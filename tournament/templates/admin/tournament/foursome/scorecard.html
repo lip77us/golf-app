@@ -1,0 +1,179 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Scorecard — {{ foursome }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .scorecard-wrap   { overflow-x: auto; margin-bottom: 30px; }
+  .scorecard        { border-collapse: collapse; font-size: 13px; min-width: 700px; }
+  .scorecard th,
+  .scorecard td     { border: 1px solid #ccc; padding: 4px 6px; text-align: center; white-space: nowrap; }
+  .scorecard thead th { background: #417690; color: #fff; font-weight: bold; }
+  .scorecard .row-label { text-align: left; font-weight: bold; background: #f8f8f8; min-width: 130px; padding-left: 8px; }
+  .scorecard .par-row td  { background: #e8f4e8; font-weight: bold; }
+  .scorecard .si-row td   { background: #f5f5f5; font-size: 11px; color: #666; }
+  .scorecard .gross-row input {
+    width: 38px; text-align: center; border: 1px solid #bbb;
+    border-radius: 3px; padding: 2px; font-size: 13px;
+  }
+  .scorecard .net-row td  { background: #fafff0; color: #444; font-size: 12px; }
+  .scorecard .total-col   { background: #417690 !important; color: #fff !important; font-weight: bold; }
+  .scorecard .out-col,
+  .scorecard .in-col      { background: #6699aa !important; color: #fff !important; font-weight: bold; }
+  .section-title  { font-size: 15px; font-weight: bold; margin: 20px 0 6px; color: #417690; }
+  .handicap-dots  { font-size: 10px; color: #e07000; letter-spacing: -1px; }
+  .save-bar       { margin: 16px 0; }
+  /* Pink / Red ball */
+  .pink-cell      { background: #fff0f3 !important; }
+  .pink-badge     { font-size: 11px; color: #cc0033; display: block; }
+  .ball-lost-wrap { font-size: 10px; color: #cc0033; margin-top: 2px; }
+  .ball-lost-wrap input { width: auto; margin-right: 2px; }
+  .lost-row td    { background: #ffe0e0 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+<p style="color:#666;">
+  {{ foursome.round }} &nbsp;|&nbsp;
+  Course: {{ foursome.round.course }} &nbsp;|&nbsp;
+  Bet unit: ${{ foursome.round.bet_unit }}
+  {% if foursome.has_phantom %}&nbsp;|&nbsp;<em>Group has phantom player</em>{% endif %}
+</p>
+
+<form method="post">
+  {% csrf_token %}
+
+  {# ---- FRONT 9 ---- #}
+  <div class="section-title">Front Nine</div>
+  <div class="scorecard-wrap">
+    <table class="scorecard">
+      <thead>
+        <tr>
+          <th class="row-label">Player / Hcp</th>
+          {% for h in front9 %}<th>{{ h.number }}</th>{% endfor %}
+          <th class="out-col">OUT</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="par-row">
+          <td class="row-label">Par</td>
+          {% for h in front9 %}<td>{{ h.par }}</td>{% endfor %}
+          <td class="out-col">{{ front9_par }}</td>
+        </tr>
+        <tr class="si-row">
+          <td class="row-label">Stroke Index</td>
+          {% for h in front9 %}<td>{{ h.stroke_index }}</td>{% endfor %}
+          <td></td>
+        </tr>
+
+        {% for row in grid %}
+        <tr class="gross-row">
+          <td class="row-label">
+            {{ row.player.name }}<br>
+            <small style="color:#888;">Hcp {{ row.membership.playing_handicap }}</small>
+          </td>
+          {% for cell in row.holes|slice:":9" %}
+          <td{% if cell.is_pink %} class="pink-cell"{% endif %}{% if cell.ball_lost %} class="lost-row"{% endif %}>
+            <input type="number" min="1" max="15"
+              name="score_{{ row.player.pk }}_{{ cell.hole_data.number }}"
+              value="{{ cell.gross }}"
+              placeholder="{{ cell.hole_data.par }}">
+            {% if cell.strokes > 0 %}
+            <div class="handicap-dots">{% for i in "x"|ljust:cell.strokes %}·{% endfor %}</div>
+            {% endif %}
+            {% if cell.is_pink %}
+            <span class="pink-badge">🔴 ball</span>
+            <div class="ball-lost-wrap">
+              <label><input type="checkbox" name="ball_lost_{{ cell.hole_data.number }}"{% if cell.ball_lost %} checked{% endif %}> Lost</label>
+            </div>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td class="out-col">{{ row.front_gross }}</td>
+        </tr>
+        <tr class="net-row">
+          <td class="row-label"><small>Net</small></td>
+          {% for cell in row.holes|slice:":9" %}
+          <td><small>{{ cell.net }}</small></td>
+          {% endfor %}
+          <td class="out-col"><small>{{ row.front_net }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ---- BACK 9 ---- #}
+  <div class="section-title">Back Nine</div>
+  <div class="scorecard-wrap">
+    <table class="scorecard">
+      <thead>
+        <tr>
+          <th class="row-label">Player / Hcp</th>
+          {% for h in back9 %}<th>{{ h.number }}</th>{% endfor %}
+          <th class="in-col">IN</th>
+          <th class="total-col">TOT</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="par-row">
+          <td class="row-label">Par</td>
+          {% for h in back9 %}<td>{{ h.par }}</td>{% endfor %}
+          <td class="in-col">{{ back9_par }}</td>
+          <td class="total-col">{{ total_par }}</td>
+        </tr>
+        <tr class="si-row">
+          <td class="row-label">Stroke Index</td>
+          {% for h in back9 %}<td>{{ h.stroke_index }}</td>{% endfor %}
+          <td></td><td></td>
+        </tr>
+
+        {% for row in grid %}
+        <tr class="gross-row">
+          <td class="row-label">
+            {{ row.player.name }}<br>
+            <small style="color:#888;">Hcp {{ row.membership.playing_handicap }}</small>
+          </td>
+          {% for cell in row.holes|slice:"9:" %}
+          <td{% if cell.is_pink %} class="pink-cell"{% endif %}{% if cell.ball_lost %} class="lost-row"{% endif %}>
+            <input type="number" min="1" max="15"
+              name="score_{{ row.player.pk }}_{{ cell.hole_data.number }}"
+              value="{{ cell.gross }}"
+              placeholder="{{ cell.hole_data.par }}">
+            {% if cell.strokes > 0 %}
+            <div class="handicap-dots">{% for i in "x"|ljust:cell.strokes %}·{% endfor %}</div>
+            {% endif %}
+            {% if cell.is_pink %}
+            <span class="pink-badge">🔴 ball</span>
+            <div class="ball-lost-wrap">
+              <label><input type="checkbox" name="ball_lost_{{ cell.hole_data.number }}"{% if cell.ball_lost %} checked{% endif %}> Lost</label>
+            </div>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td class="in-col">{{ row.back_gross }}</td>
+          <td class="total-col">{{ row.gross_total }}</td>
+        </tr>
+        <tr class="net-row">
+          <td class="row-label"><small>Net</small></td>
+          {% for cell in row.holes|slice:"9:" %}
+          <td><small>{{ cell.net }}</small></td>
+          {% endfor %}
+          <td class="in-col"><small>{{ row.back_net }}</small></td>
+          <td class="total-col"><small>{{ row.net_total }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="save-bar">
+    <input type="submit" value="Save Scores" class="default" style="font-size:14px;padding:8px 20px;">
+    &nbsp;
+    <a href="../" class="button cancel-link">Back to Foursome</a>
+  </div>
+</form>
+{% endblock %}
