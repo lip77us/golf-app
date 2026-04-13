@@ -329,22 +329,20 @@ def nassau_summary(foursome) -> dict | None:
     bet_unit    = foursome.round.bet_unit
     press_value = bet_unit * game.press_pct
 
-    # Payout helper: +ve means team1 wins that unit
-    def _payout(result: str | None) -> object:
-        from decimal import Decimal
+    # Payout helper: +ve means team1 wins that unit (returns float for JSON)
+    def _payout(result: str | None) -> float:
         if result == 'team1':
-            return bet_unit
+            return float(bet_unit)
         if result == 'team2':
-            return -bet_unit
-        return Decimal('0')
+            return -float(bet_unit)
+        return 0.0
 
-    def _press_payout(result: str | None) -> object:
-        from decimal import Decimal
+    def _press_payout(result: str | None) -> float:
         if result == 'team1':
-            return press_value
+            return float(press_value)
         if result == 'team2':
-            return -press_value
-        return Decimal('0')
+            return -float(press_value)
+        return 0.0
 
     presses_qs = NassauPress.objects.filter(game=game).order_by('triggered_on_hole')
     presses_out = [
@@ -387,9 +385,9 @@ def nassau_summary(foursome) -> dict | None:
     overall_margin = (front9_margin or 0) + (back9_margin or 0)
 
     return {
-        'bet_unit'    : bet_unit,
-        'press_pct'   : game.press_pct,
-        'press_value' : press_value,
+        'bet_unit'    : float(bet_unit),
+        'press_pct'   : float(game.press_pct),
+        'press_value' : float(press_value),
         'teams'       : {
             'team1': [p.name for p in teams[1].players.all()] if 1 in teams else [],
             'team2': [p.name for p in teams[2].players.all()] if 2 in teams else [],

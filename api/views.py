@@ -16,9 +16,11 @@ Reference data
 
 Tournaments
   GET    /api/tournaments/                 TournamentListView
+  POST   /api/tournaments/                 TournamentListView
   GET    /api/tournaments/{id}/            TournamentDetailView
 
 Rounds
+  POST   /api/rounds/                      RoundCreateView
   GET    /api/rounds/{id}/                 RoundDetailView
   POST   /api/rounds/{id}/setup/           RoundSetupView
 
@@ -60,6 +62,7 @@ from .serializers import (
     PlayerSerializer, TeeSerializer,
     TournamentSerializer, RoundSerializer, FoursomeSerializer,
     ScoreSubmitSerializer, RoundSetupSerializer,
+    TournamentCreateSerializer, RoundCreateSerializer,
     NassauSetupSerializer, SixesSetupSerializer,
 )
 
@@ -192,7 +195,7 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'label'   : 'Skins',
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
-                 'summary': skins_summary(fs)}
+                 'summary': {'totals': skins_summary(fs)}}
                 for fs in foursomes
             ],
         }
@@ -266,6 +269,54 @@ def _build_leaderboard(round_obj: Round) -> dict:
         }
 
     return games
+
+
+def _auto_setup_games(round_obj: Round, foursomes: list) -> None:
+    """
+    Auto-configure per-foursome game data immediately after the draw.
+    Teams are assigned by handicap rank: players ranked 1st & 3rd form
+    Team 1, 2nd & 4th form Team 2 (balanced pairing).
+    Called when RoundSetupView receives auto_setup_games=True.
+    """
+    active = round_obj.active_games or []
+
+    for fs in foursomes:
+        members = list(
+            FoursomeMembership.objects
+            .filter(foursome=fs, player__is_phantom=False)
+            .order_by('course_handicap')
+        )
+        pids = [m.player_id for m in members]
+        if len(pids) < 2:
+            continue
+
+        t1 = [pids[i] for i in range(0, len(pids), 2)]   # 1st, 3rd
+        t2 = [pids[i] for i in range(1, len(pids), 2)]   # 2nd, 4th
+
+        if 'nassau' in active:
+            from services.nassau import setup_nassau
+            setup_nassau(fs, t1, t2)
+
+        if 'sixes' in active and len(pids) >= 4:
+            from services.sixes import setup_sixes
+            setup_sixes(fs, [
+                {'start_hole': 1,  'end_hole': 6,
+                 'team1_player_ids': [pids[0], pids[2]],
+                 'team2_player_ids': [pids[1], pids[3]],
+                 'team_select_method': 'random'},
+                {'start_hole': 7,  'end_hole': 12,
+                 'team1_player_ids': [pids[1], pids[3]],
+                 'team2_player_ids': [pids[0], pids[2]],
+                 'team_select_method': 'random'},
+                {'start_hole': 13, 'end_hole': 18,
+                 'team1_player_ids': [pids[0], pids[3]],
+                 'team2_player_ids': [pids[1], pids[2]],
+                 'team_select_method': 'random'},
+            ])
+
+        if 'match_play' in active:
+            from services.match_play import setup_match_play
+            setup_match_play(fs)
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +400,25 @@ class PlayerListView(APIView):
         players = Player.objects.filter(is_phantom=False).order_by('name')
         return Response(PlayerSerializer(players, many=True).data)
 
+    def post(self, request):
+        ser = PlayerSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        player = ser.save()
+        return Response(PlayerSerializer(player).data, status=status.HTTP_201_CREATED)
+
+
+class PlayerDetailView(APIView):
+    def get(self, request, pk):
+        player = get_object_or_404(Player, pk=pk, is_phantom=False)
+        return Response(PlayerSerializer(player).data)
+
+    def patch(self, request, pk):
+        player = get_object_or_404(Player, pk=pk, is_phantom=False)
+        ser = PlayerSerializer(player, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        player = ser.save()
+        return Response(PlayerSerializer(player).data)
+
 
 class TeeListView(APIView):
     def get(self, request):
@@ -369,16 +439,58 @@ class TournamentListView(APIView):
         )
         return Response(TournamentSerializer(tournaments, many=True).data)
 
+    def post(self, request):
+        """POST /api/tournaments/ — create a new tournament."""
+        ser = TournamentCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        tournament = Tournament.objects.create(
+            name         = d['name'],
+            start_date   = d['start_date'],
+            active_games = d['active_games'],
+            total_rounds = d['total_rounds'],
+        )
+        return Response(TournamentSerializer(tournament).data,
+                        status=status.HTTP_201_CREATED)
+
 
 class TournamentDetailView(APIView):
     def get(self, request, pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = get_object_or_404(
+            Tournament.objects.prefetch_related('rounds__course'), pk=pk
+        )
         return Response(TournamentSerializer(tournament).data)
 
 
 # ---------------------------------------------------------------------------
 # Rounds
 # ---------------------------------------------------------------------------
+
+class RoundCreateView(APIView):
+    """POST /api/rounds/ — create a new round."""
+    def post(self, request):
+        ser = RoundCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        tee = get_object_or_404(Tee, pk=d['tee_id'])
+        tournament = None
+        if d.get('tournament_id'):
+            tournament = get_object_or_404(Tournament, pk=d['tournament_id'])
+
+        round_obj = Round.objects.create(
+            tournament   = tournament,
+            round_number = d['round_number'],
+            date         = d['date'],
+            course       = tee,
+            status       = 'pending',
+            active_games = d['active_games'],
+            bet_unit     = d['bet_unit'],
+            notes        = d['notes'],
+        )
+        return Response(RoundSerializer(round_obj).data,
+                        status=status.HTTP_201_CREATED)
+
 
 class RoundDetailView(APIView):
     def get(self, request, pk):
@@ -394,20 +506,41 @@ class RoundDetailView(APIView):
 class RoundSetupView(APIView):
     """
     POST /api/rounds/{id}/setup/
-    Body: { "player_ids": [...], "handicap_allowance": 1.0, "randomise": true }
+    Body: {
+        "player_ids": [...],
+        "handicap_allowance": 1.0,
+        "randomise": true,
+        "auto_setup_games": false
+    }
+    Draws foursomes, creates phantom scores, and optionally auto-configures
+    Nassau/Sixes/MatchPlay teams by handicap rank.
     """
+    @transaction.atomic
     def post(self, request, pk):
         round_obj = get_object_or_404(Round, pk=pk)
         ser = RoundSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+        d = ser.validated_data
 
-        from services.round_setup import setup_round
-        setup_round(
+        from services.round_setup import setup_round, create_phantom_hole_scores
+        foursomes = setup_round(
             round_obj,
-            player_ids         = ser.validated_data['player_ids'],
-            handicap_allowance = ser.validated_data['handicap_allowance'],
-            randomise          = ser.validated_data['randomise'],
+            player_ids         = d['player_ids'],
+            handicap_allowance = d['handicap_allowance'],
+            randomise          = d['randomise'],
         )
+
+        # Pre-populate phantom player scores for game calculators
+        for fs in foursomes:
+            if fs.has_phantom:
+                create_phantom_hole_scores(fs)
+
+        # Mark round in_progress now that it has players
+        round_obj.status = 'in_progress'
+        round_obj.save(update_fields=['status'])
+
+        if d['auto_setup_games']:
+            _auto_setup_games(round_obj, foursomes)
 
         round_obj = (
             Round.objects
@@ -538,9 +671,48 @@ class ScoreSubmitView(APIView):
 
         _recalculate_games(foursome)
 
+        round_obj = foursome.round
         return Response({
             'scorecard'  : _build_scorecard(foursome),
-            'leaderboard': _build_leaderboard(foursome.round),
+            'leaderboard': {
+                'round_id'   : round_obj.id,
+                'round_date' : str(round_obj.date),
+                'course'     : str(round_obj.course),
+                'status'     : round_obj.status,
+                'active_games': round_obj.active_games or [],
+                'games'      : _build_leaderboard(round_obj),
+            },
+        })
+
+
+# ---------------------------------------------------------------------------
+# Round completion
+# ---------------------------------------------------------------------------
+
+class RoundCompleteView(APIView):
+    """
+    POST /api/rounds/{id}/complete/
+    Marks the round as complete and returns the final leaderboard.
+    Safe to call multiple times (idempotent on status).
+    """
+    def post(self, request, pk):
+        round_obj = get_object_or_404(
+            Round.objects
+                 .select_related('course')
+                 .prefetch_related('foursomes__memberships__player'),
+            pk=pk,
+        )
+        if round_obj.status != 'complete':
+            round_obj.status = 'complete'
+            round_obj.save(update_fields=['status'])
+
+        return Response({
+            'round_id'    : round_obj.id,
+            'status'      : round_obj.status,
+            'round_date'  : str(round_obj.date),
+            'course'      : str(round_obj.course),
+            'active_games': round_obj.active_games or [],
+            'games'       : _build_leaderboard(round_obj),
         })
 
 

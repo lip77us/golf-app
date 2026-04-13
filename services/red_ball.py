@@ -174,7 +174,7 @@ def red_ball_summary(round_obj) -> list:
     Each dict:
         {
             'rank'             : int,
-            'foursome'         : Foursome,
+            'group_number'     : int,
             'players'          : str  (comma-separated real player names),
             'status'           : str  ('Survived' or 'Lost on hole N'),
             'total_net_score'  : int or None,
@@ -195,10 +195,10 @@ def red_ball_summary(round_obj) -> list:
                                   .select_related('player')
                                   .order_by('player__name')
         )
-        status = 'Survived 🏆' if r.eliminated_on_hole is None else f'Lost on hole {r.eliminated_on_hole}'
+        status = 'Survived' if r.eliminated_on_hole is None else f'Lost on hole {r.eliminated_on_hole}'
         summary.append({
             'rank'            : r.rank,
-            'foursome'        : r.foursome,
+            'group_number'    : r.foursome.group_number,
             'players'         : players,
             'status'          : status,
             'total_net_score' : r.total_net_score,

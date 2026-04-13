@@ -67,32 +67,24 @@ def low_net_round_standings(round_obj) -> list:
 
 def low_net_round_summary(round_obj) -> list:
     """
-    Same as low_net_round_standings() but resolves Player instances.
+    Return ranked low-net results as a list of serializable dicts.
 
     Each dict:
         {
             'rank'        : int,
-            'player'      : Player instance,
-            'net_total'   : int,
+            'name'        : str  (player name),
+            'total_net'   : int,
             'holes_played': int,
         }
     """
-    from core.models import Player
-
+    # low_net_round_standings already returns primitive-only dicts
+    # (player_id, player_name, net_total, holes_played) — just reshape.
     standings = low_net_round_standings(round_obj)
-    if not standings:
-        return []
-
-    player_map = {
-        p.pk: p for p in
-        Player.objects.filter(pk__in=[s['player_id'] for s in standings])
-    }
-
     return [
         {
             'rank'        : s['rank'],
-            'player'      : player_map[s['player_id']],
-            'net_total'   : s['net_total'],
+            'name'        : s['player_name'],
+            'total_net'   : s['net_total'],
             'holes_played': s['holes_played'],
         }
         for s in standings

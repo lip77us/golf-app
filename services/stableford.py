@@ -84,14 +84,14 @@ def stableford_summary(round_obj) -> list:
     Each dict:
         {
             'rank'         : int,
-            'player'       : Player,
+            'player_name'  : str,
             'total_points' : int,
         }
     """
     return [
         {
             'rank'         : r.rank,
-            'player'       : r.player,
+            'player_name'  : r.player.name,
             'total_points' : r.total_points,
         }
         for r in (

@@ -103,6 +103,33 @@ class SkinsResult(models.Model):
     def __str__(self):
         return f"Skins — Hole {self.hole_number} — {self.winner or 'Tied'} ({self.skins_value} skin(s))"
 
+# ---------------------------------------------------------------------------
+# SKINS (within foursome, no carryover)
+# ---------------------------------------------------------------------------
+
+class SkinsResultNoCarryover(models.Model):
+    """
+    One row per hole per foursome. winner is null if the hole is tied.
+    skins_value do not any carried-over skins from previous tied holes.
+    """
+    foursome            = models.ForeignKey(Foursome, on_delete=models.CASCADE, related_name='skins_results_no_carryover')
+    hole_number         = models.PositiveSmallIntegerField(
+                            validators=[MinValueValidator(1), MaxValueValidator(18)]
+                        )
+    winner              = models.ForeignKey(
+                            Player, on_delete=models.SET_NULL,
+                            null=True, blank=True, related_name='skins_results_no_carryover'
+                        )
+    skins_value         = models.PositiveSmallIntegerField(default=1)
+    is_carryover        = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('foursome', 'hole_number')
+        ordering = ['hole_number']
+
+    def __str__(self):
+        return f"Skins — Hole {self.hole_number} — {self.winner or 'Tied'} ({self.skins_value} skin(s))"
+
 
 # ---------------------------------------------------------------------------
 # LOW NET CHAMPIONSHIP (tournament-level, individual)

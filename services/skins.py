@@ -100,6 +100,76 @@ def calculate_skins(foursome) -> list:
     SkinsResult.objects.bulk_create(to_save)
     return to_save
 
+@transaction.atomic
+def calculate_skins_no_carryover(foursome) -> list:
+    """
+    Calculate skins for *foursome* and persist SkinsResult rows.
+
+    Can be called multiple times safely — previous results are deleted first,
+    so it re-calculates correctly as scores are entered hole by hole.
+
+    Parameters
+    ----------
+    foursome : tournament.models.Foursome
+
+    Returns
+    -------
+    List of SkinsResult instances (saved), one per hole 1-18.
+    Holes with no scores yet are skipped (not created).
+    """
+    # Pull all real-player net scores for this foursome in one query
+    hole_scores = (
+        HoleScore.objects
+        .filter(foursome=foursome, player__is_phantom=False)
+        .exclude(net_score=None)
+        .select_related('player')
+        .order_by('hole_number')
+    )
+
+    # Index by hole number → list of HoleScore
+    by_hole: dict = {}
+    for hs in hole_scores:
+        by_hole.setdefault(hs.hole_number, []).append(hs)
+
+    # Wipe previous results
+    SkinsResult.objects.filter(foursome=foursome).delete()
+
+    pot      = 1   # skins accumulated (including current hole)
+    to_save  = []
+
+    for hole_number in range(1, 19):
+        scores = by_hole.get(hole_number)
+        if scores is None:
+            # Score not yet entered — stop here (holes must be sequential)
+            break
+
+
+        min_net = min(hs.net_score for hs in scores)
+        leaders = [hs for hs in scores if hs.net_score == min_net]
+
+        if len(leaders) == 1:
+            # Outright winner — collects everything in the pot
+            to_save.append(SkinsResult(
+                foursome    = foursome,
+                hole_number = hole_number,
+                winner      = leaders[0].player,
+                skins_value = pot,
+                is_carryover= False,
+            ))
+            pot = 0   # reset after a win
+        else:
+            # Tied — record the tie and carry the pot forward
+            to_save.append(SkinsResult(
+                foursome    = foursome,
+                hole_number = hole_number,
+                winner      = None,
+                skins_value = pot,
+                is_carryover= False,
+            ))
+            # pot keeps accumulating
+
+    SkinsResultNoCarryover.objects.bulk_create(to_save)
+    return to_save
 
 # ---------------------------------------------------------------------------
 # Summary helper
@@ -112,9 +182,9 @@ def skins_summary(foursome) -> list:
 
     Each dict:
         {
-            'player'      : Player instance,
+            'player'      : str (player name),
             'skins_won'   : int,
-            'dollar_value': Decimal   (skins_won × round.bet_unit),
+            'dollar_value': float  (skins_won × round.bet_unit),
         }
 
     Players with zero skins are included so the caller can render a
@@ -142,9 +212,9 @@ def skins_summary(foursome) -> list:
     for m in memberships:
         skins = wins[m.player_id]
         summary.append({
-            'player'      : m.player,
+            'player'      : m.player.name,
             'skins_won'   : skins,
-            'dollar_value': Decimal(skins) * bet_unit,
+            'dollar_value': float(Decimal(skins) * bet_unit),
         })
 
     summary.sort(key=lambda x: x['skins_won'], reverse=True)

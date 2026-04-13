@@ -126,18 +126,40 @@ class ScoreSubmitSerializer(serializers.Serializer):
         return value
 
 
+class TournamentCreateSerializer(serializers.Serializer):
+    """Create a new tournament."""
+    name         = serializers.CharField(max_length=150)
+    start_date   = serializers.DateField()
+    active_games = serializers.ListField(child=serializers.CharField(), default=list)
+    total_rounds = serializers.IntegerField(default=1, min_value=1)
+
+
+class RoundCreateSerializer(serializers.Serializer):
+    """Create a new round, optionally inside a tournament."""
+    tournament_id = serializers.IntegerField(required=False, allow_null=True)
+    tee_id        = serializers.IntegerField()
+    date          = serializers.DateField()
+    bet_unit      = serializers.DecimalField(max_digits=6, decimal_places=2, default='1.00')
+    active_games  = serializers.ListField(child=serializers.CharField(), default=list)
+    round_number  = serializers.IntegerField(default=1, min_value=1)
+    notes         = serializers.CharField(default='', allow_blank=True)
+
+
 class RoundSetupSerializer(serializers.Serializer):
     """
     Kick off a round: assign players to foursomes.
     player_ids:         ordered list of Player PKs (max 16 for 4 foursomes)
     handicap_allowance: fraction of course handicap to apply (default 1.0)
     randomise:          shuffle players before grouping (default True)
+    auto_setup_games:   if True, auto-configure Nassau/Sixes/MatchPlay teams
+                        by handicap rank after the draw (default False)
     """
     player_ids         = serializers.ListField(
         child=serializers.IntegerField(), min_length=2, max_length=20
     )
     handicap_allowance = serializers.FloatField(default=1.0, min_value=0.0, max_value=1.0)
     randomise          = serializers.BooleanField(default=True)
+    auto_setup_games   = serializers.BooleanField(default=False)
 
 
 class NassauSetupSerializer(serializers.Serializer):

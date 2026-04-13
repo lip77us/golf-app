@@ -15,17 +15,20 @@ urlpatterns = [
     path('auth/me/',      views.MeView.as_view(),     name='api-me'),
 
     # ---- Reference data ----
-    path('players/',      views.PlayerListView.as_view(), name='api-players'),
-    path('tees/',         views.TeeListView.as_view(),    name='api-tees'),
+    path('players/',           views.PlayerListView.as_view(),   name='api-players'),
+    path('players/<int:pk>/',  views.PlayerDetailView.as_view(), name='api-player-detail'),
+    path('tees/',              views.TeeListView.as_view(),      name='api-tees'),
 
     # ---- Tournaments ----
-    path('tournaments/',        views.TournamentListView.as_view(),   name='api-tournament-list'),
+    path('tournaments/',          views.TournamentListView.as_view(),   name='api-tournament-list'),
     path('tournaments/<int:pk>/', views.TournamentDetailView.as_view(), name='api-tournament-detail'),
 
     # ---- Rounds ----
-    path('rounds/<int:pk>/',         views.RoundDetailView.as_view(),  name='api-round-detail'),
-    path('rounds/<int:pk>/setup/',   views.RoundSetupView.as_view(),   name='api-round-setup'),
-    path('rounds/<int:pk>/leaderboard/', views.LeaderboardView.as_view(), name='api-leaderboard'),
+    path('rounds/',                      views.RoundCreateView.as_view(),  name='api-round-create'),
+    path('rounds/<int:pk>/',             views.RoundDetailView.as_view(),  name='api-round-detail'),
+    path('rounds/<int:pk>/setup/',       views.RoundSetupView.as_view(),    name='api-round-setup'),
+    path('rounds/<int:pk>/complete/',    views.RoundCompleteView.as_view(), name='api-round-complete'),
+    path('rounds/<int:pk>/leaderboard/', views.LeaderboardView.as_view(),   name='api-leaderboard'),
 
     # ---- Foursomes ----
     path('foursomes/<int:pk>/',             views.FoursomeDetailView.as_view(), name='api-foursome-detail'),
