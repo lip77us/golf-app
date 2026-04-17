@@ -24,6 +24,14 @@ dependencies:
   # Icons
   cupertino_icons: ^1.0.8
 
+  # Offline queue — local SQLite storage
+  sqflite: ^2.3.3
+  sqflite_common_ffi: ^2.4.0+2   # Desktop (macOS / Windows / Linux) support
+  path: ^1.9.0
+
+  # Connectivity monitoring (offline detection)
+  connectivity_plus: ^6.0.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

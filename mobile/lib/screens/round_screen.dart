@@ -98,13 +98,21 @@ class _RoundScreenState extends State<RoundScreen> {
                   ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           ...round.foursomes.map((fs) => _FoursomeCard(
-                foursome: fs,
-                myPlayerId: myId,
-                isComplete: isComplete,
+                foursome:     fs,
+                myPlayerId:   myId,
+                isComplete:   isComplete,
+                sixesActive:  round.activeGames.contains('sixes'),
+                sixesStarted: rp.sixesIsStarted(fs.id),
                 onEnterScores: () {
                   context.read<RoundProvider>().loadScorecard(fs.id);
-                  Navigator.of(context)
-                      .pushNamed('/scorecard', arguments: fs.id);
+                  // Route to the Six's setup screen (Match 1 team picker)
+                  // when that game is active, otherwise use the standard
+                  // scorecard.  SixesSetupScreen auto-redirects to /sixes
+                  // if the match is already started.
+                  final route = (round.activeGames.contains('sixes'))
+                      ? '/sixes-setup'
+                      : '/scorecard';
+                  Navigator.of(context).pushNamed(route, arguments: fs.id);
                 },
               )),
         ],
@@ -252,12 +260,16 @@ class _FoursomeCard extends StatelessWidget {
   final Foursome foursome;
   final int?     myPlayerId;
   final bool     isComplete;
+  final bool     sixesActive;
+  final bool     sixesStarted;
   final VoidCallback onEnterScores;
 
   const _FoursomeCard({
     required this.foursome,
     required this.myPlayerId,
     required this.isComplete,
+    required this.sixesActive,
+    required this.sixesStarted,
     required this.onEnterScores,
   });
 
@@ -313,7 +325,13 @@ class _FoursomeCard extends StatelessWidget {
                 isComplete ? Icons.table_chart_outlined : Icons.edit_note,
                 size: 18,
               ),
-              label: Text(isComplete ? 'View Scorecard' : 'Enter Scores'),
+              label: Text(
+                isComplete
+                    ? 'View Scorecard'
+                    : (sixesActive && !sixesStarted)
+                        ? 'Start Match'
+                        : 'Enter Scores',
+              ),
             ),
           ),
         ]),

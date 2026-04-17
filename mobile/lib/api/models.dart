@@ -376,6 +376,140 @@ class Scorecard {
 }
 
 // ---------------------------------------------------------------------------
+// Six's
+// ---------------------------------------------------------------------------
+
+class SixesHoleResult {
+  final int hole;
+  final int? t1Net;
+  final int? t2Net;
+  final String? winner; // 'T1', 'T2', or 'Halved'
+  final int margin;     // positive = team1 leading after this hole
+
+  const SixesHoleResult({
+    required this.hole,
+    this.t1Net,
+    this.t2Net,
+    this.winner,
+    required this.margin,
+  });
+
+  factory SixesHoleResult.fromJson(Map<String, dynamic> j) => SixesHoleResult(
+        hole:   j['hole'] as int,
+        t1Net:  j['t1_net'] as int?,
+        t2Net:  j['t2_net'] as int?,
+        winner: j['winner'] as String?,
+        margin: j['margin'] as int? ?? 0,
+      );
+}
+
+class SixesTeamInfo {
+  final List<String> players; // player display names
+  final String method;
+
+  const SixesTeamInfo({required this.players, required this.method});
+
+  factory SixesTeamInfo.fromJson(Map<String, dynamic> j) => SixesTeamInfo(
+        players: List<String>.from(j['players'] as List? ?? []),
+        method:  j['method'] as String? ?? '',
+      );
+
+  bool get hasPlayers => players.isNotEmpty;
+}
+
+class SixesSegment {
+  final String label;
+  final int startHole;
+  final int endHole;
+  final bool isExtra;
+  final String status;  // 'pending', 'in_progress', 'complete', 'halved'
+  final String winner;  // 'Team 1', 'Team 2', 'Halved', '—'
+  final SixesTeamInfo team1;
+  final SixesTeamInfo team2;
+  final List<SixesHoleResult> holes; // holes played so far in this segment
+
+  const SixesSegment({
+    required this.label,
+    required this.startHole,
+    required this.endHole,
+    required this.isExtra,
+    required this.status,
+    required this.winner,
+    required this.team1,
+    required this.team2,
+    required this.holes,
+  });
+
+  factory SixesSegment.fromJson(Map<String, dynamic> j) => SixesSegment(
+        label:     j['label'] as String? ?? '',
+        startHole: j['start_hole'] as int? ?? 1,
+        endHole:   j['end_hole'] as int? ?? 6,
+        isExtra:   j['is_extra'] as bool? ?? false,
+        status:    j['status'] as String? ?? 'pending',
+        winner:    j['winner'] as String? ?? '—',
+        team1:     SixesTeamInfo.fromJson(j['team1'] as Map<String, dynamic>? ?? {}),
+        team2:     SixesTeamInfo.fromJson(j['team2'] as Map<String, dynamic>? ?? {}),
+        holes: (j['holes'] as List? ?? [])
+            .map((h) => SixesHoleResult.fromJson(h as Map<String, dynamic>))
+            .toList(),
+      );
+
+  int get totalHoles => endHole - startHole + 1;
+
+  /// Human-readable match status: "1 UP thru 3", "4 and 2", "All Square", etc.
+  String get statusDisplay {
+    if (!team1.hasPlayers || !team2.hasPlayers) return 'Select Players';
+    if (holes.isEmpty) return '—';
+
+    final holesPlayed  = holes.length;
+    final lastMargin   = holes.last.margin;
+    final absMargin    = lastMargin.abs();
+    final holesLeft    = totalHoles - holesPlayed;
+
+    if (status == 'complete' || status == 'halved') {
+      if (winner == 'Halved') return 'Halved';
+      // Early finish: "X and Y" (e.g. "4 and 2")
+      if (holesLeft > 0) return '$absMargin and $holesLeft';
+      // All holes played
+      return absMargin > 0 ? '$absMargin UP' : 'Halved';
+    }
+
+    if (status == 'in_progress') {
+      if (lastMargin == 0) return 'All Square thru $holesPlayed';
+      return '$absMargin UP thru $holesPlayed';
+    }
+
+    return '—';
+  }
+}
+
+class SixesSummary {
+  final List<SixesSegment> segments;
+  final int team1Wins;
+  final int team2Wins;
+  final int halves;
+
+  const SixesSummary({
+    required this.segments,
+    required this.team1Wins,
+    required this.team2Wins,
+    required this.halves,
+  });
+
+  factory SixesSummary.fromJson(Map<String, dynamic> j) {
+    final overall = j['overall'] as Map<String, dynamic>? ?? {};
+    return SixesSummary(
+      segments: (j['segments'] as List? ?? [])
+          .map((s) => SixesSegment.fromJson(s as Map<String, dynamic>))
+          .toList(),
+      team1Wins: overall['team1_wins'] as int? ?? 0,
+      team2Wins: overall['team2_wins'] as int? ?? 0,
+      halves:    overall['halves']     as int? ?? 0,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Leaderboard (loosely typed — shape varies by game)
 // ---------------------------------------------------------------------------
 

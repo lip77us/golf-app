@@ -330,6 +330,39 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  Future<SixesSummary> getSixesSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/sixes/');
+    return SixesSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/sixes/setup/
+  ///
+  /// [segments] is a list of segment dicts, each with:
+  ///   start_hole, end_hole, team_select_method,
+  ///   team1_player_ids, team2_player_ids
+  Future<void> postSixesSetup(
+    int foursomeId,
+    List<Map<String, dynamic>> segments,
+  ) async {
+    await _post('/foursomes/$foursomeId/sixes/setup/', {'segments': segments});
+  }
+
+  /// POST /api/foursomes/{id}/sixes/extra-teams/
+  ///
+  /// Sets teams on the existing is_extra=True segment without disturbing any
+  /// standard segments or hole results.  Returns the updated SixesSummary.
+  Future<SixesSummary> postSixesExtraTeams(
+    int foursomeId,
+    List<int> team1Ids,
+    List<int> team2Ids,
+  ) async {
+    final data = await _post(
+      '/foursomes/$foursomeId/sixes/extra-teams/',
+      {'team1_player_ids': team1Ids, 'team2_player_ids': team2Ids},
+    );
+    return SixesSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Match Play ----
 
   Future<Map<String, dynamic>> getMatchPlay(int foursomeId) async {
