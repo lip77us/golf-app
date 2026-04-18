@@ -4,7 +4,7 @@ from django import forms
 from django.contrib import admin
 from django.utils.safestring import mark_safe
 
-from .models import Player, Tee
+from .models import Player, Tee, Course
 
 
 # ---------------------------------------------------------------------------
@@ -111,15 +111,23 @@ class PlayerAdmin(admin.ModelAdmin):
     ordering      = ('name',)
 
 
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display  = ('name', 'created_at')
+    search_fields = ('name',)
+    ordering      = ('name',)
+
+
 @admin.register(Tee)
 class TeeAdmin(admin.ModelAdmin):
     form          = TeeAdminForm
-    list_display  = ('course_name', 'tee_name', 'slope', 'course_rating', 'par')
-    search_fields = ('course_name', 'tee_name')
-    ordering      = ('course_name', 'tee_name')
+    list_display  = ('course', 'tee_name', 'slope', 'course_rating', 'par')
+    list_filter   = ('course',)
+    search_fields = ('course__name', 'tee_name')
+    ordering      = ('course__name', 'tee_name')
     fieldsets     = (
         (None, {
-            'fields': ('course_name', 'tee_name', 'slope', 'course_rating', 'par'),
+            'fields': ('course', 'tee_name', 'slope', 'course_rating', 'par'),
         }),
         ('Hole-by-Hole Data', {
             'fields': ('holes',),

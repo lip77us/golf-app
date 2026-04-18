@@ -17,6 +17,7 @@ urlpatterns = [
     # ---- Reference data ----
     path('players/',           views.PlayerListView.as_view(),   name='api-players'),
     path('players/<int:pk>/',  views.PlayerDetailView.as_view(), name='api-player-detail'),
+    path('courses/',           views.CourseListView.as_view(),   name='api-courses'),
     path('tees/',              views.TeeListView.as_view(),      name='api-tees'),
 
     # ---- Tournaments ----

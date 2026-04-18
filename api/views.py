@@ -420,9 +420,15 @@ class PlayerDetailView(APIView):
         return Response(PlayerSerializer(player).data)
 
 
+class CourseListView(APIView):
+    def get(self, request):
+        courses = Course.objects.all().order_by('name')
+        return Response(CourseSerializer(courses, many=True).data)
+
+
 class TeeListView(APIView):
     def get(self, request):
-        tees = Tee.objects.all().order_by('course_name', 'tee_name')
+        tees = Tee.objects.all().order_by('course__name', 'tee_name')
         return Response(TeeSerializer(tees, many=True).data)
 
 
@@ -466,6 +472,8 @@ class TournamentDetailView(APIView):
 # Rounds
 # ---------------------------------------------------------------------------
 
+from core.models import Course
+
 class RoundCreateView(APIView):
     """POST /api/rounds/ — create a new round."""
     def post(self, request):
@@ -473,7 +481,7 @@ class RoundCreateView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
-        tee = get_object_or_404(Tee, pk=d['tee_id'])
+        course = get_object_or_404(Course, pk=d['course_id'])
         tournament = None
         if d.get('tournament_id'):
             tournament = get_object_or_404(Tournament, pk=d['tournament_id'])
@@ -482,7 +490,7 @@ class RoundCreateView(APIView):
             tournament   = tournament,
             round_number = d['round_number'],
             date         = d['date'],
-            course       = tee,
+            course       = course,
             status       = 'pending',
             active_games = d['active_games'],
             bet_unit     = d['bet_unit'],
@@ -507,7 +515,7 @@ class RoundSetupView(APIView):
     """
     POST /api/rounds/{id}/setup/
     Body: {
-        "player_ids": [...],
+        "players": [{"player_id": 1, "tee_id": 1}, ...],
         "handicap_allowance": 1.0,
         "randomise": true,
         "auto_setup_games": false
@@ -525,7 +533,7 @@ class RoundSetupView(APIView):
         from services.round_setup import setup_round, create_phantom_hole_scores
         foursomes = setup_round(
             round_obj,
-            player_ids         = d['player_ids'],
+            players            = d['players'],
             handicap_allowance = d['handicap_allowance'],
             randomise          = d['randomise'],
         )

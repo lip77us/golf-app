@@ -158,7 +158,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       final existing = _existingTournament?.rounds.length ?? 0;
       final round = await client.createRound(
         tournamentId : tournamentId,
-        teeId        : _selectedTee!.id,
+        courseId     : _selectedTee!.course.id,
         date         : dateStr,
         betUnit      : double.tryParse(_betCtrl.text) ?? 1.0,
         activeGames  : games,
@@ -168,7 +168,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       // 3. Draw foursomes + auto-setup games
       final fullRound = await client.setupRound(
         round.id,
-        playerIds      : _selectedIds.toList(),
+        players        : _selectedIds.map((id) => {'player_id': id, 'tee_id': _selectedTee!.id}).toList(),
         randomise      : true,
         autoSetupGames : true,
       );

@@ -90,10 +90,12 @@ def _get_or_create_phantom() -> Player:
 # Public API
 # ---------------------------------------------------------------------------
 
+from core.models import Tee
+
 @transaction.atomic
 def setup_round(
     round_obj,
-    player_ids: list,
+    players: list,
     handicap_allowance: float = 1.0,
     randomise: bool = True,
 ) -> list:
@@ -103,7 +105,7 @@ def setup_round(
     Parameters
     ----------
     round_obj          : tournament.models.Round instance
-    player_ids         : list of Player PKs to include (phantoms excluded)
+    players            : list of dicts: [{"player_id": 1, "tee_id": 2}, ...]
     handicap_allowance : fraction of course handicap applied as playing
                          handicap — 1.0 = full, 0.9 = 90 %, etc.
     randomise          : shuffle players before grouping (default True)
@@ -119,19 +121,33 @@ def setup_round(
     * Phantom hole scores are NOT created here — call
       create_phantom_hole_scores(foursome) separately after this returns.
     """
-    tee     = round_obj.course
-    players = list(Player.objects.filter(pk__in=player_ids, is_phantom=False))
+    player_ids = [p['player_id'] for p in players]
 
-    if not players:
+    # Using filter does not preserve order, so we fetch and then sort them back
+    # to the order requested in `player_ids`. This ensures Player 1 is preserved.
+    fetched_objs = list(Player.objects.filter(pk__in=player_ids, is_phantom=False))
+    obj_map = {p.id: p for p in fetched_objs}
+
+    player_objs = [obj_map[pid] for pid in player_ids if pid in obj_map]
+
+    if not player_objs:
         raise ValueError("No valid (non-phantom) players found for the supplied IDs.")
 
+    tee_map = {p['player_id']: Tee.objects.get(pk=p['tee_id']) for p in players}
+
     if randomise:
-        random.shuffle(players)
+        # If randomise is true, we shuffle everything EXCEPT the first player
+        # so the logged in user remains player 1.
+        if len(player_objs) > 1:
+            first = player_objs[0]
+            rest = player_objs[1:]
+            random.shuffle(rest)
+            player_objs = [first] + rest
 
     # Wipe any previous setup for this round so re-running is safe
     Foursome.objects.filter(round=round_obj).delete()
 
-    groups  = _group_players(players, max_size=4)
+    groups  = _group_players(player_objs, max_size=4)
     phantom = None
     created = []
 
@@ -153,20 +169,25 @@ def setup_round(
 
         # Real player memberships
         for player in group:
+            tee = tee_map[player.id]
             course_hcp  = player.course_handicap(tee)
             playing_hcp = round(course_hcp * handicap_allowance)
             FoursomeMembership.objects.create(
                 foursome        = foursome,
                 player          = player,
+                tee             = tee,
                 course_handicap = course_hcp,
                 playing_handicap= playing_hcp
             )
 
         # Phantom membership — always full handicap (36 strokes)
         if needs_phantom:
+            # Pick a default tee from the first real player for the phantom
+            phantom_tee = tee_map[group[0].id]
             FoursomeMembership.objects.create(
                 foursome         = foursome,
                 player           = phantom,
+                tee              = phantom_tee,
                 course_handicap  = 36,
                 playing_handicap = 36,
             )
@@ -199,7 +220,7 @@ def create_phantom_hole_scores(foursome) -> None:
     if not membership:
         return
 
-    tee     = foursome.round.course
+    tee     = membership.tee
     phantom = membership.player
 
     # Clear any previously created phantom scores for this foursome

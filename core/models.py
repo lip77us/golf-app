@@ -81,13 +81,24 @@ class Player(models.Model):
         return f"{self.name}{suffix}"
 
 
+class Course(models.Model):
+    """
+    A golf course that has multiple tees.
+    """
+    name            = models.CharField(max_length=150)
+    created_at      = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Tee(models.Model):
     """
     One tee set at one course. holes is a list of 18 dicts:
         [{ "number": 1, "par": 4, "stroke_index": 7, "yards": 412 }, ...]
     stroke_index (1–18) is used to allocate handicap strokes per hole.
     """
-    course_name     = models.CharField(max_length=150)
+    course          = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='tees')
     tee_name        = models.CharField(max_length=50)   # e.g. "White", "Blue"
     slope           = models.PositiveSmallIntegerField(
                         validators=[MinValueValidator(55), MaxValueValidator(155)]
@@ -101,4 +112,4 @@ class Tee(models.Model):
         return next(h for h in self.holes if h['number'] == number)
 
     def __str__(self):
-        return f"{self.course_name} — {self.tee_name}"
+        return f"{self.course.name} — {self.tee_name}"

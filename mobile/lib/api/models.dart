@@ -58,9 +58,24 @@ class PlayerProfile {
       );
 }
 
+class CourseInfo {
+  final int id;
+  final String name;
+
+  const CourseInfo({
+    required this.id,
+    required this.name,
+  });
+
+  factory CourseInfo.fromJson(Map<String, dynamic> j) => CourseInfo(
+        id: j['id'] as int,
+        name: j['name'] as String,
+      );
+}
+
 class TeeInfo {
   final int id;
-  final String courseName;
+  final CourseInfo course;
   final String teeName;
   final int slope;
   final double courseRating;
@@ -68,7 +83,7 @@ class TeeInfo {
 
   const TeeInfo({
     required this.id,
-    required this.courseName,
+    required this.course,
     required this.teeName,
     required this.slope,
     required this.courseRating,
@@ -77,14 +92,14 @@ class TeeInfo {
 
   factory TeeInfo.fromJson(Map<String, dynamic> j) => TeeInfo(
         id: j['id'] as int,
-        courseName: j['course_name'] as String,
+        course: CourseInfo.fromJson(j['course'] as Map<String, dynamic>),
         teeName: j['tee_name'] as String,
         slope: j['slope'] as int,
         courseRating: double.parse(j['course_rating'].toString()),
         par: j['par'] as int,
       );
 
-  String get display => '$courseName — $teeName';
+  String get display => '${course.name} — $teeName';
 }
 
 // ---------------------------------------------------------------------------
@@ -158,12 +173,14 @@ class Tournament {
 class Membership {
   final int id;
   final PlayerProfile player;
+  final TeeInfo? tee;
   final int courseHandicap;
   final int playingHandicap;
 
   const Membership({
     required this.id,
     required this.player,
+    this.tee,
     required this.courseHandicap,
     required this.playingHandicap,
   });
@@ -171,6 +188,7 @@ class Membership {
   factory Membership.fromJson(Map<String, dynamic> j) => Membership(
         id: j['id'] as int,
         player: PlayerProfile.fromJson(j['player'] as Map<String, dynamic>),
+        tee: j['tee'] != null ? TeeInfo.fromJson(j['tee'] as Map<String, dynamic>) : null,
         courseHandicap: j['course_handicap'] as int? ?? 0,
         playingHandicap: j['playing_handicap'] as int? ?? 0,
       );
@@ -214,7 +232,7 @@ class Round {
   final int id;
   final int roundNumber;
   final String date;
-  final TeeInfo course;
+  final CourseInfo course;
   final String status;
   final List<String> activeGames;
   final double betUnit;
@@ -235,7 +253,7 @@ class Round {
         id: j['id'] as int,
         roundNumber: j['round_number'] as int,
         date: j['date'] as String,
-        course: TeeInfo.fromJson(j['course'] as Map<String, dynamic>),
+        course: CourseInfo.fromJson(j['course'] as Map<String, dynamic>),
         status: j['status'] as String,
         activeGames: List<String>.from(j['active_games'] as List? ?? []),
         betUnit: double.parse(j['bet_unit'].toString()),

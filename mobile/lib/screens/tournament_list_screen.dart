@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import 'casual_round_screen.dart';
 import 'new_round_wizard.dart';
 import 'player_list_screen.dart';
 
@@ -62,15 +63,34 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         onLogout: () => auth.logout(),
       ),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const NewRoundWizard()),
-          );
-          _load(); // refresh list when wizard returns
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('New Round'),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'casual',
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CasualRoundScreen()),
+              );
+              _load(); // refresh list when wizard returns
+            },
+            icon: const Icon(Icons.sports_golf),
+            label: const Text('Casual Round'),
+          ),
+          const SizedBox(height: 16),
+          FloatingActionButton.extended(
+            heroTag: 'tournament',
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NewRoundWizard()),
+              );
+              _load(); // refresh list when wizard returns
+            },
+            icon: const Icon(Icons.emoji_events),
+            label: const Text('Tournament Round'),
+          ),
+        ],
       ),
     );
   }
