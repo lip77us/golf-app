@@ -81,12 +81,14 @@ WSGI_APPLICATION = 'my_golf_app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-import os
-
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'golf_app_db',        # Replace with your actual database name
+        'USER': 'postgres',           # Default Postgres user
+        'PASSWORD': 'Paulgres',  # The password you set during installation
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
