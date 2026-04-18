@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/net_score_button.dart';
 
 class ScorecardScreen extends StatefulWidget {
   final int foursomeId;
@@ -526,12 +527,13 @@ class _ScorecardGrid extends StatelessWidget {
 
                   Color? bg;
                   if (isSelected)      bg = theme.colorScheme.primaryContainer.withOpacity(0.25);
+                  // Net-based coloring, aligned with the score entry slider.
+                  // Over net par is intentionally left uncoloured (white).
                   if (gross != null && net != null) {
-                    final diff = gross - par;
-                    if (diff <= -2)      bg = Colors.yellow.shade100;
-                    else if (diff == -1) bg = Colors.green.shade100;
-                    else if (diff == 1)  bg = Colors.orange.shade50;
-                    else if (diff >= 2)  bg = Colors.red.shade50;
+                    final diff = net - par;        // net diff vs par
+                    if (diff <= -2)      bg = Colors.yellow.shade200; // net eagle+
+                    else if (diff == -1) bg = Colors.yellow.shade100; // net birdie
+                    else if (diff == 0)  bg = Colors.green.shade100;  // net par
                   }
                   // Local-only pending: teal tint so user knows it's saved but not synced
                   if (isLocalOnly)     bg = theme.colorScheme.tertiaryContainer.withOpacity(0.5);
@@ -732,12 +734,20 @@ class _HoleEntryPanel extends StatelessWidget {
               ],
             ]),
           const SizedBox(height: 8),
-          ...players.map((m) => _ScoreRow(
-                player: m,
-                par: hole?.par ?? 4,
-                currentValue: pending[m.player.id],
-                onChanged: (v) => onScoreChanged(m.player.id, v),
-              )),
+          ...players.map((m) {
+            // Handicap strokes for THIS player on THIS hole come from the
+            // server-rendered scorecard (predicted for unplayed holes via the
+            // player's own tee SI). Defaults to 0 if unavailable.
+            final strokes =
+                hole?.scoreFor(m.player.id)?.handicapStrokes ?? 0;
+            return _ScoreRow(
+              player: m,
+              par: hole?.par ?? 4,
+              strokes: strokes,
+              currentValue: pending[m.player.id],
+              onChanged: (v) => onScoreChanged(m.player.id, v),
+            );
+          }),
           if (hasPinkBall) ...[
             const SizedBox(height: 4),
             Row(children: [
@@ -773,71 +783,46 @@ class _HoleEntryPanel extends StatelessWidget {
 class _ScoreRow extends StatelessWidget {
   final Membership player;
   final int        par;
+  final int        strokes;   // handicap strokes this player gets on this hole
   final int?       currentValue;
   final void Function(int?) onChanged;
 
   const _ScoreRow({
     required this.player,
     required this.par,
+    required this.strokes,
     required this.currentValue,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Show par-2 through par+3 (6 buttons) centred on par.
-    // E.g. par 4 → 2, 3, 4, 5, 6, 7
-    final scores = List.generate(6, (i) => par - 2 + i);
+    // Net par for this player on this hole.
+    final netPar = par + strokes;
+
+    // 6 buttons centred on NET par, asymmetric as requested:
+    //   [netPar-2, netPar-1, netPar, netPar+1, netPar+2, netPar+3]
+    // Net par is the 3rd position.
+    final scores = List.generate(6, (i) => netPar - 2 + i);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
         Expanded(child: Text(player.player.name)),
         ...scores.map((score) {
-          if (score < 1) return const SizedBox(width: 38); // skip impossible scores
+          // Skip zero/negative scores — a 0 is not a valid golf score.
+          if (score < 1) return const SizedBox(width: 44);
+
           final sel = currentValue == score;
-          final diffFromPar = score - par;
-          // Subtle colour coding on the buttons themselves
-          Color btnColor;
-          if (sel) {
-            btnColor = Theme.of(context).colorScheme.primary;
-          } else if (diffFromPar <= -2) {
-            btnColor = Colors.yellow.shade200;
-          } else if (diffFromPar == -1) {
-            btnColor = Colors.green.shade100;
-          } else if (diffFromPar == 1) {
-            btnColor = Colors.orange.shade50;
-          } else if (diffFromPar >= 2) {
-            btnColor = Colors.red.shade50;
-          } else {
-            btnColor = Theme.of(context).colorScheme.surfaceContainerHighest;
-          }
 
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: GestureDetector(
+            child: NetScoreButton(
+              score: score,
+              par: par,
+              strokes: strokes,
+              selected: sel,
               onTap: () => onChanged(sel ? null : score),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: btnColor,
-                  borderRadius: BorderRadius.circular(6),
-                  border: sel
-                      ? Border.all(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 2)
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '$score',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: sel ? Colors.white : null,
-                  ),
-                ),
-              ),
             ),
           );
         }),
@@ -845,3 +830,4 @@ class _ScoreRow extends StatelessWidget {
     );
   }
 }
+

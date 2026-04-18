@@ -36,10 +36,23 @@ class HoleScore(models.Model):
         """Auto-calculate net_score and stableford_points before saving."""
         if self.gross_score is not None:
             self.net_score = self.gross_score - self.handicap_strokes
-            tee = self.foursome.round.course
-            hole_par = tee.hole(self.hole_number)['par']
-            diff = self.net_score - hole_par
-            self.stableford_points = max(0, 2 - diff)
+            # Par comes from THIS player's tee because par can differ by tee
+            # (e.g. women's forward tees playing a par-4 as a par-5). Fall
+            # back to any course tee only if the player has no membership/tee
+            # on record, so a save never 500s purely because of missing setup.
+            membership = (
+                self.foursome.memberships
+                    .filter(player_id=self.player_id)
+                    .select_related('tee')
+                    .first()
+            )
+            tee = membership.tee if membership and membership.tee_id else None
+            if tee is None:
+                tee = self.foursome.round.course.tees.first()
+            if tee is not None:
+                hole_par = tee.hole(self.hole_number)['par']
+                diff = self.net_score - hole_par
+                self.stableford_points = max(0, 2 - diff)
         super().save(*args, **kwargs)
 
     def __str__(self):

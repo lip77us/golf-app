@@ -54,7 +54,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from core.models import Player, Tee
+from core.models import Player, Tee, Course
 from tournament.models import Tournament, Round, Foursome, FoursomeMembership
 from scoring.models import HoleScore
 
@@ -63,7 +63,7 @@ from .serializers import (
     TournamentSerializer, RoundSerializer, FoursomeSerializer,
     ScoreSubmitSerializer, RoundSetupSerializer,
     TournamentCreateSerializer, RoundCreateSerializer,
-    NassauSetupSerializer, SixesSetupSerializer,
+    NassauSetupSerializer, SixesSetupSerializer, CourseSerializer,
 )
 
 
@@ -118,9 +118,22 @@ def _recalculate_games(foursome: Foursome) -> None:
 
 def _build_scorecard(foursome: Foursome) -> dict:
     """Build the scorecard dict for a foursome."""
-    tee          = foursome.round.course
-    memberships  = list(foursome.memberships.select_related('player').all())
+    memberships  = list(foursome.memberships.select_related('player', 'tee').all())
     real_members = [m for m in memberships if not m.player.is_phantom]
+
+    # Hole metadata (par, stroke_index, yards) lives on Tee.holes, not on
+    # Course. Round has no direct FK to Tee, so use a representative Tee from
+    # the memberships. Par and stroke_index are typically identical across
+    # tees at the same course; yardage will reflect the chosen membership's tee.
+    first_with_tee = next((m for m in memberships if m.tee_id), None)
+    if first_with_tee is None:
+        return {
+            'foursome_id' : foursome.id,
+            'group_number': foursome.group_number,
+            'holes'       : [],
+            'totals'      : [],
+        }
+    tee = first_with_tee.tee
 
     score_map = {}
     for hs in HoleScore.objects.filter(foursome=foursome).select_related('player'):
@@ -133,12 +146,19 @@ def _build_scorecard(foursome: Foursome) -> dict:
         scores_for_hole = []
         for m in real_members:
             hs = score_map.get((m.player_id, hole_num))
+            # For unplayed holes we predict handicap_strokes from the player's
+            # OWN tee SI (can differ from the representative tee's SI on
+            # courses with separate men's/women's allocations).
+            if m.tee_id is not None:
+                m_si = m.tee.hole(hole_num).get('stroke_index', stroke_index)
+            else:
+                m_si = stroke_index
             scores_for_hole.append({
                 'player_id'        : m.player_id,
                 'player_name'      : m.player.name,
                 'hole_number'      : hole_num,
                 'gross_score'      : hs.gross_score       if hs else None,
-                'handicap_strokes' : hs.handicap_strokes  if hs else m.handicap_strokes_on_hole(stroke_index),
+                'handicap_strokes' : hs.handicap_strokes  if hs else m.handicap_strokes_on_hole(m_si),
                 'net_score'        : hs.net_score         if hs else None,
                 'stableford_points': hs.stableford_points if hs else None,
             })
@@ -624,11 +644,21 @@ class ScoreSubmitView(APIView):
         hole_number    = ser.validated_data['hole_number']
         scores         = ser.validated_data['scores']
         pink_ball_lost = ser.validated_data['pink_ball_lost']
-        tee            = foursome.round.course
-        hole_info      = tee.hole(hole_number)
-        stroke_index   = hole_info.get('stroke_index', 18)
 
-        membership_map = {m.player_id: m for m in foursome.memberships.all()}
+        membership_map = {m.player_id: m for m in foursome.memberships.select_related('tee').all()}
+
+        # Sanity check: every player must have a tee assigned, because SI (and
+        # par) can differ between tees at the same course (e.g. men's vs
+        # women's tees, or forward tees playing a par-4 as a par-5). Handicap
+        # stroke allocation must use each player's own tee.
+        missing_tee = [
+            pid for pid, m in membership_map.items() if m.tee_id is None
+        ]
+        if missing_tee:
+            return Response(
+                {'detail': f'Players missing tee assignment: {missing_tee}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         errors = [
             f"Player {s['player_id']} is not in this foursome."
@@ -642,6 +672,9 @@ class ScoreSubmitView(APIView):
             pid         = s['player_id']
             gross       = s['gross_score']
             m           = membership_map[pid]
+            # Per-player SI: pulled from THIS player's tee, not a shared one.
+            player_hole_info = m.tee.hole(hole_number)
+            stroke_index     = player_hole_info.get('stroke_index', 18)
             hcp_strokes = m.handicap_strokes_on_hole(stroke_index)
 
             hs, _ = HoleScore.objects.get_or_create(

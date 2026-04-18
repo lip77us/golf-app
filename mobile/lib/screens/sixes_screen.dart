@@ -28,6 +28,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/net_score_button.dart';
 
 // Top-level helper shared by _MatchGrid and _ExtraTeamPickerSheet.
 String _initials(String name) {
@@ -199,8 +200,12 @@ class _SixesScreenState extends State<SixesScreen> {
     int par,
     int hole,
   ) async {
+    final sc      = context.read<RoundProvider>().scorecard;
     final current = (_pending[hole] ?? {})[player.player.id]
-        ?? _scoreFromCard(context.read<RoundProvider>().scorecard, hole, player.player.id);
+        ?? _scoreFromCard(sc, hole, player.player.id);
+    // Per-player handicap strokes on this hole, as served by the scorecard.
+    final strokes = sc?.holeData(hole)?.scoreFor(player.player.id)
+            ?.handicapStrokes ?? 0;
 
     final score = await showModalBottomSheet<int>(
       context: ctx,
@@ -209,6 +214,7 @@ class _SixesScreenState extends State<SixesScreen> {
         playerName: player.player.name,
         par: par,
         holeNumber: hole,
+        strokes: strokes,
         current: current,
       ),
     );
@@ -663,6 +669,10 @@ class _HoleScoreCard extends StatelessWidget {
             if (isHot)
               _InlineScorePicker(
                 par: par,
+                // Per-player handicap strokes on this hole — drives the
+                // net-centred coloring and shape decorations.
+                strokes: holeData?.scoreFor(m.player.id)
+                        ?.handicapStrokes ?? 0,
                 currentScore: gross,
                 onScoreSelected: (score) => onScoreSelected(m, score),
               ),
@@ -803,11 +813,13 @@ class _PlayerScoreRow extends StatelessWidget {
 
 class _InlineScorePicker extends StatefulWidget {
   final int  par;
+  final int  strokes;       // handicap strokes this player gets on this hole
   final int? currentScore;
   final void Function(int) onScoreSelected; // -1 = clear
 
   const _InlineScorePicker({
     required this.par,
+    required this.strokes,
     required this.currentScore,
     required this.onScoreSelected,
   });
@@ -817,7 +829,7 @@ class _InlineScorePicker extends StatefulWidget {
 }
 
 class _InlineScorePickerState extends State<_InlineScorePicker> {
-  static const double _itemWidth  = 48.0;
+  static const double _itemWidth  = 52.0;
   static const double _itemMargin = 5.0;
   static const double _itemTotal  = _itemWidth + _itemMargin * 2;
 
@@ -826,8 +838,10 @@ class _InlineScorePickerState extends State<_InlineScorePicker> {
   @override
   void initState() {
     super.initState();
-    // Scroll so that par-2 is at the left edge (shows par-2 through par+4).
-    final startIdx    = (widget.par - 3).clamp(0, 11); // 0-based index in [1..12]
+    // Scroll so that (netPar-2) is at the left edge — centring the slider
+    // on the player's net par rather than gross par.
+    final netPar      = widget.par + widget.strokes;
+    final startIdx    = (netPar - 3).clamp(0, 11); // 0-based index in [1..12]
     final initOffset  = (startIdx * _itemTotal).clamp(0.0, double.infinity);
     _ctrl = ScrollController(initialScrollOffset: initOffset);
   }
@@ -884,52 +898,19 @@ class _InlineScorePickerState extends State<_InlineScorePicker> {
             );
           }
 
-          final s    = scores[i];
-          final diff = s - widget.par;
-          final sel  = s == widget.currentScore;
-
-          Color bg;
-          if (sel) {
-            bg = theme.colorScheme.primary;
-          } else if (diff <= -2) {
-            bg = Colors.yellow.shade200;
-          } else if (diff == -1) {
-            bg = Colors.green.shade200;
-          } else if (diff == 0) {
-            bg = theme.colorScheme.surfaceContainerHighest;
-          } else if (diff == 1) {
-            bg = Colors.orange.shade100;
-          } else {
-            bg = Colors.red.shade100;
-          }
+          final s   = scores[i];
+          final sel = s == widget.currentScore;
 
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: _itemMargin),
-            child: GestureDetector(
+            child: NetScoreButton(
+              score: s,
+              par: widget.par,
+              strokes: widget.strokes,
+              selected: sel,
+              width: _itemWidth,
+              height: 48,
               onTap: () => widget.onScoreSelected(s),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width:  _itemWidth,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.circular(8),
-                  border: sel
-                      ? Border.all(
-                          color: theme.colorScheme.primary, width: 2.5)
-                      : Border.all(
-                          color: theme.colorScheme.outlineVariant),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '$s',
-                  style: TextStyle(
-                    fontSize:   18,
-                    fontWeight: FontWeight.bold,
-                    color:      sel ? Colors.white : null,
-                  ),
-                ),
-              ),
             ),
           );
         },
@@ -946,12 +927,14 @@ class _ScorePickerSheet extends StatelessWidget {
   final String playerName;
   final int    par;
   final int    holeNumber;
+  final int    strokes;     // handicap strokes this player gets on this hole
   final int?   current;
 
   const _ScorePickerSheet({
     required this.playerName,
     required this.par,
     required this.holeNumber,
+    required this.strokes,
     this.current,
   });
 
@@ -959,6 +942,7 @@ class _ScorePickerSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme  = Theme.of(context);
     final scores = List.generate(12, (i) => i + 1);
+    final netPar = par + strokes;
 
     return SafeArea(
       child: Padding(
@@ -981,13 +965,15 @@ class _ScorePickerSheet extends StatelessWidget {
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
           Text(
-            'Hole $holeNumber  •  Par $par',
+            strokes > 0
+                ? 'Hole $holeNumber  •  Par $par  •  Net par $netPar'
+                : 'Hole $holeNumber  •  Par $par',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
 
-          // Horizontally scrollable score buttons
+          // Horizontally scrollable score buttons — net-centred.
           SizedBox(
             height: 56,
             child: ListView.builder(
@@ -995,51 +981,19 @@ class _ScorePickerSheet extends StatelessWidget {
               padding: EdgeInsets.zero,
               itemCount: scores.length,
               itemBuilder: (_, i) {
-                final s    = scores[i];
-                final diff = s - par;
-                final sel  = s == current;
-
-                Color bg;
-                if (sel) {
-                  bg = theme.colorScheme.primary;
-                } else if (diff <= -2) {
-                  bg = Colors.yellow.shade200;
-                } else if (diff == -1) {
-                  bg = Colors.green.shade200;
-                } else if (diff == 0) {
-                  bg = theme.colorScheme.surfaceContainerHighest;
-                } else if (diff == 1) {
-                  bg = Colors.orange.shade100;
-                } else {
-                  bg = Colors.red.shade100;
-                }
+                final s   = scores[i];
+                final sel = s == current;
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: GestureDetector(
+                  child: NetScoreButton(
+                    score: s,
+                    par: par,
+                    strokes: strokes,
+                    selected: sel,
+                    width: 46,
+                    height: 52,
                     onTap: () => Navigator.of(context).pop(s),
-                    child: Container(
-                      width: 46,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: bg,
-                        borderRadius: BorderRadius.circular(8),
-                        border: sel
-                            ? Border.all(
-                                color: theme.colorScheme.primary, width: 2)
-                            : Border.all(
-                                color: theme.colorScheme.outlineVariant),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '$s',
-                        style: TextStyle(
-                          fontSize:   18,
-                          fontWeight: FontWeight.bold,
-                          color:      sel ? Colors.white : null,
-                        ),
-                      ),
-                    ),
                   ),
                 );
               },
