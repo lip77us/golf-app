@@ -165,11 +165,7 @@ class RoundProvider extends ChangeNotifier {
       'date':         round.date,
       'course':       {
         'id':            round.course.id,
-        'course_name':   round.course.courseName,
-        'tee_name':      round.course.teeName,
-        'slope':         round.course.slope,
-        'course_rating': round.course.courseRating,
-        'par':           round.course.par,
+        'name':          round.course.name,
       },
       'status':       round.status,
       'active_games': round.activeGames,

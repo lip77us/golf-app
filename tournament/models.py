@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 
-from core.models import GameType, RoundStatus, MatchStatus, Player, Tee
+from core.models import GameType, RoundStatus, MatchStatus, Player, Tee, Course
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ class Round(models.Model):
                         )
     round_number        = models.PositiveSmallIntegerField(default=1)
     date                = models.DateField(default=timezone.now)
-    course              = models.ForeignKey(Tee, on_delete=models.PROTECT, related_name='rounds')
+    course              = models.ForeignKey(Course, on_delete=models.PROTECT, related_name='rounds')
     status              = models.CharField(max_length=20, choices=RoundStatus.choices, default=RoundStatus.PENDING)
     active_games        = models.JSONField(
                             default=list,
@@ -64,7 +64,7 @@ class Round(models.Model):
     created_at          = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Round {self.round_number} — {self.date} @ {self.course.course_name}"
+        return f"Round {self.round_number} — {self.date} @ {self.course.name}"
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +112,7 @@ class FoursomeMembership(models.Model):
     """
     foursome            = models.ForeignKey(Foursome, on_delete=models.CASCADE, related_name='memberships')
     player              = models.ForeignKey(Player, on_delete=models.PROTECT, related_name='memberships')
+    tee                 = models.ForeignKey(Tee, on_delete=models.PROTECT, related_name='memberships', null=True)
     course_handicap     = models.SmallIntegerField(
                             help_text="Pre-calculated and stored at round setup."
                         )

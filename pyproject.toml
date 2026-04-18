@@ -5,7 +5,7 @@ description = ""
 authors = [
     {name = "lip77us",email = "paul@lipkin.us"}
 ]
-requires-python = "3.13.1"
+requires-python = ">=3.12"
 dependencies = [
     "django (>=6.0.4,<7.0.0)",
     "psycopg2-binary (>=2.9.11,<3.0.0)",

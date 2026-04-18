@@ -226,16 +226,25 @@ class ApiClient {
     return Round.fromJson(data as Map<String, dynamic>);
   }
 
+  Future<List<CourseInfo>> getCourses() async {
+    // Reusing the tees endpoint but returning courses might be tricky if we don't have a dedicated endpoint.
+    // However, since TeeInfo embeds CourseInfo, we can extract them if needed, or better, we can assume a `/courses/` endpoint.
+    final data = await _get('/courses/');
+    return (data as List)
+        .map((c) => CourseInfo.fromJson(c as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<Round> createRound({
     int? tournamentId,
-    required int teeId,
+    required int courseId,
     required String date,          // 'YYYY-MM-DD'
     double betUnit = 1.0,
     List<String> activeGames = const [],
     int roundNumber = 1,
   }) async {
     final data = await _post('/rounds/', {
-      'tee_id'       : teeId,
+      'course_id'    : courseId,
       'date'         : date,
       'bet_unit'     : betUnit,
       'active_games' : activeGames,
@@ -247,13 +256,13 @@ class ApiClient {
 
   Future<Round> setupRound(
     int roundId, {
-    required List<int> playerIds,
+    required List<Map<String, int>> players, // [{"player_id": 1, "tee_id": 2}]
     double handicapAllowance = 1.0,
     bool randomise = true,
     bool autoSetupGames = false,
   }) async {
     final data = await _post('/rounds/$roundId/setup/', {
-      'player_ids'        : playerIds,
+      'players'            : players,
       'handicap_allowance': handicapAllowance,
       'randomise'         : randomise,
       'auto_setup_games'  : autoSetupGames,

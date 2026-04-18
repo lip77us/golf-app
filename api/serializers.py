@@ -30,10 +30,21 @@ class PlayerSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+from core.models import Course
+
+class CourseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = Course
+        fields = ['id', 'name', 'created_at']
+        read_only_fields = ['id']
+
+
 class TeeSerializer(serializers.ModelSerializer):
+    course = CourseSerializer(read_only=True)
+
     class Meta:
         model  = Tee
-        fields = ['id', 'course_name', 'tee_name', 'slope', 'course_rating', 'par', 'holes']
+        fields = ['id', 'course', 'tee_name', 'slope', 'course_rating', 'par', 'holes']
         read_only_fields = ['id']
 
 
@@ -46,11 +57,12 @@ class MembershipSerializer(serializers.ModelSerializer):
     player_id    = serializers.PrimaryKeyRelatedField(
         source='player', queryset=Player.objects.all(), write_only=True
     )
+    tee          = TeeSerializer(read_only=True)
 
     class Meta:
         model  = FoursomeMembership
-        fields = ['id', 'player', 'player_id', 'course_handicap', 'playing_handicap']
-        read_only_fields = ['id', 'course_handicap', 'playing_handicap']
+        fields = ['id', 'player', 'player_id', 'tee', 'course_handicap', 'playing_handicap']
+        read_only_fields = ['id', 'tee', 'course_handicap', 'playing_handicap']
 
 
 class FoursomeSerializer(serializers.ModelSerializer):
@@ -64,7 +76,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
 
 
 class RoundSerializer(serializers.ModelSerializer):
-    course   = TeeSerializer(read_only=True)
+    course   = CourseSerializer(read_only=True)
     foursomes = FoursomeSerializer(many=True, read_only=True)
 
     class Meta:
@@ -78,7 +90,7 @@ class RoundSerializer(serializers.ModelSerializer):
 
 class RoundListSerializer(serializers.ModelSerializer):
     """Lightweight round serializer — no foursomes (used inside TournamentSerializer)."""
-    course_name = serializers.CharField(source='course.course_name', read_only=True)
+    course_name = serializers.CharField(source='course.name', read_only=True)
 
     class Meta:
         model  = Round
@@ -137,7 +149,7 @@ class TournamentCreateSerializer(serializers.Serializer):
 class RoundCreateSerializer(serializers.Serializer):
     """Create a new round, optionally inside a tournament."""
     tournament_id = serializers.IntegerField(required=False, allow_null=True)
-    tee_id        = serializers.IntegerField()
+    course_id     = serializers.IntegerField()
     date          = serializers.DateField()
     bet_unit      = serializers.DecimalField(max_digits=6, decimal_places=2, default='1.00')
     active_games  = serializers.ListField(child=serializers.CharField(), default=list)
@@ -145,18 +157,20 @@ class RoundCreateSerializer(serializers.Serializer):
     notes         = serializers.CharField(default='', allow_blank=True)
 
 
+class PlayerTeeSelectionSerializer(serializers.Serializer):
+    player_id = serializers.IntegerField()
+    tee_id    = serializers.IntegerField()
+
 class RoundSetupSerializer(serializers.Serializer):
     """
     Kick off a round: assign players to foursomes.
-    player_ids:         ordered list of Player PKs (max 16 for 4 foursomes)
+    players:            list of Player PKs and Tee PKs (max 16 for 4 foursomes)
     handicap_allowance: fraction of course handicap to apply (default 1.0)
     randomise:          shuffle players before grouping (default True)
     auto_setup_games:   if True, auto-configure Nassau/Sixes/MatchPlay teams
                         by handicap rank after the draw (default False)
     """
-    player_ids         = serializers.ListField(
-        child=serializers.IntegerField(), min_length=2, max_length=20
-    )
+    players            = PlayerTeeSelectionSerializer(many=True, min_length=2, max_length=20)
     handicap_allowance = serializers.FloatField(default=1.0, min_value=0.0, max_value=1.0)
     randomise          = serializers.BooleanField(default=True)
     auto_setup_games   = serializers.BooleanField(default=False)
