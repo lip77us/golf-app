@@ -794,6 +794,48 @@ class SixesSetupView(APIView):
         return Response({'segments_created': len(segments)}, status=status.HTTP_201_CREATED)
 
 
+class SixesExtraTeamsView(APIView):
+    """
+    POST /api/foursomes/{id}/sixes/extra-teams/
+    Body: { "team1_player_ids": [pk, pk], "team2_player_ids": [pk, pk] }
+
+    Sets teams on the existing is_extra=True segment without touching any
+    standard segments or hole results.  Returns the full sixes summary.
+    """
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        from games.models import SixesSegment, SixesTeam
+        from services.sixes import sixes_summary
+
+        seg = SixesSegment.objects.filter(foursome=foursome, is_extra=True).first()
+        if seg is None:
+            return Response(
+                {'error': 'No extra segment found for this foursome.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        t1_ids = request.data.get('team1_player_ids', [])
+        t2_ids = request.data.get('team2_player_ids', [])
+        if len(t1_ids) != 2 or len(t2_ids) != 2:
+            return Response(
+                {'error': 'Each team must have exactly 2 player IDs.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Replace any existing teams on the extra segment
+        seg.teams.all().delete()
+
+        t1 = SixesTeam.objects.create(
+            segment=seg, team_number=1, team_select_method='loser_choice')
+        t1.players.set(t1_ids)
+
+        t2 = SixesTeam.objects.create(
+            segment=seg, team_number=2, team_select_method='loser_choice')
+        t2.players.set(t2_ids)
+
+        return Response(sixes_summary(foursome), status=status.HTTP_200_OK)
+
+
 class SixesResultView(APIView):
     """GET /api/foursomes/{id}/sixes/"""
     def get(self, request, pk):

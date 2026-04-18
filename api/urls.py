@@ -40,8 +40,9 @@ urlpatterns = [
     path('foursomes/<int:pk>/nassau/setup/',  views.NassauSetupView.as_view(),  name='api-nassau-setup'),
 
     # ---- Six's ----
-    path('foursomes/<int:pk>/sixes/',        views.SixesResultView.as_view(), name='api-sixes-result'),
-    path('foursomes/<int:pk>/sixes/setup/',  views.SixesSetupView.as_view(),  name='api-sixes-setup'),
+    path('foursomes/<int:pk>/sixes/',              views.SixesResultView.as_view(),     name='api-sixes-result'),
+    path('foursomes/<int:pk>/sixes/setup/',        views.SixesSetupView.as_view(),      name='api-sixes-setup'),
+    path('foursomes/<int:pk>/sixes/extra-teams/',  views.SixesExtraTeamsView.as_view(), name='api-sixes-extra-teams'),
 
     # ---- Match Play ----
     path('foursomes/<int:pk>/match-play/',   views.MatchPlayResultView.as_view(), name='api-match-play-result'),
