@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 /// NET par (par + the player's handicap strokes on the hole).
 ///
 /// Visual encoding (netDiff = score - netPar):
-///   netDiff <= -2  (net eagle or better)  yellow fill, 2 concentric circles
-///   netDiff == -1  (net birdie)           yellow fill, 1 circle
-///   netDiff ==  0  (net par)              green  fill, no shape
-///   netDiff ==  1  (net bogey)            white  fill, 1 square
-///   netDiff >=  2  (net double or worse)  white  fill, 2 concentric squares
+///   netDiff <= -2  (net eagle or better)  green fill, 2 concentric circles
+///   netDiff == -1  (net birdie)           green fill, 1 circle
+///   netDiff ==  0  (net par)              white fill, no shape
+///   netDiff ==  1  (net bogey)            red   fill, 1 square
+///   netDiff >=  2  (net double or worse)  red   fill, 2 concentric squares
 ///
 /// Selection is shown with a thicker primary-colored outer border so it
 /// never hides the net-vs-par shape inside.
@@ -25,7 +25,7 @@ class NetScoreButton extends StatelessWidget {
   /// True if this button is the currently chosen score.
   final bool selected;
 
-  /// Overall button size. Defaults to a compact 44x44.
+  /// Overall button size. Defaults to a compact 40x40.
   final double width;
   final double height;
 
@@ -39,8 +39,8 @@ class NetScoreButton extends StatelessWidget {
     required this.par,
     required this.strokes,
     required this.selected,
-    this.width = 44,
-    this.height = 44,
+    this.width = 40,
+    this.height = 40,
     this.onTap,
   });
 
@@ -51,13 +51,16 @@ class NetScoreButton extends StatelessWidget {
     final netDiff = score - netPar;
 
     // Fill color driven purely by net diff.
+    //   under par  -> green  (single shade)
+    //   net par    -> white
+    //   over par   -> red    (single shade)
     final Color fill;
     if (netDiff < 0) {
-      fill = Colors.yellow.shade200;   // net birdie or better
+      fill = Colors.green.shade200;    // net birdie or better
     } else if (netDiff == 0) {
-      fill = Colors.green.shade200;    // net par
+      fill = Colors.white;             // net par
     } else {
-      fill = Colors.white;             // over net par
+      fill = Colors.red.shade200;      // over net par
     }
 
     // Shape style driven by net diff.

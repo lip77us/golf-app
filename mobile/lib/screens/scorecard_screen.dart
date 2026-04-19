@@ -527,13 +527,15 @@ class _ScorecardGrid extends StatelessWidget {
 
                   Color? bg;
                   if (isSelected)      bg = theme.colorScheme.primaryContainer.withOpacity(0.25);
-                  // Net-based coloring, aligned with the score entry slider.
-                  // Over net par is intentionally left uncoloured (white).
+                  // Net-based coloring, aligned with the score entry buttons:
+                  //   under net par -> green
+                  //   net par       -> white (leave uncoloured)
+                  //   over net par  -> red
                   if (gross != null && net != null) {
                     final diff = net - par;        // net diff vs par
-                    if (diff <= -2)      bg = Colors.yellow.shade200; // net eagle+
-                    else if (diff == -1) bg = Colors.yellow.shade100; // net birdie
-                    else if (diff == 0)  bg = Colors.green.shade100;  // net par
+                    if (diff < 0)       bg = Colors.green.shade200; // under net par
+                    else if (diff > 0)  bg = Colors.red.shade200;   // over net par
+                    // diff == 0 → leave as white (no fill)
                   }
                   // Local-only pending: teal tint so user knows it's saved but not synced
                   if (isLocalOnly)     bg = theme.colorScheme.tertiaryContainer.withOpacity(0.5);
@@ -715,7 +717,7 @@ class _HoleEntryPanel extends StatelessWidget {
               offset: const Offset(0, -2))
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -811,12 +813,12 @@ class _ScoreRow extends StatelessWidget {
         Expanded(child: Text(player.player.name)),
         ...scores.map((score) {
           // Skip zero/negative scores — a 0 is not a valid golf score.
-          if (score < 1) return const SizedBox(width: 44);
+          if (score < 1) return const SizedBox(width: 40);
 
           final sel = currentValue == score;
 
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 1),
             child: NetScoreButton(
               score: score,
               par: par,
