@@ -14,6 +14,7 @@ class GameType(models.TextChoices):
     PINK_BALL       = 'pink_ball',       'Pink Ball'
     SCRAMBLE        = 'scramble',        'Scramble'
     MATCH_PLAY      = 'match_play',      'Match Play'
+    MATCH_PLAY_18   = 'match_play_18',   '18-Hole Match Play'
     STABLEFORD      = 'stableford',      'Stableford'
     SKINS           = 'skins',           'Skins'
     LOW_NET_ROUND   = 'low_net_round',   'Low Net (Round)'

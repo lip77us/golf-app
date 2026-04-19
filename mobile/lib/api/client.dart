@@ -388,4 +388,26 @@ class ApiClient {
     final data = await _get('/foursomes/$foursomeId/match-play/');
     return data as Map<String, dynamic>;
   }
+
+  // ---- 18-Hole Match Play ----
+
+  Future<MatchPlay18Summary> getMatchPlay18Summary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/match-play-18/');
+    return MatchPlay18Summary.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> postMatchPlay18Setup(
+    int foursomeId, {
+    required List<int> team1Ids,
+    required List<int> team2Ids,
+    String handicapMode = 'net',
+    int netPercent = 100,
+  }) async {
+    await _post('/foursomes/$foursomeId/match-play-18/setup/', {
+      'team1_player_ids': team1Ids,
+      'team2_player_ids': team2Ids,
+      'handicap_mode': handicapMode,
+      'net_percent': netPercent,
+    });
+  }
 }

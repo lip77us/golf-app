@@ -14,6 +14,8 @@ import 'screens/round_screen.dart';
 import 'screens/scorecard_screen.dart';
 import 'screens/sixes_screen.dart';
 import 'screens/sixes_setup_screen.dart';
+import 'screens/match_play_18_screen.dart';
+import 'screens/match_play_18_setup_screen.dart';
 import 'screens/leaderboard_screen.dart';
 
 /// Global navigator key — lets AuthProvider redirect to /login on 401
@@ -144,6 +146,14 @@ class _GolfAppState extends State<GolfApp> {
         final foursomeId = settings.arguments as int;
         return MaterialPageRoute(
             builder: (_) => SixesScreen(foursomeId: foursomeId));
+      case '/match-play-18-setup':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => MatchPlay18SetupScreen(foursomeId: foursomeId));
+      case '/match-play-18':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => MatchPlay18Screen(foursomeId: foursomeId));
       case '/leaderboard':
         final roundId = settings.arguments as int;
         return MaterialPageRoute(

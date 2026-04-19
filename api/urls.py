@@ -47,4 +47,8 @@ urlpatterns = [
 
     # ---- Match Play ----
     path('foursomes/<int:pk>/match-play/',   views.MatchPlayResultView.as_view(), name='api-match-play-result'),
+
+    # ---- 18-Hole Match Play ----
+    path('foursomes/<int:pk>/match-play-18/',       views.MatchPlay18ResultView.as_view(), name='api-match-play-18-result'),
+    path('foursomes/<int:pk>/match-play-18/setup/', views.MatchPlay18SetupView.as_view(),  name='api-match-play-18-setup'),
 ]

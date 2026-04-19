@@ -544,6 +544,98 @@ class SixesSummary {
 }
 
 // ---------------------------------------------------------------------------
+// 18-Hole Match Play
+// ---------------------------------------------------------------------------
+
+class MatchPlay18HoleResult {
+  final int hole;
+  final int? t1Net;
+  final int? t2Net;
+  final String? winner; // 'team1', 'team2', or 'halved'
+  final int margin;     // positive = team1 leading after this hole
+
+  const MatchPlay18HoleResult({
+    required this.hole,
+    this.t1Net,
+    this.t2Net,
+    this.winner,
+    required this.margin,
+  });
+
+  factory MatchPlay18HoleResult.fromJson(Map<String, dynamic> j) => MatchPlay18HoleResult(
+        hole:   j['hole'] as int,
+        t1Net:  j['t1_net'] as int?,
+        t2Net:  j['t2_net'] as int?,
+        winner: j['winner'] as String?,
+        margin: j['margin'] as int? ?? 0,
+      );
+}
+
+class MatchPlay18Summary {
+  final String status;
+  final String? result;
+  final int? finishedOnHole;
+  final List<String> team1;
+  final List<String> team2;
+  final String handicapMode;
+  final int netPercent;
+  final List<MatchPlay18HoleResult> holes;
+
+  const MatchPlay18Summary({
+    required this.status,
+    this.result,
+    this.finishedOnHole,
+    required this.team1,
+    required this.team2,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.holes,
+  });
+
+  factory MatchPlay18Summary.fromJson(Map<String, dynamic> j) {
+    final hcap = j['handicap'] as Map<String, dynamic>? ?? {};
+    return MatchPlay18Summary(
+      status:         j['status'] as String? ?? 'pending',
+      result:         j['result'] as String?,
+      finishedOnHole: j['finished_on_hole'] as int?,
+      team1:          List<String>.from(j['team1'] as List? ?? []),
+      team2:          List<String>.from(j['team2'] as List? ?? []),
+      handicapMode:   hcap['mode'] as String? ?? 'net',
+      netPercent:     hcap['net_percent'] as int? ?? 100,
+      holes: (j['holes'] as List? ?? [])
+          .map((h) => MatchPlay18HoleResult.fromJson(h as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  bool get isNet => handicapMode == 'net';
+  bool get isGross => handicapMode == 'gross';
+
+  String get statusDisplay {
+    if (team1.isEmpty || team2.isEmpty) return 'Select Players';
+    if (holes.isEmpty) return '—';
+
+    final holesPlayed = holes.length;
+    final lastMargin  = holes.last.margin;
+    final absMargin   = lastMargin.abs();
+    final holesLeft   = 18 - holesPlayed;
+
+    if (status == 'complete' || status == 'halved') {
+      if (result == 'halved') return 'Halved';
+      if (holesLeft > 0) return '$absMargin and $holesLeft';
+      return absMargin > 0 ? '$absMargin UP' : 'Halved';
+    }
+
+    if (status == 'in_progress') {
+      if (lastMargin == 0) return 'All Square thru $holesPlayed';
+      return '$absMargin UP thru $holesPlayed';
+    }
+
+    return '—';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Leaderboard (loosely typed — shape varies by game)
 // ---------------------------------------------------------------------------
 

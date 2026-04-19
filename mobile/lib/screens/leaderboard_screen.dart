@@ -140,6 +140,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       'nassau':       'Nassau',
       'sixes':        "Six's",
       'match_play':   'Match Play',
+      'match_play_18':'18-Hole Match Play',
       'irish_rumble': 'Irish Rumble',
       'scramble':     'Scramble',
       'low_net_round':'Low Net',
@@ -177,6 +178,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _SixesGroupCard.new);
       case 'match_play':
         return _ByGroupView(data: data, builder: _MatchPlayGroupCard.new);
+      case 'match_play_18':
+        return _ByGroupView(data: data, builder: _MatchPlay18GroupCard.new);
       default:
         return _RawJsonView(data: data);
     }
@@ -485,6 +488,53 @@ class _MatchPlayGroupCard extends StatelessWidget {
               ]),
             );
           }),
+        ]),
+      ),
+    );
+  }
+}
+
+// ---- 18-Hole Match Play group card ----
+
+class _MatchPlay18GroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _MatchPlay18GroupCard({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = group['summary'] as Map<String, dynamic>? ?? {};
+    final isNet = summary['handicap']?['mode'] == 'net';
+    final resultStr = summary['result'] == 'team1'
+        ? 'Team 1 Wins'
+        : summary['result'] == 'team2' ? 'Team 2 Wins' : 'Halved';
+
+    final statusStr = summary['status'] == 'complete'
+        ? (summary['finished_on_hole'] != null ? 'Finished on hole ${summary['finished_on_hole']}' : 'Complete')
+        : 'In Progress';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Text(isNet ? 'Net' : 'Gross',
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ]),
+          const Divider(height: 12),
+          Text('T1: ${(summary['team1'] as List?)?.join(', ') ?? ''}'),
+          Text('T2: ${(summary['team2'] as List?)?.join(', ') ?? ''}'),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(statusStr, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              const Spacer(),
+              if (summary['status'] == 'complete')
+                Text(resultStr, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          )
         ]),
       ),
     );

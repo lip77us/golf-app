@@ -89,9 +89,11 @@ class RoundProvider extends ChangeNotifier {
   /// Foursomes whose Sixes match has been set up (segments + teams exist).
   /// Used by RoundScreen to label the entry button "Start Match" vs "Enter Scores".
   final Set<int> _sixesStartedFoursomes = {};
+  final Set<int> _matchPlay18StartedFoursomes = {};
 
   bool    _loadingRound       = false;
   bool    _loadingScorecard   = false;
+  bool    _loadingMatchPlay18 = false;
   bool    _loadingLeaderboard = false;
   bool    _loadingSixes       = false;
   bool    _submitting         = false;
@@ -108,15 +110,21 @@ class RoundProvider extends ChangeNotifier {
   Scorecard?    get scorecard          => _scorecard;
   Leaderboard?  get leaderboard        => _leaderboard;
   SixesSummary? get sixesSummary       => _sixesSummary;
+  MatchPlay18Summary? _matchPlay18Summary;
+  MatchPlay18Summary? get matchPlay18Summary => _matchPlay18Summary;
   int?          get activeFoursomeId   => _activeFoursomeId;
 
   /// True once sixes segments with players have been saved for [foursomeId].
   bool sixesIsStarted(int foursomeId) =>
       _sixesStartedFoursomes.contains(foursomeId);
+  bool matchPlay18IsStarted(int foursomeId) =>
+      _matchPlay18StartedFoursomes.contains(foursomeId);
+
   bool          get loadingRound       => _loadingRound;
   bool          get loadingScorecard   => _loadingScorecard;
   bool          get loadingLeaderboard => _loadingLeaderboard;
   bool          get loadingSixes       => _loadingSixes;
+  bool          get loadingMatchPlay18 => _loadingMatchPlay18;
   bool          get submitting         => _submitting;
   String?       get error              => _error;
   Map<int, Map<int, int>> get localPendingByHole => _localPendingByHole;
@@ -139,6 +147,12 @@ class RoundProvider extends ChangeNotifier {
       if (_round!.activeGames.contains('sixes')) {
         for (final fs in _round!.foursomes) {
           loadSixes(fs.id); // intentionally unawaited — non-fatal
+        }
+      }
+
+      if (_round!.activeGames.contains('match_play_18')) {
+        for (final fs in _round!.foursomes) {
+          loadMatchPlay18(fs.id); // intentionally unawaited
         }
       }
     } on NetworkException {
@@ -321,6 +335,58 @@ class RoundProvider extends ChangeNotifier {
       }).toList(),
     };
     _localDb.cacheScorecard(foursomeId, json);  // intentionally unawaited
+  }
+
+  // ── Match Play 18 ──────────────────────────────────────────────────────────
+
+  Future<bool> setupMatchPlay18(
+    int foursomeId, {
+    required List<int> team1Ids,
+    required List<int> team2Ids,
+    String handicapMode = 'net',
+    int netPercent = 100,
+  }) async {
+    _loadingMatchPlay18 = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _client.postMatchPlay18Setup(
+        foursomeId,
+        team1Ids: team1Ids,
+        team2Ids: team2Ids,
+        handicapMode: handicapMode,
+        netPercent: netPercent,
+      );
+      _matchPlay18StartedFoursomes.add(foursomeId);
+
+      _matchPlay18Summary = await _client.getMatchPlay18Summary(foursomeId);
+
+      _loadingMatchPlay18 = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _loadingMatchPlay18 = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> loadMatchPlay18(int foursomeId) async {
+    _loadingMatchPlay18 = true;
+    notifyListeners();
+
+    try {
+      _matchPlay18Summary = await _client.getMatchPlay18Summary(foursomeId);
+      final started = _matchPlay18Summary!.team1.isNotEmpty && _matchPlay18Summary!.team2.isNotEmpty;
+      if (started) _matchPlay18StartedFoursomes.add(foursomeId);
+    } catch (e) {
+      debugPrint('loadMatchPlay18 error: $e');
+    } finally {
+      _loadingMatchPlay18 = false;
+      notifyListeners();
+    }
   }
 
   // ── Sixes ──────────────────────────────────────────────────────────────────

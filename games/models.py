@@ -403,6 +403,76 @@ class ScrambleResult(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# 18-HOLE MATCH PLAY
+# ---------------------------------------------------------------------------
+
+class MatchPlay18Game(models.Model):
+    """
+    An 18-hole Match Play game for a foursome. Can be 1v1 or 2v2 depending on
+    the players assigned to its two teams.
+    """
+    foursome            = models.ForeignKey(Foursome, on_delete=models.CASCADE, related_name='match_play_18_games')
+    handicap_mode       = models.CharField(max_length=20, choices=HandicapMode.choices, default=HandicapMode.NET)
+    net_percent         = models.PositiveSmallIntegerField(default=100)
+    status              = models.CharField(max_length=20, choices=MatchStatus.choices, default=MatchStatus.PENDING)
+    result              = models.CharField(
+                            max_length=10,
+                            choices=[('team1', 'Team 1'), ('team2', 'Team 2'), ('halved', 'Halved')],
+                            null=True, blank=True
+                        )
+    finished_on_hole    = models.PositiveSmallIntegerField(
+                            null=True, blank=True,
+                            help_text="Hole number the match was won (for early finish tracking)."
+                        )
+
+    def __str__(self):
+        return f"Match Play 18 — Group {self.foursome.group_number}"
+
+
+class MatchPlay18Team(models.Model):
+    """
+    One of the two teams in an 18-hole match play game.
+    Can contain 1 or 2 players.
+    """
+    game                = models.ForeignKey(MatchPlay18Game, on_delete=models.CASCADE, related_name='teams')
+    team_number         = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(2)])
+    players             = models.ManyToManyField(Player, related_name='match_play_18_teams')
+    team_select_method  = models.CharField(max_length=20, choices=TeamSelectMethod.choices, blank=True)
+
+    class Meta:
+        unique_together = ('game', 'team_number')
+
+    def __str__(self):
+        return f"Team {self.team_number} for {self.game}"
+
+
+class MatchPlay18HoleResult(models.Model):
+    """
+    Result of one hole within an 18-hole match play game.
+    winner is null on a halve.
+    holes_up_after is the running margin after this hole
+    (positive = team1 leading, negative = team2 leading).
+    """
+    game                = models.ForeignKey(MatchPlay18Game, on_delete=models.CASCADE, related_name='hole_results')
+    hole_number         = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(18)])
+    team1_best_net      = models.SmallIntegerField(null=True, blank=True)
+    team2_best_net      = models.SmallIntegerField(null=True, blank=True)
+    winner              = models.CharField(
+                            max_length=10,
+                            choices=[('team1', 'Team 1'), ('team2', 'Team 2'), ('halved', 'Halved')],
+                            null=True, blank=True
+                        )
+    holes_up_after      = models.SmallIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering = ['hole_number']
+
+    def __str__(self):
+        return f"Hole {self.hole_number} — {self.game}"
+
+
+# ---------------------------------------------------------------------------
 # MATCH PLAY (within foursome, 2 × 9 holes, single elimination or points)
 # ---------------------------------------------------------------------------
 

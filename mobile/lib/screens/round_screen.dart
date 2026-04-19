@@ -103,15 +103,20 @@ class _RoundScreenState extends State<RoundScreen> {
                 isComplete:   isComplete,
                 sixesActive:  round.activeGames.contains('sixes'),
                 sixesStarted: rp.sixesIsStarted(fs.id),
+                matchPlay18Active:  round.activeGames.contains('match_play_18'),
+                matchPlay18Started: rp.matchPlay18IsStarted(fs.id),
                 onEnterScores: () {
                   context.read<RoundProvider>().loadScorecard(fs.id);
                   // Route to the Six's setup screen (Match 1 team picker)
                   // when that game is active, otherwise use the standard
                   // scorecard.  SixesSetupScreen auto-redirects to /sixes
                   // if the match is already started.
-                  final route = (round.activeGames.contains('sixes'))
-                      ? '/sixes-setup'
-                      : '/scorecard';
+                  String route = '/scorecard';
+                  if (round.activeGames.contains('sixes')) {
+                      route = '/sixes-setup';
+                  } else if (round.activeGames.contains('match_play_18')) {
+                      route = '/match-play-18-setup';
+                  }
                   Navigator.of(context).pushNamed(route, arguments: fs.id);
                 },
               )),
@@ -173,6 +178,7 @@ class _RoundInfoCard extends StatelessWidget {
       'nassau':       'Nassau',
       'sixes':        "Six's",
       'match_play':   'Match Play',
+      'match_play_18':'18-Hole Match Play',
       'irish_rumble': 'Irish Rumble',
       'scramble':     'Scramble',
       'low_net_round':'Low Net',
@@ -262,6 +268,8 @@ class _FoursomeCard extends StatelessWidget {
   final bool     isComplete;
   final bool     sixesActive;
   final bool     sixesStarted;
+  final bool     matchPlay18Active;
+  final bool     matchPlay18Started;
   final VoidCallback onEnterScores;
 
   const _FoursomeCard({
@@ -270,6 +278,8 @@ class _FoursomeCard extends StatelessWidget {
     required this.isComplete,
     required this.sixesActive,
     required this.sixesStarted,
+    required this.matchPlay18Active,
+    required this.matchPlay18Started,
     required this.onEnterScores,
   });
 
@@ -328,7 +338,7 @@ class _FoursomeCard extends StatelessWidget {
               label: Text(
                 isComplete
                     ? 'View Scorecard'
-                    : (sixesActive && !sixesStarted)
+                    : ((sixesActive && !sixesStarted) || (matchPlay18Active && !matchPlay18Started))
                         ? 'Start Match'
                         : 'Enter Scores',
               ),

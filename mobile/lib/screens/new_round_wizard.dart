@@ -17,6 +17,7 @@ const _allGames = [
   ('stableford',   'Stableford'),
   ('pink_ball',    'Pink Ball'),
   ('match_play',   'Match Play'),
+  ('match_play_18','18-Hole Match Play'),
   ('low_net_round','Low Net'),
   ('irish_rumble', 'Irish Rumble'),
   ('scramble',     'Scramble'),

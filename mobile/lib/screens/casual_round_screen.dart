@@ -33,6 +33,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     ('nassau', 'Nassau'),
     ('skins', 'Skins'),
     ('points_5_3_1', 'Points (5-3-1)'),
+    ('match_play_18', '18-Hole Match Play'),
   ];
 
   @override
@@ -221,9 +222,19 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 FilterChip(
                   label: Text(gameLabel),
                   selected: _activeGames.contains(gameValue),
-                  onSelected: gameValue == 'sixes'
-                      ? null // Keep sixes selected and disable unselecting it
-                      : null, // Disable the others entirely for now, as requested
+                  onSelected: (gameValue == 'sixes' || gameValue == 'match_play_18')
+                      ? (v) {
+                          setState(() {
+                            if (v) {
+                              _activeGames.add(gameValue);
+                            } else {
+                              if (_activeGames.length > 1) {
+                                _activeGames.remove(gameValue);
+                              }
+                            }
+                          });
+                        }
+                      : null, // Disable the others entirely for now
                 ),
             ],
           ),

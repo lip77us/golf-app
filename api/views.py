@@ -98,6 +98,11 @@ def _recalculate_games(foursome: Foursome) -> None:
         from services.match_play import calculate_match_play
         calculate_match_play(foursome)
 
+    # 6. 18-Hole Match Play
+    if 'match_play_18' in active_games:
+        from services.match_play_18 import calculate_match_play_18
+        calculate_match_play_18(foursome)
+
     # ---- Per-round ----
     if 'stableford' in active_games:
         from services.stableford import calculate_stableford
@@ -810,6 +815,54 @@ class NassauResultView(APIView):
         if summary is None:
             return Response(
                 {'detail': 'No Nassau game set up for this foursome.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(summary)
+
+# ---------------------------------------------------------------------------
+# 18-Hole Match Play
+# ---------------------------------------------------------------------------
+
+class MatchPlay18SetupView(APIView):
+    """
+    POST /api/foursomes/{id}/match-play-18/setup/
+    Body: { "team1_player_ids": [...], "team2_player_ids": [...], "handicap_mode": "net", "net_percent": 100 }
+    """
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+
+        from services.match_play_18 import setup_match_play_18
+
+        team1_ids = request.data.get('team1_player_ids', [])
+        team2_ids = request.data.get('team2_player_ids', [])
+        handicap_mode = request.data.get('handicap_mode', 'net')
+        net_percent = int(request.data.get('net_percent', 100))
+
+        if not team1_ids or not team2_ids:
+             return Response(
+                 {'detail': 'Both team1_player_ids and team2_player_ids are required.'},
+                 status=status.HTTP_400_BAD_REQUEST
+             )
+
+        game = setup_match_play_18(
+            foursome,
+            team1_ids=team1_ids,
+            team2_ids=team2_ids,
+            handicap_mode=handicap_mode,
+            net_percent=net_percent,
+        )
+        return Response({'match_play_18_game_id': game.id}, status=status.HTTP_201_CREATED)
+
+
+class MatchPlay18ResultView(APIView):
+    """GET /api/foursomes/{id}/match-play-18/"""
+    def get(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        from services.match_play_18 import match_play_18_summary
+        summary = match_play_18_summary(foursome)
+        if summary is None:
+            return Response(
+                {'detail': 'No 18-hole match play game set up for this foursome.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(summary)
