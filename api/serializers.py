@@ -191,8 +191,23 @@ class SixesSetupSerializer(serializers.Serializer):
     """
     Set up (or update) the Six's segments and teams for a foursome.
     segments is a list matching the services/sixes.py team_data format.
+
+    handicap_mode and net_percent are optional and default to full net
+    (mode='net', net_percent=100) to preserve existing behavior for
+    clients that haven't been updated yet.  'gross' ignores handicaps;
+    'net' applies playing_handicap × (net_percent / 100) allocated by SI.
     """
-    segments = serializers.ListField(child=serializers.DictField(), min_length=1, max_length=5)
+    segments      = serializers.ListField(
+                        child=serializers.DictField(),
+                        min_length=1, max_length=5,
+                    )
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'],
+                        default='net',
+                    )
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100,
+                    )
 
 
 # ===========================================================================

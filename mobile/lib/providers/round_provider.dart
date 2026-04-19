@@ -332,15 +332,25 @@ class RoundProvider extends ChangeNotifier {
   ///       'team1_player_ids', 'team2_player_ids' }, ... ]
   ///
   /// Returns true on success.  On failure, [error] is set and false returned.
+  ///
+  /// [handicapMode] is 'net' (default) or 'gross'.  [netPercent] is only
+  /// meaningful when handicapMode == 'net' (100 = full handicap).
   Future<bool> setupSixes(
     int foursomeId,
-    List<Map<String, dynamic>> segments,
-  ) async {
+    List<Map<String, dynamic>> segments, {
+    String handicapMode = 'net',
+    int    netPercent   = 100,
+  }) async {
     _submitting = true;
     _clearError();
     notifyListeners();
     try {
-      await _client.postSixesSetup(foursomeId, segments);
+      await _client.postSixesSetup(
+        foursomeId,
+        segments,
+        handicapMode: handicapMode,
+        netPercent:   netPercent,
+      );
       _sixesStartedFoursomes.add(foursomeId); // mark as started
       return true;
     } on NetworkException {

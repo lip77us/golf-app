@@ -36,6 +36,55 @@ String _initials(String name) {
   return parts.take(2).map((p) => p.isEmpty ? '' : p[0].toUpperCase()).join();
 }
 
+// ---------------------------------------------------------------------------
+// Match-handicap helpers
+// ---------------------------------------------------------------------------
+
+/// Compute a player's *effective* playing handicap for the current Sixes
+/// match, given the match's handicap mode and net percentage.
+///
+///   Net   : round(playingHandicap × netPercent / 100)
+///   Gross : 0 (no strokes — raw scores used)
+///   SO    : playingHandicap − lowestPlayingHandicap (low plays to 0).
+///           `lowestPlayingHandicap` must be provided for this to work;
+///           if null, we fall back to full net (keeps things safe until
+///           Strokes-Off is wired all the way through).
+///
+/// Returns a non-negative integer.
+int effectiveMatchHandicap({
+  required String mode,
+  required int    netPercent,
+  required int    playingHandicap,
+  int?            lowestPlayingHandicap,
+}) {
+  switch (mode) {
+    case 'gross':
+      return 0;
+    case 'strokes_off':
+      if (lowestPlayingHandicap == null) {
+        // Fallback: behave like full net until SO is implemented end-to-end.
+        return playingHandicap;
+      }
+      final off = playingHandicap - lowestPlayingHandicap;
+      return off < 0 ? 0 : off;
+    case 'net':
+    default:
+      if (netPercent == 100) return playingHandicap;
+      return (playingHandicap * netPercent / 100.0).round();
+  }
+}
+
+/// Per-hole stroke allocation for a given effective handicap and the hole's
+/// stroke index (1 = hardest hole).  Matches the backend rule in
+/// FoursomeMembership.handicap_strokes_on_hole and scoring/handicap.py.
+int strokesOnHole(int effectiveHandicap, int strokeIndex) {
+  if (effectiveHandicap <= 0) return 0;
+  final full  = effectiveHandicap ~/ 18;
+  final rem   = effectiveHandicap %  18;
+  final extra = strokeIndex <= rem ? 1 : 0;
+  return full + extra;
+}
+
 class SixesScreen extends StatefulWidget {
   final int foursomeId;
   const SixesScreen({super.key, required this.foursomeId});
@@ -199,13 +248,29 @@ class _SixesScreenState extends State<SixesScreen> {
     Membership player,
     int par,
     int hole,
+    List<Membership> players,   // foursome players, needed for SO low lookup
   ) async {
-    final sc      = context.read<RoundProvider>().scorecard;
+    final rp      = context.read<RoundProvider>();
+    final sc      = rp.scorecard;
+    final summary = rp.sixesSummary;
     final current = (_pending[hole] ?? {})[player.player.id]
         ?? _scoreFromCard(sc, hole, player.player.id);
-    // Per-player handicap strokes on this hole, as served by the scorecard.
-    final strokes = sc?.holeData(hole)?.scoreFor(player.player.id)
-            ?.handicapStrokes ?? 0;
+
+    // Per-player match strokes on this hole — honors the match's handicap
+    // mode and net_percent, so the picker colors match the score entry UI.
+    final mode        = summary?.handicapMode ?? 'net';
+    final netPercent  = summary?.netPercent   ?? 100;
+    final lowPlaying  = mode == 'strokes_off' && players.isNotEmpty
+        ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
+        : null;
+    final effective = effectiveMatchHandicap(
+      mode:                  mode,
+      netPercent:            netPercent,
+      playingHandicap:       player.playingHandicap,
+      lowestPlayingHandicap: lowPlaying,
+    );
+    final si = sc?.holeData(hole)?.strokeIndex ?? 18;
+    final strokes = strokesOnHole(effective, si);
 
     final score = await showModalBottomSheet<int>(
       context: ctx,
@@ -506,10 +571,14 @@ class _SixesScreenState extends State<SixesScreen> {
                 par:        par,
                 hasPinkBall:   _hasPinkBall,
                 pinkBallLost:  _pinkBallLost,
+                // Match handicap config drives per-player effective strokes
+                // (used for score-picker coloring, running net total, and
+                // the match-handicap label next to each golfer's name).
+                sixesSummary: rp.sixesSummary,
                 onScoreSelected: (m, score) =>
                     _selectScore(m, score, _selectedHole),
                 onEditTap: (m) =>
-                    _editScore(ctx, m, par, _selectedHole),
+                    _editScore(ctx, m, par, _selectedHole, players),
                 onPinkBallLostChanged: (v) =>
                     setState(() => _pinkBallLost = v),
               ),
@@ -572,6 +641,7 @@ class _HoleScoreCard extends StatelessWidget {
   final void Function(Membership, int) onScoreSelected; // inline picker
   final void Function(Membership)      onEditTap;       // modal for editing
   final void Function(bool)            onPinkBallLostChanged;
+  final SixesSummary?                  sixesSummary;    // nullable until loaded
 
   const _HoleScoreCard({
     required this.holeData,
@@ -587,9 +657,44 @@ class _HoleScoreCard extends StatelessWidget {
     required this.onScoreSelected,
     required this.onEditTap,
     required this.onPinkBallLostChanged,
+    required this.sixesSummary,
   });
 
+  /// Mode for this match ('net' default while summary is still loading).
+  String get _mode        => sixesSummary?.handicapMode ?? 'net';
+  int    get _netPercent  => sixesSummary?.netPercent   ?? 100;
+
+  /// Lowest playing_handicap in the foursome — used for Strokes-Off mode.
+  int? get _lowPlayingHandicap {
+    if (_mode != 'strokes_off' || players.isEmpty) return null;
+    return players
+        .map((m) => m.playingHandicap)
+        .reduce((a, b) => a < b ? a : b);
+  }
+
+  /// This player's effective handicap for the current match.
+  /// (Example: playing_handicap=32 at 50% net → 16.)
+  int _matchHandicapFor(Membership m) => effectiveMatchHandicap(
+        mode:                  _mode,
+        netPercent:            _netPercent,
+        playingHandicap:       m.playingHandicap,
+        lowestPlayingHandicap: _lowPlayingHandicap,
+      );
+
+  /// Per-player, per-hole strokes for the current match.
+  int _strokesForHole(Membership m, ScorecardHole? h) {
+    if (h == null) return 0;
+    return strokesOnHole(_matchHandicapFor(m), h.strokeIndex);
+  }
+
   _RunningTotal _running(int playerId) {
+    // Find this member's record so we can derive effective strokes per hole
+    // (the stored HoleScore.handicap_strokes reflects full 100% handicap and
+    // would be wrong when net_percent ≠ 100 or mode == 'gross').
+    final m = players
+        .where((x) => x.player.id == playerId)
+        .firstOrNull;
+
     int gross = 0, parSum = 0, net = 0;
     for (final h in scorecard.holes) {
       final pendingGross = merged[h.holeNumber]?[playerId];
@@ -598,12 +703,11 @@ class _HoleScoreCard extends StatelessWidget {
       if (grossScore == null) continue;
       gross  += grossScore;
       parSum += h.par;
-      final netScore = (pendingGross == null) ? saved?.netScore : null;
-      if (netScore != null) {
-        net += netScore;
-      } else {
-        net += grossScore - (saved?.handicapStrokes ?? 0);
-      }
+      // Derive net using *match* strokes, not the stored HoleScore value,
+      // so running totals track what the player is actually scoring in
+      // this sixes match.
+      final strokes = m == null ? 0 : _strokesForHole(m, h);
+      net += grossScore - strokes;
     }
     return _RunningTotal(grossVsPar: gross - parSum, netVsPar: net - parSum);
   }
@@ -655,13 +759,33 @@ class _HoleScoreCard extends StatelessWidget {
           final isHot   = idx == hotSpotIdx;
           final hasScore = gross != null;
 
+          // Effective strokes for the picker coloring come from the match's
+          // handicap mode/percent, not the stored full-handicap value — so
+          // at 50% net a 20-hcp player's net par reflects 10 strokes, not 20.
+          final matchStrokes = _strokesForHole(m, holeData);
+
+          // Label shown next to the player name in Net/SO modes, e.g. "-16"
+          // or "-16 •" (1 stroke on this hole) / "-16 ••" (2 strokes).  The
+          // dots reflect strokes received on the CURRENTLY-displayed hole so
+          // golfers know who gets a stroke here before the hole is played.
+          // Gross mode hides the chip entirely since no strokes are given.
+          final String? matchHcapLabel;
+          if (_mode == 'gross') {
+            matchHcapLabel = null;
+          } else {
+            final String dots =
+                matchStrokes > 0 ? ' ${'•' * matchStrokes}' : '';
+            matchHcapLabel = '-${_matchHandicapFor(m)}$dots';
+          }
+
           return [
             _PlayerScoreRow(
-              position:  idx + 1,
-              member:    m,
-              running:   rt,
-              gross:     gross,
-              isHot:     isHot,
+              position:       idx + 1,
+              member:         m,
+              running:        rt,
+              gross:          gross,
+              isHot:          isHot,
+              matchHcapLabel: matchHcapLabel,
               // Tapping a scored non-hot row lets the user edit it.
               onTap: hasScore && !isHot ? () => onEditTap(m) : null,
             ),
@@ -669,10 +793,9 @@ class _HoleScoreCard extends StatelessWidget {
             if (isHot)
               _InlineScorePicker(
                 par: par,
-                // Per-player handicap strokes on this hole — drives the
+                // Per-player match strokes on this hole — drives the
                 // net-centred coloring and shape decorations.
-                strokes: holeData?.scoreFor(m.player.id)
-                        ?.handicapStrokes ?? 0,
+                strokes: matchStrokes,
                 currentScore: gross,
                 onScoreSelected: (score) => onScoreSelected(m, score),
               ),
@@ -711,12 +834,18 @@ class _PlayerScoreRow extends StatelessWidget {
   final bool         isHot;     // shaded "you're up" indicator
   final VoidCallback? onTap;
 
+  /// Optional "-N" label shown next to the player name indicating the
+  /// handicap this golfer is playing to in the current match.  Null in
+  /// Gross mode (no strokes given, so nothing to show).
+  final String?     matchHcapLabel;
+
   const _PlayerScoreRow({
     required this.position,
     required this.member,
     required this.running,
     required this.gross,
     required this.isHot,
+    this.matchHcapLabel,
     this.onTap,
   });
 
@@ -743,7 +872,7 @@ class _PlayerScoreRow extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
-        // Position + name
+        // Position + name (+ optional match handicap chip)
         Expanded(
           child: Row(children: [
             Text('$position)  ',
@@ -759,6 +888,27 @@ class _PlayerScoreRow extends StatelessWidget {
                 ),
               ),
             ),
+            if (matchHcapLabel != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer
+                      .withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: theme.colorScheme.outlineVariant),
+                ),
+                child: Text(
+                  matchHcapLabel!,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+              ),
+            ],
           ]),
         ),
 

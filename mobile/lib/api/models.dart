@@ -507,22 +507,38 @@ class SixesSummary {
   final int team2Wins;
   final int halves;
 
+  /// 'net', 'gross', or 'strokes_off'.  Comes from the new handicap block
+  /// on the sixes summary response; defaults to 'net' for older backends.
+  final String handicapMode;
+
+  /// Percent of playing handicap to apply in net mode (100 = full).
+  final int netPercent;
+
   const SixesSummary({
     required this.segments,
     required this.team1Wins,
     required this.team2Wins,
     required this.halves,
+    required this.handicapMode,
+    required this.netPercent,
   });
 
+  bool get isNet        => handicapMode == 'net';
+  bool get isGross      => handicapMode == 'gross';
+  bool get isStrokesOff => handicapMode == 'strokes_off';
+
   factory SixesSummary.fromJson(Map<String, dynamic> j) {
-    final overall = j['overall'] as Map<String, dynamic>? ?? {};
+    final overall = j['overall']  as Map<String, dynamic>? ?? {};
+    final hcap    = j['handicap'] as Map<String, dynamic>? ?? {};
     return SixesSummary(
       segments: (j['segments'] as List? ?? [])
           .map((s) => SixesSegment.fromJson(s as Map<String, dynamic>))
           .toList(),
-      team1Wins: overall['team1_wins'] as int? ?? 0,
-      team2Wins: overall['team2_wins'] as int? ?? 0,
-      halves:    overall['halves']     as int? ?? 0,
+      team1Wins:    overall['team1_wins'] as int? ?? 0,
+      team2Wins:    overall['team2_wins'] as int? ?? 0,
+      halves:       overall['halves']     as int? ?? 0,
+      handicapMode: hcap['mode']          as String? ?? 'net',
+      netPercent:   hcap['net_percent']   as int?    ?? 100,
     );
   }
 }

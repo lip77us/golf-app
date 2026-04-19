@@ -349,11 +349,21 @@ class ApiClient {
   /// [segments] is a list of segment dicts, each with:
   ///   start_hole, end_hole, team_select_method,
   ///   team1_player_ids, team2_player_ids
+  ///
+  /// [handicapMode] is 'net' (default) or 'gross'.  [netPercent] is
+  /// only meaningful when handicapMode == 'net' (100 = full handicap,
+  /// 90 = 90% allowance, etc.).
   Future<void> postSixesSetup(
     int foursomeId,
-    List<Map<String, dynamic>> segments,
-  ) async {
-    await _post('/foursomes/$foursomeId/sixes/setup/', {'segments': segments});
+    List<Map<String, dynamic>> segments, {
+    String handicapMode = 'net',
+    int    netPercent   = 100,
+  }) async {
+    await _post('/foursomes/$foursomeId/sixes/setup/', {
+      'segments'     : segments,
+      'handicap_mode': handicapMode,
+      'net_percent'  : netPercent,
+    });
   }
 
   /// POST /api/foursomes/{id}/sixes/extra-teams/

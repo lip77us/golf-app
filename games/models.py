@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
-from core.models import MatchStatus, TeamSelectMethod, Player
+from core.models import MatchStatus, TeamSelectMethod, HandicapMode, Player
 from tournament.models import Round, Foursome
 
 
@@ -33,6 +33,21 @@ class SixesSegment(models.Model):
     is_extra            = models.BooleanField(
                             default=False,
                             help_text="True for the 4th match created from leftover holes after an early finish."
+                        )
+    # Handicap mode is per-foursome (the user picks it once when setting up Sixes).
+    # We persist the value on every segment of the same foursome for simplicity;
+    # setup_sixes keeps them in sync.  Gross mode ignores handicaps entirely;
+    # Net mode uses playing_handicap × (net_percent / 100) allocated by SI.
+    handicap_mode       = models.CharField(
+                            max_length=20,
+                            choices=HandicapMode.choices,
+                            default=HandicapMode.NET,
+                            help_text="How per-hole scores are adjusted for this match.",
+                        )
+    net_percent         = models.PositiveSmallIntegerField(
+                            default=100,
+                            validators=[MinValueValidator(0), MaxValueValidator(200)],
+                            help_text="Percentage of playing handicap applied when handicap_mode='net'.",
                         )
     created_at          = models.DateTimeField(auto_now_add=True)
 

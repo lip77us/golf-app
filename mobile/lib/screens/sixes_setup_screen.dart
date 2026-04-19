@@ -49,6 +49,12 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
   bool _initialized   = false;
   bool _checkingSetup = true; // true while we're checking for an existing match
 
+  // Handicap settings the user picks for this match.
+  //   _handicapMode: 'net' or 'gross'
+  //   _netPercent:   0–200; only used when mode == 'net'
+  String _handicapMode = 'net';
+  int    _netPercent   = 100;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
@@ -176,7 +182,12 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     ];
 
     final rp = context.read<RoundProvider>();
-    final ok = await rp.setupSixes(widget.foursomeId, segmentData);
+    final ok = await rp.setupSixes(
+      widget.foursomeId,
+      segmentData,
+      handicapMode: _handicapMode,
+      netPercent:   _netPercent,
+    );
 
     if (!ctx.mounted) return;
 
@@ -252,6 +263,15 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       ),
                       const SizedBox(height: 20),
 
+                      // ── Handicap mode picker ──
+                      _HandicapModeCard(
+                        mode:        _handicapMode,
+                        netPercent:  _netPercent,
+                        onModeChanged: (m) => setState(() => _handicapMode = m),
+                        onPercentChanged: (p) => setState(() => _netPercent = p),
+                      ),
+                      const SizedBox(height: 20),
+
                       // ── Match preview ──
                       if (_orderedPlayers.length >= 4)
                         _MatchPreview(
@@ -260,6 +280,8 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                           teamAPlayers: _orderedPlayers.take(2).toList(),
                           teamBPlayers: _orderedPlayers.skip(2).take(2).toList(),
                           initials:     _initials,
+                          handicapMode: _handicapMode,
+                          netPercent:   _netPercent,
                         ),
                     ],
                   ),
@@ -455,6 +477,8 @@ class _MatchPreview extends StatelessWidget {
   final List<Membership> teamAPlayers;
   final List<Membership> teamBPlayers;
   final String Function(String) initials;
+  final String           handicapMode;   // 'net' | 'gross'
+  final int              netPercent;     // only used when handicapMode == 'net'
 
   const _MatchPreview({
     required this.matchNumber,
@@ -462,6 +486,8 @@ class _MatchPreview extends StatelessWidget {
     required this.teamAPlayers,
     required this.teamBPlayers,
     required this.initials,
+    required this.handicapMode,
+    required this.netPercent,
   });
 
   String _teamLine(List<Membership> players, List<int> positions) {
@@ -505,11 +531,98 @@ class _MatchPreview extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Text(
-            'Holes $startHole–$endHole  •  Best ball, net  •  '
+            'Holes $startHole–$endHole  •  Best ball, '
+            '${handicapMode == 'gross' ? 'gross' : 'net ($netPercent%)'}  •  '
             'Match ends early if a team wins more holes than remain',
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// Handicap mode picker — Gross vs Net (+ net percentage)
+// ===========================================================================
+
+class _HandicapModeCard extends StatelessWidget {
+  /// 'net' or 'gross'.  ('strokes_off' is planned but not wired up yet.)
+  final String mode;
+
+  /// 0–200.  Only meaningful when mode == 'net'.
+  final int netPercent;
+
+  final ValueChanged<String> onModeChanged;
+  final ValueChanged<int>    onPercentChanged;
+
+  const _HandicapModeCard({
+    required this.mode,
+    required this.netPercent,
+    required this.onModeChanged,
+    required this.onPercentChanged,
+  });
+
+  // Common allowance presets — 100% is the default, 90% is USGA recommended
+  // for 2v2 best-ball, 80% is sometimes used for bigger handicap spreads.
+  static const _presets = <int>[100, 90, 80, 75, 50];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme  = Theme.of(context);
+    final isNet  = mode == 'net';
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Handicap',
+              style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary)),
+          const SizedBox(height: 8),
+
+          // Net vs Gross segmented buttons
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'net',   label: Text('Net')),
+              ButtonSegment(value: 'gross', label: Text('Gross')),
+            ],
+            selected: {mode},
+            onSelectionChanged: (s) => onModeChanged(s.first),
+          ),
+
+          // When Net is selected, show a percentage chooser.
+          if (isNet) ...[
+            const SizedBox(height: 12),
+            Text('Handicap allowance',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: _presets.map((p) {
+                final selected = p == netPercent;
+                return ChoiceChip(
+                  label: Text('$p%'),
+                  selected: selected,
+                  onSelected: (_) => onPercentChanged(p),
+                );
+              }).toList(),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text('No strokes given — raw scores used.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant)),
+          ],
         ]),
       ),
     );

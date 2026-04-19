@@ -831,7 +831,13 @@ class SixesSetupView(APIView):
         ser.is_valid(raise_exception=True)
 
         from services.sixes import setup_sixes
-        segments = setup_sixes(foursome, ser.validated_data['segments'])
+        data     = ser.validated_data
+        segments = setup_sixes(
+            foursome,
+            data['segments'],
+            handicap_mode = data.get('handicap_mode', 'net'),
+            net_percent   = data.get('net_percent', 100),
+        )
         return Response({'segments_created': len(segments)}, status=status.HTTP_201_CREATED)
 
 

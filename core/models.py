@@ -40,6 +40,22 @@ class TeamSelectMethod(models.TextChoices):
     LOSER_CHOICE  = 'loser_choice',  "Loser's Choice"
 
 
+class HandicapMode(models.TextChoices):
+    """
+    How per-hole scores are adjusted for handicap in a game.
+
+    NET    — each player's playing handicap (optionally scaled by net_percent)
+             is allocated by hole stroke index; net_score = gross - strokes.
+    GROSS  — no strokes given; raw gross scores are used.
+    STROKES_OFF — reserved for a future mode where the low-handicap player
+                  plays to 0 and everyone else gets (own HCP - low HCP)
+                  strokes allocated by hole index.
+    """
+    NET          = 'net',          'Net'
+    GROSS        = 'gross',        'Gross'
+    STROKES_OFF  = 'strokes_off',  'Strokes Off Low'
+
+
 # ---------------------------------------------------------------------------
 # CORE MODELS
 # ---------------------------------------------------------------------------

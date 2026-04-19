@@ -73,8 +73,9 @@ For an extra match generated mid-round, include 'is_extra': True.
 
 from django.db import transaction
 
+from core.models import HandicapMode
 from games.models import SixesSegment, SixesTeam, SixesHoleResult
-from scoring.models import HoleScore
+from scoring.handicap import build_score_index
 from tournament.models import Foursome
 
 
@@ -83,7 +84,12 @@ from tournament.models import Foursome
 # ---------------------------------------------------------------------------
 
 @transaction.atomic
-def setup_sixes(foursome, team_data: list) -> list:
+def setup_sixes(
+    foursome,
+    team_data: list,
+    handicap_mode: str = HandicapMode.NET,
+    net_percent: int = 100,
+) -> list:
     """
     Create SixesSegment and SixesTeam rows for the given foursome.
 
@@ -92,9 +98,17 @@ def setup_sixes(foursome, team_data: list) -> list:
     calculate_sixes can process the full round without gaps.
     Safe to call again — existing data is replaced.
 
+    The handicap_mode and net_percent are stored on every segment so they
+    travel with the match.  They default to 'net' at 100% for backward
+    compatibility with existing callers; a caller may pass 'gross' for a
+    no-handicap match, or 'net' with net_percent=90 for 90% allowance, etc.
+
     Returns a list of SixesSegment instances.
     """
     SixesSegment.objects.filter(foursome=foursome).delete()
+
+    # Clamp percent to the validated range so a bad caller can't poison the DB.
+    net_percent = max(0, min(200, int(net_percent)))
 
     segments = []
     for i, td in enumerate(team_data, start=1):
@@ -104,6 +118,8 @@ def setup_sixes(foursome, team_data: list) -> list:
             start_hole     = td['start_hole'],
             end_hole       = td['end_hole'],
             is_extra       = td.get('is_extra', False),
+            handicap_mode  = handicap_mode,
+            net_percent    = net_percent,
         )
 
         # Team 1
@@ -133,8 +149,11 @@ def setup_sixes(foursome, team_data: list) -> list:
 
 def _best_net_for_team(team: SixesTeam, hole_number: int, score_index: dict) -> int | None:
     """
-    Return the lowest net score among this team's players on hole_number.
-    score_index: player_id → hole_number → net_score
+    Return the lowest score among this team's players on hole_number.
+
+    The value in score_index may be a net or gross score depending on the
+    match's handicap_mode (see scoring.handicap.build_score_index); this
+    function is agnostic to which — it just picks the minimum for best-ball.
     """
     nets = [
         score_index[p_id][hole_number]
@@ -263,16 +282,21 @@ def calculate_sixes(foursome) -> list:
     if not segments:
         return []
 
-    # Build score index: player_id → hole_number → net_score
-    hole_scores = (
-        HoleScore.objects
-        .filter(foursome=foursome, player__is_phantom=False)
-        .exclude(net_score=None)
-        .values('player_id', 'hole_number', 'net_score')
+    # All segments of the same foursome share the same handicap settings —
+    # setup_sixes writes the same values to each one — so reading them off
+    # the first segment is sufficient.
+    first_seg     = segments[0]
+    handicap_mode = first_seg.handicap_mode or HandicapMode.NET
+    net_percent   = first_seg.net_percent or 100
+
+    # score_index: player_id → hole_number → score_to_compare
+    # Contents depend on handicap_mode (gross score, net at 100%, or net at
+    # a custom percentage).  See scoring/handicap.py for the rules.
+    score_index = build_score_index(
+        foursome,
+        handicap_mode=handicap_mode,
+        net_percent=net_percent,
     )
-    score_index: dict = {}
-    for hs in hole_scores:
-        score_index.setdefault(hs['player_id'], {})[hs['hole_number']] = hs['net_score']
 
     standard_segs = [s for s in segments if not s.is_extra]
     extra_segs    = [s for s in segments if s.is_extra]
@@ -317,7 +341,9 @@ def calculate_sixes(foursome) -> list:
                     extra.end_hole   = 18
                     extra.save(update_fields=['start_hole', 'end_hole'])
             else:
-                # Create a new extra segment.
+                # Create a new extra segment.  It inherits handicap_mode /
+                # net_percent from the standard segments so the whole match
+                # is played under one consistent set of rules.
                 all_so_far  = standard_segs + extra_segs_sorted[:extra_idx]
                 max_seg_num = max((s.segment_number for s in all_so_far), default=3)
                 extra = SixesSegment.objects.create(
@@ -327,6 +353,8 @@ def calculate_sixes(foursome) -> list:
                     end_hole       = 18,
                     is_extra       = True,
                     status         = 'pending',
+                    handicap_mode  = handicap_mode,
+                    net_percent    = net_percent,
                 )
 
             processed_ids.add(extra.id)
@@ -388,6 +416,11 @@ def sixes_summary(foursome) -> dict:
 
     seg_out = []
     t1_total_wins = t2_total_wins = halves = 0
+
+    # All segments share the same handicap config; read it off the first.
+    first = segments.first() if hasattr(segments, 'first') else (list(segments)[0] if segments else None)
+    handicap_mode = getattr(first, 'handicap_mode', HandicapMode.NET) if first else HandicapMode.NET
+    net_percent   = getattr(first, 'net_percent', 100) if first else 100
 
     for i, seg in enumerate(segments, start=1):
         teams  = list(seg.teams.all())
@@ -453,5 +486,9 @@ def sixes_summary(foursome) -> dict:
             'team1_wins' : t1_total_wins,
             'team2_wins' : t2_total_wins,
             'halves'     : halves,
+        },
+        'handicap' : {
+            'mode'        : handicap_mode,
+            'net_percent' : net_percent,
         },
     }
