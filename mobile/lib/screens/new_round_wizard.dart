@@ -50,7 +50,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   DateTime          _date = DateTime.now();
   final _betCtrl    = TextEditingController(text: '5.00');
   final Set<String> _activeGames = {
-    'skins', 'nassau', 'sixes', 'stableford', 'pink_ball',
+    'skins', 'nassau', 'sixes', 'stableford', 'pink_ball', 'match_play_18',
   };
 
   // ---- Step 2: Players ----

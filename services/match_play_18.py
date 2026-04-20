@@ -1,7 +1,8 @@
 import logging
 from django.db import transaction
 from core.models import HandicapMode
-from games.models import MatchPlay18Game, MatchPlay18Team, MatchPlay18HoleResult, HoleScore
+from games.models import MatchPlay18Game, MatchPlay18Team, MatchPlay18HoleResult
+from scoring.models import HoleScore
 from services.scoring.handicap import build_score_index
 
 logger = logging.getLogger(__name__)

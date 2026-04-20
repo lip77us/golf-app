@@ -26,7 +26,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   final Map<int, int> _playerTees = {};
 
   // Game mode
-  final Set<String> _activeGames = {'sixes'};
+  final Set<String> _activeGames = {'sixes', 'match_play_18'};
 
   static const _allGames = [
     ('sixes', "Six's"),
