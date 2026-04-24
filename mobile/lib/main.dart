@@ -14,7 +14,17 @@ import 'screens/round_screen.dart';
 import 'screens/scorecard_screen.dart';
 import 'screens/sixes_screen.dart';
 import 'screens/sixes_setup_screen.dart';
+import 'screens/points_531_setup_screen.dart';
+import 'screens/points_531_screen.dart';
+import 'screens/skins_setup_screen.dart';
+import 'screens/skins_screen.dart';
+import 'screens/nassau_setup_screen.dart';
+import 'screens/nassau_screen.dart';
 import 'screens/leaderboard_screen.dart';
+import 'screens/casual_rounds_list_screen.dart';
+import 'screens/irish_rumble_setup_screen.dart';
+import 'screens/pink_ball_setup_screen.dart';
+import 'screens/pink_ball_screen.dart';
 
 /// Global navigator key — lets AuthProvider redirect to /login on 401
 /// from outside the widget tree.
@@ -51,9 +61,20 @@ class GolfApp extends StatefulWidget {
 }
 
 class _GolfAppState extends State<GolfApp> {
+  /// Tracks the previous logged-in state so `_onAuthChanged` can fire the
+  /// logout redirect only on an actual logged-in → logged-out transition.
+  /// Without this flag, `AuthProvider.login()`'s first `notifyListeners()`
+  /// (which fires while `_token` is still null, just to show the spinner)
+  /// would be treated as a logout and would `pushNamedAndRemoveUntil('/login')`,
+  /// disposing the LoginScreen mid-submit.  The in-flight submit would then
+  /// complete on a `mounted == false` widget and silently skip the
+  /// navigation to `/tournaments`, forcing the user to sign in twice.
+  bool _wasLoggedIn = false;
+
   @override
   void initState() {
     super.initState();
+    _wasLoggedIn = widget.auth.isLoggedIn;
     widget.auth.addListener(_onAuthChanged);
   }
 
@@ -64,7 +85,8 @@ class _GolfAppState extends State<GolfApp> {
   }
 
   void _onAuthChanged() {
-    if (!widget.auth.isLoggedIn) {
+    final isLoggedIn = widget.auth.isLoggedIn;
+    if (_wasLoggedIn && !isLoggedIn) {
       // Clear cached data on sign-out so another user doesn't see it.
       widget.localDb.clearAll();
       navigatorKey.currentState?.pushNamedAndRemoveUntil(
@@ -72,6 +94,7 @@ class _GolfAppState extends State<GolfApp> {
         (_) => false,
       );
     }
+    _wasLoggedIn = isLoggedIn;
   }
 
   @override
@@ -129,13 +152,22 @@ class _GolfAppState extends State<GolfApp> {
         return MaterialPageRoute(builder: (_) => const LoginScreen());
       case '/tournaments':
         return MaterialPageRoute(builder: (_) => const TournamentListScreen());
+      case '/casual-rounds':
+        return MaterialPageRoute(builder: (_) => const CasualRoundsListScreen());
       case '/round':
         final roundId = settings.arguments as int;
         return MaterialPageRoute(builder: (_) => RoundScreen(roundId: roundId));
       case '/scorecard':
-        final foursomeId = settings.arguments as int;
+        // Arguments may be a plain int (edit mode) or a Map with
+        // {'foursomeId': int, 'readOnly': bool} (view mode).
+        final args       = settings.arguments;
+        final foursomeId = args is Map ? args['foursomeId'] as int : args as int;
+        final readOnly   = args is Map ? (args['readOnly'] as bool? ?? false) : false;
         return MaterialPageRoute(
-            builder: (_) => ScorecardScreen(foursomeId: foursomeId));
+            builder: (_) => ScorecardScreen(
+                  foursomeId: foursomeId,
+                  readOnly:   readOnly,
+                ));
       case '/sixes-setup':
         final foursomeId = settings.arguments as int;
         return MaterialPageRoute(
@@ -144,10 +176,50 @@ class _GolfAppState extends State<GolfApp> {
         final foursomeId = settings.arguments as int;
         return MaterialPageRoute(
             builder: (_) => SixesScreen(foursomeId: foursomeId));
+      case '/points-531-setup':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => Points531SetupScreen(foursomeId: foursomeId));
+      case '/points-531':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => Points531Screen(foursomeId: foursomeId));
+      case '/skins-setup':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => SkinsSetupScreen(foursomeId: foursomeId));
+      case '/skins':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => SkinsScreen(foursomeId: foursomeId));
+      case '/nassau-setup':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => NassauSetupScreen(foursomeId: foursomeId));
+      case '/nassau':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => NassauScreen(foursomeId: foursomeId));
       case '/leaderboard':
         final roundId = settings.arguments as int;
         return MaterialPageRoute(
             builder: (_) => LeaderboardScreen(roundId: roundId));
+      case '/irish-rumble-setup':
+        final roundId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => IrishRumbleSetupScreen(roundId: roundId));
+      case '/low-net-setup':
+        final roundId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => LowNetSetupScreen(roundId: roundId));
+      case '/pink-ball-setup':
+        final roundId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => PinkBallSetupScreen(roundId: roundId));
+      case '/pink-ball':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => PinkBallScreen(foursomeId: foursomeId));
       default:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
     }

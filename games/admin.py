@@ -7,6 +7,8 @@ from .models import (
     NassauGame, NassauTeam, NassauHoleScore, NassauPress,
     # Irish Rumble
     IrishRumbleConfig, IrishRumbleSegmentResult,
+    # Low Net (individual, per-round)
+    LowNetRoundConfig,
     # Pink / Red Ball survivor pool
     PinkBallHoleResult, PinkBallResult,
     # Scramble
@@ -114,7 +116,7 @@ class SixesTeamAdmin(admin.ModelAdmin):
 @admin.register(NassauGame)
 class NassauGameAdmin(admin.ModelAdmin):
     list_display  = ('__str__', 'foursome', 'status', 'front9_result', 'back9_result',
-                     'overall_result', 'press_pct')
+                     'overall_result', 'press_mode', 'press_unit')
     list_filter   = ('status', 'foursome__round__tournament')
     inlines       = [NassauTeamInline, NassauHoleScoreInline, NassauPressInline]
 
@@ -131,7 +133,8 @@ class NassauTeamAdmin(admin.ModelAdmin):
 
 @admin.register(IrishRumbleConfig)
 class IrishRumbleConfigAdmin(admin.ModelAdmin):
-    list_display  = ('round',)
+    list_display  = ('round', 'handicap_mode', 'net_percent', 'bet_unit')
+    list_filter   = ('handicap_mode', 'round__tournament')
     search_fields = ('round__course__course_name',)
 
 
@@ -140,6 +143,17 @@ class IrishRumbleSegmentResultAdmin(admin.ModelAdmin):
     list_display  = ('foursome', 'round', 'segment_index', 'balls_counted', 'total_net_score', 'rank')
     list_filter   = ('round__tournament',)
     ordering      = ('round', 'segment_index', 'rank')
+
+
+# ---------------------------------------------------------------------------
+# Low Net (individual, per-round)
+# ---------------------------------------------------------------------------
+
+@admin.register(LowNetRoundConfig)
+class LowNetRoundConfigAdmin(admin.ModelAdmin):
+    list_display  = ('round', 'handicap_mode', 'net_percent', 'entry_fee')
+    list_filter   = ('handicap_mode', 'round__tournament')
+    search_fields = ('round__course__course_name',)
 
 
 # ---------------------------------------------------------------------------

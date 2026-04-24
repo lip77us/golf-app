@@ -9,15 +9,17 @@ import '../api/models.dart';
 class AuthProvider extends ChangeNotifier {
   static const _tokenKey = 'auth_token';
 
-  String? _token;
+  String?        _token;
   PlayerProfile? _player;
-  bool _loading = false;
-  String? _error;
+  bool           _isStaff = false;
+  bool           _loading = false;
+  String?        _error;
 
-  String?        get token   => _token;
-  PlayerProfile? get player  => _player;
-  bool           get loading => _loading;
-  String?        get error   => _error;
+  String?        get token     => _token;
+  PlayerProfile? get player    => _player;
+  bool           get isStaff   => _isStaff;
+  bool           get loading   => _loading;
+  String?        get error     => _error;
   bool           get isLoggedIn => _token != null;
 
   ApiClient get client => ApiClient(
@@ -32,7 +34,9 @@ class AuthProvider extends ChangeNotifier {
     if (saved == null) return;
     _token = saved;
     try {
-      _player = await ApiClient(token: saved).me();
+      final result = await ApiClient(token: saved).me();
+      _player  = result.player;
+      _isStaff = result.isStaff;
     } catch (_) {
       // Token expired or server unreachable — clear it
       _token = null;
@@ -48,17 +52,24 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final result = await ApiClient().login(username, password);
-      _token = result.token;
-
+      // Persist and apply atomically so we don't end up half-logged-in if
+      // a side call fails after the token has been set.  The login
+      // response already contains the player profile, so no follow-up
+      // /auth/me/ request is needed — that second call was the source of
+      // the previous "login twice" bug when it hit a transient failure.
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_tokenKey, result.token);
-
-      // Fetch full player profile
-      _player = await client.me();
+      _token   = result.token;
+      _player  = result.player;
+      _isStaff = result.isStaff;
     } on ApiException catch (e) {
-      _error = e.message;
+      _error  = e.message;
+      _token  = null;
+      _player = null;
     } catch (e) {
-      _error = 'Could not reach server. Check your connection.';
+      _error  = 'Could not reach server. Check your connection.';
+      _token  = null;
+      _player = null;
     } finally {
       _loading = false;
       notifyListeners();
@@ -71,8 +82,9 @@ class AuthProvider extends ChangeNotifier {
         await client.logout();
       } catch (_) {}
     }
-    _token  = null;
-    _player = null;
+    _token   = null;
+    _player  = null;
+    _isStaff = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     notifyListeners();

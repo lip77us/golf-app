@@ -217,6 +217,52 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  /// Block until the queue is fully drained and the service is idle.
+  ///
+  /// Why this exists: [enqueue] fires [drainQueue] as fire-and-forget,
+  /// and [drainQueue] itself has a `_draining` guard that makes any
+  /// re-entrant call a no-op.  So code that wants to "make sure the
+  /// server has seen my scores before I navigate" (see
+  /// SixesScreen._finishRound — the one-hole Match 5 bug) can't just
+  /// `await drainQueue()`; that may return immediately while an earlier
+  /// drain is still mid-flight.
+  ///
+  /// [timeout] is a hard cap so we never hang the UI if the server is
+  /// unreachable — we give up and let the caller proceed with whatever
+  /// data the server already has.  Default 10 s covers a slow dev
+  /// machine with some padding.
+  Future<void> waitUntilIdle({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    // Nothing to wait for?  Short-circuit.
+    if (!_draining && _pendingCount == 0) return;
+
+    // If nothing is currently draining but we still have pending, kick
+    // one off.  (drainQueue is itself idempotent and guarded.)
+    if (!_draining && _pendingCount > 0 && _isOnline) {
+      drainQueue(); // fire-and-forget — we'll observe state below
+    }
+
+    final completer = Completer<void>();
+    final deadline  = DateTime.now().add(timeout);
+    Timer? poll;
+
+    bool done() => !_draining && _pendingCount == 0;
+
+    poll = Timer.periodic(const Duration(milliseconds: 100), (t) {
+      if (done() || DateTime.now().isAfter(deadline)) {
+        t.cancel();
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+
+    try {
+      await completer.future;
+    } finally {
+      poll.cancel();
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   Future<void> _refreshCount() async {

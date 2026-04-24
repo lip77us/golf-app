@@ -80,11 +80,14 @@ class RoundProvider extends ChangeNotifier {
 
   // ── State ──────────────────────────────────────────────────────────────────
 
-  Round?        _round;
-  Scorecard?    _scorecard;
-  Leaderboard?  _leaderboard;
-  SixesSummary? _sixesSummary;
-  int?          _activeFoursomeId;
+  Round?           _round;
+  Scorecard?       _scorecard;
+  Leaderboard?     _leaderboard;
+  SixesSummary?    _sixesSummary;
+  Points531Summary? _points531Summary;
+  SkinsSummary?    _skinsSummary;
+  NassauSummary?   _nassauSummary;
+  int?             _activeFoursomeId;
 
   /// Foursomes whose Sixes match has been set up (segments + teams exist).
   /// Used by RoundScreen to label the entry button "Start Match" vs "Enter Scores".
@@ -94,6 +97,9 @@ class RoundProvider extends ChangeNotifier {
   bool    _loadingScorecard   = false;
   bool    _loadingLeaderboard = false;
   bool    _loadingSixes       = false;
+  bool    _loadingPoints531   = false;
+  bool    _loadingSkins       = false;
+  bool    _loadingNassau      = false;
   bool    _submitting         = false;
   String? _error;
 
@@ -104,21 +110,27 @@ class RoundProvider extends ChangeNotifier {
 
   // ── Getters ────────────────────────────────────────────────────────────────
 
-  Round?        get round              => _round;
-  Scorecard?    get scorecard          => _scorecard;
-  Leaderboard?  get leaderboard        => _leaderboard;
-  SixesSummary? get sixesSummary       => _sixesSummary;
-  int?          get activeFoursomeId   => _activeFoursomeId;
+  Round?            get round              => _round;
+  Scorecard?        get scorecard          => _scorecard;
+  Leaderboard?      get leaderboard        => _leaderboard;
+  SixesSummary?     get sixesSummary       => _sixesSummary;
+  Points531Summary? get points531Summary   => _points531Summary;
+  SkinsSummary?     get skinsSummary       => _skinsSummary;
+  NassauSummary?    get nassauSummary      => _nassauSummary;
+  int?              get activeFoursomeId   => _activeFoursomeId;
 
   /// True once sixes segments with players have been saved for [foursomeId].
   bool sixesIsStarted(int foursomeId) =>
       _sixesStartedFoursomes.contains(foursomeId);
-  bool          get loadingRound       => _loadingRound;
-  bool          get loadingScorecard   => _loadingScorecard;
-  bool          get loadingLeaderboard => _loadingLeaderboard;
-  bool          get loadingSixes       => _loadingSixes;
-  bool          get submitting         => _submitting;
-  String?       get error              => _error;
+  bool              get loadingRound       => _loadingRound;
+  bool              get loadingScorecard   => _loadingScorecard;
+  bool              get loadingLeaderboard => _loadingLeaderboard;
+  bool              get loadingSixes       => _loadingSixes;
+  bool              get loadingPoints531   => _loadingPoints531;
+  bool              get loadingSkins       => _loadingSkins;
+  bool              get loadingNassau      => _loadingNassau;
+  bool              get submitting         => _submitting;
+  String?           get error              => _error;
   Map<int, Map<int, int>> get localPendingByHole => _localPendingByHole;
 
   void _clearError() { _error = null; }
@@ -180,6 +192,7 @@ class RoundProvider extends ChangeNotifier {
           'player': {
             'id':              m.player.id,
             'name':            m.player.name,
+            'short_name':      m.player.shortName,
             'handicap_index':  m.player.handicapIndex,
             'is_phantom':      m.player.isPhantom,
             'email':           m.player.email,
@@ -196,6 +209,12 @@ class RoundProvider extends ChangeNotifier {
   // ── Scorecard ──────────────────────────────────────────────────────────────
 
   Future<void> loadScorecard(int foursomeId) async {
+    // If we're switching to a different foursome, clear stale scorecard data
+    // immediately so any in-flight build() calls don't fire _jumpToFirstUnplayed
+    // with the wrong foursome's holes.
+    if (_activeFoursomeId != foursomeId) {
+      _scorecard = null;
+    }
     _activeFoursomeId = foursomeId;
     _loadingScorecard = true;
     _clearError();
@@ -327,6 +346,51 @@ class RoundProvider extends ChangeNotifier {
 
   /// POST the sixes team setup for a foursome.
   ///
+  /// Persist a new round-level bet_unit.  Called from the Sixes setup
+  /// screen when the user edits the bet unit inline while starting a
+  /// match.  Updates the cached [round] in place on success so any other
+  /// UI watching the provider sees the new value without a full reload.
+  ///
+  /// Returns true on success.  On failure, [error] is set and false
+  /// returned (and [round] is left unchanged).
+  Future<bool> updateRoundBetUnit(double betUnit) async {
+    if (_round == null) {
+      _error = 'No round loaded — cannot update bet unit.';
+      notifyListeners();
+      return false;
+    }
+    try {
+      final updated = await _client.updateRound(_round!.id, betUnit: betUnit);
+      // Preserve the foursomes the local Round is carrying — updateRound
+      // returns a fully-populated Round anyway, but we defensively copy
+      // over the updated bet_unit onto the existing instance's fields to
+      // avoid any fields drifting if the serializer shape changes later.
+      _round = Round(
+        id:          updated.id,
+        roundNumber: updated.roundNumber,
+        date:        updated.date,
+        course:      updated.course,
+        status:      updated.status,
+        activeGames: updated.activeGames,
+        betUnit:     updated.betUnit,
+        foursomes:   updated.foursomes.isNotEmpty
+            ? updated.foursomes
+            : _round!.foursomes,
+      );
+      _cacheRound(_round!.id, _round!);
+      notifyListeners();
+      return true;
+    } on NetworkException {
+      _error = 'No connection — cannot update bet unit while offline.';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = friendlyError(e);
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// [segments] follows the services/sixes.py team_data format:
   ///   [ { 'start_hole', 'end_hole', 'team_select_method',
   ///       'team1_player_ids', 'team2_player_ids' }, ... ]
@@ -412,6 +476,126 @@ class RoundProvider extends ChangeNotifier {
       debugPrint('loadSixes error: $e');
     } finally {
       _loadingSixes = false;
+      notifyListeners();
+    }
+  }
+
+  /// Load the Points 5-3-1 summary for the active foursome.
+  /// Same failure semantics as [loadSixes] — non-fatal, silently keeps
+  /// the last known good snapshot on network errors so the entry screen
+  /// keeps working offline.
+  Future<void> loadPoints531(int foursomeId) async {
+    _loadingPoints531 = true;
+    notifyListeners();
+    try {
+      _points531Summary = await _client.getPoints531Summary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadPoints531 error: $e');
+    } finally {
+      _loadingPoints531 = false;
+      notifyListeners();
+    }
+  }
+
+  /// Load the Skins summary for the active foursome.
+  /// Same failure semantics as [loadPoints531] — non-fatal on network
+  /// errors so the entry screen keeps working offline.
+  Future<void> loadSkins(int foursomeId) async {
+    _loadingSkins = true;
+    notifyListeners();
+    try {
+      _skinsSummary = await _client.getSkinsSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadSkins error: $e');
+    } finally {
+      _loadingSkins = false;
+      notifyListeners();
+    }
+  }
+
+  // ── Nassau ─────────────────────────────────────────────────────────────────
+
+  /// Load the Nassau summary for the active foursome.
+  /// Non-fatal on network errors — keeps the last known state.
+  Future<void> loadNassau(int foursomeId) async {
+    _loadingNassau = true;
+    notifyListeners();
+    try {
+      _nassauSummary = await _client.getNassauSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around.
+    } catch (e) {
+      debugPrint('loadNassau error: $e');
+    } finally {
+      _loadingNassau = false;
+      notifyListeners();
+    }
+  }
+
+  /// POST /nassau/setup/ — create or replace the Nassau game configuration.
+  ///
+  /// Returns true on success.  On failure, [error] is set and false returned.
+  Future<bool> setupNassau(
+    int foursomeId, {
+    required List<int> team1Ids,
+    required List<int> team2Ids,
+    String handicapMode = 'net',
+    int    netPercent   = 100,
+    String pressMode    = 'none',
+    double pressUnit    = 0.0,
+  }) async {
+    _submitting = true;
+    _clearError();
+    notifyListeners();
+    try {
+      _nassauSummary = await _client.postNassauSetup(
+        foursomeId,
+        team1Ids:     team1Ids,
+        team2Ids:     team2Ids,
+        handicapMode: handicapMode,
+        netPercent:   netPercent,
+        pressMode:    pressMode,
+        pressUnit:    pressUnit,
+      );
+      return true;
+    } on NetworkException {
+      _error = 'No connection — cannot save Nassau setup while offline.';
+      return false;
+    } catch (e) {
+      _error = friendlyError(e);
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  /// POST /nassau/press/ — losing team calls a manual press at [startHole].
+  ///
+  /// Returns true on success.  On failure (bad state, network, etc.),
+  /// [error] is set and false returned.
+  Future<bool> callNassauPress(int foursomeId, {required int startHole}) async {
+    _submitting = true;
+    _clearError();
+    notifyListeners();
+    try {
+      _nassauSummary = await _client.postNassauPress(
+        foursomeId,
+        startHole: startHole,
+      );
+      return true;
+    } on NetworkException {
+      _error = 'No connection — cannot call press while offline.';
+      return false;
+    } catch (e) {
+      _error = friendlyError(e);
+      return false;
+    } finally {
+      _submitting = false;
       notifyListeners();
     }
   }

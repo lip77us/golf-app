@@ -12,11 +12,14 @@ Organised into sections:
   6. Leaderboard            (aggregated round-level view)
 """
 
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from core.models import Player, Tee
 from tournament.models import Tournament, Round, Foursome, FoursomeMembership
 from scoring.models import HoleScore, StablefordResult, SkinsResult
+
+User = get_user_model()
 
 
 # ===========================================================================
@@ -26,8 +29,70 @@ from scoring.models import HoleScore, StablefordResult, SkinsResult
 class PlayerSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Player
-        fields = ['id', 'name', 'handicap_index', 'is_phantom', 'email', 'phone']
+        fields = ['id', 'name', 'short_name', 'handicap_index', 'is_phantom',
+                  'email', 'phone', 'sex']
         read_only_fields = ['id']
+        # short_name is writeable but optional — the Player.save() override
+        # auto-fills it from initials when blank, so the mobile form can
+        # either send a value or leave it out entirely.
+        extra_kwargs = {
+            'short_name': {'required': False, 'allow_blank': True},
+        }
+
+
+class PlayerCreateSerializer(serializers.ModelSerializer):
+    """
+    Used only when creating a new player via POST /api/players/.
+    Accepts optional username + password to create a linked Django User
+    account so the player can log in to the mobile app.
+    If username/password are omitted the Player is created without a
+    linked User (admin-only account, usable only via the admin panel).
+    """
+    username = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    password = serializers.CharField(required=False, allow_blank=True, write_only=True,
+                                     style={'input_type': 'password'})
+
+    class Meta:
+        model  = Player
+        fields = ['id', 'name', 'short_name', 'handicap_index',
+                  'email', 'phone', 'sex', 'username', 'password']
+        read_only_fields = ['id']
+        extra_kwargs = {
+            'short_name': {'required': False, 'allow_blank': True},
+        }
+
+    def validate(self, attrs):
+        username = attrs.get('username', '').strip()
+        password = attrs.get('password', '').strip()
+        # Both or neither — don't allow partial credentials
+        if bool(username) != bool(password):
+            raise serializers.ValidationError(
+                'Provide both username and password, or leave both blank.'
+            )
+        if username and User.objects.filter(username=username).exists():
+            raise serializers.ValidationError(
+                {'username': 'A user with that username already exists.'}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        username = validated_data.pop('username', '').strip()
+        password = validated_data.pop('password', '').strip()
+
+        player = Player(**validated_data)
+        player.save()
+
+        if username and password:
+            user = User.objects.create_user(
+                username=username,
+                password=password,
+                email=validated_data.get('email', ''),
+                first_name=validated_data.get('name', '').split()[0] if validated_data.get('name') else '',
+            )
+            player.user = user
+            player.save(update_fields=['user'])
+
+        return player
 
 
 from core.models import Course
@@ -44,7 +109,8 @@ class TeeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Tee
-        fields = ['id', 'course', 'tee_name', 'slope', 'course_rating', 'par', 'holes']
+        fields = ['id', 'course', 'tee_name', 'slope', 'course_rating',
+                  'par', 'holes', 'sex', 'sort_priority']
         read_only_fields = ['id']
 
 
@@ -83,7 +149,8 @@ class RoundSerializer(serializers.ModelSerializer):
         model  = Round
         fields = [
             'id', 'round_number', 'date', 'course', 'status',
-            'active_games', 'bet_unit', 'scramble_config', 'notes', 'foursomes',
+            'active_games', 'bet_unit', 'handicap_mode', 'net_percent',
+            'scramble_config', 'notes', 'foursomes',
         ]
         read_only_fields = ['id']
 
@@ -96,6 +163,23 @@ class RoundListSerializer(serializers.ModelSerializer):
         model  = Round
         fields = ['id', 'round_number', 'date', 'course_name', 'status', 'active_games', 'bet_unit']
         read_only_fields = ['id']
+
+
+class CasualRoundSummarySerializer(serializers.Serializer):
+    """
+    Lightweight summary of an in-progress casual round for the Casual Rounds list screen.
+    Returned by GET /api/rounds/casual/.
+    """
+    id                  = serializers.IntegerField()
+    date                = serializers.DateField()
+    course_name         = serializers.CharField()
+    status              = serializers.CharField()
+    active_games        = serializers.ListField(child=serializers.CharField())
+    bet_unit            = serializers.DecimalField(max_digits=6, decimal_places=2)
+    current_hole        = serializers.IntegerField()   # 0 = not started
+    created_by_player_id = serializers.IntegerField(allow_null=True)
+    foursome_id         = serializers.IntegerField(allow_null=True)
+    players             = serializers.ListField(child=serializers.DictField())
 
 
 class TournamentSerializer(serializers.ModelSerializer):
@@ -151,10 +235,14 @@ class RoundCreateSerializer(serializers.Serializer):
     tournament_id = serializers.IntegerField(required=False, allow_null=True)
     course_id     = serializers.IntegerField()
     date          = serializers.DateField()
-    bet_unit      = serializers.DecimalField(max_digits=6, decimal_places=2, default='1.00')
+    bet_unit      = serializers.DecimalField(max_digits=6, decimal_places=2, default='0.00')
     active_games  = serializers.ListField(child=serializers.CharField(), default=list)
     round_number  = serializers.IntegerField(default=1, min_value=1)
     notes         = serializers.CharField(default='', allow_blank=True)
+    handicap_mode = serializers.ChoiceField(
+        choices=['gross', 'net', 'strokes_off'], default='net'
+    )
+    net_percent   = serializers.IntegerField(default=100, min_value=0, max_value=200)
 
 
 class PlayerTeeSelectionSerializer(serializers.Serializer):
@@ -177,14 +265,45 @@ class RoundSetupSerializer(serializers.Serializer):
 
 
 class NassauSetupSerializer(serializers.Serializer):
-    """Assign fixed teams to a Nassau 9-9-18 game."""
+    """
+    Configure a Nassau 9-9-18 game for a foursome.
+
+    team1/team2_player_ids: 1 or 2 player PKs each (1v1 or 2v2 best-ball).
+    handicap_mode:          'net' | 'gross' | 'strokes_off'
+    net_percent:            0–200, only meaningful when handicap_mode='net'
+    press_mode:             'none' | 'manual' | 'auto' | 'both'
+    press_unit:             dollar amount per press bet (separate from Round.bet_unit)
+    """
     team1_player_ids = serializers.ListField(
-        child=serializers.IntegerField(), min_length=1, max_length=2
+        child=serializers.IntegerField(), min_length=1, max_length=2,
     )
     team2_player_ids = serializers.ListField(
-        child=serializers.IntegerField(), min_length=1, max_length=2
+        child=serializers.IntegerField(), min_length=1, max_length=2,
     )
-    press_pct = serializers.FloatField(default=0.50, min_value=0.0, max_value=2.0)
+    handicap_mode = serializers.ChoiceField(
+        choices=['net', 'gross', 'strokes_off'],
+        default='net',
+    )
+    net_percent = serializers.IntegerField(
+        min_value=0, max_value=200, default=100,
+    )
+    press_mode = serializers.ChoiceField(
+        choices=['none', 'manual', 'auto', 'both'],
+        default='none',
+    )
+    press_unit = serializers.DecimalField(
+        max_digits=8, decimal_places=2, default='0.00',
+    )
+
+
+class NassauPressSerializer(serializers.Serializer):
+    """
+    POST /api/foursomes/{id}/nassau/press/
+    Called by the losing team to declare a manual press.
+
+    start_hole: hole number (1–18) at which the press begins.
+    """
+    start_hole = serializers.IntegerField(min_value=1, max_value=18)
 
 
 class SixesSetupSerializer(serializers.Serializer):
@@ -208,6 +327,114 @@ class SixesSetupSerializer(serializers.Serializer):
     net_percent   = serializers.IntegerField(
                         min_value=0, max_value=200, default=100,
                     )
+
+
+class Points531SetupSerializer(serializers.Serializer):
+    """
+    Set up (or update) the Points 5-3-1 game for a foursome.
+
+    No team data to validate — Points 5-3-1 is per-player, so the only
+    knobs are the handicap policy the match is played under.  Mirrors
+    SixesSetupSerializer for the handicap knobs so the mobile layer can
+    reuse a single handicap-picker widget across both games.
+    """
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'],
+                        default='net',
+                    )
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100,
+                    )
+
+
+class SkinsSetupSerializer(serializers.Serializer):
+    """
+    Set up (or update) the Skins game for a foursome.
+
+    All knobs are optional and default to the most common configuration
+    so the mobile client only needs to send the fields it cares about.
+    """
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'],
+                        default='net',
+                    )
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100,
+                    )
+    carryover     = serializers.BooleanField(default=True)
+    allow_junk    = serializers.BooleanField(default=False)
+
+
+class IrishRumbleSetupSerializer(serializers.Serializer):
+    """POST /api/rounds/{id}/irish-rumble/setup/"""
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'],
+                        default='net',
+                    )
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100,
+                    )
+    bet_unit      = serializers.DecimalField(
+                        max_digits=6, decimal_places=2, default='1.00',
+                    )
+
+
+class LowNetSetupSerializer(serializers.Serializer):
+    """POST /api/rounds/{id}/low-net/setup/"""
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'],
+                        default='net',
+                    )
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100,
+                    )
+    entry_fee     = serializers.DecimalField(
+                        max_digits=8, decimal_places=2, default='0.00',
+                    )
+    payouts       = serializers.ListField(
+                        child=serializers.DictField(),
+                        default=list,
+                        help_text=(
+                            "[{'place': 1, 'amount': '60.00'}, "
+                            "{'place': 2, 'amount': '30.00'}]"
+                        ),
+                    )
+
+
+class PinkBallSetupSerializer(serializers.Serializer):
+    """POST /api/rounds/{id}/pink-ball/setup/"""
+    ball_color  = serializers.CharField(max_length=50, default='Pink')
+    bet_unit    = serializers.DecimalField(
+                      max_digits=8, decimal_places=2, default='1.00',
+                  )
+    places_paid = serializers.IntegerField(min_value=1, default=1)
+
+
+class PinkBallOrderSerializer(serializers.Serializer):
+    """POST /api/foursomes/{id}/pink-ball/order/"""
+    order = serializers.ListField(
+                child=serializers.IntegerField(),
+                min_length=1,
+                max_length=18,
+                help_text='List of player PKs, one per hole (up to 18 entries).',
+            )
+
+
+class SkinsJunkEntrySerializer(serializers.Serializer):
+    """One player's junk count for a single hole."""
+    player_id  = serializers.IntegerField()
+    junk_count = serializers.IntegerField(min_value=0, max_value=20)
+
+
+class SkinsJunkSerializer(serializers.Serializer):
+    """
+    POST /api/foursomes/{id}/skins/junk/
+
+    Upserts SkinsPlayerHoleResult rows for all players on a single hole.
+    Rows with junk_count=0 are deleted so scorers can zero out a mistake.
+    """
+    hole_number  = serializers.IntegerField(min_value=1, max_value=18)
+    junk_entries = SkinsJunkEntrySerializer(many=True, min_length=1)
 
 
 # ===========================================================================

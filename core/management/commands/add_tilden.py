@@ -33,7 +33,7 @@ class Command(BaseCommand):
             [10, 4,  5, 387],
             [11, 3, 7, 199],
             [12, 4,  8, 300],
-            [13, 45, 18, 438],
+            [13, 5, 18, 438],
             [14, 4,  14, 311],
             [15, 4, 17, 322],
             [16, 3,  11, 186],
@@ -55,7 +55,7 @@ class Command(BaseCommand):
             [10, 4,  4, 381],
             [11, 3, 18, 120],
             [12, 4,  6, 264],
-            [13, 45, 2, 431],
+            [13, 5, 2, 431],
             [14, 4,  14, 284],
             [15, 4, 12, 309],
             [16, 3,  16, 138],
@@ -77,7 +77,7 @@ class Command(BaseCommand):
             [10, 4,  4, 381],
             [11, 3, 18, 120],
             [12, 4,  6, 264],
-            [13, 45, 2, 431],
+            [13, 5, 2, 431],
             [14, 4,  14, 284],
             [15, 4, 12, 309],
             [16, 3,  16, 138],
@@ -97,6 +97,8 @@ class Command(BaseCommand):
                         'course_rating': '69.5',
                         'par'          : 70,
                         'holes'        : tilden_white_holes_m,
+                        'sex'          : 'M',
+                        'sort_priority': 10,   # default men's tee at this course
                     },
                 )
                 status = "Created" if created else "Found"
@@ -105,13 +107,15 @@ class Command(BaseCommand):
 
         def _get_or_create_red_m_tee(g_course) -> Tee:
                 tee, created = Tee.objects.get_or_create(
-                    course=     g_course,   
+                    course=     g_course,
                     tee_name='Red M',
                     defaults={
                         'slope'        : 120,
                         'course_rating': '67.8',
                         'par'          : 70,
                         'holes'        : tilden_red_holes_m,
+                        'sex'          : 'M',
+                        'sort_priority': 40,   # forward men's tee — behind White
                     },
                 )
                 status = "Created" if created else "Found"
@@ -126,7 +130,9 @@ class Command(BaseCommand):
                         'slope'        : 124,
                         'course_rating': '71.6',
                         'par'          : 71,
-                        'holes'        : tilden_red_holes_m,
+                        'holes'        : tilden_red_holes_w,
+                        'sex'          : 'W',
+                        'sort_priority': 10,   # default women's tee at this course
                     },
                 )
                 status = "Created" if created else "Found"

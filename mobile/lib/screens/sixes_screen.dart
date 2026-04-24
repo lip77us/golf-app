@@ -85,6 +85,120 @@ int strokesOnHole(int effectiveHandicap, int strokeIndex) {
   return full + extra;
 }
 
+/// Per-player, per-hole strokes in a Sixes Strokes-Off match.
+///
+/// [playerSo] is the player's SO number (own playing handicap minus the
+/// foursome's low playing handicap; never negative).  [summary] is the
+/// current SixesSummary (used to know which segment a hole is in and where
+/// the next segment starts, so we can handle dying strokes).  [scorecard]
+/// is the scorecard (used to look up the stroke index of every hole in a
+/// segment's potential range).
+///
+/// Standard matches: the player receives
+///     floor(SO/3) + (1 if match_idx < SO%3 else 0)
+/// strokes, allocated to the hardest holes in that SEGMENT'S OWN potential
+/// range (seg.startHole..seg.endHole).  If the segment ended early (the
+/// next segment starts before seg.endHole+1), any stroke planned past the
+/// last actually-played hole dies.
+/// Extras: the player gets a stroke on any hole in the extra whose SI
+/// meets the course-wide SO threshold.
+int sixesSoStrokesOnHole({
+  required int playerSo,
+  required int holeNumber,
+  required int strokeIndex,
+  required SixesSummary? summary,
+  required Scorecard? scorecard,
+}) {
+  if (playerSo <= 0) return 0;
+  if (scorecard == null) return 0;
+  if (summary == null) return 0;
+
+  // Segments come back from the server already ordered: standard segments
+  // 1..3 first, then any extras.  We keep that list order throughout.
+  final segments = summary.segments;
+
+  // First: is this hole currently inside an extra (tiebreak) segment?  If
+  // so we apply the simple SI-threshold rule.
+  for (final s in segments) {
+    if (s.isExtra &&
+        holeNumber >= s.startHole &&
+        holeNumber <= s.endHole) {
+      return strokeIndex <= playerSo ? 1 : 0;
+    }
+  }
+
+  // Otherwise the hole lives inside a standard segment.  Find that segment
+  // AND its index among the standard (non-extra) segments — the index
+  // drives the spread (floor(SO/3) + remainder for the first SO%3 matches).
+  //
+  // NOTE: when an earlier match ends early, the backend moves the NEXT
+  // segment's startHole left (e.g. match 1 ends at hole 4 → seg2 becomes
+  // 5-10) but leaves the earlier segment's endHole unchanged (seg1 stays
+  // 1-6).  That means seg1 and seg2 overlap on holes 5 and 6.  We want
+  // the LATER segment to own those overlap holes, so iterate in reverse
+  // and take the first match.
+  final standard = segments.where((s) => !s.isExtra).toList();
+  int? stdIdx;
+  SixesSegment? seg;
+  for (int i = standard.length - 1; i >= 0; i--) {
+    final s = standard[i];
+    if (holeNumber >= s.startHole && holeNumber <= s.endHole) {
+      stdIdx = i;
+      seg = s;
+      break;
+    }
+  }
+  if (seg == null || stdIdx == null) return 0;
+
+  final base = playerSo ~/ 3;
+  final rem  = playerSo %  3;
+  final strokesThisMatch = base + (stdIdx < rem ? 1 : 0);
+  if (strokesThisMatch <= 0) return 0;
+
+  // Actual last hole played in this segment: one less than the next
+  // segment's start (standard or extra), or 18 if this is the final one.
+  // Segments are kept in the server's emitted order (1..3 standard, then
+  // extras), so "next segment" = next in list with start > current start.
+  final segListIdx = segments.indexOf(seg);
+  int actualEnd = 18;
+  for (int i = segListIdx + 1; i < segments.length; i++) {
+    if (segments[i].startHole > seg.startHole) {
+      actualEnd = segments[i].startHole - 1;
+      break;
+    }
+  }
+
+  // Rank this segment's own potential range hardest-first (lowest SI);
+  // hole number is the deterministic tiebreak so it matches the backend.
+  final holes = <int>[
+    for (int h = seg.startHole; h <= seg.endHole; h++) h
+  ];
+  holes.sort((a, b) {
+    final aSi = scorecard.holeData(a)?.strokeIndex ?? 18;
+    final bSi = scorecard.holeData(b)?.strokeIndex ?? 18;
+    if (aSi != bSi) return aSi.compareTo(bSi);
+    return a.compareTo(b);
+  });
+  final rank = holes.indexOf(holeNumber);
+  if (rank < 0) return 0;
+
+  final segSize = holes.length;
+
+  int plannedStrokes;
+  if (strokesThisMatch <= segSize) {
+    plannedStrokes = rank < strokesThisMatch ? 1 : 0;
+  } else {
+    // Rare: more strokes than holes → 1 everywhere + extras on hardest.
+    final extraStrokes = strokesThisMatch - segSize;
+    plannedStrokes = 1 + (rank < extraStrokes ? 1 : 0);
+  }
+
+  // Dying-strokes: if the match ended before this hole, the stroke dies.
+  if (holeNumber > actualEnd) return 0;
+
+  return plannedStrokes;
+}
+
 class SixesScreen extends StatefulWidget {
   final int foursomeId;
   const SixesScreen({super.key, required this.foursomeId});
@@ -106,6 +220,19 @@ class _SixesScreenState extends State<SixesScreen> {
   /// the server has processed the scores (i.e. calculate_sixes has run).
   bool _prevHadPending = false;
 
+  /// startHole of every extras segment we've already auto-opened the team
+  /// picker for.  Keyed by startHole (which is stable per extra while it
+  /// exists) so we don't loop when the user cancels the picker.  The
+  /// user can still manually reopen the picker via the inline "Set teams"
+  /// prompt that replaces the score picker while teams are unset.
+  final Set<int> _autoOpenedExtraStart = {};
+
+  /// Guards the one-time "jump to first unplayed hole" so it only fires once
+  /// after the scorecard for THIS foursome arrives in the provider.  Without
+  /// this guard the jump either fires on a stale (previous game's) scorecard
+  /// or fires before the scorecard has loaded at all.
+  bool _initialJumpDone = false;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
@@ -119,7 +246,6 @@ class _SixesScreenState extends State<SixesScreen> {
         rp.refreshPendingOverlay();
       }
       rp.loadSixes(widget.foursomeId);
-      _jumpToFirstUnplayed(rp);
     });
   }
 
@@ -202,6 +328,8 @@ class _SixesScreenState extends State<SixesScreen> {
         return;
       }
     }
+    // All 18 holes are complete — land on the last hole instead of hole 1.
+    setState(() => _selectedHole = 18);
   }
 
   /// Effective scores for [hole]: server data merged with in-flight UI edits
@@ -270,7 +398,17 @@ class _SixesScreenState extends State<SixesScreen> {
       lowestPlayingHandicap: lowPlaying,
     );
     final si = sc?.holeData(hole)?.strokeIndex ?? 18;
-    final strokes = strokesOnHole(effective, si);
+    // In SO mode the Sixes spreading rule determines per-hole strokes;
+    // every other mode uses plain SI allocation against `effective`.
+    final strokes = mode == 'strokes_off'
+        ? sixesSoStrokesOnHole(
+            playerSo:    effective,  // player_hcp - low
+            holeNumber:  hole,
+            strokeIndex: si,
+            summary:     summary,
+            scorecard:   sc,
+          )
+        : strokesOnHole(effective, si);
 
     final score = await showModalBottomSheet<int>(
       context: ctx,
@@ -300,6 +438,74 @@ class _SixesScreenState extends State<SixesScreen> {
   }
 
   /// Save current hole and advance to next hole.
+  /// Hole 18 "Done" handler.  Submits any unsaved pending edits for the
+  /// current hole first, waits long enough to let calculate_sixes process
+  /// them on the server, then navigates to the leaderboard.  This is what
+  /// rescues a one-hole extra match ("Match 5") from showing up pending on
+  /// the leaderboard when the user taps Done without tapping Next first.
+  Future<void> _finishRound(
+    BuildContext ctx,
+    List<Membership> players,
+    int par,
+  ) async {
+    final rp      = context.read<RoundProvider>();
+    final sync    = context.read<SyncService>();
+    final roundId = rp.round?.id;
+
+    // If there are unsaved edits for this hole, save them before
+    // navigating.  If the save fails we surface a snackbar and DON'T
+    // navigate, so the user can retry.
+    final pendingForHole = _pending[_selectedHole];
+    if (pendingForHole != null && pendingForHole.isNotEmpty) {
+      final scores = pendingForHole.entries
+          .map((e) => {'player_id': e.key, 'gross_score': e.value})
+          .toList();
+      final ok = await rp.submitHole(
+        foursomeId:   widget.foursomeId,
+        holeNumber:   _selectedHole,
+        scores:       scores,
+        pinkBallLost: _pinkBallLost,
+      );
+      if (!mounted) return;
+      if (!ok) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text(rp.error ?? 'Failed to save hole.'),
+          backgroundColor: Theme.of(ctx).colorScheme.error,
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Theme.of(ctx).colorScheme.onError,
+            onPressed: () => _finishRound(ctx, players, par),
+          ),
+        ));
+        return;
+      }
+      setState(() {
+        _pending.remove(_selectedHole);
+        _pinkBallLost = false;
+      });
+    }
+
+    // submitHole only QUEUES the score locally; the actual POST happens
+    // in SyncService.drainQueue(), which is fired-and-forgotten by
+    // enqueue().  Calling drainQueue() directly here would be a no-op
+    // if a drain is already in flight (the `_draining` guard inside
+    // SyncService returns immediately).  Use waitUntilIdle which polls
+    // until the queue is fully drained AND the service is idle — the
+    // only reliable way to know calculate_sixes has seen hole 18 before
+    // we navigate to the leaderboard.  The 10 s timeout is a safety net
+    // so a flaky network doesn't hang the UI.
+    await sync.waitUntilIdle();
+    if (!mounted) return;
+
+    // Kick off a sixes reload so the leaderboard renders with the
+    // just-computed standings.  Fire-and-forget.
+    rp.loadSixes(widget.foursomeId);
+
+    if (roundId != null) {
+      Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
+    }
+  }
+
   Future<void> _saveAndAdvance(
     BuildContext ctx,
     List<Membership> players,
@@ -384,6 +590,26 @@ class _SixesScreenState extends State<SixesScreen> {
     if (_selectedHole > 1) setState(() => _selectedHole--);
   }
 
+  /// If [hole] falls inside an EXTRAS segment (is_extra=True) whose teams
+  /// haven't been assigned yet, return that segment.  Otherwise null.
+  ///
+  /// We iterate segments in reverse so that if an earlier extras segment's
+  /// (stale) range overlaps the hole, the LATER (and correct) extras
+  /// segment wins — mirroring the server's segment_number ordering and
+  /// the same reverse-iteration fix we already applied in
+  /// sixesSoStrokesOnHole.  Standard (non-extras) segments always have
+  /// teams from the initial Sixes setup, so they don't need this gate.
+  SixesSegment? _unconfiguredExtraForHole(int hole, SixesSummary? summary) {
+    if (summary == null) return null;
+    for (final s in summary.segments.reversed) {
+      if (!s.isExtra) continue;
+      if (hole < s.startHole || hole > s.endHole) continue;
+      if (s.team1.hasPlayers && s.team2.hasPlayers) return null;
+      return s;
+    }
+    return null;
+  }
+
   static Map<int, Map<int, int>> _mergePending(
     Map<int, Map<int, int>> dbPending,
     Map<int, Map<int, int>> uiEdits,
@@ -414,6 +640,19 @@ class _SixesScreenState extends State<SixesScreen> {
       });
     }
     _prevHadPending = nowHasPending;
+
+    // Once the scorecard for THIS foursome arrives, jump to the first
+    // unscored hole.  Guard on activeFoursomeId so we don't act on a
+    // stale scorecard that belongs to a different (e.g. previously
+    // viewed) game.
+    if (!_initialJumpDone &&
+        sc != null &&
+        rp.activeFoursomeId == widget.foursomeId) {
+      _initialJumpDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _jumpToFirstUnplayed(context.read<RoundProvider>());
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -448,6 +687,24 @@ class _SixesScreenState extends State<SixesScreen> {
                 rp.loadSixes(widget.foursomeId);
               },
             ),
+          IconButton(
+            tooltip: 'Full scorecard',
+            icon: const Icon(Icons.table_chart_outlined),
+            onPressed: sc == null
+                ? null
+                : () => Navigator.of(context).pushNamed('/scorecard',
+                      arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
+          ),
+          IconButton(
+            tooltip: 'Leaderboard',
+            icon: const Icon(Icons.leaderboard_outlined),
+            onPressed: rp.round == null
+                ? null
+                : () => Navigator.of(context).pushNamed(
+                      '/leaderboard',
+                      arguments: rp.round!.id,
+                    ),
+          ),
         ],
       ),
       body: _buildBody(context, rp, sync, isComplete),
@@ -484,13 +741,19 @@ class _SixesScreenState extends State<SixesScreen> {
           Expanded(
             child: _selectedHole == 18 || isComplete
                 ? FilledButton.icon(
-                    onPressed: () {
-                      final roundId = rp.round?.id;
-                      if (roundId != null) {
-                        Navigator.of(ctx)
-                            .pushNamed('/leaderboard', arguments: roundId);
-                      }
-                    },
+                    // On hole 18 the usual "Next" button becomes Done.
+                    // We MUST save any pending edits for hole 18 before
+                    // navigating away, otherwise the scores sit
+                    // unsubmitted in _pending and a one-hole extra (the
+                    // infamous "Match 5") stays pending forever because
+                    // calculate_sixes never sees the hole 18 score.
+                    //
+                    // If all four players already have scores locally but
+                    // rp.submitting is still going, disable the button
+                    // until the submission settles so we don't race.
+                    onPressed: rp.submitting
+                        ? null
+                        : () => _finishRound(ctx, players, par),
                     icon: const Icon(Icons.emoji_events, size: 20),
                     label: const Text('Done'),
                   )
@@ -548,6 +811,25 @@ class _SixesScreenState extends State<SixesScreen> {
     final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
     final par      = holeData?.par ?? 4;
 
+    // Gate score entry when the current hole is inside an extras segment
+    // whose teams haven't been assigned yet.  Two effects:
+    //   1) The first time _selectedHole lands inside such a segment we
+    //      auto-open the team picker (post-frame so we're not inside a
+    //      build() call).  We mark startHole as "already offered" so a
+    //      user who cancels isn't trapped in an infinite modal loop.
+    //   2) _HoleScoreCard receives blockedForExtraTeams=true which swaps
+    //      the inline score picker for a prominent "Set teams for Match N"
+    //      prompt — manually reopening the picker if they dismissed it.
+    final needsTeamsSeg = _unconfiguredExtraForHole(_selectedHole, rp.sixesSummary);
+    if (needsTeamsSeg != null &&
+        !_autoOpenedExtraStart.contains(needsTeamsSeg.startHole)) {
+      _autoOpenedExtraStart.add(needsTeamsSeg.startHole);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showExtraTeamPicker(needsTeamsSeg, players);
+      });
+    }
+
     return Column(children: [
       _SyncBanner(sync: sync),
       if (rp.error != null)
@@ -575,6 +857,14 @@ class _SixesScreenState extends State<SixesScreen> {
                 // (used for score-picker coloring, running net total, and
                 // the match-handicap label next to each golfer's name).
                 sixesSummary: rp.sixesSummary,
+                // When the current hole is inside an extras segment with
+                // no teams, we disable score entry and show a prompt in
+                // place of the inline picker.  The callback reopens the
+                // picker for users who cancelled the auto-open.
+                blockedExtraSeg: needsTeamsSeg,
+                onOpenExtraTeamsPicker: needsTeamsSeg == null
+                    ? null
+                    : () => _showExtraTeamPicker(needsTeamsSeg, players),
                 onScoreSelected: (m, score) =>
                     _selectScore(m, score, _selectedHole),
                 onEditTap: (m) =>
@@ -642,6 +932,14 @@ class _HoleScoreCard extends StatelessWidget {
   final void Function(Membership)      onEditTap;       // modal for editing
   final void Function(bool)            onPinkBallLostChanged;
   final SixesSummary?                  sixesSummary;    // nullable until loaded
+  /// Non-null when the current hole falls inside an extras segment whose
+  /// teams haven't been assigned yet.  When set, the inline score picker
+  /// is replaced with a prompt asking the user to set teams first.
+  final SixesSegment?                  blockedExtraSeg;
+  /// Invoked when the user taps the inline "Set teams for Match N"
+  /// button — reopens the extras team picker.  Non-null only when
+  /// blockedExtraSeg is non-null.
+  final VoidCallback?                  onOpenExtraTeamsPicker;
 
   const _HoleScoreCard({
     required this.holeData,
@@ -658,7 +956,50 @@ class _HoleScoreCard extends StatelessWidget {
     required this.onEditTap,
     required this.onPinkBallLostChanged,
     required this.sixesSummary,
+    this.blockedExtraSeg,
+    this.onOpenExtraTeamsPicker,
   });
+
+  /// Builds the "Par X  |  Y yds.  |  SI: Z" header text for a hole,
+  /// deduplicating values across tees.  When all players share the same tee
+  /// a single value is shown; when tees differ the values are slash-joined
+  /// in the same order as [players].  Mirrors the logic in
+  /// points_531_screen.dart and skins_screen.dart exactly.
+  static String _buildHoleHeaderText(
+    ScorecardHole hole,
+    List<Membership> players,
+  ) {
+    final seenKeys = <int>{};
+    final parVals  = <int>[];
+    final yardVals = <int?>[];
+    final siVals   = <int>[];
+    for (final m in players) {
+      final key = m.tee?.id ?? -m.player.id;
+      if (!seenKeys.add(key)) continue;
+      final e = hole.scoreFor(m.player.id);
+      parVals.add(e?.par ?? hole.par);
+      yardVals.add(e?.yards ?? hole.yards);
+      siVals.add(e?.strokeIndex ?? hole.strokeIndex);
+    }
+
+    String collapse<T>(List<T> vals, String Function(T) fmt) {
+      if (vals.isEmpty) return '';
+      final seen   = <T>{};
+      final unique = vals.where((v) => seen.add(v)).toList();
+      if (unique.length == 1) return fmt(unique.first);
+      return unique.map(fmt).join('/');
+    }
+
+    final parStr  = 'Par ${collapse<int>(parVals, (v) => '$v')}';
+    final siStr   = 'SI: ${collapse<int>(siVals, (v) => '$v')}';
+    final anyYard = yardVals.any((y) => y != null);
+    final yardStr = anyYard
+        ? '${collapse<int?>(yardVals, (v) => v == null ? '—' : '$v')} yds.'
+        : null;
+    return yardStr == null
+        ? '$parStr  |  $siStr'
+        : '$parStr  |  $yardStr  |  $siStr';
+  }
 
   /// Mode for this match ('net' default while summary is still loading).
   String get _mode        => sixesSummary?.handicapMode ?? 'net';
@@ -681,9 +1022,20 @@ class _HoleScoreCard extends StatelessWidget {
         lowestPlayingHandicap: _lowPlayingHandicap,
       );
 
-  /// Per-player, per-hole strokes for the current match.
+  /// Per-player, per-hole strokes for the current match.  In Strokes-Off
+  /// mode we use the Sixes-specific spreading rule; other modes use the
+  /// simple SI allocation over the player's effective handicap.
   int _strokesForHole(Membership m, ScorecardHole? h) {
     if (h == null) return 0;
+    if (_mode == 'strokes_off') {
+      return sixesSoStrokesOnHole(
+        playerSo:    _matchHandicapFor(m),  // already player_hcp - low
+        holeNumber:  h.holeNumber,
+        strokeIndex: h.strokeIndex,
+        summary:     sixesSummary,
+        scorecard:   scorecard,
+      );
+    }
     return strokesOnHole(_matchHandicapFor(m), h.strokeIndex);
   }
 
@@ -740,9 +1092,7 @@ class _HoleScoreCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               holeData != null
-                  ? 'Par ${holeData!.par}  |  '
-                    '${holeData!.yards != null ? "${holeData!.yards} yds.  |  " : ""}'
-                    'SI: ${holeData!.strokeIndex}'
+                  ? _buildHoleHeaderText(holeData!, players)
                   : '',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall,
@@ -786,19 +1136,32 @@ class _HoleScoreCard extends StatelessWidget {
               gross:          gross,
               isHot:          isHot,
               matchHcapLabel: matchHcapLabel,
+              showNet:        _mode == 'net',
               // Tapping a scored non-hot row lets the user edit it.
-              onTap: hasScore && !isHot ? () => onEditTap(m) : null,
+              // Suppressed while teams are unset — we don't want the
+              // edit modal popping up either.
+              onTap: (hasScore && !isHot && blockedExtraSeg == null)
+                  ? () => onEditTap(m)
+                  : null,
             ),
-            // Inline score picker — auto-appears below the hot-spot row.
+            // Inline score picker (or the "set teams" gate that replaces
+            // it) — only rendered under the hot-spot player's row so the
+            // prompt doesn't repeat four times.
             if (isHot)
-              _InlineScorePicker(
-                par: par,
-                // Per-player match strokes on this hole — drives the
-                // net-centred coloring and shape decorations.
-                strokes: matchStrokes,
-                currentScore: gross,
-                onScoreSelected: (score) => onScoreSelected(m, score),
-              ),
+              blockedExtraSeg == null
+                  ? _InlineScorePicker(
+                      par: par,
+                      // Per-player match strokes on this hole — drives the
+                      // net-centred coloring and shape decorations.
+                      strokes: matchStrokes,
+                      currentScore: gross,
+                      onScoreSelected: (score) => onScoreSelected(m, score),
+                    )
+                  : _SetTeamsPrompt(
+                      matchNumber: (sixesSummary?.segments
+                              .indexOf(blockedExtraSeg!) ?? -1) + 1,
+                      onTap: onOpenExtraTeamsPicker,
+                    ),
           ];
         }).toList(),
 
@@ -839,6 +1202,11 @@ class _PlayerScoreRow extends StatelessWidget {
   /// Gross mode (no strokes given, so nothing to show).
   final String?     matchHcapLabel;
 
+  /// When true the running total shows both gross and net columns.
+  /// Set to false in Gross and Strokes-Off modes so only the gross
+  /// column is displayed (net total is meaningless there).
+  final bool        showNet;
+
   const _PlayerScoreRow({
     required this.position,
     required this.member,
@@ -847,6 +1215,7 @@ class _PlayerScoreRow extends StatelessWidget {
     required this.isHot,
     this.matchHcapLabel,
     this.onTap,
+    this.showNet = true,
   });
 
   @override
@@ -912,11 +1281,14 @@ class _PlayerScoreRow extends StatelessWidget {
           ]),
         ),
 
-        // Running totals: (+2)G (+1)N — Flexible so long names don't overflow
+        // Running totals: (+2)G or (+2)G (+1)N depending on handicap mode.
+        // Net column is hidden for Gross and Strokes-Off modes.
         Flexible(
           flex: 0,
           child: Text(
-            '${_signed(running.grossVsPar)}G ${_signed(running.netVsPar)}N',
+            showNet
+                ? '${_signed(running.grossVsPar)}G ${_signed(running.netVsPar)}N'
+                : '${_signed(running.grossVsPar)}G',
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.secondary),
@@ -961,6 +1333,50 @@ class _PlayerScoreRow extends StatelessWidget {
 // Inline score picker — appears below the hot-spot player row automatically
 // ===========================================================================
 
+/// Inline gate that replaces the score picker when the current hole is
+/// inside an extras segment whose teams haven't been set yet.  Tapping
+/// the button reopens the team picker (useful if the user dismissed the
+/// auto-opened picker on first arrival at this hole).
+class _SetTeamsPrompt extends StatelessWidget {
+  final int matchNumber;
+  final VoidCallback? onTap;
+
+  const _SetTeamsPrompt({required this.matchNumber, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.tertiaryContainer.withOpacity(0.35),
+        border: Border(
+          top: BorderSide(color: theme.colorScheme.tertiary.withOpacity(0.4)),
+        ),
+      ),
+      child: Row(children: [
+        Icon(Icons.lock_outline, size: 18, color: theme.colorScheme.tertiary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Set teams for Match $matchNumber before entering scores.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w500),
+          ),
+        ),
+        const SizedBox(width: 8),
+        FilledButton.tonalIcon(
+          onPressed: onTap,
+          icon: const Icon(Icons.groups, size: 18),
+          label: const Text('Set teams'),
+        ),
+      ]),
+    );
+  }
+}
+
+
 class _InlineScorePicker extends StatefulWidget {
   final int  par;
   final int  strokes;       // handicap strokes this player gets on this hole
@@ -985,15 +1401,40 @@ class _InlineScorePickerState extends State<_InlineScorePicker> {
 
   late final ScrollController _ctrl;
 
+  /// Left-edge offset that centres the slider on this player's net par.
+  double _offsetFor(int par, int strokes) {
+    final netPar   = par + strokes;
+    final startIdx = (netPar - 3).clamp(0, 11); // 0-based index in [1..12]
+    return (startIdx * _itemTotal).clamp(0.0, double.infinity);
+  }
+
   @override
   void initState() {
     super.initState();
-    // Scroll so that (netPar-2) is at the left edge — centring the slider
-    // on the player's net par rather than gross par.
-    final netPar      = widget.par + widget.strokes;
-    final startIdx    = (netPar - 3).clamp(0, 11); // 0-based index in [1..12]
-    final initOffset  = (startIdx * _itemTotal).clamp(0.0, double.infinity);
-    _ctrl = ScrollController(initialScrollOffset: initOffset);
+    _ctrl = ScrollController(
+        initialScrollOffset: _offsetFor(widget.par, widget.strokes));
+  }
+
+  @override
+  void didUpdateWidget(covariant _InlineScorePicker old) {
+    super.didUpdateWidget(old);
+    // When Flutter reuses this State across hole changes (same widget type
+    // at the same tree position), initState doesn't re-run — but par or
+    // strokes may now be different.  Without this, the colors correctly
+    // reflect the new net par while the scroll offset stays anchored to
+    // the previous hole, which is exactly the "score 5 is white but in
+    // position 4 instead of 3" bug on the first player of hole 5.
+    if (old.par != widget.par || old.strokes != widget.strokes) {
+      final target = _offsetFor(widget.par, widget.strokes);
+      // jumpTo is fine here — the picker is only reflowed when the user
+      // advances to a new hole, so there's no pleasant animation to
+      // preserve.  Schedule post-frame so we don't fight a pending layout.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_ctrl.hasClients) return;
+        final maxExtent = _ctrl.position.maxScrollExtent;
+        _ctrl.jumpTo(target.clamp(0.0, maxExtent));
+      });
+    }
   }
 
   @override
@@ -1195,9 +1636,21 @@ class _MatchGrid extends StatelessWidget {
     return idx >= 0 ? idx + 1 : 0;
   }
 
+  /// Resolve a player-name string from the Sixes summary back to the
+  /// PlayerProfile in the foursome members list so we can use its
+  /// shortName.  Falls back to the legacy _initials() algorithm if the
+  /// name doesn't match (e.g. a phantom whose display name has diverged).
+  String _shortFor(String name) {
+    final m = members.cast<Membership?>().firstWhere(
+      (m) => m?.player.name == name,
+      orElse: () => null,
+    );
+    return m?.player.displayShort ?? _initials(name);
+  }
+
   String _teamLabel(SixesTeamInfo team) {
     if (!team.hasPlayers) return '??/??\n(?/?)';
-    final abbr = team.players.map(_initials).join('/');
+    final abbr = team.players.map(_shortFor).join('/');
     final pos  = team.players
         .map((n) => _position(n))
         .map((p) => p > 0 ? '$p' : '?')
@@ -1407,9 +1860,28 @@ class _SegmentCard extends StatelessWidget {
                     color: statusColor, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 2),
-              Text('Holes ${segment.startHole}–${segment.endHole}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
+              Builder(builder: (_) {
+                // For matches that ended early, the DB's end_hole is
+                // still the POTENTIAL end (we don't retrim it during
+                // repositioning — that would mess up other calculations
+                // that key off the original range).  So "Holes 1–6" on a
+                // match that ended at hole 4 is misleading on the match
+                // card.  Use the last actually-played hole instead when
+                // the segment is complete or halved.
+                final lastPlayed = segment.holes.isNotEmpty
+                    ? segment.holes.last.hole
+                    : null;
+                final decided = segment.status == 'complete'
+                                || segment.status == 'halved';
+                final displayEnd = (decided
+                                    && lastPlayed != null
+                                    && lastPlayed < segment.endHole)
+                    ? lastPlayed
+                    : segment.endHole;
+                return Text('Holes ${segment.startHole}–$displayEnd',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant));
+              }),
             ],
           ],
         ),
@@ -1496,7 +1968,7 @@ class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
                   leading: CircleAvatar(
                     backgroundColor: color,
                     child: Text(
-                      _initials(m.player.name),
+                      m.player.displayShort,
                       style: TextStyle(
                         color: inA || inB ? Colors.white : theme.colorScheme.onSurfaceVariant,
                         fontSize: 13,

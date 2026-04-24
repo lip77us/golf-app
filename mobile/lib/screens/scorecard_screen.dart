@@ -1,24 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
+import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/net_score_button.dart';
 
+// ---------------------------------------------------------------------------
+// Top-level helpers — identical to skins_screen.dart so we keep one source
+// of truth per utility.
+// ---------------------------------------------------------------------------
+
+int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
+  if (effectiveHandicap <= 0) return 0;
+  final full = effectiveHandicap ~/ 18;
+  final rem  = effectiveHandicap %  18;
+  return full + (strokeIndex <= rem ? 1 : 0);
+}
+
+String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
+
+class _RunningTotal {
+  final int grossVsPar;
+  final int netVsPar;
+  const _RunningTotal({required this.grossVsPar, required this.netVsPar});
+}
+
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
+
 class ScorecardScreen extends StatefulWidget {
-  final int foursomeId;
-  const ScorecardScreen({super.key, required this.foursomeId});
+  final int  foursomeId;
+  /// When true the screen is a read-only viewer: no score pickers, no
+  /// Save/Done button.  Navigation between holes still works.
+  final bool readOnly;
+
+  const ScorecardScreen({
+    super.key,
+    required this.foursomeId,
+    this.readOnly = false,
+  });
 
   @override
   State<ScorecardScreen> createState() => _ScorecardScreenState();
 }
 
 class _ScorecardScreenState extends State<ScorecardScreen> {
-  // In-flight edits for the currently selected hole (before hitting Save).
-  // Distinct from localPendingByHole (saved to DB, awaiting sync).
-  final Map<int, Map<int, int>> _pending = {};
-  int _selectedHole = 1;
-  bool _pinkBallLost = false;
+  // ── Hole selection ──────────────────────────────────────────────────────
+  int  _selectedHole    = 1;
+  bool _initialJumpDone = false;
+
+  // ── Local (unsaved) score edits, hole → { playerId → gross } ───────────
+  Map<int, Map<int, int>> _pending = {};
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -28,17 +64,9 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       if (rp.scorecard == null || rp.activeFoursomeId != widget.foursomeId) {
         rp.loadScorecard(widget.foursomeId);
       } else {
-        // Scorecard already cached — just re-sync the pending overlay from DB
-        // in case items were added or cleared while we were on another screen.
         rp.refreshPendingOverlay();
       }
     });
-  }
-
-
-  bool get _hasPinkBall {
-    final rp = context.read<RoundProvider>();
-    return rp.round?.activeGames.contains('pink_ball') ?? false;
   }
 
   List<Membership> _realPlayers(Scorecard sc, Round? round) {
@@ -46,7 +74,6 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
         .where((f) => f.id == widget.foursomeId)
         .firstOrNull;
     if (foursome != null) return foursome.realPlayers;
-    // Fallback: derive from scorecard first hole
     if (sc.holes.isEmpty) return [];
     return sc.holes.first.scores
         .map((s) => Membership(
@@ -64,76 +91,222 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
         .toList();
   }
 
-  void _setScore(int hole, int playerId, int? gross) {
+  void _jumpToFirstUnplayed(RoundProvider rp) {
+    final sc      = rp.scorecard;
+    if (sc == null) return;
+    final players = _realPlayers(sc, rp.round);
+    for (int h = 1; h <= 18; h++) {
+      if (rp.localPendingByHole.containsKey(h)) continue;
+      final hd = sc.holeData(h);
+      if (hd == null ||
+          !players.every((m) => hd.scoreFor(m.player.id)?.grossScore != null)) {
+        setState(() => _selectedHole = h);
+        return;
+      }
+    }
+    setState(() => _selectedHole = 18);
+  }
+
+  Map<int, int> _effectiveScores(Scorecard sc, int hole) {
+    final saved = <int, int>{};
+    final hd    = sc.holeData(hole);
+    if (hd != null) {
+      for (final s in hd.scores) {
+        if (s.grossScore != null) saved[s.playerId] = s.grossScore!;
+      }
+    }
+    return {...saved, ...(_pending[hole] ?? {})};
+  }
+
+  bool _allScored(List<Membership> players, Map<int, int> scores) =>
+      players.every((m) => scores.containsKey(m.player.id));
+
+  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
+    for (int i = 0; i < players.length; i++) {
+      if (!scores.containsKey(players[i].player.id)) return i;
+    }
+    return -1;
+  }
+
+  void _selectScore(Membership player, int score, int hole) {
     setState(() {
-      _pending.putIfAbsent(hole, () => {});
-      if (gross == null) {
-        _pending[hole]!.remove(playerId);
+      if (score == -1) {
+        _pending[hole]?.remove(player.player.id);
+        if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
       } else {
-        _pending[hole]![playerId] = gross;
+        _pending.putIfAbsent(hole, () => {})[player.player.id] = score;
       }
     });
   }
 
-  Future<void> _submitHole(BuildContext context) async {
-    final edits = _pending[_selectedHole];
-    if (edits == null || edits.isEmpty) return;
+  /// Returns handicap strokes on a specific hole for a player.
+  /// Prefers the server-calculated value; falls back to playing handicap.
+  int _strokesForHole(Membership m, ScorecardHole? h) {
+    if (h == null) return 0;
+    final entry = h.scoreFor(m.player.id);
+    if (entry != null) return entry.handicapStrokes;
+    return _strokesOnHole(m.playingHandicap, h.strokeIndex);
+  }
 
+  _RunningTotal _running(int playerId, Scorecard sc) {
+    final m = _realPlayers(sc, context.read<RoundProvider>().round)
+        .where((x) => x.player.id == playerId)
+        .firstOrNull;
+    int gross = 0, parSum = 0, net = 0;
+    for (final h in sc.holes) {
+      final pendingGross = _pending[h.holeNumber]?[playerId]
+          ?? context.read<RoundProvider>().localPendingByHole[h.holeNumber]?[playerId];
+      final saved        = h.scoreFor(playerId);
+      final grossScore   = pendingGross ?? saved?.grossScore;
+      if (grossScore == null) continue;
+      gross  += grossScore;
+      parSum += h.par;
+      final strokes = m == null ? 0 : _strokesForHole(m, h);
+      net += grossScore - strokes;
+    }
+    return _RunningTotal(grossVsPar: gross - parSum, netVsPar: net - parSum);
+  }
+
+  Future<void> _editScore(
+    BuildContext ctx,
+    Membership player,
+    int par,
+    int hole,
+    ScorecardHole? holeData,
+  ) async {
+    final current = (_pending[hole] ?? {})[player.player.id]
+        ?? context.read<RoundProvider>().scorecard
+            ?.holeData(hole)?.scoreFor(player.player.id)?.grossScore;
+    final strokes = _strokesForHole(player, holeData);
+
+    final score = await showModalBottomSheet<int>(
+      context: ctx,
+      useRootNavigator: true,
+      builder: (_) => _ScorePickerSheet(
+        playerName: player.player.name,
+        par:        par,
+        holeNumber: hole,
+        strokes:    strokes,
+        current:    current,
+      ),
+    );
+    if (!mounted || score == null) return;
+    setState(() {
+      if (score == -1) {
+        _pending[hole]?.remove(player.player.id);
+        if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
+      } else {
+        _pending.putIfAbsent(hole, () => {})[player.player.id] = score;
+      }
+    });
+  }
+
+  Future<void> _saveAndAdvance(
+    BuildContext ctx,
+    List<Membership> players,
+    int par,
+  ) async {
+    final edits = _pending[_selectedHole];
+    if (edits == null || edits.isEmpty) {
+      if (_selectedHole < 18) setState(() => _selectedHole++);
+      return;
+    }
     final scores = edits.entries
         .map((e) => {'player_id': e.key, 'gross_score': e.value})
         .toList();
-
     final rp = context.read<RoundProvider>();
     final ok = await rp.submitHole(
       foursomeId: widget.foursomeId,
       holeNumber: _selectedHole,
-      scores: scores,
-      pinkBallLost: _pinkBallLost,
+      scores:     scores,
     );
-
-    if (!ok && mounted) {
-      final msg = context.read<RoundProvider>().error ?? 'Failed to save hole.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          action: SnackBarAction(
-            label: 'Retry',
-            textColor: Theme.of(context).colorScheme.onError,
-            onPressed: () => _submitHole(context),
-          ),
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+        content: Text(rp.error ?? 'Failed to save hole.'),
+        backgroundColor: Theme.of(ctx).colorScheme.error,
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Theme.of(ctx).colorScheme.onError,
+          onPressed: () => _saveAndAdvance(ctx, players, par),
         ),
+      ));
+      return;
+    }
+    setState(() {
+      _pending.remove(_selectedHole);
+      if (_selectedHole < 18) _selectedHole++;
+    });
+  }
+
+  Future<void> _finishRound(
+    BuildContext ctx,
+    List<Membership> players,
+    int par,
+  ) async {
+    final rp   = context.read<RoundProvider>();
+    final sync = context.read<SyncService>();
+
+    // Save the current hole if it has unsaved edits
+    final edits = _pending[_selectedHole];
+    if (edits != null && edits.isNotEmpty) {
+      final scores = edits.entries
+          .map((e) => {'player_id': e.key, 'gross_score': e.value})
+          .toList();
+      final ok = await rp.submitHole(
+        foursomeId: widget.foursomeId,
+        holeNumber: _selectedHole,
+        scores:     scores,
       );
+      if (!mounted) return;
+      if (!ok) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text(rp.error ?? 'Failed to save hole.'),
+          backgroundColor: Theme.of(ctx).colorScheme.error,
+        ));
+        return;
+      }
+      setState(() => _pending.remove(_selectedHole));
     }
 
-    if (ok && mounted) {
-      setState(() {
-        _pending.remove(_selectedHole);
-        _pinkBallLost = false;
-        // Auto-advance to next hole
-        if (_selectedHole < 18) _selectedHole++;
-      });
-      // Brief confirmation — note this is a local save, sync happens in background
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Scores saved ✓'),
-          duration: Duration(seconds: 1),
-          backgroundColor: Colors.green,
-        ),
-      );
+    await sync.waitUntilIdle();
+    if (!mounted) return;
+
+    final roundId = rp.round?.id;
+    if (roundId != null) {
+      Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
     }
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final rp   = context.watch<RoundProvider>();
     final sync = context.watch<SyncService>();
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
+    if (isLandscape) return _buildLandscapeScaffold(context, rp, sync);
+
+    final sc         = rp.scorecard;
+    final isComplete = rp.round?.status == 'complete';
+
+    // Auto-jump to first unscored hole on initial data arrival.
+    if (!_initialJumpDone &&
+        sc != null &&
+        rp.activeFoursomeId == widget.foursomeId) {
+      _initialJumpDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _jumpToFirstUnplayed(context.read<RoundProvider>());
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Scorecard — Group ${rp.scorecard?.groupNumber ?? ""}'),
+        title: Text('Scorecard — Group ${sc?.groupNumber ?? ""}'),
+        centerTitle: true,
         actions: [
-          // Pending-sync badge on the app bar
           if (sync.hasPending)
             Padding(
               padding: const EdgeInsets.only(right: 4),
@@ -149,7 +322,204 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
                   tooltip: sync.state == SyncState.syncing
                       ? 'Syncing…'
                       : 'Tap to sync ${sync.pendingCount} score(s)',
-                  // Re-check connectivity and drain — covers missed events.
+                  onPressed: sync.state == SyncState.syncing
+                      ? null
+                      : () => sync.recheck(),
+                ),
+              ),
+            ),
+          if (sc != null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null
+                  ? null
+                  : () => Navigator.of(context)
+                      .pushNamed('/leaderboard', arguments: rp.round!.id),
+            ),
+          if (sc != null)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () => rp.loadScorecard(widget.foursomeId),
+            ),
+        ],
+      ),
+      body: Column(children: [
+        _SyncBanner(sync: sync),
+        Expanded(child: _buildPortraitBody(context, rp, sync, isComplete)),
+      ]),
+      bottomNavigationBar: (sc == null || rp.loadingScorecard)
+          ? null
+          : _buildBottomNav(context, rp, sc),
+    );
+  }
+
+  Widget _buildPortraitBody(
+    BuildContext ctx,
+    RoundProvider rp,
+    SyncService sync,
+    bool isComplete,
+  ) {
+    if (rp.loadingScorecard) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (rp.error != null && rp.scorecard == null) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(rp.error!, style: const TextStyle(color: Colors.red)),
+          const SizedBox(height: 8),
+          FilledButton(
+            onPressed: () => rp.loadScorecard(widget.foursomeId),
+            child: const Text('Retry'),
+          ),
+        ]),
+      );
+    }
+
+    final sc = rp.scorecard;
+    if (sc == null) return const SizedBox.shrink();
+
+    final players  = _realPlayers(sc, rp.round);
+    final scores   = _effectiveScores(sc, _selectedHole);
+    // In read-only mode (or when the round is complete) never highlight a
+    // "hot-spot" player — the inline picker is hidden entirely.
+    final readOnly = widget.readOnly || isComplete;
+    final hotSpot  = readOnly ? -1 : _hotSpotIdx(players, scores);
+    final holeData = sc.holeData(_selectedHole);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (rp.error != null)
+          _ErrorBanner(message: rp.error!, onDismiss: rp.clearError),
+
+        // ── Hole strip ──────────────────────────────────────────────────
+        _HoleStrip(
+          scorecard:     sc,
+          players:       players,
+          pendingScores: {...rp.localPendingByHole, ..._pending},
+          selectedHole:  _selectedHole,
+          onTap:         (h) => setState(() => _selectedHole = h),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Hole score card (hole info + per-player entry) ────────────
+        _HoleScoreCard(
+          holeData:        holeData,
+          holeNumber:      _selectedHole,
+          players:         players,
+          scorecard:       sc,
+          scores:          scores,
+          hotSpotIdx:      hotSpot,
+          par:             holeData?.par ?? 4,
+          strokesForHole:  (m) => _strokesForHole(m, holeData),
+          running:         (pid) => _running(pid, sc),
+          // Read-only: disable picker and edit sheet.
+          onScoreSelected: readOnly ? null : (m, score) => _selectScore(m, score, _selectedHole),
+          onEditTap:       readOnly ? null : (m) => _editScore(
+              ctx, m, holeData?.par ?? 4, _selectedHole, holeData),
+        ),
+        const SizedBox(height: 80),
+      ]),
+    );
+  }
+
+  Widget _buildBottomNav(BuildContext ctx, RoundProvider rp, Scorecard sc) {
+    final players    = _realPlayers(sc, rp.round);
+    final scores     = _effectiveScores(sc, _selectedHole);
+    final allDone    = _allScored(players, scores);
+    final isComplete = rp.round?.status == 'complete';
+    final readOnly   = widget.readOnly || isComplete;
+    final par        = sc.holeData(_selectedHole)?.par ?? 4;
+
+    final prevBtn = Expanded(
+      child: OutlinedButton.icon(
+        onPressed: _selectedHole > 1
+            ? () => setState(() => _selectedHole--)
+            : null,
+        icon: const Icon(Icons.chevron_left, size: 20),
+        label: Text('Hole ${_selectedHole - 1}'),
+      ),
+    );
+
+    final nextBtn = Expanded(
+      child: OutlinedButton.icon(
+        onPressed: _selectedHole < 18
+            ? () => setState(() => _selectedHole++)
+            : null,
+        icon: const Icon(Icons.chevron_right, size: 20),
+        label: Text(_selectedHole < 18 ? 'Hole ${_selectedHole + 1}' : 'Hole 18'),
+        iconAlignment: IconAlignment.end,
+      ),
+    );
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+        child: Row(children: [
+          prevBtn,
+          const SizedBox(width: 8),
+          // Read-only: simple Next button, no Save/Done.
+          if (readOnly)
+            nextBtn
+          else if (_selectedHole == 18)
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: rp.submitting
+                    ? null
+                    : () => _finishRound(ctx, players, par),
+                icon: const Icon(Icons.emoji_events, size: 20),
+                label: const Text('Done'),
+              ),
+            )
+          else
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: (allDone && !rp.submitting)
+                    ? () => _saveAndAdvance(ctx, players, par)
+                    : null,
+                icon: rp.submitting
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.chevron_right, size: 20),
+                label: Text(rp.submitting ? 'Saving…' : 'Hole ${_selectedHole + 1}'),
+                iconAlignment: IconAlignment.end,
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  // ── Landscape scaffold (full read-only grid) ──────────────────────────────
+
+  Widget _buildLandscapeScaffold(
+      BuildContext context, RoundProvider rp, SyncService sync) {
+    return Scaffold(
+      appBar: AppBar(
+        toolbarHeight: 40,
+        title: Text(
+          'Scorecard — Group ${rp.scorecard?.groupNumber ?? ""}',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          if (sync.hasPending)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Badge(
+                label: Text('${sync.pendingCount}'),
+                child: IconButton(
+                  icon: sync.state == SyncState.syncing
+                      ? const SizedBox(
+                          width: 18, height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.cloud_upload_outlined, size: 20),
+                  tooltip: sync.state == SyncState.syncing
+                      ? 'Syncing…'
+                      : 'Tap to sync ${sync.pendingCount} score(s)',
                   onPressed: sync.state == SyncState.syncing
                       ? null
                       : () => sync.recheck(),
@@ -158,267 +528,94 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
             ),
           if (rp.scorecard != null)
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh, size: 20),
               onPressed: () => rp.loadScorecard(widget.foursomeId),
             ),
         ],
       ),
-      body: Column(
-        children: [
-          // Connectivity / sync status banner
-          _SyncBanner(sync: sync),
-          Expanded(child: _buildBody(context, rp, sync)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBody(BuildContext context, RoundProvider rp, SyncService sync) {
-    if (rp.loadingScorecard) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (rp.error != null && rp.scorecard == null) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(rp.error!, style: const TextStyle(color: Colors.red)),
-          FilledButton(
-            onPressed: () => rp.loadScorecard(widget.foursomeId),
-            child: const Text('Retry'),
-          ),
-        ]),
-      );
-    }
-    final sc = rp.scorecard;
-    if (sc == null) return const SizedBox.shrink();
-
-    final players = _realPlayers(sc, rp.round);
-
-    // Merge DB-pending overlay with in-flight UI edits.
-    // Priority: _pending (current edit) > localPendingByHole (saved, not yet synced).
-    final mergedPending = _mergePending(rp.localPendingByHole, _pending);
-
-    return Column(
-      children: [
-        // Offline-status error banner (only shown when scorecard loaded but stale)
-        if (rp.error != null)
-          _ErrorBanner(
-            message: rp.error!,
-            onDismiss: rp.clearError,
-          ),
-
-        // Hole selector
-        _HoleSelector(
-          selectedHole: _selectedHole,
-          scorecard: sc,
-          localPendingByHole: rp.localPendingByHole,
-          onHoleSelected: (h) => setState(() => _selectedHole = h),
-        ),
-        const Divider(height: 1),
-
-        // Scrollable scorecard grid
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                _ScorecardGrid(
-                  scorecard: sc,
-                  players: players,
-                  pendingScores: mergedPending,
-                  selectedHole: _selectedHole,
-                  onScoreChanged: _setScore,
-                ),
-                // Totals
-                if (sc.totals.isNotEmpty)
-                  _TotalsTable(totals: sc.totals),
-                const SizedBox(height: 100),
-              ],
+      body: Column(children: [
+        _SyncBanner(sync: sync),
+        if (rp.loadingScorecard)
+          const Expanded(child: Center(child: CircularProgressIndicator()))
+        else if (rp.scorecard case final sc?)
+          Expanded(
+            child: _LandscapeGrid(
+              scorecard:     sc,
+              players:       _realPlayers(sc, rp.round),
+              pendingScores: rp.localPendingByHole,
+              currentHole:   _selectedHole,
+              totals:        sc.totals,
             ),
           ),
-        ),
-
-        // Entry panel for selected hole
-        _HoleEntryPanel(
-          hole: sc.holeData(_selectedHole),
-          players: players,
-          pending: _pending[_selectedHole] ?? {},
-          hasPinkBall: _hasPinkBall,
-          pinkBallLost: _pinkBallLost,
-          submitting: rp.submitting,
-          onScoreChanged: (pid, gross) => _setScore(_selectedHole, pid, gross),
-          onPinkBallLostChanged: (v) => setState(() => _pinkBallLost = v),
-          onSubmit: () => _submitHole(context),
-        ),
-      ],
-    );
-  }
-
-  /// Merge two pending maps.  [uiEdits] takes priority over [dbPending].
-  static Map<int, Map<int, int>> _mergePending(
-    Map<int, Map<int, int>> dbPending,
-    Map<int, Map<int, int>> uiEdits,
-  ) {
-    final result = <int, Map<int, int>>{};
-    for (final entry in dbPending.entries) {
-      result[entry.key] = Map.from(entry.value);
-    }
-    for (final entry in uiEdits.entries) {
-      if (!result.containsKey(entry.key)) {
-        result[entry.key] = Map.from(entry.value);
-      } else {
-        result[entry.key]!.addAll(entry.value); // ui edits win
-      }
-    }
-    return result;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Sync status banner — shown below the AppBar when offline or syncing
-// ---------------------------------------------------------------------------
-
-class _SyncBanner extends StatelessWidget {
-  final SyncService sync;
-  const _SyncBanner({required this.sync});
-
-  @override
-  Widget build(BuildContext context) {
-    if (!sync.hasPending && sync.state == SyncState.idle) {
-      return const SizedBox.shrink();
-    }
-
-    final Color bg;
-    final Color fg;
-    final IconData icon;
-    final String message;
-
-    if (sync.state == SyncState.syncing) {
-      bg      = Colors.blue.shade700;
-      fg      = Colors.white;
-      icon    = Icons.sync;
-      message = 'Syncing ${sync.pendingCount} score(s)…';
-    } else {
-      // Pending but not currently syncing — waiting for connectivity.
-      bg      = Colors.orange.shade700;
-      fg      = Colors.white;
-      icon    = Icons.cloud_upload_outlined;
-      message = '${sync.pendingCount} score(s) waiting to sync — tap ↑ to retry';
-    }
-
-    return Container(
-      width: double.infinity,
-      color: bg,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(children: [
-        Icon(icon, size: 16, color: fg),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(message,
-              style: TextStyle(color: fg, fontSize: 13)),
-        ),
       ]),
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Error banner — shown when stale data loaded from cache
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Hole strip — scrollable row of all 18 holes; highlights current & scored
+// ===========================================================================
 
-class _ErrorBanner extends StatelessWidget {
-  final String message;
-  final VoidCallback onDismiss;
-  const _ErrorBanner({required this.message, required this.onDismiss});
+class _HoleStrip extends StatelessWidget {
+  final Scorecard  scorecard;
+  final List<Membership> players;
+  final Map<int, Map<int, int>> pendingScores;
+  final int        selectedHole;
+  final void Function(int) onTap;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: Colors.amber.shade100,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(children: [
-        const Icon(Icons.info_outline, size: 16, color: Colors.orange),
-        const SizedBox(width: 8),
-        Expanded(child: Text(message, style: const TextStyle(fontSize: 13))),
-        IconButton(
-          icon: const Icon(Icons.close, size: 16),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: onDismiss,
-        ),
-      ]),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Hole selector row
-// ---------------------------------------------------------------------------
-
-class _HoleSelector extends StatelessWidget {
-  final int selectedHole;
-  final Scorecard scorecard;
-  final Map<int, Map<int, int>> localPendingByHole;
-  final void Function(int) onHoleSelected;
-
-  const _HoleSelector({
-    required this.selectedHole,
+  const _HoleStrip({
     required this.scorecard,
-    required this.localPendingByHole,
-    required this.onHoleSelected,
+    required this.players,
+    required this.pendingScores,
+    required this.selectedHole,
+    required this.onTap,
   });
 
-  /// A hole is "complete" if the server has all scores OR we have locally
-  /// saved scores for it (pending sync).
-  bool _isComplete(int hole) {
-    // Locally saved scores count as complete even if not yet synced
-    if (localPendingByHole.containsKey(hole)) return true;
-    final h = scorecard.holeData(hole);
-    if (h == null) return false;
-    return h.scores.every((s) => s.grossScore != null);
+  bool _holeComplete(int hole) {
+    if (pendingScores.containsKey(hole)) return true;
+    final hd = scorecard.holeData(hole);
+    if (hd == null) return false;
+    return players.every((m) => hd.scoreFor(m.player.id)?.grossScore != null);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SizedBox(
-      height: 48,
+      height: 36,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
         itemCount: 18,
         itemBuilder: (_, i) {
-          final hole     = i + 1;
-          final selected = hole == selectedHole;
-          final done     = _isComplete(hole);
-          final isPending = localPendingByHole.containsKey(hole) &&
-              !(scorecard.holeData(hole)?.scores.every((s) => s.grossScore != null) ?? false);
-
+          final hole    = i + 1;
+          final isSel   = hole == selectedHole;
+          final isDone  = _holeComplete(hole);
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
             child: GestureDetector(
-              onTap: () => onHoleSelected(hole),
-              child: Container(
-                width: 36,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? theme.colorScheme.primary
-                      : isPending
-                          ? theme.colorScheme.tertiaryContainer
-                          : done
-                              ? theme.colorScheme.primaryContainer
-                              : theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                  border: isPending
-                      ? Border.all(
-                          color: theme.colorScheme.tertiary, width: 1.5)
-                      : null,
-                ),
+              onTap: () => onTap(hole),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: 32, height: 32,
                 alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isSel
+                      ? theme.colorScheme.primary
+                      : isDone
+                          ? theme.colorScheme.secondaryContainer
+                          : theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(6),
+                ),
                 child: Text(
                   '$hole',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: selected ? Colors.white : null,
+                    fontSize: 13,
+                    color: isSel
+                        ? theme.colorScheme.onPrimary
+                        : isDone
+                            ? theme.colorScheme.onSecondaryContainer
+                            : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -430,406 +627,739 @@ class _HoleSelector extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Scorecard grid (horizontally scrollable)
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Hole score card — hole header + per-player rows with inline picker
+// ===========================================================================
 
-class _ScorecardGrid extends StatelessWidget {
-  final Scorecard scorecard;
-  final List<Membership> players;
-  final Map<int, Map<int, int>> pendingScores;
-  final int selectedHole;
-  final void Function(int hole, int playerId, int? gross) onScoreChanged;
+class _HoleScoreCard extends StatelessWidget {
+  final ScorecardHole?    holeData;
+  final int               holeNumber;
+  final List<Membership>  players;
+  final Scorecard         scorecard;
+  final Map<int, int>     scores;
+  final int               hotSpotIdx;
+  final int               par;
+  final int Function(Membership)          strokesForHole;
+  final _RunningTotal Function(int)       running;
+  /// Null in read-only mode — tapping a player row does nothing.
+  final void Function(Membership, int)?   onScoreSelected;
+  /// Null in read-only mode — the edit-score sheet is never shown.
+  final void Function(Membership)?        onEditTap;
 
-  const _ScorecardGrid({
-    required this.scorecard,
+  const _HoleScoreCard({
+    required this.holeData,
+    required this.holeNumber,
     required this.players,
-    required this.pendingScores,
-    required this.selectedHole,
-    required this.onScoreChanged,
+    required this.scorecard,
+    required this.scores,
+    required this.hotSpotIdx,
+    required this.par,
+    required this.strokesForHole,
+    required this.running,
+    this.onScoreSelected,
+    this.onEditTap,
   });
+
+  static String _holeSubtitle(ScorecardHole? h, List<Membership> players) {
+    if (h == null) return '';
+    final parStr  = 'Par ${h.par}';
+    final siStr   = 'SI: ${h.strokeIndex}';
+    final yardStr = h.yards != null ? '  |  ${h.yards} yds.' : '';
+    return '$parStr$yardStr  |  $siStr';
+  }
 
   @override
   Widget build(BuildContext context) {
-    const colW   = 44.0;
-    const nameW  = 120.0;
-    const hdrH   = 36.0;
-    const rowH   = 52.0;
-    final theme  = Theme.of(context);
-
-    final holes = List.generate(18, (i) => i + 1);
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Table(
-        defaultColumnWidth: const FixedColumnWidth(colW),
-        columnWidths: {0: const FixedColumnWidth(nameW)},
-        border: TableBorder.all(
-            color: theme.colorScheme.outlineVariant, width: 0.5),
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header row: hole numbers
-          TableRow(
+          // ── Hole header ──
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest),
-            children: [
-              _cell('Hole', height: hdrH, bold: true),
-              ...holes.map((h) => _cell('$h',
-                  height: hdrH,
-                  bold: true,
-                  highlight: h == selectedHole
-                      ? theme.colorScheme.primaryContainer
-                      : null)),
-            ],
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(8)),
+            ),
+            child: Column(children: [
+              Text(
+                'Hole $holeNumber',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _holeSubtitle(holeData, players),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
+            ]),
           ),
-          // Par row
-          TableRow(
-            decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLow),
-            children: [
-              _cell('Par', height: hdrH, italic: true),
-              ...holes.map((h) {
-                final hd = scorecard.holeData(h);
-                return _cell(hd != null ? '${hd.par}' : '-', height: hdrH);
-              }),
-            ],
-          ),
-          // SI row
-          TableRow(
-            decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLow),
-            children: [
-              _cell('SI', height: hdrH, italic: true),
-              ...holes.map((h) {
-                final hd = scorecard.holeData(h);
-                return _cell(
-                    hd != null ? '${hd.strokeIndex}' : '-', height: hdrH);
-              }),
-            ],
-          ),
-          // Player rows
-          ...players.map((m) {
-            return TableRow(
-              children: [
-                _nameCell(m.player.name, m.playingHandicap, height: rowH),
-                ...holes.map((h) {
-                  final saved    = scorecard.holeData(h)?.scoreFor(m.player.id);
-                  final pending  = pendingScores[h]?[m.player.id];
-                  final gross    = pending ?? saved?.grossScore;
-                  final net      = saved?.netScore;
-                  final hd       = scorecard.holeData(h);
-                  final par      = hd?.par ?? 4;
-                  final isSelected = h == selectedHole;
-                  // True when this hole has a locally-saved score awaiting sync.
-                  // Don't check saved?.grossScore — the cached scorecard may
-                  // already have a stale server score for this hole, which
-                  // would incorrectly hide the cloud icon.
-                  final isLocalOnly = pending != null;
 
-                  Color? bg;
-                  if (isSelected)      bg = theme.colorScheme.primaryContainer.withOpacity(0.25);
-                  // Net-based coloring, aligned with the score entry buttons:
-                  //   under net par -> green
-                  //   net par       -> white (leave uncoloured)
-                  //   over net par  -> red
-                  if (gross != null && net != null) {
-                    final diff = net - par;        // net diff vs par
-                    if (diff < 0)       bg = Colors.green.shade200; // under net par
-                    else if (diff > 0)  bg = Colors.red.shade200;   // over net par
-                    // diff == 0 → leave as white (no fill)
-                  }
-                  // Local-only pending: teal tint so user knows it's saved but not synced
-                  if (isLocalOnly)     bg = theme.colorScheme.tertiaryContainer.withOpacity(0.5);
+          // ── Player rows ──
+          ...players.asMap().entries.expand((entry) {
+            final idx      = entry.key;
+            final m        = entry.value;
+            final pid      = m.player.id;
+            final rt       = running(pid);
+            final gross    = scores[pid];
+            final isHot    = idx == hotSpotIdx;
+            final hasScore = gross != null;
+            final strokes  = strokesForHole(m);
 
-                  return TableCell(
-                    child: Container(
-                      height: rowH,
-                      color: bg,
-                      alignment: Alignment.center,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            gross != null ? '$gross' : '—',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          if (net != null && pending == null)
-                            Text('($net)',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: theme.textTheme.bodySmall?.color)),
-                          // Small cloud indicator for locally-saved unsynced scores
-                          if (isLocalOnly)
-                            Icon(Icons.cloud_upload_outlined,
-                                size: 10,
-                                color: theme.colorScheme.tertiary),
-                        ],
+            // Divider between players
+            final divider = idx > 0
+                ? const Divider(height: 1, indent: 0, endIndent: 0)
+                : const SizedBox.shrink();
+
+            // Player info row
+            final playerRow = Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: Row(children: [
+                // Name + running total
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(m.player.name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 15)),
+                      Text(
+                        'Hcp ${m.playingHandicap}  •  '
+                        'Gross ${_signed(rt.grossVsPar)}  '
+                        'Net ${_signed(rt.netVsPar)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
                       ),
+                    ],
+                  ),
+                ),
+
+                // Score chip (when already scored)
+                if (hasScore) ...[
+                  GestureDetector(
+                    // Tapping the chip opens the edit sheet; disabled read-only.
+                    onTap: onEditTap != null ? () => onEditTap!(m) : null,
+                    child: _ScoreChip(
+                      gross:   gross!,
+                      par:     par,
+                      strokes: strokes,
                     ),
-                  );
-                }),
-              ],
+                  ),
+                ] else if (!isHot) ...[
+                  // Not hot, no score — subtle dash
+                  Text('—',
+                      style: TextStyle(
+                          fontSize: 22,
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ]),
             );
+
+            // Inline picker (hot spot only, disabled in read-only mode)
+            final picker = isHot && !hasScore && onScoreSelected != null
+                ? _InlineScorePicker(
+                    par:             par,
+                    strokes:         strokes,
+                    currentScore:    null,
+                    onScoreSelected: (s) => onScoreSelected!(m, s),
+                  )
+                : const SizedBox.shrink();
+
+            return [divider, playerRow, picker];
           }),
+
+          const SizedBox(height: 4),
         ],
       ),
     );
   }
-
-  Widget _cell(String text,
-      {required double height,
-      bool bold = false,
-      bool italic = false,
-      Color? highlight}) {
-    return TableCell(
-      child: Container(
-        height: height,
-        color: highlight,
-        alignment: Alignment.center,
-        child: Text(
-          text,
-          style: TextStyle(
-            fontWeight: bold ? FontWeight.bold : null,
-            fontStyle: italic ? FontStyle.italic : null,
-            fontSize: 13,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _nameCell(String name, int hcp, {required double height}) {
-    return TableCell(
-      child: Container(
-        height: height,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        alignment: Alignment.centerLeft,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-                overflow: TextOverflow.ellipsis),
-            Text('Hcp $hcp', style: const TextStyle(fontSize: 11)),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
-// ---------------------------------------------------------------------------
-// Totals table
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Score chip — coloured circle showing the gross score
+// ===========================================================================
 
-class _TotalsTable extends StatelessWidget {
-  final List<PlayerTotals> totals;
-  const _TotalsTable({required this.totals});
+class _ScoreChip extends StatelessWidget {
+  final int gross;
+  final int par;
+  final int strokes;
+
+  const _ScoreChip({required this.gross, required this.par, required this.strokes});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Card(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              color: theme.colorScheme.surfaceContainerHighest,
-              child: const Text('Totals',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowHeight: 32,
-                dataRowMinHeight: 36,
-                dataRowMaxHeight: 36,
-                columnSpacing: 16,
-                columns: const [
-                  DataColumn(label: Text('Player')),
-                  DataColumn(label: Text('F'), numeric: true),
-                  DataColumn(label: Text('B'), numeric: true),
-                  DataColumn(label: Text('Gross'), numeric: true),
-                  DataColumn(label: Text('Net'), numeric: true),
-                  DataColumn(label: Text('Pts'), numeric: true),
-                ],
-                rows: totals.map((t) => DataRow(cells: [
-                      DataCell(Text(t.name)),
-                      DataCell(Text('${t.frontGross}')),
-                      DataCell(Text('${t.backGross}')),
-                      DataCell(Text('${t.totalGross}',
-                          style: const TextStyle(fontWeight: FontWeight.bold))),
-                      DataCell(Text('${t.totalNet}',
-                          style: const TextStyle(fontWeight: FontWeight.bold))),
-                      DataCell(Text('${t.totalStableford}')),
-                    ])).toList(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Entry panel — bottom sheet for current hole
-// ---------------------------------------------------------------------------
-
-class _HoleEntryPanel extends StatelessWidget {
-  final ScorecardHole? hole;
-  final List<Membership> players;
-  final Map<int, int> pending;
-  final bool hasPinkBall;
-  final bool pinkBallLost;
-  final bool submitting;
-  final void Function(int playerId, int? gross) onScoreChanged;
-  final void Function(bool) onPinkBallLostChanged;
-  final VoidCallback onSubmit;
-
-  const _HoleEntryPanel({
-    required this.hole,
-    required this.players,
-    required this.pending,
-    required this.hasPinkBall,
-    required this.pinkBallLost,
-    required this.submitting,
-    required this.onScoreChanged,
-    required this.onPinkBallLostChanged,
-    required this.onSubmit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final net  = gross - strokes;
+    final diff = net - par;
+    // Mirror the NetScoreButton fill colors exactly so the chip always
+    // matches what the player tapped to enter the score.
+    final Color bg;
+    if (diff < 0)       bg = Colors.green.shade200;   // birdie or better
+    else if (diff == 0) bg = Colors.grey.shade200;    // par (light bg for circle visibility)
+    else                bg = Colors.red.shade200;     // bogey or worse
 
     return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: const Offset(0, -2))
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(8, 12, 8, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (hole != null)
-            Row(children: [
-              Text('Hole ${hole!.holeNumber}',
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(width: 12),
-              Text('Par ${hole!.par} • SI ${hole!.strokeIndex}',
-                  style: theme.textTheme.bodySmall),
-              if (hole!.yards != null) ...[
-                const SizedBox(width: 12),
-                Text('${hole!.yards}y',
-                    style: theme.textTheme.bodySmall),
-              ],
-            ]),
-          const SizedBox(height: 8),
-          ...players.map((m) {
-            // Handicap strokes for THIS player on THIS hole come from the
-            // server-rendered scorecard (predicted for unplayed holes via the
-            // player's own tee SI). Defaults to 0 if unavailable.
-            final strokes =
-                hole?.scoreFor(m.player.id)?.handicapStrokes ?? 0;
-            return _ScoreRow(
-              player: m,
-              par: hole?.par ?? 4,
-              strokes: strokes,
-              currentValue: pending[m.player.id],
-              onChanged: (v) => onScoreChanged(m.player.id, v),
-            );
-          }),
-          if (hasPinkBall) ...[
-            const SizedBox(height: 4),
-            Row(children: [
-              Checkbox(
-                value: pinkBallLost,
-                onChanged: (v) => onPinkBallLostChanged(v ?? false),
-                visualDensity: VisualDensity.compact,
-              ),
-              const Text('🔴 Pink ball lost on this hole'),
-            ]),
-          ],
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: FilledButton.icon(
-              onPressed: (submitting || pending.isEmpty) ? null : onSubmit,
-              icon: submitting
-                  ? const SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.check, size: 18),
-              label: Text(submitting ? 'Saving…' : 'Save Hole'),
-            ),
-          ),
-        ],
+      width: 44, height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      child: Text(
+        '$gross',
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
       ),
     );
   }
 }
 
-class _ScoreRow extends StatelessWidget {
-  final Membership player;
-  final int        par;
-  final int        strokes;   // handicap strokes this player gets on this hole
-  final int?       currentValue;
-  final void Function(int?) onChanged;
+// ===========================================================================
+// Inline score picker — horizontal row of score buttons (hot player)
+// ===========================================================================
 
-  const _ScoreRow({
-    required this.player,
+class _InlineScorePicker extends StatefulWidget {
+  final int    par;
+  final int    strokes;
+  final int?   currentScore;
+  final void Function(int) onScoreSelected;
+
+  const _InlineScorePicker({
     required this.par,
     required this.strokes,
-    required this.currentValue,
-    required this.onChanged,
+    required this.currentScore,
+    required this.onScoreSelected,
+  });
+
+  @override
+  State<_InlineScorePicker> createState() => _InlineScorePickerState();
+}
+
+class _InlineScorePickerState extends State<_InlineScorePicker> {
+  late final ScrollController _ctrl;
+
+  static const _itemWidth  = 46.0;
+  static const _itemMargin = 3.0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Scroll to roughly par position on open so common scores are visible.
+    final offset = ((widget.par - 1) * (_itemWidth + _itemMargin * 2))
+        .clamp(0.0, double.infinity);
+    _ctrl = ScrollController(initialScrollOffset: offset);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme  = Theme.of(context);
+    final scores = List.generate(12, (i) => i + 1);
+
+    return Container(
+      height: 66,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.12),
+        border: Border(
+          top: BorderSide(color: theme.colorScheme.primary.withOpacity(0.2)),
+        ),
+      ),
+      child: ListView.builder(
+        controller:      _ctrl,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        itemCount: scores.length +
+            (widget.currentScore != null ? 1 : 0),
+        itemBuilder: (_, i) {
+          if (widget.currentScore != null && i == scores.length) {
+            return Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: GestureDetector(
+                onTap: () => widget.onScoreSelected(-1),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                        color: theme.colorScheme.error.withOpacity(0.4)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Clear',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.error,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+          final s   = scores[i];
+          final sel = s == widget.currentScore;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: _itemMargin),
+            child: NetScoreButton(
+              score:    s,
+              par:      widget.par,
+              strokes:  widget.strokes,
+              selected: sel,
+              width:    _itemWidth,
+              height:   48,
+              onTap:    () => widget.onScoreSelected(s),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// Modal edit-score sheet (tap an already-scored player to edit)
+// ===========================================================================
+
+class _ScorePickerSheet extends StatelessWidget {
+  final String playerName;
+  final int    par;
+  final int    holeNumber;
+  final int    strokes;
+  final int?   current;
+
+  const _ScorePickerSheet({
+    required this.playerName,
+    required this.par,
+    required this.holeNumber,
+    required this.strokes,
+    this.current,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Net par for this player on this hole.
+    final theme  = Theme.of(context);
+    final scores = List.generate(12, (i) => i + 1);
     final netPar = par + strokes;
 
-    // 6 buttons centred on NET par, asymmetric as requested:
-    //   [netPar-2, netPar-1, netPar, netPar+1, netPar+2, netPar+3]
-    // Net par is the 3rd position.
-    final scores = List.generate(6, (i) => netPar - 2 + i);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        Expanded(child: Text(player.player.name)),
-        ...scores.map((score) {
-          // Skip zero/negative scores — a 0 is not a valid golf score.
-          if (score < 1) return const SizedBox(width: 40);
-
-          final sel = currentValue == score;
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1),
-            child: NetScoreButton(
-              score: score,
-              par: par,
-              strokes: strokes,
-              selected: sel,
-              onTap: () => onChanged(sel ? null : score),
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
             ),
-          );
-        }),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            playerName,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            strokes > 0
+                ? 'Hole $holeNumber  •  Par $par  •  Net par $netPar'
+                : 'Hole $holeNumber  •  Par $par',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 56,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.zero,
+              itemCount: scores.length,
+              itemBuilder: (_, i) {
+                final s   = scores[i];
+                final sel = s == current;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: NetScoreButton(
+                    score:    s,
+                    par:      par,
+                    strokes:  strokes,
+                    selected: sel,
+                    width:    46,
+                    height:   52,
+                    onTap:    () => Navigator.of(context).pop(s),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (current != null)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(-1),
+              child: const Text('Clear score'),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// Sync status banner
+// ===========================================================================
+
+class _SyncBanner extends StatelessWidget {
+  final SyncService sync;
+  const _SyncBanner({required this.sync});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!sync.hasPending && sync.state == SyncState.idle) {
+      return const SizedBox.shrink();
+    }
+    final Color  bg;
+    final Color  fg;
+    final IconData icon;
+    final String message;
+
+    if (sync.state == SyncState.syncing) {
+      bg      = Colors.blue.shade700;
+      fg      = Colors.white;
+      icon    = Icons.sync;
+      message = 'Syncing ${sync.pendingCount} score(s)…';
+    } else {
+      bg      = Colors.orange.shade700;
+      fg      = Colors.white;
+      icon    = Icons.cloud_upload_outlined;
+      message = '${sync.pendingCount} score(s) waiting to sync — tap ↑ to retry';
+    }
+
+    return Container(
+      width:   double.infinity,
+      color:   bg,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(children: [
+        Icon(icon, size: 16, color: fg),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(message, style: TextStyle(color: fg, fontSize: 13)),
+        ),
       ]),
     );
   }
 }
 
+// ===========================================================================
+// Error banner
+// ===========================================================================
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onDismiss;
+  const _ErrorBanner({required this.message, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width:   double.infinity,
+      color:   Colors.amber.shade100,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(children: [
+        const Icon(Icons.info_outline, size: 16, color: Colors.orange),
+        const SizedBox(width: 8),
+        Expanded(child: Text(message, style: const TextStyle(fontSize: 13))),
+        IconButton(
+          icon:        const Icon(Icons.close, size: 16),
+          padding:     EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed:   onDismiss,
+        ),
+      ]),
+    );
+  }
+}
+
+// ===========================================================================
+// Landscape grid — full 18-hole overview (rotate device to access)
+// ===========================================================================
+
+class _LandscapeGrid extends StatefulWidget {
+  final Scorecard scorecard;
+  final List<Membership> players;
+  final Map<int, Map<int, int>> pendingScores;
+  final int currentHole;
+  final List<PlayerTotals> totals;
+
+  const _LandscapeGrid({
+    required this.scorecard,
+    required this.players,
+    required this.pendingScores,
+    required this.currentHole,
+    required this.totals,
+  });
+
+  @override
+  State<_LandscapeGrid> createState() => _LandscapeGridState();
+}
+
+class _LandscapeGridState extends State<_LandscapeGrid> {
+  final ScrollController _scroll = ScrollController();
+
+  static const double _nameW    = 80.0;
+  static const double _summaryW = 34.0;
+  static const double _colW     = 40.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToHole(widget.currentHole));
+  }
+
+  @override
+  void didUpdateWidget(_LandscapeGrid old) {
+    super.didUpdateWidget(old);
+    if (widget.currentHole != old.currentHole) {
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scrollToHole(widget.currentHole));
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollToHole(int hole) {
+    if (!_scroll.hasClients) return;
+    final double holeLeft;
+    if (hole <= 9) {
+      holeLeft = _nameW + (hole - 1) * _colW;
+    } else {
+      holeLeft = _nameW + 9 * _colW + _summaryW + (hole - 10) * _colW;
+    }
+    final viewport = _scroll.position.viewportDimension;
+    double offset  = holeLeft - viewport / 2 + _colW / 2;
+    offset = offset.clamp(0.0, _scroll.position.maxScrollExtent);
+    _scroll.animateTo(offset,
+        duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      controller:      _scroll,
+      scrollDirection: Axis.horizontal,
+      child: _buildTable(context),
+    );
+  }
+
+  Widget _buildTable(BuildContext context) {
+    final theme = Theme.of(context);
+    const hdrH  = 22.0;
+    const rowH  = 38.0;
+
+    final colWidths = <int, TableColumnWidth>{
+      0:  FixedColumnWidth(_nameW),
+      10: FixedColumnWidth(_summaryW),
+      20: FixedColumnWidth(_summaryW),
+      21: FixedColumnWidth(_summaryW),
+      22: FixedColumnWidth(_summaryW),
+      23: FixedColumnWidth(_summaryW),
+    };
+    for (int i = 1;  i <= 9;  i++) colWidths[i] = FixedColumnWidth(_colW);
+    for (int i = 11; i <= 19; i++) colWidths[i] = FixedColumnWidth(_colW);
+
+    return Table(
+      defaultColumnWidth: FixedColumnWidth(_colW),
+      columnWidths: colWidths,
+      border: TableBorder.all(
+          color: theme.colorScheme.outlineVariant, width: 0.5),
+      children: [
+        _holeHeaderRow(theme, hdrH),
+        _parRow(theme, hdrH),
+        ..._playerRows(theme, rowH),
+      ],
+    );
+  }
+
+  TableRow _holeHeaderRow(ThemeData theme, double h) {
+    Color? selBg(int hole) => hole == widget.currentHole
+        ? theme.colorScheme.primaryContainer
+        : null;
+    final sumBg = theme.colorScheme.surfaceContainerLow;
+    return TableRow(
+      decoration:
+          BoxDecoration(color: theme.colorScheme.surfaceContainerHighest),
+      children: [
+        _cell('Hole', height: h, bold: true),
+        for (int hole = 1; hole <= 9; hole++)
+          _cell('$hole', height: h, bold: true, bg: selBg(hole)),
+        _cell('OUT',  height: h, bold: true, italic: true, bg: sumBg),
+        for (int hole = 10; hole <= 18; hole++)
+          _cell('$hole', height: h, bold: true, bg: selBg(hole)),
+        _cell('IN',   height: h, bold: true, italic: true, bg: sumBg),
+        _cell('TOT',  height: h, bold: true, italic: true, bg: sumBg),
+        _cell('NET',  height: h, bold: true, italic: true, bg: sumBg),
+        _cell('STBL', height: h, bold: true, italic: true, bg: sumBg),
+      ],
+    );
+  }
+
+  TableRow _parRow(ThemeData theme, double h) {
+    int parOut = 0, parIn = 0;
+    for (int hole = 1;  hole <= 9;  hole++) {
+      parOut += widget.scorecard.holeData(hole)?.par ?? 0;
+    }
+    for (int hole = 10; hole <= 18; hole++) {
+      parIn  += widget.scorecard.holeData(hole)?.par ?? 0;
+    }
+    return TableRow(
+      decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow),
+      children: [
+        _cell('Par', height: h, italic: true),
+        for (int hole = 1;  hole <= 9;  hole++)
+          _cell('${widget.scorecard.holeData(hole)?.par ?? '-'}', height: h),
+        _cell('$parOut', height: h, bold: true),
+        for (int hole = 10; hole <= 18; hole++)
+          _cell('${widget.scorecard.holeData(hole)?.par ?? '-'}', height: h),
+        _cell('$parIn',            height: h, bold: true),
+        _cell('${parOut + parIn}', height: h, bold: true),
+        _cell('—', height: h),
+        _cell('—', height: h),
+      ],
+    );
+  }
+
+  List<TableRow> _playerRows(ThemeData theme, double h) {
+    return widget.players.map((m) {
+      int outGross = 0, inGross = 0;
+      int outNetSum = 0, inNetSum = 0;
+      bool hasOutGross = false, hasInGross = false;
+      bool hasOutNet   = true,  hasInNet   = true;
+
+      for (int hole = 1; hole <= 9; hole++) {
+        final gross = widget.pendingScores[hole]?[m.player.id]
+            ?? widget.scorecard.holeData(hole)?.scoreFor(m.player.id)?.grossScore;
+        if (gross != null) { outGross += gross; hasOutGross = true; }
+        final net = widget.scorecard.holeData(hole)?.scoreFor(m.player.id)?.netScore;
+        if (net == null) hasOutNet = false; else outNetSum += net;
+      }
+      for (int hole = 10; hole <= 18; hole++) {
+        final gross = widget.pendingScores[hole]?[m.player.id]
+            ?? widget.scorecard.holeData(hole)?.scoreFor(m.player.id)?.grossScore;
+        if (gross != null) { inGross += gross; hasInGross = true; }
+        final net = widget.scorecard.holeData(hole)?.scoreFor(m.player.id)?.netScore;
+        if (net == null) hasInNet = false; else inNetSum += net;
+      }
+
+      final bool hasNet = hasOutNet && hasInNet;
+      final int  netTot = outNetSum + inNetSum;
+      final stbl = widget.totals
+          .where((t) => t.playerId == m.player.id)
+          .firstOrNull
+          ?.totalStableford;
+
+      return TableRow(children: [
+        TableCell(
+          child: Container(
+            height: h,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            alignment: Alignment.centerLeft,
+            child: Column(
+              mainAxisAlignment:  MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(m.player.name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 11),
+                    overflow: TextOverflow.ellipsis),
+                Text('Hcp ${m.playingHandicap}',
+                    style: const TextStyle(fontSize: 9)),
+              ],
+            ),
+          ),
+        ),
+        for (int hole = 1; hole <= 9; hole++) _scoreCell(hole, m, h),
+        _summaryCell(hasOutGross ? '$outGross' : '—', h),
+        for (int hole = 10; hole <= 18; hole++) _scoreCell(hole, m, h),
+        _summaryCell(hasInGross ? '$inGross' : '—', h),
+        _summaryCell(
+            (hasOutGross || hasInGross) ? '${outGross + inGross}' : '—', h),
+        _summaryCell(hasNet ? '$netTot' : '—', h),
+        _summaryCell(stbl != null ? '$stbl' : '—', h),
+      ]);
+    }).toList();
+  }
+
+  Widget _scoreCell(int hole, Membership m, double rowH) {
+    final theme       = Theme.of(context);
+    final saved       = widget.scorecard.holeData(hole)?.scoreFor(m.player.id);
+    final pending     = widget.pendingScores[hole]?[m.player.id];
+    final gross       = pending ?? saved?.grossScore;
+    final net         = pending == null ? saved?.netScore : null;
+    final par         = widget.scorecard.holeData(hole)?.par ?? 4;
+    final isCurrent   = hole == widget.currentHole;
+    final isLocalOnly = pending != null;
+
+    Color? bg;
+    if (isCurrent) bg = theme.colorScheme.primaryContainer.withOpacity(0.3);
+    if (gross != null && net != null) {
+      final diff = net - par;
+      if (diff < 0)      bg = Colors.green.shade200;
+      else if (diff > 0) bg = Colors.red.shade200;
+    }
+    if (isLocalOnly) bg = theme.colorScheme.tertiaryContainer.withOpacity(0.5);
+
+    return TableCell(
+      child: Container(
+        height: rowH, color: bg, alignment: Alignment.center,
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(gross != null ? '$gross' : '—',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          if (isLocalOnly)
+            Icon(Icons.cloud_upload_outlined,
+                size: 8, color: theme.colorScheme.tertiary),
+        ]),
+      ),
+    );
+  }
+
+  Widget _summaryCell(String value, double rowH) {
+    final theme = Theme.of(context);
+    return TableCell(
+      child: Container(
+        height: rowH,
+        color: theme.colorScheme.surfaceContainerLow,
+        alignment: Alignment.center,
+        child: Text(value,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+      ),
+    );
+  }
+
+  Widget _cell(String text,
+      {required double height, bool bold = false, bool italic = false, Color? bg}) {
+    return TableCell(
+      child: Container(
+        height: height, color: bg, alignment: Alignment.center,
+        child: Text(
+          text,
+          style: TextStyle(
+            fontWeight: bold   ? FontWeight.bold  : null,
+            fontStyle:  italic ? FontStyle.italic : null,
+            fontSize: 11,
+          ),
+        ),
+      ),
+    );
+  }
+}

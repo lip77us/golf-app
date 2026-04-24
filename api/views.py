@@ -59,11 +59,14 @@ from tournament.models import Tournament, Round, Foursome, FoursomeMembership
 from scoring.models import HoleScore
 
 from .serializers import (
-    PlayerSerializer, TeeSerializer,
+    PlayerSerializer, PlayerCreateSerializer, TeeSerializer,
     TournamentSerializer, RoundSerializer, FoursomeSerializer,
     ScoreSubmitSerializer, RoundSetupSerializer,
     TournamentCreateSerializer, RoundCreateSerializer,
-    NassauSetupSerializer, SixesSetupSerializer, CourseSerializer,
+    NassauSetupSerializer, NassauPressSerializer,
+    SixesSetupSerializer, CourseSerializer,
+    Points531SetupSerializer, CasualRoundSummarySerializer,
+    IrishRumbleSetupSerializer, LowNetSetupSerializer,
 )
 
 
@@ -97,6 +100,10 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'match_play' in active_games:
         from services.match_play import calculate_match_play
         calculate_match_play(foursome)
+
+    if 'points_531' in active_games:
+        from services.points_531 import calculate_points_531
+        calculate_points_531(foursome)
 
     # ---- Per-round ----
     if 'stableford' in active_games:
@@ -150,13 +157,27 @@ def _build_scorecard(foursome: Foursome) -> dict:
             # OWN tee SI (can differ from the representative tee's SI on
             # courses with separate men's/women's allocations).
             if m.tee_id is not None:
-                m_si = m.tee.hole(hole_num).get('stroke_index', stroke_index)
+                m_hole_info = m.tee.hole(hole_num)
+                m_si        = m_hole_info.get('stroke_index', stroke_index)
+                m_par       = m_hole_info.get('par', hole_dict.get('par', 4))
+                m_yards     = m_hole_info.get('yards')
             else:
-                m_si = stroke_index
+                m_si    = stroke_index
+                m_par   = hole_dict.get('par', 4)
+                m_yards = hole_dict.get('yards')
             scores_for_hole.append({
                 'player_id'        : m.player_id,
                 'player_name'      : m.player.name,
                 'hole_number'      : hole_num,
+                # THIS PLAYER'S OWN tee attributes on this hole — needed on
+                # the client for mixed men's/women's foursomes where par,
+                # yards, and SI commonly differ by tee.  The shared
+                # `hole.par/yards/stroke_index` reflect only the first
+                # player's tee, so without these the hole header shows
+                # one player's numbers for everyone.
+                'stroke_index'     : m_si,
+                'par'              : m_par,
+                'yards'            : m_yards,
                 'gross_score'      : hs.gross_score       if hs else None,
                 'handicap_strokes' : hs.handicap_strokes  if hs else m.handicap_strokes_on_hole(m_si),
                 'net_score'        : hs.net_score         if hs else None,
@@ -215,7 +236,7 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'label'   : 'Skins',
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
-                 'summary': {'totals': skins_summary(fs)}}
+                 'summary': skins_summary(fs)}
                 for fs in foursomes
             ],
         }
@@ -230,22 +251,22 @@ def _build_leaderboard(round_obj: Round) -> dict:
     if 'pink_ball' in active_games:
         from services.red_ball import red_ball_summary
         games['pink_ball'] = {
-            'label'  : 'Pink Ball',
-            'results': red_ball_summary(round_obj),
+            'label': 'Pink Ball',
+            **red_ball_summary(round_obj),
         }
 
     if 'low_net_round' in active_games:
         from services.low_net_round import low_net_round_summary
         games['low_net_round'] = {
-            'label'  : 'Low Net',
-            'results': low_net_round_summary(round_obj),
+            'label': 'Low Net',
+            **low_net_round_summary(round_obj),
         }
 
     if 'irish_rumble' in active_games:
         from services.irish_rumble import irish_rumble_summary
         games['irish_rumble'] = {
-            'label'  : 'Irish Rumble',
-            'results': irish_rumble_summary(round_obj),
+            'label': 'Irish Rumble',
+            **irish_rumble_summary(round_obj),
         }
 
     if 'scramble' in active_games:
@@ -284,6 +305,17 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
                  'summary': match_play_summary(fs)}
+                for fs in foursomes
+            ],
+        }
+
+    if 'points_531' in active_games:
+        from services.points_531 import points_531_summary
+        games['points_531'] = {
+            'label'   : 'Points 5-3-1',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': points_531_summary(fs)}
                 for fs in foursomes
             ],
         }
@@ -347,7 +379,14 @@ class LoginView(APIView):
     """
     POST /api/auth/login/
     Body: { "username": "...", "password": "..." }
-    Returns: { "token": "...", "player_id": N, "name": "...", "handicap_index": "..." }
+    Returns:
+        { "token": "...", "player": { id, name, handicap_index, is_phantom, email, phone } }
+        `player` is omitted if the user has no linked Player profile (admins).
+
+    The full player profile is returned so the client doesn't have to make
+    a follow-up /auth/me/ call — that second round-trip was responsible for
+    a mid-login failure mode where a transient hiccup on me() left the user
+    half-logged-in and forced a re-login.
     """
     permission_classes = [AllowAny]
 
@@ -370,18 +409,12 @@ class LoginView(APIView):
 
         token, _ = Token.objects.get_or_create(user=user)
 
-        player_data = {}
+        body = {'token': token.key, 'is_staff': user.is_staff}
         try:
-            p = user.player_profile
-            player_data = {
-                'player_id'     : p.id,
-                'name'          : p.name,
-                'handicap_index': str(p.handicap_index),
-            }
+            body['player'] = PlayerSerializer(user.player_profile).data
         except Exception:
-            pass  # admin/staff user with no player profile
-
-        return Response({'token': token.key, **player_data})
+            pass  # user has no linked Player profile
+        return Response(body)
 
 
 class LogoutView(APIView):
@@ -397,18 +430,16 @@ class LogoutView(APIView):
 
 
 class MeView(APIView):
-    """GET /api/auth/me/ — current player profile."""
+    """GET /api/auth/me/ — current user info (is_staff + optional player profile)."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        body = {'is_staff': request.user.is_staff}
         try:
-            player = request.user.player_profile
-            return Response(PlayerSerializer(player).data)
+            body['player'] = PlayerSerializer(request.user.player_profile).data
         except Exception:
-            return Response(
-                {'detail': 'No player profile linked to this account.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            body['player'] = None
+        return Response(body)
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +452,7 @@ class PlayerListView(APIView):
         return Response(PlayerSerializer(players, many=True).data)
 
     def post(self, request):
-        ser = PlayerSerializer(data=request.data)
+        ser = PlayerCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         player = ser.save()
         return Response(PlayerSerializer(player).data, status=status.HTTP_201_CREATED)
@@ -466,7 +497,12 @@ class TournamentListView(APIView):
         return Response(TournamentSerializer(tournaments, many=True).data)
 
     def post(self, request):
-        """POST /api/tournaments/ — create a new tournament."""
+        """POST /api/tournaments/ — create a new tournament (staff only)."""
+        if not request.user.is_staff:
+            return Response(
+                {'detail': 'Only staff members can create tournaments.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         ser = TournamentCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
@@ -487,6 +523,17 @@ class TournamentDetailView(APIView):
         )
         return Response(TournamentSerializer(tournament).data)
 
+    def delete(self, request, pk):
+        """DELETE /api/tournaments/{id}/ — remove tournament and all associated data (staff only)."""
+        if not request.user.is_staff:
+            return Response(
+                {'detail': 'Only staff members can delete tournaments.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 # ---------------------------------------------------------------------------
 # Rounds
@@ -506,15 +553,22 @@ class RoundCreateView(APIView):
         if d.get('tournament_id'):
             tournament = get_object_or_404(Tournament, pk=d['tournament_id'])
 
+        # Resolve the creating player from the authenticated user (may be None
+        # for admin/staff accounts that have no linked Player profile).
+        created_by = getattr(request.user, 'player_profile', None)
+
         round_obj = Round.objects.create(
-            tournament   = tournament,
-            round_number = d['round_number'],
-            date         = d['date'],
-            course       = course,
-            status       = 'pending',
-            active_games = d['active_games'],
-            bet_unit     = d['bet_unit'],
-            notes        = d['notes'],
+            tournament    = tournament,
+            round_number  = d['round_number'],
+            date          = d['date'],
+            course        = course,
+            status        = 'pending',
+            active_games  = d['active_games'],
+            bet_unit      = d['bet_unit'],
+            handicap_mode = d.get('handicap_mode', 'net'),
+            net_percent   = d.get('net_percent', 100),
+            notes         = d['notes'],
+            created_by    = created_by,
         )
         return Response(RoundSerializer(round_obj).data,
                         status=status.HTTP_201_CREATED)
@@ -529,6 +583,134 @@ class RoundDetailView(APIView):
             pk=pk,
         )
         return Response(RoundSerializer(round_obj).data)
+
+    def patch(self, request, pk):
+        """
+        Partial update of a Round.  Currently used from the Sixes setup
+        screen to let the user adjust the round-level bet_unit at the time
+        they're starting a match.  RoundSerializer already exposes
+        bet_unit as writable and excludes read-only fields, so we just
+        delegate to it with partial=True.
+        """
+        round_obj = get_object_or_404(
+            Round.objects
+                 .select_related('course')
+                 .prefetch_related('foursomes__memberships__player'),
+            pk=pk,
+        )
+        ser = RoundSerializer(round_obj, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(ser.data)
+
+    def delete(self, request, pk):
+        """
+        DELETE /api/rounds/{id}/ — permanently remove a casual round.
+        Only the player who created the round may delete it.
+        """
+        round_obj = get_object_or_404(Round, pk=pk)
+        requesting_player = getattr(request.user, 'player_profile', None)
+        if round_obj.created_by_id is None or requesting_player is None:
+            return Response(
+                {'detail': 'Only the round creator can delete this round.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if round_obj.created_by_id != requesting_player.id:
+            return Response(
+                {'detail': 'Only the round creator can delete this round.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        round_obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CasualRoundListView(APIView):
+    """
+    GET /api/rounds/casual/?status=in_progress   (default)
+    GET /api/rounds/casual/?status=complete
+
+    Returns casual rounds (no tournament) that include the authenticated
+    user's player in any foursome, filtered by status.  Each item contains
+    enough data for the Casual Rounds list screen: date, course, active
+    games, players, current hole, and whether this user is the creator
+    (so the client can show the delete button).
+    """
+    def get(self, request):
+        requesting_player = getattr(request.user, 'player_profile', None)
+        if requesting_player is None:
+            return Response([])
+
+        # Accept ?status= query param; default to in_progress.
+        requested_status = request.query_params.get('status', 'in_progress')
+        if requested_status not in ('in_progress', 'complete', 'pending'):
+            requested_status = 'in_progress'
+
+        rounds = (
+            Round.objects
+            .filter(
+                tournament__isnull=True,
+                status=requested_status,
+                foursomes__memberships__player=requesting_player,
+            )
+            .select_related('course', 'created_by')
+            .prefetch_related(
+                'foursomes__memberships__player',
+            )
+            .distinct()
+            .order_by('-date', '-created_at')
+        )
+
+        results = []
+        for r in rounds:
+            # Collect all real players across all foursomes.
+            players = []
+            seen_ids = set()
+            for fs in r.foursomes.all():
+                for m in fs.memberships.all():
+                    p = m.player
+                    if not p.is_phantom and p.id not in seen_ids:
+                        seen_ids.add(p.id)
+                        players.append({
+                            'id':         p.id,
+                            'name':       p.name,
+                            'short_name': p.display_short if hasattr(p, 'display_short') else p.name,
+                        })
+
+            # Current hole = highest hole_number where a real (non-phantom)
+            # player has a gross_score.  Phantom scores are pre-filled for
+            # all 18 holes at setup, so we must exclude them or every round
+            # would report current_hole=18 from the start.
+            from scoring.models import HoleScore as HS
+            max_hole = (
+                HS.objects
+                .filter(
+                    foursome__round=r,
+                    gross_score__isnull=False,
+                    player__is_phantom=False,
+                )
+                .order_by('-hole_number')
+                .values_list('hole_number', flat=True)
+                .first()
+            )
+
+            # Casual rounds have exactly one foursome.
+            first_fs = r.foursomes.first()
+
+            results.append({
+                'id':                   r.id,
+                'date':                 r.date,
+                'course_name':          r.course.name,
+                'status':               r.status,
+                'active_games':         r.active_games,
+                'bet_unit':             r.bet_unit,
+                'current_hole':         max_hole or 0,
+                'created_by_player_id': r.created_by_id,
+                'foursome_id':          first_fs.id if first_fs else None,
+                'players':              players,
+            })
+
+        ser = CasualRoundSummarySerializer(results, many=True)
+        return Response(ser.data)
 
 
 class RoundSetupView(APIView):
@@ -784,21 +966,59 @@ class LeaderboardView(APIView):
 class NassauSetupView(APIView):
     """
     POST /api/foursomes/{id}/nassau/setup/
-    Body: { "team1_player_ids": [...], "team2_player_ids": [...], "press_pct": 0.5 }
+    Body: {
+        "team1_player_ids": [...],
+        "team2_player_ids": [...],
+        "handicap_mode":   "net" | "gross" | "strokes_off",
+        "net_percent":     100,
+        "press_mode":      "none" | "manual" | "auto" | "both",
+        "press_unit":      5.00
+    }
+    Creates (or replaces) the NassauGame for this foursome, then
+    re-runs calculate_nassau so any pre-existing hole scores are
+    reflected immediately.  Safe to call repeatedly.
     """
     def post(self, request, pk):
         foursome = get_object_or_404(Foursome, pk=pk)
         ser = NassauSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+        d = ser.validated_data
 
-        from services.nassau import setup_nassau
-        game = setup_nassau(
+        from services.nassau import setup_nassau, calculate_nassau, nassau_summary
+        setup_nassau(
             foursome,
-            team1_ids = ser.validated_data['team1_player_ids'],
-            team2_ids = ser.validated_data['team2_player_ids'],
-            press_pct = ser.validated_data['press_pct'],
+            team1_ids     = d['team1_player_ids'],
+            team2_ids     = d['team2_player_ids'],
+            handicap_mode = d.get('handicap_mode', 'net'),
+            net_percent   = d.get('net_percent', 100),
+            press_mode    = d.get('press_mode', 'none'),
+            press_unit    = d.get('press_unit', '0.00'),
         )
-        return Response({'nassau_game_id': game.id}, status=status.HTTP_201_CREATED)
+        calculate_nassau(foursome)
+        return Response(nassau_summary(foursome), status=status.HTTP_201_CREATED)
+
+
+class NassauPressView(APIView):
+    """
+    POST /api/foursomes/{id}/nassau/press/
+    Body: { "start_hole": 7 }
+
+    Called by the losing team to declare a manual press.  The winning
+    team always accepts — no pending/rejection state needed.
+    Returns the updated nassau summary.
+    """
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        ser = NassauPressSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        from services.nassau import add_manual_press, nassau_summary
+        try:
+            add_manual_press(foursome, ser.validated_data['start_hole'])
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(nassau_summary(foursome))
 
 
 class NassauResultView(APIView):
@@ -854,10 +1074,26 @@ class SixesExtraTeamsView(APIView):
         from games.models import SixesSegment, SixesTeam
         from services.sixes import sixes_summary
 
-        seg = SixesSegment.objects.filter(foursome=foursome, is_extra=True).first()
+        # When an extra match itself ends early, calculate_sixes spawns a
+        # SECOND extra (segment_number = 5, 6, ...).  The request targets
+        # the newest unconfigured extra — i.e. the one with no teams yet.
+        # Using .filter(is_extra=True).first() would land on the earliest
+        # extra and overwrite its teams (which then looks halved on the
+        # leaderboard because the new SixesTeam rows default is_winner=False
+        # while the segment's status is still 'complete' from the prior
+        # calc).  So: find the highest segment_number extra whose teams
+        # haven't been set.
+        extras = (SixesSegment.objects
+                  .filter(foursome=foursome, is_extra=True)
+                  .prefetch_related('teams')
+                  .order_by('-segment_number'))
+        seg = next(
+            (e for e in extras if e.teams.count() == 0),
+            None,
+        )
         if seg is None:
             return Response(
-                {'error': 'No extra segment found for this foursome.'},
+                {'error': 'No unconfigured extra segment found for this foursome.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -869,7 +1105,10 @@ class SixesExtraTeamsView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Replace any existing teams on the extra segment
+        # No existing teams to replace (we deliberately picked a seg with
+        # .teams.count() == 0), but .delete() is a no-op safety net in
+        # case of a race where teams were created between our select
+        # and this write.
         seg.teams.all().delete()
 
         t1 = SixesTeam.objects.create(
@@ -880,6 +1119,17 @@ class SixesExtraTeamsView(APIView):
             segment=seg, team_number=2, team_select_method='loser_choice')
         t2.players.set(t2_ids)
 
+        # Re-run calculate_sixes AFTER the teams are saved.  Otherwise, any
+        # hole scores already on file for this extra segment sit idle —
+        # status stays 'pending' until another score submission triggers
+        # a recalc.  Concretely: the user taps Done on hole 18 (which
+        # submits the hole 18 scores and fires calculate_sixes once), THEN
+        # sets the Match 5 teams.  Without this recalc, Match 5 has teams
+        # but no SixesHoleResult rows, so the leaderboard shows "Pending"
+        # despite every hole being scored.
+        from services.sixes import calculate_sixes
+        calculate_sixes(foursome)
+
         return Response(sixes_summary(foursome), status=status.HTTP_200_OK)
 
 
@@ -889,6 +1139,147 @@ class SixesResultView(APIView):
         foursome = get_object_or_404(Foursome, pk=pk)
         from services.sixes import sixes_summary
         return Response(sixes_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Points 5-3-1
+# ---------------------------------------------------------------------------
+
+class Points531SetupView(APIView):
+    """
+    POST /api/foursomes/{id}/points_531/setup/
+    Body: { "handicap_mode": "net" | "gross" | "strokes_off",
+            "net_percent":  0..200 }
+
+    Creates (or replaces) the Points531Game for this foursome, then
+    re-runs calculate_points_531 so any hole scores already on file are
+    reflected in the first summary the UI fetches.  Safe to call
+    repeatedly — setup_points_531 and calculate_points_531 are both
+    idempotent.
+    """
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        ser = Points531SetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        from services.points_531 import (
+            setup_points_531, calculate_points_531, points_531_summary,
+        )
+        data = ser.validated_data
+        setup_points_531(
+            foursome,
+            handicap_mode = data.get('handicap_mode', 'net'),
+            net_percent   = data.get('net_percent', 100),
+        )
+        # Score any pre-existing hole entries right away so the first
+        # UI fetch isn't blank.  calculate_points_531 is a no-op if
+        # there are no scores yet.
+        calculate_points_531(foursome)
+        return Response(
+            points_531_summary(foursome),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class Points531ResultView(APIView):
+    """GET /api/foursomes/{id}/points_531/"""
+    def get(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        from services.points_531 import points_531_summary
+        return Response(points_531_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Skins
+# ---------------------------------------------------------------------------
+
+class SkinsSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/skins/setup/
+    Body: {
+        "handicap_mode": "net" | "gross" | "strokes_off",
+        "net_percent":   0..200,
+        "carryover":     true | false,
+        "allow_junk":    true | false
+    }
+
+    Creates (or replaces) the SkinsGame for this foursome, then
+    re-runs calculate_skins so any hole scores already on file are
+    reflected in the first summary the UI fetches.  Safe to call
+    repeatedly.
+    """
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        from api.serializers import SkinsSetupSerializer
+        ser = SkinsSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        from services.skins import setup_skins, calculate_skins, skins_summary
+        d = ser.validated_data
+        setup_skins(
+            foursome,
+            handicap_mode = d.get('handicap_mode', 'net'),
+            net_percent   = d.get('net_percent', 100),
+            carryover     = d.get('carryover', True),
+            allow_junk    = d.get('allow_junk', False),
+        )
+        calculate_skins(foursome)
+        return Response(skins_summary(foursome), status=status.HTTP_201_CREATED)
+
+
+class SkinsResultView(APIView):
+    """GET /api/foursomes/{id}/skins/"""
+    def get(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        from services.skins import skins_summary
+        return Response(skins_summary(foursome))
+
+
+class SkinsJunkView(APIView):
+    """
+    POST /api/foursomes/{id}/skins/junk/
+    Body: {
+        "hole_number": 1..18,
+        "junk_entries": [{"player_id": N, "junk_count": N}, ...]
+    }
+
+    Upserts SkinsPlayerHoleResult rows for the given hole.  Entries
+    with junk_count=0 are deleted (so the scorer can zero out a
+    mistake without leaving orphan rows).  Returns the updated summary.
+    """
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        from api.serializers import SkinsJunkSerializer
+        ser = SkinsJunkSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        from games.models import SkinsGame, SkinsPlayerHoleResult
+        try:
+            game = foursome.skins_game
+        except SkinsGame.DoesNotExist:
+            return Response(
+                {'detail': 'Skins game not set up for this foursome.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        hole_number  = ser.validated_data['hole_number']
+        junk_entries = ser.validated_data['junk_entries']
+
+        for entry in junk_entries:
+            pid   = entry['player_id']
+            count = entry['junk_count']
+            if count == 0:
+                SkinsPlayerHoleResult.objects.filter(
+                    game=game, player_id=pid, hole_number=hole_number
+                ).delete()
+            else:
+                SkinsPlayerHoleResult.objects.update_or_create(
+                    game=game, player_id=pid, hole_number=hole_number,
+                    defaults={'junk_count': count},
+                )
+
+        from services.skins import skins_summary
+        return Response(skins_summary(foursome))
 
 
 # ---------------------------------------------------------------------------
@@ -907,3 +1298,281 @@ class MatchPlayResultView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(summary)
+
+
+# ---------------------------------------------------------------------------
+# Irish Rumble setup (round-level)
+# ---------------------------------------------------------------------------
+
+_IR_DEFAULT_SEGMENTS = [
+    {'start_hole': 1,  'end_hole': 6,  'balls_to_count': 1},
+    {'start_hole': 7,  'end_hole': 12, 'balls_to_count': 2},
+    {'start_hole': 13, 'end_hole': 17, 'balls_to_count': 3},
+    {'start_hole': 18, 'end_hole': 18, 'balls_to_count': 4},
+]
+
+
+class IrishRumbleSetupView(APIView):
+    """
+    GET  /api/rounds/{id}/irish-rumble/setup/  — return current config or defaults
+    POST /api/rounds/{id}/irish-rumble/setup/  — create or update config
+    """
+
+    def _config_dict(self, config):
+        return {
+            'configured'   : True,
+            'handicap_mode': config.handicap_mode,
+            'net_percent'  : config.net_percent,
+            'bet_unit'     : float(config.bet_unit),
+            'segments'     : config.segments,
+        }
+
+    def get(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+        is_tournament = round_obj.tournament_id is not None
+        from games.models import IrishRumbleConfig
+        try:
+            config = round_obj.irish_rumble_config
+            data   = self._config_dict(config)
+        except IrishRumbleConfig.DoesNotExist:
+            data = {
+                'configured'   : False,
+                'handicap_mode': round_obj.handicap_mode,
+                'net_percent'  : round_obj.net_percent,
+                'bet_unit'     : 1.00,
+                'segments'     : _IR_DEFAULT_SEGMENTS,
+            }
+        data['is_tournament_round']  = is_tournament
+        data['round_handicap_mode']  = round_obj.handicap_mode
+        data['round_net_percent']    = round_obj.net_percent
+        return Response(data)
+
+    def post(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+        ser = IrishRumbleSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        # For tournament rounds, the handicap mode is set at the round level
+        # and cannot be overridden per-game.
+        if round_obj.tournament_id:
+            hcap_mode   = round_obj.handicap_mode
+            net_pct     = round_obj.net_percent
+        else:
+            hcap_mode   = d['handicap_mode']
+            net_pct     = d['net_percent']
+
+        from games.models import IrishRumbleConfig
+        config, _ = IrishRumbleConfig.objects.update_or_create(
+            round    = round_obj,
+            defaults = {
+                'handicap_mode': hcap_mode,
+                'net_percent'  : net_pct,
+                'bet_unit'     : d['bet_unit'],
+                'segments'     : _IR_DEFAULT_SEGMENTS,
+            },
+        )
+        # Recalculate if there are already hole scores on file
+        from services.irish_rumble import calculate_irish_rumble
+        try:
+            calculate_irish_rumble(round_obj)
+        except Exception:
+            pass  # No scores yet — calculation will run after first score save
+
+        return Response(self._config_dict(config), status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Low Net setup (round-level)
+# ---------------------------------------------------------------------------
+
+class LowNetSetupView(APIView):
+    """
+    GET  /api/rounds/{id}/low-net/setup/  — return current config or defaults
+    POST /api/rounds/{id}/low-net/setup/  — create or update config
+    """
+
+    def _config_dict(self, config):
+        return {
+            'configured'   : True,
+            'handicap_mode': config.handicap_mode,
+            'net_percent'  : config.net_percent,
+            'entry_fee'    : float(config.entry_fee),
+            'payouts'      : config.payouts or [],
+        }
+
+    @staticmethod
+    def _count_players(round_obj):
+        """Count real (non-phantom) players across all foursomes in the round."""
+        return sum(
+            1
+            for fs in round_obj.foursomes.all()
+            for m in fs.memberships.all()
+            if not m.player.is_phantom
+        )
+
+    def get(self, request, pk):
+        round_obj = get_object_or_404(
+            Round.objects.prefetch_related('foursomes__memberships__player'),
+            pk=pk,
+        )
+        num_players   = self._count_players(round_obj)
+        is_tournament = round_obj.tournament_id is not None
+        from games.models import LowNetRoundConfig
+        try:
+            config = round_obj.low_net_config
+            data   = {'num_players': num_players, **self._config_dict(config)}
+        except LowNetRoundConfig.DoesNotExist:
+            data = {
+                'num_players'  : num_players,
+                'configured'   : False,
+                'handicap_mode': round_obj.handicap_mode,
+                'net_percent'  : round_obj.net_percent,
+                'entry_fee'    : 0.00,
+                'payouts'      : [],
+            }
+        data['is_tournament_round'] = is_tournament
+        data['round_handicap_mode'] = round_obj.handicap_mode
+        data['round_net_percent']   = round_obj.net_percent
+        return Response(data)
+
+    def post(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+        ser = LowNetSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        if round_obj.tournament_id:
+            hcap_mode = round_obj.handicap_mode
+            net_pct   = round_obj.net_percent
+        else:
+            hcap_mode = d['handicap_mode']
+            net_pct   = d['net_percent']
+
+        from games.models import LowNetRoundConfig
+        config, _ = LowNetRoundConfig.objects.update_or_create(
+            round    = round_obj,
+            defaults = {
+                'handicap_mode': hcap_mode,
+                'net_percent'  : net_pct,
+                'entry_fee'    : d['entry_fee'],
+                'payouts'      : d['payouts'],
+            },
+        )
+        return Response(self._config_dict(config), status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Pink Ball setup (round-level) + per-foursome order
+# ---------------------------------------------------------------------------
+
+class PinkBallSetupView(APIView):
+    """
+    GET  /api/rounds/{id}/pink-ball/setup/
+        Returns current config (ball_color, bet_unit) plus each foursome's
+        current pink_ball_order and player list.
+
+    POST /api/rounds/{id}/pink-ball/setup/
+        Save ball_color and bet_unit.
+    """
+
+    @staticmethod
+    def _foursome_data(fs):
+        real_members = (
+            fs.memberships.filter(player__is_phantom=False)
+                          .select_related('player')
+                          .order_by('id')
+        )
+        return {
+            'foursome_id' : fs.pk,
+            'group_number': fs.group_number,
+            'players'     : [
+                {'id': m.player.pk, 'name': m.player.name,
+                 'short_name': m.player.short_name}
+                for m in real_members
+            ],
+            'order': fs.pink_ball_order or [],
+        }
+
+    def get(self, request, pk):
+        round_obj = get_object_or_404(
+            Round.objects.prefetch_related('foursomes__memberships__player'),
+            pk=pk,
+        )
+        from games.models import PinkBallConfig
+        try:
+            config      = round_obj.pink_ball_config
+            configured  = True
+            ball_color  = config.ball_color
+            bet_unit    = float(config.bet_unit)
+            places_paid = config.places_paid
+        except PinkBallConfig.DoesNotExist:
+            configured  = False
+            ball_color  = 'Pink'
+            bet_unit    = 1.00
+            places_paid = 1
+
+        foursomes_data = [
+            self._foursome_data(fs)
+            for fs in round_obj.foursomes.order_by('group_number')
+        ]
+        return Response({
+            'configured' : configured,
+            'ball_color' : ball_color,
+            'bet_unit'   : bet_unit,
+            'places_paid': places_paid,
+            'foursomes'  : foursomes_data,
+        })
+
+    def post(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+        from api.serializers import PinkBallSetupSerializer
+        ser = PinkBallSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        from games.models import PinkBallConfig
+        config, _ = PinkBallConfig.objects.update_or_create(
+            round    = round_obj,
+            defaults = {
+                'ball_color' : d['ball_color'],
+                'bet_unit'   : d['bet_unit'],
+                'places_paid': d.get('places_paid', 1),
+            },
+        )
+        return Response({
+            'configured' : True,
+            'ball_color' : config.ball_color,
+            'bet_unit'   : float(config.bet_unit),
+            'places_paid': config.places_paid,
+        }, status=status.HTTP_201_CREATED)
+
+
+class PinkBallFoursomeOrderView(APIView):
+    """
+    POST /api/foursomes/{id}/pink-ball/order/
+        Body: {"order": [player_pk, ...]}  (exactly 18 entries)
+        Saves the custom rotation for this foursome.
+    """
+
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        from api.serializers import PinkBallOrderSerializer
+        ser = PinkBallOrderSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        order = ser.validated_data['order']
+
+        # Validate: all PKs must be real players in this foursome
+        real_ids = set(
+            foursome.memberships.filter(player__is_phantom=False)
+                                .values_list('player_id', flat=True)
+        )
+        for pid in order:
+            if pid not in real_ids:
+                from rest_framework.exceptions import ValidationError as DRFValidationError
+                raise DRFValidationError(
+                    f'Player {pid} is not a real member of this foursome.'
+                )
+
+        foursome.pink_ball_order = order
+        foursome.save(update_fields=['pink_ball_order'])
+        return Response({'order': order})

@@ -18,6 +18,15 @@ class GameType(models.TextChoices):
     SKINS           = 'skins',           'Skins'
     LOW_NET_ROUND   = 'low_net_round',   'Low Net (Round)'
     LOW_NET         = 'low_net',         'Low Net Championship'
+    # Points 5-3-1: a 3-player, per-hole points game.  Per-hole rank awards
+    # 5/3/1 points with tie-splitting (so each hole always pays out 9
+    # points total).  Settles against a "par" of 3 points per hole: a
+    # 55-point player over 18 holes wins 1 bet_unit.  Because the sum of
+    # points on every hole is 3 × 3 = 9, the money sums to zero across
+    # the three players.  The casual-round UI restricts this game to
+    # foursomes with exactly three real players and is mutually
+    # exclusive with Six's.
+    POINTS_531      = 'points_531',      'Points 5-3-1'
 
 
 class RoundStatus(models.TextChoices):
@@ -38,6 +47,17 @@ class TeamSelectMethod(models.TextChoices):
     RANDOM        = 'random',        'Random'
     REMAINDER     = 'remainder',     'Remainder'
     LOSER_CHOICE  = 'loser_choice',  "Loser's Choice"
+
+
+class PlayerSex(models.TextChoices):
+    """
+    Designation used to pick the appropriate tee (most courses have
+    separate men's and women's tees: e.g. 'White' for men, 'Red W' for
+    women).  We're matching the course's own tee designations, not
+    making any claim about the player beyond which tee they play.
+    """
+    MALE   = 'M', 'Male'
+    FEMALE = 'W', 'Female'
 
 
 class HandicapMode(models.TextChoices):
@@ -75,11 +95,35 @@ class Player(models.Model):
                         help_text="Linked Django user account for API token auth."
                     )
     name            = models.CharField(max_length=100)
+    # Short, compact label used wherever the UI would otherwise compute
+    # initials (e.g. Sixes team abbreviations).  Up to 5 characters.
+    # When left blank on save() we auto-fill from the player's name using
+    # the initials-of-first-two-words convention so existing screens keep
+    # their current look with zero extra data entry.  Callers may override
+    # at any time via the admin or the player form.
+    short_name      = models.CharField(
+                        max_length=5, blank=True,
+                        help_text="Short display label (max 5 chars). "
+                                  "Auto-defaults to initials of first two "
+                                  "name words when left blank.",
+                    )
     email           = models.EmailField(blank=True)
     phone           = models.CharField(max_length=20, blank=True)
     handicap_index  = models.DecimalField(
                         max_digits=4, decimal_places=1,
                         validators=[MinValueValidator(-10), MaxValueValidator(54)]
+                    )
+    # Drives which tee the player gets by default during round setup.
+    # Tees are filtered by this (plus any unisex tees) and then sorted
+    # by Tee.sort_priority, so a course with multiple matching tees
+    # (e.g. Black-M / Blue-M / White-M) can still surface the right
+    # default rather than sorting alphabetically.  Nullable would be
+    # nice for privacy but the tee picker needs a value, so default M.
+    sex             = models.CharField(
+                        max_length=1,
+                        choices=PlayerSex.choices,
+                        default=PlayerSex.MALE,
+                        help_text="Determines the default tee during round setup.",
                     )
     is_phantom      = models.BooleanField(default=False)
     created_at      = models.DateTimeField(auto_now_add=True)
@@ -91,6 +135,27 @@ class Player(models.Model):
         """
         ch = float(self.handicap_index) * (float(tee.slope) / 113.0) + (float(tee.course_rating) - float(tee.par))
         return round(ch)
+
+    @staticmethod
+    def default_short_name_for(name: str) -> str:
+        """
+        Compute the default short_name for a player with the given full name.
+        Takes the first letter of each of the first two whitespace-separated
+        words, uppercased.  Clamped to 5 characters to match the field
+        max_length.  Exposed as a staticmethod so the mobile form can
+        pre-compute the same default before the row is saved.
+        """
+        parts = (name or '').strip().split()
+        initials = ''.join(p[0].upper() for p in parts[:2] if p)
+        return initials[:5]
+
+    def save(self, *args, **kwargs):
+        # Auto-fill short_name from initials when left blank so existing
+        # callers and fixtures don't need updating and existing UI that
+        # shows initials keeps working seamlessly.
+        if not self.short_name:
+            self.short_name = self.default_short_name_for(self.name)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         suffix = ' (phantom)' if self.is_phantom else ''
@@ -122,6 +187,24 @@ class Tee(models.Model):
     course_rating   = models.DecimalField(max_digits=4, decimal_places=1)
     par             = models.PositiveSmallIntegerField(default=72)
     holes           = models.JSONField()                # list of 18 hole dicts (see above)
+    # Which sex this tee is intended for.  Null = unisex (e.g. Black /
+    # Championship tees played from by low-handicap players of either
+    # sex).  Used alongside Player.sex to narrow the tee picker default.
+    sex             = models.CharField(
+                        max_length=1,
+                        choices=PlayerSex.choices,
+                        null=True, blank=True,
+                        help_text="Tee designation. Null for unisex.",
+                    )
+    # Lower number = more commonly-used tee.  When multiple tees match
+    # the player's sex, the lowest sort_priority is the default.
+    # Example ordering for a men's side: Black=10, Blue=20, White=30.
+    # Women's side: Red W=30.  Unisex Black could be 10 for both.
+    sort_priority   = models.PositiveSmallIntegerField(
+                        default=100,
+                        help_text="Lower = more default. Used to pick the "
+                                  "default tee for a player of a given sex.",
+                    )
 
     def hole(self, number):
         """Return the hole dict for a given hole number (1-based)."""

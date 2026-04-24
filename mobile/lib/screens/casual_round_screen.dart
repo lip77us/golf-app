@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 
 class CasualRoundScreen extends StatefulWidget {
@@ -25,15 +26,41 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   // Map of Player ID to Tee ID
   final Map<int, int> _playerTees = {};
 
-  // Game mode
+  // Game mode.  Sixes is the default; the user can swap it for Points
+  // 5-3-1 when the group has exactly 3 real players.  Nassau and Skins
+  // are reserved chips in the picker but aren't selectable yet.
   final Set<String> _activeGames = {'sixes'};
 
+  /// Keys in this list ARE the server-side game identifiers — Points
+  /// 5-3-1 is 'points_531' (matches core.GameType.POINTS_531), not the
+  /// earlier placeholder 'points_5_3_1'.  Label is what the user sees
+  /// on the chip.
   static const _allGames = [
-    ('sixes', "Six's"),
-    ('nassau', 'Nassau'),
-    ('skins', 'Skins'),
-    ('points_5_3_1', 'Points (5-3-1)'),
+    ('sixes',       "Six's"),
+    ('points_531',  'Points (5-3-1)'),
+    ('nassau',      'Nassau'),
+    ('skins',       'Skins'),
   ];
+
+  /// Games that are mutually exclusive as *primary* per-foursome
+  /// game.  Picking one auto-deselects all others in its group.
+  /// Skins, Nassau, Sixes and Points 5-3-1 are all mutually exclusive
+  /// because they each own the hole-by-hole entry screen.
+  static const _mutexGroups = [
+    {'sixes', 'points_531', 'skins', 'nassau'},
+  ];
+
+  /// Apply any mutex constraints after a chip toggle.  If turning ON a
+  /// game that's in a mutex group, turn OFF every other member of that
+  /// group.  Safe to call even when no constraints are violated — it's
+  /// a no-op in that case.
+  void _applyGameMutex(String justAdded) {
+    for (final group in _mutexGroups) {
+      if (group.contains(justAdded)) {
+        _activeGames.removeWhere((g) => g != justAdded && group.contains(g));
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -84,12 +111,64 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     return _tees.where((t) => t.course.id == _selectedCourse!.id).toList();
   }
 
+  /// Tees at the currently-selected course that this player can play:
+  /// matches the player's sex OR is unisex (tee.sex == null).  Sorted
+  /// by (sort_priority ASC, tee_name ASC) so the "default" tee at this
+  /// course for this sex comes out first.  Returns [] if no course is
+  /// selected yet.
+  List<TeeInfo> _teesForPlayer(PlayerProfile p) {
+    final tees = _availableTees
+        .where((t) => t.sex == null || t.sex == p.sex)
+        .toList()
+      ..sort((a, b) {
+        final pc = a.sortPriority.compareTo(b.sortPriority);
+        if (pc != 0) return pc;
+        return a.teeName.compareTo(b.teeName);
+      });
+    return tees;
+  }
+
+  /// Tee id to pre-select for this player: the lowest-priority tee in
+  /// [_teesForPlayer].  Returns 0 if no course is selected or no tee
+  /// matches (shouldn't happen on a well-seeded course).
+  int _defaultTeeIdForPlayer(PlayerProfile p) {
+    final tees = _teesForPlayer(p);
+    return tees.isEmpty ? 0 : tees.first.id;
+  }
+
+  /// Render one game FilterChip, handling enabled/disabled state and
+  /// mutex cleanup on toggle.
+  Widget _buildGameChip(String gameValue, String gameLabel) {
+    final selected = _activeGames.contains(gameValue);
+    return FilterChip(
+      label: Text(gameLabel),
+      selected: selected,
+      onSelected: (picked) {
+        setState(() {
+          if (picked) {
+            _activeGames.add(gameValue);
+            _applyGameMutex(gameValue);
+          } else {
+            // Refuse to deselect the last remaining game.
+            if (_activeGames.length == 1 &&
+                _activeGames.contains(gameValue)) {
+              return;
+            }
+            _activeGames.remove(gameValue);
+          }
+        });
+      },
+    );
+  }
+
   void _onPlayerToggle(int playerId, bool selected) {
     setState(() {
       if (selected) {
-        // If they select a player, assign the first available tee for the course (if a course is selected)
-        final defaultTee = _availableTees.isNotEmpty ? _availableTees.first.id : 0;
-        _playerTees[playerId] = defaultTee;
+        // Assign the right default tee for this specific player (by sex
+        // + priority).  Women get their lowest-priority women's tee,
+        // men get their lowest-priority men's tee.
+        final player = _players.firstWhere((p) => p.id == playerId);
+        _playerTees[playerId] = _defaultTeeIdForPlayer(player);
       } else {
         _playerTees.remove(playerId);
       }
@@ -106,6 +185,45 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     if (_playerTees.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select at least 2 players.')),
+      );
+      return;
+    }
+    // Points 5-3-1 is a hard 3-player game — its tie-splitting math
+    // (5/3/1 baseline → 9 points per hole) only sums to zero with
+    // exactly three scorers, so block Start until the roster is right.
+    if (_activeGames.contains('points_531') && _playerTees.length != 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+            'Points 5-3-1 requires exactly 3 players.')),
+      );
+      return;
+    }
+    // Six's is 2v2 best-ball across three 6-hole segments — it requires
+    // exactly 4 real players.  Mirrors the 3-player lock on Points
+    // 5-3-1 above; prevents the user from landing on the Six's setup
+    // screen with an invalid foursome.
+    if (_activeGames.contains('sixes') && _playerTees.length != 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+            "Six's requires exactly 4 players.")),
+      );
+      return;
+    }
+    // Skins supports 2–4 real players.
+    if (_activeGames.contains('skins') &&
+        (_playerTees.length < 2 || _playerTees.length > 4)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+            'Skins requires 2–4 players.')),
+      );
+      return;
+    }
+    // Nassau supports 2–4 real players (1v1 or 2v2).
+    if (_activeGames.contains('nassau') &&
+        (_playerTees.length < 2 || _playerTees.length > 4)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+            'Nassau requires 2–4 players (1v1 or 2v2).')),
       );
       return;
     }
@@ -126,7 +244,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       final round = await client.createRound(
         courseId: _selectedCourse!.id,
         date: dateStr,
-        betUnit: 1.0,
         activeGames: _activeGames.toList(),
       );
 
@@ -145,8 +262,46 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
       if (!mounted) return;
 
-      // Navigate to the round screen and jump right in!
-      Navigator.of(context).pushReplacementNamed('/round', arguments: fullRound.id);
+      // For a casual round there's exactly one foursome, and we already
+      // know which game is active — so skip the /round "group card" hub
+      // and drop the user straight on the match setup screen they would
+      // have tapped into from /round anyway.  Fewer taps, same outcome.
+      // Fallback to /round only if we can't figure out where to go
+      // (defensive; shouldn't happen in practice).
+      final rp = context.read<RoundProvider>();
+      await rp.loadRound(fullRound.id);
+      if (!mounted) return;
+
+      final firstFs = fullRound.foursomes.isNotEmpty
+          ? fullRound.foursomes.first
+          : null;
+
+      if (firstFs != null && _activeGames.contains('sixes')) {
+        Navigator.of(context).pushReplacementNamed(
+          '/sixes-setup',
+          arguments: firstFs.id,
+        );
+      } else if (firstFs != null && _activeGames.contains('points_531')) {
+        Navigator.of(context).pushReplacementNamed(
+          '/points-531-setup',
+          arguments: firstFs.id,
+        );
+      } else if (firstFs != null && _activeGames.contains('skins')) {
+        Navigator.of(context).pushReplacementNamed(
+          '/skins-setup',
+          arguments: firstFs.id,
+        );
+      } else if (firstFs != null && _activeGames.contains('nassau')) {
+        Navigator.of(context).pushReplacementNamed(
+          '/nassau-setup',
+          arguments: firstFs.id,
+        );
+      } else {
+        Navigator.of(context).pushReplacementNamed(
+          '/round',
+          arguments: fullRound.id,
+        );
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e; _creating = false; });
     }
@@ -196,14 +351,24 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             onChanged: (c) {
               setState(() {
                 _selectedCourse = c;
-                // Update default tees for already selected players if they don't have a valid tee
-                if (_availableTees.isNotEmpty) {
-                  final defaultTee = _availableTees.first.id;
-                  for (final key in _playerTees.keys.toList()) {
-                    // Only update if it was 0 (unassigned) or if the current tee doesn't belong to this course
-                    if (_playerTees[key] == 0 || !_availableTees.any((t) => t.id == _playerTees[key])) {
-                       _playerTees[key] = defaultTee;
-                    }
+                // Recompute each selected player's default tee when the
+                // course changes.  Using the per-player helper keeps
+                // Women pointed at a Women's tee and Men at a Men's tee,
+                // sorted by sort_priority.  We overwrite only tees that
+                // became invalid (wrong course) or were unassigned (0)
+                // so manual overrides survive course changes where the
+                // tee_id happens to still be valid — rare, but the
+                // failure mode is safe.
+                for (final pid in _playerTees.keys.toList()) {
+                  final cur = _playerTees[pid];
+                  final teeStillValid = cur != 0 &&
+                      _availableTees.any((t) => t.id == cur);
+                  if (!teeStillValid) {
+                    final player = _players.firstWhere(
+                      (p) => p.id == pid,
+                      orElse: () => _players.first,
+                    );
+                    _playerTees[pid] = _defaultTeeIdForPlayer(player);
                   }
                 }
               });
@@ -218,15 +383,67 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             runSpacing: 4,
             children: [
               for (final (gameValue, gameLabel) in _allGames)
-                FilterChip(
-                  label: Text(gameLabel),
-                  selected: _activeGames.contains(gameValue),
-                  onSelected: gameValue == 'sixes'
-                      ? null // Keep sixes selected and disable unselecting it
-                      : null, // Disable the others entirely for now, as requested
-                ),
+                _buildGameChip(gameValue, gameLabel),
             ],
           ),
+          // Inline warnings when the picked game's roster requirement is
+          // off.  Sixes is 2v2 best-ball so it needs exactly 4 real
+          // players; Points 5-3-1 is a three-player game.  Either
+          // mismatch blocks Start Round down below.
+          if (_activeGames.contains('points_531') && _playerTees.length != 3)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                _playerTees.length < 3
+                    ? 'Points 5-3-1 needs exactly 3 players — '
+                      'add ${3 - _playerTees.length} more below.'
+                    : 'Points 5-3-1 is a 3-player game — '
+                      'remove ${_playerTees.length - 3} player(s) below.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          if (_activeGames.contains('sixes') && _playerTees.length != 4)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                _playerTees.length < 4
+                    ? "Six's needs exactly 4 players — "
+                      'add ${4 - _playerTees.length} more below.'
+                    : "Six's is a 4-player game — "
+                      'remove ${_playerTees.length - 4} player(s) below.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          if (_activeGames.contains('skins') &&
+              (_playerTees.length < 2 || _playerTees.length > 4))
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                _playerTees.length < 2
+                    ? 'Skins needs at least 2 players — '
+                      'add ${2 - _playerTees.length} more below.'
+                    : 'Skins supports at most 4 players — '
+                      'remove ${_playerTees.length - 4} player(s) below.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          if (_activeGames.contains('nassau') &&
+              (_playerTees.length < 2 || _playerTees.length > 4))
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                _playerTees.length < 2
+                    ? 'Nassau needs at least 2 players — '
+                      'add ${2 - _playerTees.length} more below.'
+                    : 'Nassau supports at most 4 players (1v1 or 2v2) — '
+                      'remove ${_playerTees.length - 4} player(s) below.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error),
+              ),
+            ),
           const SizedBox(height: 24),
 
           Text('Select Players & Tees', style: Theme.of(context).textTheme.titleLarge),
@@ -243,6 +460,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 final player = _players[i];
                 final isSelected = _playerTees.containsKey(player.id);
                 final playerTeeId = _playerTees[player.id];
+                // The logged-in player is always locked in as a participant.
+                final authPlayer = context.read<AuthProvider>().player;
+                final isLockedIn = authPlayer != null && player.id == authPlayer.id;
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -252,13 +472,25 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                       children: [
                         Checkbox(
                           value: isSelected,
-                          onChanged: (v) => _onPlayerToggle(player.id, v ?? false),
+                          onChanged: isLockedIn
+                              ? null  // locked — creator cannot remove themselves
+                              : (v) => _onPlayerToggle(player.id, v ?? false),
                         ),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(player.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              Row(children: [
+                                Text(player.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                if (isLockedIn) ...[
+                                  const SizedBox(width: 6),
+                                  const Chip(
+                                    label: Text('You', style: TextStyle(fontSize: 11)),
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ],
+                              ]),
                               Text('Hcp: ${player.handicapIndex}', style: Theme.of(context).textTheme.bodySmall),
                             ],
                           ),
@@ -266,19 +498,33 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                         if (isSelected)
                           Padding(
                             padding: const EdgeInsets.only(right: 16),
-                            child: DropdownButton<int>(
-                              value: playerTeeId == 0 ? null : playerTeeId,
-                              hint: const Text('Tee'),
-                              items: _availableTees.map((t) => DropdownMenuItem(
-                                value: t.id,
-                                child: Text(t.teeName),
-                              )).toList(),
-                              onChanged: (teeId) {
-                                if (teeId != null) {
-                                  setState(() => _playerTees[player.id] = teeId);
-                                }
-                              },
-                            ),
+                            child: Builder(builder: (_) {
+                              // Dropdown only shows tees this player can
+                              // legitimately play: matching sex + any
+                              // unisex tees at the course, sorted by
+                              // priority so the default is first.
+                              final playerTees = _teesForPlayer(player);
+                              // If the stored value is 0 or not in the
+                              // filtered list, show the hint instead of
+                              // forcing Flutter to render a missing value.
+                              final effectiveValue =
+                                  playerTees.any((t) => t.id == playerTeeId)
+                                      ? playerTeeId
+                                      : null;
+                              return DropdownButton<int>(
+                                value: effectiveValue,
+                                hint: const Text('Tee'),
+                                items: playerTees.map((t) => DropdownMenuItem(
+                                  value: t.id,
+                                  child: Text(t.teeName),
+                                )).toList(),
+                                onChanged: (teeId) {
+                                  if (teeId != null) {
+                                    setState(() => _playerTees[player.id] = teeId);
+                                  }
+                                },
+                              );
+                            }),
                           )
                       ],
                     ),

@@ -367,7 +367,7 @@ class Command(BaseCommand):
 
         if 'nassau' in games:
             from services.nassau import setup_nassau
-            setup_nassau(foursome, team1_ids, team2_ids, press_pct=0.50)
+            setup_nassau(foursome, team1_ids, team2_ids)
             self.stdout.write(
                 f"    Nassau: Group {foursome.group_number} — "
                 f"T1={[m.player.name for m in real_members[::2]]} vs "

@@ -105,10 +105,13 @@ class TeeAdminForm(forms.ModelForm):
 
 @admin.register(Player)
 class PlayerAdmin(admin.ModelAdmin):
-    list_display  = ('name', 'handicap_index', 'is_phantom', 'email', 'created_at')
-    list_filter   = ('is_phantom',)
-    search_fields = ('name', 'email')
+    list_display  = ('name', 'short_name', 'handicap_index', 'sex',
+                     'is_phantom', 'email', 'created_at')
+    list_filter   = ('is_phantom', 'sex')
+    search_fields = ('name', 'short_name', 'email')
     ordering      = ('name',)
+    fields        = ('name', 'short_name', 'email', 'phone', 'handicap_index',
+                     'sex', 'is_phantom', 'user')
 
 
 @admin.register(Course)
@@ -121,13 +124,23 @@ class CourseAdmin(admin.ModelAdmin):
 @admin.register(Tee)
 class TeeAdmin(admin.ModelAdmin):
     form          = TeeAdminForm
-    list_display  = ('course', 'tee_name', 'slope', 'course_rating', 'par')
-    list_filter   = ('course',)
+    # Sort default on list view by (course, priority, name) so the admin
+    # matches the priority order the app uses when defaulting a tee for
+    # a new round — makes it obvious at a glance which tee is "default"
+    # at each course.
+    list_display  = ('course', 'tee_name', 'sex', 'sort_priority',
+                     'slope', 'course_rating', 'par')
+    list_filter   = ('course', 'sex')
+    list_editable = ('sex', 'sort_priority')
     search_fields = ('course__name', 'tee_name')
-    ordering      = ('course__name', 'tee_name')
+    ordering      = ('course__name', 'sort_priority', 'tee_name')
     fieldsets     = (
         (None, {
-            'fields': ('course', 'tee_name', 'slope', 'course_rating', 'par'),
+            'fields': ('course', 'tee_name', 'sex', 'sort_priority',
+                       'slope', 'course_rating', 'par'),
+            'description': ('sex=null means the tee is unisex. '
+                            'sort_priority is the default-order rank — '
+                            'lower numbers appear first in the picker.'),
         }),
         ('Hole-by-Hole Data', {
             'fields': ('holes',),

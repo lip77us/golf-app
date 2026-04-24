@@ -86,12 +86,34 @@ class _RoundScreenState extends State<RoundScreen> {
 
     final isComplete = round.status == 'complete';
 
+    // Staff users (is_staff=true on the Django User) get full admin access
+    // regardless of whether they also have a linked player profile.
+    final isAdmin = context.read<AuthProvider>().isStaff;
+
+    final hasIrishRumble = round.activeGames.contains('irish_rumble');
+    final hasLowNet      = round.activeGames.contains('low_net_round');
+    final hasPinkBall    = round.activeGames.contains('pink_ball');
+    final hasSetupGames  = hasIrishRumble || hasLowNet || hasPinkBall;
+
     return RefreshIndicator(
       onRefresh: () => rp.loadRound(widget.roundId),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         children: [
           _RoundInfoCard(round: round),
+          if (hasSetupGames && !isComplete) ...[
+            const SizedBox(height: 16),
+            Text('Game Setup',
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            _GameSetupCard(
+              roundId:         widget.roundId,
+              hasIrishRumble:  hasIrishRumble,
+              hasLowNet:       hasLowNet,
+              hasPinkBall:     hasPinkBall,
+            ),
+          ],
           const SizedBox(height: 16),
           Text('Foursomes',
               style: Theme.of(context).textTheme.titleMedium
@@ -100,18 +122,43 @@ class _RoundScreenState extends State<RoundScreen> {
           ...round.foursomes.map((fs) => _FoursomeCard(
                 foursome:     fs,
                 myPlayerId:   myId,
+                isAdmin:      isAdmin,
                 isComplete:   isComplete,
                 sixesActive:  round.activeGames.contains('sixes'),
                 sixesStarted: rp.sixesIsStarted(fs.id),
                 onEnterScores: () {
                   context.read<RoundProvider>().loadScorecard(fs.id);
-                  // Route to the Six's setup screen (Match 1 team picker)
-                  // when that game is active, otherwise use the standard
-                  // scorecard.  SixesSetupScreen auto-redirects to /sixes
-                  // if the match is already started.
-                  final route = (round.activeGames.contains('sixes'))
-                      ? '/sixes-setup'
-                      : '/scorecard';
+                  // Route priority:
+                  //   1. Sixes active → /sixes-setup (team picker).
+                  //      SixesSetupScreen auto-redirects to /sixes if the
+                  //      match is already started.
+                  //   2. Points 5-3-1 active → /points-531-setup (handicap
+                  //      mode picker).  No team-picking step because the
+                  //      game is per-player.
+                  //   3. Skins active → /skins-setup (handicap + carryover).
+                  //      SkinsSetupScreen auto-redirects to /skins if the
+                  //      game is already started.
+                  //   4. Nassau active → /nassau-setup (team + handicap +
+                  //      press config).  NassauSetupScreen auto-redirects to
+                  //      /nassau if the game is already started.
+                  //   5. Otherwise → the plain /scorecard.
+                  //
+                  // These games are mutually exclusive in the casual-round
+                  // picker, so branches never collide in practice.
+                  final String route;
+                  if (round.activeGames.contains('pink_ball')) {
+                    route = '/pink-ball';
+                  } else if (round.activeGames.contains('sixes')) {
+                    route = '/sixes-setup';
+                  } else if (round.activeGames.contains('points_531')) {
+                    route = '/points-531-setup';
+                  } else if (round.activeGames.contains('skins')) {
+                    route = '/skins-setup';
+                  } else if (round.activeGames.contains('nassau')) {
+                    route = '/nassau-setup';
+                  } else {
+                    route = '/scorecard';
+                  }
                   Navigator.of(context).pushNamed(route, arguments: fs.id);
                 },
               )),
@@ -178,6 +225,63 @@ class _RoundInfoCard extends StatelessWidget {
       'low_net_round':'Low Net',
     };
     return labels[g] ?? g;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Game Setup card — surfaces Irish Rumble / Low Net config buttons
+// ---------------------------------------------------------------------------
+
+class _GameSetupCard extends StatelessWidget {
+  final int  roundId;
+  final bool hasIrishRumble;
+  final bool hasLowNet;
+  final bool hasPinkBall;
+
+  const _GameSetupCard({
+    required this.roundId,
+    required this.hasIrishRumble,
+    required this.hasLowNet,
+    required this.hasPinkBall,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (hasIrishRumble) ...[
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .pushNamed('/irish-rumble-setup', arguments: roundId),
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Configure Irish Rumble'),
+              ),
+              if (hasLowNet) const SizedBox(height: 8),
+            ],
+            if (hasLowNet)
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .pushNamed('/low-net-setup', arguments: roundId),
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Configure Low Net'),
+              ),
+            if (hasPinkBall) ...[
+              if (hasIrishRumble || hasLowNet) const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .pushNamed('/pink-ball-setup', arguments: roundId),
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Configure Pink Ball'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -259,6 +363,9 @@ class _CompleteRoundButton extends StatelessWidget {
 class _FoursomeCard extends StatelessWidget {
   final Foursome foursome;
   final int?     myPlayerId;
+  /// True when the logged-in user is admin/staff (no linked player).
+  /// Admins can enter scores for any foursome and see game-setup controls.
+  final bool     isAdmin;
   final bool     isComplete;
   final bool     sixesActive;
   final bool     sixesStarted;
@@ -267,6 +374,7 @@ class _FoursomeCard extends StatelessWidget {
   const _FoursomeCard({
     required this.foursome,
     required this.myPlayerId,
+    required this.isAdmin,
     required this.isComplete,
     required this.sixesActive,
     required this.sixesStarted,
@@ -277,6 +385,9 @@ class _FoursomeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMyGroup = myPlayerId != null &&
         foursome.containsPlayer(myPlayerId!);
+    // Players can only edit scores for their own group.
+    // Admins can edit any group. Everyone can view completed scorecards.
+    final canEdit = isAdmin || isMyGroup;
     final theme = Theme.of(context);
 
     return Card(
@@ -316,24 +427,28 @@ class _FoursomeCard extends StatelessWidget {
                       style: theme.textTheme.bodySmall),
                 ]),
               )),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onEnterScores,
-              icon: Icon(
-                isComplete ? Icons.table_chart_outlined : Icons.edit_note,
-                size: 18,
-              ),
-              label: Text(
-                isComplete
-                    ? 'View Scorecard'
-                    : (sixesActive && !sixesStarted)
-                        ? 'Start Match'
-                        : 'Enter Scores',
+          // Players who are not in this group and the round is still in
+          // progress see no button at all — they have nothing to do here.
+          if (canEdit || isComplete) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onEnterScores,
+                icon: Icon(
+                  isComplete ? Icons.table_chart_outlined : Icons.edit_note,
+                  size: 18,
+                ),
+                label: Text(
+                  isComplete
+                      ? 'View Scorecard'
+                      : (sixesActive && !sixesStarted)
+                          ? 'Start Match'
+                          : 'Enter Scores',
+                ),
               ),
             ),
-          ),
+          ],
         ]),
       ),
     );

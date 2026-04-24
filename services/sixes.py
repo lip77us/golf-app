@@ -75,7 +75,11 @@ from django.db import transaction
 
 from core.models import HandicapMode
 from games.models import SixesSegment, SixesTeam, SixesHoleResult
-from scoring.handicap import build_score_index
+from scoring.handicap import (
+    build_score_index,
+    _strokes_for_segment_index,
+    _allocate_segment_strokes,
+)
 from tournament.models import Foursome
 
 
@@ -256,6 +260,68 @@ def _score_segment(seg: SixesSegment, score_index: dict) -> tuple:
     return results, finished_on
 
 
+# ---------------------------------------------------------------------------
+# Strokes-Off overlay helpers (see calculate_sixes below for why they exist)
+# ---------------------------------------------------------------------------
+
+def _overlay_so_strokes_for_segment(seg, segment_idx, player_so, member_by_pid, score_index):
+    """
+    Apply this standard segment's SO strokes to *score_index* in place.
+
+    For each player with SO > 0 we compute how many strokes they receive
+    in this match — floor(SO/3), plus 1 for the first SO%3 matches — and
+    allocate those strokes to the hardest holes (lowest stroke index) in
+    this segment's *actual* range (seg.start_hole..seg.end_hole), then
+    subtract from the player's per-hole score.  Holes the match never
+    reaches are simply never read by _score_segment, so any strokes we
+    drop on them "die" naturally.
+    """
+    for pid, so in player_so.items():
+        if so <= 0:
+            continue
+        member = member_by_pid.get(pid)
+        if member is None or member.tee_id is None:
+            continue
+        strokes_this_seg = _strokes_for_segment_index(so, segment_idx)
+        if strokes_this_seg <= 0:
+            continue
+        holes_with_si = [
+            (h, member.tee.hole(h).get('stroke_index', 18))
+            for h in range(seg.start_hole, seg.end_hole + 1)
+        ]
+        allocation = _allocate_segment_strokes(strokes_this_seg, holes_with_si)
+        player_entries = score_index.get(pid)
+        if not player_entries:
+            continue
+        for h, strokes in allocation.items():
+            if h in player_entries:
+                player_entries[h] -= strokes
+
+
+def _overlay_so_strokes_for_extras(start_hole, player_so, member_by_pid, score_index):
+    """
+    Apply the extras SO rule to every remaining hole in one shot.
+
+    For holes start_hole..18, any hole whose stroke_index <= the player's
+    SO grants that player one stroke (subtracted from score_index in
+    place).  Used once, just before the extras chain scores.
+    """
+    for pid, so in player_so.items():
+        if so <= 0:
+            continue
+        member = member_by_pid.get(pid)
+        if member is None or member.tee_id is None:
+            continue
+        player_entries = score_index.get(pid)
+        if not player_entries:
+            continue
+        for h in range(start_hole, 19):
+            if h in player_entries:
+                si = member.tee.hole(h).get('stroke_index', 18)
+                if si <= so:
+                    player_entries[h] -= 1
+
+
 @transaction.atomic
 def calculate_sixes(foursome) -> list:
     """
@@ -289,29 +355,69 @@ def calculate_sixes(foursome) -> list:
     handicap_mode = first_seg.handicap_mode or HandicapMode.NET
     net_percent   = first_seg.net_percent or 100
 
-    # score_index: player_id → hole_number → score_to_compare
-    # Contents depend on handicap_mode (gross score, net at 100%, or net at
-    # a custom percentage).  See scoring/handicap.py for the rules.
-    score_index = build_score_index(
-        foursome,
-        handicap_mode=handicap_mode,
-        net_percent=net_percent,
-    )
-
     standard_segs = [s for s in segments if not s.is_extra]
     extra_segs    = [s for s in segments if s.is_extra]
+
+    # score_index: player_id → hole_number → score_to_compare
+    #
+    # Non-SO modes: build the whole index once up front — strokes don't
+    # depend on segment positions so pre-computing is fine.
+    #
+    # SO mode: segment stroke allocation depends on each match's actual
+    # range, which depends on where the previous match ended.  That's a
+    # chicken-and-egg with a pre-built index, so instead we start from a
+    # gross index and overlay each standard segment's strokes *just in
+    # time*, right after we've repositioned that segment.
+    so_mode = handicap_mode == HandicapMode.STROKES_OFF
+    if so_mode:
+        score_index = build_score_index(
+            foursome,
+            handicap_mode=HandicapMode.GROSS,
+        )
+        memberships = list(
+            foursome.memberships
+            .select_related('player', 'tee')
+            .filter(player__is_phantom=False)
+        )
+        phcps = [m.playing_handicap for m in memberships
+                 if m.playing_handicap is not None]
+        low = min(phcps) if phcps else 0
+        player_so = {
+            m.player_id: max(0, (m.playing_handicap or 0) - low)
+            for m in memberships
+        }
+        member_by_pid = {m.player_id: m for m in memberships}
+    else:
+        score_index = build_score_index(
+            foursome,
+            handicap_mode=handicap_mode,
+            net_percent=net_percent,
+            segments=segments,
+        )
+        player_so = {}
+        member_by_pid = {}
 
     all_results = []
     current_hole = 1  # tracks the first hole of the next match
 
     # ── Score standard segments ────────────────────────────────────────────
-    for seg in standard_segs:
+    for idx, seg in enumerate(standard_segs):
         # Reposition this segment so it starts right after the previous one.
         expected_end = min(current_hole + 5, 18)
         if seg.start_hole != current_hole or seg.end_hole != expected_end:
             seg.start_hole = current_hole
             seg.end_hole   = expected_end
             seg.save(update_fields=['start_hole', 'end_hole'])
+
+        # SO mode: overlay this segment's strokes on the gross score_index
+        # *after* repositioning, so we allocate strokes against the range
+        # the match is actually playing (not the canonical/pre-reposition
+        # range).  Strokes that fall on unreached holes just sit in the
+        # index but the match loop stops before reading them, so they die.
+        if so_mode:
+            _overlay_so_strokes_for_segment(
+                seg, idx, player_so, member_by_pid, score_index
+            )
 
         results, finished_on = _score_segment(seg, score_index)
         all_results.extend(results)
@@ -327,6 +433,13 @@ def calculate_sixes(foursome) -> list:
     # segments.  If an extra match itself ends early another one starts
     # immediately after, just as standard matches do.
     if current_hole <= 18:
+        # SO mode: apply the extras SI-threshold rule to every remaining
+        # hole before we score any extra segment.  A player with SO=N gets
+        # one stroke on any hole whose stroke_index <= N.
+        if so_mode:
+            _overlay_so_strokes_for_extras(
+                current_hole, player_so, member_by_pid, score_index
+            )
         extra_segs_sorted = sorted(extra_segs, key=lambda s: s.segment_number)
         extra_idx     = 0
         extra_current = current_hole
@@ -422,18 +535,33 @@ def sixes_summary(foursome) -> dict:
     handicap_mode = getattr(first, 'handicap_mode', HandicapMode.NET) if first else HandicapMode.NET
     net_percent   = getattr(first, 'net_percent', 100) if first else 100
 
+    # Per-player running money total for this foursome.  One unit per
+    # decided match — winners +bet_unit, losers -bet_unit, halved = 0.
+    # Phantoms are skipped so they never appear in the leaderboard.
+    bet_unit    = float(foursome.round.bet_unit)
+    money_totals = {}  # player_id → {'name': ..., 'amount': float}
+
     for i, seg in enumerate(segments, start=1):
         teams  = list(seg.teams.all())
         t1     = next((t for t in teams if t.team_number == 1), None)
         t2     = next((t for t in teams if t.team_number == 2), None)
 
+        # Resolve winner label AND credit/debit each real player on the
+        # winning / losing team for this segment's decided result.  We
+        # only move money on 'complete' with an is_winner=True team; a
+        # 'halved' segment is a wash and 'pending'/'in_progress' haven't
+        # paid out yet.
+        winning_team = None
+        losing_team  = None
         if seg.status == 'complete':
             if t1 and t1.is_winner:
                 winner_label = 'Team 1'
                 t1_total_wins += 1
+                winning_team, losing_team = t1, t2
             elif t2 and t2.is_winner:
                 winner_label = 'Team 2'
                 t2_total_wins += 1
+                winning_team, losing_team = t2, t1
             else:
                 winner_label = 'Halved'
                 halves += 1
@@ -443,11 +571,35 @@ def sixes_summary(foursome) -> dict:
         else:
             winner_label = '—'
 
+        if winning_team is not None and losing_team is not None:
+            for p in winning_team.players.all():
+                if p.is_phantom:
+                    continue
+                entry = money_totals.setdefault(p.id, {'name': p.name, 'amount': 0.0})
+                entry['amount'] += bet_unit
+            for p in losing_team.players.all():
+                if p.is_phantom:
+                    continue
+                entry = money_totals.setdefault(p.id, {'name': p.name, 'amount': 0.0})
+                entry['amount'] -= bet_unit
+
         extra_label = ' (extra)' if seg.is_extra else ''
-        label = f"Holes {seg.start_hole}–{seg.end_hole} (Match {i}{extra_label})"
+
+        # For completed matches that ended early, show the actually-played
+        # range rather than the potential range.  seg.end_hole is still the
+        # potential end (we don't trim it during repositioning) so we reach
+        # into hole_results for the last hole that was scored.
+        hole_results_list = list(seg.hole_results.all())
+        if (seg.status in ('complete', 'halved')
+                and hole_results_list
+                and hole_results_list[-1].hole_number < seg.end_hole):
+            display_end = hole_results_list[-1].hole_number
+        else:
+            display_end = seg.end_hole
+        label = f"Holes {seg.start_hole}–{display_end} (Match {i}{extra_label})"
 
         holes_out = []
-        for hr in seg.hole_results.all():
+        for hr in hole_results_list:
             if hr.winning_team is None:
                 hole_winner = 'Halved'
             elif hr.winning_team.team_number == 1:
@@ -480,6 +632,19 @@ def sixes_summary(foursome) -> dict:
             'holes'    : holes_out,
         })
 
+    # Emit money sorted by amount desc then name so the leaderboard is
+    # stable as scores come in; ensure every real player in the foursome
+    # appears even if they haven't been involved in a decided match yet.
+    for m in foursome.memberships.select_related('player').all():
+        if m.player.is_phantom:
+            continue
+        money_totals.setdefault(m.player_id,
+                                {'name': m.player.name, 'amount': 0.0})
+    money_out = sorted(
+        money_totals.values(),
+        key=lambda e: (-e['amount'], e['name']),
+    )
+
     return {
         'segments': seg_out,
         'overall' : {
@@ -490,5 +655,9 @@ def sixes_summary(foursome) -> dict:
         'handicap' : {
             'mode'        : handicap_mode,
             'net_percent' : net_percent,
+        },
+        'money' : {
+            'bet_unit'  : bet_unit,
+            'by_player' : money_out,
         },
     }

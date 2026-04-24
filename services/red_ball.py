@@ -34,7 +34,7 @@ Public API
 
 from django.db import transaction
 
-from games.models import PinkBallHoleResult, PinkBallResult
+from games.models import PinkBallConfig, PinkBallHoleResult, PinkBallResult
 from tournament.models import Foursome
 
 
@@ -167,19 +167,36 @@ def calculate_red_ball(round_obj) -> list:
 # Summary helper
 # ---------------------------------------------------------------------------
 
-def red_ball_summary(round_obj) -> list:
+def red_ball_summary(round_obj) -> dict:
     """
-    Return ranked results as a list of readable dicts.
-
-    Each dict:
+    Return a serialisable dict:
         {
-            'rank'             : int,
-            'group_number'     : int,
-            'players'          : str  (comma-separated real player names),
-            'status'           : str  ('Survived' or 'Lost on hole N'),
-            'total_net_score'  : int or None,
+          'ball_color' : str,
+          'bet_unit'   : float,
+          'pool'       : float,
+          'results'    : [
+              {
+                'rank'           : int,
+                'group_number'   : int,
+                'players'        : str,
+                'status'         : str,   # 'Survived' | 'Lost on hole N'
+                'total_net_score': int | None,
+                'payout'         : float,
+              }, ...
+          ]
         }
     """
+    # Round-level config (ball colour + bet unit + places paid)
+    try:
+        config      = round_obj.pink_ball_config
+        ball_color  = config.ball_color
+        bet_unit    = float(config.bet_unit)
+        places_paid = config.places_paid
+    except PinkBallConfig.DoesNotExist:
+        ball_color  = 'Pink'
+        bet_unit    = 0.0
+        places_paid = 1
+
     results = (
         PinkBallResult.objects
         .filter(round=round_obj)
@@ -187,21 +204,53 @@ def red_ball_summary(round_obj) -> list:
         .order_by('rank')
     )
 
-    summary = []
-    for r in results:
+    # Pool = bet_unit × number of foursomes in the round
+    num_groups = Foursome.objects.filter(round=round_obj).count()
+    pool       = round(bet_unit * num_groups, 2)
+
+    # Split pool equally among paid places; within each place, split among tied groups.
+    # pot_per_place = pool / places_paid (integer-limited to actual paid places).
+    result_list    = list(results)
+    paid_ranks     = sorted(set(r.rank for r in result_list if r.rank is not None))[:places_paid]
+    pot_per_place  = round(pool / places_paid, 2) if places_paid and pool else 0.0
+
+    # Count groups at each paid rank so we can split pot_per_place among ties.
+    count_at_rank  = {}
+    for r in result_list:
+        if r.rank in paid_ranks:
+            count_at_rank[r.rank] = count_at_rank.get(r.rank, 0) + 1
+
+    def _payout_for(rank):
+        if rank not in paid_ranks:
+            return 0.0
+        n = count_at_rank.get(rank, 1)
+        return round(pot_per_place / n, 2)
+
+    summary_rows = []
+    for r in result_list:
         players = ', '.join(
             m.player.name for m in
             r.foursome.memberships.filter(player__is_phantom=False)
                                   .select_related('player')
                                   .order_by('player__name')
         )
-        status = 'Survived' if r.eliminated_on_hole is None else f'Lost on hole {r.eliminated_on_hole}'
-        summary.append({
+        status = (
+            'Survived' if r.eliminated_on_hole is None
+            else f'Lost on hole {r.eliminated_on_hole}'
+        )
+        summary_rows.append({
             'rank'            : r.rank,
             'group_number'    : r.foursome.group_number,
             'players'         : players,
             'status'          : status,
             'total_net_score' : r.total_net_score,
+            'payout'          : _payout_for(r.rank),
         })
 
-    return summary
+    return {
+        'ball_color' : ball_color,
+        'bet_unit'   : bet_unit,
+        'places_paid': places_paid,
+        'pool'       : pool,
+        'results'    : summary_rows,
+    }

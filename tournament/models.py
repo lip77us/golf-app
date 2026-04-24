@@ -53,6 +53,16 @@ class Round(models.Model):
                             help_text="List of GameType values active for this round."
                         )
     bet_unit            = models.DecimalField(max_digits=6, decimal_places=2, default=1.00)
+    handicap_mode       = models.CharField(
+                            max_length=20,
+                            choices=[('gross','Gross'),('net','Net'),('strokes_off','Strokes Off Low')],
+                            default='net',
+                            help_text="Handicap mode applied to all games in this round.",
+                        )
+    net_percent         = models.PositiveSmallIntegerField(
+                            default=100,
+                            help_text="Percentage of handicap applied when mode=net (0–200).",
+                        )
     scramble_config     = models.JSONField(
                             null=True, blank=True,
                             help_text=(
@@ -62,6 +72,13 @@ class Round(models.Model):
                         )
     notes               = models.TextField(blank=True)
     created_at          = models.DateTimeField(auto_now_add=True)
+    created_by          = models.ForeignKey(
+                            'core.Player',
+                            on_delete=models.SET_NULL,
+                            null=True, blank=True,
+                            related_name='created_rounds',
+                            help_text="Player who created this round. Only they may delete it."
+                        )
 
     def __str__(self):
         return f"Round {self.round_number} — {self.date} @ {self.course.name}"

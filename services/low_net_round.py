@@ -3,12 +3,19 @@ services/low_net_round.py
 -------------------------
 Low Net (Round) calculator — individual game, single round.
 
-Each player's total net score (sum of gross - handicap strokes across all
-18 holes) is ranked lowest-to-highest. Lowest net wins.
+Each player's total adjusted score (18 holes) is ranked lowest-to-highest.
+Lowest score wins.
 
-This is always a secondary/tertiary game so results are returned as data
-rather than persisted to a separate model. Use low_net_round_summary() for
-display and low_net_round_standings() for raw data.
+Scoring
+~~~~~~~
+* Per-hole score is adjusted per LowNetRoundConfig (or defaults to full net):
+    - 'net'         : gross − strokes (playing_handicap × net_percent / 100)
+    - 'gross'       : raw gross score
+    - 'strokes_off' : gross − max(0, own_handicap − round_low_handicap),
+                      strokes allocated by hole stroke_index.
+  The strokes_off reference is the lowest playing_handicap across ALL
+  foursomes in the round.
+* A double-bogey cap is always applied: effective = min(adjusted, par + 2).
 
 Public API
 ~~~~~~~~~~
@@ -16,76 +23,245 @@ Public API
     summary   = low_net_round_summary(round_obj)
 """
 
+from core.models import HandicapMode
 from scoring.models import HoleScore
+from scoring.handicap import _effective_hcp, _strokes_on_hole
+from tournament.models import Foursome
 
+
+# ---------------------------------------------------------------------------
+# Internal helper
+# ---------------------------------------------------------------------------
+
+def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
+    """
+    Return {player_id: {'name': str, 'total': int, 'holes_played': int}}
+    for all real players in the round, with handicap adjustment and
+    double-bogey cap applied.
+    """
+    foursomes = list(
+        Foursome.objects
+        .filter(round=round_obj)
+        .prefetch_related('memberships__player', 'memberships__tee')
+    )
+
+    # membership lookup: {player_id: membership}  (across all foursomes)
+    membership_map = {}
+    for fs in foursomes:
+        for m in fs.memberships.all():
+            if not m.player.is_phantom:
+                membership_map[m.player_id] = m
+
+    # par lookup: {foursome_id: {hole_number: par}}
+    par_index = {}
+    for fs in foursomes:
+        first_m = next(
+            (m for m in fs.memberships.all() if m.tee_id is not None), None
+        )
+        if first_m:
+            par_index[fs.pk] = {h['number']: h['par'] for h in first_m.tee.holes}
+
+    # For strokes_off: round-wide lowest playing_handicap (real players only)
+    low_hcp = 0
+    if handicap_mode == HandicapMode.STROKES_OFF:
+        all_hcps = [m.playing_handicap for m in membership_map.values()]
+        low_hcp  = min(all_hcps) if all_hcps else 0
+
+    qs = (
+        HoleScore.objects
+        .filter(foursome__round=round_obj, player__is_phantom=False)
+        .exclude(gross_score=None)
+        .values('foursome_id', 'player_id', 'player__name',
+                'hole_number', 'gross_score', 'net_score')
+    )
+
+    totals: dict = {}  # {player_id: {'name', 'total', 'holes_played'}}
+
+    for hs in qs:
+        pid  = hs['player_id']
+        hole = hs['hole_number']
+        fid  = hs['foursome_id']
+
+        membership = membership_map.get(pid)
+        if membership is None:
+            continue
+
+        # ── Handicap adjustment ─────────────────────────────────────────────
+        if handicap_mode == HandicapMode.GROSS:
+            adjusted = hs['gross_score']
+
+        elif handicap_mode == HandicapMode.NET:
+            if net_percent == 100 and hs['net_score'] is not None:
+                adjusted = hs['net_score']
+            else:
+                if membership.tee_id is None:
+                    continue
+                si  = membership.tee.hole(hole).get('stroke_index', 18)
+                eff = _effective_hcp(membership.playing_handicap, net_percent)
+                adjusted = hs['gross_score'] - _strokes_on_hole(eff, si)
+
+        else:  # STROKES_OFF
+            if membership.tee_id is None:
+                continue
+            si       = membership.tee.hole(hole).get('stroke_index', 18)
+            so       = max(0, membership.playing_handicap - low_hcp)
+            adjusted = hs['gross_score'] - _strokes_on_hole(so, si)
+
+        # ── Double-bogey cap ────────────────────────────────────────────────
+        par    = par_index.get(fid, {}).get(hole, 4)
+        capped = min(adjusted, par + 2)
+
+        entry = totals.setdefault(pid, {
+            'name'        : hs['player__name'],
+            'total'       : 0,
+            'holes_played': 0,
+            'par_played'  : 0,
+            'foursome_id' : fid,
+        })
+        entry['total']        += capped
+        entry['holes_played'] += 1
+        entry['par_played']   += par
+
+    return totals
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 def low_net_round_standings(round_obj) -> list:
     """
-    Calculate net totals for all real players in the round.
+    Calculate adjusted totals for all real players in the round.
 
-    Returns a list of dicts ordered by net total (lowest first), with ties
-    sharing the same rank:
+    Reads LowNetRoundConfig if present; falls back to full net (100%).
+
+    Returns a list of dicts ordered by total (lowest first), with ties
+    sharing the same rank and the prize pool split evenly among them:
         {
-            'rank'      : int,
-            'player'    : Player,
-            'net_total' : int,
-            'holes_played': int,   # for partial rounds
+            'rank'        : int,
+            'player_id'   : int,
+            'player_name' : str,
+            'net_total'   : int,
+            'net_to_par'  : int | None,
+            'holes_played': int,
+            'foursome_id' : int,
+            'payout'      : float | None,
         }
     """
-    from django.db.models import Sum, Count
+    try:
+        config        = round_obj.low_net_config
+        handicap_mode = config.handicap_mode
+        net_percent   = config.net_percent
+        payouts_cfg   = {p['place']: float(p['amount']) for p in (config.payouts or [])}
+    except Exception:
+        handicap_mode = HandicapMode.NET
+        net_percent   = 100
+        payouts_cfg   = {}
 
-    rows = (
-        HoleScore.objects
-        .filter(
-            foursome__round    = round_obj,
-            player__is_phantom = False,
-        )
-        .exclude(net_score=None)
-        .values('player_id', 'player__name')
-        .annotate(
-            net_total    = Sum('net_score'),
-            holes_played = Count('hole_number'),
-        )
-        .order_by('net_total')
-    )
+    player_totals = _build_ln_player_totals(round_obj, handicap_mode, net_percent)
 
-    standings = []
+    # Sort by net-to-par (total − par_played) so rankings are always in
+    # par-relative order regardless of tee/course-par differences between
+    # foursomes.  Players with no holes played sort last.
+    def _sort_key(kv):
+        d = kv[1]
+        if d['holes_played'] == 0:
+            return (1, 0)           # unsorted players go to the bottom
+        return (0, d['total'] - d['par_played'])
+
+    rows = sorted(player_totals.items(), key=_sort_key)
+
+    # ── Assign ranks ─────────────────────────────────────────────────────────
+    ranked = []  # [(pid, data, rank)]
     rank = 1
-    for i, row in enumerate(rows):
-        if i > 0 and row['net_total'] > rows[i - 1]['net_total']:
-            rank = i + 1
+    for i, (pid, data) in enumerate(rows):
+        if i > 0:
+            prev = rows[i - 1][1]
+            curr = data
+            # Tied only when both net-to-par values are identical.
+            prev_ntp = prev['total'] - prev['par_played']
+            curr_ntp = curr['total'] - curr['par_played']
+            if curr_ntp > prev_ntp:
+                rank = i + 1
+        ranked.append((pid, data, rank))
+
+    # ── Tied-payout splitting ─────────────────────────────────────────────────
+    # Group players by rank, then for each rank pool all the prize money for
+    # the positions they "consume" (e.g. 4 tied for 1st consume places 1-4)
+    # and divide evenly.  Places not in payouts_cfg contribute $0.
+    from collections import defaultdict
+    pids_by_rank: dict = defaultdict(list)
+    for pid, data, r in ranked:
+        pids_by_rank[r].append(pid)
+
+    rank_payout: dict = {}
+    for r, pids in pids_by_rank.items():
+        n = len(pids)
+        total_prize = sum(payouts_cfg.get(r + j, 0.0) for j in range(n))
+        per_player  = round(total_prize / n, 2) if total_prize > 0 else None
+        rank_payout[r] = per_player
+
+    # ── Build standings list ──────────────────────────────────────────────────
+    standings = []
+    for pid, data, r in ranked:
+        hp  = data['holes_played']
+        ntp = (data['total'] - data['par_played']) if hp > 0 else None
         standings.append({
-            'rank'        : rank,
-            'player_id'   : row['player_id'],
-            'player_name' : row['player__name'],
-            'net_total'   : row['net_total'],
-            'holes_played': row['holes_played'],
+            'rank'        : r,
+            'player_id'   : pid,
+            'player_name' : data['name'],
+            'net_total'   : data['total'],
+            'net_to_par'  : ntp,
+            'holes_played': hp,
+            'foursome_id' : data.get('foursome_id'),
+            'payout'      : rank_payout.get(r),
         })
 
     return standings
 
 
-def low_net_round_summary(round_obj) -> list:
+def low_net_round_summary(round_obj) -> dict:
     """
-    Return ranked low-net results as a list of serializable dicts.
+    Return serialisable summary dict:
+        {
+          'handicap_mode': str,
+          'net_percent'  : int,
+          'entry_fee'    : float,
+          'payouts'      : [{'place': int, 'amount': float}, ...],
+          'results'      : [
+              {'rank', 'name', 'total_net', 'holes_played', 'payout'}, ...
+          ]
+        }
+    """
+    try:
+        config      = round_obj.low_net_config
+        entry_fee   = float(config.entry_fee)
+        payouts_cfg = config.payouts or []
+        hmode       = config.handicap_mode
+        npct        = config.net_percent
+    except Exception:
+        entry_fee   = 0.0
+        payouts_cfg = []
+        hmode       = HandicapMode.NET
+        npct        = 100
 
-    Each dict:
-        {
-            'rank'        : int,
-            'name'        : str  (player name),
-            'total_net'   : int,
-            'holes_played': int,
-        }
-    """
-    # low_net_round_standings already returns primitive-only dicts
-    # (player_id, player_name, net_total, holes_played) — just reshape.
     standings = low_net_round_standings(round_obj)
-    return [
-        {
-            'rank'        : s['rank'],
-            'name'        : s['player_name'],
-            'total_net'   : s['net_total'],
-            'holes_played': s['holes_played'],
-        }
-        for s in standings
-    ]
+
+    return {
+        'handicap_mode': hmode,
+        'net_percent'  : npct,
+        'entry_fee'    : entry_fee,
+        'payouts'      : payouts_cfg,
+        'results'      : [
+            {
+                'rank'        : s['rank'],
+                'name'        : s['player_name'],
+                'total_net'   : s['net_total'],
+                'net_to_par'  : s['net_to_par'],
+                'holes_played': s['holes_played'],
+                'foursome_id' : s['foursome_id'],
+                'payout'      : s['payout'],
+            }
+            for s in standings
+        ],
+    }

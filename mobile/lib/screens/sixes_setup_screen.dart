@@ -55,6 +55,12 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
   String _handicapMode = 'net';
   int    _netPercent   = 100;
 
+  // Bet unit for this round (editable inline).  Pre-filled from the
+  // round's current bet_unit after the round loads.  On Start Match we
+  // PATCH the round if this value differs from what's on the server.
+  final _betCtrl = TextEditingController();
+  bool  _betCtrlInitialized = false;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
@@ -89,6 +95,12 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _betCtrl.dispose();
+    super.dispose();
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   List<Membership> _playersFromProvider(RoundProvider rp) {
@@ -117,10 +129,12 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     return [];
   }
 
-  static String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    return parts.take(2).map((p) => p.isEmpty ? '' : p[0].toUpperCase()).join();
-  }
+  // The old `_initials(name)` helper was removed when this screen was
+  // migrated to PlayerProfile.shortName.  _MatchPreview now pulls the
+  // short label directly off each Membership's player via
+  // `m.player.displayShort`, which transparently falls back to a
+  // name-based initials computation if short_name happens to be blank
+  // (e.g. a legacy cached row that hasn't been re-fetched yet).
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -182,6 +196,25 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     ];
 
     final rp = context.read<RoundProvider>();
+
+    // Persist the bet unit first if the user edited it.  We do this BEFORE
+    // setupSixes so if the PATCH fails the user isn't left with a
+    // half-configured match.  A value the user didn't touch is a no-op.
+    final parsedBet = double.tryParse(_betCtrl.text);
+    final currentBet = rp.round?.betUnit;
+    if (parsedBet != null && currentBet != null &&
+        (parsedBet - currentBet).abs() > 0.001) {
+      final betOk = await rp.updateRoundBetUnit(parsedBet);
+      if (!ctx.mounted) return;
+      if (!betOk) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text(rp.error ?? 'Failed to update bet unit.'),
+          backgroundColor: Theme.of(ctx).colorScheme.error,
+        ));
+        return;
+      }
+    }
+
     final ok = await rp.setupSixes(
       widget.foursomeId,
       segmentData,
@@ -232,6 +265,14 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
       }
     }
 
+    // Pre-fill the bet unit field from the round exactly once, as soon as
+    // the round is available.  Doing this in build (rather than initState)
+    // means we naturally wait for loadRound() to finish.
+    if (!_betCtrlInitialized && rp.round != null) {
+      _betCtrl.text = rp.round!.betUnit.toStringAsFixed(2);
+      _betCtrlInitialized = true;
+    }
+
     final holeData = rp.scorecard?.holeData(widget.startHole);
 
     return Scaffold(
@@ -272,6 +313,10 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       ),
                       const SizedBox(height: 20),
 
+                      // ── Bet unit (round-level, editable here) ──
+                      _BetUnitCard(controller: _betCtrl),
+                      const SizedBox(height: 20),
+
                       // ── Match preview ──
                       if (_orderedPlayers.length >= 4)
                         _MatchPreview(
@@ -279,7 +324,6 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                           startHole:    widget.startHole,
                           teamAPlayers: _orderedPlayers.take(2).toList(),
                           teamBPlayers: _orderedPlayers.skip(2).take(2).toList(),
-                          initials:     _initials,
                           handicapMode: _handicapMode,
                           netPercent:   _netPercent,
                         ),
@@ -476,7 +520,6 @@ class _MatchPreview extends StatelessWidget {
   final int              startHole;
   final List<Membership> teamAPlayers;
   final List<Membership> teamBPlayers;
-  final String Function(String) initials;
   final String           handicapMode;   // 'net' | 'gross'
   final int              netPercent;     // only used when handicapMode == 'net'
 
@@ -485,13 +528,14 @@ class _MatchPreview extends StatelessWidget {
     required this.startHole,
     required this.teamAPlayers,
     required this.teamBPlayers,
-    required this.initials,
     required this.handicapMode,
     required this.netPercent,
   });
 
   String _teamLine(List<Membership> players, List<int> positions) {
-    final abbr = players.map((m) => initials(m.player.name)).join('/');
+    // Prefer each player's custom short_name (≤ 5 chars); fall back to
+    // computed initials when unset (e.g. legacy cached rows).
+    final abbr = players.map((m) => m.player.displayShort).join('/');
     final pos  = positions.map((p) => '$p').join('/');
     return '$abbr ($pos)';
   }
@@ -547,8 +591,59 @@ class _MatchPreview extends StatelessWidget {
 // Handicap mode picker — Gross vs Net (+ net percentage)
 // ===========================================================================
 
+/// Small card with a single dollar-amount field for the round's bet
+/// unit.  Edits here are saved back to Round.bet_unit when the user taps
+/// Start Match.  No submit button of its own — the value is just read
+/// off the controller by _startMatch.
+class _BetUnitCard extends StatelessWidget {
+  final TextEditingController controller;
+
+  const _BetUnitCard({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Bet Unit',
+              style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary)),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'Bet unit (\$)',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.attach_money),
+              isDense: true,
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Applies to every game in this round.  Edit here to update the '
+            'round-level value without leaving match setup.',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+
 class _HandicapModeCard extends StatelessWidget {
-  /// 'net' or 'gross'.  ('strokes_off' is planned but not wired up yet.)
+  /// 'net', 'gross', or 'strokes_off'.
   final String mode;
 
   /// 0–200.  Only meaningful when mode == 'net'.
@@ -565,13 +660,14 @@ class _HandicapModeCard extends StatelessWidget {
   });
 
   // Common allowance presets — 100% is the default, 90% is USGA recommended
-  // for 2v2 best-ball, 80% is sometimes used for bigger handicap spreads.
-  static const _presets = <int>[100, 90, 80, 75, 50];
+  // for 2v2 best-ball, 80% is sometimes used for bigger handicap spreads,
+  // 75% for very wide spreads.  Kept to four so they fit on one row and
+  // the bet unit card sits higher on the screen.
+  static const _presets = <int>[100, 90, 80, 75];
 
   @override
   Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final isNet  = mode == 'net';
+    final theme = Theme.of(context);
 
     return Card(
       elevation: 0,
@@ -588,18 +684,20 @@ class _HandicapModeCard extends StatelessWidget {
                   color: theme.colorScheme.primary)),
           const SizedBox(height: 8),
 
-          // Net vs Gross segmented buttons
+          // Net / Gross / SO segmented buttons.  "SO" = Strokes Off the
+          // low golfer in the foursome.
           SegmentedButton<String>(
             segments: const [
-              ButtonSegment(value: 'net',   label: Text('Net')),
-              ButtonSegment(value: 'gross', label: Text('Gross')),
+              ButtonSegment(value: 'net',         label: Text('Net')),
+              ButtonSegment(value: 'gross',       label: Text('Gross')),
+              ButtonSegment(value: 'strokes_off', label: Text('SO')),
             ],
             selected: {mode},
             onSelectionChanged: (s) => onModeChanged(s.first),
           ),
 
-          // When Net is selected, show a percentage chooser.
-          if (isNet) ...[
+          // Mode-specific helper text / controls below the picker.
+          if (mode == 'net') ...[
             const SizedBox(height: 12),
             Text('Handicap allowance',
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -617,11 +715,23 @@ class _HandicapModeCard extends StatelessWidget {
                 );
               }).toList(),
             ),
-          ] else ...[
+          ] else if (mode == 'gross') ...[
             const SizedBox(height: 8),
             Text('No strokes given — raw scores used.',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant)),
+          ] else ...[
+            // 'strokes_off'
+            const SizedBox(height: 8),
+            Text(
+              'Low player in the foursome plays to 0. Others get '
+              '(own HCP − low HCP) strokes, spread across the three '
+              '6-hole matches and allocated to the hardest holes in each. '
+              'Strokes planned on unreached holes die; extra-match holes '
+              'use a stroke-index threshold.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
           ],
         ]),
       ),
