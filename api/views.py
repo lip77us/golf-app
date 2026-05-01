@@ -54,9 +54,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from core.models import Player, Tee, Course
+from core.models import Player, Tee, Course, HandicapMode
 from tournament.models import Tournament, Round, Foursome, FoursomeMembership
 from scoring.models import HoleScore
+from scoring.phantom import PhantomScoreProvider, get_algorithm, DEFAULT_ALGORITHM_ID
 
 from .serializers import (
     PlayerSerializer, PlayerCreateSerializer, TeeSerializer,
@@ -67,6 +68,7 @@ from .serializers import (
     SixesSetupSerializer, CourseSerializer,
     Points531SetupSerializer, CasualRoundSummarySerializer,
     IrishRumbleSetupSerializer, LowNetSetupSerializer,
+    ThreePersonMatchSetupSerializer,
 )
 
 
@@ -80,9 +82,17 @@ def _recalculate_games(foursome: Foursome) -> None:
     Per-foursome games: skins, sixes, nassau, match_play.
     Per-round games:    stableford, pink_ball, low_net_round, irish_rumble, scramble.
     Safe to call after every score update — all calculators are idempotent.
+
+    Active games resolution: union of round-level and foursome-level games.
+    Round-level games (stableford, irish_rumble, pink_ball, stroke_play) apply
+    to every foursome.  Per-foursome games (match_play, nassau, skins, sixes)
+    are stored on the foursome itself.  Both sets must be recalculated so that
+    a round combining e.g. match_play + irish_rumble correctly updates both.
     """
     round_obj    = foursome.round
-    active_games = round_obj.active_games or []
+    active_games = list(
+        set(foursome.active_games or []) | set(round_obj.active_games or [])
+    )
 
     # ---- Per-foursome ----
     if 'skins' in active_games:
@@ -97,13 +107,26 @@ def _recalculate_games(foursome: Foursome) -> None:
         from services.nassau import calculate_nassau
         calculate_nassau(foursome)
 
-    if 'match_play' in active_games:
-        from services.match_play import calculate_match_play
-        calculate_match_play(foursome)
+    # Tournament-level games (match_play, three_person_match) live on
+    # tournament.active_games rather than the round or foursome, so they may
+    # not appear in active_games even when a bracket/record exists.  Check
+    # for a DB row as a reliable fallback — the setup views now also stamp
+    # foursome.active_games so future setups don't need the fallback, but
+    # existing rows created before that fix must still be handled.
+    if 'match_play' in active_games or foursome.match_play_brackets.exists():
+        from services.tournament_match_play import calculate_tournament_match_play
+        calculate_tournament_match_play(foursome)
 
     if 'points_531' in active_games:
         from services.points_531 import calculate_points_531
         calculate_points_531(foursome)
+
+    from games.models import ThreePersonMatch as _TPM
+    _tpm_in_games = 'three_person_match' in active_games
+    _tpm_exists   = _TPM.objects.filter(foursome=foursome).exists()
+    if _tpm_in_games or _tpm_exists:
+        from services.three_person_match import calculate_three_person_match
+        calculate_three_person_match(foursome)
 
     # ---- Per-round ----
     if 'stableford' in active_games:
@@ -190,6 +213,20 @@ def _build_scorecard(foursome: Foursome) -> dict:
             'yards'       : hole_dict.get('yards'),
             'scores'      : scores_for_hole,
         })
+
+    # Inject phantom hole scores
+    if foursome.has_phantom:
+        provider = PhantomScoreProvider(foursome)
+        if provider.has_phantom:
+            phantom_gross = provider.phantom_gross_scores()
+            for h in holes_out:
+                hole_num = h['hole_number']
+                if hole_num in phantom_gross:
+                    h['phantom'] = {
+                        'gross_score'            : phantom_gross[hole_num],
+                        'is_phantom'             : True,
+                        'phantom_source_player_id': provider.get_source_player_id(hole_num),
+                    }
 
     totals = []
     for m in real_members:
@@ -299,13 +336,46 @@ def _build_leaderboard(round_obj: Round) -> dict:
         }
 
     if 'match_play' in active_games:
-        from services.match_play import match_play_summary
-        games['match_play'] = {
-            'label'   : 'Match Play',
+        from services.tournament_match_play import tournament_match_play_summary
+        from games.models import ThreePersonMatch as _TPM
+        tpm_fs_ids = set(
+            _TPM.objects
+            .filter(foursome__round=round_obj)
+            .values_list('foursome_id', flat=True)
+        )
+        mp_groups = []
+        for fs in foursomes:
+            if fs.id in tpm_fs_ids:
+                continue  # 3-person group plays 5-3-1, not bracket match play
+            s = tournament_match_play_summary(fs)
+            if s is not None:
+                mp_groups.append({
+                    'foursome_id' : fs.id,
+                    'group_number': fs.group_number,
+                    'summary'     : s,
+                })
+        if mp_groups:
+            games['match_play'] = {'label': 'Match Play', 'by_group': mp_groups}
+
+    # Three-Person Match — always include when any foursome has one configured,
+    # even if 'three_person_match' is not explicitly in round.active_games.
+    from games.models import ThreePersonMatch as _TPM
+    tpm_qs = (
+        _TPM.objects
+        .filter(foursome__round=round_obj)
+        .select_related('foursome')
+    )
+    if tpm_qs.exists():
+        from services.three_person_match import three_person_match_summary
+        games['three_person_match'] = {
+            'label'   : 'Three-Person Match',
             'by_group': [
-                {'foursome_id': fs.id, 'group_number': fs.group_number,
-                 'summary': match_play_summary(fs)}
-                for fs in foursomes
+                {
+                    'foursome_id' : tpm.foursome_id,
+                    'group_number': tpm.foursome.group_number,
+                    'summary'     : three_person_match_summary(tpm.foursome),
+                }
+                for tpm in tpm_qs.order_by('foursome__group_number')
             ],
         }
 
@@ -323,6 +393,21 @@ def _build_leaderboard(round_obj: Round) -> dict:
     return games
 
 
+def _leaderboard_active_games(round_obj, games_dict: dict) -> list:
+    """
+    Return the active_games list for a leaderboard response.
+
+    Starts with round_obj.active_games and appends any game keys that were
+    dynamically detected (e.g. three_person_match) so the Flutter tab bar
+    always reflects what's actually in the games dict.
+    """
+    active = list(round_obj.active_games or [])
+    for key in games_dict:
+        if key not in active:
+            active.append(key)
+    return active
+
+
 def _auto_setup_games(round_obj: Round, foursomes: list) -> None:
     """
     Auto-configure per-foursome game data immediately after the draw.
@@ -330,9 +415,13 @@ def _auto_setup_games(round_obj: Round, foursomes: list) -> None:
     Team 1, 2nd & 4th form Team 2 (balanced pairing).
     Called when RoundSetupView receives auto_setup_games=True.
     """
-    active = round_obj.active_games or []
-
     for fs in foursomes:
+        # Union of round-level and foursome-level games (same logic as
+        # _recalculate_games) so that per-foursome game configs are honoured.
+        active = list(
+            set(round_obj.active_games or []) | set(fs.active_games or [])
+        )
+
         members = list(
             FoursomeMembership.objects
             .filter(foursome=fs, player__is_phantom=False)
@@ -367,8 +456,26 @@ def _auto_setup_games(round_obj: Round, foursomes: list) -> None:
             ])
 
         if 'match_play' in active:
-            from services.match_play import setup_match_play
-            setup_match_play(fs)
+            real_count = len(pids)
+            if real_count >= 4:
+                from services.tournament_match_play import setup_tournament_match_play
+                setup_tournament_match_play(fs)
+            elif real_count == 3:
+                # 3-player foursomes play 5-3-1 points — not a bracket.
+                from services.three_person_match import setup_three_person_match
+                setup_three_person_match(
+                    fs,
+                    handicap_mode=round_obj.handicap_mode,
+                    net_percent=round_obj.net_percent,
+                )
+                # Stamp three_person_match in the foursome's own active_games so
+                # _recalculate_games fires calculate_three_person_match on every
+                # score submission without needing a DB fallback check.
+                fs_games = list(fs.active_games or [])
+                if 'three_person_match' not in fs_games:
+                    fs_games.append('three_person_match')
+                    fs.active_games = fs_games
+                    fs.save(update_fields=['active_games'])
 
 
 # ---------------------------------------------------------------------------
@@ -533,6 +640,122 @@ class TournamentDetailView(APIView):
         tournament = get_object_or_404(Tournament, pk=pk)
         tournament.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Tournament — Low Net Championship
+# ---------------------------------------------------------------------------
+
+class TournamentLowNetSetupView(APIView):
+    """
+    GET  /api/tournaments/{id}/low-net/setup/ — return current config or defaults.
+    POST /api/tournaments/{id}/low-net/setup/ — create or update championship config.
+
+    POST body (all optional):
+        handicap_mode : 'net' | 'gross' | 'strokes_off'   (default 'net')
+        net_percent   : int 0-200                           (default 100)
+        entry_fee     : decimal                             (default 0.00)
+        payouts       : [{"place": 1, "amount": 200.00}, ...]
+    """
+    def get(self, request, pk):
+        tournament = get_object_or_404(Tournament, pk=pk)
+        from games.models import LowNetChampionshipConfig
+        from core.models import HandicapMode
+        try:
+            cfg = tournament.low_net_championship_config
+            data = {
+                'handicap_mode': cfg.handicap_mode,
+                'net_percent'  : cfg.net_percent,
+                'entry_fee'    : float(cfg.entry_fee),
+                'payouts'      : cfg.payouts,
+            }
+        except LowNetChampionshipConfig.DoesNotExist:
+            data = {
+                'handicap_mode': HandicapMode.NET,
+                'net_percent'  : 100,
+                'entry_fee'    : 0.00,
+                'payouts'      : [],
+            }
+        return Response(data)
+
+    def post(self, request, pk):
+        tournament = get_object_or_404(Tournament, pk=pk)
+        from games.models import LowNetChampionshipConfig
+        d = request.data
+        cfg, _ = LowNetChampionshipConfig.objects.update_or_create(
+            tournament = tournament,
+            defaults   = {
+                'handicap_mode': d.get('handicap_mode', 'net'),
+                'net_percent'  : int(d.get('net_percent', 100)),
+                'entry_fee'    : d.get('entry_fee', 0.00),
+                'payouts'      : d.get('payouts', []),
+            },
+        )
+        return Response({
+            'handicap_mode': cfg.handicap_mode,
+            'net_percent'  : cfg.net_percent,
+            'entry_fee'    : float(cfg.entry_fee),
+            'payouts'      : cfg.payouts,
+        }, status=status.HTTP_200_OK)
+
+
+class TournamentLowNetView(APIView):
+    """GET /api/tournaments/{id}/low-net/ — cumulative Low Net standings."""
+    def get(self, request, pk):
+        tournament = get_object_or_404(Tournament, pk=pk)
+        from services.low_net_championship import low_net_championship_summary
+        return Response(low_net_championship_summary(tournament))
+
+
+class TournamentLeaderboardView(APIView):
+    """
+    GET /api/tournaments/{id}/leaderboard/
+
+    Returns all active tournament-level game standings in one payload.
+    Supports: low_net (Low Net Championship), match_play (Match Play summary).
+    Per-round game results (Irish Rumble, Pink Ball, etc.) live on the
+    per-round leaderboard endpoint (/api/rounds/{id}/leaderboard/).
+    """
+    def get(self, request, pk):
+        tournament = get_object_or_404(
+            Tournament.objects.prefetch_related(
+                'rounds__foursomes__memberships__player',
+            ),
+            pk=pk,
+        )
+        active_games = tournament.active_games or []
+        games: dict  = {}
+
+        if 'low_net' in active_games:
+            from services.low_net_championship import low_net_championship_summary
+            games['low_net'] = {
+                'label'  : 'Low Net Championship',
+                **low_net_championship_summary(tournament),
+            }
+
+        if 'match_play' in active_games:
+            from services.tournament_match_play import tournament_match_play_summary
+            brackets = []
+            for round_obj in tournament.rounds.order_by('round_number'):
+                for foursome in round_obj.foursomes.order_by('group_number'):
+                    try:
+                        summary = tournament_match_play_summary(foursome)
+                        summary['round_number'] = round_obj.round_number
+                        summary['group_number'] = foursome.group_number
+                        brackets.append(summary)
+                    except Exception:
+                        pass  # foursome has no match play bracket yet
+            games['match_play'] = {
+                'label'   : 'Match Play',
+                'brackets': brackets,
+            }
+
+        return Response({
+            'tournament_id'  : tournament.id,
+            'tournament_name': tournament.name,
+            'active_games'   : active_games,
+            'games'          : games,
+        })
 
 
 # ---------------------------------------------------------------------------
@@ -740,14 +963,35 @@ class RoundSetupView(APIView):
             randomise          = d['randomise'],
         )
 
-        # Pre-populate phantom player scores for game calculators
+        # Pre-populate phantom player scores and initialise rotation config.
+        from scoring.phantom import get_algorithm, DEFAULT_ALGORITHM_ID
         for fs in foursomes:
             if fs.has_phantom:
                 create_phantom_hole_scores(fs)
+                # Initialise phantom_config (rotation order) so services like
+                # Irish Rumble that derive scores on-the-fly via PhantomScoreProvider
+                # work correctly without requiring a separate frontend initPhantom call.
+                phantom_m = fs.memberships.filter(player__is_phantom=True).first()
+                if phantom_m and not phantom_m.phantom_config:
+                    real_ms   = list(fs.memberships.filter(player__is_phantom=False))
+                    real_ids  = [m.player_id for m in real_ms]
+                    real_hcps = [m.playing_handicap for m in real_ms]
+                    algo = get_algorithm(DEFAULT_ALGORITHM_ID)
+                    phantom_m.phantom_config    = algo.initial_config(real_ids)
+                    phantom_m.playing_handicap  = algo.compute_playing_handicap(
+                        phantom_m.phantom_config, real_hcps
+                    )
+                    phantom_m.save(update_fields=['phantom_config', 'playing_handicap'])
 
-        # Mark round in_progress now that it has players
+        # Persist caller-supplied active_games before marking in_progress
+        # (so _auto_setup_games reads the right game list).
+        update_fields = ['status']
+        if d.get('active_games'):
+            round_obj.active_games = d['active_games']
+            update_fields.append('active_games')
+
         round_obj.status = 'in_progress'
-        round_obj.save(update_fields=['status'])
+        round_obj.save(update_fields=update_fields)
 
         if d['auto_setup_games']:
             _auto_setup_games(round_obj, foursomes)
@@ -774,6 +1018,36 @@ class FoursomeDetailView(APIView):
         return Response(FoursomeSerializer(foursome).data)
 
 
+class FoursomeActiveGamesView(APIView):
+    """
+    PATCH /api/foursomes/{id}/active-games/
+    Body: { "active_games": ["irish_rumble", "pink_ball"] }
+
+    Sets the per-foursome game override list.  Empty list means "inherit from round".
+    Staff only — regular players cannot reassign games mid-round.
+    """
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            return Response(
+                {'detail': 'Only staff members can configure foursome games.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        foursome = get_object_or_404(Foursome, pk=pk)
+        games = request.data.get('active_games', [])
+        if not isinstance(games, list):
+            return Response(
+                {'detail': 'active_games must be a list.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        foursome.active_games = games
+        foursome.save(update_fields=['active_games'])
+        return Response({
+            'foursome_id' : foursome.id,
+            'group_number': foursome.group_number,
+            'active_games': foursome.active_games,
+        })
+
+
 # ---------------------------------------------------------------------------
 # Scorecard
 # ---------------------------------------------------------------------------
@@ -792,6 +1066,66 @@ class ScorecardView(APIView):
 # ---------------------------------------------------------------------------
 # Score submission
 # ---------------------------------------------------------------------------
+
+class PhantomInitView(APIView):
+    """
+    POST /api/foursomes/<pk>/phantom/init/
+    
+    Idempotent — safe to call repeatedly.  If the phantom membership already
+    has a config (non-empty phantom_config), this is a no-op and just returns
+    the current source_by_hole mapping.
+
+    Initialises the phantom player's algorithm config (e.g. the random
+    rotation order) and sets their playing_handicap to the average of the
+    real players' playing handicaps.
+
+    Response:
+        {
+          "phantom_player_id": int,
+          "playing_handicap": int,
+          "algorithm": str,
+          "source_by_hole": {1: player_id, 2: player_id, ...}
+        }
+    """
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        if not foursome.has_phantom:
+            return Response({'detail': 'This foursome has no phantom player.'},
+                            status=400)
+
+        phantom_m = foursome.memberships.filter(player__is_phantom=True).first()
+        if phantom_m is None:
+            return Response({'detail': 'Phantom membership not found.'}, status=404)
+
+        real_memberships = list(foursome.memberships.filter(player__is_phantom=False))
+        real_player_ids  = [m.player_id for m in real_memberships]
+        real_hcaps       = [m.playing_handicap for m in real_memberships]
+
+        algo_id   = phantom_m.phantom_algorithm or DEFAULT_ALGORITHM_ID
+        algorithm = get_algorithm(algo_id)
+
+        # Idempotent: only initialise config if not already set
+        if not phantom_m.phantom_config:
+            phantom_m.phantom_config = algorithm.initial_config(real_player_ids)
+
+        # Always recalculate playing_handicap from current real players
+        phantom_m.playing_handicap = algorithm.compute_playing_handicap(
+            phantom_m.phantom_config, real_hcaps
+        )
+        phantom_m.save(update_fields=['phantom_config', 'playing_handicap'])
+
+        source_by_hole = {
+            h: algorithm.get_source_player_id(h, phantom_m.phantom_config)
+            for h in range(1, 19)
+        }
+
+        return Response({
+            'phantom_player_id': phantom_m.player_id,
+            'playing_handicap' : phantom_m.playing_handicap,
+            'algorithm'        : algo_id,
+            'source_by_hole'   : source_by_hole,
+        })
+
 
 class ScoreSubmitView(APIView):
     """
@@ -894,7 +1228,8 @@ class ScoreSubmitView(APIView):
 
         _recalculate_games(foursome)
 
-        round_obj = foursome.round
+        round_obj  = foursome.round
+        lb_games   = _build_leaderboard(round_obj)
         return Response({
             'scorecard'  : _build_scorecard(foursome),
             'leaderboard': {
@@ -902,8 +1237,8 @@ class ScoreSubmitView(APIView):
                 'round_date' : str(round_obj.date),
                 'course'     : str(round_obj.course),
                 'status'     : round_obj.status,
-                'active_games': round_obj.active_games or [],
-                'games'      : _build_leaderboard(round_obj),
+                'active_games': _leaderboard_active_games(round_obj, lb_games),
+                'games'      : lb_games,
             },
         })
 
@@ -929,13 +1264,14 @@ class RoundCompleteView(APIView):
             round_obj.status = 'complete'
             round_obj.save(update_fields=['status'])
 
+        lb_games = _build_leaderboard(round_obj)
         return Response({
             'round_id'    : round_obj.id,
             'status'      : round_obj.status,
             'round_date'  : str(round_obj.date),
             'course'      : str(round_obj.course),
-            'active_games': round_obj.active_games or [],
-            'games'       : _build_leaderboard(round_obj),
+            'active_games': _leaderboard_active_games(round_obj, lb_games),
+            'games'       : lb_games,
         })
 
 
@@ -946,16 +1282,21 @@ class RoundCompleteView(APIView):
 class LeaderboardView(APIView):
     def get(self, request, pk):
         round_obj = get_object_or_404(
-            Round.objects.select_related('course').prefetch_related('foursomes'),
+            Round.objects.select_related('course', 'tournament').prefetch_related('foursomes'),
             pk=pk,
         )
+        t        = round_obj.tournament
+        lb_games = _build_leaderboard(round_obj)
         return Response({
-            'round_id'   : round_obj.id,
-            'round_date' : str(round_obj.date),
-            'course'     : str(round_obj.course),
-            'status'     : round_obj.status,
-            'active_games': round_obj.active_games or [],
-            'games'      : _build_leaderboard(round_obj),
+            'round_id'              : round_obj.id,
+            'round_date'            : str(round_obj.date),
+            'course'                : str(round_obj.course),
+            'status'                : round_obj.status,
+            'active_games'          : _leaderboard_active_games(round_obj, lb_games),
+            'tournament_id'         : t.id   if t else None,
+            'tournament_name'       : t.name if t else None,
+            'tournament_active_games': t.active_games or [] if t else [],
+            'games'                 : lb_games,
         })
 
 
@@ -1290,14 +1631,137 @@ class MatchPlayResultView(APIView):
     """GET /api/foursomes/{id}/match-play/"""
     def get(self, request, pk):
         foursome = get_object_or_404(Foursome, pk=pk)
-        from services.match_play import match_play_summary
-        summary = match_play_summary(foursome)
+        from services.tournament_match_play import tournament_match_play_summary
+        # Do NOT recalculate here — _recalculate_games handles that on every
+        # score submission.  Recalculating on every GET caused concurrent
+        # delete→bulk_create races (UniqueViolation) when the 3-second polling
+        # timer and a score-submit response both called loadMatchPlay at once.
+        summary = tournament_match_play_summary(foursome)
         if summary is None:
             return Response(
                 {'detail': 'No match play bracket set up for this foursome.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(summary)
+
+
+class MatchPlaySetupView(APIView):
+    """
+    POST /api/foursomes/{id}/match-play/setup/
+
+    (Re-)initialise the match play bracket for a foursome.  Players are
+    seeded by playing_handicap (lowest vs highest, second vs third).
+    Handicap mode is inherited from the round — no extra body params needed.
+
+    Accepts an optional JSON body:
+        { "recalculate": true }   (default true)
+    If recalculate is true, an immediate calculate pass is run so the
+    bracket reflects any scores already on file.
+    """
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        from services.tournament_match_play import (
+            setup_tournament_match_play,
+            calculate_tournament_match_play,
+            tournament_match_play_summary,
+        )
+        entry_fee     = request.data.get('entry_fee', 0.00)
+        payout_config = request.data.get('payout_config', {})
+        seed_order    = request.data.get('seed_order', None)   # optional list of player PKs
+        try:
+            setup_tournament_match_play(
+                foursome,
+                entry_fee=entry_fee,
+                payout_config=payout_config,
+                seed_order=seed_order,
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Ensure 'match_play' is in foursome.active_games so that
+        # _recalculate_games fires calculate_tournament_match_play after every
+        # score submission.  (Tournament-level games live on tournament.active_games,
+        # not on the round or foursome, so without this the bracket would never
+        # be recalculated as hole scores come in.)
+        games = list(foursome.active_games or [])
+        if 'match_play' not in games:
+            games.append('match_play')
+            foursome.active_games = games
+            foursome.save(update_fields=['active_games'])
+
+        recalculate = request.data.get('recalculate', True)
+        if recalculate:
+            calculate_tournament_match_play(foursome)
+
+        summary = tournament_match_play_summary(foursome)
+        return Response(summary, status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Three-Person Match
+# ---------------------------------------------------------------------------
+
+class ThreePersonMatchResultView(APIView):
+    """GET /api/foursomes/{id}/three-person-match/"""
+    def get(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        from services.three_person_match import three_person_match_summary
+        summary = three_person_match_summary(foursome)
+        if summary is None:
+            return Response(
+                {'detail': 'No Three-Person Match set up for this foursome.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(summary)
+
+
+class ThreePersonMatchSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/three-person-match/setup/
+
+    (Re-)initialise the Three-Person Match for a foursome.  Requires
+    exactly 3 real players.  Accepts:
+        {
+            "handicap_mode": "net" | "gross" | "strokes_off",
+            "net_percent":   0..200,
+            "entry_fee":     float,
+            "payout_config": {"1st": float, "2nd": float, "3rd": float}
+        }
+    Returns the full summary after an immediate calculate pass.
+    """
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        ser = ThreePersonMatchSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        from services.three_person_match import (
+            setup_three_person_match,
+            calculate_three_person_match,
+            three_person_match_summary,
+        )
+        d = ser.validated_data
+        setup_three_person_match(
+            foursome,
+            handicap_mode = d.get('handicap_mode', 'net'),
+            net_percent   = d.get('net_percent', 100),
+            entry_fee     = float(d.get('entry_fee', 0.00)),
+            payout_config = d.get('payout_config', {}),
+        )
+
+        # Ensure 'three_person_match' is in foursome.active_games so that
+        # _recalculate_games fires calculate_three_person_match after every
+        # score submission (same reason as the match_play fix above).
+        games = list(foursome.active_games or [])
+        if 'three_person_match' not in games:
+            games.append('three_person_match')
+            foursome.active_games = games
+            foursome.save(update_fields=['active_games'])
+
+        calculate_three_person_match(foursome)
+        return Response(
+            three_person_match_summary(foursome),
+            status=status.HTTP_201_CREATED,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1323,12 +1787,26 @@ class IrishRumbleSetupView(APIView):
             'configured'   : True,
             'handicap_mode': config.handicap_mode,
             'net_percent'  : config.net_percent,
-            'bet_unit'     : float(config.bet_unit),
+            'entry_fee'    : float(config.entry_fee),
+            'payouts'      : config.payouts or [],
             'segments'     : config.segments,
         }
 
+    @staticmethod
+    def _count_players(round_obj):
+        return sum(
+            1
+            for fs in round_obj.foursomes.all()
+            for m in fs.memberships.all()
+            if not m.player.is_phantom
+        )
+
     def get(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = get_object_or_404(
+            Round.objects.prefetch_related('foursomes__memberships__player'),
+            pk=pk,
+        )
+        num_players   = self._count_players(round_obj)
         is_tournament = round_obj.tournament_id is not None
         from games.models import IrishRumbleConfig
         try:
@@ -1339,9 +1817,11 @@ class IrishRumbleSetupView(APIView):
                 'configured'   : False,
                 'handicap_mode': round_obj.handicap_mode,
                 'net_percent'  : round_obj.net_percent,
-                'bet_unit'     : 1.00,
+                'entry_fee'    : 0.00,
+                'payouts'      : [],
                 'segments'     : _IR_DEFAULT_SEGMENTS,
             }
+        data['num_players']          = num_players
         data['is_tournament_round']  = is_tournament
         data['round_handicap_mode']  = round_obj.handicap_mode
         data['round_net_percent']    = round_obj.net_percent
@@ -1368,7 +1848,8 @@ class IrishRumbleSetupView(APIView):
             defaults = {
                 'handicap_mode': hcap_mode,
                 'net_percent'  : net_pct,
-                'bet_unit'     : d['bet_unit'],
+                'entry_fee'    : d['entry_fee'],
+                'payouts'      : d['payouts'],
                 'segments'     : _IR_DEFAULT_SEGMENTS,
             },
         )
@@ -1394,11 +1875,12 @@ class LowNetSetupView(APIView):
 
     def _config_dict(self, config):
         return {
-            'configured'   : True,
-            'handicap_mode': config.handicap_mode,
-            'net_percent'  : config.net_percent,
-            'entry_fee'    : float(config.entry_fee),
-            'payouts'      : config.payouts or [],
+            'configured'         : True,
+            'handicap_mode'      : config.handicap_mode,
+            'net_percent'        : config.net_percent,
+            'entry_fee'          : float(config.entry_fee),
+            'payouts'            : config.payouts or [],
+            'excluded_player_ids': config.excluded_player_ids or [],
         }
 
     @staticmethod
@@ -1411,9 +1893,41 @@ class LowNetSetupView(APIView):
             if not m.player.is_phantom
         )
 
+    @staticmethod
+    def _championship_placers(round_obj):
+        """
+        Return players who won prize money in the tournament's Low Net
+        Championship standings, suggested for exclusion from day-2 prizes.
+        Only called when the round belongs to a tournament.
+        """
+        if not round_obj.tournament_id:
+            return []
+        try:
+            from services.low_net_championship import low_net_championship_standings
+            # Need the tournament object with the right prefetch
+            from tournament.models import Tournament
+            tournament = Tournament.objects.prefetch_related(
+                'rounds__foursomes__memberships__player'
+            ).get(pk=round_obj.tournament_id)
+            standings = low_net_championship_standings(tournament)
+            return [
+                {
+                    'player_id'  : s['player_id'],
+                    'player_name': s['player_name'],
+                    'rank'       : s['rank'],
+                    'payout'     : s['payout'],
+                }
+                for s in standings
+                if s['payout'] is not None
+            ]
+        except Exception:
+            return []
+
     def get(self, request, pk):
         round_obj = get_object_or_404(
-            Round.objects.prefetch_related('foursomes__memberships__player'),
+            Round.objects
+                 .select_related('tournament')
+                 .prefetch_related('foursomes__memberships__player'),
             pk=pk,
         )
         num_players   = self._count_players(round_obj)
@@ -1424,16 +1938,18 @@ class LowNetSetupView(APIView):
             data   = {'num_players': num_players, **self._config_dict(config)}
         except LowNetRoundConfig.DoesNotExist:
             data = {
-                'num_players'  : num_players,
-                'configured'   : False,
-                'handicap_mode': round_obj.handicap_mode,
-                'net_percent'  : round_obj.net_percent,
-                'entry_fee'    : 0.00,
-                'payouts'      : [],
+                'num_players'        : num_players,
+                'configured'         : False,
+                'handicap_mode'      : round_obj.handicap_mode,
+                'net_percent'        : round_obj.net_percent,
+                'entry_fee'          : 0.00,
+                'payouts'            : [],
+                'excluded_player_ids': [],
             }
-        data['is_tournament_round'] = is_tournament
-        data['round_handicap_mode'] = round_obj.handicap_mode
-        data['round_net_percent']   = round_obj.net_percent
+        data['is_tournament_round']  = is_tournament
+        data['round_handicap_mode']  = round_obj.handicap_mode
+        data['round_net_percent']    = round_obj.net_percent
+        data['championship_placers'] = self._championship_placers(round_obj)
         return Response(data)
 
     def post(self, request, pk):
@@ -1453,10 +1969,11 @@ class LowNetSetupView(APIView):
         config, _ = LowNetRoundConfig.objects.update_or_create(
             round    = round_obj,
             defaults = {
-                'handicap_mode': hcap_mode,
-                'net_percent'  : net_pct,
-                'entry_fee'    : d['entry_fee'],
-                'payouts'      : d['payouts'],
+                'handicap_mode'      : hcap_mode,
+                'net_percent'        : net_pct,
+                'entry_fee'          : d['entry_fee'],
+                'payouts'            : d['payouts'],
+                'excluded_player_ids': d.get('excluded_player_ids', []),
             },
         )
         return Response(self._config_dict(config), status=status.HTTP_201_CREATED)
@@ -1469,11 +1986,11 @@ class LowNetSetupView(APIView):
 class PinkBallSetupView(APIView):
     """
     GET  /api/rounds/{id}/pink-ball/setup/
-        Returns current config (ball_color, bet_unit) plus each foursome's
-        current pink_ball_order and player list.
+        Returns current config (ball_color, entry_fee, payouts) plus each
+        foursome's current pink_ball_order and player list.
 
     POST /api/rounds/{id}/pink-ball/setup/
-        Save ball_color and bet_unit.
+        Save ball_color, entry_fee, and payouts.
     """
 
     @staticmethod
@@ -1483,34 +2000,47 @@ class PinkBallSetupView(APIView):
                           .select_related('player')
                           .order_by('id')
         )
+        from games.models import PinkBallResult
+        result = PinkBallResult.objects.filter(round=fs.round, foursome=fs).first()
         return {
-            'foursome_id' : fs.pk,
-            'group_number': fs.group_number,
-            'players'     : [
+            'foursome_id'      : fs.pk,
+            'group_number'     : fs.group_number,
+            'players'          : [
                 {'id': m.player.pk, 'name': m.player.name,
                  'short_name': m.player.short_name}
                 for m in real_members
             ],
-            'order': fs.pink_ball_order or [],
+            'order'            : fs.pink_ball_order or [],
+            'eliminated_on_hole': result.eliminated_on_hole if result else None,
         }
+
+    @staticmethod
+    def _count_players(round_obj):
+        return sum(
+            1
+            for fs in round_obj.foursomes.all()
+            for m in fs.memberships.all()
+            if not m.player.is_phantom
+        )
 
     def get(self, request, pk):
         round_obj = get_object_or_404(
             Round.objects.prefetch_related('foursomes__memberships__player'),
             pk=pk,
         )
+        num_players = self._count_players(round_obj)
         from games.models import PinkBallConfig
         try:
             config      = round_obj.pink_ball_config
             configured  = True
             ball_color  = config.ball_color
-            bet_unit    = float(config.bet_unit)
-            places_paid = config.places_paid
+            entry_fee   = float(config.entry_fee)
+            payouts     = config.payouts or []
         except PinkBallConfig.DoesNotExist:
             configured  = False
             ball_color  = 'Pink'
-            bet_unit    = 1.00
-            places_paid = 1
+            entry_fee   = 0.00
+            payouts     = []
 
         foursomes_data = [
             self._foursome_data(fs)
@@ -1519,8 +2049,9 @@ class PinkBallSetupView(APIView):
         return Response({
             'configured' : configured,
             'ball_color' : ball_color,
-            'bet_unit'   : bet_unit,
-            'places_paid': places_paid,
+            'entry_fee'  : entry_fee,
+            'payouts'    : payouts,
+            'num_players': num_players,
             'foursomes'  : foursomes_data,
         })
 
@@ -1534,17 +2065,246 @@ class PinkBallSetupView(APIView):
         config, _ = PinkBallConfig.objects.update_or_create(
             round    = round_obj,
             defaults = {
-                'ball_color' : d['ball_color'],
-                'bet_unit'   : d['bet_unit'],
-                'places_paid': d.get('places_paid', 1),
+                'ball_color': d['ball_color'],
+                'entry_fee' : d['entry_fee'],
+                'payouts'   : d['payouts'],
             },
         )
         return Response({
-            'configured' : True,
-            'ball_color' : config.ball_color,
-            'bet_unit'   : float(config.bet_unit),
-            'places_paid': config.places_paid,
+            'configured': True,
+            'ball_color': config.ball_color,
+            'entry_fee' : float(config.entry_fee),
+            'payouts'   : config.payouts or [],
         }, status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Course import from GolfCourseAPI (golfcourseapi.com)
+# ---------------------------------------------------------------------------
+
+class GolfApiSearchView(APIView):
+    """
+    GET /api/courses/golf-api/search/?q={query}
+
+    Proxies a course-name search to GolfCourseAPI and annotates each result
+    with whether the course already exists in the local database.
+    Staff only — regular players don't manage the course library.
+    """
+    def get(self, request):
+        if not request.user.is_staff:
+            return Response(
+                {'detail': 'Only staff members can search for courses.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        query = request.query_params.get('q', '').strip()
+        if len(query) < 2:
+            return Response(
+                {'detail': 'Please enter at least 2 characters to search.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from services.golf_api_client import search_courses
+        try:
+            courses = search_courses(query)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception as exc:
+            import traceback, logging
+            logging.getLogger(__name__).error('GolfCourseAPI search error:\n%s', traceback.format_exc())
+            return Response(
+                {'detail': str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Annotate with local DB existence.
+        # Match on the canonical course name we'd assign on import.
+        from core.models import Course as CourseModel
+        existing_names = set(CourseModel.objects.values_list('name', flat=True))
+        for c in courses:
+            c['already_imported'] = _course_display_name(c) in existing_names
+
+        return Response({'courses': courses})
+
+
+class GolfApiCourseDetailView(APIView):
+    """
+    GET /api/courses/golf-api/courses/{course_id}/
+
+    Fetches a single course from GolfCourseAPI (tees + holes) and annotates
+    with local-DB existence.  Used by the mobile app to preview tee sets
+    before committing to an import.
+    """
+    def get(self, request, course_id):
+        if not request.user.is_staff:
+            return Response(
+                {'detail': 'Only staff members can fetch course details.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from services.golf_api_client import fetch_course
+        try:
+            course = fetch_course(course_id)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception as exc:
+            import traceback, logging
+            logging.getLogger(__name__).error('GolfCourseAPI detail error:\n%s', traceback.format_exc())
+            return Response(
+                {'detail': f'Golf API error: {exc}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        from core.models import Course as CourseModel
+        existing_names = set(CourseModel.objects.values_list('name', flat=True))
+        course['already_imported'] = _course_display_name(course) in existing_names
+
+        return Response(course)
+
+
+def _course_display_name(api_course: dict) -> str:
+    """
+    Build the canonical name we store locally for a course returned by
+    GolfCourseAPI.  If club_name and course_name differ (the club has
+    multiple courses), we disambiguate; otherwise we use club_name alone.
+    """
+    club   = (api_course.get('club_name')   or '').strip()
+    course = (api_course.get('course_name') or '').strip()
+    if course and course != club:
+        return f'{club} — {course}'
+    return club
+
+
+class CourseImportView(APIView):
+    """
+    POST /api/courses/import/
+    Body:
+        {
+            "course_id"   : 99,      # GolfCourseAPI numeric course ID (required)
+            "force_update": false    # True = overwrite tees if course already exists
+        }
+
+    Fetches the full course from GolfCourseAPI, creates (or updates) the
+    local Course and Tee records, and returns the saved Course with its tees.
+
+    Already-exists behaviour
+    ~~~~~~~~~~~~~~~~~~~~~~~~
+    * force_update = false (default): returns HTTP 409 with the existing
+      course data so the mobile can offer the user a Skip/Update choice.
+    * force_update = true: deletes all existing Tee rows for the course and
+      re-creates them from the API data.  The Course row itself is preserved
+      (rounds referencing it stay intact).
+    """
+    @transaction.atomic
+    def post(self, request):
+        if not request.user.is_staff:
+            return Response(
+                {'detail': 'Only staff members can import courses.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        course_id    = request.data.get('course_id')
+        force_update = bool(request.data.get('force_update', False))
+
+        if not course_id:
+            return Response(
+                {'detail': 'course_id is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from services.golf_api_client import fetch_course
+        try:
+            api_course = fetch_course(course_id)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception as exc:
+            return Response(
+                {'detail': f'Golf API error: {exc}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        course_name = _course_display_name(api_course)
+        if not course_name:
+            return Response(
+                {'detail': 'API returned a course with no name.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from core.models import Course as CourseModel, Tee as TeeModel
+        from .serializers import CourseSerializer
+
+        existing = CourseModel.objects.filter(name=course_name).first()
+
+        if existing and not force_update:
+            return Response(
+                {
+                    'already_exists': True,
+                    'course'        : CourseSerializer(existing).data,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # ── Create or reuse the Course row ────────────────────────────────────
+        if existing:
+            course_obj = existing
+            TeeModel.objects.filter(course=course_obj).delete()
+        else:
+            course_obj = CourseModel.objects.create(name=course_name)
+
+        # ── Create Tee rows ───────────────────────────────────────────────────
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
+        tees = api_course.get('tees', [])
+        _log.info(
+            'CourseImportView: course_id=%s name=%r tee_count=%d',
+            course_id, course_name, len(tees),
+        )
+
+        incomplete_tees = []
+        for priority, tee_data in enumerate(tees, start=10):
+            holes = tee_data.get('holes', [])
+            if len(holes) != 18:
+                # Log but continue — slope/rating/par are still usable for
+                # handicap differential calculation even without per-hole data.
+                _log.warning(
+                    'Tee "%s" has %d holes (expected 18); importing anyway.',
+                    tee_data.get('name', '?'), len(holes),
+                )
+                incomplete_tees.append(tee_data.get('name', '?'))
+
+            TeeModel.objects.create(
+                course        = course_obj,
+                tee_name      = tee_data['name'] or 'Default',
+                slope         = max(55, min(155, tee_data['slope'])),
+                course_rating = tee_data['course_rating'],
+                par           = tee_data['par'],
+                sex           = tee_data['sex'],
+                sort_priority = priority,
+                holes         = [
+                    {
+                        'number'      : h['number'],
+                        'par'         : h['par'],
+                        'stroke_index': h['stroke_index'],
+                        'yards'       : h['yards'],
+                    }
+                    for h in holes  # ordered 1..N from the adapter
+                ],
+            )
+
+        tee_count = TeeModel.objects.filter(course=course_obj).count()
+        result = {
+            'already_exists' : existing is not None,
+            'created'        : existing is None,
+            'tees_imported'  : tee_count,
+            'course'         : CourseSerializer(course_obj).data,
+        }
+        if incomplete_tees:
+            result['warning'] = (
+                f'The following tees were imported without full hole data '
+                f'(slope/rating/par are correct, but per-hole handicap '
+                f'allocation will be unavailable): {", ".join(incomplete_tees)}'
+            )
+        return Response(result, status=status.HTTP_201_CREATED)
 
 
 class PinkBallFoursomeOrderView(APIView):

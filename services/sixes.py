@@ -272,10 +272,13 @@ def _overlay_so_strokes_for_segment(seg, segment_idx, player_so, member_by_pid, 
     in this match — floor(SO/3), plus 1 for the first SO%3 matches — and
     allocate those strokes to the hardest holes (lowest stroke index) in
     this segment's *actual* range (seg.start_hole..seg.end_hole), then
-    subtract from the player's per-hole score.  Holes the match never
-    reaches are simply never read by _score_segment, so any strokes we
-    drop on them "die" naturally.
+    subtract from the player's per-hole score.
+
+    Returns a {player_id: {hole_number: strokes_applied}} dict so the
+    caller can undo strokes on holes that were never reached if the match
+    ends early (preventing the next segment from double-counting them).
     """
+    applied: dict = {}
     for pid, so in player_so.items():
         if so <= 0:
             continue
@@ -296,6 +299,8 @@ def _overlay_so_strokes_for_segment(seg, segment_idx, player_so, member_by_pid, 
         for h, strokes in allocation.items():
             if h in player_entries:
                 player_entries[h] -= strokes
+                applied.setdefault(pid, {})[h] = strokes
+    return applied
 
 
 def _overlay_so_strokes_for_extras(start_hole, player_so, member_by_pid, score_index):
@@ -367,7 +372,9 @@ def calculate_sixes(foursome) -> list:
     # range, which depends on where the previous match ended.  That's a
     # chicken-and-egg with a pre-built index, so instead we start from a
     # gross index and overlay each standard segment's strokes *just in
-    # time*, right after we've repositioned that segment.
+    # time*, right after we've repositioned that segment.  When a match
+    # ends early, we also undo the strokes on unplayed holes so the next
+    # segment doesn't inherit a double discount on its first hole.
     so_mode = handicap_mode == HandicapMode.STROKES_OFF
     if so_mode:
         score_index = build_score_index(
@@ -383,7 +390,7 @@ def calculate_sixes(foursome) -> list:
                  if m.playing_handicap is not None]
         low = min(phcps) if phcps else 0
         player_so = {
-            m.player_id: max(0, (m.playing_handicap or 0) - low)
+            m.player_id: round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
             for m in memberships
         }
         member_by_pid = {m.player_id: m for m in memberships}
@@ -412,10 +419,10 @@ def calculate_sixes(foursome) -> list:
         # SO mode: overlay this segment's strokes on the gross score_index
         # *after* repositioning, so we allocate strokes against the range
         # the match is actually playing (not the canonical/pre-reposition
-        # range).  Strokes that fall on unreached holes just sit in the
-        # index but the match loop stops before reading them, so they die.
+        # range).
+        so_applied: dict = {}
         if so_mode:
-            _overlay_so_strokes_for_segment(
+            so_applied = _overlay_so_strokes_for_segment(
                 seg, idx, player_so, member_by_pid, score_index
             )
 
@@ -424,6 +431,18 @@ def calculate_sixes(foursome) -> list:
 
         # Advance pointer: next match starts right after this one ends.
         if finished_on:
+            # Undo SO strokes on holes that were never played.  Without this,
+            # the next segment would inherit those strokes in the shared
+            # score_index and then add its own — producing a double discount
+            # on the first hole of the new segment.
+            if so_mode and so_applied:
+                for pid, hole_strokes in so_applied.items():
+                    player_entries = score_index.get(pid)
+                    if not player_entries:
+                        continue
+                    for h, strokes in hole_strokes.items():
+                        if h > finished_on and h in player_entries:
+                            player_entries[h] += strokes  # undo
             current_hole = finished_on + 1   # early finish — start immediately
         else:
             current_hole = seg.end_hole + 1  # normal end

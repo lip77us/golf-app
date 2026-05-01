@@ -5,6 +5,9 @@ import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import 'new_round_wizard.dart';
 import 'player_list_screen.dart';
+import 'tournament_low_net_setup_screen.dart';
+import 'setup_round_players_screen.dart';
+import 'tournament_leaderboard_screen.dart';
 
 class TournamentListScreen extends StatefulWidget {
   const TournamentListScreen({super.key});
@@ -114,6 +117,12 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       appBar: AppBar(
         title: const Text('Tournaments'),
         actions: [
+          if (auth.isStaff)
+            IconButton(
+              icon: const Icon(Icons.golf_course),
+              tooltip: 'Manage Courses',
+              onPressed: () => Navigator.of(context).pushNamed('/course-search'),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _load,
@@ -123,14 +132,16 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       drawer: _AppDrawer(
         playerName: auth.player?.name,
         onPlayersTap: () {
+          Navigator.of(context).pop();
           Navigator.of(context)
-            ..pop()
-            ..push(MaterialPageRoute(builder: (_) => const PlayerListScreen()));
+              .push(MaterialPageRoute(builder: (_) => const PlayerListScreen()))
+              .then((_) { if (mounted) _load(); });
         },
         onCasualRoundsTap: () {
+          Navigator.of(context).pop();
           Navigator.of(context)
-            ..pop()
-            ..pushNamed('/casual-rounds');
+              .pushNamed('/casual-rounds')
+              .then((_) { if (mounted) _load(); });
         },
         onLogout: () => auth.logout(),
       ),
@@ -179,13 +190,32 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       child: ListView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: tournaments.length,
-        itemBuilder: (_, i) => _TournamentCard(
-          tournament: tournaments[i],
-          isStaff: context.read<AuthProvider>().isStaff,
-          onRoundTap: (roundId) =>
-              Navigator.of(context).pushNamed('/round', arguments: roundId),
-          onDelete: () => _deleteTournament(tournaments[i]),
-        ),
+        itemBuilder: (_, i) {
+          final t = tournaments[i];
+          return _TournamentCard(
+            tournament       : t,
+            isStaff          : context.read<AuthProvider>().isStaff,
+            onRoundTap       : (roundId) =>
+                Navigator.of(context).pushNamed('/round', arguments: roundId),
+            onSetupRound     : (roundId) => Navigator.of(context)
+                .push(MaterialPageRoute(
+                    builder: (_) => SetupRoundPlayersScreen(roundId: roundId)))
+                .then((_) { if (mounted) _load(); }),
+            onViewLeaderboard: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => TournamentLeaderboardScreen(
+                    tournamentId  : t.id,
+                    tournamentName: t.name,
+                  ),
+                )),
+            onConfigureLowNet: () => Navigator.of(context)
+                .push(MaterialPageRoute(
+                    builder: (_) => TournamentLowNetSetupScreen(
+                        tournamentId: t.id)))
+                .then((_) { if (mounted) _load(); }),
+            onDelete         : () => _deleteTournament(t),
+          );
+        },
       ),
     );
   }
@@ -275,12 +305,18 @@ class _TournamentCard extends StatelessWidget {
   final Tournament tournament;
   final bool isStaff;
   final void Function(int roundId) onRoundTap;
+  final void Function(int roundId) onSetupRound;
+  final VoidCallback onViewLeaderboard;
+  final VoidCallback onConfigureLowNet;
   final VoidCallback onDelete;
 
   const _TournamentCard({
     required this.tournament,
     required this.isStaff,
     required this.onRoundTap,
+    required this.onSetupRound,
+    required this.onViewLeaderboard,
+    required this.onConfigureLowNet,
     required this.onDelete,
   });
 
@@ -326,11 +362,109 @@ class _TournamentCard extends StatelessWidget {
           ),
           if (tournament.rounds.isNotEmpty) ...[
             const Divider(height: 20),
-            ...tournament.rounds.map((r) => _RoundTile(
-                  round: r,
-                  onTap: () => onRoundTap(r.id),
-                )),
+            ...tournament.rounds.map((r) => r.status == 'pending' && isStaff
+                ? _PendingRoundTile(
+                    round   : r,
+                    onSetup : () => onSetupRound(r.id),
+                  )
+                : _RoundTile(
+                    round: r,
+                    onTap: () => onRoundTap(r.id),
+                  )),
           ],
+
+          // ── Championship Leaderboard (always shown for multi-game tournaments)
+          if (tournament.activeGames.isNotEmpty) ...[
+            const Divider(height: 16),
+            _ActionButton(
+              icon : Icons.emoji_events_outlined,
+              label: 'Championship Leaderboard',
+              onTap: onViewLeaderboard,
+            ),
+          ],
+
+          // ── Staff configure buttons ────────────────────────────────────
+          if (isStaff && tournament.activeGames.isNotEmpty) ...[
+            if (tournament.activeGames.contains('low_net'))
+              _ActionButton(
+                icon : Icons.settings_outlined,
+                label: 'Configure Stroke Play Championship',
+                onTap: onConfigureLowNet,
+              ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Tile for a round that has not yet been configured (status = 'pending').
+/// Shows a "Set Up" button instead of navigating to the round screen.
+class _PendingRoundTile extends StatelessWidget {
+  final RoundSummary round;
+  final VoidCallback onSetup;
+
+  const _PendingRoundTile({required this.round, required this.onSetup});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+        child: Text('R${round.roundNumber}',
+            style: TextStyle(
+                color: theme.colorScheme.onSurfaceVariant, fontSize: 13)),
+      ),
+      title: Text(round.courseName),
+      subtitle: Text(round.date),
+      trailing: FilledButton.tonal(
+        onPressed: onSetup,
+        style: FilledButton.styleFrom(
+          padding            : const EdgeInsets.symmetric(horizontal: 12),
+          visualDensity      : VisualDensity.compact,
+          tapTargetSize      : MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: const Text('Set Up', style: TextStyle(fontSize: 12)),
+      ),
+    );
+  }
+}
+
+/// Small tappable action button shown at the bottom of a tournament card.
+class _ActionButton extends StatelessWidget {
+  final IconData     icon;
+  final String       label;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap        : onTap,
+      borderRadius : BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        child: Row(children: [
+          Icon(icon,
+              size : 18,
+              color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(label,
+              style: TextStyle(
+                  color     : Theme.of(context).colorScheme.primary,
+                  fontSize  : 13,
+                  fontWeight: FontWeight.w500)),
+          const Spacer(),
+          Icon(Icons.chevron_right,
+              size : 18,
+              color: Theme.of(context).colorScheme.primary),
         ]),
       ),
     );

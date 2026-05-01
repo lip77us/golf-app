@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
@@ -26,41 +27,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   // Map of Player ID to Tee ID
   final Map<int, int> _playerTees = {};
 
-  // Game mode.  Sixes is the default; the user can swap it for Points
-  // 5-3-1 when the group has exactly 3 real players.  Nassau and Skins
-  // are reserved chips in the picker but aren't selectable yet.
-  final Set<String> _activeGames = {'sixes'};
-
-  /// Keys in this list ARE the server-side game identifiers — Points
-  /// 5-3-1 is 'points_531' (matches core.GameType.POINTS_531), not the
-  /// earlier placeholder 'points_5_3_1'.  Label is what the user sees
-  /// on the chip.
-  static const _allGames = [
-    ('sixes',       "Six's"),
-    ('points_531',  'Points (5-3-1)'),
-    ('nassau',      'Nassau'),
-    ('skins',       'Skins'),
-  ];
-
-  /// Games that are mutually exclusive as *primary* per-foursome
-  /// game.  Picking one auto-deselects all others in its group.
-  /// Skins, Nassau, Sixes and Points 5-3-1 are all mutually exclusive
-  /// because they each own the hole-by-hole entry screen.
-  static const _mutexGroups = [
-    {'sixes', 'points_531', 'skins', 'nassau'},
-  ];
-
-  /// Apply any mutex constraints after a chip toggle.  If turning ON a
-  /// game that's in a mutex group, turn OFF every other member of that
-  /// group.  Safe to call even when no constraints are violated — it's
-  /// a no-op in that case.
-  void _applyGameMutex(String justAdded) {
-    for (final group in _mutexGroups) {
-      if (group.contains(justAdded)) {
-        _activeGames.removeWhere((g) => g != justAdded && group.contains(g));
-      }
-    }
-  }
+  // Active games set — starts empty so the user must explicitly pick.
+  // The catalog drives which games are shown and which can combine.
+  final Set<String> _activeGames = {};
 
   @override
   void initState() {
@@ -136,25 +105,23 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     return tees.isEmpty ? 0 : tees.first.id;
   }
 
-  /// Render one game FilterChip, handling enabled/disabled state and
-  /// mutex cleanup on toggle.
-  Widget _buildGameChip(String gameValue, String gameLabel) {
-    final selected = _activeGames.contains(gameValue);
+  /// Render one game FilterChip, applying catalog combination rules on toggle.
+  Widget _buildGameChip(GameMeta meta) {
+    final selected = _activeGames.contains(meta.id);
     return FilterChip(
-      label: Text(gameLabel),
+      label: Text(meta.displayName),
       selected: selected,
       onSelected: (picked) {
         setState(() {
           if (picked) {
-            _activeGames.add(gameValue);
-            _applyGameMutex(gameValue);
+            // Compute the new set BEFORE mutating _activeGames.
+            final updated = applyGameToggle(_activeGames, meta.id, true);
+            _activeGames.clear();
+            _activeGames.addAll(updated);
           } else {
             // Refuse to deselect the last remaining game.
-            if (_activeGames.length == 1 &&
-                _activeGames.contains(gameValue)) {
-              return;
-            }
-            _activeGames.remove(gameValue);
+            if (_activeGames.length == 1 && selected) return;
+            _activeGames.remove(meta.id);
           }
         });
       },
@@ -182,50 +149,44 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       );
       return;
     }
+    if (_activeGames.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one game.')),
+      );
+      return;
+    }
     if (_playerTees.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select at least 2 players.')),
       );
       return;
     }
-    // Points 5-3-1 is a hard 3-player game — its tie-splitting math
-    // (5/3/1 baseline → 9 points per hole) only sums to zero with
-    // exactly three scorers, so block Start until the roster is right.
-    if (_activeGames.contains('points_531') && _playerTees.length != 3) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(
-            'Points 5-3-1 requires exactly 3 players.')),
-      );
-      return;
-    }
-    // Six's is 2v2 best-ball across three 6-hole segments — it requires
-    // exactly 4 real players.  Mirrors the 3-player lock on Points
-    // 5-3-1 above; prevents the user from landing on the Six's setup
-    // screen with an invalid foursome.
-    if (_activeGames.contains('sixes') && _playerTees.length != 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(
-            "Six's requires exactly 4 players.")),
-      );
-      return;
-    }
-    // Skins supports 2–4 real players.
-    if (_activeGames.contains('skins') &&
-        (_playerTees.length < 2 || _playerTees.length > 4)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(
-            'Skins requires 2–4 players.')),
-      );
-      return;
-    }
-    // Nassau supports 2–4 real players (1v1 or 2v2).
-    if (_activeGames.contains('nassau') &&
-        (_playerTees.length < 2 || _playerTees.length > 4)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(
-            'Nassau requires 2–4 players (1v1 or 2v2).')),
-      );
-      return;
+    // Validate each active game's player-count requirement from the catalog.
+    for (final gameId in _activeGames) {
+      final meta = gameMeta(gameId);
+      if (meta == null) continue;
+      final n = _playerTees.length;
+      if (meta.exactPlayers != null && n != meta.exactPlayers) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${meta.displayName} requires exactly '
+              '${meta.exactPlayers} players.'),
+        ));
+        return;
+      }
+      if (meta.minPlayers != null && n < meta.minPlayers!) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${meta.displayName} requires at least '
+              '${meta.minPlayers} players.'),
+        ));
+        return;
+      }
+      if (meta.maxPlayers != null && n > meta.maxPlayers!) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${meta.displayName} supports at most '
+              '${meta.maxPlayers} players.'),
+        ));
+        return;
+      }
     }
     if (_playerTees.values.any((teeId) => teeId == 0)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -276,27 +237,39 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           ? fullRound.foursomes.first
           : null;
 
-      if (firstFs != null && _activeGames.contains('sixes')) {
+      // For single-game casual rounds, skip the /round hub and drop directly
+      // onto the game's setup screen.  For multi-game combos (e.g. Skins +
+      // Nassau), go to /round so the user can configure each game in turn.
+      String? directRoute;
+      Object? directArgs;
+
+      if (_activeGames.length == 1 && firstFs != null) {
+        switch (_activeGames.first) {
+          case GameIds.sixes:
+            directRoute = '/sixes-setup';
+            directArgs  = firstFs.id;
+          case GameIds.points531:
+            directRoute = '/points-531-setup';
+            directArgs  = firstFs.id;
+          case GameIds.skins:
+            directRoute = '/skins-setup';
+            directArgs  = firstFs.id;
+          case GameIds.nassau:
+            directRoute = '/nassau-setup';
+            directArgs  = firstFs.id;
+          case GameIds.strokePlay:
+            directRoute = '/low-net-setup';
+            directArgs  = fullRound.id;
+        }
+      }
+
+      if (directRoute != null) {
         Navigator.of(context).pushReplacementNamed(
-          '/sixes-setup',
-          arguments: firstFs.id,
-        );
-      } else if (firstFs != null && _activeGames.contains('points_531')) {
-        Navigator.of(context).pushReplacementNamed(
-          '/points-531-setup',
-          arguments: firstFs.id,
-        );
-      } else if (firstFs != null && _activeGames.contains('skins')) {
-        Navigator.of(context).pushReplacementNamed(
-          '/skins-setup',
-          arguments: firstFs.id,
-        );
-      } else if (firstFs != null && _activeGames.contains('nassau')) {
-        Navigator.of(context).pushReplacementNamed(
-          '/nassau-setup',
-          arguments: firstFs.id,
+          directRoute,
+          arguments: directArgs,
         );
       } else {
+        // Multi-game combo or Stableford (no per-round setup yet) → hub.
         Navigator.of(context).pushReplacementNamed(
           '/round',
           arguments: fullRound.id,
@@ -382,68 +355,42 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             spacing: 8,
             runSpacing: 4,
             children: [
-              for (final (gameValue, gameLabel) in _allGames)
-                _buildGameChip(gameValue, gameLabel),
+              for (final meta in casualGames)
+                _buildGameChip(meta),
             ],
           ),
-          // Inline warnings when the picked game's roster requirement is
-          // off.  Sixes is 2v2 best-ball so it needs exactly 4 real
-          // players; Points 5-3-1 is a three-player game.  Either
-          // mismatch blocks Start Round down below.
-          if (_activeGames.contains('points_531') && _playerTees.length != 3)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _playerTees.length < 3
-                    ? 'Points 5-3-1 needs exactly 3 players — '
-                      'add ${3 - _playerTees.length} more below.'
-                    : 'Points 5-3-1 is a 3-player game — '
-                      'remove ${_playerTees.length - 3} player(s) below.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          if (_activeGames.contains('sixes') && _playerTees.length != 4)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _playerTees.length < 4
-                    ? "Six's needs exactly 4 players — "
-                      'add ${4 - _playerTees.length} more below.'
-                    : "Six's is a 4-player game — "
-                      'remove ${_playerTees.length - 4} player(s) below.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          if (_activeGames.contains('skins') &&
-              (_playerTees.length < 2 || _playerTees.length > 4))
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _playerTees.length < 2
-                    ? 'Skins needs at least 2 players — '
-                      'add ${2 - _playerTees.length} more below.'
-                    : 'Skins supports at most 4 players — '
-                      'remove ${_playerTees.length - 4} player(s) below.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          if (_activeGames.contains('nassau') &&
-              (_playerTees.length < 2 || _playerTees.length > 4))
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _playerTees.length < 2
-                    ? 'Nassau needs at least 2 players — '
-                      'add ${2 - _playerTees.length} more below.'
-                    : 'Nassau supports at most 4 players (1v1 or 2v2) — '
-                      'remove ${_playerTees.length - 4} player(s) below.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.error),
-              ),
-            ),
+          // Inline player-count warnings driven by the game catalog.
+          for (final gameId in _activeGames) ...[
+            Builder(builder: (_) {
+              final meta = gameMeta(gameId);
+              if (meta == null) return const SizedBox.shrink();
+              final n = _playerTees.length;
+              String? warning;
+              if (meta.exactPlayers != null && n != meta.exactPlayers) {
+                final diff = meta.exactPlayers! - n;
+                warning = diff > 0
+                    ? '${meta.displayName} needs exactly ${meta.exactPlayers} players'
+                      ' — add $diff more below.'
+                    : '${meta.displayName} is a ${meta.exactPlayers}-player game'
+                      ' — remove ${-diff} player(s) below.';
+              } else if (meta.minPlayers != null && n < meta.minPlayers!) {
+                warning = '${meta.displayName} needs at least ${meta.minPlayers}'
+                    ' players — add ${meta.minPlayers! - n} more below.';
+              } else if (meta.maxPlayers != null && n > meta.maxPlayers!) {
+                warning = '${meta.displayName} supports at most ${meta.maxPlayers}'
+                    ' players — remove ${n - meta.maxPlayers!} player(s) below.';
+              }
+              if (warning == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  warning,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error),
+                ),
+              );
+            }),
+          ],
           const SizedBox(height: 24),
 
           Text('Select Players & Tees', style: Theme.of(context).textTheme.titleLarge),

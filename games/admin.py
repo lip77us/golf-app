@@ -133,7 +133,7 @@ class NassauTeamAdmin(admin.ModelAdmin):
 
 @admin.register(IrishRumbleConfig)
 class IrishRumbleConfigAdmin(admin.ModelAdmin):
-    list_display  = ('round', 'handicap_mode', 'net_percent', 'bet_unit')
+    list_display  = ('round', 'handicap_mode', 'net_percent', 'entry_fee')
     list_filter   = ('handicap_mode', 'round__tournament')
     search_fields = ('round__course__course_name',)
 

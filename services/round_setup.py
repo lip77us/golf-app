@@ -34,28 +34,55 @@ from tournament.models import Foursome, FoursomeMembership
 
 def _group_players(players: list, max_size: int = 4) -> list:
     """
-    Split *players* into groups as evenly as possible, each group no
-    larger than *max_size*.
+    Split *players* into groups, filling foursomes first and placing
+    trailing threesomes at the end so no group is ever smaller than 3.
 
     Examples
     --------
-    8 players → [4, 4]
-    9 players → [3, 3, 3]
-    7 players → [4, 3]
-    5 players → [3, 2]
+    8  players → [4, 4]
+    9  players → [3, 3, 3]
+    10 players → [4, 3, 3]
+    11 players → [4, 4, 3]
+    12 players → [4, 4, 4]
+    13 players → [4, 3, 3, 3]
+    14 players → [4, 4, 3, 3]
+    15 players → [4, 4, 4, 3]
+
+    Edge case (n=2 or n=5): no valid split avoids a group smaller than 3;
+    falls back to even distribution.
     """
     n = len(players)
     if n == 0:
         return []
-    num_groups = math.ceil(n / max_size)
-    base       = n // num_groups
-    extras     = n % num_groups   # first `extras` groups get one extra player
 
+    rem = n % max_size
+    if rem == 0:
+        return [players[i : i + max_size] for i in range(0, n, max_size)]
+
+    # trailing threesomes: rem=3→1, rem=2→2, rem=1→3
+    trailing  = {3: 1, 2: 2, 1: 3}[rem]
+    min_needed = trailing * 3  # minimum n for a clean split with no group < 3
+
+    if n < min_needed:
+        # Unavoidable edge case (n=2 or n=5): fall back to even distribution
+        num_groups = math.ceil(n / max_size)
+        base   = n // num_groups
+        extras = n % num_groups
+        groups, idx = [], 0
+        for i in range(num_groups):
+            size = base + (1 if i < extras else 0)
+            groups.append(players[idx : idx + size])
+            idx += size
+        return groups
+
+    fours = (n - trailing * 3) // max_size
     groups, idx = [], 0
-    for i in range(num_groups):
-        size = base + (1 if i < extras else 0)
-        groups.append(players[idx : idx + size])
-        idx += size
+    for _ in range(fours):
+        groups.append(players[idx : idx + max_size])
+        idx += max_size
+    for _ in range(trailing):
+        groups.append(players[idx : idx + 3])
+        idx += 3
     return groups
 
 

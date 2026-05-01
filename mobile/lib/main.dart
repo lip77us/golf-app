@@ -25,6 +25,14 @@ import 'screens/casual_rounds_list_screen.dart';
 import 'screens/irish_rumble_setup_screen.dart';
 import 'screens/pink_ball_setup_screen.dart';
 import 'screens/pink_ball_screen.dart';
+import 'screens/tournament_low_net_setup_screen.dart';
+import 'screens/setup_round_players_screen.dart';
+import 'screens/tournament_leaderboard_screen.dart';
+import 'screens/match_play_setup_screen.dart';
+import 'screens/match_play_screen.dart';
+import 'screens/course_search_screen.dart';
+import 'screens/score_entry_screen.dart';
+import 'screens/three_person_match_setup_screen.dart';
 
 /// Global navigator key — lets AuthProvider redirect to /login on 401
 /// from outside the widget tree.
@@ -220,6 +228,58 @@ class _GolfAppState extends State<GolfApp> {
         final foursomeId = settings.arguments as int;
         return MaterialPageRoute(
             builder: (_) => PinkBallScreen(foursomeId: foursomeId));
+      case '/tournament-leaderboard':
+        final args           = settings.arguments as Map<String, dynamic>;
+        final tournamentId   = args['tournamentId'] as int;
+        final tournamentName = args['tournamentName'] as String? ?? '';
+        return MaterialPageRoute(
+            builder: (_) => TournamentLeaderboardScreen(
+                tournamentId: tournamentId, tournamentName: tournamentName));
+      case '/tournament-low-net-setup':
+        final tournamentId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) =>
+                TournamentLowNetSetupScreen(tournamentId: tournamentId));
+      case '/setup-round-players':
+        final roundId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => SetupRoundPlayersScreen(roundId: roundId));
+      case '/match-play-setup':
+        // Arguments may be a plain int (legacy) or a Map with extra context.
+        final args = settings.arguments;
+        final int       foursomeId;
+        final List<int> allMatchPlayIds;
+        final List<int> peerIds;
+        if (args is Map) {
+          foursomeId      = args['foursomeId']      as int;
+          allMatchPlayIds = List<int>.from(args['allMatchPlayIds'] as List? ?? []);
+          peerIds         = List<int>.from(args['peerIds']         as List? ?? []);
+        } else {
+          foursomeId      = args as int;
+          allMatchPlayIds = [];
+          peerIds         = [];
+        }
+        return MaterialPageRoute(
+            builder: (_) => MatchPlaySetupScreen(
+              foursomeId:      foursomeId,
+              allMatchPlayIds: allMatchPlayIds,
+              peerIds:         peerIds,
+            ));
+      case '/match-play':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => MatchPlayScreen(foursomeId: foursomeId));
+      case '/three-person-match-setup':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) =>
+                ThreePersonMatchSetupScreen(foursomeId: foursomeId));
+      case '/course-search':
+        return MaterialPageRoute(builder: (_) => const CourseSearchScreen());
+      case '/score-entry':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => ScoreEntryScreen(foursomeId: foursomeId));
       default:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
     }

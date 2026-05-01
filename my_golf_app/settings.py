@@ -10,7 +10,18 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+# Load .env file from the project root if it exists.
+# Supports the common KEY=VALUE format without requiring python-dotenv.
+_env_file = Path(__file__).resolve().parent.parent / '.env'
+if _env_file.exists():
+    for _line in _env_file.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith('#') and '=' in _line:
+            _k, _, _v = _line.partition('=')
+            os.environ.setdefault(_k.strip(), _v.strip())
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +31,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-@6g-3**v^msz99%j4%tg!kij12ahcq(1rvag=ghj!&f)kl53v@'
+# Set SECRET_KEY in your environment or .env file for production.
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-@6g-3**v^msz99%j4%tg!kij12ahcq(1rvag=ghj!&f)kl53v@',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Set DEBUG=True in .env for local development only.
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = []
+# Comma-separated list of allowed hosts, e.g. "golf.lipkin.us,*.up.railway.app"
+_allowed = os.environ.get('ALLOWED_HOSTS', '')
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()]
 
 
 # Application definition
@@ -50,6 +68,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # serve static files in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -80,17 +99,26 @@ WSGI_APPLICATION = 'my_golf_app.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+#
+# In production (Railway), DATABASE_URL is injected automatically.
+# For local dev, set DATABASE_URL in .env or fall back to the explicit config.
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'golf_app_db',        # Replace with your actual database name
-        'USER': 'postgres',           # Default Postgres user
-        'PASSWORD': 'Paulgres',  # The password you set during installation
-        'HOST': 'localhost',
-        'PORT': '5432',
+import dj_database_url as _dj_db
+
+_database_url = os.environ.get('DATABASE_URL')
+if _database_url:
+    DATABASES = {'default': _dj_db.config(default=_database_url, conn_max_age=600)}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'golf_app_db'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'Paulgres'),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
     }
-}
 
 
 # Password validation
@@ -128,6 +156,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Django REST Framework
@@ -146,4 +180,56 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 100,
+}
+
+# ---------------------------------------------------------------------------
+# GolfCourseAPI (golfcourseapi.com) — course data import
+# ---------------------------------------------------------------------------
+# Set GOLF_API_KEY in your environment (or .env file).
+# The base URL can be overridden if the provider changes their API version.
+
+GOLF_API_KEY      = os.environ.get('GOLF_API_KEY', '')
+GOLF_API_BASE_URL = os.environ.get('GOLF_API_BASE_URL', 'https://api.golfcourseapi.com')
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+# Logs appear in the terminal where you run `python manage.py runserver`.
+# Set DJANGO_LOG_LEVEL=DEBUG in your .env to see full API response bodies.
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '[{levelname}] {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'loggers': {
+        # Our app code — show INFO and above (includes API response bodies,
+        # import summaries, tee warnings, and errors).
+        'api': {
+            'handlers': ['console'],
+            'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'services': {
+            'handlers': ['console'],
+            'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        # Django request logs — keep at WARNING to avoid noise.
+        'django': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
 }

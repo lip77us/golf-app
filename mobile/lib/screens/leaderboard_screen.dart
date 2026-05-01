@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -24,7 +25,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     });
   }
 
-  void _initTabs(List<String> games) {
+  void _initTabs(Leaderboard lb) {
+    final games = [
+      ...lb.activeGames,
+      if (lb.tournamentId != null && lb.tournamentActiveGames.isNotEmpty)
+        '__championship__',
+    ];
     if (_gameTabs.join(',') == games.join(',')) return;
     _gameTabs = games;
     _tabController?.dispose();
@@ -43,7 +49,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     final rp = context.watch<RoundProvider>();
 
     if (!rp.loadingLeaderboard && rp.leaderboard != null) {
-      _initTabs(rp.leaderboard!.activeGames);
+      _initTabs(rp.leaderboard!);
     }
 
     final lb      = rp.leaderboard;
@@ -122,6 +128,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           child: TabBarView(
             controller: _tabController,
             children: _gameTabs.map((gameKey) {
+              if (gameKey == '__championship__') {
+                return ChampionshipTabView(tournamentId: lb.tournamentId!);
+              }
               final game = lb.games[gameKey];
               if (game == null) {
                 return const Center(child: Text('No data yet.'));
@@ -139,15 +148,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
 
   String _label(String g) {
     const labels = {
-      'skins':        'Skins',
-      'stableford':   'Stableford',
-      'pink_ball':    'Pink Ball',
-      'nassau':       'Nassau',
-      'sixes':        "Six's",
-      'match_play':   'Match Play',
-      'irish_rumble': 'Irish Rumble',
-      'scramble':     'Scramble',
-      'low_net_round':'Low Net',
+      'skins':             'Skins',
+      'stableford':        'Stableford',
+      'pink_ball':         'Pink Ball',
+      'nassau':            'Nassau',
+      'sixes':             "Six's",
+      'match_play':        'Match Play',
+      'three_person_match': 'Three-Person Match',
+      'irish_rumble':      'Irish Rumble',
+      'scramble':          'Scramble',
+      'low_net_round':     'Stroke Play',
+      '__championship__':  'Championship',
     };
     return labels[g] ?? g;
   }
@@ -184,6 +195,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _Points531GroupCard.new);
       case 'match_play':
         return _ByGroupView(data: data, builder: _MatchPlayGroupCard.new);
+      case 'three_person_match':
+        return _ByGroupView(data: data, builder: _ThreePersonMatchGroupCard.new);
       case 'irish_rumble':
         return _IrishRumbleView(data: data);
       default:
@@ -226,71 +239,156 @@ class _RedBallView extends StatelessWidget {
   final Map<String, dynamic> data;
   const _RedBallView({required this.data});
 
+  static String _ntpLabel(int? ntp) {
+    if (ntp == null) return '—';
+    if (ntp == 0)   return 'E';
+    return ntp < 0 ? '$ntp' : '+$ntp';
+  }
+
+  static Color _ntpColor(int? ntp, ThemeData theme) {
+    if (ntp == null || ntp == 0) return theme.colorScheme.onSurface;
+    return ntp < 0 ? Colors.green.shade700 : theme.colorScheme.error;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme     = Theme.of(context);
     final results   = (data['results'] as List? ?? []);
     final ballColor = data['ball_color']?.toString() ?? 'Pink';
-    final pool      = (data['pool'] as num?)?.toDouble() ?? 0.0;
+    final entryFee  = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
+    final payouts   = (data['payouts'] as List? ?? []);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Pool header
-        if (pool > 0) ...[
-          Row(children: [
+        // Info chips — match Low Net style
+        Row(children: [
+          Chip(
+            label: Text('$ballColor Ball',
+                style: const TextStyle(fontSize: 11)),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+          ),
+          if (entryFee > 0) ...[
+            const SizedBox(width: 8),
             Chip(
-              label: Text('$ballColor Ball',
+              label: Text('Entry \$${entryFee.formatBet()}',
                   style: const TextStyle(fontSize: 11)),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
             ),
+          ],
+          if (payouts.isNotEmpty) ...[
             const SizedBox(width: 8),
-            Text('Pool: \$${pool.toStringAsFixed(2)}',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          ]),
-          const SizedBox(height: 12),
-        ],
+            Chip(
+              label: Text(
+                  payouts.length == 1 ? 'Winner takes all' : '${payouts.length} places paid',
+                  style: const TextStyle(fontSize: 11)),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+            ),
+          ],
+        ]),
+        const SizedBox(height: 8),
+
         ...results.map((r) {
-          final row      = r as Map<String, dynamic>;
-          final rank     = row['rank'] as int? ?? 0;
-          final players  = row['players']?.toString() ?? 'Group ${row['group_number']}';
-          final status   = row['status']?.toString() ?? '';
-          final survived = status == 'Survived';
-          final payout   = (row['payout'] as num?)?.toDouble() ?? 0.0;
+          final row             = r as Map<String, dynamic>;
+          final rank            = row['rank'] as int? ?? 0;
+          final players         = row['players']?.toString() ?? 'Group ${row['group_number']}';
+          final status          = row['status']?.toString() ?? '';
+          final survived        = status == 'Survived';
+          final payout          = (row['payout'] as num?)?.toDouble() ?? 0.0;
+          final perPersonPayout = (row['per_person_payout'] as num?)?.toDouble() ?? payout;
+          final netToPar        = row['net_to_par'] as int?;
+          final eliminatedOn    = row['eliminated_on_hole'] as int?;
+          final currentHole     = row['current_hole'] as int?;
+
+          // Subtitle:
+          //   "Not started"    — no holes played yet
+          //   "Alive Thru 7"   — ball still in play, round not finished
+          //   "Survived"       — all 18 holes completed with ball intact
+          //   "Lost on Hole 4" — ball was lost
+          final notStarted = currentHole == null || currentHole == 0;
+          final activelyAlive = survived && !notStarted;
+          final String subtitle;
+          final Color  subtitleColor;
+          if (!survived && eliminatedOn != null) {
+            subtitle      = 'Lost on Hole $eliminatedOn';
+            subtitleColor = theme.colorScheme.onSurfaceVariant;
+          } else if (notStarted) {
+            subtitle      = 'Not started';
+            subtitleColor = theme.colorScheme.onSurfaceVariant;
+          } else if (survived && currentHole != null && currentHole < 18) {
+            subtitle      = 'Alive Thru $currentHole';
+            subtitleColor = Colors.green.shade700;
+          } else {
+            // Completed all 18 holes with ball intact
+            subtitle      = 'Survived';
+            subtitleColor = Colors.green.shade700;
+          }
+
+          // Trailing: score on top, per-person payout below (right-justified)
+          final ntpStr = _ntpLabel(netToPar);
 
           return Card(
             margin: const EdgeInsets.only(bottom: 6),
+            color: activelyAlive
+                ? Colors.green.shade50.withOpacity(0.4)
+                : null,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: activelyAlive
+                  ? BorderSide(color: Colors.green.shade300, width: 1.5)
+                  : BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
             child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               leading: CircleAvatar(
-                backgroundColor: survived
-                    ? Colors.green
+                radius: 16,
+                backgroundColor: activelyAlive
+                    ? Colors.green.shade600
                     : rank == 1
                         ? theme.colorScheme.primary
                         : theme.colorScheme.surfaceContainerHighest,
                 child: Text('$rank',
                     style: TextStyle(
-                        color: (survived || rank == 1)
-                            ? Colors.white
-                            : null,
+                        fontSize: 13,
+                        color: activelyAlive || rank == 1 ? Colors.white : null,
                         fontWeight: FontWeight.bold)),
               ),
               title: Text(players,
                   style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(status,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: survived
-                          ? Colors.green.shade700
-                          : theme.colorScheme.onSurfaceVariant)),
-              trailing: payout > 0
-                  ? Text(
-                      '\$${payout.toStringAsFixed(2)}',
+              subtitle: Text(subtitle,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: subtitleColor)),
+              trailing: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (activelyAlive || netToPar != null)
+                    Text(
+                      ntpStr,
                       style: TextStyle(
-                          fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: _ntpColor(netToPar, theme),
+                      ),
+                    ),
+                  if (perPersonPayout > 0) ...[
+                    Text(
+                      '\$${perPersonPayout.formatBet()}',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                           color: Colors.green.shade700),
-                    )
-                  : null,
+                    ),
+                    Text('each',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.green.shade600)),
+                  ],
+                ],
+              ),
             ),
           );
         }),
@@ -335,7 +433,7 @@ class _LowNetView extends StatelessWidget {
           if (entryFee > 0) ...[
             const SizedBox(width: 8),
             Chip(
-              label: Text('Entry \$${entryFee.toStringAsFixed(2)}',
+              label: Text('Entry \$${entryFee.formatBet()}',
                   style: const TextStyle(fontSize: 11)),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
@@ -344,7 +442,8 @@ class _LowNetView extends StatelessWidget {
           if (payouts.isNotEmpty) ...[
             const SizedBox(width: 8),
             Chip(
-              label: Text('${payouts.length} places paid',
+              label: Text(
+                  payouts.length == 1 ? 'Winner takes all' : '${payouts.length} places paid',
                   style: const TextStyle(fontSize: 11)),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
@@ -394,10 +493,12 @@ class _LowNetView extends StatelessWidget {
                         fontWeight: FontWeight.bold)),
               ),
               title: Text(name),
-              subtitle: partial
-                  ? Text('$holes holes played',
-                      style: theme.textTheme.bodySmall)
-                  : null,
+              subtitle: Text(
+                holes == 18 ? 'F'
+                    : holes > 0 ? 'Thru $holes'
+                    : 'No scores',
+                style: theme.textTheme.bodySmall,
+              ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -414,7 +515,7 @@ class _LowNetView extends StatelessWidget {
                         ),
                       ),
                       if (payout != null)
-                        Text('\$${payout.toStringAsFixed(2)}',
+                        Text('\$${payout.formatBet()}',
                             style: theme.textTheme.bodySmall
                                 ?.copyWith(color: Colors.green.shade700)),
                     ],
@@ -463,31 +564,66 @@ class _IrishRumbleView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final overall = (data['overall'] as List? ?? []);
-    final pool    = (data['pool'] as num?)?.toDouble() ?? 0.0;
+    final theme     = Theme.of(context);
+    final overall   = (data['overall'] as List? ?? []);
+    final entryFee  = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
+    final payouts   = (data['payouts'] as List? ?? []);
+    final hmode     = data['handicap_mode']?.toString() ?? 'net';
+    final npct      = data['net_percent'] as int? ?? 100;
+    final pool      = (data['pool'] as num?)?.toDouble() ?? 0.0;
 
     if (overall.isEmpty) {
       return const Center(child: Text('No scores yet.'));
     }
 
+    final modeLabel = hmode == 'gross' ? 'Gross'
+        : hmode == 'strokes_off' ? 'Strokes Off'
+        : npct == 100 ? 'Full Net'
+        : 'Net $npct%';
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (pool > 0) ...[
-          Text('Pool: \$${pool.toStringAsFixed(2)}',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 12),
-        ],
+        // Info chips — same pattern as Low Net
+        Row(children: [
+          Chip(
+            label: Text(modeLabel, style: const TextStyle(fontSize: 11)),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+          ),
+          if (entryFee > 0) ...[
+            const SizedBox(width: 8),
+            Chip(
+              label: Text('Entry \$${entryFee.formatBet()}',
+                  style: const TextStyle(fontSize: 11)),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+            ),
+          ],
+          if (payouts.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Chip(
+              label: Text(
+                  payouts.length == 1 ? 'Winner takes all' : '${payouts.length} places paid',
+                  style: const TextStyle(fontSize: 11)),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+            ),
+          ],
+        ]),
+        const SizedBox(height: 8),
+
         ...overall.map((r) {
-          final row         = r as Map<String, dynamic>;
-          final rank        = row['rank'] as int?;         // null = no complete segment yet
-          final players     = row['players']?.toString() ?? '';
-          final ntp         = row['net_to_par'] as int?;
-          final currentHole = row['current_hole'] as int?;
-          final payout      = (row['payout'] as num?)?.toDouble() ?? 0.0;
-          final isLeading   = rank == 1;
+          final row             = r as Map<String, dynamic>;
+          final rank            = row['rank'] as int?;
+          final hasPhantom      = row['has_phantom'] as bool? ?? false;
+          final playersRaw      = row['players']?.toString() ?? '';
+          final players         = hasPhantom ? '$playersRaw + Phantom' : playersRaw;
+          final ntp             = row['net_to_par'] as int?;
+          final currentHole     = row['current_hole'] as int?;
+          final payout          = (row['payout'] as num?)?.toDouble() ?? 0.0;
+          final perPersonPayout = (row['per_person_payout'] as num?)?.toDouble() ?? payout;
+          final isLeading       = rank == 1;
 
           final holeLabel = currentHole == null
               ? 'No scores'
@@ -509,74 +645,59 @@ class _IrishRumbleView extends StatelessWidget {
                     : theme.colorScheme.outlineVariant,
               ),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(children: [
-                // Rank badge
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: isLeading
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.surfaceContainerHighest,
-                  child: Text(
-                    rank != null ? '$rank' : '—',
-                    style: TextStyle(
-                        fontSize: rank != null ? 13 : 11,
-                        fontWeight: FontWeight.bold,
-                        color: isLeading ? Colors.white : null),
-                  ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              leading: CircleAvatar(
+                radius: 16,
+                backgroundColor: isLeading
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.surfaceContainerHighest,
+                child: Text(
+                  rank != null ? '$rank' : '—',
+                  style: TextStyle(
+                      fontSize: rank != null ? 13 : 11,
+                      fontWeight: FontWeight.bold,
+                      color: isLeading ? Colors.white : null),
                 ),
-                const SizedBox(width: 12),
-
-                // Team name + players
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(players,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text(holeLabel,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant)),
-                    ],
-                  ),
-                ),
-
-                // Score to net
-                SizedBox(
-                  width: 44,
-                  child: Text(
+              ),
+              title: Text(players,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(holeLabel,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+              trailing: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
                     _ntpLabel(ntp),
-                    textAlign: TextAlign.right,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 18,
+                      fontSize: 16,
                       color: _ntpColor(ntp, theme),
                     ),
                   ),
-                ),
-
-                // Payout
-                if (pool > 0) ...[
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 56,
-                    child: Text(
-                      payout > 0
-                          ? '\$${payout.toStringAsFixed(2)}'
+                  if (pool > 0) ...[
+                    Text(
+                      perPersonPayout > 0
+                          ? '\$${perPersonPayout.formatBet()}'
                           : '—',
-                      textAlign: TextAlign.right,
                       style: TextStyle(
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: payout > 0
+                        color: perPersonPayout > 0
                             ? Colors.green.shade700
                             : theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  ),
+                    if (perPersonPayout > 0)
+                      Text('each',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.green.shade600)),
+                  ],
                 ],
-              ]),
+              ),
             ),
           );
         }),
@@ -662,7 +783,7 @@ class _SkinsGroupCard extends StatelessWidget {
             final junk     = p['junk_skins'] ?? 0;
             final payout   = p['payout'];
             final payStr   = payout != null
-                ? '\$${(payout as num).toStringAsFixed(2)}'
+                ? '\$${(payout as num).formatBet()}'
                 : '\$0.00';
             final skinsLabel = junk > 0
                 ? '$skinsWon skin${skinsWon == 1 ? '' : 's'} and $junk junk'
@@ -710,7 +831,7 @@ class _NassauGroupCard extends StatelessWidget {
     String signedDollar(double v) {
       if (v == 0) return '\$0.00';
       final sign = v > 0 ? '+' : '\u2212';
-      return '$sign\$${v.abs().toStringAsFixed(2)}';
+      return '$sign\$${v.abs().formatBet()}';
     }
 
     return Card(
@@ -815,13 +936,13 @@ class _NassauGroupCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  'Match: \$${nas.betUnit.toStringAsFixed(2)}',
+                  'Match: \$${nas.betUnit.formatBet()}',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
                 ),
                 if (nas.pressUnit > 0)
                   Text(
-                    'Press: \$${nas.pressUnit.toStringAsFixed(2)}',
+                    'Press: \$${nas.pressUnit.formatBet()}',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
@@ -1031,7 +1152,7 @@ class _SixesGroupCard extends StatelessWidget {
           if (byPlayer.isNotEmpty && betUnit > 0) ...[
             const Divider(height: 16),
             Text(
-              'Money (unit \$${betUnit.toStringAsFixed(2)})',
+              'Money (unit \$${betUnit.formatBet()})',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
@@ -1050,7 +1171,7 @@ class _SixesGroupCard extends StatelessWidget {
                 child: Row(children: [
                   Expanded(child: Text(name)),
                   Text(
-                    '$sign\$${amt.abs().toStringAsFixed(2)}',
+                    '$sign\$${amt.abs().formatBet()}',
                     style: TextStyle(color: color, fontWeight: FontWeight.w600),
                   ),
                 ]),
@@ -1207,7 +1328,7 @@ class _Points531GroupCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'Bet unit \$${betUnit.toStringAsFixed(2)}  '
+                'Bet unit \$${betUnit.formatBet()}  '
                 '\u2022  Par is $parPH pts / hole.',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant),
@@ -1235,7 +1356,7 @@ class _Points531GroupCard extends StatelessWidget {
   static String _fmtMoney(double v) {
     if (v == 0) return '—';
     final sign = v > 0 ? '+' : '\u2212';
-    return '$sign\$${v.abs().toStringAsFixed(2)}';
+    return '$sign\$${v.abs().formatBet()}';
   }
 }
 
@@ -1382,56 +1503,838 @@ class _PointsCell extends StatelessWidget {
   }
 }
 
+// ---- Three-Person Match group card ----
+
+class _ThreePersonMatchGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _ThreePersonMatchGroupCard({required this.group});
+
+  static String _hcapLabel(Map<String, dynamic> hcap) {
+    final mode = hcap['mode']?.toString() ?? 'net';
+    if (mode == 'gross') return 'Gross';
+    if (mode == 'strokes_off') return 'SO';
+    final pct = (hcap['net_percent'] as num?)?.toInt() ?? 100;
+    return pct == 100 ? 'Net' : 'Net ($pct%)';
+  }
+
+  static String _fmtPts(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
+  static String _fmtMoney(double v) {
+    if (v == 0) return '—';
+    final sign = v > 0 ? '+' : '−';
+    return '$sign\$${v.abs().formatBet()}';
+  }
+
+  static String _placeLabel(int place, {bool tied = false}) {
+    if (tied && place > 1) return 'T$place';
+    const labels = {1: '1st', 2: '2nd', 3: '3rd'};
+    return labels[place] ?? '$place';
+  }
+
+  /// One-line match play status string for the phase 2 match.
+  static String _p2MatchSummary(Map<String, dynamic> p2) {
+    final p2Status   = p2['status']      as String? ?? 'pending';
+    final leader     = p2['leader_name'] as String? ?? '?';
+    final runnerUp   = p2['runner_up_name'] as String? ?? '?';
+    final margin     = (p2['margin']     as num?)?.toInt() ?? 0;
+    final lastHole   = (p2['last_hole']  as num?)?.toInt();
+    final winnerName = p2['winner_name'] as String?;
+
+    if (p2Status == 'pending') return 'Not started — $leader vs $runnerUp';
+    if (p2Status == 'complete') {
+      if (winnerName == null) {
+        // All square after 18
+        return 'All Square — $leader vs $runnerUp';
+      }
+      // Check if it ended early (dormie / decided before hole 18)
+      if (lastHole != null && lastHole < 18) {
+        final remaining = 18 - lastHole;
+        return '$winnerName ${margin.abs()}&$remaining';
+      }
+      return '$winnerName wins ${margin.abs()}UP';
+    }
+    // in_progress
+    if (lastHole == null) return '$leader vs $runnerUp — In progress';
+    if (margin == 0) return 'All Square thru $lastHole';
+    final aheadName = margin > 0 ? leader : runnerUp;
+    return '$aheadName ${margin.abs()}UP thru $lastHole';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme      = Theme.of(context);
+    final summary    = group['summary'] as Map<String, dynamic>? ?? {};
+    final hcap       = summary['handicap'] as Map<String, dynamic>? ?? const {};
+    final status     = summary['status']?.toString() ?? 'pending';
+    final players    = (summary['players'] as List? ?? const []);
+    final holes      = (summary['holes']   as List? ?? const []);
+    final money      = summary['money']    as Map<String, dynamic>? ?? const {};
+    final entryFee   = (money['entry_fee'] as num?)?.toDouble() ?? 0.0;
+    final payouts    = (money['payouts']   as List? ?? const []);
+    final phase2     = summary['phase2']   as Map<String, dynamic>?;
+    final singleGroup = group['_single_group'] == true;
+
+    String statusLabel;
+    switch (status) {
+      case 'complete':    statusLabel = 'Final';       break;
+      case 'in_progress': statusLabel = 'In progress'; break;
+      case 'tiebreak':    statusLabel = 'Tiebreak';    break;
+      case 'phase2':      statusLabel = 'Back 9';      break;
+      default:            statusLabel = 'Pending';     break;
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (!singleGroup) ...[
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Divider(height: 12),
+          ],
+
+          // Header: mode + status chip
+          Row(children: [
+            Expanded(
+              child: Text(
+                'Three-Person Match — ${_hcapLabel(hcap)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: status == 'phase2'
+                    ? theme.colorScheme.tertiaryContainer
+                    : status == 'tiebreak'
+                        ? Colors.orange.shade100
+                        : theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(statusLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: status == 'phase2'
+                          ? theme.colorScheme.onTertiaryContainer
+                          : status == 'tiebreak'
+                              ? Colors.orange.shade800
+                              : theme.colorScheme.onSurfaceVariant)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+
+          // Player standings (5-3-1 phase)
+          if (players.isEmpty)
+            Text('No players yet.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant))
+          else ...[
+            // Count how many players share each final_place for T2 notation.
+            () {
+              final placeCount = <int, int>{};
+              for (final p in players) {
+                final fp = ((p as Map)['final_place'] as num?)?.toInt()
+                    ?? ((p)['phase1_place'] as num?)?.toInt() ?? 0;
+                placeCount[fp] = (placeCount[fp] ?? 0) + 1;
+              }
+              return Column(
+                children: players.map((p) {
+                  final r      = p as Map<String, dynamic>;
+                  final name   = r['name']?.toString() ?? '';
+                  final pts    = (r['phase1_points'] as num?)?.toDouble() ?? 0.0;
+                  final fp     = (r['final_place']   as num?)?.toInt()
+                      ?? (r['phase1_place'] as num?)?.toInt() ?? 0;
+                  final pMoney = (r['money']         as num?)?.toDouble() ?? 0.0;
+                  final isFirst  = fp == 1;
+                  final isTied   = (placeCount[fp] ?? 1) > 1;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(children: [
+                      SizedBox(
+                        width: 36,
+                        child: Text(
+                          _placeLabel(fp, tied: isTied),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: isFirst
+                                ? Colors.amber.shade800
+                                : theme.colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(name,
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                      ),
+                      Text('${_fmtPts(pts)} pts',
+                          style: theme.textTheme.bodyMedium),
+                      if (entryFee > 0) ...[
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 72,
+                          child: Text(
+                            _fmtMoney(pMoney),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: pMoney > 0
+                                  ? Colors.green.shade700
+                                  : pMoney < 0
+                                      ? Colors.red.shade700
+                                      : theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ]),
+                  );
+                }).toList(),
+              );
+            }(),
+          ],
+
+          // Per-hole grid (reuses Points 5-3-1 grid — same hole entry shape)
+          if (holes.isNotEmpty) ...[
+            const Divider(height: 20),
+            _Points531HoleGrid(holes: holes, players: players),
+          ],
+
+          // ── Tiebreak section ─────────────────────────────────────────────
+          if (status == 'tiebreak') ...[
+            const Divider(height: 20),
+            _TpmTiebreakSection(
+                tiebreak: summary['tiebreak'] as Map<String, dynamic>?,
+                players: players,
+                theme: theme),
+          ],
+
+          // ── Phase 2 — back-9 match play section ─────────────────────────
+          if (phase2 != null) ...[
+            const Divider(height: 20),
+            _TpmPhase2Section(phase2: phase2, theme: theme),
+          ],
+
+          // Payout summary (shown when complete and entry fee > 0)
+          if (entryFee > 0 && status == 'complete' &&
+              payouts.any((p) => ((p as Map)['amount'] as num? ?? 0) > 0)) ...[
+            const Divider(height: 16),
+            ...payouts
+                .where((p) => ((p as Map)['amount'] as num? ?? 0) > 0)
+                .map((p) {
+              final row    = p as Map<String, dynamic>;
+              final place  = row['place']  as String? ?? '';
+              final player = row['player'] as String?;
+              final amount = (row['amount'] as num?)?.toDouble() ?? 0.0;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 1),
+                child: Row(children: [
+                  SizedBox(
+                    width: 36,
+                    child: Text(place,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600)),
+                  ),
+                  Expanded(
+                    child: Text(player ?? '—',
+                        style: theme.textTheme.bodySmall),
+                  ),
+                  Text('\$${amount.toStringAsFixed(0)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.green.shade700,
+                          fontWeight: FontWeight.w600)),
+                ]),
+              );
+            }),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Section widget showing the sudden-death tiebreak progress.
+class _TpmTiebreakSection extends StatelessWidget {
+  final Map<String, dynamic>? tiebreak;
+  final List                  players;
+  final ThemeData             theme;
+  const _TpmTiebreakSection({
+    required this.tiebreak,
+    required this.players,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tb = tiebreak ?? {};
+    final leaderFound = tb['leader_found'] == true;
+    final leaderName  = tb['leader_name'] as String?;
+    final tiedAName   = tb['tied_a_name'] as String?;
+    final tiedBName   = tb['tied_b_name'] as String?;
+    final tbHoles     = (tb['holes'] as List? ?? []);
+
+    // Column headers: before leader found, use standings order from players.
+    final col0 = leaderFound ? (leaderName ?? '?')
+        : (players.isNotEmpty ? (players[0] as Map)['short_name']?.toString() ?? '?' : '?');
+    final col1 = leaderFound ? (tiedAName  ?? '?')
+        : (players.length > 1 ? (players[1] as Map)['short_name']?.toString() ?? '?' : '?');
+    final col2 = leaderFound ? (tiedBName  ?? '?')
+        : (players.length > 2 ? (players[2] as Map)['short_name']?.toString() ?? '?' : '?');
+
+    final muted = theme.textTheme.labelSmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final bodySmall = theme.textTheme.bodySmall;
+
+    Widget scoreCell(int? score, int? minScore) {
+      final isWin = score != null && minScore != null && score == minScore;
+      return SizedBox(
+        width: 40,
+        child: Text(
+          score?.toString() ?? '—',
+          textAlign: TextAlign.center,
+          style: bodySmall?.copyWith(
+            fontWeight: isWin ? FontWeight.bold : FontWeight.normal,
+            color: isWin ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Sudden Death',
+            style: theme.textTheme.labelSmall?.copyWith(
+                color: Colors.orange.shade800,
+                fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+
+        // Describe the current SD state.
+        Text(
+          leaderFound
+              ? '${leaderName ?? "?"} leads — ${tiedAName ?? "?"} vs ${tiedBName ?? "?"} in SD for 2nd'
+              : '3-way SD — keep scoring hole by hole',
+          style: bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+
+        if (tbHoles.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          // Header
+          Row(children: [
+            SizedBox(width: 48, child: Text('Hole', style: muted)),
+            SizedBox(width: 40, child: Text(col0, textAlign: TextAlign.center, style: muted)),
+            SizedBox(width: 40, child: Text(col1, textAlign: TextAlign.center, style: muted)),
+            SizedBox(width: 40, child: Text(col2, textAlign: TextAlign.center, style: muted)),
+          ]),
+          ...tbHoles.map((h) {
+            final row       = h as Map<String, dynamic>;
+            final holeNum   = (row['hole'] as num?)?.toInt() ?? 0;
+            final c0        = (row['leader_net'] as num?)?.toInt();
+            final c1        = (row['tb_a_net']   as num?)?.toInt();
+            final c2        = (row['tb_b_net']   as num?)?.toInt();
+            final allScores = [c0, c1, c2].whereType<int>();
+            final minScore  = allScores.isNotEmpty
+                ? allScores.reduce((a, b) => a < b ? a : b) : null;
+            final tieCount  = [c0, c1, c2].where((s) => s == minScore).length;
+            final suffix    = tieCount == 3 ? ' (all ↔)' : tieCount == 2 ? ' (tied)' : '';
+            return Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(children: [
+                SizedBox(
+                  width: 48,
+                  child: Text('H$holeNum$suffix',
+                      style: bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
+                scoreCell(c0, minScore),
+                scoreCell(c1, minScore),
+                scoreCell(c2, minScore),
+              ]),
+            );
+          }),
+        ] else ...[
+          const SizedBox(height: 4),
+          Text('Scoring continues from hole 10.',
+              style: bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic)),
+        ],
+      ],
+    );
+  }
+}
+
+/// Section widget for the back-9 match play phase of Three-Person Match.
+class _TpmPhase2Section extends StatelessWidget {
+  final Map<String, dynamic> phase2;
+  final ThemeData            theme;
+  const _TpmPhase2Section({required this.phase2, required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    final p2Status    = phase2['status']        as String? ?? 'pending';
+    final leader      = phase2['leader_name']   as String? ?? '?';
+    final runnerUp    = phase2['runner_up_name'] as String? ?? '?';
+    final margin      = (phase2['margin']       as num?)?.toInt() ?? 0;
+    final lastHole    = (phase2['last_hole']    as num?)?.toInt();
+    final winnerName  = phase2['winner_name']   as String?;
+    final p2Holes     = (phase2['holes']        as List? ?? const []);
+
+    // Status line text & color
+    String statusText;
+    Color  statusColor;
+    if (p2Status == 'complete') {
+      if (winnerName == null) {
+        statusText  = 'All Square after 18';
+        statusColor = theme.colorScheme.onSurfaceVariant;
+      } else if (lastHole != null && lastHole < 18) {
+        final remaining = 18 - lastHole;
+        statusText  = '$winnerName wins ${margin.abs()}&$remaining';
+        statusColor = Colors.green.shade700;
+      } else {
+        statusText  = '$winnerName wins ${margin.abs()}UP';
+        statusColor = Colors.green.shade700;
+      }
+    } else if (p2Status == 'in_progress') {
+      if (lastHole == null || margin == 0) {
+        statusText  = 'All Square${lastHole != null ? ' thru $lastHole' : ''}';
+        statusColor = theme.colorScheme.onSurface;
+      } else {
+        final aheadName = margin > 0 ? leader : runnerUp;
+        statusText  = '$aheadName ${margin.abs()}UP thru $lastHole';
+        statusColor = theme.colorScheme.primary;
+      }
+    } else {
+      statusText  = 'Not started yet';
+      statusColor = theme.colorScheme.onSurfaceVariant;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section header
+        Text('Back 9 Match Play',
+            style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+
+        // Matchup line
+        Row(children: [
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+                children: [
+                  TextSpan(
+                    text: leader,
+                    style: const TextStyle(color: Colors.blue),
+                  ),
+                  TextSpan(
+                    text: ' vs ',
+                    style: TextStyle(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.normal),
+                  ),
+                  TextSpan(
+                    text: runnerUp,
+                    style: TextStyle(color: Colors.orange.shade800),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 4),
+
+        // Status text
+        Text(statusText,
+            style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: statusColor)),
+
+        // Compact per-hole strip (holes 10–18) when any holes are scored
+        if (p2Holes.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _TpmPhase2HoleStrip(
+            holes:        p2Holes,
+            leader:       leader,
+            runnerUp:     runnerUp,
+            theme:        theme,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Compact hole-by-hole match play strip for Phase 2.
+/// Shows hole numbers as a scrollable row with W/L/H indicators and
+/// the running margin below.
+class _TpmPhase2HoleStrip extends StatelessWidget {
+  final List           holes;
+  final String         leader;
+  final String         runnerUp;
+  final ThemeData      theme;
+  const _TpmPhase2HoleStrip({
+    required this.holes,
+    required this.leader,
+    required this.runnerUp,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const cellW = 28.0;
+    const rowH  = 20.0;
+    const labelW = 52.0;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row: hole numbers
+          Row(children: [
+            SizedBox(
+              width: labelW,
+              height: rowH,
+              child: Text('Hole',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.bold)),
+            ),
+            for (final h in holes)
+              SizedBox(
+                width: cellW,
+                height: rowH,
+                child: Center(
+                  child: Text(
+                    '${(h as Map<String, dynamic>)['hole']}',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+          ]),
+          // Leader row: W/L/H
+          Row(children: [
+            SizedBox(
+              width: labelW,
+              height: rowH,
+              child: Text(
+                leader,
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.blue, fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            for (final h in holes) ...[
+              () {
+                final hm         = h as Map<String, dynamic>;
+                final leaderWins = hm['leader_wins'];
+                String cell;
+                Color  color;
+                if (leaderWins == true) {
+                  cell  = 'W';
+                  color = Colors.green.shade700;
+                } else if (leaderWins == false) {
+                  cell  = 'L';
+                  color = Colors.red.shade700;
+                } else {
+                  cell  = 'H';
+                  color = theme.colorScheme.onSurfaceVariant;
+                }
+                return SizedBox(
+                  width: cellW,
+                  height: rowH,
+                  child: Center(
+                    child: Text(cell,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.bold, color: color)),
+                  ),
+                );
+              }(),
+            ],
+          ]),
+          // Margin row
+          Row(children: [
+            SizedBox(
+              width: labelW,
+              height: rowH,
+              child: Text('Margin',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+            for (final h in holes) ...[
+              () {
+                final hm  = h as Map<String, dynamic>;
+                final m   = (hm['margin'] as num?)?.toInt() ?? 0;
+                final lbl = m == 0 ? 'AS' : (m > 0 ? '+$m' : '$m');
+                final col = m > 0
+                    ? Colors.blue.shade700
+                    : m < 0
+                        ? Colors.orange.shade800
+                        : theme.colorScheme.onSurfaceVariant;
+                return SizedBox(
+                  width: cellW,
+                  height: rowH,
+                  child: Center(
+                    child: Text(lbl,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w600, color: col)),
+                  ),
+                );
+              }(),
+            ],
+          ]),
+        ],
+      ),
+    );
+  }
+}
+
+
 // ---- Match Play group card ----
 
 class _MatchPlayGroupCard extends StatelessWidget {
   final Map<String, dynamic> group;
   const _MatchPlayGroupCard({required this.group});
 
+  /// One-line score/status summary for a single match — mirrors
+  /// _MatchPlayStatusCard._matchSummary() in score_entry_screen.dart.
+  static String _matchSummary(Map<String, dynamic> match) {
+    final status           = match['status']           as String? ?? 'pending';
+    final result           = match['result']           as String?;
+    final holes            = (match['holes']           as List?  ?? []);
+    final p1               = match['player1']          as String? ?? '?';
+    final winnerName       = match['winner_name']      as String?;
+    final finishedOn       = match['finished_hole']    as int?;
+    final tieBreak         = match['tie_break']        as String?;
+    final round            = match['round']            as int? ?? 1;
+    final playersTbd       = match['players_tbd']       as bool? ?? false;
+    final playersTentative = match['players_tentative'] as bool? ?? false;
+
+    // Back-9 match: no semi winner confirmed yet (e.g. both tied after F9)
+    if (playersTbd) return 'Awaiting semi results';
+    // Back-9 match: one semi confirmed, other still in sudden death
+    if (playersTentative && status != 'complete') return 'Tracking live — SD in progress';
+    if (status == 'pending' && holes.isEmpty) return 'Not started';
+
+    if (status == 'complete') {
+      if (result == 'halved') return 'Halved';
+      if (winnerName == null) return 'Complete';
+      if (tieBreak == 'sudden_death')  return '$winnerName wins (SD)';
+      if (tieBreak == 'last_hole_won') return '$winnerName wins (last hole)';
+      if (finishedOn != null) {
+        final scheduledEnd = round == 1 ? 9 : 18;
+        final remaining    = scheduledEnd - finishedOn;
+        final h = holes.cast<Map<String, dynamic>>().firstWhere(
+              (h) => h['hole'] == finishedOn, orElse: () => <String, dynamic>{});
+        final margin = ((h['margin'] as int?) ?? 0).abs();
+        if (remaining > 0) return '$winnerName ${margin}&$remaining';
+        if (margin > 0)    return '$winnerName wins $margin Up';
+      }
+      return '$winnerName wins';
+    }
+
+    // in_progress
+    if (holes.isEmpty) return 'In progress';
+    final last        = holes.last as Map<String, dynamic>;
+    final lastHoleNum = last['hole']   as int? ?? 0;
+    final margin      = last['margin'] as int? ?? 0;
+    if (margin == 0) return 'All Square thru $lastHoleNum';
+    final leader = margin > 0 ? p1 : (match['player2'] as String? ?? '?');
+    return '$leader ${margin.abs()} Up thru $lastHoleNum';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final summary = group['summary'] as Map<String, dynamic>? ?? {};
-    final matches = (summary['matches'] as List? ?? []);
+    final theme    = Theme.of(context);
+    final summary  = group['summary'] as Map<String, dynamic>? ?? {};
+    final allMatches = (summary['matches'] as List? ?? [])
+        .map((m) => Map<String, dynamic>.from(m as Map))
+        .toList();
+    final r1 = allMatches.where((m) => (m['round'] as int? ?? 1) == 1).toList();
+    final r2 = allMatches.where((m) => (m['round'] as int? ?? 1) == 2).toList();
+    final winner = summary['winner']?.toString();
+    final status = summary['status']?.toString() ?? 'pending';
+    final singleGroup = group['_single_group'] == true;
+
+    // Money info
+    final money      = summary['money'] as Map<String, dynamic>? ?? {};
+    final entryFee   = (money['entry_fee']  as num?)?.toDouble() ?? 0.0;
+    final prizePool  = (money['prize_pool'] as num?)?.toDouble() ?? 0.0;
+    final payouts    = (money['payouts']    as List? ?? []);
+    final hasPayouts = payouts.any((p) =>
+        ((p as Map)['amount'] as num? ?? 0) > 0);
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Group ${group['group_number']}',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            if (summary['winner'] != null) ...[
-              const Spacer(),
-              const Icon(Icons.emoji_events, size: 16, color: Colors.amber),
-              const SizedBox(width: 4),
-              Text(summary['winner'].toString(),
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ]),
-          const Divider(height: 12),
-          ...matches.map((m) {
-            final match  = m as Map<String, dynamic>;
-            final winner = match['winner_name']?.toString();
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(children: [
-                Text(match['label']?.toString() ?? '',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                const SizedBox(width: 8),
+          // Header
+          if (!singleGroup || winner != null) ...[
+            Row(children: [
+              if (!singleGroup)
+                Text('Group ${group['group_number']}',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (winner != null) ...[
+                if (!singleGroup) const Spacer(),
+                const Icon(Icons.emoji_events, size: 16, color: Colors.amber),
+                const SizedBox(width: 4),
                 Expanded(
-                  child: Text(
-                    '${match['player1']} vs ${match['player2']}',
-                    style: const TextStyle(fontSize: 13),
-                  ),
+                  child: Text(winner,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis),
                 ),
-                if (winner != null)
-                  Text(winner,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13)),
-              ]),
-            );
-          }),
+              ],
+            ]),
+            const Divider(height: 12),
+          ],
+
+          // Status chip
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: status == 'complete'
+                  ? Colors.green.shade100
+                  : status == 'in_progress'
+                      ? theme.colorScheme.primaryContainer
+                      : theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              status == 'complete'
+                  ? 'Final'
+                  : status == 'in_progress'
+                      ? 'In progress'
+                      : 'Pending',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: status == 'complete'
+                    ? Colors.green.shade800
+                    : status == 'in_progress'
+                        ? theme.colorScheme.onPrimaryContainer
+                        : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+
+          // Semis section
+          if (r1.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('Semis (F9)',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 4),
+            for (final m in r1) _MatchRow(match: m, theme: theme),
+          ],
+
+          // Final & 3rd section
+          if (r2.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Final & 3rd (B9)',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 4),
+            for (final m in r2) _MatchRow(match: m, theme: theme),
+          ],
+
+          // Money block — only when there's an entry fee
+          if (entryFee > 0 && (hasPayouts || prizePool > 0)) ...[
+            const Divider(height: 16),
+            Row(children: [
+              Text('Pool: \$${prizePool.toStringAsFixed(0)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600)),
+            ]),
+            if (hasPayouts) ...[
+              const SizedBox(height: 4),
+              ...payouts.where((p) =>
+                  ((p as Map)['amount'] as num? ?? 0) > 0)
+                  .map((p) {
+                final row    = p as Map<String, dynamic>;
+                final place  = row['place']  as String? ?? '';
+                final player = row['player'] as String?;
+                final amount = (row['amount'] as num?)?.toDouble() ?? 0.0;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 1),
+                  child: Row(children: [
+                    SizedBox(
+                      width: 32,
+                      child: Text(place,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    Expanded(
+                      child: Text(player ?? '—',
+                          style: theme.textTheme.bodySmall),
+                    ),
+                    Text('\$${amount.toStringAsFixed(0)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.w600)),
+                  ]),
+                );
+              }),
+            ],
+          ],
         ]),
+      ),
+    );
+  }
+}
+
+class _MatchRow extends StatelessWidget {
+  final Map<String, dynamic> match;
+  final ThemeData            theme;
+  const _MatchRow({required this.match, required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    final p1     = match['player1'] as String? ?? '?';
+    final p2     = match['player2'] as String? ?? '?';
+    final label  = match['label']   as String? ?? '';
+    final status = match['status']  as String? ?? 'pending';
+    final summary = _MatchPlayGroupCard._matchSummary(match);
+
+    final Color summaryColor;
+    if (status == 'complete') {
+      summaryColor = Colors.green.shade700;
+    } else if (status == 'in_progress') {
+      summaryColor = theme.colorScheme.primary;
+    } else {
+      summaryColor = theme.colorScheme.onSurfaceVariant;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer)),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text('$p1 vs $p2',
+                  style: const TextStyle(fontSize: 13),
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ]),
+          const SizedBox(height: 2),
+          Text(summary,
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: summaryColor, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

@@ -132,12 +132,53 @@ class MembershipSerializer(serializers.ModelSerializer):
 
 
 class FoursomeSerializer(serializers.ModelSerializer):
-    memberships     = MembershipSerializer(many=True, read_only=True)
-    pink_ball_order = serializers.JSONField(read_only=True)
+    memberships      = MembershipSerializer(many=True, read_only=True)
+    pink_ball_order  = serializers.JSONField(read_only=True)
+    active_games     = serializers.JSONField(read_only=True)
+    configured_games = serializers.SerializerMethodField()
+
+    def get_configured_games(self, obj):
+        """
+        Return a list of game keys that have been explicitly set up for this
+        foursome (game model row exists), independent of active_games.
+        """
+        games = []
+        # OneToOne relationships — safe to check via hasattr
+        for attr, key in [
+            ('skins_game',         'skins'),
+            ('nassau_game',        'nassau'),
+            ('points_531_game',    'points_531'),
+            ('three_person_match', 'three_person_match'),
+        ]:
+            try:
+                getattr(obj, attr)
+                games.append(key)
+            except Exception:
+                pass
+        # FK relationships — check if any rows exist
+        if obj.sixes_segments.exists():
+            games.append('sixes')
+        # match_play: configured as soon as any bracket row exists.
+        # Previously this required payout_config != {}, but that caused the
+        # score-entry screen to skip loading match play data when only an
+        # entry fee (no payout split) was configured.  The "Set Up Bracket"
+        # buttons on the round screen are gated on round.active_games, not
+        # configured_games, so this change does not affect that display.
+        if obj.match_play_brackets.exists():
+            games.append('match_play')
+        if obj.pink_ball_order:
+            games.append('pink_ball')
+        if obj.irish_rumble_results.exists():
+            games.append('irish_rumble')
+        return games
 
     class Meta:
         model  = Foursome
-        fields = ['id', 'group_number', 'has_phantom', 'pink_ball_order', 'memberships']
+        fields = [
+            'id', 'group_number', 'has_phantom',
+            'pink_ball_order', 'active_games', 'configured_games',
+            'memberships',
+        ]
         read_only_fields = ['id']
 
 
@@ -257,11 +298,16 @@ class RoundSetupSerializer(serializers.Serializer):
     randomise:          shuffle players before grouping (default True)
     auto_setup_games:   if True, auto-configure Nassau/Sixes/MatchPlay teams
                         by handicap rank after the draw (default False)
+    active_games:       list of game keys to activate for this round — if
+                        provided, overwrites Round.active_games before setup
     """
     players            = PlayerTeeSelectionSerializer(many=True, min_length=2, max_length=20)
     handicap_allowance = serializers.FloatField(default=1.0, min_value=0.0, max_value=1.0)
     randomise          = serializers.BooleanField(default=True)
     auto_setup_games   = serializers.BooleanField(default=False)
+    active_games       = serializers.ListField(
+                             child=serializers.CharField(max_length=50),
+                             required=False, default=list)
 
 
 class NassauSetupSerializer(serializers.Serializer):
@@ -347,6 +393,31 @@ class Points531SetupSerializer(serializers.Serializer):
                     )
 
 
+class ThreePersonMatchSetupSerializer(serializers.Serializer):
+    """
+    Set up (or replace) the Three-Person Match for a foursome.
+
+    handicap_mode / net_percent control the score comparison in both phases.
+    entry_fee     — per-player buy-in.
+    payout_config — dict mapping place ('1st', '2nd', '3rd') → dollar amount.
+    """
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'],
+                        default='net',
+                    )
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100,
+                    )
+    entry_fee     = serializers.DecimalField(
+                        max_digits=7, decimal_places=2, default='0.00',
+                    )
+    payout_config = serializers.DictField(
+                        child=serializers.FloatField(),
+                        default=dict,
+                        help_text="{'1st': 48.00, '2nd': 24.00, '3rd': 0.00}",
+                    )
+
+
 class SkinsSetupSerializer(serializers.Serializer):
     """
     Set up (or update) the Skins game for a foursome.
@@ -374,20 +445,6 @@ class IrishRumbleSetupSerializer(serializers.Serializer):
     net_percent   = serializers.IntegerField(
                         min_value=0, max_value=200, default=100,
                     )
-    bet_unit      = serializers.DecimalField(
-                        max_digits=6, decimal_places=2, default='1.00',
-                    )
-
-
-class LowNetSetupSerializer(serializers.Serializer):
-    """POST /api/rounds/{id}/low-net/setup/"""
-    handicap_mode = serializers.ChoiceField(
-                        choices=['net', 'gross', 'strokes_off'],
-                        default='net',
-                    )
-    net_percent   = serializers.IntegerField(
-                        min_value=0, max_value=200, default=100,
-                    )
     entry_fee     = serializers.DecimalField(
                         max_digits=8, decimal_places=2, default='0.00',
                     )
@@ -401,13 +458,50 @@ class LowNetSetupSerializer(serializers.Serializer):
                     )
 
 
+class LowNetSetupSerializer(serializers.Serializer):
+    """POST /api/rounds/{id}/low-net/setup/"""
+    handicap_mode       = serializers.ChoiceField(
+                              choices=['net', 'gross', 'strokes_off'],
+                              default='net',
+                          )
+    net_percent         = serializers.IntegerField(
+                              min_value=0, max_value=200, default=100,
+                          )
+    entry_fee           = serializers.DecimalField(
+                              max_digits=8, decimal_places=2, default='0.00',
+                          )
+    payouts             = serializers.ListField(
+                              child=serializers.DictField(),
+                              default=list,
+                              help_text=(
+                                  "[{'place': 1, 'amount': '60.00'}, "
+                                  "{'place': 2, 'amount': '30.00'}]"
+                              ),
+                          )
+    excluded_player_ids = serializers.ListField(
+                              child=serializers.IntegerField(),
+                              default=list,
+                              help_text=(
+                                  "Player IDs ineligible for prizes "
+                                  "(e.g. championship Low Net placers)."
+                              ),
+                          )
+
+
 class PinkBallSetupSerializer(serializers.Serializer):
     """POST /api/rounds/{id}/pink-ball/setup/"""
-    ball_color  = serializers.CharField(max_length=50, default='Pink')
-    bet_unit    = serializers.DecimalField(
-                      max_digits=8, decimal_places=2, default='1.00',
-                  )
-    places_paid = serializers.IntegerField(min_value=1, default=1)
+    ball_color = serializers.CharField(max_length=50, default='Pink')
+    entry_fee  = serializers.DecimalField(
+                     max_digits=8, decimal_places=2, default='0.00',
+                 )
+    payouts    = serializers.ListField(
+                     child=serializers.DictField(),
+                     default=list,
+                     help_text=(
+                         "[{'place': 1, 'amount': '60.00'}, "
+                         "{'place': 2, 'amount': '30.00'}]"
+                     ),
+                 )
 
 
 class PinkBallOrderSerializer(serializers.Serializer):

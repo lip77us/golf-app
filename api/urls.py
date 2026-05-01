@@ -21,8 +21,11 @@ urlpatterns = [
     path('tees/',              views.TeeListView.as_view(),      name='api-tees'),
 
     # ---- Tournaments ----
-    path('tournaments/',          views.TournamentListView.as_view(),   name='api-tournament-list'),
-    path('tournaments/<int:pk>/', views.TournamentDetailView.as_view(), name='api-tournament-detail'),
+    path('tournaments/',                              views.TournamentListView.as_view(),        name='api-tournament-list'),
+    path('tournaments/<int:pk>/',                     views.TournamentDetailView.as_view(),      name='api-tournament-detail'),
+    path('tournaments/<int:pk>/leaderboard/',         views.TournamentLeaderboardView.as_view(), name='api-tournament-leaderboard'),
+    path('tournaments/<int:pk>/low-net/',             views.TournamentLowNetView.as_view(),      name='api-tournament-low-net'),
+    path('tournaments/<int:pk>/low-net/setup/',       views.TournamentLowNetSetupView.as_view(), name='api-tournament-low-net-setup'),
 
     # ---- Rounds ----
     path('rounds/',                      views.RoundCreateView.as_view(),     name='api-round-create'),
@@ -33,9 +36,11 @@ urlpatterns = [
     path('rounds/<int:pk>/leaderboard/', views.LeaderboardView.as_view(),   name='api-leaderboard'),
 
     # ---- Foursomes ----
-    path('foursomes/<int:pk>/',             views.FoursomeDetailView.as_view(), name='api-foursome-detail'),
-    path('foursomes/<int:pk>/scorecard/',   views.ScorecardView.as_view(),      name='api-scorecard'),
-    path('foursomes/<int:pk>/scores/',      views.ScoreSubmitView.as_view(),    name='api-score-submit'),
+    path('foursomes/<int:pk>/',              views.FoursomeDetailView.as_view(),      name='api-foursome-detail'),
+    path('foursomes/<int:pk>/active-games/', views.FoursomeActiveGamesView.as_view(), name='api-foursome-active-games'),
+    path('foursomes/<int:pk>/phantom/init/', views.PhantomInitView.as_view(),         name='phantom-init'),
+    path('foursomes/<int:pk>/scorecard/',    views.ScorecardView.as_view(),           name='api-scorecard'),
+    path('foursomes/<int:pk>/scores/',       views.ScoreSubmitView.as_view(),         name='api-score-submit'),
 
     # ---- Nassau ----
     path('foursomes/<int:pk>/nassau/',        views.NassauResultView.as_view(), name='api-nassau-result'),
@@ -57,7 +62,12 @@ urlpatterns = [
     path('foursomes/<int:pk>/skins/junk/',   views.SkinsJunkView.as_view(),   name='api-skins-junk'),
 
     # ---- Match Play ----
-    path('foursomes/<int:pk>/match-play/',   views.MatchPlayResultView.as_view(), name='api-match-play-result'),
+    path('foursomes/<int:pk>/match-play/',        views.MatchPlayResultView.as_view(), name='api-match-play-result'),
+    path('foursomes/<int:pk>/match-play/setup/',  views.MatchPlaySetupView.as_view(),  name='api-match-play-setup'),
+
+    # ---- Three-Person Match ----
+    path('foursomes/<int:pk>/three-person-match/',        views.ThreePersonMatchResultView.as_view(), name='api-three-person-match-result'),
+    path('foursomes/<int:pk>/three-person-match/setup/',  views.ThreePersonMatchSetupView.as_view(),  name='api-three-person-match-setup'),
 
     # ---- Irish Rumble setup (round-level) ----
     path('rounds/<int:pk>/irish-rumble/setup/', views.IrishRumbleSetupView.as_view(), name='api-irish-rumble-setup'),
@@ -68,4 +78,9 @@ urlpatterns = [
     # ---- Pink Ball setup (round-level) + per-foursome order ----
     path('rounds/<int:pk>/pink-ball/setup/',      views.PinkBallSetupView.as_view(),          name='api-pink-ball-setup'),
     path('foursomes/<int:pk>/pink-ball/order/',   views.PinkBallFoursomeOrderView.as_view(),  name='api-pink-ball-order'),
+
+    # ---- Course import from GolfCourseAPI ----
+    path('courses/golf-api/search/',                   views.GolfApiSearchView.as_view(),        name='api-golf-api-search'),
+    path('courses/golf-api/courses/<int:course_id>/',  views.GolfApiCourseDetailView.as_view(),  name='api-golf-api-course-detail'),
+    path('courses/import/',                            views.CourseImportView.as_view(),          name='api-course-import'),
 ]

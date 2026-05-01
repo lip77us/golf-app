@@ -137,7 +137,7 @@ def _strokes_on_hole(playing_handicap: int, stroke_index: int) -> int:
     full_strokes = playing_handicap // 18
     remainder    = playing_handicap % 18
     extra        = 1 if stroke_index <= remainder else 0
-    return full_strokes + extra
+    return max(0, full_strokes + extra)
 
 
 # ---------------------------------------------------------------------------

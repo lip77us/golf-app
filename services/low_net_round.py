@@ -153,10 +153,12 @@ def low_net_round_standings(round_obj) -> list:
         handicap_mode = config.handicap_mode
         net_percent   = config.net_percent
         payouts_cfg   = {p['place']: float(p['amount']) for p in (config.payouts or [])}
+        excluded_ids  = set(config.excluded_player_ids or [])
     except Exception:
         handicap_mode = HandicapMode.NET
         net_percent   = 100
         payouts_cfg   = {}
+        excluded_ids  = set()
 
     player_totals = _build_ln_player_totals(round_obj, handicap_mode, net_percent)
 
@@ -171,50 +173,69 @@ def low_net_round_standings(round_obj) -> list:
 
     rows = sorted(player_totals.items(), key=_sort_key)
 
-    # ── Assign ranks ─────────────────────────────────────────────────────────
-    ranked = []  # [(pid, data, rank)]
+    # ── Assign display ranks (all players, including excluded) ────────────────
+    ranked = []  # [(pid, data, display_rank)]
     rank = 1
     for i, (pid, data) in enumerate(rows):
         if i > 0:
             prev = rows[i - 1][1]
             curr = data
-            # Tied only when both net-to-par values are identical.
             prev_ntp = prev['total'] - prev['par_played']
             curr_ntp = curr['total'] - curr['par_played']
             if curr_ntp > prev_ntp:
                 rank = i + 1
         ranked.append((pid, data, rank))
 
-    # ── Tied-payout splitting ─────────────────────────────────────────────────
-    # Group players by rank, then for each rank pool all the prize money for
-    # the positions they "consume" (e.g. 4 tied for 1st consume places 1-4)
-    # and divide evenly.  Places not in payouts_cfg contribute $0.
+    # ── Prize ranking — eligible (non-excluded) players only ─────────────────
+    # Excluded players appear in the standings with their score visible, but
+    # they cannot win prize money.  Prize positions are assigned as if excluded
+    # players were not competing, so the $1st prize goes to the best-scoring
+    # *eligible* player, $2nd to the next, and so on.
     from collections import defaultdict
-    pids_by_rank: dict = defaultdict(list)
-    for pid, data, r in ranked:
-        pids_by_rank[r].append(pid)
 
-    rank_payout: dict = {}
-    for r, pids in pids_by_rank.items():
+    eligible_rows = [(pid, data) for pid, data in rows if pid not in excluded_ids]
+
+    prize_rank = 1
+    eligible_ranked: list = []   # [(pid, prize_rank)]
+    for i, (pid, data) in enumerate(eligible_rows):
+        if i > 0:
+            prev_ntp = eligible_rows[i-1][1]['total'] - eligible_rows[i-1][1]['par_played']
+            curr_ntp = data['total'] - data['par_played']
+            if curr_ntp > prev_ntp:
+                prize_rank = i + 1
+        eligible_ranked.append((pid, prize_rank))
+
+    prize_rank_map: dict = {pid: r for pid, r in eligible_ranked}
+
+    # Tied-payout splitting among eligible players.
+    pids_by_prize_rank: dict = defaultdict(list)
+    for pid, r in eligible_ranked:
+        pids_by_prize_rank[r].append(pid)
+
+    prize_rank_payout: dict = {}
+    for r, pids in pids_by_prize_rank.items():
         n = len(pids)
         total_prize = sum(payouts_cfg.get(r + j, 0.0) for j in range(n))
         per_player  = round(total_prize / n, 2) if total_prize > 0 else None
-        rank_payout[r] = per_player
+        prize_rank_payout[r] = per_player
 
     # ── Build standings list ──────────────────────────────────────────────────
     standings = []
-    for pid, data, r in ranked:
-        hp  = data['holes_played']
-        ntp = (data['total'] - data['par_played']) if hp > 0 else None
+    for pid, data, display_rank in ranked:
+        hp          = data['holes_played']
+        ntp         = (data['total'] - data['par_played']) if hp > 0 else None
+        is_excluded = pid in excluded_ids
+        payout      = None if is_excluded else prize_rank_payout.get(prize_rank_map.get(pid))
         standings.append({
-            'rank'        : r,
+            'rank'        : display_rank,
             'player_id'   : pid,
             'player_name' : data['name'],
             'net_total'   : data['total'],
             'net_to_par'  : ntp,
             'holes_played': hp,
             'foursome_id' : data.get('foursome_id'),
-            'payout'      : rank_payout.get(r),
+            'excluded'    : is_excluded,
+            'payout'      : payout,
         })
 
     return standings
@@ -260,6 +281,7 @@ def low_net_round_summary(round_obj) -> dict:
                 'net_to_par'  : s['net_to_par'],
                 'holes_played': s['holes_played'],
                 'foursome_id' : s['foursome_id'],
+                'excluded'    : s.get('excluded', False),
                 'payout'      : s['payout'],
             }
             for s in standings

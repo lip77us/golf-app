@@ -52,7 +52,7 @@ from scoring.handicap import build_score_index
 # Score index helpers
 # ---------------------------------------------------------------------------
 
-def _build_so_score_index(foursome) -> dict:
+def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
     """
     Strokes-Off-Low score index for Nassau.
     Lowest playing handicap plays to 0; each other player gets
@@ -79,7 +79,7 @@ def _build_so_score_index(foursome) -> dict:
     for m in memberships:
         if m.tee_id is None:
             continue
-        so = max(0, (m.playing_handicap or 0) - low)
+        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
         if so <= 0:
             continue
 
@@ -102,7 +102,7 @@ def _build_so_score_index(foursome) -> dict:
 def _get_score_index(foursome, game) -> dict:
     """Return player_id → hole_number → adjusted_score based on game's handicap mode."""
     if game.handicap_mode == HandicapMode.STROKES_OFF:
-        return _build_so_score_index(foursome)
+        return _build_so_score_index(foursome, net_percent=game.net_percent)
     return build_score_index(foursome, game.handicap_mode, game.net_percent)
 
 

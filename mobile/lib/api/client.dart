@@ -268,6 +268,23 @@ class ApiClient {
     await _delete('/tournaments/$id/');
   }
 
+  Future<Map<String, dynamic>> getTournamentLeaderboard(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/leaderboard/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<LowNetChampionshipSetup> getTournamentLowNetSetup(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/low-net/setup/');
+    return LowNetChampionshipSetup.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<LowNetChampionshipSetup> postTournamentLowNetSetup(
+      int tournamentId, LowNetChampionshipSetup setup) async {
+    final data = await _post(
+        '/tournaments/$tournamentId/low-net/setup/', setup.toJson());
+    return LowNetChampionshipSetup.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Rounds ----
 
   Future<Round> getRound(int id) async {
@@ -352,13 +369,16 @@ class ApiClient {
     double handicapAllowance = 1.0,
     bool randomise = true,
     bool autoSetupGames = false,
+    List<String> activeGames = const [],
   }) async {
-    final data = await _post('/rounds/$roundId/setup/', {
+    final body = <String, dynamic>{
       'players'            : players,
-      'handicap_allowance': handicapAllowance,
-      'randomise'         : randomise,
-      'auto_setup_games'  : autoSetupGames,
-    });
+      'handicap_allowance' : handicapAllowance,
+      'randomise'          : randomise,
+      'auto_setup_games'   : autoSetupGames,
+    };
+    if (activeGames.isNotEmpty) body['active_games'] = activeGames;
+    final data = await _post('/rounds/$roundId/setup/', body);
     return Round.fromJson(data as Map<String, dynamic>);
   }
 
@@ -584,6 +604,52 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  /// Configure entry fee, payouts, and bracket seedings; returns the full
+  /// match play summary.  Safe to call before play starts.
+  ///
+  /// [seedOrder] — optional list of player IDs in desired seed order
+  /// (index 0 = seed 1, plays seed 4 in Semi 1).  Omit to use the
+  /// default automatic handicap seeding.
+  Future<Map<String, dynamic>> postMatchPlaySetup(
+    int foursomeId, {
+    double               entryFee     = 0,
+    Map<String, double>  payoutConfig = const {},
+    List<int>?           seedOrder,
+  }) async {
+    final body = <String, dynamic>{
+      'entry_fee'    : entryFee,
+      'payout_config': {for (final e in payoutConfig.entries) e.key: e.value},
+    };
+    if (seedOrder != null) body['seed_order'] = seedOrder;
+    final data = await _post('/foursomes/$foursomeId/match-play/setup/', body);
+    return data as Map<String, dynamic>;
+  }
+
+  // ---- Three-Person Match ----
+
+  /// Fetch the current Three-Person Match summary for a foursome.
+  Future<ThreePersonMatchSummary> getThreePersonMatch(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/three-person-match/');
+    return ThreePersonMatchSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Set up (or replace) the Three-Person Match for a foursome.
+  Future<ThreePersonMatchSummary> postThreePersonMatchSetup(
+    int foursomeId, {
+    String               handicapMode = 'net',
+    int                  netPercent   = 100,
+    double               entryFee     = 0.0,
+    Map<String, double>  payoutConfig = const {},
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/three-person-match/setup/', {
+      'handicap_mode': handicapMode,
+      'net_percent'  : netPercent,
+      'entry_fee'    : entryFee,
+      'payout_config': {for (final e in payoutConfig.entries) e.key: e.value},
+    });
+    return ThreePersonMatchSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Irish Rumble setup (round-level) ----
 
   Future<Map<String, dynamic>> getIrishRumbleConfig(int roundId) async {
@@ -593,14 +659,63 @@ class ApiClient {
 
   Future<Map<String, dynamic>> postIrishRumbleSetup(
     int roundId, {
-    required String handicapMode,
-    required int    netPercent,
-    required double betUnit,
+    required String                      handicapMode,
+    required int                         netPercent,
+    required double                      entryFee,
+    required List<Map<String, dynamic>>  payouts,
   }) async {
     final data = await _post('/rounds/$roundId/irish-rumble/setup/', {
       'handicap_mode': handicapMode,
       'net_percent'  : netPercent,
-      'bet_unit'     : betUnit.toStringAsFixed(2),
+      'entry_fee'    : entryFee.toStringAsFixed(2),
+      'payouts'      : payouts,
+    });
+    return data as Map<String, dynamic>;
+  }
+
+  // ---- Course import (GolfCourseAPI) ----
+
+  /// Search golf courses by name via GolfCourseAPI.
+  /// Returns a list of course maps:
+  ///   [{ id (int), club_name, course_name, city, state, country, already_imported }]
+  Future<List<Map<String, dynamic>>> searchGolfApiCourses(String query) async {
+    final data    = await _get('/courses/golf-api/search/?q=${Uri.encodeComponent(query)}');
+    final courses = (data as Map<String, dynamic>)['courses'] as List? ?? [];
+    return courses.map((c) => Map<String, dynamic>.from(c as Map)).toList();
+  }
+
+  /// Fetch full course detail (tees + holes) from GolfCourseAPI.
+  /// [courseId] is the numeric id returned by searchGolfApiCourses.
+  Future<Map<String, dynamic>> getGolfApiCourse(int courseId) async {
+    final data = await _get('/courses/golf-api/courses/$courseId/');
+    return data as Map<String, dynamic>;
+  }
+
+  /// Import a course from GolfCourseAPI into the local database.
+  ///
+  /// Returns { already_exists, created, tees_imported, course: {...} }
+  /// Throws ApiException(409) when the course exists and forceUpdate=false —
+  /// the caller can catch that and offer the user Skip / Update.
+  Future<Map<String, dynamic>> importCourse(
+    int courseId, {
+    bool forceUpdate = false,
+  }) async {
+    final body = <String, dynamic>{
+      'course_id'   : courseId,
+      'force_update': forceUpdate,
+    };
+    final data = await _post('/courses/import/', body);
+    return data as Map<String, dynamic>;
+  }
+
+  // ---- Foursome per-game override ----
+
+  Future<Map<String, dynamic>> patchFoursomeActiveGames(
+    int foursomeId, {
+    required List<String> activeGames,
+  }) async {
+    final data = await _patch('/foursomes/$foursomeId/active-games/', {
+      'active_games': activeGames,
     });
     return data as Map<String, dynamic>;
   }
@@ -614,16 +729,18 @@ class ApiClient {
 
   Future<Map<String, dynamic>> postLowNetSetup(
     int roundId, {
-    required String                   handicapMode,
-    required int                      netPercent,
-    required double                   entryFee,
+    required String                     handicapMode,
+    required int                        netPercent,
+    required double                     entryFee,
     required List<Map<String, dynamic>> payouts,
+    List<int>                           excludedPlayerIds = const [],
   }) async {
     final data = await _post('/rounds/$roundId/low-net/setup/', {
-      'handicap_mode': handicapMode,
-      'net_percent'  : netPercent,
-      'entry_fee'    : entryFee.toStringAsFixed(2),
-      'payouts'      : payouts,
+      'handicap_mode'      : handicapMode,
+      'net_percent'        : netPercent,
+      'entry_fee'          : entryFee.toStringAsFixed(2),
+      'payouts'            : payouts,
+      'excluded_player_ids': excludedPlayerIds,
     });
     return data as Map<String, dynamic>;
   }
@@ -637,14 +754,14 @@ class ApiClient {
 
   Future<Map<String, dynamic>> postPinkBallSetup(
     int roundId, {
-    required String ballColor,
-    required double betUnit,
-    int placesPaid = 1,
+    required String                      ballColor,
+    required double                      entryFee,
+    required List<Map<String, dynamic>>  payouts,
   }) async {
     final data = await _post('/rounds/$roundId/pink-ball/setup/', {
-      'ball_color'  : ballColor,
-      'bet_unit'    : betUnit.toStringAsFixed(2),
-      'places_paid' : placesPaid,
+      'ball_color': ballColor,
+      'entry_fee' : entryFee.toStringAsFixed(2),
+      'payouts'   : payouts,
     });
     return data as Map<String, dynamic>;
   }
@@ -657,5 +774,16 @@ class ApiClient {
       'order': order,
     });
     return data as Map<String, dynamic>;
+  }
+
+  // ---- Phantom player ----
+
+  /// Idempotent — safe to call on every score-entry screen load.
+  /// Initialises the phantom's rotation config (once) and returns
+  /// the per-hole source-player mapping so the UI can show which
+  /// real player's score the phantom copies on each hole.
+  Future<PhantomInitResult> initPhantom(int foursomeId) async {
+    final data = await _post('/foursomes/$foursomeId/phantom/init/', {});
+    return PhantomInitResult.fromJson(data as Map<String, dynamic>);
   }
 }

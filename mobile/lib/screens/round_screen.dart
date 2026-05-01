@@ -5,6 +5,20 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 
+// ── Human-readable labels for game keys ──────────────────────────────────────
+const _kGameLabels = {
+  'skins'        : 'Skins',
+  'stableford'   : 'Stableford',
+  'pink_ball'    : 'Pink Ball',
+  'nassau'       : 'Nassau',
+  'sixes'        : "Six's",
+  'match_play'   : 'Match Play',
+  'irish_rumble' : 'Irish Rumble',
+  'scramble'     : 'Scramble',
+  'low_net_round': 'Stroke Play',
+  'points_531'   : 'Points 5-3-1',
+};
+
 class RoundScreen extends StatefulWidget {
   final int roundId;
   const RoundScreen({super.key, required this.roundId});
@@ -93,7 +107,8 @@ class _RoundScreenState extends State<RoundScreen> {
     final hasIrishRumble = round.activeGames.contains('irish_rumble');
     final hasLowNet      = round.activeGames.contains('low_net_round');
     final hasPinkBall    = round.activeGames.contains('pink_ball');
-    final hasSetupGames  = hasIrishRumble || hasLowNet || hasPinkBall;
+    final hasMatchPlay   = round.activeGames.contains('match_play');
+    final hasSetupGames  = hasIrishRumble || hasLowNet || hasPinkBall || hasMatchPlay;
 
     return RefreshIndicator(
       onRefresh: () => rp.loadRound(widget.roundId),
@@ -101,17 +116,19 @@ class _RoundScreenState extends State<RoundScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         children: [
           _RoundInfoCard(round: round),
-          if (hasSetupGames && !isComplete) ...[
+          if (hasSetupGames && !isComplete && isAdmin) ...[
             const SizedBox(height: 16),
             Text('Game Setup',
                 style: Theme.of(context).textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             _GameSetupCard(
-              roundId:         widget.roundId,
-              hasIrishRumble:  hasIrishRumble,
-              hasLowNet:       hasLowNet,
-              hasPinkBall:     hasPinkBall,
+              roundId:        widget.roundId,
+              hasIrishRumble: hasIrishRumble,
+              hasLowNet:      hasLowNet,
+              hasPinkBall:    hasPinkBall,
+              hasMatchPlay:   hasMatchPlay,
+              foursomes:      round.foursomes,
             ),
           ],
           const SizedBox(height: 16),
@@ -119,49 +136,95 @@ class _RoundScreenState extends State<RoundScreen> {
               style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...round.foursomes.map((fs) => _FoursomeCard(
-                foursome:     fs,
-                myPlayerId:   myId,
-                isAdmin:      isAdmin,
-                isComplete:   isComplete,
-                sixesActive:  round.activeGames.contains('sixes'),
-                sixesStarted: rp.sixesIsStarted(fs.id),
-                onEnterScores: () {
-                  context.read<RoundProvider>().loadScorecard(fs.id);
-                  // Route priority:
-                  //   1. Sixes active → /sixes-setup (team picker).
-                  //      SixesSetupScreen auto-redirects to /sixes if the
-                  //      match is already started.
-                  //   2. Points 5-3-1 active → /points-531-setup (handicap
-                  //      mode picker).  No team-picking step because the
-                  //      game is per-player.
-                  //   3. Skins active → /skins-setup (handicap + carryover).
-                  //      SkinsSetupScreen auto-redirects to /skins if the
-                  //      game is already started.
-                  //   4. Nassau active → /nassau-setup (team + handicap +
-                  //      press config).  NassauSetupScreen auto-redirects to
-                  //      /nassau if the game is already started.
-                  //   5. Otherwise → the plain /scorecard.
-                  //
-                  // These games are mutually exclusive in the casual-round
-                  // picker, so branches never collide in practice.
-                  final String route;
-                  if (round.activeGames.contains('pink_ball')) {
-                    route = '/pink-ball';
-                  } else if (round.activeGames.contains('sixes')) {
-                    route = '/sixes-setup';
-                  } else if (round.activeGames.contains('points_531')) {
-                    route = '/points-531-setup';
-                  } else if (round.activeGames.contains('skins')) {
-                    route = '/skins-setup';
-                  } else if (round.activeGames.contains('nassau')) {
-                    route = '/nassau-setup';
-                  } else {
-                    route = '/scorecard';
-                  }
-                  Navigator.of(context).pushNamed(route, arguments: fs.id);
-                },
-              )),
+          ...round.foursomes.map((fs) {
+                // Effective game list for this foursome: union of round-level
+                // games (irish_rumble, pink_ball, stableford, stroke_play —
+                // shared by all foursomes) and per-foursome games (match_play,
+                // nassau, skins — specific to this foursome).
+                final fsGames = {
+                  ...round.activeGames,
+                  ...fs.activeGames,
+                }.toList();
+                return _FoursomeCard(
+                  foursome:        fs,
+                  myPlayerId:      myId,
+                  isAdmin:         isAdmin,
+                  isComplete:      isComplete,
+                  sixesActive:     fsGames.contains('sixes'),
+                  sixesStarted:    rp.sixesIsStarted(fs.id),
+                  roundActiveGames: round.activeGames,
+                  onGamesChanged:  () => rp.loadRound(widget.roundId),
+                  onEnterScores:   () {
+                    context.read<RoundProvider>().loadScorecard(fs.id);
+                    // Route priority: setup screens for games that need initial
+                    // configuration; otherwise go straight to universal score entry.
+                    // Note: match_play setup is checked BEFORE pink_ball so that
+                    // a round combining both games still goes through bracket setup.
+                    final String route;
+                    if (fsGames.contains('three_person_match') &&
+                        !fs.configuredGames.contains('three_person_match')) {
+                      // Three-Person Match not yet configured — go to setup.
+                      route = '/three-person-match-setup';
+                    } else if (fsGames.contains('match_play') &&
+                        !fs.configuredGames.contains('match_play') &&
+                        !fs.configuredGames.contains('three_person_match')) {
+                      // Match play bracket not yet configured — go to setup.
+                      // Skip this gate for 3-player foursomes: they play
+                      // Three-Person Match (5-3-1) instead of a bracket, so
+                      // their three_person_match config satisfies the setup
+                      // requirement even though match_play is round-wide.
+                      route = '/match-play-setup';
+                    } else if (fsGames.contains('pink_ball')) {
+                      // Pink ball always gets its own dedicated screen.
+                      // The pink ball screen loads and displays match play
+                      // status when match play is also active.
+                      route = '/pink-ball';
+                    } else if (fsGames.contains('sixes') &&
+                        !rp.sixesIsStarted(fs.id)) {
+                      // Six's needs team / segment setup first.
+                      route = '/sixes-setup';
+                    } else if (fsGames.contains('points_531') &&
+                        !fs.configuredGames.contains('points_531')) {
+                      // Points 531 needs handicap config.
+                      route = '/points-531-setup';
+                    } else if (fsGames.contains('nassau') &&
+                        !fs.configuredGames.contains('nassau')) {
+                      // Nassau needs team assignment + handicap config.
+                      route = '/nassau-setup';
+                    } else if (fsGames.contains('skins') &&
+                        !fs.configuredGames.contains('skins')) {
+                      // Skins needs handicap + carryover config.
+                      route = '/skins-setup';
+                    } else {
+                      // Everything configured (or no setup required) →
+                      // universal score entry.
+                      route = '/score-entry';
+                    }
+                    // Build richer arguments for match-play-setup so it can
+                    // offer "copy to all" and "copy to peers" actions.
+                    final Object routeArgs;
+                    if (route == '/match-play-setup') {
+                      final allIds = round.foursomes
+                          .map((f) => f.id)
+                          .toList();
+                      final peerIds = round.foursomes
+                          .where((f) =>
+                              f.id != fs.id &&
+                              f.realPlayers.length == fs.realPlayers.length)
+                          .map((f) => f.id)
+                          .toList();
+                      routeArgs = {
+                        'foursomeId'     : fs.id,
+                        'allMatchPlayIds': allIds,
+                        'peerIds'        : peerIds,
+                      };
+                    } else {
+                      routeArgs = fs.id;
+                    }
+                    Navigator.of(context).pushNamed(route, arguments: routeArgs);
+                  },
+                );
+              }),
         ],
       ),
     );
@@ -189,7 +252,7 @@ class _RoundInfoCard extends StatelessWidget {
             Chip(label: Text(round.status.replaceAll('_', ' ').toUpperCase(),
                 style: const TextStyle(fontSize: 11))),
             const SizedBox(width: 8),
-            Text('\$${round.betUnit.toStringAsFixed(2)} / unit',
+            Text('\$${round.betUnit.formatBet()} / unit',
                 style: theme.textTheme.bodySmall),
           ]),
           if (round.activeGames.isNotEmpty) ...[
@@ -222,61 +285,139 @@ class _RoundInfoCard extends StatelessWidget {
       'match_play':   'Match Play',
       'irish_rumble': 'Irish Rumble',
       'scramble':     'Scramble',
-      'low_net_round':'Low Net',
+      'low_net_round':'Stroke Play',
     };
     return labels[g] ?? g;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Game Setup card — surfaces Irish Rumble / Low Net config buttons
+// Game Setup card — surfaces Irish Rumble / Stroke Play config buttons
 // ---------------------------------------------------------------------------
 
 class _GameSetupCard extends StatelessWidget {
-  final int  roundId;
-  final bool hasIrishRumble;
-  final bool hasLowNet;
-  final bool hasPinkBall;
+  final int            roundId;
+  final bool           hasIrishRumble;
+  final bool           hasLowNet;
+  final bool           hasPinkBall;
+  final bool           hasMatchPlay;
+  final List<Foursome> foursomes;
 
   const _GameSetupCard({
     required this.roundId,
     required this.hasIrishRumble,
     required this.hasLowNet,
     required this.hasPinkBall,
+    required this.hasMatchPlay,
+    required this.foursomes,
   });
 
   @override
   Widget build(BuildContext context) {
+    // For match play, only list foursomes that haven't been configured yet.
+    // Exclude 3-player foursomes that play Three-Person Match (5-3-1) instead —
+    // their three_person_match config satisfies setup even without a bracket.
+    final pendingMatchPlay = hasMatchPlay
+        ? foursomes.where((fs) =>
+            !fs.configuredGames.contains('match_play') &&
+            !fs.configuredGames.contains('three_person_match')
+          ).toList()
+        : <Foursome>[];
+
+    final theme = Theme.of(context);
+    // Spacer helpers: only add gaps between sections that are actually present
+    final beforeLowNet   = hasIrishRumble;
+    final beforePinkBall = hasIrishRumble || hasLowNet;
+    final beforeMatchPlay = hasIrishRumble || hasLowNet || hasPinkBall;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (hasIrishRumble) ...[
+            if (hasIrishRumble)
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context)
                     .pushNamed('/irish-rumble-setup', arguments: roundId),
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Configure Irish Rumble'),
               ),
-              if (hasLowNet) const SizedBox(height: 8),
-            ],
-            if (hasLowNet)
+            if (hasLowNet) ...[
+              if (beforeLowNet) const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context)
                     .pushNamed('/low-net-setup', arguments: roundId),
                 icon: const Icon(Icons.tune, size: 18),
-                label: const Text('Configure Low Net'),
+                label: const Text('Configure Stroke Play'),
               ),
+            ],
             if (hasPinkBall) ...[
-              if (hasIrishRumble || hasLowNet) const SizedBox(height: 8),
+              if (beforePinkBall) const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context)
                     .pushNamed('/pink-ball-setup', arguments: roundId),
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Configure Pink Ball'),
               ),
+            ],
+            if (hasMatchPlay) ...[
+              if (beforeMatchPlay) const SizedBox(height: 8),
+              // Section header
+              Row(children: [
+                const Icon(Icons.sports_golf, size: 16),
+                const SizedBox(width: 6),
+                Text('Match Play Brackets',
+                    style: theme.textTheme.labelLarge
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+              ]),
+              const SizedBox(height: 4),
+              if (pendingMatchPlay.isEmpty)
+                // All foursomes configured
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(children: [
+                    Icon(Icons.check_circle_outline,
+                        size: 16, color: theme.colorScheme.primary),
+                    const SizedBox(width: 6),
+                    Text('All brackets set up',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.primary)),
+                  ]),
+                )
+              else ...[
+                Text(
+                  'Set up one bracket per group:',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 6),
+                // One button per unconfigured foursome
+                ...pendingMatchPlay.map((fs) {
+                  final allIds = foursomes.map((f) => f.id).toList();
+                  final peerIds = foursomes
+                      .where((f) =>
+                          f.id != fs.id &&
+                          f.realPlayers.length == fs.realPlayers.length)
+                      .map((f) => f.id)
+                      .toList();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).pushNamed(
+                        '/match-play-setup',
+                        arguments: {
+                          'foursomeId'     : fs.id,
+                          'allMatchPlayIds': allIds,
+                          'peerIds'        : peerIds,
+                        },
+                      ),
+                      icon:  const Icon(Icons.tune, size: 18),
+                      label: Text('Set Up ${fs.label}'),
+                    ),
+                  );
+                }),
+              ],
             ],
           ],
         ),
@@ -361,15 +502,17 @@ class _CompleteRoundButton extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _FoursomeCard extends StatelessWidget {
-  final Foursome foursome;
-  final int?     myPlayerId;
+  final Foursome     foursome;
+  final int?         myPlayerId;
   /// True when the logged-in user is admin/staff (no linked player).
   /// Admins can enter scores for any foursome and see game-setup controls.
-  final bool     isAdmin;
-  final bool     isComplete;
-  final bool     sixesActive;
-  final bool     sixesStarted;
+  final bool         isAdmin;
+  final bool         isComplete;
+  final bool         sixesActive;
+  final bool         sixesStarted;
+  final List<String> roundActiveGames;
   final VoidCallback onEnterScores;
+  final VoidCallback onGamesChanged;
 
   const _FoursomeCard({
     required this.foursome,
@@ -378,8 +521,63 @@ class _FoursomeCard extends StatelessWidget {
     required this.isComplete,
     required this.sixesActive,
     required this.sixesStarted,
+    required this.roundActiveGames,
     required this.onEnterScores,
+    required this.onGamesChanged,
   });
+
+  // Games that make sense to toggle per-foursome (excludes round-level-only games)
+  static const _perFoursomeGames = {
+    'skins', 'sixes', 'nassau', 'match_play', 'points_531',
+    'irish_rumble', 'pink_ball',
+  };
+
+  Future<void> _showGameSheet(BuildContext context) async {
+    // Only offer games that are active at the round level and can be per-foursome
+    final eligible = roundActiveGames
+        .where((g) => _perFoursomeGames.contains(g))
+        .toList();
+    if (eligible.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No per-group games to configure.')),
+      );
+      return;
+    }
+
+    // Current selection: foursome override if set, otherwise all round games
+    final current = foursome.activeGames.isNotEmpty
+        ? Set<String>.from(foursome.activeGames)
+        : Set<String>.from(eligible);
+
+    final selected = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _GameSelectionSheet(
+        foursomeLabel: foursome.label,
+        eligibleGames: eligible,
+        selected:      current,
+      ),
+    );
+
+    if (selected == null || !context.mounted) return;
+
+    // Empty list means "inherit round defaults" (all round games selected)
+    final toSave = selected.length == eligible.length
+        ? <String>[]   // identical to round — clear override
+        : selected.toList();
+
+    final client = context.read<AuthProvider>().client;
+    try {
+      await client.patchFoursomeActiveGames(foursome.id, activeGames: toSave);
+      onGamesChanged();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -389,6 +587,20 @@ class _FoursomeCard extends StatelessWidget {
     // Admins can edit any group. Everyone can view completed scorecards.
     final canEdit = isAdmin || isMyGroup;
     final theme = Theme.of(context);
+
+    // Effective games shown for this foursome
+    final effectiveGames = foursome.activeGames.isNotEmpty
+        ? foursome.activeGames
+        : roundActiveGames;
+    final hasOverride = foursome.activeGames.isNotEmpty;
+
+    // True when this foursome needs a bracket/setup step before score entry.
+    final fsGames = {...roundActiveGames, ...foursome.activeGames};
+    final needsBracketSetup =
+        (fsGames.contains('match_play') &&
+            !foursome.configuredGames.contains('match_play')) ||
+        (fsGames.contains('three_person_match') &&
+            !foursome.configuredGames.contains('three_person_match'));
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -414,7 +626,39 @@ class _FoursomeCard extends StatelessWidget {
                     style: TextStyle(color: Colors.white, fontSize: 11)),
               ),
             ],
+            if (isAdmin && !isComplete) ...[
+              const Spacer(),
+              IconButton(
+                icon: Icon(
+                  Icons.sports_golf,
+                  size: 18,
+                  color: hasOverride
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                tooltip: 'Configure group games',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                onPressed: () => _showGameSheet(context),
+              ),
+            ],
           ]),
+          // Per-foursome game chips (only when override is active)
+          if (hasOverride && effectiveGames.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 4,
+              runSpacing: 2,
+              children: effectiveGames.map((g) => Chip(
+                label: Text(_kGameLabels[g] ?? g,
+                    style: const TextStyle(fontSize: 10)),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                backgroundColor:
+                    theme.colorScheme.primaryContainer.withOpacity(0.5),
+              )).toList(),
+            ),
+          ],
           const SizedBox(height: 8),
           ...foursome.realPlayers.map((m) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
@@ -436,20 +680,103 @@ class _FoursomeCard extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: onEnterScores,
                 icon: Icon(
-                  isComplete ? Icons.table_chart_outlined : Icons.edit_note,
+                  isComplete
+                      ? Icons.table_chart_outlined
+                      : needsBracketSetup
+                          ? Icons.tune
+                          : Icons.edit_note,
                   size: 18,
                 ),
                 label: Text(
                   isComplete
                       ? 'View Scorecard'
-                      : (sixesActive && !sixesStarted)
-                          ? 'Start Match'
-                          : 'Enter Scores',
+                      : needsBracketSetup
+                          ? 'Set Up Bracket →'
+                          : (sixesActive && !sixesStarted)
+                              ? 'Start Match'
+                              : 'Enter Scores',
                 ),
               ),
             ),
           ],
         ]),
+      ),
+    );
+  }
+}
+
+// ── Bottom sheet for per-foursome game selection ──────────────────────────────
+
+class _GameSelectionSheet extends StatefulWidget {
+  final String       foursomeLabel;
+  final List<String> eligibleGames;
+  final Set<String>  selected;
+
+  const _GameSelectionSheet({
+    required this.foursomeLabel,
+    required this.eligibleGames,
+    required this.selected,
+  });
+
+  @override
+  State<_GameSelectionSheet> createState() => _GameSelectionSheetState();
+}
+
+class _GameSelectionSheetState extends State<_GameSelectionSheet> {
+  late final Set<String> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set<String>.from(widget.selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Text('${widget.foursomeLabel} — Games',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(null),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+            'Toggle which games this group is playing. '
+            'Deselecting all reverts to the round defaults.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          ...widget.eligibleGames.map((g) => CheckboxListTile(
+                title: Text(_kGameLabels[g] ?? g),
+                value: _selected.contains(g),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                onChanged: (v) => setState(() {
+                  if (v == true) _selected.add(g); else _selected.remove(g);
+                }),
+              )),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(Set<String>.from(_selected)),
+              child: const Text('Save'),
+            ),
+          ),
+        ],
       ),
     );
   }

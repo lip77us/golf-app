@@ -142,6 +142,45 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent):
 
         result.setdefault(fid, {}).setdefault(pid, {})[hole] = capped
 
+    # ── Inject phantom scores ───────────────────────────────────────────────
+    from scoring.phantom import PhantomScoreProvider
+    for fs in foursomes:
+        if not fs.has_phantom:
+            continue
+        provider = PhantomScoreProvider(fs)
+        if not provider.has_phantom:
+            continue
+        phantom_m = next(
+            (m for m in fs.memberships.all() if m.player.is_phantom), None
+        )
+        if phantom_m is None:
+            continue
+        phantom_hcp    = provider.phantom_playing_handicap()
+        phantom_gross  = provider.phantom_gross_scores()
+        phantom_pid    = phantom_m.player_id
+        # Compute capped adjusted score per hole for the phantom
+        for hole, gross in phantom_gross.items():
+            # Get tee for SI lookup — use the phantom membership's tee, or fallback to first real member
+            tee = phantom_m.tee or next(
+                (m.tee for m in fs.memberships.all() if not m.player.is_phantom and m.tee_id), None
+            )
+            if tee is None:
+                continue
+            si = tee.hole(hole).get('stroke_index', 18)
+
+            if handicap_mode == HandicapMode.GROSS:
+                adjusted = gross
+            elif handicap_mode == HandicapMode.NET:
+                eff = _effective_hcp(phantom_hcp, net_percent)
+                adjusted = gross - _strokes_on_hole(eff, si)
+            else:  # STROKES_OFF
+                so = max(0, phantom_hcp - low_hcp)
+                adjusted = gross - _strokes_on_hole(so, si)
+
+            par    = par_index.get(fs.pk, {}).get(hole, 4)
+            capped = min(adjusted, par + 2)
+            result.setdefault(fs.pk, {}).setdefault(phantom_pid, {})[hole] = capped
+
     return result
 
 
@@ -177,13 +216,9 @@ def calculate_irish_rumble(round_obj) -> list:
 
     Returns a flat list of IrishRumbleSegmentResult instances.
     """
-    try:
-        config = round_obj.irish_rumble_config
-    except IrishRumbleConfig.DoesNotExist:
-        raise ValueError(
-            f"No IrishRumbleConfig found for {round_obj}. "
-            "Create one in admin under Games → Irish Rumble Config."
-        )
+    config = IrishRumbleConfig.objects.filter(round=round_obj).first()
+    if config is None:
+        return []
 
     handicap_mode = config.handicap_mode
     net_percent   = config.net_percent
@@ -193,9 +228,10 @@ def calculate_irish_rumble(round_obj) -> list:
     # Build the capped score index for the whole round
     score_index = _build_ir_score_index(round_obj, handicap_mode, net_percent)
 
-    # Real player counts per foursome
+    # Player counts per foursome (including phantom)
     player_counts = {
         fs.pk: fs.memberships.filter(player__is_phantom=False).count()
+               + (1 if fs.has_phantom else 0)
         for fs in foursomes
     }
 
@@ -275,7 +311,9 @@ def irish_rumble_summary(round_obj) -> dict:
         {
           'handicap_mode': str,
           'net_percent'  : int,
-          'bet_unit'     : float,
+          'entry_fee'    : float,
+          'payouts'      : [{'place': int, 'amount': float}, ...],
+          'pool'         : float,
           'segments'     : [
               {
                 'label'  : "Holes 1-6 (best 1)",
@@ -283,7 +321,8 @@ def irish_rumble_summary(round_obj) -> dict:
               }, ...
           ],
           'overall': [
-              {'rank', 'group', 'players', 'total_score', 'net_to_par'}, ...
+              {'rank', 'group', 'players', 'total_score', 'net_to_par',
+               'current_hole', 'payout'}, ...
           ]
         }
     """
@@ -342,9 +381,10 @@ def irish_rumble_summary(round_obj) -> dict:
 
     foursomes = {fs.pk: fs for fs in Foursome.objects.filter(round=round_obj)}
 
-    # player count per foursome (caps balls on 3-somes)
+    # player count per foursome (includes phantom)
     player_counts_dict = {
         fs.pk: fs.memberships.filter(player__is_phantom=False).count()
+               + (1 if fs.has_phantom else 0)
         for fs in foursomes.values()
     }
 
@@ -366,7 +406,7 @@ def irish_rumble_summary(round_obj) -> dict:
         row['foursome_id']: row['max_hole']
         for row in (
             HoleScore.objects
-            .filter(foursome__round=round_obj)
+            .filter(foursome__round=round_obj, player__is_phantom=False)
             .exclude(gross_score=None)
             .values('foursome_id')
             .annotate(max_hole=Max('hole_number'))
@@ -397,9 +437,14 @@ def irish_rumble_summary(round_obj) -> dict:
         if has_any:
             running[fid] = {'score': score_acc, 'par': par_acc}
 
-    # Payout: winner-take-all pool; split evenly on ties.
-    num_groups = len(foursomes)
-    pool       = round(float(config.bet_unit) * num_groups, 2)
+    # Payout: entry_fee × num_players pool; split per explicit payouts list.
+    from tournament.models import FoursomeMembership
+    num_players  = FoursomeMembership.objects.filter(
+                       foursome__round=round_obj, player__is_phantom=False
+                   ).count()
+    pool         = round(float(config.entry_fee) * num_players, 2)
+    payouts_list = config.payouts or []
+    payouts_dict = {int(p['place']): float(p['amount']) for p in payouts_list}
 
     # Sort: teams with scores first (lowest net-to-par wins), then unstarted
     def _ntp(fid):
@@ -423,36 +468,51 @@ def irish_rumble_summary(round_obj) -> dict:
     for fid in unscored:
         ranked_rows.append({'foursome_id': fid, 'rank': None})
 
-    # Split pool among co-leaders (rank == 1)
-    leaders = [r for r in ranked_rows if r['rank'] == 1]
-    payout_each = round(pool / len(leaders), 2) if leaders else 0.0
+    # Count groups at each paid rank so we can split tied payouts.
+    count_at_rank = {}
+    for row in ranked_rows:
+        r = row['rank']
+        if r is not None and r in payouts_dict:
+            count_at_rank[r] = count_at_rank.get(r, 0) + 1
+
+    def _payout_for(rank):
+        if rank is None or rank not in payouts_dict:
+            return 0.0
+        n = count_at_rank.get(rank, 1)
+        return round(payouts_dict[rank] / n, 2)
 
     overall_out = []
     for row in ranked_rows:
-        fid     = row['foursome_id']
-        fs      = foursomes[fid]
-        r       = running.get(fid)
-        ntp     = (r['score'] - r['par']) if r else None
-        players = ', '.join(
+        fid      = row['foursome_id']
+        fs       = foursomes[fid]
+        r        = running.get(fid)
+        ntp      = (r['score'] - r['par']) if r else None
+        n_players = player_counts_dict.get(fid, 4)
+        players  = ', '.join(
             m.player.name
             for m in fs.memberships.filter(player__is_phantom=False)
                                    .select_related('player')
                                    .order_by('player__name')
         )
+        group_payout = _payout_for(row['rank'])
         overall_out.append({
-            'rank'        : row['rank'],
-            'group'       : f"Group {fs.group_number}",
-            'players'     : players,
-            'total_score' : r['score'] if r else None,
-            'net_to_par'  : ntp,
-            'current_hole': hole_progress.get(fid),
-            'payout'      : payout_each if row['rank'] == 1 else 0.0,
+            'rank'             : row['rank'],
+            'group'            : f"Group {fs.group_number}",
+            'players'          : players,
+            'n_players'        : n_players,
+            'has_phantom'      : fs.has_phantom,
+            'total_score'      : r['score'] if r else None,
+            'net_to_par'       : ntp,
+            'current_hole'     : hole_progress.get(fid),
+            'payout'           : group_payout,
+            'per_person_payout': round(group_payout / n_players, 2) if n_players else 0.0,
         })
 
     return {
         'handicap_mode': config.handicap_mode,
         'net_percent'  : config.net_percent,
-        'bet_unit'     : float(config.bet_unit),
+        'entry_fee'    : float(config.entry_fee),
+        'payouts'      : payouts_list,
         'pool'         : pool,
         'segments'     : segments_out,
         'overall'      : overall_out,

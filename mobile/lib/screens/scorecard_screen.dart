@@ -715,56 +715,120 @@ class _HoleScoreCard extends StatelessWidget {
             final hasScore = gross != null;
             final strokes  = strokesForHole(m);
 
-            // Divider between players
-            final divider = idx > 0
-                ? const Divider(height: 1, indent: 0, endIndent: 0)
-                : const SizedBox.shrink();
+            // Score box coloring: net result when scored, hot highlight when empty+active.
+            final Color? boxBg;
+            final Border boxBorder;
+            if (hasScore) {
+              final diff = (gross! - strokes) - par;
+              final Color c = diff < 0
+                  ? Colors.green.shade200
+                  : diff == 0
+                      ? Colors.grey.shade200
+                      : Colors.red.shade200;
+              boxBg    = c;
+              boxBorder = Border.all(color: c);
+            } else if (isHot) {
+              boxBg    = theme.colorScheme.primaryContainer.withOpacity(0.4);
+              boxBorder = Border.all(
+                  color: theme.colorScheme.primary, width: 2);
+            } else {
+              boxBg    = null;
+              boxBorder = Border.all(color: theme.colorScheme.outline);
+            }
 
-            // Player info row
-            final playerRow = Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            // Player row — matches sixes layout exactly.
+            final playerRow = Container(
+              decoration: BoxDecoration(
+                color: isHot
+                    ? theme.colorScheme.primaryContainer.withOpacity(0.08)
+                    : null,
+                border: Border(
+                    top: BorderSide(
+                        color: theme.colorScheme.outlineVariant)),
+              ),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 8),
               child: Row(children: [
-                // Name + running total
+                // Position + name + HCP chip
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(m.player.name,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 15)),
-                      Text(
-                        'Hcp ${m.playingHandicap}  •  '
-                        'Gross ${_signed(rt.grossVsPar)}  '
-                        'Net ${_signed(rt.netVsPar)}',
+                  child: Row(children: [
+                    Text('${idx + 1})  ',
                         style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
+                            color: theme.colorScheme.primary)),
+                    Flexible(
+                      child: Text(
+                        m.player.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: isHot
+                              ? theme.colorScheme.primary
+                              : null,
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.secondaryContainer
+                            .withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: theme.colorScheme.outlineVariant),
+                      ),
+                      child: Text(
+                        'Hcp ${m.playingHandicap}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme
+                              .onSecondaryContainer,
+                        ),
+                      ),
+                    ),
+                  ]),
                 ),
 
-                // Score chip (when already scored)
-                if (hasScore) ...[
-                  GestureDetector(
-                    // Tapping the chip opens the edit sheet; disabled read-only.
-                    onTap: onEditTap != null ? () => onEditTap!(m) : null,
-                    child: _ScoreChip(
-                      gross:   gross!,
-                      par:     par,
-                      strokes: strokes,
+                // Running totals
+                Text(
+                  '${_signed(rt.grossVsPar)}G '
+                  '${_signed(rt.netVsPar)}N',
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.secondary),
+                ),
+                const SizedBox(width: 8),
+
+                // Score box
+                GestureDetector(
+                  onTap: hasScore && onEditTap != null
+                      ? () => onEditTap!(m)
+                      : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 40,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: boxBg,
+                      border: boxBorder,
+                      borderRadius: BorderRadius.circular(6),
                     ),
+                    alignment: Alignment.center,
+                    child: gross != null
+                        ? Text(
+                            '$gross',
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(
+                                    fontWeight: FontWeight.bold),
+                          )
+                        : null,
                   ),
-                ] else if (!isHot) ...[
-                  // Not hot, no score — subtle dash
-                  Text('—',
-                      style: TextStyle(
-                          fontSize: 22,
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ],
+                ),
               ]),
             );
 
-            // Inline picker (hot spot only, disabled in read-only mode)
+            // Inline picker — hot spot only, hidden in read-only mode.
             final picker = isHot && !hasScore && onScoreSelected != null
                 ? _InlineScorePicker(
                     par:             par,
@@ -774,7 +838,7 @@ class _HoleScoreCard extends StatelessWidget {
                   )
                 : const SizedBox.shrink();
 
-            return [divider, playerRow, picker];
+            return [playerRow, picker];
           }),
 
           const SizedBox(height: 4),
@@ -819,7 +883,8 @@ class _ScoreChip extends StatelessWidget {
 }
 
 // ===========================================================================
-// Inline score picker — horizontal row of score buttons (hot player)
+// Inline score picker — scrollable 1–12, opens with par-2 as first visible
+// button so par is naturally the 3rd (par-2, par-1, par …).
 // ===========================================================================
 
 class _InlineScorePicker extends StatefulWidget {
@@ -840,18 +905,23 @@ class _InlineScorePicker extends StatefulWidget {
 }
 
 class _InlineScorePickerState extends State<_InlineScorePicker> {
+  // Size each button so ~6 fit in view on a typical phone.
+  static const _itemWidth  = 50.0;
+  static const _itemMargin = 4.0;
+  static const _itemTotal  = _itemWidth + _itemMargin * 2;
+
   late final ScrollController _ctrl;
 
-  static const _itemWidth  = 46.0;
-  static const _itemMargin = 3.0;
+  // Scroll so that net-par-2 is the first visible button (net par becomes 3rd).
+  double _initialOffset() {
+    final firstIdx = (widget.par + widget.strokes - 3).clamp(0, 9);
+    return firstIdx * _itemTotal;
+  }
 
   @override
   void initState() {
     super.initState();
-    // Scroll to roughly par position on open so common scores are visible.
-    final offset = ((widget.par - 1) * (_itemWidth + _itemMargin * 2))
-        .clamp(0.0, double.infinity);
-    _ctrl = ScrollController(initialScrollOffset: offset);
+    _ctrl = ScrollController(initialScrollOffset: _initialOffset());
   }
 
   @override
@@ -877,43 +947,16 @@ class _InlineScorePickerState extends State<_InlineScorePicker> {
         controller:      _ctrl,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-        itemCount: scores.length +
-            (widget.currentScore != null ? 1 : 0),
+        itemCount: scores.length,
         itemBuilder: (_, i) {
-          if (widget.currentScore != null && i == scores.length) {
-            return Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: GestureDetector(
-                onTap: () => widget.onScoreSelected(-1),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  height: 48,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                        color: theme.colorScheme.error.withOpacity(0.4)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Clear',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.error,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }
-          final s   = scores[i];
-          final sel = s == widget.currentScore;
+          final s = scores[i];
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: _itemMargin),
             child: NetScoreButton(
               score:    s,
               par:      widget.par,
               strokes:  widget.strokes,
-              selected: sel,
+              selected: s == widget.currentScore,
               width:    _itemWidth,
               height:   48,
               onTap:    () => widget.onScoreSelected(s),
@@ -929,7 +972,7 @@ class _InlineScorePickerState extends State<_InlineScorePicker> {
 // Modal edit-score sheet (tap an already-scored player to edit)
 // ===========================================================================
 
-class _ScorePickerSheet extends StatelessWidget {
+class _ScorePickerSheet extends StatefulWidget {
   final String playerName;
   final int    par;
   final int    holeNumber;
@@ -945,10 +988,34 @@ class _ScorePickerSheet extends StatelessWidget {
   });
 
   @override
+  State<_ScorePickerSheet> createState() => _ScorePickerSheetState();
+}
+
+class _ScorePickerSheetState extends State<_ScorePickerSheet> {
+  static const _itemWidth  = 50.0;
+  static const _itemMargin = 4.0;
+  static const _itemTotal  = _itemWidth + _itemMargin * 2;
+
+  late final ScrollController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final firstIdx = (widget.par + widget.strokes - 3).clamp(0, 9);
+    _ctrl = ScrollController(initialScrollOffset: firstIdx * _itemTotal);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme  = Theme.of(context);
+    final netPar = widget.par + widget.strokes;
     final scores = List.generate(12, (i) => i + 1);
-    final netPar = par + strokes;
 
     return SafeArea(
       child: Padding(
@@ -963,14 +1030,14 @@ class _ScorePickerSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            playerName,
+            widget.playerName,
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
           Text(
-            strokes > 0
-                ? 'Hole $holeNumber  •  Par $par  •  Net par $netPar'
-                : 'Hole $holeNumber  •  Par $par',
+            widget.strokes > 0
+                ? 'Hole ${widget.holeNumber}  •  Par ${widget.par}  •  Net par $netPar'
+                : 'Hole ${widget.holeNumber}  •  Par ${widget.par}',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
@@ -978,20 +1045,21 @@ class _ScorePickerSheet extends StatelessWidget {
           SizedBox(
             height: 56,
             child: ListView.builder(
+              controller:      _ctrl,
               scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.zero,
-              itemCount: scores.length,
+              padding:         EdgeInsets.zero,
+              itemCount:       scores.length,
               itemBuilder: (_, i) {
-                final s   = scores[i];
-                final sel = s == current;
+                final s = scores[i];
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: _itemMargin),
                   child: NetScoreButton(
                     score:    s,
-                    par:      par,
-                    strokes:  strokes,
-                    selected: sel,
-                    width:    46,
+                    par:      widget.par,
+                    strokes:  widget.strokes,
+                    selected: s == widget.current,
+                    width:    _itemWidth,
                     height:   52,
                     onTap:    () => Navigator.of(context).pop(s),
                   ),
@@ -1000,7 +1068,7 @@ class _ScorePickerSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          if (current != null)
+          if (widget.current != null)
             TextButton(
               onPressed: () => Navigator.of(context).pop(-1),
               child: const Text('Clear score'),

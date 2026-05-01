@@ -77,10 +77,10 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
 
       if (!mounted) return;
 
-      // 2. If already started → skip setup and go straight to scoring.
+      // 2. If already started → skip setup and go straight to score entry.
       if (rp.sixesIsStarted(widget.foursomeId)) {
         Navigator.of(context).pushReplacementNamed(
-          '/sixes',
+          '/score-entry',
           arguments: widget.foursomeId,
         );
         return;
@@ -237,7 +237,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
       return;
     }
 
-    Navigator.of(ctx).pushReplacementNamed('/sixes', arguments: widget.foursomeId);
+    Navigator.of(ctx).pushReplacementNamed('/score-entry', arguments: widget.foursomeId);
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -269,7 +269,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     // the round is available.  Doing this in build (rather than initState)
     // means we naturally wait for loadRound() to finish.
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.toStringAsFixed(2);
+      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -697,7 +697,7 @@ class _HandicapModeCard extends StatelessWidget {
           ),
 
           // Mode-specific helper text / controls below the picker.
-          if (mode == 'net') ...[
+          if (mode != 'gross') ...[
             const SizedBox(height: 12),
             Text('Handicap allowance',
                 style: theme.textTheme.bodySmall?.copyWith(

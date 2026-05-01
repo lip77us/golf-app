@@ -87,6 +87,11 @@ class RoundProvider extends ChangeNotifier {
   Points531Summary? _points531Summary;
   SkinsSummary?    _skinsSummary;
   NassauSummary?   _nassauSummary;
+  Map<String, dynamic>? _matchPlayData;
+  ThreePersonMatchSummary? _threePersonMatchSummary;
+  Map<String, dynamic>? _lowNetConfig;   // { handicap_mode, net_percent, ... }
+  /// Keyed by foursomeId.  Populated by initPhantom() on first entry.
+  final Map<int, PhantomInitResult> _phantomInit = {};
   int?             _activeFoursomeId;
 
   /// Foursomes whose Sixes match has been set up (segments + teams exist).
@@ -100,6 +105,9 @@ class RoundProvider extends ChangeNotifier {
   bool    _loadingPoints531   = false;
   bool    _loadingSkins       = false;
   bool    _loadingNassau      = false;
+  bool    _loadingMatchPlay          = false;
+  bool    _loadingThreePersonMatch   = false;
+  bool    _loadingLowNet             = false;
   bool    _submitting         = false;
   String? _error;
 
@@ -116,8 +124,12 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?     get sixesSummary       => _sixesSummary;
   Points531Summary? get points531Summary   => _points531Summary;
   SkinsSummary?     get skinsSummary       => _skinsSummary;
-  NassauSummary?    get nassauSummary      => _nassauSummary;
-  int?              get activeFoursomeId   => _activeFoursomeId;
+  NassauSummary?        get nassauSummary      => _nassauSummary;
+  Map<String, dynamic>?       get matchPlayData            => _matchPlayData;
+  ThreePersonMatchSummary?    get threePersonMatchSummary  => _threePersonMatchSummary;
+  Map<String, dynamic>?       get lowNetConfig             => _lowNetConfig;
+  PhantomInitResult?    phantomInitFor(int foursomeId) => _phantomInit[foursomeId];
+  int?                  get activeFoursomeId  => _activeFoursomeId;
 
   /// True once sixes segments with players have been saved for [foursomeId].
   bool sixesIsStarted(int foursomeId) =>
@@ -129,6 +141,9 @@ class RoundProvider extends ChangeNotifier {
   bool              get loadingPoints531   => _loadingPoints531;
   bool              get loadingSkins       => _loadingSkins;
   bool              get loadingNassau      => _loadingNassau;
+  bool              get loadingMatchPlay          => _loadingMatchPlay;
+  bool              get loadingThreePersonMatch   => _loadingThreePersonMatch;
+  bool              get loadingLowNet             => _loadingLowNet;
   bool              get submitting         => _submitting;
   String?           get error              => _error;
   Map<int, Map<int, int>> get localPendingByHole => _localPendingByHole;
@@ -499,6 +514,44 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  /// Load the low-net (Stroke Play) config for the active round.
+  /// Needed so the score-entry screen knows the handicap mode (net / gross /
+  /// strokes_off) chosen during Stroke Play setup — that value lives in the
+  /// low-net config, NOT on the top-level round object.
+  Future<void> loadLowNetConfig(int roundId) async {
+    _loadingLowNet = true;
+    notifyListeners();
+    try {
+      _lowNetConfig = await _client.getLowNetConfig(roundId);
+    } on NetworkException {
+      // Offline — keep the previous config around if we had one.
+    } catch (e) {
+      debugPrint('loadLowNetConfig error: $e');
+    } finally {
+      _loadingLowNet = false;
+      notifyListeners();
+    }
+  }
+
+  /// Initialise the phantom player for a foursome.
+  ///
+  /// Idempotent — calling repeatedly is safe; the server only randomises the
+  /// rotation once (subsequent calls return the same config).  Cached locally
+  /// so repeated `_loadGameSummaries` calls avoid redundant network trips if
+  /// we already have a result for this foursome.
+  Future<void> initPhantom(int foursomeId) async {
+    if (_phantomInit.containsKey(foursomeId)) return; // already done
+    try {
+      final result = await _client.initPhantom(foursomeId);
+      _phantomInit[foursomeId] = result;
+      notifyListeners();
+    } on NetworkException {
+      // Offline — phantom row will show without source label.
+    } catch (e) {
+      debugPrint('initPhantom error: $e');
+    }
+  }
+
   /// Load the Skins summary for the active foursome.
   /// Same failure semantics as [loadPoints531] — non-fatal on network
   /// errors so the entry screen keeps working offline.
@@ -533,6 +586,69 @@ class RoundProvider extends ChangeNotifier {
     } finally {
       _loadingNassau = false;
       notifyListeners();
+    }
+  }
+
+  // ── Match Play ─────────────────────────────────────────────────────────────
+
+  /// Load the Match Play summary for the active foursome.
+  /// Non-fatal on network errors — keeps the last known state.
+  Future<void> loadMatchPlay(int foursomeId) async {
+    _loadingMatchPlay = true;
+    notifyListeners();
+    try {
+      _matchPlayData = await _client.getMatchPlay(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous data around.
+    } catch (e, st) {
+      debugPrint('loadMatchPlay error: $e\n$st');
+    } finally {
+      _loadingMatchPlay = false;
+      notifyListeners();
+    }
+  }
+
+  // ── Three-Person Match ──────────────────────────────────────────────────────
+
+  /// Load the Three-Person Match summary for the active foursome.
+  /// Non-fatal on network errors — keeps the last known state.
+  Future<void> loadThreePersonMatch(int foursomeId) async {
+    _loadingThreePersonMatch = true;
+    notifyListeners();
+    try {
+      _threePersonMatchSummary = await _client.getThreePersonMatch(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around.
+    } catch (e) {
+      debugPrint('loadThreePersonMatch error: $e');
+    } finally {
+      _loadingThreePersonMatch = false;
+      notifyListeners();
+    }
+  }
+
+  /// POST /three-person-match/setup/ — set up or replace the Three-Person Match.
+  Future<bool> setupThreePersonMatch(
+    int foursomeId, {
+    String              handicapMode = 'net',
+    int                 netPercent   = 100,
+    double              entryFee     = 0.0,
+    Map<String, double> payoutConfig = const {},
+  }) async {
+    try {
+      _threePersonMatchSummary = await _client.postThreePersonMatchSetup(
+        foursomeId,
+        handicapMode: handicapMode,
+        netPercent:   netPercent,
+        entryFee:     entryFee,
+        payoutConfig: payoutConfig,
+      );
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
     }
   }
 

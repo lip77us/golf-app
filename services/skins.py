@@ -92,7 +92,7 @@ def setup_skins(
 # Strokes-Off support (course-wide SI threshold — mirrors points_531.py)
 # ---------------------------------------------------------------------------
 
-def _build_so_score_index(foursome) -> dict:
+def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
     """
     Return a gross-based score index with Strokes-Off adjustments baked in.
 
@@ -118,7 +118,7 @@ def _build_so_score_index(foursome) -> dict:
     for m in memberships:
         if m.tee_id is None:
             continue
-        so = max(0, (m.playing_handicap or 0) - low)
+        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
         if so <= 0:
             continue
 
@@ -178,7 +178,7 @@ def calculate_skins(foursome) -> list:
 
     # Build the appropriate score index.
     if game.handicap_mode == HandicapMode.STROKES_OFF:
-        score_index = _build_so_score_index(foursome)
+        score_index = _build_so_score_index(foursome, net_percent=game.net_percent)
     else:
         score_index = build_score_index(
             foursome,

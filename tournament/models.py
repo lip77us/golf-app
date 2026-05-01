@@ -52,7 +52,7 @@ class Round(models.Model):
                             default=list,
                             help_text="List of GameType values active for this round."
                         )
-    bet_unit            = models.DecimalField(max_digits=6, decimal_places=2, default=1.00)
+    bet_unit            = models.DecimalField(max_digits=6, decimal_places=2, default=5.00)
     handicap_mode       = models.CharField(
                             max_length=20,
                             choices=[('gross','Gross'),('net','Net'),('strokes_off','Strokes Off Low')],
@@ -101,6 +101,13 @@ class Foursome(models.Model):
                             default=list,
                             help_text="Ordered list of player PKs for pink ball rotation."
                         )
+    active_games        = models.JSONField(
+                            default=list,
+                            help_text=(
+                                "Games active for this specific foursome. "
+                                "When empty the round-level active_games applies."
+                            )
+                        )
     has_phantom         = models.BooleanField(default=False)
 
     class Meta:
@@ -136,6 +143,15 @@ class FoursomeMembership(models.Model):
     playing_handicap    = models.SmallIntegerField(
                             help_text="course_handicap adjusted by any local allowance (e.g. 90%)."
                         )
+    phantom_algorithm   = models.CharField(
+                            max_length=50,
+                            default='rotating_player_scores',
+                            help_text='Algorithm id from scoring.phantom.REGISTRY.',
+                        )
+    phantom_config      = models.JSONField(
+                            default=dict,
+                            help_text='Algorithm-specific config (e.g. rotation order).',
+                        )
 
     class Meta:
         unique_together = ('foursome', 'player')
@@ -146,11 +162,15 @@ class FoursomeMembership(models.Model):
         given the hole's stroke_index (1=hardest, 18=easiest).
         A playing handicap of 20 gives 1 stroke on holes SI 1–18 and
         2 strokes on holes SI 1–2.
+
+        Plus-handicappers (playing_handicap < 0) can produce a negative raw
+        value; we clamp to 0 because the HoleScore field is non-negative and
+        plus-handicap adjustments are handled separately if needed.
         """
         full_strokes = self.playing_handicap // 18
         remainder = self.playing_handicap % 18
         extra = 1 if stroke_index <= remainder else 0
-        return full_strokes + extra
+        return max(0, full_strokes + extra)
 
     def __str__(self):
         return f"{self.player.name} in {self.foursome}"

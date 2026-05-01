@@ -27,6 +27,12 @@ class GameType(models.TextChoices):
     # foursomes with exactly three real players and is mutually
     # exclusive with Six's.
     POINTS_531      = 'points_531',      'Points 5-3-1'
+    # Three-Person Match: tournament game for a 3-player group.  Phase 1
+    # (holes 1–9) uses Points 5-3-1 to seed the players; phase 2 (holes
+    # 10–18) is 1v1 match play between the top two finishers.  Tie-breaking
+    # rules handle 3-way ties (continue 5-3-1) and 2nd/3rd-place ties
+    # (concurrent sub-match + 1st plays best ball simultaneously).
+    THREE_PERSON_MATCH = 'three_person_match', 'Three-Person Match'
 
 
 class RoundStatus(models.TextChoices):

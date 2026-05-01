@@ -65,10 +65,10 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       _summary = await client.getSkinsSummary(widget.foursomeId);
       if (!mounted) return;
 
-      // Game already started — jump straight to the entry screen.
+      // Game already started — jump straight to score entry.
       if (_summary!.status == 'in_progress') {
         Navigator.of(context).pushReplacementNamed(
-          '/skins',
+          '/score-entry',
           arguments: widget.foursomeId,
         );
         return;
@@ -125,7 +125,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed(
-        '/skins',
+        '/score-entry',
         arguments: widget.foursomeId,
       );
     } catch (e) {
@@ -137,7 +137,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
   Widget build(BuildContext context) {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.toStringAsFixed(2);
+      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -410,7 +410,7 @@ class _HandicapModeCard extends StatelessWidget {
             selected: {mode},
             onSelectionChanged: (s) => onModeChanged(s.first),
           ),
-          if (mode == 'net') ...[
+          if (mode != 'gross') ...[
             const SizedBox(height: 12),
             Text('Handicap allowance',
                 style: theme.textTheme.bodySmall?.copyWith(

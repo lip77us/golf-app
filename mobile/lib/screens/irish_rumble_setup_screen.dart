@@ -4,7 +4,7 @@
 ///
 /// Knobs:
 ///   • Handicap mode (Net / Gross / Strokes-Off-Low) + Net % allowance
-///   • Bet unit (winner-take-all dollar amount)
+///   • Entry fee per foursome + explicit payout structure
 ///
 /// The segment structure is always the standard Irish Rumble format:
 ///   Holes 1–6   → best 1 net per group
@@ -32,12 +32,17 @@ class IrishRumbleSetupScreen extends StatefulWidget {
 class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
   String _mode       = 'net';
   int    _netPercent = 100;
-  final  _betCtrl    = TextEditingController(text: '5');
+  final  _entryCtrl  = TextEditingController(text: '5');
 
-  bool    _loading         = true;
-  bool    _saving          = false;
+  // Payout rows: one controller per paid place
+  final List<TextEditingController> _payoutCtrls = [];
+  int _payoutPlaces  = 0;
+  int _numPlayers    = 0; // fetched from API for pool-balance validation
+
+  bool    _loading           = true;
+  bool    _saving            = false;
   Object? _error;
-  bool    _configured      = false;
+  bool    _configured        = false;
   /// True when this is a tournament round — handicap mode is locked at
   /// the round level and the picker is hidden in favour of a read-only chip.
   bool    _isTournamentRound = false;
@@ -45,14 +50,44 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
   @override
   void initState() {
     super.initState();
+    _entryCtrl.addListener(() => setState(() {}));
     _load();
   }
 
   @override
   void dispose() {
-    _betCtrl.dispose();
+    _entryCtrl.dispose();
+    for (final c in _payoutCtrls) c.dispose();
     super.dispose();
   }
+
+  // ── Pool balance helpers ──────────────────────────────────────────────────
+
+  double get _pool {
+    final fee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
+    return fee * _numPlayers;
+  }
+
+  // Payouts are entered and displayed as per-person amounts (group total ÷ 4).
+  double get _poolPerPerson => _pool / 4.0;
+
+  double get _allocated =>
+      _payoutCtrls.fold(0.0, (s, c) => s + (double.tryParse(c.text.trim()) ?? 0.0));
+
+  bool get _poolBalanced {
+    if (_numPlayers == 0) return true;
+    if (_pool <= 0) return true;
+    if (_payoutPlaces == 0) return _pool == 0;
+    return (_poolPerPerson - _allocated).abs() < 0.01;
+  }
+
+  TextEditingController _makePayoutCtrl(String text) {
+    final c = TextEditingController(text: text.isEmpty ? '0' : text);
+    c.addListener(() => setState(() {}));
+    return c;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
@@ -60,15 +95,28 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
       final client = context.read<AuthProvider>().client;
       final cfg    = await client.getIrishRumbleConfig(widget.roundId);
       if (!mounted) return;
+
+      final payouts = (cfg['payouts'] as List? ?? []);
+      final ctrls   = <TextEditingController>[];
+      for (final p in payouts) {
+        // Stored as group total; display as per-person (÷4).
+        final amt = double.tryParse(p['amount']?.toString() ?? '') ?? 0.0;
+        ctrls.add(_makePayoutCtrl(_fmtAmount(amt / 4.0)));
+      }
+
       setState(() {
         _configured        = cfg['configured'] as bool? ?? false;
         _isTournamentRound = cfg['is_tournament_round'] as bool? ?? false;
-        // For tournament rounds use the round-level mode; otherwise use the
-        // stored game config value (which may differ for casual rounds).
         _mode       = (cfg['round_handicap_mode'] ?? cfg['handicap_mode'])
                           ?.toString() ?? 'net';
         _netPercent = (cfg['round_net_percent'] ?? cfg['net_percent']) as int? ?? 100;
-        _betCtrl.text = _fmtAmount(cfg['bet_unit'] as num? ?? 5.0);
+        _numPlayers        = cfg['num_players'] as int? ?? 0;
+        _entryCtrl.text    = _fmtAmount(cfg['entry_fee'] as num? ?? 5.0);
+        _payoutPlaces      = ctrls.length;
+        for (final c in _payoutCtrls) c.dispose();
+        _payoutCtrls
+          ..clear()
+          ..addAll(ctrls);
         _loading = false;
       });
     } catch (e) {
@@ -76,19 +124,83 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
     }
   }
 
+  void _setPayoutPlaces(int n) {
+    setState(() {
+      while (_payoutCtrls.length < n) {
+        _payoutCtrls.add(_makePayoutCtrl('0'));
+      }
+      while (_payoutCtrls.length > n) {
+        _payoutCtrls.removeLast().dispose();
+      }
+      _payoutPlaces = n;
+    });
+  }
+
+  /// Apply a quick-fill preset.  [ratios] must sum to 1.0.
+  /// Amounts are calculated from the current per-player pool; the last place
+  /// gets the remainder so rounding never leaves the pool unbalanced.
+  void _applyPreset(List<double> ratios) {
+    final fee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
+    if (fee <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter an entry fee first.')),
+      );
+      return;
+    }
+    if (_numPlayers == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No players registered yet — pool cannot be calculated. '
+              'You can still set payouts manually.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+    final pool = _poolPerPerson;
+    setState(() {
+      final n = ratios.length;
+      while (_payoutCtrls.length < n) _payoutCtrls.add(_makePayoutCtrl('0'));
+      while (_payoutCtrls.length > n) _payoutCtrls.removeLast().dispose();
+      _payoutPlaces = n;
+      double remaining = pool;
+      for (int i = 0; i < n; i++) {
+        final amt = i < n - 1 ? (pool * ratios[i]) : remaining;
+        remaining -= amt;
+        _payoutCtrls[i].text = _fmtAmount(amt);
+      }
+    });
+  }
+
   Future<void> _save() async {
+    if (!_poolBalanced) {
+      setState(() {
+        _error = Exception(
+          'Per-player payouts (\$${_allocated.toStringAsFixed(2)}/player) must equal '
+          '\$${_poolPerPerson.toStringAsFixed(2)}/player.',
+        );
+      });
+      return;
+    }
     setState(() { _saving = true; _error = null; });
     try {
-      final client  = context.read<AuthProvider>().client;
-      final betUnit = double.tryParse(_betCtrl.text.trim()) ?? 1.0;
+      final client   = context.read<AuthProvider>().client;
+      final entryFee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
+      final payouts  = <Map<String, dynamic>>[];
+      for (int i = 0; i < _payoutCtrls.length; i++) {
+        // Display is per-player; store as group total (×4).
+        final perPlayer = double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0;
+        payouts.add({'place': i + 1, 'amount': perPlayer * 4.0});
+      }
       await client.postIrishRumbleSetup(
         widget.roundId,
         handicapMode: _mode,
         netPercent:   _netPercent,
-        betUnit:      betUnit,
+        entryFee:     entryFee,
+        payouts:      payouts,
       );
       if (!mounted) return;
-      Navigator.of(context).pop(true); // signal success to caller
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) setState(() { _error = e; _saving = false; });
     }
@@ -115,7 +227,7 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
             width: double.infinity,
             height: 52,
             child: FilledButton(
-              onPressed: _saving ? null : _save,
+              onPressed: (_saving || !_poolBalanced) ? null : _save,
               child: _saving
                   ? const SizedBox(
                       width: 20, height: 20,
@@ -164,7 +276,6 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
           const SizedBox(height: 16),
 
           // ── Handicap mode ───────────────────────────────────────────────
-          // For tournament rounds the mode is locked at the round level.
           if (_isTournamentRound)
             _LockedHandicapChip(mode: _mode, netPercent: _netPercent)
           else
@@ -179,16 +290,16 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
 
           const SizedBox(height: 16),
 
-          // ── Bet unit ────────────────────────────────────────────────────
+          // ── Entry fee ───────────────────────────────────────────────────
           _SectionCard(
-            title: 'Bet',
+            title: 'Entry Fee',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextFormField(
-                  controller: _betCtrl,
+                  controller: _entryCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Bet unit (\$)',
+                    labelText: 'Entry fee per player (\$)',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.attach_money),
                     isDense: true,
@@ -196,13 +307,77 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
-                  'Winner-take-all. The group with the lowest cumulative '
-                  'net-to-par total across all four segments wins.',
+                  'Collected from each player. '
+                  'Total pool = entry fee × number of players.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
                 ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Payout structure ────────────────────────────────────────────
+          _SectionCard(
+            title: 'Payouts',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Places paid',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                LayoutBuilder(builder: (context, constraints) {
+                  final segW = ((constraints.maxWidth - 7) / 6).floorToDouble();
+                  return ToggleButtons(
+                    borderRadius: BorderRadius.circular(8),
+                    constraints: BoxConstraints.tightFor(width: segW, height: 40),
+                    isSelected: List.generate(6, (i) => i == _payoutPlaces),
+                    onPressed: _setPayoutPlaces,
+                    children: const [
+                      Text('0'), Text('1'), Text('2'),
+                      Text('3'), Text('4'), Text('5'),
+                    ],
+                  );
+                }),
+
+                // ── Suggested payout presets ──────────────────────────────
+                const SizedBox(height: 10),
+                _PayoutPresetsRow(onPreset: _applyPreset),
+
+                if (_payoutPlaces > 0) ...[
+                  const SizedBox(height: 14),
+                  ...List.generate(_payoutPlaces, (i) {
+                    final ordinal = ['1st', '2nd', '3rd', '4th', '5th'][i];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: TextFormField(
+                        controller: _payoutCtrls[i],
+                        decoration: InputDecoration(
+                          labelText: '$ordinal place payout (\$/player)',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.emoji_events_outlined),
+                          isDense: true,
+                        ),
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 4),
+                ],
+                if (_numPlayers > 0 && _pool > 0) ...[
+                  const SizedBox(height: 8),
+                  _PoolBalanceRow(
+                    pool:      _poolPerPerson,
+                    allocated: _allocated,
+                    balanced:  _poolBalanced,
+                    perPlayer: true,
+                  ),
+                ],
               ],
             ),
           ),
@@ -239,6 +414,12 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   int _payoutPlaces = 0;
   int _numPlayers   = 0; // fetched from API for pool-balance validation
 
+  // Prize exclusions
+  /// Player IDs currently toggled as excluded (cannot win prizes).
+  final Set<int> _excludedIds = {};
+  /// Players suggested for exclusion because they placed in the championship.
+  /// Each entry: {'player_id': int, 'player_name': str, 'rank': int, 'payout': num}
+  List<Map<String, dynamic>> _championshipPlacers = [];
   bool    _loading           = true;
   bool    _saving            = false;
   Object? _error;
@@ -296,11 +477,18 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
       final payouts = (cfg['payouts'] as List? ?? []);
       final ctrls   = <TextEditingController>[];
       for (final p in payouts) {
-        // amount comes back as either num or String (depending on how it was
-        // saved); parse defensively to avoid type-cast crashes.
+        // amount comes back as either num or String; parse defensively.
         final amt = double.tryParse(p['amount']?.toString() ?? '') ?? 0.0;
         ctrls.add(_makePayoutCtrl(_fmtAmount(amt)));
       }
+
+      // Prize exclusions
+      final excludedList = (cfg['excluded_player_ids'] as List? ?? [])
+          .map((e) => e as int)
+          .toList();
+      final placers = (cfg['championship_placers'] as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
 
       setState(() {
         _configured        = cfg['configured'] as bool? ?? false;
@@ -317,6 +505,11 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
         _payoutCtrls
           ..clear()
           ..addAll(ctrls);
+        // Exclusions
+        _excludedIds
+          ..clear()
+          ..addAll(excludedList);
+        _championshipPlacers = placers;
         _loading = false;
       });
     } catch (e) {
@@ -333,6 +526,39 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
         _payoutCtrls.removeLast().dispose();
       }
       _payoutPlaces = n;
+    });
+  }
+
+  void _applyPreset(List<double> ratios) {
+    final fee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
+    if (fee <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter an entry fee first.')),
+      );
+      return;
+    }
+    if (_numPlayers == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No players registered yet — pool cannot be calculated. '
+              'You can still set payouts manually.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+    final pool = _pool;
+    setState(() {
+      final n = ratios.length;
+      while (_payoutCtrls.length < n) _payoutCtrls.add(_makePayoutCtrl('0'));
+      while (_payoutCtrls.length > n) _payoutCtrls.removeLast().dispose();
+      _payoutPlaces = n;
+      double remaining = pool;
+      for (int i = 0; i < n; i++) {
+        final amt = i < n - 1 ? (pool * ratios[i]) : remaining;
+        remaining -= amt;
+        _payoutCtrls[i].text = _fmtAmount(amt);
+      }
     });
   }
 
@@ -353,15 +579,15 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
       final payouts  = <Map<String, dynamic>>[];
       for (int i = 0; i < _payoutCtrls.length; i++) {
         final amt = double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0;
-        // Send as a number, not a string, so the server round-trips it correctly.
         payouts.add({'place': i + 1, 'amount': amt});
       }
       await client.postLowNetSetup(
         widget.roundId,
-        handicapMode: _mode,
-        netPercent:   _netPercent,
-        entryFee:     entryFee,
-        payouts:      payouts,
+        handicapMode:      _mode,
+        netPercent:        _netPercent,
+        entryFee:          entryFee,
+        payouts:           payouts,
+        excludedPlayerIds: _excludedIds.toList(),
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -405,6 +631,167 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Ordinal helper ───────────────────────────────────────────────────────
+
+  String _ordinal(int n) {
+    if (n == 1) return '1st';
+    if (n == 2) return '2nd';
+    if (n == 3) return '3rd';
+    return '${n}th';
+  }
+
+  // ── Prize Exclusions section ──────────────────────────────────────────────
+
+  Widget _buildExclusionsSection(ThemeData theme) {
+    // Build the full player list from the API response. Since getLowNetConfig
+    // doesn't currently return the player roster, we derive it from the
+    // championship placers list + any already-excluded IDs stored on config.
+    // For non-placer excluded players we show just an ID (rare edge case).
+    //
+    // Players are shown in two groups:
+    //   1. Championship placers (auto-suggested, with rank + payout info)
+    //   2. Other excluded players (manually excluded, no placer data)
+    final placerIds = _championshipPlacers.map((p) => p['player_id'] as int).toSet();
+
+    // Collect non-placer excluded players (manually added exclusions)
+    final nonPlacerExcluded = _excludedIds.where((id) => !placerIds.contains(id)).toList();
+
+    final hasSuggestions = _championshipPlacers.isNotEmpty;
+
+    return _SectionCard(
+      title: 'Prize Exclusions',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Excluded players still appear in the standings '
+            'but cannot win prize money.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+
+          // ── Championship placers suggestion banner ─────────────────────
+          if (hasSuggestions) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: theme.colorScheme.secondary.withOpacity(0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Icon(Icons.emoji_events_outlined,
+                        size: 16, color: theme.colorScheme.secondary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Championship placers — suggested exclusions',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.secondary,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(
+                    'These players won prize money in the Low Net '
+                    'Championship and are suggested for exclusion from '
+                    'the Day 2 Low Net prize.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      side: BorderSide(
+                          color: theme.colorScheme.secondary.withOpacity(0.5)),
+                    ),
+                    onPressed: () => setState(() {
+                      for (final p in _championshipPlacers) {
+                        _excludedIds.add(p['player_id'] as int);
+                      }
+                    }),
+                    icon: const Icon(Icons.select_all, size: 16),
+                    label: const Text('Exclude all placers'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // ── Toggle list for championship placers ───────────────────────
+          if (hasSuggestions) ...[
+            const SizedBox(height: 8),
+            ...(_championshipPlacers.map((p) {
+              final pid    = p['player_id'] as int;
+              final name   = p['player_name'] as String? ?? 'Player $pid';
+              final rank   = p['rank'] as int? ?? 0;
+              final payout = p['payout'];
+              final payStr = payout != null
+                  ? '\$${(payout as num).toStringAsFixed(2)}'
+                  : '';
+              return CheckboxListTile(
+                value: _excludedIds.contains(pid),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(name),
+                subtitle: Text(
+                  '${_ordinal(rank)} place${ payStr.isNotEmpty ? " · $payStr" : ""}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+                secondary: Icon(
+                  Icons.emoji_events,
+                  size: 18,
+                  color: theme.colorScheme.secondary.withOpacity(0.7),
+                ),
+                onChanged: (v) => setState(() {
+                  if (v == true) _excludedIds.add(pid);
+                  else           _excludedIds.remove(pid);
+                }),
+              );
+            })),
+          ],
+
+          // ── Non-placer excluded players ────────────────────────────────
+          if (nonPlacerExcluded.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Other excluded players',
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant)),
+            ...nonPlacerExcluded.map((pid) => CheckboxListTile(
+              value: true,
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text('Player #$pid'),
+              onChanged: (v) => setState(() {
+                if (v != true) _excludedIds.remove(pid);
+              }),
+            )),
+          ],
+
+          if (!hasSuggestions && _excludedIds.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'No championship placers found. '
+                'Run the championship Low Net setup first.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -476,7 +863,7 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                 // Use a Row of ToggleButtons so each segment gets equal
                 // flex and the widget never overflows on narrow screens.
                 LayoutBuilder(builder: (context, constraints) {
-                  final segW = constraints.maxWidth / 6;
+                  final segW = ((constraints.maxWidth - 7) / 6).floorToDouble();
                   return ToggleButtons(
                     borderRadius: BorderRadius.circular(8),
                     constraints: BoxConstraints.tightFor(
@@ -489,6 +876,10 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                     ],
                   );
                 }),
+
+                // ── Suggested payout presets ─────────────────────────────
+                const SizedBox(height: 10),
+                _PayoutPresetsRow(onPreset: _applyPreset),
 
                 if (_payoutPlaces > 0) ...[
                   const SizedBox(height: 14),
@@ -524,6 +915,12 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
             ),
           ),
 
+          // ── Prize Exclusions (tournament rounds only) ───────────────
+          if (_isTournamentRound) ...[
+            const SizedBox(height: 16),
+            _buildExclusionsSection(theme),
+          ],
+
           if (_error != null && !_saving) ...[
             const SizedBox(height: 16),
             _ErrorBanner(message: friendlyError(_error!)),
@@ -532,6 +929,46 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
           const SizedBox(height: 80),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Suggested payout preset row (shared by Irish Rumble + Low Net setup)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PayoutPresetsRow extends StatelessWidget {
+  final void Function(List<double> ratios) onPreset;
+  const _PayoutPresetsRow({required this.onPreset});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final btnStyle = TextButton.styleFrom(
+      minimumSize: Size.zero,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: const TextStyle(fontSize: 12),
+    );
+
+    Widget chip(String label, List<double> ratios) => TextButton(
+          style: btnStyle,
+          onPressed: () => onPreset(ratios),
+          child: Text(label),
+        );
+
+    return Row(
+      children: [
+        Text('Suggested:', style: muted),
+        const SizedBox(width: 2),
+        chip('Winner takes all', [1.0]),
+        Text('·', style: muted),
+        chip('60/40', [0.6, 0.4]),
+        Text('·', style: muted),
+        chip('60/30/10', [0.6, 0.3, 0.1]),
+      ],
     );
   }
 }
@@ -614,7 +1051,7 @@ class _LockedHandicapChip extends StatelessWidget {
   String get _label {
     switch (mode) {
       case 'gross':       return 'Gross';
-      case 'strokes_off': return 'Strokes Off Low';
+      case 'strokes_off': return netPercent == 100 ? 'Strokes Off Low' : 'Strokes Off Low ($netPercent%)';
       default:            return 'Net ($netPercent%)';
     }
   }
@@ -701,7 +1138,7 @@ class _HandicapCard extends StatelessWidget {
             selected: {mode},
             onSelectionChanged: (s) => onModeChanged(s.first),
           ),
-          if (mode == 'net') ...[
+          if (mode != 'gross') ...[
             const SizedBox(height: 12),
             Text('Handicap allowance',
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -736,28 +1173,31 @@ class _PoolBalanceRow extends StatelessWidget {
   final double pool;
   final double allocated;
   final bool   balanced;
+  final bool   perPlayer;
 
   const _PoolBalanceRow({
     required this.pool,
     required this.allocated,
     required this.balanced,
+    this.perPlayer = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme     = Theme.of(context);
     final remaining = pool - allocated;
+    final suffix    = perPlayer ? '/player' : '';
     final color = balanced
         ? theme.colorScheme.primary
         : theme.colorScheme.error;
     final icon  = balanced ? Icons.check_circle_outline : Icons.error_outline;
     final label = balanced
-        ? 'Pool balanced  (\$${pool.toStringAsFixed(2)})'
+        ? 'Pool balanced  (\$${pool.toStringAsFixed(2)}$suffix)'
         : remaining > 0
-            ? '\$${remaining.toStringAsFixed(2)} still unallocated  '
-                '(pool \$${pool.toStringAsFixed(2)})'
-            : '\$${(-remaining).toStringAsFixed(2)} over pool  '
-                '(pool \$${pool.toStringAsFixed(2)})';
+            ? '\$${remaining.toStringAsFixed(2)}$suffix still unallocated  '
+                '(pool \$${pool.toStringAsFixed(2)}$suffix)'
+            : '\$${(-remaining).toStringAsFixed(2)}$suffix over pool  '
+                '(pool \$${pool.toStringAsFixed(2)}$suffix)';
 
     return Row(children: [
       Icon(icon, size: 16, color: color),

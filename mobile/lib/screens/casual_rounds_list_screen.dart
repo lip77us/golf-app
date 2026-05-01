@@ -178,15 +178,15 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
 
     final String route;
     if (round.activeGames.contains('sixes')) {
-      route = '/sixes-setup';
+      route = '/sixes-setup';          // will redirect to /score-entry if already started
     } else if (round.activeGames.contains('points_531')) {
-      route = '/points-531-setup';
+      route = '/points-531-setup';     // will redirect to /score-entry if already started
     } else if (round.activeGames.contains('skins')) {
-      route = '/skins-setup';
+      route = '/skins-setup';          // will redirect to /score-entry if already started
     } else if (round.activeGames.contains('nassau')) {
-      route = '/nassau-setup';
+      route = '/nassau-setup';         // will redirect to /score-entry if already started
     } else {
-      route = '/scorecard';
+      route = '/score-entry';          // stroke play, stableford, or multi-game combo
     }
     await nav.pushNamed(route, arguments: fsId);
 

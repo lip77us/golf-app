@@ -3,6 +3,17 @@
 /// All fromJson constructors handle null-safety explicitly.
 
 // ---------------------------------------------------------------------------
+// Shared formatting helpers
+// ---------------------------------------------------------------------------
+
+extension BetUnitFormat on num {
+  /// Show whole-dollar amounts without cents ("5"), fractions with two
+  /// decimal places ("2.50").  Used on every bet-unit display in the app.
+  String formatBet() =>
+      this % 1 == 0 ? toInt().toString() : toStringAsFixed(2);
+}
+
+// ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
 
@@ -218,6 +229,8 @@ class Tournament {
   final String startDate;
   final String? endDate;
   final List<RoundSummary> rounds;
+  final int totalRounds;
+  final List<String> activeGames;
 
   const Tournament({
     required this.id,
@@ -225,6 +238,8 @@ class Tournament {
     required this.startDate,
     this.endDate,
     required this.rounds,
+    this.totalRounds = 1,
+    this.activeGames = const [],
   });
 
   factory Tournament.fromJson(Map<String, dynamic> j) => Tournament(
@@ -235,7 +250,43 @@ class Tournament {
         rounds: (j['rounds'] as List? ?? [])
             .map((r) => RoundSummary.fromJson(r as Map<String, dynamic>))
             .toList(),
+        totalRounds: j['total_rounds'] as int? ?? 1,
+        activeGames: (j['active_games'] as List? ?? [])
+            .map((g) => g as String)
+            .toList(),
       );
+}
+
+/// Low Net Championship configuration (tournament-level).
+class LowNetChampionshipSetup {
+  final String handicapMode;
+  final int netPercent;
+  final double entryFee;
+  final List<Map<String, dynamic>> payouts;
+
+  const LowNetChampionshipSetup({
+    required this.handicapMode,
+    required this.netPercent,
+    required this.entryFee,
+    required this.payouts,
+  });
+
+  factory LowNetChampionshipSetup.fromJson(Map<String, dynamic> j) =>
+      LowNetChampionshipSetup(
+        handicapMode: j['handicap_mode'] as String? ?? 'net',
+        netPercent: j['net_percent'] as int? ?? 100,
+        entryFee: (j['entry_fee'] as num? ?? 0).toDouble(),
+        payouts: (j['payouts'] as List? ?? [])
+            .map((p) => Map<String, dynamic>.from(p as Map))
+            .toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'handicap_mode': handicapMode,
+        'net_percent': netPercent,
+        'entry_fee': entryFee,
+        'payouts': payouts,
+      };
 }
 
 /// Lightweight summary of an in-progress casual round, used in the
@@ -335,6 +386,11 @@ class Foursome {
   final bool hasPhantom;
   final List<int> pinkBallOrder;
   final List<Membership> memberships;
+  /// Per-foursome game override.  Empty = inherit from Round.active_games.
+  final List<String> activeGames;
+  /// Game keys for which a config/model row already exists (read-only,
+  /// computed by FoursomeSerializer.get_configured_games).
+  final List<String> configuredGames;
 
   const Foursome({
     required this.id,
@@ -342,14 +398,18 @@ class Foursome {
     required this.hasPhantom,
     required this.pinkBallOrder,
     required this.memberships,
+    this.activeGames    = const [],
+    this.configuredGames = const [],
   });
 
   factory Foursome.fromJson(Map<String, dynamic> j) => Foursome(
-        id: j['id'] as int,
-        groupNumber: j['group_number'] as int,
-        hasPhantom: j['has_phantom'] as bool? ?? false,
-        pinkBallOrder: List<int>.from(j['pink_ball_order'] as List? ?? []),
-        memberships: (j['memberships'] as List? ?? [])
+        id:              j['id'] as int,
+        groupNumber:     j['group_number'] as int,
+        hasPhantom:      j['has_phantom'] as bool? ?? false,
+        pinkBallOrder:   List<int>.from(j['pink_ball_order'] as List? ?? []),
+        activeGames:     List<String>.from(j['active_games'] as List? ?? []),
+        configuredGames: List<String>.from(j['configured_games'] as List? ?? []),
+        memberships:     (j['memberships'] as List? ?? [])
             .map((m) => Membership.fromJson(m as Map<String, dynamic>))
             .toList(),
       );
@@ -1235,6 +1295,9 @@ class Leaderboard {
   final String status;
   final List<String> activeGames;
   final Map<String, LeaderboardGame> games;
+  final int? tournamentId;
+  final String? tournamentName;
+  final List<String> tournamentActiveGames;
 
   const Leaderboard({
     required this.roundId,
@@ -1243,6 +1306,9 @@ class Leaderboard {
     required this.status,
     required this.activeGames,
     required this.games,
+    this.tournamentId,
+    this.tournamentName,
+    this.tournamentActiveGames = const [],
   });
 
   factory Leaderboard.fromJson(Map<String, dynamic> j) {
@@ -1262,6 +1328,155 @@ class Leaderboard {
       status: j['status'] as String,
       activeGames: List<String>.from(j['active_games'] as List? ?? []),
       games: games,
+      tournamentId: j['tournament_id'] as int?,
+      tournamentName: j['tournament_name'] as String?,
+      tournamentActiveGames: List<String>.from(
+          j['tournament_active_games'] as List? ?? []),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Three-Person Match
+// ---------------------------------------------------------------------------
+
+/// Per-player summary from the phase-1 (5-3-1) standings.
+class TpmPlayerSummary {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final double phase1Points;
+  final int    phase1Place;
+  final double money;
+
+  const TpmPlayerSummary({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.phase1Points,
+    required this.phase1Place,
+    required this.money,
+  });
+
+  factory TpmPlayerSummary.fromJson(Map<String, dynamic> j) => TpmPlayerSummary(
+    playerId:     j['player_id']     as int,
+    name:         j['name']          as String? ?? '',
+    shortName:    j['short_name']    as String? ?? '',
+    phase1Points: (j['phase1_points'] as num?)?.toDouble() ?? 0.0,
+    phase1Place:  j['phase1_place']  as int?    ?? 0,
+    money:        (j['money']        as num?)?.toDouble() ?? 0.0,
+  );
+}
+
+/// A single hole entry in the phase-1 (5-3-1) grid.
+class TpmP1HoleEntry {
+  final int    playerId;
+  final String shortName;
+  final int    netScore;
+  final double points;
+
+  const TpmP1HoleEntry({
+    required this.playerId,
+    required this.shortName,
+    required this.netScore,
+    required this.points,
+  });
+
+  factory TpmP1HoleEntry.fromJson(Map<String, dynamic> j) => TpmP1HoleEntry(
+    playerId:  j['player_id']  as int,
+    shortName: j['short_name'] as String? ?? '',
+    netScore:  j['net_score']  as int,
+    points:    (j['points']    as num?)?.toDouble() ?? 0.0,
+  );
+}
+
+/// Full summary for a Three-Person Match game.
+class ThreePersonMatchSummary {
+  /// One of: pending | in_progress | tiebreak | phase2 | complete
+  final String              status;
+  final String              handicapMode;
+  final int                 netPercent;
+  final List<TpmPlayerSummary> players;
+  /// Number of holes scored so far (0–9).
+  final int                 holesScored;
+  /// Per-hole breakdown for the 5-3-1 phase (holes 1–9).
+  final List<Map<String, dynamic>> holes;
+  final Map<String, dynamic> money;
+  /// Back-9 match play data; null if tiebreak not yet resolved or phase 1 not done.
+  final Map<String, dynamic>? phase2;
+  /// Tiebreak data; non-null when status == 'tiebreak'.
+  final Map<String, dynamic>? tiebreak;
+
+  const ThreePersonMatchSummary({
+    required this.status,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.players,
+    required this.holesScored,
+    required this.holes,
+    required this.money,
+    this.phase2,
+    this.tiebreak,
+  });
+
+  bool get isComplete   => status == 'complete';
+  bool get isInProgress => status == 'in_progress' || status == 'tiebreak' || status == 'phase2';
+  bool get isTiebreak   => status == 'tiebreak';
+  bool get isPhase2     => status == 'phase2' || (status == 'complete' && phase2 != null);
+
+  factory ThreePersonMatchSummary.fromJson(Map<String, dynamic> j) {
+    final hcap = j['handicap'] as Map<String, dynamic>? ?? {};
+    return ThreePersonMatchSummary(
+      status:       j['status']       as String? ?? 'pending',
+      handicapMode: hcap['mode']       as String? ?? 'net',
+      netPercent:   hcap['net_percent'] as int?   ?? 100,
+      players: (j['players'] as List? ?? [])
+          .map((p) => TpmPlayerSummary.fromJson(p as Map<String, dynamic>))
+          .toList(),
+      holesScored: j['holes_scored'] as int? ?? 0,
+      holes: (j['holes'] as List? ?? [])
+          .map((h) => h as Map<String, dynamic>)
+          .toList(),
+      money:    j['money']    as Map<String, dynamic>? ?? {},
+      phase2:   j['phase2']   as Map<String, dynamic>?,
+      tiebreak: j['tiebreak'] as Map<String, dynamic>?,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phantom player init
+// ---------------------------------------------------------------------------
+
+/// Response from POST /api/foursomes/<id>/phantom/init/
+///
+/// Contains the per-hole source player mapping so the UI can show which
+/// real player the phantom is copying on each hole.
+class PhantomInitResult {
+  final int         phantomPlayerId;
+  final int         playingHandicap;
+  final String      algorithm;
+  /// {hole_number → source_player_id} for holes 1–18.
+  final Map<int, int> sourceByHole;
+
+  const PhantomInitResult({
+    required this.phantomPlayerId,
+    required this.playingHandicap,
+    required this.algorithm,
+    required this.sourceByHole,
+  });
+
+  factory PhantomInitResult.fromJson(Map<String, dynamic> j) {
+    final raw = j['source_by_hole'] as Map<String, dynamic>? ?? {};
+    final sourceByHole = raw.map(
+      (k, v) => MapEntry(int.parse(k), v as int),
+    );
+    return PhantomInitResult(
+      phantomPlayerId: j['phantom_player_id'] as int,
+      playingHandicap: j['playing_handicap']  as int,
+      algorithm:       j['algorithm']         as String? ?? 'rotating_player_scores',
+      sourceByHole:    sourceByHole,
     );
   }
 }

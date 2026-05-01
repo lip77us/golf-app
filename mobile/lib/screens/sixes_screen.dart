@@ -1135,6 +1135,8 @@ class _HoleScoreCard extends StatelessWidget {
               running:        rt,
               gross:          gross,
               isHot:          isHot,
+              par:            par,
+              strokes:        matchStrokes,
               matchHcapLabel: matchHcapLabel,
               showNet:        _mode == 'net',
               // Tapping a scored non-hot row lets the user edit it.
@@ -1195,6 +1197,8 @@ class _PlayerScoreRow extends StatelessWidget {
   final _RunningTotal running;
   final int?         gross;     // null = not yet entered
   final bool         isHot;     // shaded "you're up" indicator
+  final int          par;       // gross par for this hole
+  final int          strokes;   // match strokes (handicap-adjusted) for this player
   final VoidCallback? onTap;
 
   /// Optional "-N" label shown next to the player name indicating the
@@ -1213,6 +1217,8 @@ class _PlayerScoreRow extends StatelessWidget {
     required this.running,
     required this.gross,
     required this.isHot,
+    required this.par,
+    required this.strokes,
     this.matchHcapLabel,
     this.onTap,
     this.showNet = true,
@@ -1222,13 +1228,25 @@ class _PlayerScoreRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final Color boxBg = isHot
-        ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-        : Colors.transparent;
-
-    final boxBorder = isHot
-        ? Border.all(color: theme.colorScheme.primary, width: 2)
-        : Border.all(color: theme.colorScheme.outline);
+    // Score box: colored by net result when scored, highlighted when hot+empty.
+    final Color? boxBg;
+    final Border boxBorder;
+    if (gross != null) {
+      final diff = (gross! - strokes) - par;
+      final Color c = diff < 0
+          ? Colors.green.shade200
+          : diff == 0
+              ? Colors.grey.shade200
+              : Colors.red.shade200;
+      boxBg    = c;
+      boxBorder = Border.all(color: c);
+    } else if (isHot) {
+      boxBg    = theme.colorScheme.primaryContainer.withOpacity(0.4);
+      boxBorder = Border.all(color: theme.colorScheme.primary, width: 2);
+    } else {
+      boxBg    = null;
+      boxBorder = Border.all(color: theme.colorScheme.outline);
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -1296,7 +1314,7 @@ class _PlayerScoreRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
 
-        // Score box
+        // Score box — colored by net result, empty+highlighted when active.
         GestureDetector(
           onTap: onTap,
           child: AnimatedContainer(
@@ -1315,13 +1333,7 @@ class _PlayerScoreRow extends StatelessWidget {
                     style: theme.textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.bold),
                   )
-                : isHot
-                    ? Icon(
-                        Icons.arrow_drop_down,
-                        size: 20,
-                        color: theme.colorScheme.primary,
-                      )
-                    : null,
+                : null,
           ),
         ),
       ]),

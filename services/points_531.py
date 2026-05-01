@@ -117,7 +117,7 @@ def setup_points_531(
 # Strokes-Off support (course-wide SI threshold — simpler than Sixes)
 # ---------------------------------------------------------------------------
 
-def _build_so_score_index(foursome) -> dict:
+def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
     """
     Return a gross-based score_index with strokes-off adjustments baked
     in for every real player.
@@ -148,7 +148,7 @@ def _build_so_score_index(foursome) -> dict:
     for m in memberships:
         if m.tee_id is None:
             continue
-        so = max(0, (m.playing_handicap or 0) - low)
+        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
         if so <= 0:
             continue
 
@@ -271,7 +271,7 @@ def calculate_points_531(foursome) -> list:
 
     # Pick the score index that matches the game's handicap policy.
     if game.handicap_mode == HandicapMode.STROKES_OFF:
-        score_index = _build_so_score_index(foursome)
+        score_index = _build_so_score_index(foursome, net_percent=game.net_percent)
     else:
         score_index = build_score_index(
             foursome,

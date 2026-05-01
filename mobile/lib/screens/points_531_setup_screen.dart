@@ -71,7 +71,7 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
       // Game already started — jump straight to the entry screen.
       if (_summary!.status == 'in_progress') {
         Navigator.of(context).pushReplacementNamed(
-          '/points-531',
+          '/score-entry',
           arguments: widget.foursomeId,
         );
         return;
@@ -130,7 +130,7 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
       // recalculation of Points 5-3-1 automatically via
       // _run_active_game_calculators on the server.
       Navigator.of(context).pushReplacementNamed(
-        '/points-531',
+        '/score-entry',
         arguments: widget.foursomeId,
       );
     } catch (e) {
@@ -143,7 +143,7 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
     final rp = context.watch<RoundProvider>();
     // One-time seed of the bet controller once the round is available.
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.toStringAsFixed(2);
+      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -365,7 +365,7 @@ class _HandicapModeCard extends StatelessWidget {
             selected: {mode},
             onSelectionChanged: (s) => onModeChanged(s.first),
           ),
-          if (mode == 'net') ...[
+          if (mode != 'gross') ...[
             const SizedBox(height: 12),
             Text('Handicap allowance',
                 style: theme.textTheme.bodySmall?.copyWith(

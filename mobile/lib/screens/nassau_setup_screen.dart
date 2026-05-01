@@ -96,11 +96,11 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
       try {
         final existing = await client.getNassauSummary(widget.foursomeId);
 
-        // If a game is already in progress jump straight to play screen.
+        // If a game is already in progress jump straight to score entry.
         if (existing.status == 'in_progress' || existing.status == 'complete') {
           if (!mounted) return;
           Navigator.of(context).pushReplacementNamed(
-            '/nassau',
+            '/score-entry',
             arguments: widget.foursomeId,
           );
           return;
@@ -169,7 +169,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
       if (!mounted) return;
       if (ok) {
         Navigator.of(context).pushReplacementNamed(
-          '/nassau',
+          '/score-entry',
           arguments: widget.foursomeId,
         );
       } else {
@@ -186,7 +186,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   Widget build(BuildContext context) {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.toStringAsFixed(2);
+      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -530,7 +530,7 @@ class _HandicapModeCard extends StatelessWidget {
             selected: {mode},
             onSelectionChanged: (s) => onModeChanged(s.first),
           ),
-          if (mode == 'net') ...[
+          if (mode != 'gross') ...[
             const SizedBox(height: 12),
             Text('Handicap allowance',
                 style: theme.textTheme.bodySmall?.copyWith(

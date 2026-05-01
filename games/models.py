@@ -517,9 +517,17 @@ class IrishRumbleConfig(models.Model):
                             default=100,
                             help_text="Percentage of playing handicap applied when handicap_mode='net'.",
                         )
-    bet_unit            = models.DecimalField(
-                            max_digits=6, decimal_places=2, default=1.00,
-                            help_text="Dollar value of the Irish Rumble bet (winner-take-all).",
+    entry_fee           = models.DecimalField(
+                            max_digits=8, decimal_places=2, default=0.00,
+                            help_text="Entry fee per foursome; total pool = entry_fee × num_foursomes.",
+                        )
+    payouts             = models.JSONField(
+                            default=list,
+                            help_text=(
+                                "Payout per finishing place. "
+                                "Example: [{'place': 1, 'amount': 60.00}, "
+                                "{'place': 2, 'amount': 30.00}]"
+                            ),
                         )
     segments            = models.JSONField(
                             help_text="List of segment dicts with start_hole, end_hole, balls_to_count."
@@ -596,9 +604,65 @@ class LowNetRoundConfig(models.Model):
                                 "{'place': 2, 'amount': 30.00}]"
                             ),
                         )
+    excluded_player_ids = models.JSONField(
+                            default=list,
+                            help_text=(
+                                "Player IDs excluded from prize payouts. "
+                                "Excluded players still appear in standings "
+                                "so their score is visible, but they receive "
+                                "no payout."
+                            ),
+                        )
 
     def __str__(self):
         return f"Low Net config — {self.round}"
+
+
+class LowNetChampionshipConfig(models.Model):
+    """
+    Configuration for the Low Net Championship game spanning a full Tournament.
+
+    Mirrors LowNetRoundConfig but scoped to a Tournament instead of a Round.
+    The calculator aggregates each player's capped net total across every
+    round in the tournament (rounds_to_count = None means all rounds count;
+    N-of-M selection is deferred until a future release).
+
+    A double-bogey cap (max 2 over par per hole) is always applied, matching
+    the per-round behaviour.
+
+    payouts is a JSON list defining the prize structure:
+        [{"place": 1, "amount": 200.00}, {"place": 2, "amount": 100.00}, ...]
+    entry_fee is per player; prize_pool = entry_fee × player_count.
+    """
+    tournament          = models.OneToOneField(
+                            'tournament.Tournament',
+                            on_delete=models.CASCADE,
+                            related_name='low_net_championship_config',
+                        )
+    handicap_mode       = models.CharField(
+                            max_length=20,
+                            choices=HandicapMode.choices,
+                            default=HandicapMode.NET,
+                        )
+    net_percent         = models.PositiveSmallIntegerField(
+                            default=100,
+                            help_text="Percentage of playing handicap applied when handicap_mode='net'.",
+                        )
+    entry_fee           = models.DecimalField(
+                            max_digits=8, decimal_places=2, default=0.00,
+                            help_text="Per-player entry fee.",
+                        )
+    payouts             = models.JSONField(
+                            default=list,
+                            help_text=(
+                                "Payout per finishing place. "
+                                "Example: [{'place': 1, 'amount': 200.00}, "
+                                "{'place': 2, 'amount': 100.00}]"
+                            ),
+                        )
+
+    def __str__(self):
+        return f"Low Net Championship config — {self.tournament}"
 
 
 # ---------------------------------------------------------------------------
@@ -620,8 +684,18 @@ class PinkBallConfig(models.Model):
                       related_name='pink_ball_config'
                   )
     ball_color  = models.CharField(max_length=50, default='Pink')
-    bet_unit    = models.DecimalField(max_digits=8, decimal_places=2, default=1.00)
-    places_paid = models.PositiveSmallIntegerField(default=1)
+    entry_fee   = models.DecimalField(
+                      max_digits=8, decimal_places=2, default=0.00,
+                      help_text="Entry fee per foursome; total pool = entry_fee × num_foursomes.",
+                  )
+    payouts     = models.JSONField(
+                      default=list,
+                      help_text=(
+                          "Payout per finishing place. "
+                          "Example: [{'place': 1, 'amount': 60.00}, "
+                          "{'place': 2, 'amount': 30.00}]"
+                      ),
+                  )
 
     class Meta:
         verbose_name = 'Pink Ball Config'
@@ -761,9 +835,15 @@ class ScrambleResult(models.Model):
 class MatchPlayBracket(models.Model):
     """
     The overall match play structure for one Foursome in one Round.
-    For a 4-some: standard single elimination (2 semis + 1 final across 2×9).
-    For a 3-some: 3 parallel 9-hole matches → points → top 2 play a 9-hole final.
-    bracket_type: 'single_elim' or 'three_player_points'
+    For a 4-some: standard single elimination (2 semis on holes 1-9;
+    Final + 3rd Place match on holes 10-18).
+    bracket_type: 'single_elim' only (three_player_points kept for legacy).
+
+    entry_fee   — amount each real player pays into the prize pool.
+    payout_config — JSON dict mapping place label to dollar amount, e.g.:
+        {"1st": 48.00, "2nd": 24.00, "3rd": 8.00, "4th": 0.00}
+    prize_pool is derived as entry_fee × number of real players and stored
+    for display convenience.
     """
     foursome            = models.ForeignKey(Foursome, on_delete=models.CASCADE, related_name='match_play_brackets')
     bracket_type        = models.CharField(
@@ -775,6 +855,17 @@ class MatchPlayBracket(models.Model):
                             null=True, blank=True, related_name='match_play_wins'
                         )
     status              = models.CharField(max_length=20, choices=MatchStatus.choices, default=MatchStatus.PENDING)
+    entry_fee           = models.DecimalField(
+                            max_digits=7, decimal_places=2, default=0.00,
+                            help_text="Per-player entry fee for the match play prize pool."
+                        )
+    payout_config       = models.JSONField(
+                            default=dict, blank=True,
+                            help_text=(
+                                'Dict of place → dollar amount. '
+                                'E.g. {"1st": 48.00, "2nd": 24.00, "3rd": 8.00, "4th": 0.00}'
+                            )
+                        )
 
     def __str__(self):
         return f"Match Play — Group {self.foursome.group_number} — {self.bracket_type}"
@@ -834,3 +925,218 @@ class MatchPlayHoleResult(models.Model):
 
     def __str__(self):
         return f"Hole {self.hole_number} — {self.match}"
+
+
+# ---------------------------------------------------------------------------
+# THREE-PERSON MATCH (tournament game: 9-hole 5-3-1 seeding + 9-hole match play)
+# ---------------------------------------------------------------------------
+
+class ThreePersonMatch(models.Model):
+    """
+    Tournament game for a 3-player group.
+
+    Nine holes of Points 5-3-1 scoring.  After hole 9, final standings are
+    determined by cumulative points.  Tied positions are resolved by sudden-
+    death match play on holes 10-18.  Phase 2 (leader vs runner_up) always
+    calculates retroactively from hole 10 once both finalists are known.
+
+    Payout: entry_fee × real players = prize pool, payout_config maps place
+    labels ('1st', '2nd', '3rd') to dollar amounts; tied players split.
+    """
+
+    STATUS_PENDING     = 'pending'
+    STATUS_IN_PROGRESS = 'in_progress'
+    STATUS_TIEBREAK    = 'tiebreak'
+    STATUS_PHASE2      = 'phase2'
+    STATUS_COMPLETE    = 'complete'
+
+    STATUS_CHOICES = [
+        ('pending',     'Pending'),
+        ('in_progress', 'In Progress'),
+        ('tiebreak',    'Tiebreak'),
+        ('phase2',      'Phase 2'),
+        ('complete',    'Complete'),
+    ]
+
+    foursome            = models.OneToOneField(
+                            Foursome, on_delete=models.CASCADE,
+                            related_name='three_person_match',
+                        )
+    status              = models.CharField(
+                            max_length=20,
+                            choices=STATUS_CHOICES,
+                            default='pending',
+                        )
+    handicap_mode       = models.CharField(
+                            max_length=20,
+                            choices=HandicapMode.choices,
+                            default=HandicapMode.NET,
+                        )
+    net_percent         = models.PositiveSmallIntegerField(
+                            default=100,
+                            validators=[MinValueValidator(0), MaxValueValidator(200)],
+                        )
+    entry_fee           = models.DecimalField(
+                            max_digits=7, decimal_places=2, default=0.00,
+                            help_text="Per-player entry fee for the prize pool.",
+                        )
+    payout_config       = models.JSONField(
+                            default=dict, blank=True,
+                            help_text=(
+                                "Dict of place → dollar amount. "
+                                "E.g. {'1st': 48.00, '2nd': 24.00, '3rd': 0.00}"
+                            ),
+                        )
+
+    # ── Seeding (set once phase 1 resolves) ──────────────────────────────────
+    # The player who finished 1st in 5-3-1 phase.
+    phase1_leader       = models.ForeignKey(
+                            Player, on_delete=models.SET_NULL,
+                            null=True, blank=True, related_name='+',
+                            help_text="1st-place finisher after the 5-3-1 phase.",
+                        )
+    # The player who will face the leader in match play (2nd-place seed).
+    phase1_runner_up    = models.ForeignKey(
+                            Player, on_delete=models.SET_NULL,
+                            null=True, blank=True, related_name='+',
+                            help_text="2nd-place seed entering the match play phase.",
+                        )
+    # When status='tiebreak_23': the two players battling for the runner-up slot.
+    phase1_tied_a       = models.ForeignKey(
+                            Player, on_delete=models.SET_NULL,
+                            null=True, blank=True, related_name='+',
+                            help_text="Tied-for-2nd candidate A (only set during tiebreak_23).",
+                        )
+    phase1_tied_b       = models.ForeignKey(
+                            Player, on_delete=models.SET_NULL,
+                            null=True, blank=True, related_name='+',
+                            help_text="Tied-for-2nd candidate B (only set during tiebreak_23).",
+                        )
+
+    # ── Phase 2 match play details ────────────────────────────────────────────
+    # First hole of the pure 1v1 match play (usually 10, may be later after
+    # a tiebreak extends past hole 9).
+    phase2_start_hole   = models.PositiveSmallIntegerField(
+                            null=True, blank=True,
+                            help_text="First hole of the pure match play phase.",
+                        )
+    # Running margin accumulated during the tiebreak_23 best-ball match.
+    # Positive = leader is ahead entering phase 2.
+    phase2_carryover    = models.SmallIntegerField(
+                            default=0,
+                            help_text=(
+                                "Best-ball match margin at the end of the "
+                                "tiebreak_23 phase (+ve = leader ahead)."
+                            ),
+                        )
+
+    # ── Final result ──────────────────────────────────────────────────────────
+    match_winner        = models.ForeignKey(
+                            Player, on_delete=models.SET_NULL,
+                            null=True, blank=True,
+                            related_name='three_person_match_wins',
+                        )
+
+    created_at          = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Three-Person Match — Group {self.foursome.group_number}"
+
+
+class ThreePersonMatchP1HoleResult(models.Model):
+    """
+    Phase 1 (5-3-1) per-hole, per-player result.
+    Created for every hole scored during the 5-3-1 phase (holes 1–9 plus
+    any tiebreak-extension holes).  Mirrors Points531PlayerHoleResult so
+    the same tie-split allocator can be reused.
+    """
+    game                = models.ForeignKey(
+                            ThreePersonMatch, on_delete=models.CASCADE,
+                            related_name='phase1_results',
+                        )
+    player              = models.ForeignKey(
+                            Player, on_delete=models.CASCADE,
+                            related_name='tpm_p1_hole_results',
+                        )
+    hole_number         = models.PositiveSmallIntegerField(
+                            validators=[MinValueValidator(1), MaxValueValidator(18)]
+                        )
+    net_score           = models.SmallIntegerField()
+    points_awarded      = models.DecimalField(max_digits=4, decimal_places=2)
+
+    class Meta:
+        unique_together = ('game', 'player', 'hole_number')
+        ordering        = ['hole_number', '-points_awarded']
+
+    def __str__(self):
+        return (
+            f"TPM P1 Hole {self.hole_number} — {self.player.name} — "
+            f"{self.points_awarded}pt"
+        )
+
+
+class ThreePersonMatchP2HoleResult(models.Model):
+    """
+    Match play hole results for the Three-Person Match.
+
+    phase='tiebreak' — holes played during the tiebreak_23 concurrent phase.
+        main_* fields track the best-ball match (leader vs best of tied_a/b).
+        tb_*   fields track the sub-match (tied_a vs tied_b).
+    phase='phase2'   — holes played in the pure 1v1 match play phase.
+        main_* fields track the leader vs runner_up match.
+        tb_*   fields are unused (null).
+
+    main_leader_wins: True=leader won the hole, False=opponent won, None=halved.
+    tb_a_wins:        True=tied_a won the hole, False=tied_b won, None=halved.
+    main_margin_after / tb_margin_after:
+        Running margin after this hole.  Positive = leader / tied_a is ahead.
+    """
+    PHASE_TIEBREAK = 'tiebreak'
+    PHASE_PHASE2   = 'phase2'
+    PHASE_CHOICES  = [('tiebreak', 'Tiebreak'), ('phase2', 'Phase 2')]
+
+    game                = models.ForeignKey(
+                            ThreePersonMatch, on_delete=models.CASCADE,
+                            related_name='phase2_results',
+                        )
+    hole_number         = models.PositiveSmallIntegerField(
+                            validators=[MinValueValidator(1), MaxValueValidator(18)]
+                        )
+    phase               = models.CharField(max_length=10, choices=PHASE_CHOICES)
+
+    # Main match (leader vs runner_up / best-ball)
+    main_leader_net     = models.SmallIntegerField(null=True, blank=True)
+    main_opp_net        = models.SmallIntegerField(
+                            null=True, blank=True,
+                            help_text=(
+                                "During tiebreak: min(tied_a_net, tied_b_net). "
+                                "During phase2: runner_up's net score."
+                            ),
+                        )
+    main_leader_wins    = models.BooleanField(
+                            null=True, blank=True,
+                            help_text="True=leader wins hole, False=opp wins, None=halved.",
+                        )
+    main_margin_after   = models.SmallIntegerField(
+                            default=0,
+                            help_text="Running margin after hole (+ve = leader ahead).",
+                        )
+
+    # Tiebreak sub-match (only populated when phase='tiebreak')
+    tb_a_net            = models.SmallIntegerField(null=True, blank=True)
+    tb_b_net            = models.SmallIntegerField(null=True, blank=True)
+    tb_a_wins           = models.BooleanField(
+                            null=True, blank=True,
+                            help_text="True=tied_a wins hole, False=tied_b wins, None=halved.",
+                        )
+    tb_margin_after     = models.SmallIntegerField(
+                            default=0,
+                            help_text="Sub-match margin after hole (+ve = tied_a ahead).",
+                        )
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        return f"TPM P2 Hole {self.hole_number} [{self.phase}] — {self.game}"

@@ -185,8 +185,19 @@ class SyncService extends ChangeNotifier {
         networkFailed = true;
         break;
       } on ApiException catch (e) {
-        // Permanent server-side error (e.g. 400 bad request) — log and discard
-        // so it doesn't block the rest of the queue.
+        if (e.statusCode >= 500) {
+          // Server-side error (5xx) — could be a transient bug; leave the item
+          // queued so it retries after a server restart rather than being lost.
+          debugPrint(
+            'SyncService: server 5xx for '
+            'foursome=${item.foursomeId} hole=${item.holeNumber}: $e — will retry',
+          );
+          await _db.incrementRetry(item.id);
+          networkFailed = true; // treat like a transient failure: stop drain + schedule retry
+          break;
+        }
+        // Client-side error (4xx) — the score is malformed and the server will
+        // never accept it; discard so it doesn't block the rest of the queue.
         debugPrint(
           'SyncService: server rejected '
           'foursome=${item.foursomeId} hole=${item.holeNumber}: $e',
