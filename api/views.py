@@ -45,6 +45,7 @@ Match Play
 """
 
 from django.contrib.auth import authenticate
+from django.http import JsonResponse
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 
@@ -2336,3 +2337,11 @@ class PinkBallFoursomeOrderView(APIView):
         foursome.pink_ball_order = order
         foursome.save(update_fields=['pink_ball_order'])
         return Response({'order': order})
+
+
+# ---------------------------------------------------------------------------
+# Health check — used by Railway to confirm the app is running
+# ---------------------------------------------------------------------------
+
+def health_check(request):
+    return JsonResponse({'status': 'ok'})

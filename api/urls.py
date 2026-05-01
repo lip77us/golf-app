@@ -79,6 +79,9 @@ urlpatterns = [
     path('rounds/<int:pk>/pink-ball/setup/',      views.PinkBallSetupView.as_view(),          name='api-pink-ball-setup'),
     path('foursomes/<int:pk>/pink-ball/order/',   views.PinkBallFoursomeOrderView.as_view(),  name='api-pink-ball-order'),
 
+    # ---- Health check ----
+    path('health/', views.health_check, name='api-health'),
+
     # ---- Course import from GolfCourseAPI ----
     path('courses/golf-api/search/',                   views.GolfApiSearchView.as_view(),        name='api-golf-api-search'),
     path('courses/golf-api/courses/<int:course_id>/',  views.GolfApiCourseDetailView.as_view(),  name='api-golf-api-course-detail'),
