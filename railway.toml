@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "gunicorn my_golf_app.wsgi --log-file -"
+startCommand = "gunicorn my_golf_app.wsgi --bind 0.0.0.0:$PORT --log-file -"
 healthcheckPath = "/api/health/"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
