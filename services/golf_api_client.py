@@ -57,6 +57,12 @@ def _get(path: str, params: dict | None = None) -> dict:
     Raises RuntimeError on HTTP errors or network failures.
     """
     key = getattr(settings, 'GOLF_API_KEY', '')
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        'GOLF_API_KEY in use: %r (first 6 chars: %s)',
+        key[:6] + '...' if len(key) > 6 else key,
+        key[:6],
+    )
     if not key:
         raise ValueError(
             'GOLF_API_KEY is not configured.  '
