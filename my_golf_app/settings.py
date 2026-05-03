@@ -45,6 +45,10 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 _allowed = os.environ.get('ALLOWED_HOSTS', '')
 ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()]
 
+# CSRF trusted origins — required for Django admin and any POST requests over HTTPS
+_csrf_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()]
+
 
 # Application definition
 
