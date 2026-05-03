@@ -230,10 +230,12 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     final theme   = Theme.of(context);
     final members = _realMembers;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
 
           // ── Team assignment card ──────────────────────────────────────────
@@ -355,6 +357,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                     ),
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -386,6 +390,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                   ),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -418,7 +424,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           const SizedBox(height: 80),
         ],
       ),
-    );
+    ));
   }
 
   // ── Small helpers ────────────────────────────────────────────────────────────
