@@ -48,6 +48,12 @@ ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()]
 # CSRF trusted origins — required for Django admin and any POST requests over HTTPS
 _csrf_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()]
+# Always trust our known domains regardless of env var
+for _host in ALLOWED_HOSTS:
+    if not _host.startswith('.'):
+        _origin = f'https://{_host}'
+        if _origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_origin)
 
 
 # Application definition
