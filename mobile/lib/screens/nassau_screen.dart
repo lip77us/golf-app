@@ -1500,16 +1500,17 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                       rowH:          rowH,
                       strokesOnHole: (h) => _strokesOnHoleFor(m, h),
                     ),
-                  // Hole winner row
+                  // Hole winner row (top bet)
                   Row(children: [
                     SizedBox(
                       width: labelColW, height: rowH,
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: Text('Won by',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontStyle: FontStyle.italic)),
+                        child: Text(
+                          nassau.isClaremont ? 'Top' : 'Won by',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontStyle: FontStyle.italic)),
                       ),
                     ),
                     for (final h in holeRange)
@@ -1541,6 +1542,53 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                                 )));
                       }),
                   ]),
+
+                  // ── Claremont bottom delta row ─────────────────────────
+                  if (nassau.isClaremont)
+                    Row(children: [
+                      SizedBox(
+                        width: labelColW, height: rowH,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('Bot',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontStyle: FontStyle.italic)),
+                        ),
+                      ),
+                      for (final h in holeRange)
+                        Builder(builder: (_) {
+                          final hd = nassau.holes
+                              .where((x) => x.hole == h)
+                              .firstOrNull;
+                          final delta = hd?.bottomDelta;
+                          Color? bg;
+                          Color? fg;
+                          String lbl = '·';
+                          if (delta != null) {
+                            if (delta > 0) {
+                              bg  = Colors.blue.shade100;
+                              fg  = Colors.blue.shade700;
+                              lbl = '+$delta';
+                            } else if (delta < 0) {
+                              bg  = Colors.orange.shade100;
+                              fg  = Colors.orange.shade800;
+                              lbl = '$delta';
+                            } else {
+                              bg  = Colors.grey.shade100;
+                              fg  = Colors.grey.shade600;
+                              lbl = '0';
+                            }
+                          }
+                          return holeCell(h,
+                              bg: bg,
+                              child: Text(lbl,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: fg ?? theme.colorScheme.onSurfaceVariant,
+                                  )));
+                        }),
+                    ]),
                 ],
               ),
             ),
@@ -1810,14 +1858,30 @@ class _MatchStatusBar extends StatelessWidget {
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // ── Top (Nassau) row ───────────────────────────────────────────────
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _betChip(context, 'F9',  summary.front9),
-            _betChip(context, 'B9',  summary.back9),
-            _betChip(context, 'ALL', summary.overall),
+            _betChip(context, summary.isClaremont ? 'Top F9' : 'F9',  summary.front9),
+            _betChip(context, summary.isClaremont ? 'Top B9' : 'B9',  summary.back9),
+            _betChip(context, summary.isClaremont ? 'Top ALL' : 'ALL', summary.overall),
           ],
         ),
+        // ── Bottom (Claremont) row ─────────────────────────────────────────
+        if (summary.isClaremont &&
+            summary.bottomFront9 != null &&
+            summary.bottomBack9  != null &&
+            summary.bottomOverall != null) ...[
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _bottomChip(context, 'Bot F9',  summary.bottomFront9!),
+              _bottomChip(context, 'Bot B9',  summary.bottomBack9!),
+              _bottomChip(context, 'Bot ALL', summary.bottomOverall!),
+            ],
+          ),
+        ],
         if (onPress != null) ...[
           const SizedBox(height: 6),
           SizedBox(
@@ -1881,6 +1945,54 @@ class _MatchStatusBar extends StatelessWidget {
     return Container(
       padding:
           const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(label,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 2),
+        Text(subtitle,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(fontWeight: FontWeight.bold)),
+      ]),
+    );
+  }
+
+  /// Compact chip for Claremont bottom bets (margin in points).
+  Widget _bottomChip(
+    BuildContext context,
+    String label,
+    NassauBottomBetResult bet,
+  ) {
+    final theme   = Theme.of(context);
+    final result  = bet.result;
+    Color  bg;
+    String subtitle;
+
+    if (result != null) {
+      if (result == 'halved') {
+        bg       = Colors.grey.shade200;
+        subtitle = 'AS';
+      } else {
+        bg       = result == 'team1' ? Colors.blue.shade100 : Colors.orange.shade100;
+        subtitle = 'wins';
+      }
+    } else if (bet.holesPlayed == 0) {
+      bg       = theme.colorScheme.surfaceContainer;
+      subtitle = '—';
+    } else if (bet.margin == 0) {
+      bg       = theme.colorScheme.surfaceContainer;
+      subtitle = 'AS';
+    } else {
+      bg       = bet.margin > 0 ? Colors.blue.shade50 : Colors.orange.shade50;
+      subtitle = '${bet.margin > 0 ? '+' : ''}${bet.margin}';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(8),

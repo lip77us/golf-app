@@ -937,11 +937,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       // Nassau team banner
       if (nas != null) _TeamBanner(summary: nas),
 
-      // Nassau presses strip
-      if (nas != null && nas.presses.isNotEmpty)
+      // Nassau presses strip (top + bottom combined)
+      if (nas != null &&
+          (nas.presses.isNotEmpty || nas.bottomPresses.isNotEmpty))
         _PressesStrip(
-          presses:     nas.presses,
-          currentHole: _selectedHole,
+          presses:       nas.presses,
+          bottomPresses: nas.bottomPresses,
+          currentHole:   _selectedHole,
         ),
 
       Expanded(
@@ -2418,6 +2420,9 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
   String? _winnerForHole(int h) =>
       widget.nassau.holes.where((x) => x.hole == h).firstOrNull?.winner;
 
+  int? _bottomDeltaForHole(int h) =>
+      widget.nassau.holes.where((x) => x.hole == h).firstOrNull?.bottomDelta;
+
   @override
   Widget build(BuildContext context) {
     final theme       = Theme.of(context);
@@ -2532,13 +2537,16 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                               ? Colors.orange.shade800
                               : null,
                     ),
-                  // Nassau hole winner row
+                  // Top hole winner row
+                  // Claremont: label "Top", show "1" (team colour) or "—".
+                  // Standard:  label "Won by", show "T1"/"T2"/"=".
                   Row(children: [
                     SizedBox(
                       width: _labelColW, height: _rowH,
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: Text('Won by',
+                        child: Text(
+                            nassau.isClaremont ? 'Top' : 'Won by',
                             style: theme.textTheme.labelSmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                                 fontStyle: FontStyle.italic)),
@@ -2549,19 +2557,40 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                         final winner = _winnerForHole(h);
                         Color? bg;
                         Color? fg;
-                        String label = '·';
-                        if (winner == 'team1') {
-                          bg    = Colors.blue.shade100;
-                          fg    = Colors.blue.shade700;
-                          label = 'T1';
-                        } else if (winner == 'team2') {
-                          bg    = Colors.orange.shade100;
-                          fg    = Colors.orange.shade800;
-                          label = 'T2';
-                        } else if (winner == 'halved') {
-                          bg    = Colors.grey.shade100;
-                          fg    = Colors.grey.shade600;
-                          label = '=';
+                        final String label;
+                        if (nassau.isClaremont) {
+                          // Compact Claremont style: "1" coloured, "—" grey
+                          if (winner == 'team1') {
+                            bg = Colors.blue.shade100;
+                            fg = Colors.blue.shade700;
+                            label = '1';
+                          } else if (winner == 'team2') {
+                            bg = Colors.orange.shade100;
+                            fg = Colors.orange.shade800;
+                            label = '1';
+                          } else if (winner == 'halved') {
+                            fg = Colors.grey.shade500;
+                            label = '—';
+                          } else {
+                            label = '·';
+                          }
+                        } else {
+                          // Standard style: T1 / T2 / =
+                          if (winner == 'team1') {
+                            bg = Colors.blue.shade100;
+                            fg = Colors.blue.shade700;
+                            label = 'T1';
+                          } else if (winner == 'team2') {
+                            bg = Colors.orange.shade100;
+                            fg = Colors.orange.shade800;
+                            label = 'T2';
+                          } else if (winner == 'halved') {
+                            bg = Colors.grey.shade100;
+                            fg = Colors.grey.shade600;
+                            label = '=';
+                          } else {
+                            label = '·';
+                          }
                         }
                         return holeCell(h,
                             bg: bg,
@@ -2572,6 +2601,55 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                                 )));
                       }),
                   ]),
+
+                  // Bottom hole points row — Claremont only
+                  if (nassau.isClaremont)
+                    Row(children: [
+                      SizedBox(
+                        width: _labelColW, height: _rowH,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('Bottom',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontStyle: FontStyle.italic)),
+                        ),
+                      ),
+                      for (final h in holeRange)
+                        Builder(builder: (_) {
+                          final delta = _bottomDeltaForHole(h);
+                          Color? bg;
+                          Color? fg;
+                          final String label;
+                          if (delta == null) {
+                            label = '·';
+                          } else if (delta == 0) {
+                            fg    = Colors.grey.shade500;
+                            label = '—';
+                          } else {
+                            final pts = delta.abs();
+                            if (delta > 0) {
+                              bg = pts == 2
+                                  ? Colors.blue.shade100
+                                  : Colors.blue.shade50;
+                              fg = Colors.blue.shade700;
+                            } else {
+                              bg = pts == 2
+                                  ? Colors.orange.shade100
+                                  : Colors.orange.shade50;
+                              fg = Colors.orange.shade800;
+                            }
+                            label = '$pts';
+                          }
+                          return holeCell(h,
+                              bg: bg,
+                              child: Text(label,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: fg ?? theme.colorScheme.onSurfaceVariant,
+                                  )));
+                        }),
+                    ]),
                 ],
               ),
             ),
@@ -2934,14 +3012,27 @@ class _TeamBanner extends StatelessWidget {
 
 class _PressesStrip extends StatelessWidget {
   final List<NassauPressResult> presses;
+  final List<NassauPressResult> bottomPresses;
   final int currentHole;
-  const _PressesStrip({required this.presses, required this.currentHole});
+  const _PressesStrip({
+    required this.presses,
+    this.bottomPresses = const [],
+    required this.currentHole,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme       = Theme.of(context);
     final currentNine = currentHole <= 9 ? 'front' : 'back';
-    final visible     = presses.where((p) => p.nine == currentNine).toList();
+
+    // Combine top + bottom, tag each with isBottom flag.
+    final allTagged = [
+      for (final p in presses)       (press: p, isBottom: false),
+      for (final p in bottomPresses) (press: p, isBottom: true),
+    ];
+    final visible = allTagged
+        .where((t) => t.press.nine == currentNine)
+        .toList();
     if (visible.isEmpty) return const SizedBox.shrink();
 
     return Container(
@@ -2953,30 +3044,34 @@ class _PressesStrip extends StatelessWidget {
         itemCount: visible.length,
         separatorBuilder: (_, __) => const SizedBox(width: 6),
         itemBuilder: (_, i) {
-          final p      = visible[i];
-          final label  = '${p.startHole}–${p.endHole}';
-          final result = p.result;
-          final m      = p.margin ?? 0;
-          final mAbs   = m.abs();
+          final p        = visible[i].press;
+          final isBottom = visible[i].isBottom;
+          final label    = '${p.startHole}–${p.endHole}';
+          final result   = p.result;
+          final m        = p.margin ?? 0;
+          final mAbs     = m.abs();
           Color  chipColor;
           String scoreText;
+
           if (result == 'team1') {
             chipColor = Colors.blue.shade100;
-            scoreText = p.holesRemaining > 0
-                ? '$mAbs&${p.holesRemaining}'
-                : '${mAbs}UP';
+            scoreText = isBottom
+                ? '+$mAbs pts'
+                : (p.holesRemaining > 0 ? '$mAbs&${p.holesRemaining}' : '${mAbs}UP');
           } else if (result == 'team2') {
             chipColor = Colors.orange.shade100;
-            scoreText = p.holesRemaining > 0
-                ? '$mAbs&${p.holesRemaining}'
-                : '${mAbs}UP';
+            scoreText = isBottom
+                ? '+$mAbs pts'
+                : (p.holesRemaining > 0 ? '$mAbs&${p.holesRemaining}' : '${mAbs}UP');
           } else if (result == 'halved') {
             chipColor = Colors.grey.shade200;
             scoreText = 'AS';
           } else {
+            // Active / in-progress — show range only.
             chipColor = theme.colorScheme.secondaryContainer;
             scoreText = '';
           }
+
           final chipText = scoreText.isEmpty ? label : '$label $scoreText';
           return Center(
             child: Container(
@@ -3009,20 +3104,58 @@ class _MatchStatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme       = Theme.of(context);
+    final isClaremont = summary.isClaremont;
+    final hasBottom   = isClaremont &&
+        summary.bottomFront9  != null &&
+        summary.bottomBack9   != null &&
+        summary.bottomOverall != null;
+
+    // Label style for the "Top" / "Bot" row prefixes.
+    final rowLabelStyle = theme.textTheme.labelSmall?.copyWith(
+      fontWeight: FontWeight.bold,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    Widget betRow(String? rowLabel, List<Widget> chips) => Row(children: [
+      if (rowLabel != null)
+        SizedBox(
+          width: 32,
+          child: Text(rowLabel, style: rowLabelStyle),
+        ),
+      Expanded(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: chips,
+        ),
+      ),
+    ]);
 
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _betChip(context, 'F9',  summary.front9),
-            _betChip(context, 'B9',  summary.back9),
-            _betChip(context, 'ALL', summary.overall),
+        // Top bet row — labelled "Top" only when Claremont is active.
+        betRow(
+          hasBottom ? 'Top' : null,
+          [
+            _betChip(context, 'F9',  summary.front9,  isNine: true),
+            _betChip(context, 'B9',  summary.back9,   isNine: true),
+            _betChip(context, 'ALL', summary.overall, isNine: false),
           ],
         ),
+        // Bottom bet row (Claremont only).
+        if (hasBottom) ...[
+          const SizedBox(height: 4),
+          betRow(
+            'Bot',
+            [
+              _bottomChip(context, 'F9',  summary.bottomFront9!),
+              _bottomChip(context, 'B9',  summary.bottomBack9!),
+              _bottomChip(context, 'ALL', summary.bottomOverall!),
+            ],
+          ),
+        ],
         if (onPress != null) ...[
           const SizedBox(height: 6),
           SizedBox(
@@ -3038,10 +3171,11 @@ class _MatchStatusBar extends StatelessWidget {
     );
   }
 
-  Widget _betChip(BuildContext context, String label, NassauBetResult bet) {
+  Widget _betChip(BuildContext context, String label, NassauBetResult bet,
+      {required bool isNine}) {
     final theme    = Theme.of(context);
     final result   = bet.result;
-    final nineLen  = label == 'ALL' ? 18 : 9;
+    final nineLen  = isNine ? 9 : 18;
     final holesLeft = nineLen - bet.holesPlayed;
     final t1Leads  = bet.margin > 0;
     Color  bg;
@@ -3077,6 +3211,54 @@ class _MatchStatusBar extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(label,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 2),
+        Text(subtitle,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(fontWeight: FontWeight.bold)),
+      ]),
+    );
+  }
+
+  /// Compact chip for Claremont bottom bets (points margin, +N / AS / —).
+  Widget _bottomChip(
+    BuildContext context,
+    String label,
+    NassauBottomBetResult bet,
+  ) {
+    final theme  = Theme.of(context);
+    final result = bet.result;
+    Color  bg;
+    String subtitle;
+
+    if (result != null) {
+      if (result == 'halved') {
+        bg       = Colors.grey.shade200;
+        subtitle = 'AS';
+      } else {
+        bg       = result == 'team1' ? Colors.blue.shade100 : Colors.orange.shade100;
+        subtitle = 'wins';
+      }
+    } else if (bet.holesPlayed == 0) {
+      bg       = theme.colorScheme.surfaceContainer;
+      subtitle = '—';
+    } else if (bet.margin == 0) {
+      bg       = theme.colorScheme.surfaceContainer;
+      subtitle = 'AS';
+    } else {
+      bg       = bet.margin > 0 ? Colors.blue.shade50 : Colors.orange.shade50;
+      subtitle = bet.margin > 0 ? '+${bet.margin}' : '${bet.margin}';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(8),

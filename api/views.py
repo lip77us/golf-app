@@ -1335,6 +1335,7 @@ class NassauSetupView(APIView):
             net_percent   = d.get('net_percent', 100),
             press_mode    = d.get('press_mode', 'none'),
             press_unit    = d.get('press_unit', '0.00'),
+            variant       = d.get('variant', 'none'),
         )
         calculate_nassau(foursome)
         return Response(nassau_summary(foursome), status=status.HTTP_201_CREATED)

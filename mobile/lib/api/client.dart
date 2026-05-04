@@ -444,6 +444,7 @@ class ApiClient {
     int    netPercent   = 100,
     String pressMode    = 'none',
     double pressUnit    = 0.0,
+    String variant      = 'none',  // 'none' | 'tiebreak_2nd' | 'claremont'
   }) async {
     final data = await _post('/foursomes/$foursomeId/nassau/setup/', {
       'team1_player_ids': team1Ids,
@@ -452,6 +453,7 @@ class ApiClient {
       'net_percent'     : netPercent,
       'press_mode'      : pressMode,
       'press_unit'      : pressUnit,
+      'variant'         : variant,
     });
     return NassauSummary.fromJson(data as Map<String, dynamic>);
   }

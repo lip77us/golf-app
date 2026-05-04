@@ -190,9 +190,12 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
     }
     await nav.pushNamed(route, arguments: fsId);
 
-    // After returning from the game screen, wait for any pending score syncs
-    // to flush before reloading the list.  Without this the server hasn't
-    // received the scores yet and current_hole still shows 0 / "Not started".
+    // Immediately show a loading spinner so the stale "Not started" list is
+    // hidden while we wait for any pending score syncs to flush.
+    if (mounted) setState(() { _loading = true; });
+
+    // Wait for any pending score syncs to drain so current_hole is accurate
+    // before reloading the list from the server.
     if (mounted) {
       final sync = context.read<SyncService>();
       if (sync.hasPending) {
@@ -341,9 +344,12 @@ class _CasualRoundCard extends StatelessWidget {
                         Icon(Icons.casino_outlined,
                             size: 13, color: theme.colorScheme.primary),
                         const SizedBox(width: 4),
-                        Text(gameLabels,
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.colorScheme.primary)),
+                        Flexible(
+                          child: Text(gameLabels,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall
+                                  ?.copyWith(color: theme.colorScheme.primary)),
+                        ),
                         const SizedBox(width: 12),
                       ],
                       Icon(

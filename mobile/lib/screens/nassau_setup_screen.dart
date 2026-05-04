@@ -33,8 +33,10 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   String _mode       = 'net';
   int    _netPercent = 100;
   String _pressMode  = 'none';
+  /// 'none' | 'tiebreak_2nd' | 'claremont'
+  String _variant    = 'none';
 
-  final _pressUnitCtrl = TextEditingController(text: '5.00');
+  final _pressUnitCtrl = TextEditingController(text: '0');
   final _betCtrl       = TextEditingController();
   bool  _betCtrlInitialized = false;
 
@@ -111,7 +113,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           _mode       = existing.handicapMode;
           _netPercent = existing.netPercent;
           _pressMode  = existing.pressMode;
-          _pressUnitCtrl.text = existing.pressUnit.toStringAsFixed(2);
+          _variant    = existing.variant;
+          _pressUnitCtrl.text = existing.pressUnit.truncate().toString();
         });
 
         // Restore team assignments if teams exist.
@@ -164,6 +167,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         netPercent:   _netPercent,
         pressMode:    _pressMode,
         pressUnit:    pressUnit,
+        variant:      _variant,
       );
 
       if (!mounted) return;
@@ -355,8 +359,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                       prefixIcon: Icon(Icons.attach_money),
                       isDense: true,
                     ),
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
                   ),
@@ -402,6 +405,15 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                 ),
               ],
             ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Advanced / variant ────────────────────────────────────────────
+          _VariantCard(
+            variant:       _variant,
+            isFoursome:    _realMembers.length == 4,
+            onChanged:     (v) => setState(() => _variant = v),
           ),
 
           const SizedBox(height: 16),
@@ -487,6 +499,102 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ===========================================================================
+// _VariantCard — Advanced settings: game variant picker
+// ===========================================================================
+
+class _VariantCard extends StatelessWidget {
+  final String   variant;
+  final bool     isFoursome;   // true only when roster is 2v2 (4 real players)
+  final ValueChanged<String> onChanged;
+
+  const _VariantCard({
+    required this.variant,
+    required this.isFoursome,
+    required this.onChanged,
+  });
+
+  static const _descriptions = <String, String>{
+    'none': 'Standard Nassau — tied holes are halved with no further comparison.',
+    'tiebreak_2nd':
+        '2nd-Ball Tie-Break — when best balls are equal, the 2nd best ball '
+        'decides the hole winner. Eliminates most ties. Foursomes only.',
+    'claremont':
+        'Claremont — adds a simultaneous 2-point bottom bet alongside the '
+        'standard Nassau (top). Each hole: 1 pt for best ball, 1 pt for 2nd '
+        'best ball. Bottom tracks its own F9/B9/Overall bets with independent '
+        'auto-presses at ±4 points down. Foursomes only.',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Advanced',
+                style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary)),
+            const SizedBox(height: 10),
+            Text('Game variant',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 8),
+
+            // ── Variant chips ──────────────────────────────────────────────
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                _chip(context, 'none',         'Standard'),
+                _chip(context, 'tiebreak_2nd', '2nd Ball Tiebreak',
+                    disabled: !isFoursome),
+                _chip(context, 'claremont',    'Claremont',
+                    disabled: !isFoursome),
+              ],
+            ),
+
+            if (!isFoursome && variant == 'none') ...[
+              const SizedBox(height: 8),
+              Text(
+                'Tiebreak and Claremont variants require a 2v2 foursome.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+
+            const SizedBox(height: 10),
+            Text(
+              _descriptions[variant] ?? '',
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(BuildContext context, String value, String label,
+      {bool disabled = false}) {
+    final selected = variant == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: disabled ? null : (_) => onChanged(value),
     );
   }
 }

@@ -1,11 +1,22 @@
 /// config.dart
-/// Change baseUrl to match your dev environment:
-///   iOS Simulator  → http://localhost:8000
-///   Android Emulator → http://10.0.2.2:8000
-///   Physical device  → http://192.168.x.x:8000  (your Mac's LAN IP)
+///
+/// Server selection is controlled at launch time via --dart-define.
+/// No code changes needed — just pick the right run configuration.
+///
+/// Railway (default, physical iPhone):
+///   flutter run
+///
+/// Local Django server (iOS Simulator):
+///   flutter run --dart-define=USE_LOCAL=true
+///
+/// In VS Code, use the "Golf (Local)" or "Golf (Railway)" launch configs.
 
 class Config {
-  /// static const String baseUrl = 'http://localhost:8000/api';
-  ///static const String baseUrl = 'https://golf.lipkin.us/api';
-  static const String baseUrl = 'https://web-production-b84d4a.up.railway.app/api';
+  static const bool _useLocal =
+      bool.fromEnvironment('USE_LOCAL', defaultValue: false);
+
+  static const String _railway = 'https://web-production-b84d4a.up.railway.app/api';
+  static const String _local   = 'http://localhost:8000/api';
+
+  static const String baseUrl = _useLocal ? _local : _railway;
 }

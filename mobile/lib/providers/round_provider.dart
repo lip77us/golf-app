@@ -663,6 +663,7 @@ class RoundProvider extends ChangeNotifier {
     int    netPercent   = 100,
     String pressMode    = 'none',
     double pressUnit    = 0.0,
+    String variant      = 'none',
   }) async {
     _submitting = true;
     _clearError();
@@ -676,6 +677,7 @@ class RoundProvider extends ChangeNotifier {
         netPercent:   netPercent,
         pressMode:    pressMode,
         pressUnit:    pressUnit,
+        variant:      variant,
       );
       return true;
     } on NetworkException {

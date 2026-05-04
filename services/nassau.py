@@ -13,32 +13,43 @@ Rules
 * Scoring: best-ball per hole using per-player adjusted scores.
   Lower team best-ball wins the hole; equal = halved.
 * Handicap modes: net (% allowance), gross, strokes_off_low.
-  Gross: raw scores compared directly.
-  Net: playing_handicap × (net_percent / 100) allocated by stroke index.
-  Strokes-off: low playing handicap plays to 0; others get the difference.
+
+Variants
+~~~~~~~~
+none         — standard Nassau (default)
+tiebreak_2nd — when best balls are tied, compare 2nd best balls to decide
+               the hole winner; useful for foursomes to eliminate pushes.
+               2-player matches always halve ties (no 2nd ball available).
+claremont    — adds a simultaneous 2-point-per-hole "bottom" bet running
+               alongside the standard Nassau ("top") bet:
+                 Bottom Point 1 = best ball  (same comparison as top)
+                 Bottom Point 2 = 2nd best ball
+               Bottom tracks its own F9/B9/Overall bets and its own independent
+               auto-press series: fires at ±4 bottom-POINTS down in a nine
+               ("2-down" = 2 holes equivalent = 4 pts, since 2 pts/hole).
+               Manual presses (V1): apply to top only.
 
 Press rules
 ~~~~~~~~~~~
 * Press bets are worth NassauGame.press_unit (explicit dollar amount).
 * press_mode controls which types of presses can occur:
     none   – no presses
-    manual – losing team calls a press at any point; winning team must accept
-             (they cannot decline).  Recorded via add_manual_press().
-    auto   – automatic press when the losing team goes 2-down within a nine
-    both   – manual AND auto presses both active
-* Each press covers the remaining holes of the nine in which it fires
-  (not the full nine from scratch, not the overall bet).
-* Multiple presses per nine are possible.
-* Manual presses are stored as NassauPress rows with press_type='manual'.
-  They survive calculate_nassau() calls (only auto presses are rebuilt).
+    manual – losing team calls a press at any point; winning team must accept.
+             Recorded via add_manual_press().  Top only (V1).
+    auto   – automatic presses.  Top fires at ±2 holes-down; bottom (Claremont
+             only) fires independently at ±4 bottom-points-down (= 2 holes equiv).
+    both   – manual (top) AND auto (top + bottom) presses both active.
+* Each press covers the remaining holes of the nine in which it fires.
+* NassauPress.side distinguishes top ('top') from bottom ('bottom') presses.
 
 Public API
 ~~~~~~~~~~
     game    = setup_nassau(foursome, team1_ids, team2_ids,
-                           handicap_mode, net_percent, press_mode, press_unit)
+                           handicap_mode, net_percent, press_mode, press_unit,
+                           variant)
     result  = calculate_nassau(foursome)
     summary = nassau_summary(foursome)
-    press   = add_manual_press(foursome, start_hole)   # losing team calls press
+    press   = add_manual_press(foursome, start_hole)   # losing team calls top press
 """
 
 from django.db import transaction
@@ -119,6 +130,7 @@ def setup_nassau(
     net_percent:   int   = 100,
     press_mode:    str   = 'none',
     press_unit:    float = 0.00,
+    variant:       str   = 'none',
 ) -> NassauGame:
     """
     Create (or replace) the NassauGame and its two fixed teams.
@@ -126,10 +138,14 @@ def setup_nassau(
     team1_ids / team2_ids: lists of Player PKs (1 or 2 each for head-to-head
     or 2v2).  Deleting the old NassauGame cascades to teams, hole scores, and
     all presses.
+
+    variant: 'none' | 'tiebreak_2nd' | 'claremont'
     """
     NassauGame.objects.filter(foursome=foursome).delete()
 
     net_percent = max(0, min(200, int(net_percent)))
+    if variant not in ('none', 'tiebreak_2nd', 'claremont'):
+        variant = 'none'
 
     game = NassauGame.objects.create(
         foursome      = foursome,
@@ -137,6 +153,7 @@ def setup_nassau(
         net_percent   = net_percent,
         press_mode    = press_mode,
         press_unit    = press_unit,
+        variant       = variant,
         status        = MatchStatus.PENDING,
     )
 
@@ -224,6 +241,20 @@ def _best_ball(team: NassauTeam, hole_num: int, score_index: dict) -> int | None
     return min(nets) if nets else None
 
 
+def _second_ball(team: NassauTeam, hole_num: int, score_index: dict) -> int | None:
+    """
+    Second-lowest adjusted score from this team for hole_num.
+    Returns None when the team has only one player (no 2nd ball exists).
+    """
+    player_ids = list(team.players.values_list('id', flat=True))
+    nets = sorted([
+        score_index[pid][hole_num]
+        for pid in player_ids
+        if pid in score_index and hole_num in score_index[pid]
+    ])
+    return nets[1] if len(nets) >= 2 else None
+
+
 def _resolve(holes_up: int) -> str:
     """Convert final holes_up margin → result string."""
     if holes_up > 0:  return 'team1'
@@ -239,11 +270,12 @@ def _resolve(holes_up: int) -> str:
 def calculate_nassau(foursome) -> NassauGame | None:
     """
     Recompute all NassauHoleScore rows, detect auto-presses, update manual
-    press results, and resolve the three standard bets.
+    press results, and resolve the three standard bets (and Claremont bottom
+    bets when variant == 'claremont').
 
-    Manual presses (press_type='manual') are preserved across calls —
-    only their result / holes_up are updated.  Auto presses are rebuilt
-    from scratch each call.
+    Manual presses (press_type='manual', side='top') are preserved across
+    calls — only their result / holes_up are updated.  Auto presses (top and
+    bottom) are rebuilt from scratch each call.
 
     Returns the updated NassauGame, or None if no game exists.
     """
@@ -260,56 +292,67 @@ def calculate_nassau(foursome) -> NassauGame | None:
 
     score_index = _get_score_index(foursome, game)
 
-    # ── Preserve manual presses ───────────────────────────────────────────
-    # Save their start_hole / nine before we touch anything, so we can
-    # re-process them in the calculation loop.
+    is_claremont    = game.variant == 'claremont'
+    is_tiebreak_2nd = game.variant == 'tiebreak_2nd'
+    needs_2nd_ball  = is_claremont or is_tiebreak_2nd
+
+    # ── Preserve top manual presses ───────────────────────────────────────
     manual_press_starts = list(
-        NassauPress.objects.filter(game=game, press_type='manual')
+        NassauPress.objects.filter(game=game, press_type='manual', side='top')
         .values_list('start_hole', flat=True)
     )
 
-    # Delete all NassauHoleScore rows and ALL press rows.
-    # Manual presses will be recreated below with fresh results.
     NassauHoleScore.objects.filter(game=game).delete()
     NassauPress.objects.filter(game=game).delete()
 
-    # ── Running state ─────────────────────────────────────────────────────
+    # ── Running state — TOP ───────────────────────────────────────────────
     front9_up  = 0
     back9_up   = 0
     overall_up = 0
 
-    # Record the margin and holes remaining at the FIRST moment each bet is
-    # decided (so we can freeze the display at "5&4" rather than letting it
-    # drift to "6&3" when play continues after the bet is settled).
-    front9_decided_margin    = None   # e.g. +5 means T1 5-up when decided
-    front9_decided_remaining = None   # holes left at that moment (e.g. 4)
+    front9_decided_margin    = None
+    front9_decided_remaining = None
     back9_decided_margin     = None
     back9_decided_remaining  = None
     overall_decided_margin    = None
     overall_decided_remaining = None
 
-    # Active presses: list of dicts tracking running margin
-    # {'nine', 'press_type', 'trigger_hole', 'start', 'end', 'margin'}
-    active_presses:    list = []
-    completed_presses: list = []
+    # Top press trackers  {'nine', 'press_type', 'side', 'trigger_hole', 'start', 'end', 'margin'}
+    top_active_presses:    list = []
+    top_completed_presses: list = []
 
     front_holes = set(range(1, 10))
     back_holes  = set(range(10, 19))
 
-    # Index manual press starts by nine so we can trigger them at the right hole
     manual_front = sorted([s for s in manual_press_starts if s in front_holes])
     manual_back  = sorted([s for s in manual_press_starts if s in back_holes])
 
-    # Auto-press threshold tracking.
-    # Signed nine margin values at which an auto-press has already fired:
-    #   positive value  = T1 up by that amount (T2 was N-down)
-    #   negative value  = T2 up by that amount (T1 was N-down)
-    # Each threshold fires at most once per nine, regardless of whether the
-    # margin later recovers and returns to the same level.
-    # Thresholds that can trigger a press: ±2, ±4, ±6, ±8.
-    AUTO_PRESS_THRESHOLDS = frozenset({2, 4, 6, 8, -2, -4, -6, -8})
-    front9_thresholds_fired: set = set()
-    back9_thresholds_fired:  set = set()
+    AUTO_TOP_THRESHOLDS = frozenset({2, 4, 6, 8, -2, -4, -6, -8})
+    top_front9_thresholds_fired: set = set()
+    top_back9_thresholds_fired:  set = set()
+
+    # ── Running state — BOTTOM (Claremont only) ───────────────────────────
+    bot_front9_up  = 0
+    bot_back9_up   = 0
+    bot_overall_up = 0
+
+    bot_front9_decided_margin    = None
+    bot_front9_decided_remaining = None
+    bot_back9_decided_margin     = None
+    bot_back9_decided_remaining  = None
+    bot_overall_decided_margin    = None
+    bot_overall_decided_remaining = None
+
+    # Bottom press trackers — same dict shape as top; margin is in points (max ±2/hole)
+    bot_active_presses:    list = []
+    bot_completed_presses: list = []
+
+    # Bottom auto-press fires at ±4, ±8, ±12, ±16
+    # "2-down" in Claremont means 2 holes equivalent = 4 points (2 pts/hole).
+    # Subsequent presses fire every 4 more points down.
+    AUTO_BOT_THRESHOLDS = frozenset(range(-16, 17, 4)) - {0}  # → {±4, ±8, ±12, ±16}
+    bot_front9_thresholds_fired: set = set()
+    bot_back9_thresholds_fired:  set = set()
 
     hole_score_objs = []
     auto_enabled   = game.press_mode in ('auto', 'both')
@@ -322,145 +365,224 @@ def calculate_nassau(foursome) -> NassauGame | None:
         if t1_net is None or t2_net is None:
             break  # stop at first incomplete hole
 
-        # Hole winner
+        # ── 2nd ball scores ───────────────────────────────────────────────
+        t1_2nd: int | None = None
+        t2_2nd: int | None = None
+        if needs_2nd_ball:
+            t1_2nd = _second_ball(t1, hole_num, score_index)
+            t2_2nd = _second_ball(t2, hole_num, score_index)
+
+        # ── Top hole winner ───────────────────────────────────────────────
         if t1_net < t2_net:
             winner, delta = 'team1',  1
         elif t2_net < t1_net:
             winner, delta = 'team2', -1
         else:
-            winner, delta = 'halved', 0
+            # tiebreak_2nd: break ties using 2nd ball (foursomes only)
+            if is_tiebreak_2nd and t1_2nd is not None and t2_2nd is not None:
+                if t1_2nd < t2_2nd:
+                    winner, delta = 'team1',  1
+                elif t2_2nd < t1_2nd:
+                    winner, delta = 'team2', -1
+                else:
+                    winner, delta = 'halved', 0
+            else:
+                winner, delta = 'halved', 0
 
         overall_up += delta
 
         if hole_num in front_holes:
             nine_key = 'front'
             front9_up += delta
-            nine_margin = front9_up
-            nine_end    = 9
-            # First moment the front nine is mathematically decided.
+            top_nine_margin = front9_up
+            nine_end        = 9
             if front9_decided_margin is None:
-                _remaining = 9 - hole_num
-                if abs(front9_up) > _remaining:
+                _rem = 9 - hole_num
+                if abs(front9_up) > _rem:
                     front9_decided_margin    = front9_up
-                    front9_decided_remaining = _remaining
+                    front9_decided_remaining = _rem
         else:
             nine_key = 'back'
             back9_up += delta
-            nine_margin = back9_up
-            nine_end    = 18
-            # First moment the back nine is mathematically decided.
+            top_nine_margin = back9_up
+            nine_end        = 18
             if back9_decided_margin is None:
-                _remaining = 18 - hole_num
-                if abs(back9_up) > _remaining:
+                _rem = 18 - hole_num
+                if abs(back9_up) > _rem:
                     back9_decided_margin    = back9_up
-                    back9_decided_remaining = _remaining
+                    back9_decided_remaining = _rem
 
-        # First moment the OVERALL match is mathematically decided.
         if overall_decided_margin is None:
-            _ov_remaining = 18 - hole_num
-            if abs(overall_up) > _ov_remaining:
+            _ov_rem = 18 - hole_num
+            if abs(overall_up) > _ov_rem:
                 overall_decided_margin    = overall_up
-                overall_decided_remaining = _ov_remaining
+                overall_decided_remaining = _ov_rem
 
-        # ── Advance active presses for this nine ──────────────────────────
-        still_active = []
-        for press in active_presses:
+        # ── Advance TOP active presses ────────────────────────────────────
+        still_top = []
+        for press in top_active_presses:
             if press['nine'] != nine_key:
-                still_active.append(press)
+                still_top.append(press)
                 continue
             press['margin'] += delta
             holes_left = press['end'] - hole_num
-            # Press ends when: last hole of nine reached, OR the trailing side
-            # has been closed out (margin > remaining holes — impossible to
-            # overturn even if they win every hole left).
             if hole_num >= press['end'] or abs(press['margin']) > holes_left:
-                completed_presses.append(press)
+                press['is_active'] = False   # definitively closed
+                top_completed_presses.append(press)
             else:
-                still_active.append(press)
-        active_presses = still_active
+                still_top.append(press)
+        top_active_presses = still_top
 
-        # ── Trigger manual press if start_hole == this hole ───────────────
+        # ── Trigger top manual press ──────────────────────────────────────
         if manual_enabled:
             for ms in (manual_front if nine_key == 'front' else manual_back):
                 if ms == hole_num:
                     already = any(
-                        p['press_type'] == 'manual'
-                        and p['nine'] == nine_key
-                        and p['start'] == ms
-                        for p in active_presses + completed_presses
+                        p['press_type'] == 'manual' and p['nine'] == nine_key and p['start'] == ms
+                        for p in top_active_presses + top_completed_presses
                     )
                     if not already:
-                        active_presses.append({
-                            'nine'       : nine_key,
-                            'press_type' : 'manual',
-                            'trigger_hole': hole_num - 1,
-                            'start'      : hole_num,
-                            'end'        : nine_end,
-                            'margin'     : delta,  # this hole counts in the press
+                        top_active_presses.append({
+                            'nine': nine_key, 'press_type': 'manual', 'side': 'top',
+                            'trigger_hole': hole_num - 1, 'start': hole_num,
+                            'end': nine_end, 'margin': delta,
+                            'is_active': True,
                         })
 
-        # ── Auto-press trigger (threshold-based on nine margin) ─────────────
-        # A new auto-press fires each time the nine's cumulative margin reaches
-        # a new even threshold: ±2, ±4, ±6, ±8.  Positive = T1 up (T2 down),
-        # negative = T2 up (T1 down).  Each signed threshold fires at most once
-        # per nine — if the margin recovers and later returns to the same level
-        # it does NOT fire again.  The press starts the following hole and runs
-        # to the end of the nine.
+        # ── Trigger top auto-press ────────────────────────────────────────
         if auto_enabled:
             holes_left_in_nine = nine_end - hole_num
-            if holes_left_in_nine > 0 and nine_margin in AUTO_PRESS_THRESHOLDS:
-                thresholds_fired = (
-                    front9_thresholds_fired if nine_key == 'front'
-                    else back9_thresholds_fired
-                )
-                if nine_margin not in thresholds_fired:
-                    thresholds_fired.add(nine_margin)
-                    active_presses.append({
-                        'nine'        : nine_key,
-                        'press_type'  : 'auto',
-                        'trigger_hole': hole_num,
-                        'start'       : hole_num + 1,
-                        'end'         : nine_end,
-                        'margin'      : 0,
+            if holes_left_in_nine > 0 and top_nine_margin in AUTO_TOP_THRESHOLDS:
+                tf = top_front9_thresholds_fired if nine_key == 'front' else top_back9_thresholds_fired
+                if top_nine_margin not in tf:
+                    tf.add(top_nine_margin)
+                    top_active_presses.append({
+                        'nine': nine_key, 'press_type': 'auto', 'side': 'top',
+                        'trigger_hole': hole_num, 'start': hole_num + 1,
+                        'end': nine_end, 'margin': 0,
+                        'is_active': True,
                     })
 
+        # ── Claremont bottom ──────────────────────────────────────────────
+        bot_delta_val       = None
+        bot_front9_up_val   = None
+        bot_back9_up_val    = None
+        bot_overall_up_val  = None
+
+        if is_claremont:
+            # Point 1: best ball (+1/0/−1)
+            p1 = 1 if t1_net < t2_net else (-1 if t2_net < t1_net else 0)
+            # Point 2: 2nd best ball (+1/0/−1); treat as 0 if either team has no 2nd ball
+            if t1_2nd is not None and t2_2nd is not None:
+                p2 = 1 if t1_2nd < t2_2nd else (-1 if t2_2nd < t1_2nd else 0)
+            else:
+                p2 = 0
+            bot_delta_val  = p1 + p2
+            bot_overall_up += bot_delta_val
+
+            if hole_num in front_holes:
+                bot_front9_up   += bot_delta_val
+                bot_nine_margin  = bot_front9_up
+                bot_front9_up_val = bot_front9_up
+                if bot_front9_decided_margin is None:
+                    _rem = 9 - hole_num
+                    # Remaining potential swing = _rem * 2 (max 2 pts/hole)
+                    if abs(bot_front9_up) > _rem * 2:
+                        bot_front9_decided_margin    = bot_front9_up
+                        bot_front9_decided_remaining = _rem
+            else:
+                bot_back9_up    += bot_delta_val
+                bot_nine_margin  = bot_back9_up
+                bot_back9_up_val = bot_back9_up
+                if bot_back9_decided_margin is None:
+                    _rem = 18 - hole_num
+                    if abs(bot_back9_up) > _rem * 2:
+                        bot_back9_decided_margin    = bot_back9_up
+                        bot_back9_decided_remaining = _rem
+
+            if bot_overall_decided_margin is None:
+                _ov_rem = 18 - hole_num
+                if abs(bot_overall_up) > _ov_rem * 2:
+                    bot_overall_decided_margin    = bot_overall_up
+                    bot_overall_decided_remaining = _ov_rem
+
+            bot_overall_up_val = bot_overall_up
+
+            # ── Advance BOTTOM active presses ─────────────────────────────
+            still_bot = []
+            for press in bot_active_presses:
+                if press['nine'] != nine_key:
+                    still_bot.append(press)
+                    continue
+                press['margin'] += bot_delta_val
+                pts_left = (press['end'] - hole_num) * 2  # max bottom swing remaining
+                if hole_num >= press['end'] or abs(press['margin']) > pts_left:
+                    press['is_active'] = False   # definitively closed
+                    bot_completed_presses.append(press)
+                else:
+                    still_bot.append(press)
+            bot_active_presses = still_bot
+
+            # ── Trigger bottom auto-press ─────────────────────────────────
+            if auto_enabled:
+                pts_left_in_nine = (nine_end - hole_num) * 2
+                if pts_left_in_nine > 0 and bot_nine_margin in AUTO_BOT_THRESHOLDS:
+                    bf = bot_front9_thresholds_fired if nine_key == 'front' else bot_back9_thresholds_fired
+                    if bot_nine_margin not in bf:
+                        bf.add(bot_nine_margin)
+                        bot_active_presses.append({
+                            'nine': nine_key, 'press_type': 'auto', 'side': 'bottom',
+                            'trigger_hole': hole_num, 'start': hole_num + 1,
+                            'end': nine_end, 'margin': 0,
+                            'is_active': True,
+                        })
+
         hole_score_objs.append(NassauHoleScore(
-            game            = game,
-            hole_number     = hole_num,
-            team1_best_net  = t1_net,
-            team2_best_net  = t2_net,
-            winner          = winner,
-            front9_up_after  = front9_up   if hole_num in front_holes else None,
-            back9_up_after   = back9_up    if hole_num in back_holes  else None,
-            overall_up_after = overall_up,
+            game                    = game,
+            hole_number             = hole_num,
+            team1_best_net          = t1_net,
+            team2_best_net          = t2_net,
+            winner                  = winner,
+            front9_up_after         = front9_up  if hole_num in front_holes else None,
+            back9_up_after          = back9_up   if hole_num in back_holes  else None,
+            overall_up_after        = overall_up,
+            # 2nd-ball (tiebreak_2nd + claremont)
+            team1_2nd_net           = t1_2nd,
+            team2_2nd_net           = t2_2nd,
+            # Claremont bottom
+            bottom_delta            = bot_delta_val,
+            bottom_front9_up_after  = bot_front9_up_val,
+            bottom_back9_up_after   = bot_back9_up_val,
+            bottom_overall_up_after = bot_overall_up_val,
         ))
 
-    # Any press still open when scoring ran out is also done
-    completed_presses.extend(active_presses)
+    # Flush any open presses
+    top_completed_presses.extend(top_active_presses)
+    bot_completed_presses.extend(bot_active_presses)
 
     NassauHoleScore.objects.bulk_create(hole_score_objs)
 
-    # ── Persist press rows ────────────────────────────────────────────────
-    # Triggered / completed presses (have a known result or running margin).
+    # ── Persist TOP press rows ────────────────────────────────────────────
+    # Presses still marked is_active=True are open/in-progress — save with
+    # result=None so the UI shows "In progress" rather than a stale winner.
     press_objs = [
         NassauPress(
             game              = game,
             nine              = p['nine'],
+            side              = 'top',
             press_type        = p['press_type'],
             triggered_on_hole = p['trigger_hole'],
             start_hole        = p['start'],
             end_hole          = p['end'],
-            result            = _resolve(p['margin']),
+            result            = None if p.get('is_active') else _resolve(p['margin']),
             holes_up          = p['margin'],
         )
-        for p in completed_presses
+        for p in top_completed_presses
     ]
 
-    # Manual presses whose start_hole hasn't been reached yet (future holes).
-    # These were saved in manual_press_starts before we wiped the table; we
-    # must recreate them so they survive the recalculation.
+    # Recreate top manual presses not yet triggered
     triggered_manual_starts = {
-        p['start'] for p in completed_presses if p['press_type'] == 'manual'
+        p['start'] for p in top_completed_presses if p['press_type'] == 'manual'
     }
     for ms in manual_press_starts:
         if ms not in triggered_manual_starts:
@@ -469,6 +591,7 @@ def calculate_nassau(foursome) -> NassauGame | None:
             press_objs.append(NassauPress(
                 game              = game,
                 nine              = ms_nine,
+                side              = 'top',
                 press_type        = 'manual',
                 triggered_on_hole = ms - 1,
                 start_hole        = ms,
@@ -477,24 +600,48 @@ def calculate_nassau(foursome) -> NassauGame | None:
                 holes_up          = None,
             ))
 
+    # ── Persist BOTTOM press rows (Claremont only) ────────────────────────
+    if is_claremont:
+        press_objs += [
+            NassauPress(
+                game              = game,
+                nine              = p['nine'],
+                side              = 'bottom',
+                press_type        = p['press_type'],
+                triggered_on_hole = p['trigger_hole'],
+                start_hole        = p['start'],
+                end_hole          = p['end'],
+                result            = None if p.get('is_active') else _resolve(p['margin']),
+                holes_up          = p['margin'],
+            )
+            for p in bot_completed_presses
+        ]
+
     NassauPress.objects.bulk_create(press_objs)
 
-    # ── Resolve standard bets ─────────────────────────────────────────────
-    holes_played      = len(hole_score_objs)
-    # A nine is considered complete (and its result locked in) as soon as it
-    # is mathematically decided (margin > remaining holes), even if play
-    # continues.  The decided-at margin (not the current margin) determines
-    # the result so the winner can't change after the nine is settled.
-    front_complete    = holes_played >= 9  or front9_decided_margin   is not None
-    back_complete     = holes_played >= 18 or back9_decided_margin    is not None
-    overall_complete  = holes_played >= 18 or overall_decided_margin  is not None
+    # ── Resolve TOP standard bets ─────────────────────────────────────────
+    holes_played    = len(hole_score_objs)
+    front_complete  = holes_played >= 9  or front9_decided_margin  is not None
+    back_complete   = holes_played >= 18 or back9_decided_margin   is not None
+    overall_complete = holes_played >= 18 or overall_decided_margin is not None
 
-    game.front9_result  = _resolve(front9_decided_margin   if front9_decided_margin   is not None else front9_up)   \
-                          if front_complete   else None
-    game.back9_result   = _resolve(back9_decided_margin    if back9_decided_margin    is not None else back9_up)    \
-                          if back_complete    else None
-    game.overall_result = _resolve(overall_decided_margin  if overall_decided_margin  is not None else overall_up)  \
-                          if overall_complete else None
+    game.front9_result  = _resolve(front9_decided_margin  if front9_decided_margin  is not None else front9_up)  if front_complete  else None
+    game.back9_result   = _resolve(back9_decided_margin   if back9_decided_margin   is not None else back9_up)   if back_complete   else None
+    game.overall_result = _resolve(overall_decided_margin if overall_decided_margin is not None else overall_up) if overall_complete else None
+
+    # ── Resolve BOTTOM standard bets (Claremont) ──────────────────────────
+    if is_claremont:
+        bot_front_complete   = holes_played >= 9  or bot_front9_decided_margin  is not None
+        bot_back_complete    = holes_played >= 18 or bot_back9_decided_margin   is not None
+        bot_overall_complete = holes_played >= 18 or bot_overall_decided_margin is not None
+
+        game.bottom_front9_result  = _resolve(bot_front9_decided_margin  if bot_front9_decided_margin  is not None else bot_front9_up)  if bot_front_complete  else None
+        game.bottom_back9_result   = _resolve(bot_back9_decided_margin   if bot_back9_decided_margin   is not None else bot_back9_up)   if bot_back_complete   else None
+        game.bottom_overall_result = _resolve(bot_overall_decided_margin if bot_overall_decided_margin is not None else bot_overall_up) if bot_overall_complete else None
+    else:
+        game.bottom_front9_result  = None
+        game.bottom_back9_result   = None
+        game.bottom_overall_result = None
 
     if overall_complete:
         game.status = MatchStatus.COMPLETE
@@ -586,17 +733,26 @@ def nassau_summary(foursome) -> dict | None:
         if result == 'team2': return -press_unit
         return 0.0
 
+    is_claremont    = game.variant == 'claremont'
+    is_tiebreak_2nd = game.variant == 'tiebreak_2nd'
+
     # ── Holes ─────────────────────────────────────────────────────────────
     holes_qs = NassauHoleScore.objects.filter(game=game).order_by('hole_number')
     holes_out = [
         {
-            'hole'          : h.hole_number,
-            'winner'        : h.winner,
-            't1_net'        : h.team1_best_net,
-            't2_net'        : h.team2_best_net,
-            'front9_margin' : h.front9_up_after,
-            'back9_margin'  : h.back9_up_after,
-            'overall_margin': h.overall_up_after,
+            'hole'                  : h.hole_number,
+            'winner'                : h.winner,
+            't1_net'                : h.team1_best_net,
+            't2_net'                : h.team2_best_net,
+            't1_2nd_net'            : h.team1_2nd_net,
+            't2_2nd_net'            : h.team2_2nd_net,
+            'front9_margin'         : h.front9_up_after,
+            'back9_margin'          : h.back9_up_after,
+            'overall_margin'        : h.overall_up_after,
+            'bottom_delta'          : h.bottom_delta,
+            'bottom_front9_margin'  : h.bottom_front9_up_after,
+            'bottom_back9_margin'   : h.bottom_back9_up_after,
+            'bottom_overall_margin' : h.bottom_overall_up_after,
         }
         for h in holes_qs
     ]
@@ -614,23 +770,33 @@ def nassau_summary(foursome) -> dict | None:
         (h['overall_margin'] for h in reversed(holes_out)
          if h['overall_margin'] is not None), 0
     )
+    bot_front9_margin = next(
+        (h['bottom_front9_margin'] for h in reversed(holes_out)
+         if h['bottom_front9_margin'] is not None), 0
+    )
+    bot_back9_margin = next(
+        (h['bottom_back9_margin'] for h in reversed(holes_out)
+         if h['bottom_back9_margin'] is not None), 0
+    )
+    bot_overall_margin = next(
+        (h['bottom_overall_margin'] for h in reversed(holes_out)
+         if h['bottom_overall_margin'] is not None), 0
+    )
 
     holes_front = sum(1 for h in holes_out if h['hole'] <= 9)
     holes_back  = sum(1 for h in holes_out if h['hole'] > 9)
 
     # ── Presses ───────────────────────────────────────────────────────────
-    # Build a hole-winner lookup from the scored hole data so we can replay
-    # each press's running margin and discover how many holes were remaining
-    # when it closed — needed for the match-play "4&3" notation in the UI.
     winner_by_hole = {h['hole']: h['winner'] for h in holes_out}
+    bot_delta_by_hole = {h['hole']: (h['bottom_delta'] or 0) for h in holes_out}
 
-    def _press_holes_remaining(p) -> int:
-        """Replay the press margin and return holes left when it closed."""
+    def _top_press_holes_remaining(p) -> int:
+        """Replay top press margin → holes remaining when it closed."""
         press_margin = 0
         for h in range(p.start_hole, p.end_hole + 1):
             w = winner_by_hole.get(h)
             if w is None:
-                return 0   # hole not yet scored — press still open
+                return 0
             if w == 'team1':
                 press_margin += 1
             elif w == 'team2':
@@ -640,40 +806,66 @@ def nassau_summary(foursome) -> dict | None:
                 return holes_left
         return 0
 
-    presses_qs = NassauPress.objects.filter(game=game).order_by('triggered_on_hole')
-    presses_out = [
-        {
+    def _bot_press_holes_remaining(p) -> int:
+        """Replay bottom press points margin → holes remaining when it closed."""
+        press_margin = 0
+        for h in range(p.start_hole, p.end_hole + 1):
+            d = bot_delta_by_hole.get(h)
+            if d is None:
+                return 0
+            press_margin += d
+            pts_left = (p.end_hole - h) * 2
+            if h >= p.end_hole or abs(press_margin) > pts_left:
+                return p.end_hole - h
+        return 0
+
+    all_presses_qs = NassauPress.objects.filter(game=game).order_by('side', 'triggered_on_hole')
+
+    top_presses_out = []
+    bot_presses_out = []
+    for p in all_presses_qs:
+        row = {
             'nine'            : p.nine,
             'press_type'      : p.press_type,
             'start_hole'      : p.start_hole,
             'end_hole'        : p.end_hole,
             'result'          : p.result,
             'margin'          : p.holes_up,
-            'holes_remaining' : _press_holes_remaining(p),
+            'holes_remaining' : (
+                _top_press_holes_remaining(p) if p.side == 'top'
+                else _bot_press_holes_remaining(p)
+            ),
         }
-        for p in presses_qs
-    ]
-    press_total = sum(_press_payout(p['result']) for p in presses_out)
+        if p.side == 'bottom':
+            bot_presses_out.append(row)
+        else:
+            top_presses_out.append(row)
 
-    # ── Standard bet payouts ──────────────────────────────────────────────
+    top_press_total = sum(_press_payout(p['result']) for p in top_presses_out)
+    bot_press_total = sum(_press_payout(p['result']) for p in bot_presses_out)
+
+    # ── Standard bet payouts ─────────────────────────────────────────────��
     front9_pay  = _payout(game.front9_result)
     back9_pay   = _payout(game.back9_result)
     overall_pay = _payout(game.overall_result)
 
+    bot_front9_pay  = _payout(game.bottom_front9_result)  if is_claremont else 0.0
+    bot_back9_pay   = _payout(game.bottom_back9_result)   if is_claremont else 0.0
+    bot_overall_pay = _payout(game.bottom_overall_result) if is_claremont else 0.0
+
+    top_total = front9_pay + back9_pay + overall_pay + top_press_total
+    bot_total = bot_front9_pay + bot_back9_pay + bot_overall_pay + bot_press_total
+
     # ── can_press: available when manual presses allowed and game active ──
-    # The losing team can press any time there are holes remaining in a nine.
     can_press = False
     press_available_nine = None
     if game.press_mode in ('manual', 'both') and game.status == MatchStatus.IN_PROGRESS:
-        # Determine which nine is currently active
         last_hole = holes_out[-1]['hole'] if holes_out else 0
         if last_hole < 9:
-            # Still in front nine — can press if currently losing
             if front9_margin != 0:
                 can_press = True
                 press_available_nine = 'front'
         elif last_hole < 18:
-            # In back nine (or transitioning) — can press on back nine if losing
             if back9_margin != 0:
                 can_press = True
                 press_available_nine = 'back'
@@ -693,6 +885,7 @@ def nassau_summary(foursome) -> dict | None:
 
     return {
         'status'        : game.status,
+        'variant'       : game.variant,
         'handicap_mode' : game.handicap_mode,
         'net_percent'   : game.net_percent,
         'press_mode'    : game.press_mode,
@@ -702,38 +895,31 @@ def nassau_summary(foursome) -> dict | None:
             'team1': _team_players(1),
             'team2': _team_players(2),
         },
-        # decided_margin / decided_remaining: the frozen score at the moment the
-        # nine was first mathematically decided (e.g. decided_margin=5,
-        # decided_remaining=4 → display "5&4").  Both None when the nine ran to
-        # its natural end or hasn't been decided yet.
+        # ── Top (standard Nassau) bets ────────────────────────────────────
         'front9'  : {
             'result'            : game.front9_result,
             'margin'            : front9_margin,
             'holes_played'      : holes_front,
             'decided_margin'    : next(
-                (h['front9_margin']  for h in holes_out
-                 if h['hole'] <= 9
-                 and h['front9_margin'] is not None
-                 and abs(h['front9_margin']) > 9  - h['hole']), None),
+                (h['front9_margin'] for h in holes_out
+                 if h['hole'] <= 9 and h['front9_margin'] is not None
+                 and abs(h['front9_margin']) > 9 - h['hole']), None),
             'decided_remaining' : next(
-                (9  - h['hole'] for h in holes_out
-                 if h['hole'] <= 9
-                 and h['front9_margin'] is not None
-                 and abs(h['front9_margin']) > 9  - h['hole']), None),
+                (9 - h['hole'] for h in holes_out
+                 if h['hole'] <= 9 and h['front9_margin'] is not None
+                 and abs(h['front9_margin']) > 9 - h['hole']), None),
         },
         'back9'   : {
             'result'            : game.back9_result,
             'margin'            : back9_margin,
             'holes_played'      : holes_back,
             'decided_margin'    : next(
-                (h['back9_margin']  for h in holes_out
-                 if h['hole'] > 9
-                 and h['back9_margin'] is not None
+                (h['back9_margin'] for h in holes_out
+                 if h['hole'] > 9 and h['back9_margin'] is not None
                  and abs(h['back9_margin']) > 18 - h['hole']), None),
             'decided_remaining' : next(
                 (18 - h['hole'] for h in holes_out
-                 if h['hole'] > 9
-                 and h['back9_margin'] is not None
+                 if h['hole'] > 9 and h['back9_margin'] is not None
                  and abs(h['back9_margin']) > 18 - h['hole']), None),
         },
         'overall' : {
@@ -749,15 +935,40 @@ def nassau_summary(foursome) -> dict | None:
                  if h['overall_margin'] is not None
                  and abs(h['overall_margin']) > 18 - h['hole']), None),
         },
-        'presses' : presses_out,
+        # ── Claremont bottom bets (null when variant != 'claremont') ──────
+        'bottom_front9'  : {
+            'result'  : game.bottom_front9_result,
+            'margin'  : bot_front9_margin,
+            'holes_played': holes_front,
+        } if is_claremont else None,
+        'bottom_back9'   : {
+            'result'  : game.bottom_back9_result,
+            'margin'  : bot_back9_margin,
+            'holes_played': holes_back,
+        } if is_claremont else None,
+        'bottom_overall' : {
+            'result'  : game.bottom_overall_result,
+            'margin'  : bot_overall_margin,
+            'holes_played': len(holes_out),
+        } if is_claremont else None,
+        # ── Presses ───────────────────────────────────────────────────────
+        'presses'        : top_presses_out,
+        'bottom_presses' : bot_presses_out if is_claremont else [],
+        # ── Payouts ───────────────────────────────────────────────────────
         'payouts' : {
-            'front9'  : front9_pay,
-            'back9'   : back9_pay,
-            'overall' : overall_pay,
-            'presses' : press_total,
-            'total'   : front9_pay + back9_pay + overall_pay + press_total,
+            'front9'         : front9_pay,
+            'back9'          : back9_pay,
+            'overall'        : overall_pay,
+            'presses'        : top_press_total,
+            'top_total'      : top_total,
+            'bottom_front9'  : bot_front9_pay,
+            'bottom_back9'   : bot_back9_pay,
+            'bottom_overall' : bot_overall_pay,
+            'bottom_presses' : bot_press_total,
+            'bottom_total'   : bot_total,
+            'total'          : top_total + bot_total,
         },
-        'holes'         : holes_out,
-        'can_press'     : can_press,
+        'holes'               : holes_out,
+        'can_press'           : can_press,
         'press_available_nine': press_available_nine,
     }

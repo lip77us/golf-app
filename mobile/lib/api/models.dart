@@ -1137,38 +1137,94 @@ class NassauPressResult {
 
 /// Per-hole data for the Nassau grid.
 class NassauHoleData {
-  final int    hole;
-  final String? winner;  // 'team1' | 'team2' | 'halved' | null (not yet played)
-  final int?   t1Net;
-  final int?   t2Net;
-  final int?   front9Margin;
-  final int?   back9Margin;
-  final int?   overallMargin;
+  final int     hole;
+  final String? winner;   // 'team1' | 'team2' | 'halved' | null
+  final int?    t1Net;
+  final int?    t2Net;
+  // 2nd-ball scores (tiebreak_2nd + claremont variants only)
+  final int?    t12ndNet;
+  final int?    t22ndNet;
+  // Top margins
+  final int?    front9Margin;
+  final int?    back9Margin;
+  final int?    overallMargin;
+  // Claremont bottom
+  final int?    bottomDelta;          // net points for T1 this hole: -2..+2
+  final int?    bottomFront9Margin;
+  final int?    bottomBack9Margin;
+  final int?    bottomOverallMargin;
 
   const NassauHoleData({
     required this.hole,
     this.winner,
     this.t1Net,
     this.t2Net,
+    this.t12ndNet,
+    this.t22ndNet,
     this.front9Margin,
     this.back9Margin,
     this.overallMargin,
+    this.bottomDelta,
+    this.bottomFront9Margin,
+    this.bottomBack9Margin,
+    this.bottomOverallMargin,
   });
 
   factory NassauHoleData.fromJson(Map<String, dynamic> j) => NassauHoleData(
-        hole:          j['hole']           as int,
-        winner:        j['winner']         as String?,
-        t1Net:         j['t1_net']         as int?,
-        t2Net:         j['t2_net']         as int?,
-        front9Margin:  j['front9_margin']  as int?,
-        back9Margin:   j['back9_margin']   as int?,
-        overallMargin: j['overall_margin'] as int?,
+        hole:                j['hole']                   as int,
+        winner:              j['winner']                 as String?,
+        t1Net:               j['t1_net']                 as int?,
+        t2Net:               j['t2_net']                 as int?,
+        t12ndNet:            j['t1_2nd_net']             as int?,
+        t22ndNet:            j['t2_2nd_net']             as int?,
+        front9Margin:        j['front9_margin']          as int?,
+        back9Margin:         j['back9_margin']           as int?,
+        overallMargin:       j['overall_margin']         as int?,
+        bottomDelta:         j['bottom_delta']           as int?,
+        bottomFront9Margin:  j['bottom_front9_margin']   as int?,
+        bottomBack9Margin:   j['bottom_back9_margin']    as int?,
+        bottomOverallMargin: j['bottom_overall_margin']  as int?,
       );
+}
+
+/// Minimal bet result for Claremont bottom (no decided_margin needed there).
+class NassauBottomBetResult {
+  final String? result;    // 'team1' | 'team2' | 'halved' | null
+  final int     margin;    // running points margin (+ve = T1 leading)
+  final int     holesPlayed;
+
+  const NassauBottomBetResult({
+    required this.result,
+    required this.margin,
+    required this.holesPlayed,
+  });
+
+  factory NassauBottomBetResult.fromJson(Map<String, dynamic> j) =>
+      NassauBottomBetResult(
+        result:      j['result']       as String?,
+        margin:      j['margin']       as int? ?? 0,
+        holesPlayed: j['holes_played'] as int? ?? 0,
+      );
+
+  bool get isComplete => result != null;
+
+  String statusLabel({String t1Label = 'T1', String t2Label = 'T2'}) {
+    if (isComplete) {
+      if (result == 'halved') return 'Halved';
+      return '${result == 'team1' ? t1Label : t2Label} wins';
+    }
+    if (holesPlayed == 0) return 'Not started';
+    final abs = margin.abs();
+    if (margin == 0) return 'All Square thru $holesPlayed';
+    final leader = margin > 0 ? t1Label : t2Label;
+    return '$leader +$abs thru $holesPlayed';
+  }
 }
 
 /// Full summary for a Nassau game — mirrors nassau_summary() output.
 class NassauSummary {
   final String status;           // 'pending' | 'in_progress' | 'complete'
+  final String variant;          // 'none' | 'tiebreak_2nd' | 'claremont'
   final String handicapMode;
   final int    netPercent;
   final String pressMode;        // 'none' | 'manual' | 'auto' | 'both'
@@ -1179,19 +1235,33 @@ class NassauSummary {
   final List<NassauPlayerInfo> team1;
   final List<NassauPlayerInfo> team2;
 
-  // Bet results
+  // Top bet results
   final NassauBetResult front9;
   final NassauBetResult back9;
   final NassauBetResult overall;
 
-  // Presses
+  // Top presses
   final List<NassauPressResult> presses;
+
+  // Claremont bottom bet results (null when variant != 'claremont')
+  final NassauBottomBetResult? bottomFront9;
+  final NassauBottomBetResult? bottomBack9;
+  final NassauBottomBetResult? bottomOverall;
+
+  // Bottom presses (empty when variant != 'claremont')
+  final List<NassauPressResult> bottomPresses;
 
   // Payouts (+ve = team1 wins that dollar amount)
   final double payoutFront9;
   final double payoutBack9;
   final double payoutOverall;
   final double payoutPresses;
+  final double payoutTopTotal;
+  final double payoutBottomFront9;
+  final double payoutBottomBack9;
+  final double payoutBottomOverall;
+  final double payoutBottomPresses;
+  final double payoutBottomTotal;
   final double payoutTotal;
 
   // Hole-by-hole data
@@ -1203,6 +1273,7 @@ class NassauSummary {
 
   const NassauSummary({
     required this.status,
+    required this.variant,
     required this.handicapMode,
     required this.netPercent,
     required this.pressMode,
@@ -1214,10 +1285,20 @@ class NassauSummary {
     required this.back9,
     required this.overall,
     required this.presses,
+    this.bottomFront9,
+    this.bottomBack9,
+    this.bottomOverall,
+    required this.bottomPresses,
     required this.payoutFront9,
     required this.payoutBack9,
     required this.payoutOverall,
     required this.payoutPresses,
+    required this.payoutTopTotal,
+    required this.payoutBottomFront9,
+    required this.payoutBottomBack9,
+    required this.payoutBottomOverall,
+    required this.payoutBottomPresses,
+    required this.payoutBottomTotal,
     required this.payoutTotal,
     required this.holes,
     required this.canPress,
@@ -1227,25 +1308,28 @@ class NassauSummary {
   bool get isNet        => handicapMode == 'net';
   bool get isGross      => handicapMode == 'gross';
   bool get isStrokesOff => handicapMode == 'strokes_off';
+  bool get isClaremont    => variant == 'claremont';
+  bool get isTiebreak2nd  => variant == 'tiebreak_2nd';
   bool get allowsManualPress => pressMode == 'manual' || pressMode == 'both';
 
-  /// Short label for team 1 (first player's short name).
-  String get t1Label =>
-      team1.isNotEmpty ? team1.first.shortName : 'T1';
+  String get t1Label => team1.isNotEmpty ? team1.first.shortName : 'T1';
+  String get t2Label => team2.isNotEmpty ? team2.first.shortName : 'T2';
 
-  /// Short label for team 2 (first player's short name).
-  String get t2Label =>
-      team2.isNotEmpty ? team2.first.shortName : 'T2';
-
-  /// Display label for a bet result from this game's perspective.
   String betLabel(NassauBetResult bet) =>
       bet.statusLabel(useTeamNames: true, t1Label: t1Label, t2Label: t2Label);
+
+  String bottomBetLabel(NassauBottomBetResult bet) =>
+      bet.statusLabel(t1Label: t1Label, t2Label: t2Label);
 
   factory NassauSummary.fromJson(Map<String, dynamic> j) {
     final teams   = j['teams']   as Map<String, dynamic>? ?? {};
     final payouts = j['payouts'] as Map<String, dynamic>? ?? {};
+    final bf9Raw  = j['bottom_front9']  as Map<String, dynamic>?;
+    final bb9Raw  = j['bottom_back9']   as Map<String, dynamic>?;
+    final bovRaw  = j['bottom_overall'] as Map<String, dynamic>?;
     return NassauSummary(
       status:       j['status']        as String? ?? 'pending',
+      variant:      j['variant']       as String? ?? 'none',
       handicapMode: j['handicap_mode'] as String? ?? 'net',
       netPercent:   j['net_percent']   as int?    ?? 100,
       pressMode:    j['press_mode']    as String? ?? 'none',
@@ -1263,11 +1347,23 @@ class NassauSummary {
       presses: ((j['presses'] as List?) ?? [])
           .map((p) => NassauPressResult.fromJson(p as Map<String, dynamic>))
           .toList(),
-      payoutFront9:   (payouts['front9']   as num?)?.toDouble() ?? 0.0,
-      payoutBack9:    (payouts['back9']    as num?)?.toDouble() ?? 0.0,
-      payoutOverall:  (payouts['overall']  as num?)?.toDouble() ?? 0.0,
-      payoutPresses:  (payouts['presses']  as num?)?.toDouble() ?? 0.0,
-      payoutTotal:    (payouts['total']    as num?)?.toDouble() ?? 0.0,
+      bottomFront9:  bf9Raw != null ? NassauBottomBetResult.fromJson(bf9Raw) : null,
+      bottomBack9:   bb9Raw != null ? NassauBottomBetResult.fromJson(bb9Raw) : null,
+      bottomOverall: bovRaw != null ? NassauBottomBetResult.fromJson(bovRaw) : null,
+      bottomPresses: ((j['bottom_presses'] as List?) ?? [])
+          .map((p) => NassauPressResult.fromJson(p as Map<String, dynamic>))
+          .toList(),
+      payoutFront9:        (payouts['front9']          as num?)?.toDouble() ?? 0.0,
+      payoutBack9:         (payouts['back9']           as num?)?.toDouble() ?? 0.0,
+      payoutOverall:       (payouts['overall']         as num?)?.toDouble() ?? 0.0,
+      payoutPresses:       (payouts['presses']         as num?)?.toDouble() ?? 0.0,
+      payoutTopTotal:      (payouts['top_total']       as num?)?.toDouble() ?? 0.0,
+      payoutBottomFront9:  (payouts['bottom_front9']   as num?)?.toDouble() ?? 0.0,
+      payoutBottomBack9:   (payouts['bottom_back9']    as num?)?.toDouble() ?? 0.0,
+      payoutBottomOverall: (payouts['bottom_overall']  as num?)?.toDouble() ?? 0.0,
+      payoutBottomPresses: (payouts['bottom_presses']  as num?)?.toDouble() ?? 0.0,
+      payoutBottomTotal:   (payouts['bottom_total']    as num?)?.toDouble() ?? 0.0,
+      payoutTotal:         (payouts['total']           as num?)?.toDouble() ?? 0.0,
       holes: ((j['holes'] as List?) ?? [])
           .map((h) => NassauHoleData.fromJson(h as Map<String, dynamic>))
           .toList(),

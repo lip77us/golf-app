@@ -868,53 +868,73 @@ class _NassauGroupCard extends StatelessWidget {
 
           const Divider(height: 16),
 
-          // Bet rows — use full team names ("JimD & Paul"), not just lead player.
-          _betRow('Front 9',  nas.front9,  t1Names, t2Names, theme),
+          // ── Top bet rows ──────────────────────────────────────────────
+          if (nas.isClaremont)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text('Top (Nassau)',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary)),
+            ),
+          _betRow(nas.isClaremont ? 'F9' : 'Front 9', nas.front9,  t1Names, t2Names, theme),
           const SizedBox(height: 4),
-          _betRow('Back 9',   nas.back9,   t1Names, t2Names, theme),
+          _betRow(nas.isClaremont ? 'B9' : 'Back 9',  nas.back9,   t1Names, t2Names, theme),
           const SizedBox(height: 4),
-          _betRow('Overall',  nas.overall, t1Names, t2Names, theme),
+          _betRow(nas.isClaremont ? 'All' : 'Overall', nas.overall, t1Names, t2Names, theme),
 
-          // Presses (if any) — no nine prefix (3-9, not F3-9)
+          // Top presses
           if (nas.presses.isNotEmpty) ...[
             const Divider(height: 14),
-            ...nas.presses.map((p) {
-              final resultLabel = _pressResultLabel(p, t1Names, t2Names);
-              // Color the result by winner (blue=T1, orange=T2, grey=AS/pending)
-              Color resultColor;
-              if (p.result == 'team1') {
-                resultColor = Colors.blue.shade700;
-              } else if (p.result == 'team2') {
-                resultColor = Colors.orange.shade700;
-              } else {
-                resultColor = theme.colorScheme.onSurfaceVariant;
-              }
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  Text(
-                    '${p.pressType == 'manual' ? 'Manual' : 'Auto'} press '
-                    '${p.startHole}–${p.endHole}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  const Spacer(),
-                  Text(resultLabel,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: resultColor)),
-                ]),
-              );
-            }),
+            ..._pressRows(nas.presses, t1Names, t2Names, theme),
+          ],
+
+          // ── Bottom (Claremont) bet rows ───────────────────────────────
+          if (nas.isClaremont &&
+              nas.bottomFront9 != null &&
+              nas.bottomBack9  != null &&
+              nas.bottomOverall != null) ...[
+            const Divider(height: 14),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text('Bottom (Claremont)',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary)),
+            ),
+            _bottomBetRow('F9',  nas.bottomFront9!,  t1Names, t2Names, theme),
+            const SizedBox(height: 4),
+            _bottomBetRow('B9',  nas.bottomBack9!,   t1Names, t2Names, theme),
+            const SizedBox(height: 4),
+            _bottomBetRow('All', nas.bottomOverall!, t1Names, t2Names, theme),
+            if (nas.bottomPresses.isNotEmpty) ...[
+              const Divider(height: 14),
+              ..._pressRows(nas.bottomPresses, t1Names, t2Names, theme,
+                  labelPrefix: 'Bot ', isBottom: true),
+            ],
           ],
 
           const Divider(height: 16),
 
-          // Payout summary — full team names
+          // ── Payout summary ────────────────────────────────────────────
           Row(children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (nas.isClaremont) ...[
+                    Text(
+                      'Top:  ${signedDollar(nas.payoutTopTotal)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: totalColor(nas.payoutTopTotal)),
+                    ),
+                    Text(
+                      'Bot:  ${signedDollar(nas.payoutBottomTotal)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: totalColor(nas.payoutBottomTotal)),
+                    ),
+                    const SizedBox(height: 2),
+                  ],
                   Text(
                     '$t1Names: ${signedDollar(nas.payoutTotal)}',
                     style: TextStyle(
@@ -1011,7 +1031,13 @@ class _NassauGroupCard extends StatelessWidget {
 
   static String _pressResultLabel(
       NassauPressResult p, String t1Names, String t2Names) {
-    if (p.result == null) return 'In progress';
+    if (p.result == null) {
+      // Still active — show running hole margin.
+      final m = p.margin ?? 0;
+      if (m == 0) return 'AS';
+      final leader = m > 0 ? t1Names : t2Names;
+      return '$leader ${m.abs()}UP';
+    }
     if (p.result == 'halved') return 'AS';
     final m      = (p.margin ?? 0).abs();
     final winner = p.result == 'team1' ? t1Names : t2Names;
@@ -1020,6 +1046,102 @@ class _NassauGroupCard extends StatelessWidget {
         ? '$m&${p.holesRemaining}'
         : '${m}UP';
     return '$winner $score';
+  }
+
+  /// Bottom press label — margin is in *points* (max ±2/hole), not holes.
+  static String _bottomPressResultLabel(
+      NassauPressResult p, String t1Names, String t2Names) {
+    if (p.result == null) {
+      // Still active — show running point margin.
+      final m = p.margin ?? 0;
+      if (m == 0) return 'AS';
+      final leader = m > 0 ? t1Names : t2Names;
+      return '$leader +${m.abs()} pts';
+    }
+    if (p.result == 'halved') return 'AS';
+    final m      = (p.margin ?? 0).abs();
+    final winner = p.result == 'team1' ? t1Names : t2Names;
+    if (m == 0) return '$winner wins';
+    return '$winner +$m pts';
+  }
+
+  /// Shared press rows widget — used for both top and bottom presses.
+  static Iterable<Widget> _pressRows(
+    List<NassauPressResult> presses,
+    String t1Names,
+    String t2Names,
+    ThemeData theme, {
+    String labelPrefix = '',
+    bool isBottom = false,
+  }) {
+    return presses.map((p) {
+      final resultLabel = isBottom
+          ? _bottomPressResultLabel(p, t1Names, t2Names)
+          : _pressResultLabel(p, t1Names, t2Names);
+      Color resultColor;
+      if (p.result == 'team1') {
+        resultColor = Colors.blue.shade700;
+      } else if (p.result == 'team2') {
+        resultColor = Colors.orange.shade700;
+      } else {
+        resultColor = theme.colorScheme.onSurfaceVariant;
+      }
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(children: [
+          Text(
+            '$labelPrefix${p.pressType == 'manual' ? 'Manual' : 'Auto'} press '
+            '${p.startHole}–${p.endHole}',
+            style: theme.textTheme.bodySmall,
+          ),
+          const Spacer(),
+          Text(resultLabel,
+              style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600, color: resultColor)),
+        ]),
+      );
+    });
+  }
+
+  /// Bet row for Claremont bottom (margin in points, not holes).
+  static Widget _bottomBetRow(
+    String label,
+    NassauBottomBetResult bet,
+    String t1Names,
+    String t2Names,
+    ThemeData theme,
+  ) {
+    final result = bet.result;
+    String display;
+    Color  color = theme.colorScheme.onSurface;
+
+    if (result == null) {
+      final m = bet.margin;
+      if (m == 0) {
+        display = bet.holesPlayed == 0 ? 'Not started' : 'AS';
+      } else {
+        final leader = m > 0 ? t1Names : t2Names;
+        display = '$leader ${m > 0 ? '+$m' : '$m'} pts';
+        color   = m > 0 ? Colors.blue.shade700 : Colors.orange.shade700;
+      }
+    } else if (result == 'halved') {
+      display = 'AS';
+      color   = theme.colorScheme.onSurfaceVariant;
+    } else {
+      final won    = result == 'team1';
+      final winner = won ? t1Names : t2Names;
+      color   = won ? Colors.blue.shade700 : Colors.orange.shade700;
+      display = '$winner wins';
+    }
+
+    return Row(children: [
+      SizedBox(width: 72, child: Text(label, style: theme.textTheme.bodySmall)),
+      Expanded(
+        child: Text(display,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(fontWeight: FontWeight.w600, color: color)),
+      ),
+    ]);
   }
 }
 

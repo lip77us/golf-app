@@ -319,6 +319,9 @@ class NassauSetupSerializer(serializers.Serializer):
     net_percent:            0–200, only meaningful when handicap_mode='net'
     press_mode:             'none' | 'manual' | 'auto' | 'both'
     press_unit:             dollar amount per press bet (separate from Round.bet_unit)
+    variant:                'none' | 'tiebreak_2nd' | 'claremont'
+                            tiebreak_2nd — 2nd best ball breaks tied holes (foursomes only)
+                            claremont    — adds simultaneous 2-point bottom bet
     """
     team1_player_ids = serializers.ListField(
         child=serializers.IntegerField(), min_length=1, max_length=2,
@@ -339,6 +342,10 @@ class NassauSetupSerializer(serializers.Serializer):
     )
     press_unit = serializers.DecimalField(
         max_digits=8, decimal_places=2, default='0.00',
+    )
+    variant = serializers.ChoiceField(
+        choices=['none', 'tiebreak_2nd', 'claremont'],
+        default='none',
     )
 
 

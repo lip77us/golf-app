@@ -340,6 +340,17 @@ NASSAU_PRESS_TYPE_CHOICES = [
     ('auto',   'Auto'),
 ]
 
+NASSAU_VARIANT_CHOICES = [
+    ('none',         'Standard Nassau'),
+    ('tiebreak_2nd', '2nd-Ball Tie-Break'),
+    ('claremont',    'Claremont'),
+]
+
+NASSAU_PRESS_SIDE_CHOICES = [
+    ('top',    'Top (best-ball Nassau)'),
+    ('bottom', 'Bottom (Claremont 2-pt game)'),
+]
+
 
 class NassauGame(models.Model):
     """
@@ -361,8 +372,19 @@ class NassauGame(models.Model):
 
     Handicap modes: net (with net_percent allowance), gross, strokes_off_low.
 
-    front9_result / back9_result / overall_result: set when each concludes
-    ('team1', 'team2', or 'halved').
+    Variants:
+      none         — standard Nassau (default)
+      tiebreak_2nd — when best balls tie, 2nd best ball breaks the tie
+                     (foursomes only; 2-player games ignore this)
+      claremont    — adds a simultaneous 2-point game (bottom bet):
+                       Point 1 per hole = best ball
+                       Point 2 per hole = 2nd best ball
+                     Bottom also runs front9/back9/overall with its own
+                     independent presses firing at ±2 bottom-points down.
+
+    front9_result / back9_result / overall_result: set when each top bet concludes.
+    bottom_front9_result / bottom_back9_result / bottom_overall_result:
+        Claremont only — set when each bottom bet concludes.
     """
     foursome            = models.OneToOneField(Foursome, on_delete=models.CASCADE, related_name='nassau_game')
     handicap_mode       = models.CharField(
@@ -385,9 +407,20 @@ class NassauGame(models.Model):
                             max_digits=8, decimal_places=2, default='0.00',
                             help_text="Dollar amount per press bet (separate from Round.bet_unit).",
                         )
+    variant             = models.CharField(
+                            max_length=20,
+                            choices=NASSAU_VARIANT_CHOICES,
+                            default='none',
+                            help_text="Game variant: standard, 2nd-ball tie-break, or Claremont.",
+                        )
+    # Top (standard Nassau) results
     front9_result       = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
     back9_result        = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
     overall_result      = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
+    # Bottom (Claremont) results — null when variant != 'claremont'
+    bottom_front9_result  = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
+    bottom_back9_result   = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
+    bottom_overall_result = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
     status              = models.CharField(max_length=20, choices=MatchStatus.choices, default=MatchStatus.PENDING)
 
     def __str__(self):
@@ -412,16 +445,24 @@ class NassauHoleScore(models.Model):
     """
     Best ball score for each team on each hole of a NassauGame.
     winner: 'team1', 'team2', or 'halved'. Null if not yet played.
-    holes_up_after: cumulative 18-hole match margin
-        (positive = team1 leading, negative = team2 leading).
-    front9_up_after / back9_up_after track the 9-hole sub-bets separately.
+    front9_up_after / back9_up_after / overall_up_after track top-bet margins.
+
+    Variant fields (null when variant == 'none'):
+      team1_2nd_net / team2_2nd_net:
+          Second-best adjusted score per team.  Set for 'tiebreak_2nd' and
+          'claremont'; null for standard Nassau or 2-player matches.
+      bottom_delta:
+          Net bottom points earned by team1 on this hole: +2, +1, 0, -1, -2.
+          Claremont only.
+      bottom_front9_up_after / bottom_back9_up_after / bottom_overall_up_after:
+          Running bottom-points margin.  Claremont only.
     """
     game                = models.ForeignKey(NassauGame, on_delete=models.CASCADE, related_name='hole_scores')
     hole_number         = models.PositiveSmallIntegerField()
     team1_best_net      = models.SmallIntegerField(null=True, blank=True)
     team2_best_net      = models.SmallIntegerField(null=True, blank=True)
     winner              = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
-    # Running margins within each nine (for press trigger detection)
+    # Running top margins within each nine
     front9_up_after     = models.SmallIntegerField(
                             null=True, blank=True,
                             help_text="Running front-9 margin after this hole (holes 1-9 only)."
@@ -434,6 +475,17 @@ class NassauHoleScore(models.Model):
                             null=True, blank=True,
                             help_text="Running overall margin after this hole (all 18)."
                         )
+    # 2nd-ball fields (tiebreak_2nd + claremont variants only)
+    team1_2nd_net       = models.SmallIntegerField(null=True, blank=True)
+    team2_2nd_net       = models.SmallIntegerField(null=True, blank=True)
+    # Claremont bottom fields
+    bottom_delta        = models.SmallIntegerField(
+                            null=True, blank=True,
+                            help_text="Net bottom points for team1 this hole: +2..−2. Claremont only."
+                        )
+    bottom_front9_up_after    = models.SmallIntegerField(null=True, blank=True)
+    bottom_back9_up_after     = models.SmallIntegerField(null=True, blank=True)
+    bottom_overall_up_after   = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         unique_together = ('game', 'hole_number')
@@ -445,22 +497,29 @@ class NassauHoleScore(models.Model):
 
 class NassauPress(models.Model):
     """
-    A press bet within a NassauGame — either auto-triggered (2-down) or
-    manually called by the losing team.
+    A press bet within a NassauGame — either auto-triggered or manually called.
 
     nine:             'front' (holes 1-9) or 'back' (holes 10-18)
+    side:             'top'    — standard best-ball Nassau press
+                      'bottom' — Claremont 2-pt game press (fires at ±2 pts down)
     press_type:       'auto' (2-down trigger) or 'manual' (losing team)
-    triggered_on_hole: hole after which the press was called (press starts
-                       on start_hole = triggered_on_hole + 1)
+    triggered_on_hole: hole after which the press was called
     start_hole:       first hole counted in this press
     end_hole:         last hole of that nine (9 for front, 18 for back)
     result:           set when the press concludes (None while active)
-    holes_up:         final margin: +ve = team1 won, -ve = team2 won, 0 = halved
+    holes_up:         final margin: +ve = team1 won.  For bottom presses this
+                      is the net bottom-points margin (not hole count).
     """
     game                = models.ForeignKey(NassauGame, on_delete=models.CASCADE, related_name='presses')
     nine                = models.CharField(
                             max_length=5,
                             choices=[('front', 'Front 9'), ('back', 'Back 9')]
+                        )
+    side                = models.CharField(
+                            max_length=10,
+                            choices=NASSAU_PRESS_SIDE_CHOICES,
+                            default='top',
+                            help_text="'top' = Nassau best-ball press; 'bottom' = Claremont 2-pt press.",
                         )
     press_type          = models.CharField(
                             max_length=10,
@@ -477,10 +536,13 @@ class NassauPress(models.Model):
                         )
 
     class Meta:
-        ordering = ['triggered_on_hole']
+        ordering = ['side', 'triggered_on_hole']
 
     def __str__(self):
-        return f"{self.get_press_type_display()} press hole {self.triggered_on_hole} ({self.nine}) — {self.game}"
+        return (
+            f"{self.get_press_type_display()} {self.side} press "
+            f"hole {self.triggered_on_hole} ({self.nine}) — {self.game}"
+        )
 
 
 # ---------------------------------------------------------------------------
