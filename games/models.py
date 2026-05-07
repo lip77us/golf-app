@@ -1202,3 +1202,194 @@ class ThreePersonMatchP2HoleResult(models.Model):
 
     def __str__(self):
         return f"TPM P2 Hole {self.hole_number} [{self.phase}] — {self.game}"
+
+
+# ---------------------------------------------------------------------------
+# QUOTA NASSAU  (2-player Stableford-quota comparison, Nassau style)
+# ---------------------------------------------------------------------------
+#
+# How quota works
+# ~~~~~~~~~~~~~~~
+# Each player has a personal quota = 36 − course_handicap_index.
+# A player with quota 18 is expected to earn 18 Stableford points over
+# 18 holes (i.e. every hole at bogey = 1 pt, par = 2 pts, etc.).
+# Being above quota ≡ under par in traditional match-play terms;
+# below quota ≡ over par.
+#
+# Nassau-style comparison
+# ~~~~~~~~~~~~~~~~~~~~~~~
+# Front 9:  compare (p1_stableford_f9 − quota/2) vs (p2_stableford_f9 − quota/2).
+# Back 9:   compare (p1_stableford_b9 − quota/2) vs (p2_stableford_b9 − quota/2).
+# Overall:  compare (p1_stableford_18 − quota)   vs (p2_stableford_18 − quota).
+# Higher score-vs-quota wins the segment; equal = halved.
+#
+# Live progress display
+# ~~~~~~~~~~~~~~~~~~~~~
+# After hole H, a player's running score-vs-quota is:
+#     stableford_thru_H − (quota × H / 18)
+# This is the "against par" equivalent the UI shows as the round progresses.
+#
+# Multiple matches per foursome
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# A foursome with 2 players from each Ryder Cup team yields 2 cross-team
+# matches per group (e.g. A1 vs B1 and A2 vs B2).  All live under one
+# QuotaNassauGame container (one per foursome).
+# ---------------------------------------------------------------------------
+
+QUOTA_RESULT_CHOICES = [
+    ('player1', 'Player 1'),
+    ('player2', 'Player 2'),
+    ('halved',  'Halved'),
+]
+
+
+class QuotaNassauGame(models.Model):
+    """
+    Container for all 1v1 Quota Nassau matches within a foursome.
+
+    status rolls up from its QuotaNassauMatch children:
+        pending     — no holes scored yet
+        in_progress — at least one hole scored
+        complete    — all matches through 18 holes
+    """
+    foursome   = models.ForeignKey(
+                     Foursome, on_delete=models.CASCADE,
+                     related_name='quota_nassau_games'
+                 )
+    status     = models.CharField(
+                     max_length=20,
+                     choices=MatchStatus.choices,
+                     default=MatchStatus.PENDING
+                 )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Quota Nassau — Group {self.foursome.group_number}"
+
+
+class QuotaNassauMatch(models.Model):
+    """
+    A single 1v1 Quota Nassau match between two players.
+
+    player1_quota / player2_quota store 36 − course_handicap_index at the
+    time of setup so the match is immune to later handicap edits.
+
+    Segment results ('player1' | 'player2' | 'halved') are set by
+    calculate_quota_nassau(); null means the segment is not yet resolved.
+    """
+    game          = models.ForeignKey(
+                        QuotaNassauGame, on_delete=models.CASCADE,
+                        related_name='matches'
+                    )
+    player1       = models.ForeignKey(
+                        Player, on_delete=models.PROTECT,
+                        related_name='quota_nassau_as_p1'
+                    )
+    player2       = models.ForeignKey(
+                        Player, on_delete=models.PROTECT,
+                        related_name='quota_nassau_as_p2'
+                    )
+    player1_quota = models.SmallIntegerField(
+                        help_text="36 − player1's course handicap index at setup time."
+                    )
+    player2_quota = models.SmallIntegerField(
+                        help_text="36 − player2's course handicap index at setup time."
+                    )
+    front9_result  = models.CharField(
+                         max_length=10, choices=QUOTA_RESULT_CHOICES,
+                         null=True, blank=True
+                     )
+    back9_result   = models.CharField(
+                         max_length=10, choices=QUOTA_RESULT_CHOICES,
+                         null=True, blank=True
+                     )
+    overall_result = models.CharField(
+                         max_length=10, choices=QUOTA_RESULT_CHOICES,
+                         null=True, blank=True
+                     )
+    status         = models.CharField(
+                         max_length=20,
+                         choices=MatchStatus.choices,
+                         default=MatchStatus.PENDING
+                     )
+
+    class Meta:
+        unique_together = ('game', 'player1', 'player2')
+
+    def __str__(self):
+        return (
+            f"{self.player1.short_name} (Q{self.player1_quota}) vs "
+            f"{self.player2.short_name} (Q{self.player2_quota}) — {self.game}"
+        )
+
+
+class QuotaNassauHoleResult(models.Model):
+    """
+    Per-hole detail for a QuotaNassauMatch.
+
+    Stableford points each player earned on this hole, plus running
+    score-vs-quota accumulators used by the live-progress display.
+
+    score_vs_quota_after
+        Running (stableford_total − quota × hole / 18) for each player.
+        Positive = above quota = under par equivalent.
+        Negative = below quota = over par equivalent.
+
+    front9_margin_after / back9_margin_after / overall_margin_after
+        (p1_score_vs_quota − p2_score_vs_quota) after this hole within
+        the relevant segment. Positive = player1 is ahead.
+        Stored separately per nine so the UI can show independent segment
+        progress bars without recomputing.
+    """
+    match        = models.ForeignKey(
+                       QuotaNassauMatch, on_delete=models.CASCADE,
+                       related_name='hole_results'
+                   )
+    hole_number  = models.PositiveSmallIntegerField(
+                       validators=[MinValueValidator(1), MaxValueValidator(18)]
+                   )
+    p1_stableford          = models.SmallIntegerField(
+                                 null=True, blank=True,
+                                 help_text="Stableford points player1 earned this hole (0–5)."
+                             )
+    p2_stableford          = models.SmallIntegerField(
+                                 null=True, blank=True,
+                                 help_text="Stableford points player2 earned this hole (0–5)."
+                             )
+    # Running score-vs-quota for each player after this hole
+    p1_score_vs_quota      = models.DecimalField(
+                                 max_digits=6, decimal_places=2,
+                                 null=True, blank=True,
+                                 help_text=(
+                                     "p1 cumulative stableford − (quota × hole/18). "
+                                     "+ve = above quota, −ve = below."
+                                 )
+                             )
+    p2_score_vs_quota      = models.DecimalField(
+                                 max_digits=6, decimal_places=2,
+                                 null=True, blank=True,
+                             )
+    # Segment running margins  (p1_score_vs_quota − p2_score_vs_quota)
+    # Only the relevant nine is populated per hole (the other is null).
+    front9_margin_after    = models.DecimalField(
+                                 max_digits=6, decimal_places=2,
+                                 null=True, blank=True,
+                                 help_text="Front-9 margin after this hole (holes 1–9 only)."
+                             )
+    back9_margin_after     = models.DecimalField(
+                                 max_digits=6, decimal_places=2,
+                                 null=True, blank=True,
+                                 help_text="Back-9 margin after this hole (holes 10–18 only)."
+                             )
+    overall_margin_after   = models.DecimalField(
+                                 max_digits=6, decimal_places=2,
+                                 null=True, blank=True,
+                                 help_text="Overall (18-hole) running margin after this hole."
+                             )
+
+    class Meta:
+        unique_together = ('match', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        return f"Hole {self.hole_number} — {self.match}"

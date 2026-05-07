@@ -23,8 +23,9 @@ urlpatterns = [
     # ---- Tournaments ----
     path('tournaments/',                              views.TournamentListView.as_view(),        name='api-tournament-list'),
     path('tournaments/<int:pk>/',                     views.TournamentDetailView.as_view(),      name='api-tournament-detail'),
-    path('tournaments/<int:pk>/leaderboard/',         views.TournamentLeaderboardView.as_view(), name='api-tournament-leaderboard'),
-    path('tournaments/<int:pk>/low-net/',             views.TournamentLowNetView.as_view(),      name='api-tournament-low-net'),
+    path('tournaments/<int:pk>/leaderboard/',         views.TournamentLeaderboardView.as_view(),   name='api-tournament-leaderboard'),
+    path('tournaments/<int:pk>/cup-standings/',       views.TournamentCupStandingsView.as_view(), name='api-tournament-cup-standings'),
+    path('tournaments/<int:pk>/low-net/',             views.TournamentLowNetView.as_view(),       name='api-tournament-low-net'),
     path('tournaments/<int:pk>/low-net/setup/',       views.TournamentLowNetSetupView.as_view(), name='api-tournament-low-net-setup'),
 
     # ---- Rounds ----
@@ -78,6 +79,25 @@ urlpatterns = [
     # ---- Pink Ball setup (round-level) + per-foursome order ----
     path('rounds/<int:pk>/pink-ball/setup/',      views.PinkBallSetupView.as_view(),          name='api-pink-ball-setup'),
     path('foursomes/<int:pk>/pink-ball/order/',   views.PinkBallFoursomeOrderView.as_view(),  name='api-pink-ball-order'),
+
+    # ---- Team Tournament (Ryder Cup) ----
+    path('tournaments/<int:pk>/team-tournament/setup/',                                          views.TeamTournamentSetupView.as_view(),        name='api-team-tournament-setup'),
+    path('tournaments/<int:pk>/team-tournament/',                                                views.TeamTournamentDetailView.as_view(),       name='api-team-tournament-detail'),
+    path('tournaments/<int:pk>/team-tournament/draft-complete/',                                 views.TeamTournamentDraftCompleteView.as_view(),name='api-team-tournament-draft-complete'),
+    path('tournaments/<int:pk>/team-tournament/teams/<int:team_pk>/',                             views.TeamRenameView.as_view(),                name='api-team-rename'),
+    path('tournaments/<int:pk>/team-tournament/teams/<int:team_pk>/players/',                    views.TeamPlayerView.as_view(),                name='api-team-player-add'),
+    path('tournaments/<int:pk>/team-tournament/teams/<int:team_pk>/players/<int:player_pk>/',    views.TeamPlayerView.as_view(),                name='api-team-player-remove'),
+
+    # ---- Ryder Cup round config ----
+    path('rounds/<int:pk>/ryder-cup/setup/',      views.RyderCupRoundSetupView.as_view(),      name='api-ryder-cup-round-setup'),
+    path('rounds/<int:pk>/ryder-cup/',            views.RyderCupRoundResultView.as_view(),     name='api-ryder-cup-round-result'),
+    path('rounds/<int:pk>/ryder-cup/calculate/',  views.RyderCupRoundCalculateView.as_view(),  name='api-ryder-cup-round-calculate'),
+    path('rounds/<int:pk>/cup-live/',             views.CupRoundLiveView.as_view(),             name='api-cup-round-live'),
+    path('rounds/<int:pk>/tee-times/',            views.TeeTimeBulkView.as_view(),             name='api-tee-times-bulk'),
+
+    # ---- Quota Nassau (per-foursome) ----
+    path('foursomes/<int:pk>/quota-nassau/',        views.QuotaNassauResultView.as_view(), name='api-quota-nassau-result'),
+    path('foursomes/<int:pk>/quota-nassau/setup/',  views.QuotaNassauSetupView.as_view(),  name='api-quota-nassau-setup'),
 
     # ---- Health check ----
     path('health/', views.health_check, name='api-health'),

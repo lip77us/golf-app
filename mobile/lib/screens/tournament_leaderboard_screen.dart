@@ -279,12 +279,14 @@ class _LowNetChampView extends StatelessWidget {
             const SizedBox(width: 34, child: Text('Thru',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
-            for (int r = 1; r <= totalRounds; r++)
-              SizedBox(width: 40,
-                  child: Text('R$r Net',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 10,
-                          fontWeight: FontWeight.w600))),
+            // Hide per-round columns when only 1 round — they'd duplicate Total.
+            if (totalRounds > 1)
+              for (int r = 1; r <= totalRounds; r++)
+                SizedBox(width: 40,
+                    child: Text('R$r Net',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 10,
+                            fontWeight: FontWeight.w600))),
             const SizedBox(width: 46, child: Text('Total',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
@@ -358,24 +360,25 @@ class _LowNetChampView extends StatelessWidget {
                             : FontWeight.w600),
                   ),
                 ),
-                // Per-round net-to-par
-                for (int ri = 0; ri < totalRounds; ri++) ...[
-                  SizedBox(
-                    width: 40,
-                    child: ri < roundNtps.length
-                        ? Text(
-                            _ntpLabel(roundNtps[ri]),
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: _ntpColor(roundNtps[ri], theme),
-                                fontWeight: FontWeight.w500),
-                          )
-                        : Text('—',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant)),
-                  ),
-                ],
+                // Per-round net-to-par (hidden when only 1 round)
+                if (totalRounds > 1)
+                  for (int ri = 0; ri < totalRounds; ri++) ...[
+                    SizedBox(
+                      width: 40,
+                      child: ri < roundNtps.length
+                          ? Text(
+                              _ntpLabel(roundNtps[ri]),
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: _ntpColor(roundNtps[ri], theme),
+                                  fontWeight: FontWeight.w500),
+                            )
+                          : Text('—',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                    ),
+                  ],
                 // Net-to-par total
                 SizedBox(
                   width: 46,
@@ -697,8 +700,9 @@ class _PayoutBlock extends StatelessWidget {
 
 class ChampionshipTabView extends StatefulWidget {
   final int tournamentId;
+  final int? roundId; // When provided, filter to this round only
 
-  const ChampionshipTabView({super.key, required this.tournamentId});
+  const ChampionshipTabView({super.key, required this.tournamentId, this.roundId});
 
   @override
   State<ChampionshipTabView> createState() => _ChampionshipTabViewState();
@@ -733,7 +737,8 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
     setState(() { _loading = true; _error = null; });
     try {
       final client  = context.read<AuthProvider>().client;
-      final payload = await client.getTournamentLeaderboard(widget.tournamentId);
+      final payload = await client.getTournamentLeaderboard(
+          widget.tournamentId, roundId: widget.roundId);
       if (!mounted) return;
 
       final activeGames = (payload['active_games'] as List? ?? [])

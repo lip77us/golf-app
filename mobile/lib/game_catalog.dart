@@ -22,8 +22,12 @@ class GameIds {
   static const String stableford  = 'stableford';
 
   // Tournament-only, multi-foursome
-  static const String matchPlay   = 'match_play';
-  static const String irishRumble = 'irish_rumble';
+  static const String irishRumble    = 'irish_rumble';
+  // Cup singles formats — two 1v1 matches per foursome.
+  // singlesNassau: each match has F9/B9/Overall (pv × 6/foursome).
+  // singles18:     each match is 18-hole overall only  (pv × 2/foursome).
+  static const String singlesNassau  = 'singles_nassau';
+  static const String singles18      = 'singles_18';
   static const String pinkBall    = 'pink_ball';
   static const String scramble    = 'scramble';
 
@@ -33,6 +37,11 @@ class GameIds {
   // cross-day accumulator.
   static const String championshipStrokePlay  = 'low_net';
   static const String championshipStableford  = 'stableford_championship';
+
+  // Team Cup (Ryder Cup style).  Stored in tournament.active_games so the
+  // tournament list screen can detect it and show cup-specific buttons.
+  // Not a per-round game — the cup layer sits on top of regular games.
+  static const String teamCup = 'team_cup';
 }
 
 // ── Per-game metadata ─────────────────────────────────────────────────────────
@@ -156,8 +165,14 @@ const List<GameMeta> kGameCatalog = [
   // ── Tournament-only ───────────────────────────────────────────────────────
 
   GameMeta(
-    id          : GameIds.matchPlay,
-    displayName : 'Match Play',
+    id          : GameIds.singlesNassau,
+    displayName : 'Singles Nassau',
+    tournament  : true,
+    exactPlayers: 4,
+  ),
+  GameMeta(
+    id          : GameIds.singles18,
+    displayName : '18-Hole Singles',
     tournament  : true,
     exactPlayers: 4,
   ),
@@ -217,6 +232,7 @@ List<GameMeta> get primaryGames =>
 const List<(String, String)> kChampionshipGames = [
   (GameIds.championshipStrokePlay, 'Stroke Play Championship'),
   (GameIds.championshipStableford, 'Stableford Championship'),
+  (GameIds.teamCup,                'Cup Play (Ryder Cup style)'),
 ];
 
 // ── Combination logic ─────────────────────────────────────────────────────────

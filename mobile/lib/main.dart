@@ -33,6 +33,8 @@ import 'screens/match_play_screen.dart';
 import 'screens/course_search_screen.dart';
 import 'screens/score_entry_screen.dart';
 import 'screens/three_person_match_setup_screen.dart';
+import 'screens/splash_screen.dart';
+import 'screens/quota_nassau_screen.dart';
 
 /// Global navigator key — lets AuthProvider redirect to /login on 401
 /// from outside the widget tree.
@@ -133,7 +135,7 @@ class _GolfAppState extends State<GolfApp> {
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
-        title: 'Golf App',
+        title: 'The Bandon Cup',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFF2E7D32),
@@ -148,7 +150,7 @@ class _GolfAppState extends State<GolfApp> {
           ),
           useMaterial3: true,
         ),
-        initialRoute: widget.auth.isLoggedIn ? '/tournaments' : '/login',
+        initialRoute: '/splash',
         onGenerateRoute: _router,
       ),
     );
@@ -156,6 +158,16 @@ class _GolfAppState extends State<GolfApp> {
 
   Route<dynamic>? _router(RouteSettings settings) {
     switch (settings.name) {
+      case '/splash':
+        return MaterialPageRoute(
+          builder: (_) => SplashScreen(
+            onComplete: () {
+              navigatorKey.currentState?.pushReplacementNamed(
+                widget.auth.isLoggedIn ? '/tournaments' : '/login',
+              );
+            },
+          ),
+        );
       case '/login':
         return MaterialPageRoute(builder: (_) => const LoginScreen());
       case '/tournaments':
@@ -280,6 +292,10 @@ class _GolfAppState extends State<GolfApp> {
         final foursomeId = settings.arguments as int;
         return MaterialPageRoute(
             builder: (_) => ScoreEntryScreen(foursomeId: foursomeId));
+      case '/quota-nassau':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => QuotaNassauScreen(foursomeId: foursomeId));
       default:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
     }

@@ -268,8 +268,20 @@ class ApiClient {
     await _delete('/tournaments/$id/');
   }
 
-  Future<Map<String, dynamic>> getTournamentLeaderboard(int tournamentId) async {
-    final data = await _get('/tournaments/$tournamentId/leaderboard/');
+  Future<Map<String, dynamic>> getTournamentLeaderboard(int tournamentId, {int? roundId}) async {
+    final query = roundId != null ? '?round_id=$roundId' : '';
+    final data = await _get('/tournaments/$tournamentId/leaderboard/$query');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> getTournamentCupStandings(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/cup-standings/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Live cup standings for a specific round (Irish Rumble + Nassau + Singles).
+  Future<Map<String, dynamic>> getCupRoundLiveSummary(int roundId) async {
+    final data = await _get('/rounds/$roundId/cup-live/');
     return Map<String, dynamic>.from(data as Map);
   }
 
@@ -336,17 +348,21 @@ class ApiClient {
     required int courseId,
     required String date,          // 'YYYY-MM-DD'
     List<String> activeGames = const [],
+    Map<String, double> gamePointValues = const {},
+    Map<String, int>    cupGroupCounts  = const {},
     int roundNumber = 1,
     String handicapMode = 'net',
     int netPercent = 100,
   }) async {
     final data = await _post('/rounds/', {
-      'course_id'     : courseId,
-      'date'          : date,
-      'active_games'  : activeGames,
-      'round_number'  : roundNumber,
-      'handicap_mode' : handicapMode,
-      'net_percent'   : netPercent,
+      'course_id'          : courseId,
+      'date'               : date,
+      'active_games'       : activeGames,
+      'round_number'       : roundNumber,
+      'handicap_mode'      : handicapMode,
+      'net_percent'        : netPercent,
+      if (gamePointValues.isNotEmpty) 'game_point_values': gamePointValues,
+      if (cupGroupCounts.isNotEmpty)  'cup_group_counts' : cupGroupCounts,
       if (tournamentId != null) 'tournament_id': tournamentId,
     });
     return Round.fromJson(data as Map<String, dynamic>);
@@ -778,14 +794,147 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  // ---- Team Tournament (Ryder Cup) ----
+
+  /// GET /api/tournaments/<id>/team-tournament/
+  /// Returns the full summary (teams, total points, per-round breakdown).
+  /// Throws ApiException(404) when no team tournament has been set up.
+  Future<TeamTournamentSummary> getTeamTournament(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/team-tournament/');
+    return TeamTournamentSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/tournaments/<id>/team-tournament/setup/
+  /// Creates (or replaces) the cup config + team shells.
+  /// [teams] is a list of {name, team_number, colour?, short_code?}
+  Future<Map<String, dynamic>> postTeamTournamentSetup(
+    int tournamentId, {
+    required String             cupName,
+    required int                playersPerTeam,
+    required List<Map<String, dynamic>> teams,
+  }) async {
+    final data = await _post('/tournaments/$tournamentId/team-tournament/setup/', {
+      'cup_name'        : cupName,
+      'players_per_team': playersPerTeam,
+      'teams'           : teams,
+    });
+    return data as Map<String, dynamic>;
+  }
+
+  /// POST /api/tournaments/<id>/team-tournament/draft-complete/
+  /// Locks the rosters.
+  Future<void> postDraftComplete(int tournamentId) async {
+    await _post('/tournaments/$tournamentId/team-tournament/draft-complete/', {});
+  }
+
+  /// POST /api/tournaments/<id>/team-tournament/teams/<teamId>/players/
+  /// Adds [playerId] to the team.  Automatically removes the player from any
+  /// other team in this tournament.
+  Future<Map<String, dynamic>> postAddTeamPlayer(
+    int tournamentId, int teamId, int playerId,
+  ) async {
+    final data = await _post(
+      '/tournaments/$tournamentId/team-tournament/teams/$teamId/players/',
+      {'player_id': playerId},
+    );
+    return data as Map<String, dynamic>;
+  }
+
+  /// DELETE /api/tournaments/<id>/team-tournament/teams/<teamId>/players/<playerId>/
+  Future<void> deleteTeamPlayer(
+    int tournamentId, int teamId, int playerId,
+  ) async {
+    await _delete(
+      '/tournaments/$tournamentId/team-tournament/teams/$teamId/players/$playerId/',
+    );
+  }
+
+  /// PATCH /api/tournaments/<id>/team-tournament/teams/<teamId>/
+  /// Renames the team.
+  Future<void> patchTeamName(int tournamentId, int teamId, String name) async {
+    await _patch(
+      '/tournaments/$tournamentId/team-tournament/teams/$teamId/',
+      {'name': name},
+    );
+  }
+
+  // ---- Ryder Cup round config ----
+
+  /// GET /api/rounds/<id>/ryder-cup/
+  Future<Map<String, dynamic>> getRyderCupRound(int roundId) async {
+    final data = await _get('/rounds/$roundId/ryder-cup/');
+    return data as Map<String, dynamic>;
+  }
+
+  /// POST /api/rounds/<id>/ryder-cup/setup/
+  /// [foursomes] = [{foursome_id, game_type, team1_id?, team2_id?}, ...]
+  /// [irishRumblePairings] = [{foursome_a_id, foursome_b_id, team_a_id, team_b_id}, ...]
+  Future<Map<String, dynamic>> postRyderCupRoundSetup(
+    int roundId, {
+    required double nassauPointValue,
+    required double pointMultiplier,
+    String notes = '',
+    required List<Map<String, dynamic>> foursomes,
+    List<Map<String, dynamic>> irishRumblePairings = const [],
+  }) async {
+    final data = await _post('/rounds/$roundId/ryder-cup/setup/', {
+      'nassau_point_value'  : nassauPointValue,
+      'point_multiplier'    : pointMultiplier,
+      'notes'               : notes,
+      'foursomes'           : foursomes,
+      'irish_rumble_pairings': irishRumblePairings,
+    });
+    return data as Map<String, dynamic>;
+  }
+
+  /// POST /api/rounds/<id>/ryder-cup/calculate/
+  /// Triggers a points recalculation from current game results.
+  Future<Map<String, dynamic>> postRyderCupCalculate(int roundId) async {
+    final data = await _post('/rounds/$roundId/ryder-cup/calculate/', {});
+    return data as Map<String, dynamic>;
+  }
+
+  /// PATCH /api/rounds/<id>/tee-times/
+  /// Sets tee times on foursomes identified by group_number.
+  /// [entries] = [{group_number: 1, tee_time: "08:00"}, ...]
+  /// Pass tee_time as null to clear a group's tee time.
+  Future<List<Foursome>> setTeeTimes(
+    int roundId,
+    List<Map<String, dynamic>> entries,
+  ) async {
+    final data = await _patch('/rounds/$roundId/tee-times/',
+        {'tee_times': entries});
+    return (data as List)
+        .map((f) => Foursome.fromJson(f as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---- Phantom player ----
 
   /// Idempotent — safe to call on every score-entry screen load.
-  /// Initialises the phantom's rotation config (once) and returns
-  /// the per-hole source-player mapping so the UI can show which
-  /// real player's score the phantom copies on each hole.
   Future<PhantomInitResult> initPhantom(int foursomeId) async {
     final data = await _post('/foursomes/$foursomeId/phantom/init/', {});
     return PhantomInitResult.fromJson(data as Map<String, dynamic>);
+  }
+
+  // ---- Quota Nassau ----
+
+  Future<QuotaNassauSummary?> getQuotaNassauSummary(int foursomeId) async {
+    try {
+      final data = await _get('/foursomes/$foursomeId/quota-nassau/');
+      return QuotaNassauSummary.fromJson(data as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<QuotaNassauSummary> postQuotaNassauSetup(
+    int foursomeId,
+    List<Map<String, dynamic>> pairings,
+  ) async {
+    final data = await _post('/foursomes/$foursomeId/quota-nassau/setup/', {
+      'pairings': pairings,
+    });
+    return QuotaNassauSummary.fromJson(data as Map<String, dynamic>);
   }
 }

@@ -55,7 +55,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from core.models import Player, Tee, Course, HandicapMode
+from core.models import Player, Tee, Course, HandicapMode, GameType
 from tournament.models import Tournament, Round, Foursome, FoursomeMembership
 from scoring.models import HoleScore
 from scoring.phantom import PhantomScoreProvider, get_algorithm, DEFAULT_ALGORITHM_ID
@@ -115,8 +115,38 @@ def _recalculate_games(foursome: Foursome) -> None:
     # foursome.active_games so future setups don't need the fallback, but
     # existing rows created before that fix must still be handled.
     if 'match_play' in active_games or foursome.match_play_brackets.exists():
-        from services.tournament_match_play import calculate_tournament_match_play
-        calculate_tournament_match_play(foursome)
+        # Route to the correct calculator based on bracket type.
+        bracket = foursome.match_play_brackets.first()
+        if bracket and bracket.bracket_type == 'cup_singles':
+            from services.cup_singles import calculate_cup_singles
+            calculate_cup_singles(foursome)
+        else:
+            from services.tournament_match_play import calculate_tournament_match_play
+            calculate_tournament_match_play(foursome)
+
+    # Non-cup casual singles (singles_nassau / singles_18) — use 1-v-1 18-hole
+    # cup_singles bracket format so the leaderboard can show the same card as
+    # Bandon Cup.  Auto-create the bracket on first score submission if needed.
+    _casual_singles_key = (
+        'singles_nassau' if 'singles_nassau' in active_games else
+        'singles_18'     if 'singles_18'     in active_games else
+        None
+    )
+    if _casual_singles_key and 'match_play' not in active_games:
+        _is_cup_fs = False
+        try:
+            _ = foursome.ryder_cup_foursome_config
+            _is_cup_fs = True
+        except Exception:
+            pass
+        if not _is_cup_fs:
+            from services.cup_singles import setup_cup_singles, calculate_cup_singles
+            if not foursome.match_play_brackets.filter(bracket_type='cup_singles').exists():
+                try:
+                    setup_cup_singles(foursome, None, None, singles_matchups=[])
+                except (ValueError, Exception):
+                    pass
+            calculate_cup_singles(foursome)
 
     if 'points_531' in active_games:
         from services.points_531 import calculate_points_531
@@ -145,6 +175,10 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'scramble' in active_games:
         from services.scramble import calculate_scramble
         calculate_scramble(round_obj)
+
+    if 'quota_nassau' in active_games:
+        from services.quota_nassau import calculate_quota_nassau
+        calculate_quota_nassau(foursome)
 
 
 def _build_scorecard(foursome: Foursome) -> dict:
@@ -302,10 +336,67 @@ def _build_leaderboard(round_obj: Round) -> dict:
 
     if 'irish_rumble' in active_games:
         from services.irish_rumble import irish_rumble_summary
-        games['irish_rumble'] = {
-            'label': 'Irish Rumble',
-            **irish_rumble_summary(round_obj),
-        }
+        from tournament.models import RyderCupIrishRumblePairing
+        # Check for cup-mode Irish Rumble (head-to-head pairings between
+        # foursomes from opposing teams).  If pairings exist we display the
+        # matchup results instead of the standard segment-ranking table.
+        cup_ir_pairings = []
+        try:
+            rc = round_obj.ryder_cup_config
+            cup_ir_pairings = list(
+                RyderCupIrishRumblePairing.objects
+                .filter(round_config=rc)
+                .select_related('foursome_a', 'foursome_b', 'team_a', 'team_b')
+            )
+        except Exception:
+            pass
+        if cup_ir_pairings:
+            pairings_out = []
+            for p in cup_ir_pairings:
+                pairings_out.append({
+                    'foursome_a_id'  : p.foursome_a_id,
+                    'group_a'        : p.foursome_a.group_number,
+                    'team_a'         : p.team_a.name   if p.team_a else '',
+                    'team_a_colour'  : p.team_a.colour if p.team_a else '',
+                    'foursome_b_id'  : p.foursome_b_id,
+                    'group_b'        : p.foursome_b.group_number,
+                    'team_b'         : p.team_b.name   if p.team_b else '',
+                    'team_b_colour'  : p.team_b.colour if p.team_b else '',
+                    'front9_result'  : p.front9_result,
+                    'back9_result'   : p.back9_result,
+                    'overall_result' : p.overall_result,
+                })
+            games['irish_rumble'] = {
+                'label'   : 'Irish Rumble',
+                'is_cup'  : True,
+                'pairings': pairings_out,
+            }
+        else:
+            summary = irish_rumble_summary(round_obj)
+            # For cup rounds, remove non-IR foursomes from the rankings so
+            # that groups playing Singles / Quota Nassau / etc. don't appear
+            # on the Irish Rumble leaderboard tab.
+            ir_groups = set()
+            for fs in foursomes:
+                try:
+                    if fs.ryder_cup_foursome_config.game_type == GameType.IRISH_RUMBLE:
+                        ir_groups.add(f"Group {fs.group_number}")
+                except Exception:
+                    pass
+            if ir_groups:
+                for seg in summary.get('segments', []):
+                    seg['results'] = [
+                        r for r in seg.get('results', [])
+                        if r.get('group') in ir_groups
+                    ]
+                summary['overall'] = [
+                    r for r in summary.get('overall', [])
+                    if r.get('group') in ir_groups
+                ]
+            games['irish_rumble'] = {
+                'label': 'Irish Rumble',
+                **summary,
+            }
 
     if 'scramble' in active_games:
         from services.scramble import scramble_summary
@@ -327,36 +418,179 @@ def _build_leaderboard(round_obj: Round) -> dict:
 
     if 'nassau' in active_games:
         from services.nassau import nassau_summary
+        nassau_groups = []
+        for fs in foursomes:
+            # For cup rounds, skip foursomes assigned to a different game type
+            cup_cfg = None
+            try:
+                cup_cfg = fs.ryder_cup_foursome_config
+                if cup_cfg.game_type != GameType.NASSAU:
+                    continue  # Skip; this foursome plays singles/IR/skins/etc.
+            except Exception:
+                pass  # Not a cup foursome — include normally
+
+            group_entry = {
+                'foursome_id' : fs.id,
+                'group_number': fs.group_number,
+                'summary'     : nassau_summary(fs),
+            }
+            # Augment with cup metadata if this is a cup nassau match
+            if cup_cfg is not None:
+                group_entry['is_cup_match']     = True
+                group_entry['cup_point_value']   = float(cup_cfg.point_value)
+                group_entry['team1_name']        = cup_cfg.team1.name if cup_cfg.team1 else ''
+                group_entry['team2_name']        = cup_cfg.team2.name if cup_cfg.team2 else ''
+            nassau_groups.append(group_entry)
         games['nassau'] = {
-            'label'   : 'Nassau',
-            'by_group': [
-                {'foursome_id': fs.id, 'group_number': fs.group_number,
-                 'summary': nassau_summary(fs)}
-                for fs in foursomes
-            ],
+            'label'   : 'Four Ball',
+            'by_group': nassau_groups,
         }
 
-    if 'match_play' in active_games:
+    # Quota Nassau — also check per-foursome active_games for cup rounds
+    _qn_active = 'quota_nassau' in active_games or any(
+        'quota_nassau' in (fs.active_games or []) for fs in foursomes
+    )
+    if _qn_active:
+        from services.quota_nassau import quota_nassau_summary
+        quota_groups = []
+        for fs in foursomes:
+            cup_cfg = None
+            try:
+                cup_cfg = fs.ryder_cup_foursome_config
+                if cup_cfg.game_type != GameType.QUOTA_NASSAU:
+                    continue   # skip foursomes assigned to a different cup game
+            except Exception:
+                pass  # not a cup foursome — include (casual Quota Nassau TBD)
+
+            summary = quota_nassau_summary(fs)
+            entry = {
+                'foursome_id' : fs.id,
+                'group_number': fs.group_number,
+                'summary'     : summary,
+            }
+            if cup_cfg is not None:
+                t1 = cup_cfg.team1
+                t2 = cup_cfg.team2
+                entry['is_cup_match']    = True
+                entry['cup_point_value'] = float(cup_cfg.point_value)
+                entry['team1_name']      = t1.name   if t1 else ''
+                entry['team2_name']      = t2.name   if t2 else ''
+                entry['team1_colour']    = (t1.colour or 'Red')  if t1 else 'Red'
+                entry['team2_colour']    = (t2.colour or 'Blue') if t2 else 'Blue'
+            quota_groups.append(entry)
+        if quota_groups:
+            games['quota_nassau'] = {
+                'label'   : 'Quota Nassau',
+                'by_group': quota_groups,
+            }
+
+    # Cup singles rounds store 'singles_18' or 'singles_nassau' in per-foursome
+    # active_games rather than 'match_play' at the round level.  Trigger the
+    # match_play / cup_singles processing block whenever any of these keys are
+    # present, either on the round or on any of its foursomes.
+    _all_fs_games = set()
+    for _fs in foursomes:
+        _all_fs_games.update(_fs.active_games or [])
+    _mp_or_singles_active = (
+        'match_play'     in active_games or
+        'singles_18'     in active_games or
+        'singles_nassau' in active_games or
+        'singles_18'     in _all_fs_games or
+        'singles_nassau' in _all_fs_games
+    )
+    if _mp_or_singles_active:
         from services.tournament_match_play import tournament_match_play_summary
+        from services.cup_singles import cup_singles_summary
         from games.models import ThreePersonMatch as _TPM
         tpm_fs_ids = set(
             _TPM.objects
             .filter(foursome__round=round_obj)
             .values_list('foursome_id', flat=True)
         )
-        mp_groups = []
+        mp_groups              = []
+        singles_nassau_groups  = []   # cup_singles Nassau (cup rounds)
+        singles_18_groups      = []   # cup_singles 18-hole (cup rounds)
+        casual_sng_groups      = {}   # 'singles_nassau' | 'singles_18' → list
         for fs in foursomes:
             if fs.id in tpm_fs_ids:
                 continue  # 3-person group plays 5-3-1, not bracket match play
-            s = tournament_match_play_summary(fs)
-            if s is not None:
-                mp_groups.append({
-                    'foursome_id' : fs.id,
-                    'group_number': fs.group_number,
-                    'summary'     : s,
-                })
+            # For cup rounds, route each foursome to the correct section based
+            # on its assigned game type.  Non-cup foursomes go to match_play
+            # or casual singles depending on their active games.
+            cup_game_type = None
+            cup_cfg       = None
+            try:
+                cup_cfg       = fs.ryder_cup_foursome_config
+                cup_game_type = cup_cfg.game_type
+            except Exception:
+                pass
+
+            if cup_game_type in (GameType.SINGLES_NASSAU, GameType.SINGLES_18) and cup_cfg is not None:
+                # Cup singles — route Nassau and 18-hole into separate buckets
+                s = cup_singles_summary(fs)
+                group_entry = {
+                    'foursome_id'    : fs.id,
+                    'group_number'   : fs.group_number,
+                    'summary'        : s,
+                    'is_cup_match'   : True,
+                    'cup_point_value': float(cup_cfg.point_value),
+                    'team1_name'     : cup_cfg.team1.name if cup_cfg.team1 else '',
+                    'team2_name'     : cup_cfg.team2.name if cup_cfg.team2 else '',
+                    'team1_colour'   : (cup_cfg.team1.colour or 'Red')  if cup_cfg.team1 else 'Red',
+                    'team2_colour'   : (cup_cfg.team2.colour or 'Blue') if cup_cfg.team2 else 'Blue',
+                }
+                if cup_game_type == GameType.SINGLES_NASSAU:
+                    singles_nassau_groups.append(group_entry)
+                else:
+                    singles_18_groups.append(group_entry)
+            elif cup_game_type is not None:
+                # Cup foursome playing a different game (Nassau, Irish Rumble,
+                # Skins …) — skip; it will appear in its own section.
+                continue
+            else:
+                # Non-cup foursome: check for casual singles games first.
+                _fs_all = set(round_obj.active_games or []) | set(fs.active_games or [])
+                _sng_key = (
+                    'singles_nassau' if 'singles_nassau' in _fs_all else
+                    'singles_18'     if 'singles_18'     in _fs_all else
+                    None
+                )
+                if _sng_key and 'match_play' not in _fs_all:
+                    # Try cup_singles bracket (auto-created by _recalculate_games)
+                    s = cup_singles_summary(fs)
+                    if s is not None:
+                        casual_sng_groups.setdefault(_sng_key, []).append({
+                            'foursome_id' : fs.id,
+                            'group_number': fs.group_number,
+                            'summary'     : s,
+                            'is_cup_match': False,
+                        })
+                    else:
+                        # Bracket not built yet — fall back to tournament view
+                        s = tournament_match_play_summary(fs)
+                        mp_groups.append({
+                            'foursome_id' : fs.id,
+                            'group_number': fs.group_number,
+                            'summary'     : s,
+                        })
+                else:
+                    # Regular tournament match play (non-cup, non-singles)
+                    s = tournament_match_play_summary(fs)
+                    mp_groups.append({
+                        'foursome_id' : fs.id,
+                        'group_number': fs.group_number,
+                        'summary'     : s,
+                    })
+
         if mp_groups:
             games['match_play'] = {'label': 'Match Play', 'by_group': mp_groups}
+        if singles_nassau_groups:
+            games['cup_singles'] = {'label': 'Singles', 'by_group': singles_nassau_groups}
+        if singles_18_groups:
+            games['cup_singles_18'] = {'label': 'Singles-18', 'by_group': singles_18_groups}
+        for _sng_key, _sng_grps in casual_sng_groups.items():
+            _lbl = 'Singles Nassau' if _sng_key == 'singles_nassau' else '18-Hole Singles'
+            games[_sng_key] = {'label': _lbl, 'by_group': _sng_grps}
 
     # Three-Person Match — always include when any foursome has one configured,
     # even if 'three_person_match' is not explicitly in round.active_games.
@@ -727,11 +961,20 @@ class TournamentLeaderboardView(APIView):
         active_games = tournament.active_games or []
         games: dict  = {}
 
+        # Optional round_id filter — show standings for this round only
+        round_id_filter = request.query_params.get('round_id')
+        round_filter = None
+        if round_id_filter:
+            try:
+                round_filter = int(round_id_filter)
+            except (ValueError, TypeError):
+                pass
+
         if 'low_net' in active_games:
             from services.low_net_championship import low_net_championship_summary
             games['low_net'] = {
                 'label'  : 'Low Net Championship',
-                **low_net_championship_summary(tournament),
+                **low_net_championship_summary(tournament, round_id=round_filter),
             }
 
         if 'match_play' in active_games:
@@ -759,6 +1002,28 @@ class TournamentLeaderboardView(APIView):
         })
 
 
+class TournamentCupStandingsView(APIView):
+    """
+    GET /api/tournaments/{id}/cup-standings/
+
+    Returns cumulative Ryder Cup (Nassau four-ball) points across all rounds
+    in the tournament — both the running totals and a per-round breakdown.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        tournament = get_object_or_404(
+            Tournament.objects.prefetch_related(
+                'rounds__foursomes__memberships__player',
+                'rounds__foursomes__ryder_cup_foursome_config__team1',
+                'rounds__foursomes__ryder_cup_foursome_config__team2',
+            ),
+            pk=pk,
+        )
+        from services.cup_standings import cup_standings_summary
+        return Response(cup_standings_summary(tournament))
+
+
 # ---------------------------------------------------------------------------
 # Rounds
 # ---------------------------------------------------------------------------
@@ -782,17 +1047,19 @@ class RoundCreateView(APIView):
         created_by = getattr(request.user, 'player_profile', None)
 
         round_obj = Round.objects.create(
-            tournament    = tournament,
-            round_number  = d['round_number'],
-            date          = d['date'],
-            course        = course,
-            status        = 'pending',
-            active_games  = d['active_games'],
-            bet_unit      = d['bet_unit'],
-            handicap_mode = d.get('handicap_mode', 'net'),
-            net_percent   = d.get('net_percent', 100),
-            notes         = d['notes'],
-            created_by    = created_by,
+            tournament        = tournament,
+            round_number      = d['round_number'],
+            date              = d['date'],
+            course            = course,
+            status            = 'pending',
+            active_games      = d['active_games'],
+            game_point_values = d.get('game_point_values', {}),
+            cup_group_counts  = d.get('cup_group_counts', {}),
+            bet_unit          = d['bet_unit'],
+            handicap_mode     = d.get('handicap_mode', 'net'),
+            net_percent       = d.get('net_percent', 100),
+            notes             = d['notes'],
+            created_by        = created_by,
         )
         return Response(RoundSerializer(round_obj).data,
                         status=status.HTTP_201_CREATED)
@@ -803,7 +1070,10 @@ class RoundDetailView(APIView):
         round_obj = get_object_or_404(
             Round.objects
                  .select_related('course')
-                 .prefetch_related('foursomes__memberships__player'),
+                 .prefetch_related(
+                     'foursomes__memberships__player',
+                     'foursomes__ryder_cup_foursome_config',
+                 ),
             pk=pk,
         )
         return Response(RoundSerializer(round_obj).data)
@@ -819,7 +1089,10 @@ class RoundDetailView(APIView):
         round_obj = get_object_or_404(
             Round.objects
                  .select_related('course')
-                 .prefetch_related('foursomes__memberships__player'),
+                 .prefetch_related(
+                     'foursomes__memberships__player',
+                     'foursomes__ryder_cup_foursome_config',
+                 ),
             pk=pk,
         )
         ser = RoundSerializer(round_obj, data=request.data, partial=True)
@@ -1000,7 +1273,10 @@ class RoundSetupView(APIView):
         round_obj = (
             Round.objects
             .select_related('course')
-            .prefetch_related('foursomes__memberships__player')
+            .prefetch_related(
+                'foursomes__memberships__player',
+                'foursomes__ryder_cup_foursome_config',
+            )
             .get(pk=pk)
         )
         return Response(RoundSerializer(round_obj).data, status=status.HTTP_201_CREATED)
@@ -1286,13 +1562,15 @@ class LeaderboardView(APIView):
             Round.objects.select_related('course', 'tournament').prefetch_related('foursomes'),
             pk=pk,
         )
-        t        = round_obj.tournament
-        lb_games = _build_leaderboard(round_obj)
+        t          = round_obj.tournament
+        lb_games   = _build_leaderboard(round_obj)
+        is_cup_rnd = hasattr(round_obj, 'ryder_cup_config')
         return Response({
             'round_id'              : round_obj.id,
             'round_date'            : str(round_obj.date),
             'course'                : str(round_obj.course),
             'status'                : round_obj.status,
+            'is_cup_round'          : is_cup_rnd,
             'active_games'          : _leaderboard_active_games(round_obj, lb_games),
             'tournament_id'         : t.id   if t else None,
             'tournament_name'       : t.name if t else None,
@@ -1632,12 +1910,56 @@ class SkinsJunkView(APIView):
 class MatchPlayResultView(APIView):
     """GET /api/foursomes/{id}/match-play/"""
     def get(self, request, pk):
+        import logging
+        _log = logging.getLogger(__name__)
+
         foursome = get_object_or_404(Foursome, pk=pk)
-        from services.tournament_match_play import tournament_match_play_summary
-        # Do NOT recalculate here — _recalculate_games handles that on every
-        # score submission.  Recalculating on every GET caused concurrent
-        # delete→bulk_create races (UniqueViolation) when the 3-second polling
-        # timer and a score-submit response both called loadMatchPlay at once.
+
+        # Cup Singles — detected by RyderCupFoursomeConfig game_type.
+        _cup_cfg = None
+        try:
+            _cup_cfg = foursome.ryder_cup_foursome_config
+        except Exception:
+            pass  # No cup config — fall through to standard match play
+
+        if _cup_cfg is not None:
+            from core.models import GameType as GT
+            if _cup_cfg.game_type in (GT.SINGLES_NASSAU, GT.SINGLES_18):
+                from services.cup_singles import (
+                    cup_singles_summary, setup_cup_singles, calculate_cup_singles
+                )
+                summary = cup_singles_summary(foursome)
+                if summary is None:
+                    # Bracket not created yet — auto-create now using
+                    # alternating-position fallback (team membership optional).
+                    try:
+                        setup_cup_singles(foursome, _cup_cfg.team1, _cup_cfg.team2,
+                                          singles_matchups=[])
+                        calculate_cup_singles(foursome)
+                        existing  = list(foursome.active_games or [])
+                        game_key  = _cup_cfg.game_type  # already the string value
+                        if game_key not in existing:
+                            existing.append(game_key)
+                            foursome.active_games = existing
+                            foursome.save(update_fields=['active_games'])
+                        summary = cup_singles_summary(foursome)
+                    except Exception as _e:
+                        _log.error(
+                            'cup singles auto-setup failed for foursome %s: %s',
+                            foursome.id, _e, exc_info=True
+                        )
+                if summary is None:
+                    return Response(
+                        {'detail': 'Cup singles bracket not set up for this foursome.'},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+                return Response(summary)
+
+        from services.tournament_match_play import (
+            tournament_match_play_summary,
+            setup_tournament_match_play,
+            calculate_tournament_match_play,
+        )
         summary = tournament_match_play_summary(foursome)
         if summary is None:
             return Response(
@@ -1662,6 +1984,34 @@ class MatchPlaySetupView(APIView):
     """
     def post(self, request, pk):
         foursome = get_object_or_404(Foursome, pk=pk)
+
+        # Cup foursomes with SINGLES or MATCH_PLAY game type use cup_singles setup
+        try:
+            cup_cfg = foursome.ryder_cup_foursome_config
+            from core.models import GameType as GT
+            if cup_cfg.game_type in (GT.SINGLES_NASSAU, GT.SINGLES_18):
+                from services.cup_singles import (
+                    setup_cup_singles,
+                    calculate_cup_singles,
+                    cup_singles_summary,
+                )
+                try:
+                    setup_cup_singles(foursome, cup_cfg.team1, cup_cfg.team2)
+                except ValueError as exc:
+                    return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+                games = list(foursome.active_games or [])
+                if 'match_play' not in games:
+                    games.append('match_play')
+                    foursome.active_games = games
+                    foursome.save(update_fields=['active_games'])
+                recalculate = request.data.get('recalculate', True)
+                if recalculate:
+                    calculate_cup_singles(foursome)
+                summary = cup_singles_summary(foursome)
+                return Response(summary, status=status.HTTP_201_CREATED)
+        except Exception:
+            pass  # Not a cup foursome — fall through to regular setup
+
         from services.tournament_match_play import (
             setup_tournament_match_play,
             calculate_tournament_match_play,
@@ -1682,9 +2032,7 @@ class MatchPlaySetupView(APIView):
 
         # Ensure 'match_play' is in foursome.active_games so that
         # _recalculate_games fires calculate_tournament_match_play after every
-        # score submission.  (Tournament-level games live on tournament.active_games,
-        # not on the round or foursome, so without this the bracket would never
-        # be recalculated as hole scores come in.)
+        # score submission.
         games = list(foursome.active_games or [])
         if 'match_play' not in games:
             games.append('match_play')
@@ -2346,3 +2694,729 @@ class PinkBallFoursomeOrderView(APIView):
 
 def health_check(request):
     return JsonResponse({'status': 'ok'})
+
+
+# ===========================================================================
+# TEAM TOURNAMENT  (Ryder Cup / Presidents Cup / custom cup name)
+# ===========================================================================
+#
+# Endpoint map
+# ~~~~~~~~~~~~
+# POST  /api/tournaments/<pk>/team-tournament/setup/
+#       Create (or replace) the TeamTournament and its team stubs.
+#
+# GET   /api/tournaments/<pk>/team-tournament/
+#       Return current standings + roster.
+#
+# POST  /api/tournaments/<pk>/team-tournament/teams/<team_pk>/players/
+#       Add a player to a team (draft pick).
+#
+# DELETE /api/tournaments/<pk>/team-tournament/teams/<team_pk>/players/<player_pk>/
+#       Remove a player from a team.
+#
+# POST  /api/tournaments/<pk>/team-tournament/draft-complete/
+#       Lock rosters.
+#
+# POST  /api/rounds/<pk>/ryder-cup/setup/
+#       Configure Ryder Cup scoring for one round (game types, pairings, points).
+#
+# GET   /api/rounds/<pk>/ryder-cup/
+#       Return per-round Ryder Cup points and match breakdown.
+#
+# POST  /api/rounds/<pk>/ryder-cup/calculate/
+#       Recalculate all Ryder Cup points for a round from current game results.
+#
+# POST  /api/foursomes/<pk>/quota-nassau/setup/
+#       Create/replace the Quota Nassau game for this foursome.
+#
+# GET   /api/foursomes/<pk>/quota-nassau/
+#       Return the Quota Nassau summary (hole-by-hole + segment results).
+# ===========================================================================
+
+from tournament.models import (
+    TeamTournament, TournamentTeam,
+    RyderCupRoundConfig, RyderCupFoursomeConfig,
+    RyderCupIrishRumblePairing,
+)
+from services.ryder_cup import calculate_ryder_cup_points, ryder_cup_summary
+from services.quota_nassau import (
+    setup_quota_nassau, calculate_quota_nassau, quota_nassau_summary,
+)
+from .serializers import (
+    TeamTournamentSetupSerializer, TeamPlayerSerializer,
+    RyderCupRoundSetupSerializer, QuotaNassauSetupSerializer,
+)
+
+
+# ---------------------------------------------------------------------------
+# Helper: auto-calculate quota (36 - course_handicap_index) from membership
+# ---------------------------------------------------------------------------
+
+def _quota_for_player(foursome, player_id: int) -> int:
+    """
+    Quota = 36 − course_handicap_index (rounded integer).
+    Reads course_handicap from the stored FoursomeMembership so it's
+    consistent with how handicaps were calculated at round setup time.
+    """
+    try:
+        m = foursome.memberships.get(player_id=player_id)
+        return max(0, 36 - m.course_handicap)
+    except Exception:
+        return 18   # sensible fallback if membership not found
+
+
+# ---------------------------------------------------------------------------
+# Team Tournament setup
+# ---------------------------------------------------------------------------
+
+class TeamTournamentSetupView(APIView):
+    """
+    POST /api/tournaments/<pk>/team-tournament/setup/
+
+    Creates a TeamTournament for an existing Tournament (or replaces it
+    if one already exists).  Accepts cup_name so the competition can be
+    named anything — 'Ryder Cup', 'Bandon Cup 2026', etc.
+
+    Deleting the existing TeamTournament cascades to TournamentTeam rows,
+    so all previous rosters are cleared.  Call before the draft begins.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        tournament = get_object_or_404(Tournament, pk=pk)
+        ser = TeamTournamentSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        # Replace any existing TeamTournament for this tournament
+        TeamTournament.objects.filter(tournament=tournament).delete()
+
+        tt = TeamTournament.objects.create(
+            tournament       = tournament,
+            cup_name         = d['cup_name'],
+            players_per_team = d['players_per_team'],
+            draft_complete   = False,
+        )
+        for team_data in d['teams']:
+            TournamentTeam.objects.create(
+                tournament  = tt,
+                team_number = team_data['team_number'],
+                name        = team_data['name'],
+                colour      = team_data.get('colour', ''),
+                short_code  = team_data.get('short_code', ''),
+            )
+
+        return Response(
+            _team_tournament_detail(tt),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class TeamTournamentDetailView(APIView):
+    """
+    GET /api/tournaments/<pk>/team-tournament/
+
+    Returns the current standings (ryder_cup_summary) and team rosters.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        tournament = get_object_or_404(Tournament, pk=pk)
+        tt = get_object_or_404(TeamTournament, tournament=tournament)
+        return Response(ryder_cup_summary(tt))
+
+
+class TeamTournamentDraftCompleteView(APIView):
+    """
+    POST /api/tournaments/<pk>/team-tournament/draft-complete/
+
+    Locks team rosters.  Once draft_complete=True the UI should prevent
+    further player moves.  No body required.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        tournament = get_object_or_404(Tournament, pk=pk)
+        tt = get_object_or_404(TeamTournament, tournament=tournament)
+        tt.draft_complete = True
+        tt.save(update_fields=['draft_complete'])
+        return Response({'draft_complete': True, 'cup_name': tt.cup_name})
+
+
+class TeamPlayerView(APIView):
+    """
+    POST   /api/tournaments/<pk>/team-tournament/teams/<team_pk>/players/
+        Add player_id to this team's roster.
+        Body: {"player_id": 5}
+
+    DELETE /api/tournaments/<pk>/team-tournament/teams/<team_pk>/players/<player_pk>/
+        Remove player from this team's roster.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, team_pk):
+        tournament = get_object_or_404(Tournament, pk=pk)
+        tt         = get_object_or_404(TeamTournament, tournament=tournament)
+        team       = get_object_or_404(TournamentTeam, pk=team_pk, tournament=tt)
+
+        if tt.draft_complete:
+            return Response(
+                {'detail': 'Draft is complete. Rosters are locked.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ser = TeamPlayerSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        player_id = ser.validated_data['player_id']
+        player    = get_object_or_404(Player, pk=player_id)
+
+        # Remove player from any other team in this tournament first
+        for other_team in tt.teams.exclude(pk=team.pk):
+            other_team.players.remove(player)
+
+        team.players.add(player)
+        return Response(_team_roster(team))
+
+    def delete(self, request, pk, team_pk, player_pk):
+        tournament = get_object_or_404(Tournament, pk=pk)
+        tt         = get_object_or_404(TeamTournament, tournament=tournament)
+        team       = get_object_or_404(TournamentTeam, pk=team_pk, tournament=tt)
+
+        if tt.draft_complete:
+            return Response(
+                {'detail': 'Draft is complete. Rosters are locked.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        player = get_object_or_404(Player, pk=player_pk)
+        team.players.remove(player)
+        return Response(_team_roster(team))
+
+
+class TeamRenameView(APIView):
+    """
+    PATCH /api/tournaments/<pk>/team-tournament/teams/<team_pk>/
+        Rename a team.
+        Body: {"name": "Blue Team"}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk, team_pk):
+        tournament = get_object_or_404(Tournament, pk=pk)
+        tt         = get_object_or_404(TeamTournament, tournament=tournament)
+        team       = get_object_or_404(TournamentTeam, pk=team_pk, tournament=tt)
+
+        name = request.data.get('name', '').strip()
+        if not name:
+            return Response(
+                {'detail': 'Team name cannot be empty.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        team.name = name
+        team.save(update_fields=['name'])
+        return Response({'id': team.pk, 'name': team.name})
+
+
+# ---------------------------------------------------------------------------
+# Ryder Cup round config
+# ---------------------------------------------------------------------------
+
+class RyderCupRoundSetupView(APIView):
+    """
+    POST /api/rounds/<pk>/ryder-cup/setup/
+
+    Configure Ryder Cup scoring for a round.  Creates:
+      - RyderCupRoundConfig (point value, multiplier, notes)
+      - RyderCupFoursomeConfig for every foursome listed in `foursomes`
+      - RyderCupIrishRumblePairing for every entry in `irish_rumble_pairings`
+
+    Replaces any existing config for this round.
+    The round must already belong to a Tournament that has a TeamTournament.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+
+        if not round_obj.tournament_id:
+            return Response(
+                {'detail': 'This round is not linked to a tournament.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            tt = round_obj.tournament.team_tournament
+        except TeamTournament.DoesNotExist:
+            return Response(
+                {'detail': 'This tournament does not have a team competition set up yet.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ser = RyderCupRoundSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        # Replace existing config (cascades to foursome configs + pairings)
+        RyderCupRoundConfig.objects.filter(round=round_obj).delete()
+
+        rc = RyderCupRoundConfig.objects.create(
+            round              = round_obj,
+            tournament         = tt,
+            nassau_point_value = d['nassau_point_value'],
+            point_multiplier   = d['point_multiplier'],
+            notes              = d['notes'],
+        )
+
+        # Per-foursome configs
+        for fs_data in d.get('foursomes', []):
+            foursome = get_object_or_404(Foursome, pk=fs_data['foursome_id'])
+            team1 = get_object_or_404(TournamentTeam, pk=fs_data['team1_id'], tournament=tt) if fs_data.get('team1_id') else None
+            team2 = get_object_or_404(TournamentTeam, pk=fs_data['team2_id'], tournament=tt) if fs_data.get('team2_id') else None
+            RyderCupFoursomeConfig.objects.create(
+                foursome     = foursome,
+                round_config = rc,
+                game_type    = fs_data['game_type'],
+                team1        = team1,
+                team2        = team2,
+                point_value  = fs_data.get('point_value', '1.00'),
+            )
+
+            # Auto-setup Nassau game for cup nassau foursomes
+            if fs_data['game_type'] == GameType.NASSAU:
+                from services.nassau import setup_nassau
+                foursome_player_ids = set(
+                    foursome.memberships.filter(player__is_phantom=False)
+                    .values_list('player_id', flat=True)
+                )
+                t1_ids = [p.pk for p in team1.players.all() if p.pk in foursome_player_ids] if team1 else []
+                t2_ids = [p.pk for p in team2.players.all() if p.pk in foursome_player_ids] if team2 else []
+                # Delete any existing Nassau game for this foursome to avoid duplicates
+                from games.models import NassauGame
+                NassauGame.objects.filter(foursome=foursome).delete()
+                setup_nassau(
+                    foursome,
+                    t1_ids,
+                    t2_ids,
+                    handicap_mode=round_obj.handicap_mode,
+                    net_percent=round_obj.net_percent,
+                )
+                # Ensure 'nassau' is in the foursome's active_games so
+                # the score entry screen loads the Nassau summary.
+                existing_games = list(foursome.active_games or [])
+                if 'nassau' not in existing_games:
+                    existing_games.append('nassau')
+                    foursome.active_games = existing_games
+                    foursome.save(update_fields=['active_games'])
+
+            # Irish Rumble: flag active_games so _recalculate_games fires the
+            # calculator after every score submission.
+            elif fs_data['game_type'] == GameType.IRISH_RUMBLE:
+                existing_games = list(foursome.active_games or [])
+                if 'irish_rumble' not in existing_games:
+                    existing_games.append('irish_rumble')
+                    foursome.active_games = existing_games
+                    foursome.save(update_fields=['active_games'])
+
+            # Cup singles (18-hole overall only, pv×2 per foursome).
+            elif fs_data['game_type'] == GameType.SINGLES_18:
+                from services.cup_singles import setup_cup_singles
+                _matchups = fs_data.get('singles_matchups') or []
+                try:
+                    setup_cup_singles(foursome, team1, team2,
+                                      singles_matchups=_matchups)
+                except (ValueError, Exception) as _e:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        'cup singles setup failed for foursome %s: %s', foursome.id, _e)
+                existing_games = list(foursome.active_games or [])
+                if 'singles_18' not in existing_games:
+                    existing_games.append('singles_18')
+                    foursome.active_games = existing_games
+                    foursome.save(update_fields=['active_games'])
+
+            # Cup singles Nassau (F9/B9/Overall per match, pv×6 per foursome).
+            elif fs_data['game_type'] == GameType.SINGLES_NASSAU:
+                from services.cup_singles import setup_cup_singles
+                _matchups = fs_data.get('singles_matchups') or []
+                try:
+                    setup_cup_singles(foursome, team1, team2,
+                                      singles_matchups=_matchups)
+                except (ValueError, Exception) as _e:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        'cup singles setup failed for foursome %s: %s', foursome.id, _e)
+                existing_games = list(foursome.active_games or [])
+                if 'singles_nassau' not in existing_games:
+                    existing_games.append('singles_nassau')
+                    foursome.active_games = existing_games
+                    foursome.save(update_fields=['active_games'])
+
+            elif fs_data['game_type'] == GameType.QUOTA_NASSAU:
+                # Auto-pair: team1[i] vs team2[i] cross-team 1v1 matches
+                from services.quota_nassau import setup_quota_nassau
+                foursome_pids = set(
+                    foursome.memberships.filter(player__is_phantom=False)
+                    .values_list('player_id', flat=True)
+                )
+                t1_players = [p for p in (team1.players.all() if team1 else [])
+                              if p.pk in foursome_pids]
+                t2_players = [p for p in (team2.players.all() if team2 else [])
+                              if p.pk in foursome_pids]
+                pairings = []
+                for i in range(min(len(t1_players), len(t2_players))):
+                    p1 = t1_players[i]
+                    p2 = t2_players[i]
+                    pairings.append({
+                        'player1_id'   : p1.pk,
+                        'player1_quota': _quota_for_player(foursome, p1.pk),
+                        'player2_id'   : p2.pk,
+                        'player2_quota': _quota_for_player(foursome, p2.pk),
+                    })
+                if pairings:
+                    setup_quota_nassau(foursome, pairings)
+                existing_games = list(foursome.active_games or [])
+                if 'quota_nassau' not in existing_games:
+                    existing_games.append('quota_nassau')
+                    foursome.active_games = existing_games
+                    foursome.save(update_fields=['active_games'])
+
+        # Ensure 'quota_nassau' appears in round.active_games when any
+        # foursome is configured for it (so _build_leaderboard picks it up).
+        has_qn = any(
+            fs_d['game_type'] == GameType.QUOTA_NASSAU
+            for fs_d in d.get('foursomes', [])
+        )
+        if has_qn:
+            round_games = list(round_obj.active_games or [])
+            if 'quota_nassau' not in round_games:
+                round_games.append('quota_nassau')
+                round_obj.active_games = round_games
+                round_obj.save(update_fields=['active_games'])
+
+        # Auto-create IrishRumbleConfig for cup rounds that include Irish Rumble
+        # foursomes.  Without this, calculate_irish_rumble() and the ryder_cup
+        # points extractor both silently return [] and the leaderboard shows
+        # "Irish Rumble not configured for this round."
+        has_ir = any(
+            fs_d['game_type'] == GameType.IRISH_RUMBLE
+            for fs_d in d.get('foursomes', [])
+        )
+        if has_ir:
+            from games.models import IrishRumbleConfig
+            IrishRumbleConfig.objects.update_or_create(
+                round = round_obj,
+                defaults = dict(
+                    handicap_mode = round_obj.handicap_mode,
+                    net_percent   = round_obj.net_percent,
+                    entry_fee     = 0,
+                    payouts       = [],
+                    segments      = [
+                        {'start_hole': 1,  'end_hole': 6,  'balls_to_count': 1},
+                        {'start_hole': 7,  'end_hole': 12, 'balls_to_count': 2},
+                        {'start_hole': 13, 'end_hole': 17, 'balls_to_count': 3},
+                        {'start_hole': 18, 'end_hole': 18, 'balls_to_count': 4},
+                    ],
+                ),
+            )
+
+        # Irish Rumble cross-group pairings
+        for ir_data in d.get('irish_rumble_pairings', []):
+            RyderCupIrishRumblePairing.objects.create(
+                round_config  = rc,
+                foursome_a    = get_object_or_404(Foursome, pk=ir_data['foursome_a_id']),
+                foursome_b    = get_object_or_404(Foursome, pk=ir_data['foursome_b_id']),
+                team_a        = get_object_or_404(TournamentTeam, pk=ir_data['team_a_id'], tournament=tt),
+                team_b        = get_object_or_404(TournamentTeam, pk=ir_data['team_b_id'], tournament=tt),
+            )
+
+        # ── Auto-populate format_declarations ─────────────────────────────────
+        # Compute total possible points from the foursome game types so the
+        # standings screen never needs a manual admin override.
+        #
+        # Irish Rumble: every *pair* of foursomes produces 1 set of points
+        # (pv × 1). The number of pairings equals len(irish_rumble_pairings)
+        # when pairings are explicit, or foursome_count // 2 as a fallback.
+        # All other games: each foursome produces its own multiplied points.
+        from collections import Counter
+        foursomes_payload = d.get('foursomes', [])
+        game_counts = Counter(str(fs_d['game_type']) for fs_d in foursomes_payload)
+        pv_str = str(round(float(d['nassau_point_value']), 2))
+
+        declarations = []
+        for game_type_str, count in game_counts.items():
+            if game_type_str == GameType.IRISH_RUMBLE:
+                # Each IR foursome pair is one contest; use explicit pairings
+                # count if available, otherwise divide foursome count by 2.
+                ir_pairings = d.get('irish_rumble_pairings', [])
+                units = len(ir_pairings) if ir_pairings else (count // 2)
+            else:
+                # nassau, quota_nassau, singles_nassau, singles_18:
+                # each foursome is an independent contest.
+                units = count
+            if units > 0:
+                declarations.append({
+                    'game_type'  : game_type_str,
+                    'units'      : units,
+                    'point_value': pv_str,
+                })
+
+        rc.format_declarations = declarations
+        rc.save(update_fields=['format_declarations'])
+
+        return Response(_round_ryder_config(rc), status=status.HTTP_201_CREATED)
+
+
+class RyderCupRoundResultView(APIView):
+    """
+    GET  /api/rounds/<pk>/ryder-cup/
+        Return the current Ryder Cup points breakdown for this round.
+
+    POST /api/rounds/<pk>/ryder-cup/calculate/
+        (Re)calculate Ryder Cup points from current game results.
+        Call this after scores have been entered and game calculators run.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+        try:
+            rc = round_obj.ryder_cup_config
+        except RyderCupRoundConfig.DoesNotExist:
+            return Response(
+                {'detail': 'No Ryder Cup config for this round.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(_round_ryder_config(rc))
+
+
+class CupRoundLiveView(APIView):
+    """
+    GET /api/rounds/<pk>/cup-live/
+
+    Live Ryder Cup standings for a specific round, computed directly from
+    game models (no stored RyderCupMatchPoints required).  Always returns
+    fresh data — the leaderboard Cup tab calls this on every open.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+        from services.cup_standings import cup_round_live_summary
+        summary = cup_round_live_summary(round_obj)
+        if summary is None:
+            return Response(
+                {'detail': 'No cup config for this round.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(summary)
+
+
+class RyderCupRoundCalculateView(APIView):
+    """
+    POST /api/rounds/<pk>/ryder-cup/calculate/
+    Trigger a point recalculation.  Returns the updated round breakdown.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+        try:
+            rc = round_obj.ryder_cup_config
+        except RyderCupRoundConfig.DoesNotExist:
+            return Response(
+                {'detail': 'No Ryder Cup config for this round.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        calculate_ryder_cup_points(round_obj)
+        return Response(_round_ryder_config(rc))
+
+
+# ---------------------------------------------------------------------------
+# Quota Nassau game
+# ---------------------------------------------------------------------------
+
+class QuotaNassauSetupView(APIView):
+    """
+    POST /api/foursomes/<pk>/quota-nassau/setup/
+
+    Create (or replace) the QuotaNassauGame for this foursome.
+    If player_quota values are omitted they are auto-calculated from the
+    stored course_handicap on FoursomeMembership (36 − course_handicap).
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        ser = QuotaNassauSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        pairings = []
+        for p in ser.validated_data['pairings']:
+            pairings.append({
+                'player1_id'   : p['player1_id'],
+                'player2_id'   : p['player2_id'],
+                'player1_quota': (
+                    p.get('player1_quota')
+                    if p.get('player1_quota') is not None
+                    else _quota_for_player(foursome, p['player1_id'])
+                ),
+                'player2_quota': (
+                    p.get('player2_quota')
+                    if p.get('player2_quota') is not None
+                    else _quota_for_player(foursome, p['player2_id'])
+                ),
+            })
+
+        game = setup_quota_nassau(foursome, pairings)
+
+        # Mark the game as active on the foursome
+        active = list(foursome.active_games or [])
+        if 'quota_nassau' not in active:
+            active.append('quota_nassau')
+            foursome.active_games = active
+            foursome.save(update_fields=['active_games'])
+
+        return Response(
+            quota_nassau_summary(foursome),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class QuotaNassauResultView(APIView):
+    """
+    GET /api/foursomes/<pk>/quota-nassau/
+    Return the current Quota Nassau summary for this foursome.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        foursome = get_object_or_404(Foursome, pk=pk)
+        summary  = quota_nassau_summary(foursome)
+        if summary is None:
+            return Response(
+                {'detail': 'No Quota Nassau game set up for this foursome.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(summary)
+
+
+# ---------------------------------------------------------------------------
+# Team tournament internal helpers
+# ---------------------------------------------------------------------------
+
+def _team_roster(team: TournamentTeam) -> dict:
+    return {
+        'team_id'    : team.pk,
+        'team_number': team.team_number,
+        'name'       : team.name,
+        'colour'     : team.colour,
+        'short_code' : team.short_code,
+        'players'    : [
+            {'player_id': p.id, 'name': p.name, 'short_name': p.short_name}
+            for p in team.players.all()
+        ],
+    }
+
+
+def _team_tournament_detail(tt: TeamTournament) -> dict:
+    return {
+        'id'              : tt.pk,
+        'cup_name'        : tt.cup_name,
+        'players_per_team': tt.players_per_team,
+        'draft_complete'  : tt.draft_complete,
+        'teams'           : [_team_roster(t) for t in tt.teams.order_by('team_number')],
+    }
+
+
+def _round_ryder_config(rc: RyderCupRoundConfig) -> dict:
+    """Serialise a RyderCupRoundConfig + its current match points."""
+    match_groups: dict = {}
+    for mp in rc.match_points.select_related(
+        'team1', 'team2', 'foursome', 'player1', 'player2'
+    ).all():
+        source_key = ('fs', mp.foursome_id) if mp.foursome_id else ('ir', mp.irish_rumble_pairing_id)
+        key = (source_key, mp.game_type, mp.player1_id, mp.player2_id)
+        match_groups.setdefault(key, []).append(mp)
+
+    SEGMENT_ORDER = ['front9', 'back9', 'overall']
+    matches_out = []
+    for _key, segs in match_groups.items():
+        first = segs[0]
+        matches_out.append({
+            'game_type': first.game_type,
+            'group'    : first.foursome.group_number if first.foursome_id else None,
+            'team1'    : first.team1.name,
+            'team2'    : first.team2.name,
+            'player1'  : first.player1.short_name if first.player1_id else None,
+            'player2'  : first.player2.short_name if first.player2_id else None,
+            'segments' : [
+                {
+                    'segment': mp.segment,
+                    'result' : mp.result,
+                    't1_pts' : float(mp.team1_points),
+                    't2_pts' : float(mp.team2_points),
+                }
+                for mp in sorted(
+                    segs,
+                    key=lambda x: SEGMENT_ORDER.index(x.segment)
+                    if x.segment in SEGMENT_ORDER else 99,
+                )
+            ],
+        })
+
+    # Per-team totals for this round only
+    team_totals: dict = {}
+    for mp in rc.match_points.select_related('team1', 'team2').all():
+        team_totals.setdefault(mp.team1.name, 0.0)
+        team_totals.setdefault(mp.team2.name, 0.0)
+        team_totals[mp.team1.name] = round(team_totals[mp.team1.name] + float(mp.team1_points), 2)
+        team_totals[mp.team2.name] = round(team_totals[mp.team2.name] + float(mp.team2_points), 2)
+
+    return {
+        'round_id'          : rc.round_id,
+        'nassau_point_value': float(rc.nassau_point_value),
+        'point_multiplier'  : float(rc.point_multiplier),
+        'notes'             : rc.notes,
+        'team_totals'       : [
+            {'team': name, 'points': pts} for name, pts in team_totals.items()
+        ],
+        'matches': matches_out,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tee-time bulk update
+# ---------------------------------------------------------------------------
+
+class TeeTimeBulkView(APIView):
+    """
+    PATCH /api/rounds/<pk>/tee-times/
+
+    Body: {"tee_times": [{"group_number": 1, "tee_time": "08:00"},
+                         {"group_number": 2, "tee_time": "08:10"}, ...]}
+
+    Sets the tee_time on each Foursome identified by group_number.
+    Passing null for tee_time clears it.
+    Returns the updated foursomes.
+    """
+    def patch(self, request, pk):
+        from api.serializers import TeeTimeBulkSerializer, FoursomeSerializer
+        round_obj = get_object_or_404(Round, pk=pk)
+        ser = TeeTimeBulkSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        updated = []
+        for entry in ser.validated_data['tee_times']:
+            try:
+                fs = Foursome.objects.get(round=round_obj,
+                                         group_number=entry['group_number'])
+                fs.tee_time = entry['tee_time']
+                fs.save(update_fields=['tee_time'])
+                updated.append(fs)
+            except Foursome.DoesNotExist:
+                pass  # silently skip unknown group numbers
+
+        return Response(FoursomeSerializer(updated, many=True).data)

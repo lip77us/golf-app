@@ -8,6 +8,7 @@ from core.models import GameType
 from .models import (
     Tournament, Round, Foursome, FoursomeMembership,
     MatchPlayChampionship, ChampionshipSeed,
+    RyderCupRoundConfig, RyderCupFoursomeConfig,
 )
 
 
@@ -327,3 +328,23 @@ class MatchPlayChampionshipAdmin(admin.ModelAdmin):
     list_display  = ('tournament', 'status', 'champion')
     list_filter   = ('status',)
     inlines       = [ChampionshipSeedInline]
+
+
+# ---------------------------------------------------------------------------
+# Ryder Cup admin
+# ---------------------------------------------------------------------------
+
+class RyderCupFoursomeConfigInline(admin.TabularInline):
+    model  = RyderCupFoursomeConfig
+    extra  = 0
+    fields = ('foursome', 'game_type', 'point_value', 'team1', 'team2')
+
+
+@admin.register(RyderCupRoundConfig)
+class RyderCupRoundConfigAdmin(admin.ModelAdmin):
+    list_display  = ('round', 'nassau_point_value', 'point_multiplier', 'notes')
+    list_filter   = ('round__tournament',)
+    search_fields = ('round__course__course_name', 'notes')
+    ordering      = ('-round__date',)
+    fields        = ('round', 'nassau_point_value', 'point_multiplier', 'notes')
+    inlines       = [RyderCupFoursomeConfigInline]

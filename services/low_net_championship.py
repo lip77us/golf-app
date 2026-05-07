@@ -179,7 +179,7 @@ def low_net_championship_standings(tournament) -> list:
     return standings
 
 
-def low_net_championship_summary(tournament) -> dict:
+def low_net_championship_summary(tournament, round_id: int | None = None) -> dict:
     """
     Return a serialisable summary of the Low Net Championship:
     {
@@ -217,12 +217,46 @@ def low_net_championship_summary(tournament) -> dict:
         hmode       = HandicapMode.NET
         npct        = 100
 
-    standings = low_net_championship_standings(tournament)
+    if round_id is not None:
+        # Single-round view: compute standings using only this round
+        from services.low_net_round import _build_ln_player_totals
+        from tournament.models import Round as _Round
+        try:
+            round_obj = tournament.rounds.get(pk=round_id)
+            round_totals = _build_ln_player_totals(round_obj, hmode, npct)
+            single_round_standings = []
+            for pid, data in round_totals.items():
+                if data['holes_played'] == 0:
+                    continue
+                ntp = (data['total'] - data['par_played']) if data['holes_played'] > 0 else None
+                single_round_standings.append({
+                    'rank'         : 0,
+                    'player_name'  : data['name'],
+                    'net_total'    : data['total'],
+                    'net_to_par'   : ntp,
+                    'holes_played' : data['holes_played'],
+                    'rounds_played': 1,
+                    'round_totals' : [data['total']],
+                    'round_ntps'   : [ntp] if ntp is not None else [],
+                    'payout'       : None,
+                })
+            single_round_standings.sort(key=lambda x: (x['net_to_par'] if x['net_to_par'] is not None else 999, -x['holes_played']))
+            for i, row in enumerate(single_round_standings, 1):
+                row['rank'] = i
+            standings = single_round_standings
+        except Exception:
+            standings = low_net_championship_standings(tournament)
+    else:
+        standings = low_net_championship_standings(tournament)
 
-    total_rounds  = tournament.rounds.count()
-    played_rounds = tournament.rounds.filter(
-        foursomes__memberships__isnull=False
-    ).distinct().count()
+    if round_id is not None:
+        total_rounds  = 1
+        played_rounds = 1 if standings else 0
+    else:
+        total_rounds  = tournament.rounds.count()
+        played_rounds = tournament.rounds.filter(
+            foursomes__memberships__isnull=False
+        ).distinct().count()
 
     return {
         'handicap_mode' : hmode,

@@ -86,7 +86,8 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?    _sixesSummary;
   Points531Summary? _points531Summary;
   SkinsSummary?    _skinsSummary;
-  NassauSummary?   _nassauSummary;
+  NassauSummary?         _nassauSummary;
+  QuotaNassauSummary?    _quotaNassauSummary;
   Map<String, dynamic>? _matchPlayData;
   ThreePersonMatchSummary? _threePersonMatchSummary;
   Map<String, dynamic>? _lowNetConfig;   // { handicap_mode, net_percent, ... }
@@ -105,6 +106,7 @@ class RoundProvider extends ChangeNotifier {
   bool    _loadingPoints531   = false;
   bool    _loadingSkins       = false;
   bool    _loadingNassau      = false;
+  bool    _loadingQuotaNassau = false;
   bool    _loadingMatchPlay          = false;
   bool    _loadingThreePersonMatch   = false;
   bool    _loadingLowNet             = false;
@@ -125,6 +127,8 @@ class RoundProvider extends ChangeNotifier {
   Points531Summary? get points531Summary   => _points531Summary;
   SkinsSummary?     get skinsSummary       => _skinsSummary;
   NassauSummary?        get nassauSummary      => _nassauSummary;
+  QuotaNassauSummary?   get quotaNassauSummary => _quotaNassauSummary;
+  bool                  get loadingQuotaNassau => _loadingQuotaNassau;
   Map<String, dynamic>?       get matchPlayData            => _matchPlayData;
   ThreePersonMatchSummary?    get threePersonMatchSummary  => _threePersonMatchSummary;
   Map<String, dynamic>?       get lowNetConfig             => _lowNetConfig;
@@ -589,6 +593,23 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  // ── Quota Nassau ───────────────────────────────────────────────────────────
+
+  Future<void> loadQuotaNassau(int foursomeId) async {
+    _loadingQuotaNassau = true;
+    notifyListeners();
+    try {
+      _quotaNassauSummary = await _client.getQuotaNassauSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around.
+    } catch (e) {
+      debugPrint('loadQuotaNassau error: $e');
+    } finally {
+      _loadingQuotaNassau = false;
+      notifyListeners();
+    }
+  }
+
   // ── Match Play ─────────────────────────────────────────────────────────────
 
   /// Load the Match Play summary for the active foursome.
@@ -600,6 +621,13 @@ class RoundProvider extends ChangeNotifier {
       _matchPlayData = await _client.getMatchPlay(foursomeId);
     } on NetworkException {
       // Offline — keep the previous data around.
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) {
+        // Cup singles foursomes return 404 when the bracket isn't set up yet.
+        // Keep _matchPlayData null; the UI handles null gracefully.
+      } else {
+        debugPrint('loadMatchPlay error: $e');
+      }
     } catch (e, st) {
       debugPrint('loadMatchPlay error: $e\n$st');
     } finally {

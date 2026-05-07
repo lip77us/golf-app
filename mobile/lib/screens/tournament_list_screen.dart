@@ -8,6 +8,10 @@ import 'player_list_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'setup_round_players_screen.dart';
 import 'tournament_leaderboard_screen.dart';
+import 'ryder_cup_draft_screen.dart';
+import 'ryder_cup_scoreboard_screen.dart';
+import 'ryder_cup_round_setup_screen.dart';
+import 'cup_round_setup_screen.dart';
 
 class TournamentListScreen extends StatefulWidget {
   const TournamentListScreen({super.key});
@@ -213,6 +217,30 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                     builder: (_) => TournamentLowNetSetupScreen(
                         tournamentId: t.id)))
                 .then((_) { if (mounted) _load(); }),
+            onOpenCupDraft: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => RyderCupDraftScreen(
+                  tournamentId  : t.id,
+                  tournamentName: t.name,
+                ))),
+            onOpenCupScoreboard: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => RyderCupScoreboardScreen(
+                    tournamentId  : t.id,
+                    tournamentName: t.name,
+                  ),
+                )),
+            onSetupCupRound: (round) => Navigator.of(context)
+                .push(MaterialPageRoute(
+                    builder: (_) => CupRoundSetupScreen(
+                      roundId         : round.id,
+                      tournamentId    : t.id,
+                      roundNumber     : round.roundNumber,
+                      courseId        : round.courseId,
+                      courseName      : round.courseName,
+                      availableGames  : round.activeGames,
+                      gamePointValues : round.gamePointValues,
+                    )))
+                .then((_) { if (mounted) _load(); }),
             onDelete         : () => _deleteTournament(t),
           );
         },
@@ -308,6 +336,9 @@ class _TournamentCard extends StatelessWidget {
   final void Function(int roundId) onSetupRound;
   final VoidCallback onViewLeaderboard;
   final VoidCallback onConfigureLowNet;
+  final VoidCallback onOpenCupDraft;
+  final VoidCallback onOpenCupScoreboard;
+  final void Function(RoundSummary round) onSetupCupRound;
   final VoidCallback onDelete;
 
   const _TournamentCard({
@@ -317,6 +348,9 @@ class _TournamentCard extends StatelessWidget {
     required this.onSetupRound,
     required this.onViewLeaderboard,
     required this.onConfigureLowNet,
+    required this.onOpenCupDraft,
+    required this.onOpenCupScoreboard,
+    required this.onSetupCupRound,
     required this.onDelete,
   });
 
@@ -360,17 +394,34 @@ class _TournamentCard extends StatelessWidget {
                 ),
             ],
           ),
+          // Non-cup tournaments: show round tiles (pending = setup button, else tap to score).
+          // Cup tournaments: show in-progress round tiles so players can tap in to enter scores;
+          //   pending rounds have no tile here (staff accesses them via "Set Up Cup Round" below).
           if (tournament.rounds.isNotEmpty) ...[
-            const Divider(height: 20),
-            ...tournament.rounds.map((r) => r.status == 'pending' && isStaff
-                ? _PendingRoundTile(
-                    round   : r,
-                    onSetup : () => onSetupRound(r.id),
-                  )
-                : _RoundTile(
-                    round: r,
-                    onTap: () => onRoundTap(r.id),
-                  )),
+            if (!tournament.activeGames.contains('team_cup')) ...[
+              const Divider(height: 20),
+              ...tournament.rounds.map((r) => r.status == 'pending' && isStaff
+                  ? _PendingRoundTile(
+                      round   : r,
+                      onSetup : () => onSetupRound(r.id),
+                    )
+                  : _RoundTile(
+                      round: r,
+                      onTap: () => onRoundTap(r.id),
+                    )),
+            ] else ...[
+              // Cup tournament: only show tiles for rounds that are in_progress
+              // (pending rounds are accessed via the "Set Up Cup Round" button below).
+              if (tournament.rounds.any((r) => r.status == 'in_progress')) ...[
+                const Divider(height: 20),
+                ...tournament.rounds
+                    .where((r) => r.status == 'in_progress')
+                    .map((r) => _RoundTile(
+                          round: r,
+                          onTap: () => onRoundTap(r.id),
+                        )),
+              ],
+            ],
           ],
 
           // ── Championship Leaderboard (always shown for multi-game tournaments)
@@ -391,6 +442,30 @@ class _TournamentCard extends StatelessWidget {
                 label: 'Configure Stroke Play Championship',
                 onTap: onConfigureLowNet,
               ),
+          ],
+
+          // ── Cup / Ryder Cup buttons (only for Cup Play tournaments) ────────
+          if (tournament.activeGames.contains('team_cup')) ...[
+            const Divider(height: 16),
+            _ActionButton(
+              icon : Icons.emoji_events_outlined,
+              label: 'Cup Scoreboard',
+              onTap: onOpenCupScoreboard,
+            ),
+            if (isStaff) ...[
+              _ActionButton(
+                icon : Icons.groups_outlined,
+                label: 'Cup Draft & Teams',
+                onTap: onOpenCupDraft,
+              ),
+              // Round setup: show for all rounds (pending or not) so staff
+              // can build foursomes & assign games when the round is ready.
+              ...tournament.rounds.map((r) => _ActionButton(
+                    icon : Icons.tune_outlined,
+                    label: 'R${r.roundNumber} · Set Up Cup Round',
+                    onTap: () => onSetupCupRound(r),
+                  )),
+            ],
           ],
         ]),
       ),

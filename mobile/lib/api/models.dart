@@ -187,31 +187,40 @@ class TeeInfo {
 
 class RoundSummary {
   final int id;
+  final int courseId;
   final int roundNumber;
   final String date;
   final String courseName;
   final String status;
   final List<String> activeGames;
   final double betUnit;
+  /// Cup point values per game type, e.g. {'nassau': 1.0, 'singles': 2.0}.
+  /// Set at wizard time; applied automatically in CupRoundSetupScreen.
+  final Map<String, double> gamePointValues;
 
   const RoundSummary({
     required this.id,
+    required this.courseId,
     required this.roundNumber,
     required this.date,
     required this.courseName,
     required this.status,
     required this.activeGames,
     required this.betUnit,
+    this.gamePointValues = const {},
   });
 
   factory RoundSummary.fromJson(Map<String, dynamic> j) => RoundSummary(
-        id: j['id'] as int,
-        roundNumber: j['round_number'] as int,
-        date: j['date'] as String,
-        courseName: j['course_name'] as String? ?? '',
-        status: j['status'] as String,
-        activeGames: List<String>.from(j['active_games'] as List? ?? []),
-        betUnit: double.parse(j['bet_unit'].toString()),
+        id             : j['id'] as int,
+        courseId       : j['course_id'] as int? ?? 0,
+        roundNumber    : j['round_number'] as int,
+        date           : j['date'] as String,
+        courseName     : j['course_name'] as String? ?? '',
+        status         : j['status'] as String,
+        activeGames    : List<String>.from(j['active_games'] as List? ?? []),
+        betUnit        : double.parse(j['bet_unit'].toString()),
+        gamePointValues: (j['game_point_values'] as Map<String, dynamic>? ?? {})
+            .map((k, v) => MapEntry(k, (v as num).toDouble())),
       );
 
   String get statusLabel {
@@ -391,6 +400,8 @@ class Foursome {
   /// Game keys for which a config/model row already exists (read-only,
   /// computed by FoursomeSerializer.get_configured_games).
   final List<String> configuredGames;
+  /// Scheduled tee time, e.g. "08:00" or null if not set.
+  final String? teeTime;
 
   const Foursome({
     required this.id,
@@ -398,8 +409,9 @@ class Foursome {
     required this.hasPhantom,
     required this.pinkBallOrder,
     required this.memberships,
-    this.activeGames    = const [],
+    this.activeGames     = const [],
     this.configuredGames = const [],
+    this.teeTime,
   });
 
   factory Foursome.fromJson(Map<String, dynamic> j) => Foursome(
@@ -409,6 +421,7 @@ class Foursome {
         pinkBallOrder:   List<int>.from(j['pink_ball_order'] as List? ?? []),
         activeGames:     List<String>.from(j['active_games'] as List? ?? []),
         configuredGames: List<String>.from(j['configured_games'] as List? ?? []),
+        teeTime:         j['tee_time'] as String?,
         memberships:     (j['memberships'] as List? ?? [])
             .map((m) => Membership.fromJson(m as Map<String, dynamic>))
             .toList(),
@@ -436,6 +449,13 @@ class Round {
   /// Percentage of handicap applied when mode=net (0–200, default 100).
   final int netPercent;
   final List<Foursome> foursomes;
+  /// True when this round has been configured via CupRoundSetupScreen
+  /// (i.e. a RyderCupRoundConfig exists on the backend).
+  /// When true, score entry skips all game setup screens.
+  final bool isCupRound;
+  /// Irish Rumble balls-per-segment config — list of
+  /// {start_hole, end_hole, balls_to_count} maps.  Empty when IR is not active.
+  final List<Map<String, dynamic>> irBallsConfig;
 
   const Round({
     required this.id,
@@ -448,6 +468,8 @@ class Round {
     this.handicapMode = 'net',
     this.netPercent   = 100,
     required this.foursomes,
+    this.isCupRound    = false,
+    this.irBallsConfig = const [],
   });
 
   factory Round.fromJson(Map<String, dynamic> j) => Round(
@@ -460,10 +482,24 @@ class Round {
         betUnit:      double.parse(j['bet_unit'].toString()),
         handicapMode: j['handicap_mode'] as String? ?? 'net',
         netPercent:   j['net_percent']   as int?    ?? 100,
+        isCupRound:   j['is_cup_round']  as bool?   ?? false,
+        irBallsConfig: (j['ir_balls_config'] as List? ?? [])
+            .map((s) => Map<String, dynamic>.from(s as Map))
+            .toList(),
         foursomes:    (j['foursomes'] as List? ?? [])
             .map((f) => Foursome.fromJson(f as Map<String, dynamic>))
             .toList(),
       );
+
+  /// Returns the balls-to-count for a given hole number, or null if not configured.
+  int? irBallsForHole(int hole) {
+    for (final seg in irBallsConfig) {
+      final start = seg['start_hole'] as int? ?? 0;
+      final end   = seg['end_hole']   as int? ?? 0;
+      if (hole >= start && hole <= end) return seg['balls_to_count'] as int?;
+    }
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1389,6 +1425,7 @@ class Leaderboard {
   final String roundDate;
   final String course;
   final String status;
+  final bool isCupRound;
   final List<String> activeGames;
   final Map<String, LeaderboardGame> games;
   final int? tournamentId;
@@ -1400,6 +1437,7 @@ class Leaderboard {
     required this.roundDate,
     required this.course,
     required this.status,
+    this.isCupRound = false,
     required this.activeGames,
     required this.games,
     this.tournamentId,
@@ -1418,10 +1456,11 @@ class Leaderboard {
       );
     }
     return Leaderboard(
-      roundId: j['round_id'] as int,
-      roundDate: j['round_date'] as String,
-      course: j['course'] as String,
-      status: j['status'] as String,
+      roundId:    j['round_id']  as int,
+      roundDate:  j['round_date'] as String,
+      course:     j['course']     as String,
+      status:     j['status']     as String,
+      isCupRound: j['is_cup_round'] as bool? ?? false,
       activeGames: List<String>.from(j['active_games'] as List? ?? []),
       games: games,
       tournamentId: j['tournament_id'] as int?,
@@ -1539,6 +1578,324 @@ class ThreePersonMatchSummary {
       tiebreak: j['tiebreak'] as Map<String, dynamic>?,
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Team Tournament (Ryder Cup / named Cup)
+// ---------------------------------------------------------------------------
+
+/// A player on a team roster.
+class CupPlayer {
+  final int    id;
+  final String name;
+  final String shortName;
+
+  const CupPlayer({required this.id, required this.name, required this.shortName});
+
+  factory CupPlayer.fromJson(Map<String, dynamic> j) => CupPlayer(
+        id:        j['player_id'] as int,
+        name:      j['name']      as String,
+        shortName: j['short_name'] as String? ?? '',
+      );
+}
+
+/// A team inside a cup — includes roster and accumulated points.
+class CupTeam {
+  final int          teamId;
+  final int          teamNumber;
+  final String       name;
+  final String       colour;
+  final String       shortCode;
+  final double       totalPoints;
+  final List<CupPlayer> players;
+
+  const CupTeam({
+    required this.teamId,
+    required this.teamNumber,
+    required this.name,
+    required this.colour,
+    required this.shortCode,
+    required this.totalPoints,
+    required this.players,
+  });
+
+  factory CupTeam.fromJson(Map<String, dynamic> j) => CupTeam(
+        teamId:      j['team_id']      as int? ?? 0,
+        teamNumber:  j['team_number']  as int,
+        name:        j['name']         as String,
+        colour:      j['colour']       as String? ?? '',
+        shortCode:   j['short_code']   as String? ?? '',
+        totalPoints: (j['total_points'] as num? ?? 0).toDouble(),
+        players: (j['players'] as List? ?? [])
+            .map((p) => CupPlayer.fromJson(p as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// F9 / B9 / Overall segment result for one match.
+class CupSegmentResult {
+  final String  segment;   // 'front9', 'back9', 'overall'
+  final String? result;    // 'team1', 'team2', 'halved', null
+  final double  t1Points;
+  final double  t2Points;
+
+  const CupSegmentResult({
+    required this.segment,
+    this.result,
+    required this.t1Points,
+    required this.t2Points,
+  });
+
+  factory CupSegmentResult.fromJson(Map<String, dynamic> j) => CupSegmentResult(
+        segment:  j['segment']  as String,
+        result:   j['result']   as String?,
+        t1Points: (j['t1_pts'] as num? ?? 0).toDouble(),
+        t2Points: (j['t2_pts'] as num? ?? 0).toDouble(),
+      );
+
+  String get segmentLabel {
+    switch (segment) {
+      case 'front9':  return 'F9';
+      case 'back9':   return 'B9';
+      case 'overall': return '18';
+      default:        return segment;
+    }
+  }
+}
+
+/// One logical match (foursome or singles) with its three Nassau segments.
+class CupMatch {
+  final String  gameType;
+  final int?    group;     // foursome group_number, null for singles
+  final String  team1;
+  final String  team2;
+  final String? player1;  // short_name for singles, null for foursome
+  final String? player2;
+  final List<CupSegmentResult> segments;
+
+  const CupMatch({
+    required this.gameType,
+    this.group,
+    required this.team1,
+    required this.team2,
+    this.player1,
+    this.player2,
+    required this.segments,
+  });
+
+  factory CupMatch.fromJson(Map<String, dynamic> j) => CupMatch(
+        gameType: j['game_type'] as String,
+        group:    j['group']    as int?,
+        team1:    j['team1']    as String,
+        team2:    j['team2']    as String,
+        player1:  j['player1'] as String?,
+        player2:  j['player2'] as String?,
+        segments: (j['segments'] as List? ?? [])
+            .map((s) => CupSegmentResult.fromJson(s as Map<String, dynamic>))
+            .toList(),
+      );
+
+  String get displayLabel {
+    if (player1 != null && player2 != null) return '$player1 vs $player2';
+    if (group != null) return 'Group $group';
+    return '$team1 vs $team2';
+  }
+}
+
+/// Per-round breakdown — team points + match details.
+class CupRound {
+  final int    roundId;
+  final int    roundNumber;
+  final String date;
+  final String course;
+  final double nassauPointValue;
+  final double pointMultiplier;
+  final String notes;
+  final List<Map<String, dynamic>> teamPoints;  // [{team_name, points}, ...]
+  final List<CupMatch> matches;
+
+  const CupRound({
+    required this.roundId,
+    required this.roundNumber,
+    required this.date,
+    required this.course,
+    required this.nassauPointValue,
+    required this.pointMultiplier,
+    required this.notes,
+    required this.teamPoints,
+    required this.matches,
+  });
+
+  factory CupRound.fromJson(Map<String, dynamic> j) => CupRound(
+        roundId:          j['round_id']           as int,
+        roundNumber:      j['round_number']        as int,
+        date:             j['date']                as String,
+        course:           j['course']              as String,
+        nassauPointValue: (j['nassau_point_value'] as num? ?? 1).toDouble(),
+        pointMultiplier:  (j['point_multiplier']   as num? ?? 1).toDouble(),
+        notes:            j['notes']               as String? ?? '',
+        teamPoints: (j['team_points'] as List? ?? [])
+            .map((t) => Map<String, dynamic>.from(t as Map))
+            .toList(),
+        matches: (j['matches'] as List? ?? [])
+            .map((m) => CupMatch.fromJson(m as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// Full team-tournament summary (GET /api/tournaments/<id>/team-tournament/).
+class TeamTournamentSummary {
+  final String          tournamentName;
+  final String          cupName;
+  final bool            draftComplete;
+  final List<CupTeam>   teams;
+  final List<CupRound>  rounds;
+
+  const TeamTournamentSummary({
+    required this.tournamentName,
+    required this.cupName,
+    required this.draftComplete,
+    required this.teams,
+    required this.rounds,
+  });
+
+  factory TeamTournamentSummary.fromJson(Map<String, dynamic> j) =>
+      TeamTournamentSummary(
+        tournamentName: j['tournament_name'] as String,
+        cupName:        j['cup_name']        as String? ?? 'Cup',
+        draftComplete:  j['draft_complete']  as bool?   ?? false,
+        teams: (j['teams'] as List? ?? [])
+            .map((t) => CupTeam.fromJson(t as Map<String, dynamic>))
+            .toList(),
+        rounds: (j['rounds'] as List? ?? [])
+            .map((r) => CupRound.fromJson(r as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+// ---------------------------------------------------------------------------
+// Quota Nassau
+// ---------------------------------------------------------------------------
+
+class QuotaNassauPlayerInfo {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final int    quota;
+
+  const QuotaNassauPlayerInfo({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.quota,
+  });
+
+  factory QuotaNassauPlayerInfo.fromJson(Map<String, dynamic> j) =>
+      QuotaNassauPlayerInfo(
+        playerId  : j['player_id']  as int,
+        name      : j['name']       as String? ?? '',
+        shortName : j['short_name'] as String? ?? '',
+        quota     : j['quota']      as int? ?? 0,
+      );
+}
+
+class QuotaNassauSegment {
+  final String? result;   // 'player1' | 'player2' | 'halved' | null
+  final double  margin;   // +ve = player1 ahead in quota pts
+
+  const QuotaNassauSegment({required this.result, required this.margin});
+
+  factory QuotaNassauSegment.fromJson(Map<String, dynamic> j) =>
+      QuotaNassauSegment(
+        result: j['result'] as String?,
+        margin: (j['margin'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+class QuotaNassauHoleResult {
+  final int    hole;
+  final int    p1Stableford;
+  final int    p2Stableford;
+  final double? p1VsQuota;
+  final double? p2VsQuota;
+  final double? front9Margin;
+  final double? back9Margin;
+  final double? overallMargin;
+
+  const QuotaNassauHoleResult({
+    required this.hole,
+    required this.p1Stableford,
+    required this.p2Stableford,
+    this.p1VsQuota,
+    this.p2VsQuota,
+    this.front9Margin,
+    this.back9Margin,
+    this.overallMargin,
+  });
+
+  factory QuotaNassauHoleResult.fromJson(Map<String, dynamic> j) =>
+      QuotaNassauHoleResult(
+        hole           : j['hole']           as int,
+        p1Stableford   : j['p1_stableford']  as int? ?? 0,
+        p2Stableford   : j['p2_stableford']  as int? ?? 0,
+        p1VsQuota      : (j['p1_vs_quota']   as num?)?.toDouble(),
+        p2VsQuota      : (j['p2_vs_quota']   as num?)?.toDouble(),
+        front9Margin   : (j['front9_margin'] as num?)?.toDouble(),
+        back9Margin    : (j['back9_margin']  as num?)?.toDouble(),
+        overallMargin  : (j['overall_margin'] as num?)?.toDouble(),
+      );
+}
+
+class QuotaNassauMatchSummary {
+  final QuotaNassauPlayerInfo player1;
+  final QuotaNassauPlayerInfo player2;
+  final QuotaNassauSegment    front9;
+  final QuotaNassauSegment    back9;
+  final QuotaNassauSegment    overall;
+  final List<QuotaNassauHoleResult> holes;
+
+  const QuotaNassauMatchSummary({
+    required this.player1,
+    required this.player2,
+    required this.front9,
+    required this.back9,
+    required this.overall,
+    required this.holes,
+  });
+
+  factory QuotaNassauMatchSummary.fromJson(Map<String, dynamic> j) =>
+      QuotaNassauMatchSummary(
+        player1 : QuotaNassauPlayerInfo.fromJson(j['player1'] as Map<String, dynamic>),
+        player2 : QuotaNassauPlayerInfo.fromJson(j['player2'] as Map<String, dynamic>),
+        front9  : QuotaNassauSegment.fromJson(j['front9']  as Map<String, dynamic>),
+        back9   : QuotaNassauSegment.fromJson(j['back9']   as Map<String, dynamic>),
+        overall : QuotaNassauSegment.fromJson(j['overall'] as Map<String, dynamic>),
+        holes   : (j['holes'] as List? ?? [])
+            .map((h) => QuotaNassauHoleResult.fromJson(h as Map<String, dynamic>))
+            .toList(),
+      );
+
+  int get holesPlayed => holes.length;
+  String get status {
+    if (holesPlayed == 0) return 'pending';
+    if (holesPlayed >= 18) return 'complete';
+    return 'in_progress';
+  }
+}
+
+class QuotaNassauSummary {
+  final String status;
+  final List<QuotaNassauMatchSummary> matches;
+
+  const QuotaNassauSummary({required this.status, required this.matches});
+
+  factory QuotaNassauSummary.fromJson(Map<String, dynamic> j) =>
+      QuotaNassauSummary(
+        status  : j['status'] as String? ?? 'pending',
+        matches : (j['matches'] as List? ?? [])
+            .map((m) => QuotaNassauMatchSummary.fromJson(m as Map<String, dynamic>))
+            .toList(),
+      );
 }
 
 // ---------------------------------------------------------------------------

@@ -13,7 +13,6 @@ class GameType(models.TextChoices):
     SIXES           = 'sixes',           "Six's"
     PINK_BALL       = 'pink_ball',       'Pink Ball'
     SCRAMBLE        = 'scramble',        'Scramble'
-    MATCH_PLAY      = 'match_play',      'Match Play'
     STABLEFORD      = 'stableford',      'Stableford'
     SKINS           = 'skins',           'Skins'
     LOW_NET_ROUND   = 'low_net_round',   'Low Net (Round)'
@@ -33,6 +32,18 @@ class GameType(models.TextChoices):
     # rules handle 3-way ties (continue 5-3-1) and 2nd/3rd-place ties
     # (concurrent sub-match + 1st plays best ball simultaneously).
     THREE_PERSON_MATCH = 'three_person_match', 'Three-Person Match'
+    # Quota Nassau: two-player Stableford-vs-quota comparison, Nassau style.
+    # Quota = 36 − course_handicap_index. Compare score-vs-quota at F9/B9/18.
+    # Used as the per-foursome game type in Ryder Cup rounds.
+    QUOTA_NASSAU    = 'quota_nassau',    'Quota Nassau'
+    # Singles Nassau: two 1v1 Nassau matches per foursome (F9/B9/Overall each).
+    # Uses MatchPlayBracket for score tracking.
+    # Cup multiplier: pv × 6 per foursome (2 matches × 3 segments).
+    SINGLES_NASSAU  = 'singles_nassau',  'Singles Nassau'
+    # 18-Hole Singles: two 1v1 stroke/match-play singles per foursome,
+    # 18-hole overall result only — no F9/B9 breakdown.
+    # Cup multiplier: pv × 2 per foursome (2 matches × 1 point each).
+    SINGLES_18      = 'singles_18',      '18-Hole Singles'
 
 
 class RoundStatus(models.TextChoices):

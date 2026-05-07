@@ -246,7 +246,7 @@ class _NassauScreenState extends State<NassauScreen> {
       context: ctx,
       useRootNavigator: true,
       builder: (_) => _NassauScorePickerSheet(
-        playerName: player.player.name,
+        playerName: player.player.displayShort,
         par:        par,
         holeNumber: hole,
         strokes:    strokes,
@@ -976,7 +976,7 @@ class _NassauPlayerRow extends StatelessWidget {
           child: Row(children: [
             Flexible(
               child: Text(
-                member.player.name,
+                member.player.displayShort,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,

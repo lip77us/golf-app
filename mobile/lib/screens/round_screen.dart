@@ -116,7 +116,7 @@ class _RoundScreenState extends State<RoundScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         children: [
           _RoundInfoCard(round: round),
-          if (hasSetupGames && !isComplete && isAdmin) ...[
+          if (hasSetupGames && !isComplete && isAdmin && !round.isCupRound) ...[
             const SizedBox(height: 16),
             Text('Game Setup',
                 style: Theme.of(context).textTheme.titleMedium
@@ -150,6 +150,7 @@ class _RoundScreenState extends State<RoundScreen> {
                   myPlayerId:      myId,
                   isAdmin:         isAdmin,
                   isComplete:      isComplete,
+                  isCupRound:      round.isCupRound,
                   sixesActive:     fsGames.contains('sixes'),
                   sixesStarted:    rp.sixesIsStarted(fs.id),
                   roundActiveGames: round.activeGames,
@@ -158,10 +159,17 @@ class _RoundScreenState extends State<RoundScreen> {
                     context.read<RoundProvider>().loadScorecard(fs.id);
                     // Route priority: setup screens for games that need initial
                     // configuration; otherwise go straight to universal score entry.
-                    // Note: match_play setup is checked BEFORE pink_ball so that
-                    // a round combining both games still goes through bracket setup.
+                    // Cup rounds are fully configured via CupRoundSetupScreen —
+                    // skip all setup routing and go directly to score entry.
                     final String route;
-                    if (fsGames.contains('three_person_match') &&
+                    if (round.isCupRound &&
+                        fs.configuredGames.contains('quota_nassau')) {
+                      // Quota Nassau cup foursomes use the dedicated gross-only
+                      // entry screen — not the universal score entry.
+                      route = '/quota-nassau';
+                    } else if (round.isCupRound) {
+                      route = '/score-entry';
+                    } else if (fsGames.contains('three_person_match') &&
                         !fs.configuredGames.contains('three_person_match')) {
                       // Three-Person Match not yet configured — go to setup.
                       route = '/three-person-match-setup';
@@ -251,9 +259,11 @@ class _RoundInfoCard extends StatelessWidget {
           Row(children: [
             Chip(label: Text(round.status.replaceAll('_', ' ').toUpperCase(),
                 style: const TextStyle(fontSize: 11))),
-            const SizedBox(width: 8),
-            Text('\$${round.betUnit.formatBet()} / unit',
-                style: theme.textTheme.bodySmall),
+            if (!round.isCupRound) ...[
+              const SizedBox(width: 8),
+              Text('\$${round.betUnit.formatBet()} / unit',
+                  style: theme.textTheme.bodySmall),
+            ],
           ]),
           if (round.activeGames.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -280,12 +290,13 @@ class _RoundInfoCard extends StatelessWidget {
       'skins':        'Skins',
       'stableford':   'Stableford',
       'pink_ball':    'Pink Ball',
-      'nassau':       'Nassau',
-      'sixes':        "Six's",
-      'match_play':   'Match Play',
-      'irish_rumble': 'Irish Rumble',
-      'scramble':     'Scramble',
-      'low_net_round':'Stroke Play',
+      'nassau':        'Nassau',
+      'quota_nassau':  'Four Ball Quota',
+      'sixes':         "Six's",
+      'match_play':    'Match Play',
+      'irish_rumble':  'Irish Rumble',
+      'scramble':      'Scramble',
+      'low_net_round': 'Stroke Play',
     };
     return labels[g] ?? g;
   }
@@ -508,6 +519,7 @@ class _FoursomeCard extends StatelessWidget {
   /// Admins can enter scores for any foursome and see game-setup controls.
   final bool         isAdmin;
   final bool         isComplete;
+  final bool         isCupRound;
   final bool         sixesActive;
   final bool         sixesStarted;
   final List<String> roundActiveGames;
@@ -519,6 +531,7 @@ class _FoursomeCard extends StatelessWidget {
     required this.myPlayerId,
     required this.isAdmin,
     required this.isComplete,
+    required this.isCupRound,
     required this.sixesActive,
     required this.sixesStarted,
     required this.roundActiveGames,
@@ -595,12 +608,20 @@ class _FoursomeCard extends StatelessWidget {
     final hasOverride = foursome.activeGames.isNotEmpty;
 
     // True when this foursome needs a bracket/setup step before score entry.
+    // Cup rounds are fully configured via CupRoundSetupScreen — skip all
+    // bracket-setup gates for cup foursomes.
     final fsGames = {...roundActiveGames, ...foursome.activeGames};
-    final needsBracketSetup =
+    final needsBracketSetup = !isCupRound && (
         (fsGames.contains('match_play') &&
             !foursome.configuredGames.contains('match_play')) ||
         (fsGames.contains('three_person_match') &&
-            !foursome.configuredGames.contains('three_person_match'));
+            !foursome.configuredGames.contains('three_person_match')));
+
+    // For cup rounds, show the game each foursome is playing (its activeGames).
+    // For regular rounds, only show chips when there's a per-foursome override.
+    final showGameChips = isCupRound
+        ? effectiveGames.isNotEmpty
+        : (hasOverride && effectiveGames.isNotEmpty);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -626,7 +647,9 @@ class _FoursomeCard extends StatelessWidget {
                     style: TextStyle(color: Colors.white, fontSize: 11)),
               ),
             ],
-            if (isAdmin && !isComplete) ...[
+            // Game toggle icon — hidden for cup rounds (games are fixed per
+            // foursome and can't be changed mid-tournament).
+            if (isAdmin && !isComplete && !isCupRound) ...[
               const Spacer(),
               IconButton(
                 icon: Icon(
@@ -643,8 +666,9 @@ class _FoursomeCard extends StatelessWidget {
               ),
             ],
           ]),
-          // Per-foursome game chips (only when override is active)
-          if (hasOverride && effectiveGames.isNotEmpty) ...[
+          // Game chips: always shown for cup rounds; only when override active
+          // for regular rounds.
+          if (showGameChips) ...[
             const SizedBox(height: 6),
             Wrap(
               spacing: 4,

@@ -134,8 +134,41 @@ class MembershipSerializer(serializers.ModelSerializer):
 class FoursomeSerializer(serializers.ModelSerializer):
     memberships      = MembershipSerializer(many=True, read_only=True)
     pink_ball_order  = serializers.JSONField(read_only=True)
-    active_games     = serializers.JSONField(read_only=True)
+    active_games     = serializers.SerializerMethodField()
     configured_games = serializers.SerializerMethodField()
+
+    # Map RyderCupFoursomeConfig.game_type → active_games key.
+    # GameType enum values (strings) as stored in the DB.
+    # 'singles' is pure 1-v-1 match play — it shares the match_play
+    # bracket model and the same score-entry / summary endpoints.
+    _CUP_GAME_TYPE_MAP = {
+        'nassau'       : 'nassau',
+        'irish_rumble' : 'irish_rumble',
+        'match_play'   : 'match_play',
+        'singles'      : 'match_play',
+        'skins'        : 'skins',
+    }
+
+    def get_active_games(self, obj):
+        """
+        Return the effective active-games list for this foursome.
+
+        Priority:
+          1. Explicit per-foursome override (foursome.active_games non-empty)
+          2. Cup match assignment (RyderCupFoursomeConfig.game_type) — so the
+             score-entry screen title shows only the game this group is playing,
+             not the full round-level union of all cup game types.
+          3. Empty list (caller falls back to round.active_games)
+        """
+        if obj.active_games:
+            return list(obj.active_games)
+        try:
+            cup_cfg   = obj.ryder_cup_foursome_config
+            game_key  = self._CUP_GAME_TYPE_MAP.get(cup_cfg.game_type, cup_cfg.game_type)
+            return [game_key]
+        except Exception:
+            pass
+        return []
 
     def get_configured_games(self, obj):
         """
@@ -170,6 +203,14 @@ class FoursomeSerializer(serializers.ModelSerializer):
             games.append('pink_ball')
         if obj.irish_rumble_results.exists():
             games.append('irish_rumble')
+        # Cup match assignment counts as "configured" for its game type.
+        try:
+            cup_cfg  = obj.ryder_cup_foursome_config
+            game_key = self._CUP_GAME_TYPE_MAP.get(cup_cfg.game_type, cup_cfg.game_type)
+            if game_key not in games:
+                games.append(game_key)
+        except Exception:
+            pass
         return games
 
     class Meta:
@@ -177,21 +218,40 @@ class FoursomeSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'group_number', 'has_phantom',
             'pink_ball_order', 'active_games', 'configured_games',
-            'memberships',
+            'tee_time', 'memberships',
         ]
         read_only_fields = ['id']
 
 
 class RoundSerializer(serializers.ModelSerializer):
-    course   = CourseSerializer(read_only=True)
-    foursomes = FoursomeSerializer(many=True, read_only=True)
+    course         = CourseSerializer(read_only=True)
+    foursomes      = FoursomeSerializer(many=True, read_only=True)
+    is_cup_round   = serializers.SerializerMethodField()
+    ir_balls_config = serializers.SerializerMethodField()
+
+    def get_is_cup_round(self, obj):
+        """True when this round has a Ryder Cup config (was set up via CupRoundSetupScreen)."""
+        return hasattr(obj, 'ryder_cup_config')
+
+    def get_ir_balls_config(self, obj):
+        """
+        Irish Rumble balls-per-segment config — list of
+        {start_hole, end_hole, balls_to_count} dicts, or [] if not configured.
+        Consumed by the score-entry screen to show "Best N of M" per hole.
+        """
+        try:
+            return obj.irish_rumble_config.segments or []
+        except Exception:
+            return []
 
     class Meta:
         model  = Round
         fields = [
             'id', 'round_number', 'date', 'course', 'status',
-            'active_games', 'bet_unit', 'handicap_mode', 'net_percent',
+            'active_games', 'game_point_values', 'bet_unit',
+            'handicap_mode', 'net_percent',
             'scramble_config', 'notes', 'foursomes',
+            'is_cup_round', 'ir_balls_config',
         ]
         read_only_fields = ['id']
 
@@ -199,10 +259,14 @@ class RoundSerializer(serializers.ModelSerializer):
 class RoundListSerializer(serializers.ModelSerializer):
     """Lightweight round serializer — no foursomes (used inside TournamentSerializer)."""
     course_name = serializers.CharField(source='course.name', read_only=True)
+    course_id   = serializers.IntegerField(source='course.id',   read_only=True)
 
     class Meta:
         model  = Round
-        fields = ['id', 'round_number', 'date', 'course_name', 'status', 'active_games', 'bet_unit']
+        fields = [
+            'id', 'round_number', 'date', 'course_id', 'course_name',
+            'status', 'active_games', 'game_point_values', 'bet_unit',
+        ]
         read_only_fields = ['id']
 
 
@@ -273,17 +337,19 @@ class TournamentCreateSerializer(serializers.Serializer):
 
 class RoundCreateSerializer(serializers.Serializer):
     """Create a new round, optionally inside a tournament."""
-    tournament_id = serializers.IntegerField(required=False, allow_null=True)
-    course_id     = serializers.IntegerField()
-    date          = serializers.DateField()
-    bet_unit      = serializers.DecimalField(max_digits=6, decimal_places=2, default='0.00')
-    active_games  = serializers.ListField(child=serializers.CharField(), default=list)
-    round_number  = serializers.IntegerField(default=1, min_value=1)
-    notes         = serializers.CharField(default='', allow_blank=True)
-    handicap_mode = serializers.ChoiceField(
+    tournament_id     = serializers.IntegerField(required=False, allow_null=True)
+    course_id         = serializers.IntegerField()
+    date              = serializers.DateField()
+    bet_unit          = serializers.DecimalField(max_digits=6, decimal_places=2, default='0.00')
+    active_games      = serializers.ListField(child=serializers.CharField(), default=list)
+    game_point_values = serializers.JSONField(required=False, default=dict)
+    cup_group_counts  = serializers.JSONField(required=False, default=dict)
+    round_number      = serializers.IntegerField(default=1, min_value=1)
+    notes             = serializers.CharField(default='', allow_blank=True)
+    handicap_mode     = serializers.ChoiceField(
         choices=['gross', 'net', 'strokes_off'], default='net'
     )
-    net_percent   = serializers.IntegerField(default=100, min_value=0, max_value=200)
+    net_percent       = serializers.IntegerField(default=100, min_value=0, max_value=200)
 
 
 class PlayerTeeSelectionSerializer(serializers.Serializer):
@@ -628,3 +694,203 @@ class LeaderboardSerializer(serializers.Serializer):
     games        = serializers.DictField()
     # games keyed by game_type value, each value is the summary dict
     # from the corresponding service's *_summary() function.
+
+
+# ===========================================================================
+# 7. Team Tournament (Ryder Cup style)
+# ===========================================================================
+
+# ── 7a. Setup inputs ─────────────────────────────────────────────────────────
+
+class TeamSetupSerializer(serializers.Serializer):
+    """
+    One team definition inside TeamTournamentSetupSerializer.
+    team_number is 1-based and must be unique within the tournament.
+    """
+    team_number = serializers.IntegerField(min_value=1)
+    name        = serializers.CharField(max_length=100)
+    colour      = serializers.CharField(max_length=50,  required=False, allow_blank=True, default='')
+    short_code  = serializers.CharField(max_length=5,   required=False, allow_blank=True, default='')
+
+
+class TeamTournamentSetupSerializer(serializers.Serializer):
+    """
+    POST /api/tournaments/<pk>/team-tournament/setup/
+
+    Creates the TeamTournament and its initial empty team rosters.
+    Players are added separately via the /teams/<team_pk>/players/ endpoint.
+
+    Body:
+        {
+          "cup_name"       : "Bandon Cup 2026",  // editable display name
+          "players_per_team": 6,
+          "teams": [
+            {"team_number": 1, "name": "Team USA",    "colour": "Blue", "short_code": "USA"},
+            {"team_number": 2, "name": "Team Europe",  "colour": "Red",  "short_code": "EUR"}
+          ]
+        }
+    """
+    cup_name         = serializers.CharField(max_length=100, required=False, default='Ryder Cup')
+    players_per_team = serializers.IntegerField(min_value=1, default=6)
+    teams            = TeamSetupSerializer(many=True)
+
+    def validate_teams(self, value):
+        numbers = [t['team_number'] for t in value]
+        if len(numbers) != len(set(numbers)):
+            raise serializers.ValidationError('team_number values must be unique.')
+        if len(value) < 2:
+            raise serializers.ValidationError('At least 2 teams are required.')
+        return value
+
+
+class TeamPlayerSerializer(serializers.Serializer):
+    """
+    POST /api/tournaments/<pk>/team-tournament/teams/<team_pk>/players/
+    Body: {"player_id": 5}
+    """
+    player_id = serializers.IntegerField()
+
+
+class FoursomeRyderConfigSerializer(serializers.Serializer):
+    """
+    One foursome's Ryder Cup game config inside RyderCupRoundSetupSerializer.
+    """
+    foursome_id      = serializers.IntegerField()
+    game_type        = serializers.CharField(max_length=30)
+    team1_id         = serializers.IntegerField(required=False, allow_null=True)
+    team2_id         = serializers.IntegerField(required=False, allow_null=True)
+    point_value      = serializers.DecimalField(
+                           max_digits=5, decimal_places=2,
+                           required=False, default='1.00'
+                       )
+    singles_matchups = serializers.ListField(
+                           child=serializers.DictField(),
+                           required=False, default=list
+                       )
+
+
+class IrishRumblePairingSerializer(serializers.Serializer):
+    """
+    Cross-foursome head-to-head Irish Rumble pairing.
+    Each foursome is a homogeneous team (all players on the same Ryder Cup team).
+    """
+    foursome_a_id = serializers.IntegerField()
+    foursome_b_id = serializers.IntegerField()
+    team_a_id     = serializers.IntegerField()
+    team_b_id     = serializers.IntegerField()
+
+
+class RyderCupRoundSetupSerializer(serializers.Serializer):
+    """
+    POST /api/rounds/<pk>/ryder-cup/setup/
+
+    Configures Ryder Cup scoring for a round.  Creates:
+      - RyderCupRoundConfig (point values + multiplier)
+      - RyderCupFoursomeConfig per foursome listed in `foursomes`
+      - RyderCupIrishRumblePairing per entry in `irish_rumble_pairings`
+
+    Body:
+        {
+          "nassau_point_value"  : 1.0,
+          "point_multiplier"    : 1.0,
+          "notes"               : "Four-ball Nassau — Round 1",
+          "foursomes": [
+            {"foursome_id": 1, "game_type": "nassau",  "team1_id": 1, "team2_id": 2},
+            {"foursome_id": 2, "game_type": "nassau",  "team1_id": 1, "team2_id": 2},
+            {"foursome_id": 3, "game_type": "nassau",  "team1_id": 1, "team2_id": 2}
+          ],
+          "irish_rumble_pairings": []
+        }
+
+    For an Irish Rumble round, leave `foursomes` empty (or populate with the
+    singles group only) and fill `irish_rumble_pairings`:
+        {
+          "foursomes": [
+            {"foursome_id": 3, "game_type": "nassau", "team1_id": 1, "team2_id": 2}
+          ],
+          "irish_rumble_pairings": [
+            {"foursome_a_id": 1, "foursome_b_id": 2, "team_a_id": 1, "team_b_id": 2}
+          ]
+        }
+    """
+    nassau_point_value   = serializers.DecimalField(
+                               max_digits=5, decimal_places=2,
+                               required=False, default='1.00'
+                           )
+    point_multiplier     = serializers.DecimalField(
+                               max_digits=5, decimal_places=2,
+                               required=False, default='1.00'
+                           )
+    notes                = serializers.CharField(required=False, allow_blank=True, default='')
+    foursomes            = FoursomeRyderConfigSerializer(many=True, required=False, default=list)
+    irish_rumble_pairings = IrishRumblePairingSerializer(many=True, required=False, default=list)
+
+
+class QuotaPairingSerializer(serializers.Serializer):
+    """
+    One 1v1 pairing inside QuotaNassauSetupSerializer.
+    player1_quota / player2_quota = 36 − course_handicap_index.
+    If omitted, the setup view calculates them from the stored FoursomeMembership.
+    """
+    player1_id    = serializers.IntegerField()
+    player2_id    = serializers.IntegerField()
+    player1_quota = serializers.IntegerField(required=False, allow_null=True)
+    player2_quota = serializers.IntegerField(required=False, allow_null=True)
+
+
+class QuotaNassauSetupSerializer(serializers.Serializer):
+    """
+    POST /api/foursomes/<pk>/quota-nassau/setup/
+
+    Creates the QuotaNassauGame and its 1v1 QuotaNassauMatch rows.
+    If player_quota values are omitted the view auto-calculates them
+    from the stored course_handicap_index on FoursomeMembership.
+
+    Body (explicit quotas):
+        {
+          "pairings": [
+            {"player1_id": 1, "player2_id": 4, "player1_quota": 18, "player2_quota": 22},
+            {"player1_id": 2, "player2_id": 5, "player1_quota": 24, "player2_quota": 16}
+          ]
+        }
+
+    Body (auto-calculate quotas from handicaps):
+        {
+          "pairings": [
+            {"player1_id": 1, "player2_id": 4},
+            {"player1_id": 2, "player2_id": 5}
+          ]
+        }
+    """
+    pairings = QuotaPairingSerializer(many=True)
+
+    def validate_pairings(self, value):
+        if not value:
+            raise serializers.ValidationError('At least one pairing is required.')
+        for p in value:
+            if p['player1_id'] == p['player2_id']:
+                raise serializers.ValidationError('player1 and player2 must be different players.')
+        return value
+
+
+# ---------------------------------------------------------------------------
+# Tee-time bulk update
+# ---------------------------------------------------------------------------
+
+class TeeTimeEntrySerializer(serializers.Serializer):
+    """One entry in a bulk tee-time update: {group_number, tee_time}."""
+    group_number = serializers.IntegerField(min_value=1)
+    tee_time     = serializers.TimeField(
+        allow_null=True,
+        help_text='HH:MM or HH:MM:SS.  Null clears the tee time.',
+    )
+
+
+class TeeTimeBulkSerializer(serializers.Serializer):
+    """
+    Body for PATCH /api/rounds/<id>/tee-times/
+
+    [{"group_number": 1, "tee_time": "08:00"},
+     {"group_number": 2, "tee_time": "08:10"}, ...]
+    """
+    tee_times = TeeTimeEntrySerializer(many=True)

@@ -10,6 +10,7 @@ import '../widgets/error_view.dart';
 import '../widgets/payout_config_field.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
+import 'ryder_cup_draft_screen.dart';
 
 // Group badge colours — cycles for > 4 foursomes
 const _groupColors = [
@@ -44,8 +45,17 @@ class NewRoundWizard extends StatefulWidget {
 class _NewRoundWizardState extends State<NewRoundWizard> {
   // ---- step index ----
   int _step = 0;
-  // Steps 0-5 are the main wizard; step 6 is post-creation game setup.
-  static const _totalSteps = 6;
+
+  // Cup tournaments use a shorter wizard (steps 0-3 only) that ends at the
+  // game plan.  Team assignment and round setup happen later from the
+  // tournament card.  _isCupTournament and _totalSteps are computed getters.
+  bool get _isCupTournament =>
+      _createNewTournament &&
+      _tournamentActiveGames.contains(GameIds.teamCup);
+  // Cup: 5 steps (0=tournament, 1=courses, 2=cup design, 3=game plan,
+  //              4=review → create, 5=post-create confirmation).
+  // Non-cup: 6 steps (adds players, groups, games before review).
+  int  get _totalSteps => _isCupTournament ? 5 : 6;
 
   // ---- Step 0: Tournament ----
   bool              _createNewTournament = true;
@@ -56,6 +66,25 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<_RoundDraft> _additionalRounds    = [];
   /// Tournament-level games (e.g. low_net championship).
   final Set<String> _tournamentActiveGames = {};
+
+  // ---- Cup Design (step 2 for cup tournaments) ----
+  // Team NAMES are set later during Phase 2 (team roster screen).
+  // The wizard only captures the cup name and team count here.
+  final _cupNameCtrl = TextEditingController(text: 'Ryder Cup');
+  int   _cupTeamCount = 2;
+
+  // ---- Cup Round Games (step 3 for cup tournaments) ----
+  // Per-round game plan: round index (0 = round 1, 1 = round 2, …) →
+  // Cup game types per round.  Each unique game type appears once; the count
+  // of how many groups play it is in _roundCupGroupCounts.
+  // e.g. {0: ['nassau', 'irish_rumble']}
+  final Map<int, List<String>>        _roundCupGames       = {};
+  // Cup point values per game type per round: round index → game_type → pts.
+  // e.g. {0: {'nassau': 1.0, 'singles_nassau': 2.0}}  Default 1.0.
+  final Map<int, Map<String, double>> _roundCupPoints      = {};
+  // Number of groups playing each game type per round.
+  // e.g. {0: {'nassau': 2, 'irish_rumble': 2}}
+  final Map<int, Map<String, int>>    _roundCupGroupCounts = {};
 
   // ---- Step 1: Round details (course, dates, handicap — NO game selection) ----
   List<CourseInfo>  _courses        = [];
@@ -96,6 +125,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   // ---- Step 6: Game setup (shown after round is created) ----
   Round? _createdRound;
+  int?   _createdTournamentId;
 
   // ---- reference data ----
   List<TeeInfo>    _tees        = [];
@@ -132,6 +162,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _cupNameCtrl.dispose();
     super.dispose();
   }
 
@@ -164,15 +195,16 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       final courses = courseMap.values.toList()
         ..sort((a, b) => a.name.compareTo(b.name));
 
-      final defaultCourseId = courses.isNotEmpty ? courses.first.id : null;
       setState(() {
         _tournaments      = results[0] as List<Tournament>;
         _tees             = tees;
         _courses          = courses;
-        _selectedCourseId ??= defaultCourseId;
-        // Apply default course to any additional round drafts that lack one.
+        // No auto-select: leave _selectedCourseId null so the user must
+        // explicitly pick a course (avoids surprising defaults like
+        // "Augusta National" being pre-filled).
+        // Additional round drafts also start with no course pre-selected.
         for (final d in _additionalRounds) {
-          d.courseId ??= defaultCourseId;
+          d.courseId ??= null; // explicit: remains null until user picks
         }
         _allPlayers       = (results[2] as List<PlayerProfile>)
             .where((p) => !p.isPhantom)
@@ -190,6 +222,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // ---- navigation ----
 
   bool _canAdvance() {
+    final cup = _isCupTournament;
     switch (_step) {
       case 0:
         if (_createNewTournament) {
@@ -198,7 +231,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           if (_numRounds > 1) {
             final hasPrimary =
                 _tournamentActiveGames.contains(GameIds.championshipStrokePlay) ||
-                _tournamentActiveGames.contains(GameIds.championshipStableford);
+                _tournamentActiveGames.contains(GameIds.championshipStableford) ||
+                _tournamentActiveGames.contains(GameIds.teamCup);
             if (!hasPrimary) return false;
           }
           return true;
@@ -208,12 +242,22 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         // Course required; no game selection here any more.
         if (_selectedCourseId == null) return false;
         return _additionalRounds.every((d) => d.courseId != null);
-      case 2: return _selectedIds.length >= 2;
+      case 2:
+        if (cup) return _cupNameCtrl.text.trim().isNotEmpty; // Cup Design
+        return _selectedIds.length >= 2;                     // Players (non-cup)
       case 3:
+        if (cup) {
+          // Per-round game plan — every round must have at least one game.
+          if (_roundCupGames.length < _numRounds) return false;
+          return _roundCupGames.values.every((g) => g.isNotEmpty);
+        }
+        // Groups + tees (non-cup)
         return _orderedPlayerIds.isNotEmpty &&
             _orderedPlayerIds.every((id) => _playerTees[id] != null);
-      case 4: return true; // side games are optional
-      case 5: return true;  // Review / Create
+      case 4:
+        // Cup: Review step (always OK).  Non-cup: side games (always OK).
+        return true;
+      case 5: return true; // Review (non-cup) / post-create (cup)
       default: return false;
     }
   }
@@ -221,9 +265,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   void _next() {
     if (_step == 0 && !(_step0Key.currentState?.validate() ?? true)) return;
     if (_step == 1 && !(_step1Key.currentState?.validate() ?? true)) return;
-    if (_step == 2) _initGroups();
+    // For non-cup tournaments, _initGroups() must run when leaving the
+    // Players step (step 2) so the groups/tees step has an ordered player list.
+    // Cup tournaments don't select players in the wizard at all.
+    if (!_isCupTournament && _step == 2) _initGroups();
     if (_step < _totalSteps - 1) setState(() => _step++);
-    // Note: step 6 is post-creation only; _next() never reaches it.
+    // Note: the post-creation step is _totalSteps; _next() never reaches it.
   }
 
   void _back() {
@@ -269,137 +316,235 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   Future<void> _createRound() async {
     setState(() { _creating = true; _createError = null; });
     try {
-      final client  = context.read<AuthProvider>().client;
-      final dateStr = DateFormat('yyyy-MM-dd').format(_date);
-      final games   = _activeGames.toList();
-
-      // 1. Resolve or create tournament
-      int? tournamentId;
-      if (_createNewTournament) {
-        final t = await client.createTournament(
-          name       : _nameCtrl.text.trim(),
-          startDate  : dateStr,
-          activeGames: _tournamentActiveGames.toList(),
-          totalRounds: _numRounds,
-        );
-        tournamentId = t.id;
+      if (_isCupTournament) {
+        await _createCupTournament();
       } else {
-        tournamentId = _existingTournament?.id;
-      }
-
-      // 1b. Auto-apply Stroke Play Championship config if entered in Step 4.
-      if (tournamentId != null &&
-          _tournamentActiveGames.contains(GameIds.championshipStrokePlay) &&
-          (_lowNetEntryFee > 0 || _lowNetPayouts.any((p) => p > 0))) {
-        final payoutList = <Map<String, dynamic>>[];
-        for (int i = 0; i < _lowNetNumPayouts; i++) {
-          if (_lowNetPayouts[i] > 0) {
-            payoutList.add({'place': i + 1, 'amount': _lowNetPayouts[i].toDouble()});
-          }
-        }
-        await client.postTournamentLowNetSetup(
-          tournamentId,
-          LowNetChampionshipSetup(
-            handicapMode: _handicapMode,
-            netPercent  : _netPercent,
-            entryFee    : _lowNetEntryFee.toDouble(),
-            payouts     : payoutList,
-          ),
-        );
-      }
-
-      if (!mounted) return;
-
-      // 2. Create stub rounds for rounds 2..N (no foursomes; configured later)
-      if (_createNewTournament) {
-        for (int i = 0; i < _additionalRounds.length; i++) {
-          final draft       = _additionalRounds[i];
-          final draftDate   = DateFormat('yyyy-MM-dd').format(draft.date);
-          await client.createRound(
-            tournamentId: tournamentId,
-            courseId    : draft.courseId!,
-            date        : draftDate,
-            activeGames : games,   // same game types; configured separately
-            roundNumber : i + 2,
-            handicapMode: _handicapMode,
-            netPercent  : _netPercent,
-          );
-        }
-      }
-
-      // 3. Create Round 1 (fully set up with foursomes)
-      final existing = _existingTournament?.rounds.length ?? 0;
-      final round = await client.createRound(
-        tournamentId: tournamentId,
-        courseId    : _selectedCourseId!,
-        date        : dateStr,
-        activeGames : games,
-        roundNumber : _createNewTournament ? 1 : existing + 1,
-        handicapMode: _handicapMode,
-        netPercent  : _netPercent,
-      );
-
-      // 3. Set up foursomes: ordered list drives group assignment; randomise=false
-      //    tells the server to group players exactly as submitted (first 4 → group 1,
-      //    next 4 → group 2, etc.).
-      final playersList = _orderedPlayerIds.map((id) {
-        final tee = _playerTees[id];
-        if (tee == null) throw Exception('Player $id has no tee selected.');
-        return {'player_id': id, 'tee_id': tee.id};
-      }).toList();
-
-      final fullRound = await client.setupRound(
-        round.id,
-        players       : playersList,
-        randomise     : false,
-        autoSetupGames: true,
-      );
-
-      if (!mounted) return;
-
-      // Auto-apply any match play config entered in Step 4.
-      // Entry fee > 0 OR any non-zero payout = "user configured it".
-      bool matchPlayAutoConfigured = false;
-      if (_tournamentActiveGames.contains(GameIds.matchPlay)) {
-        const labels = ['1st', '2nd', '3rd', '4th'];
-        final payoutConfig = <String, double>{};
-        for (int i = 0; i < _matchPlayNumPayouts; i++) {
-          if (_matchPlayPayouts[i] > 0) {
-            payoutConfig[labels[i]] = _matchPlayPayouts[i].toDouble();
-          }
-        }
-        if (_matchPlayEntryFee > 0 || payoutConfig.isNotEmpty) {
-          for (final fs in fullRound.foursomes) {
-            await client.postMatchPlaySetup(
-              fs.id,
-              entryFee:     _matchPlayEntryFee.toDouble(),
-              payoutConfig: payoutConfig,
-            );
-          }
-          matchPlayAutoConfigured = true;
-        }
-      }
-
-      if (!mounted) return;
-      // Show step 6 only if games other than auto-configured match play need setup.
-      final needsConfig = _activeGames.contains(GameIds.irishRumble) ||
-          _activeGames.contains(GameIds.strokePlay)  ||
-          _activeGames.contains(GameIds.pinkBall)    ||
-          (_tournamentActiveGames.contains(GameIds.matchPlay) && !matchPlayAutoConfigured);
-      if (needsConfig) {
-        setState(() {
-          _createdRound            = fullRound;
-          _step                    = 6;
-          _creating                = false;
-          _matchPlayStep6Configured = matchPlayAutoConfigured;
-        });
-      } else {
-        Navigator.of(context).pop(true);
+        await _createCasualOrStandardRound();
       }
     } catch (e) {
       if (mounted) {
         setState(() { _createError = friendlyError(e); _creating = false; });
       }
+    }
+  }
+
+  // ── Cup path ─────────────────────────────────────────────────────────────
+  // Creates the tournament skeleton (all rounds as stubs) + TeamTournament
+  // with placeholder team names.  No foursomes or players are set up here —
+  // those happen later via "Assign Teams" and "Set Up Round N" on the
+  // tournament card.
+
+  Future<void> _createCupTournament() async {
+    final client  = context.read<AuthProvider>().client;
+    final dateStr = DateFormat('yyyy-MM-dd').format(_date);
+
+    // 1. Create tournament
+    final t = await client.createTournament(
+      name       : _nameCtrl.text.trim(),
+      startDate  : dateStr,
+      activeGames: _tournamentActiveGames.toList(),
+      totalRounds: _numRounds,
+    );
+    final tournamentId = t.id;
+    if (!mounted) return;
+
+    // 2. Create Round 1 as a stub (no foursomes; will be set up in Phase 3).
+    //    Save unique game types, per-game point values, and group counts so
+    //    cup_standings_summary can compute total_possible before setup runs.
+    final round1Games  = List<String>.from(_roundCupGames[0] ?? []);
+    final round1Points = Map<String, double>.from(_roundCupPoints[0] ?? {});
+    final round1Counts = Map<String, int>.from(_roundCupGroupCounts[0] ?? {});
+    for (final g in round1Games) {
+      round1Points.putIfAbsent(g, () => 1.0);
+      round1Counts.putIfAbsent(g, () => 1);
+    }
+    final round1 = await client.createRound(
+      tournamentId    : tournamentId,
+      courseId        : _selectedCourseId!,
+      date            : dateStr,
+      activeGames     : round1Games,
+      gamePointValues : round1Points,
+      cupGroupCounts  : round1Counts,
+      roundNumber     : 1,
+      handicapMode    : _handicapMode,
+      netPercent      : _netPercent,
+    );
+    if (!mounted) return;
+
+    // 3. Create stub rounds for rounds 2..N
+    for (int i = 0; i < _additionalRounds.length; i++) {
+      final draft        = _additionalRounds[i];
+      final draftDate    = DateFormat('yyyy-MM-dd').format(draft.date);
+      final roundGames   = List<String>.from(_roundCupGames[i + 1] ?? []);
+      final roundPoints  = Map<String, double>.from(_roundCupPoints[i + 1] ?? {});
+      final roundCounts  = Map<String, int>.from(_roundCupGroupCounts[i + 1] ?? {});
+      for (final g in roundGames) {
+        roundPoints.putIfAbsent(g, () => 1.0);
+        roundCounts.putIfAbsent(g, () => 1);
+      }
+      await client.createRound(
+        tournamentId    : tournamentId,
+        courseId        : draft.courseId!,
+        date            : draftDate,
+        activeGames     : roundGames,
+        gamePointValues : roundPoints,
+        cupGroupCounts  : roundCounts,
+        roundNumber     : i + 2,
+        handicapMode    : _handicapMode,
+        netPercent      : _netPercent,
+      );
+      if (!mounted) return;
+    }
+
+    // 4. Create TeamTournament with placeholder team names.
+    //    Real names and player assignments come from the Phase 2 roster screen.
+    final placeholderTeams = List.generate(_cupTeamCount, (i) => <String, dynamic>{
+      'team_number': i + 1,
+      'name'       : 'Team ${i + 1}',
+    });
+    await client.postTeamTournamentSetup(
+      tournamentId,
+      cupName        : _cupNameCtrl.text.trim(),
+      playersPerTeam : 1,          // placeholder; real value set in Phase 2
+      teams          : placeholderTeams,
+    );
+    if (!mounted) return;
+
+    // 5. Navigate to post-creation confirmation.
+    setState(() {
+      _createdRound        = round1;
+      _createdTournamentId = tournamentId;
+      _step                = _totalSteps;   // 5 for cup
+      _creating            = false;
+    });
+  }
+
+  // ── Non-cup path ─────────────────────────────────────────────────────────
+  // Full wizard flow: creates tournament + Round 1 with foursomes + any
+  // side-game auto-config (same logic as before).
+
+  Future<void> _createCasualOrStandardRound() async {
+    final client  = context.read<AuthProvider>().client;
+    final dateStr = DateFormat('yyyy-MM-dd').format(_date);
+    final games   = _activeGames.toList();
+
+    // 1. Resolve or create tournament
+    int? tournamentId;
+    if (_createNewTournament) {
+      final t = await client.createTournament(
+        name       : _nameCtrl.text.trim(),
+        startDate  : dateStr,
+        activeGames: _tournamentActiveGames.toList(),
+        totalRounds: _numRounds,
+      );
+      tournamentId = t.id;
+    } else {
+      tournamentId = _existingTournament?.id;
+    }
+
+    // 1b. Auto-apply Stroke Play Championship config if entered in Step 4.
+    if (tournamentId != null &&
+        _tournamentActiveGames.contains(GameIds.championshipStrokePlay) &&
+        (_lowNetEntryFee > 0 || _lowNetPayouts.any((p) => p > 0))) {
+      final payoutList = <Map<String, dynamic>>[];
+      for (int i = 0; i < _lowNetNumPayouts; i++) {
+        if (_lowNetPayouts[i] > 0) {
+          payoutList.add({'place': i + 1, 'amount': _lowNetPayouts[i].toDouble()});
+        }
+      }
+      await client.postTournamentLowNetSetup(
+        tournamentId,
+        LowNetChampionshipSetup(
+          handicapMode: _handicapMode,
+          netPercent  : _netPercent,
+          entryFee    : _lowNetEntryFee.toDouble(),
+          payouts     : payoutList,
+        ),
+      );
+    }
+    if (!mounted) return;
+
+    // 2. Create stub rounds for rounds 2..N
+    if (_createNewTournament) {
+      for (int i = 0; i < _additionalRounds.length; i++) {
+        final draft     = _additionalRounds[i];
+        final draftDate = DateFormat('yyyy-MM-dd').format(draft.date);
+        await client.createRound(
+          tournamentId: tournamentId,
+          courseId    : draft.courseId!,
+          date        : draftDate,
+          activeGames : games,
+          roundNumber : i + 2,
+          handicapMode: _handicapMode,
+          netPercent  : _netPercent,
+        );
+      }
+    }
+
+    // 3. Create Round 1 with foursomes
+    final existing = _existingTournament?.rounds.length ?? 0;
+    final round = await client.createRound(
+      tournamentId: tournamentId,
+      courseId    : _selectedCourseId!,
+      date        : dateStr,
+      activeGames : games,
+      roundNumber : _createNewTournament ? 1 : existing + 1,
+      handicapMode: _handicapMode,
+      netPercent  : _netPercent,
+    );
+
+    final playersList = _orderedPlayerIds.map((id) {
+      final tee = _playerTees[id];
+      if (tee == null) throw Exception('Player $id has no tee selected.');
+      return {'player_id': id, 'tee_id': tee.id};
+    }).toList();
+
+    final fullRound = await client.setupRound(
+      round.id,
+      players       : playersList,
+      randomise     : false,
+      autoSetupGames: true,
+    );
+    if (!mounted) return;
+
+    // Auto-apply match play config entered in Step 4.
+    bool matchPlayAutoConfigured = false;
+    if (_tournamentActiveGames.contains(GameIds.singlesNassau)) {
+      const labels = ['1st', '2nd', '3rd', '4th'];
+      final payoutConfig = <String, double>{};
+      for (int i = 0; i < _matchPlayNumPayouts; i++) {
+        if (_matchPlayPayouts[i] > 0) {
+          payoutConfig[labels[i]] = _matchPlayPayouts[i].toDouble();
+        }
+      }
+      if (_matchPlayEntryFee > 0 || payoutConfig.isNotEmpty) {
+        for (final fs in fullRound.foursomes) {
+          await client.postMatchPlaySetup(
+            fs.id,
+            entryFee:     _matchPlayEntryFee.toDouble(),
+            payoutConfig: payoutConfig,
+          );
+        }
+        matchPlayAutoConfigured = true;
+      }
+    }
+    if (!mounted) return;
+
+    final needsConfig =
+        _activeGames.contains(GameIds.irishRumble) ||
+        _activeGames.contains(GameIds.strokePlay)  ||
+        _activeGames.contains(GameIds.pinkBall)    ||
+        (_tournamentActiveGames.contains(GameIds.singlesNassau) && !matchPlayAutoConfigured);
+    if (needsConfig) {
+      setState(() {
+        _createdRound             = fullRound;
+        _createdTournamentId      = tournamentId;
+        _step                     = _totalSteps;   // 6 for non-cup
+        _creating                 = false;
+        _matchPlayStep6Configured = matchPlayAutoConfigured;
+      });
+    } else {
+      Navigator.of(context).pop(true);
     }
   }
 
@@ -413,14 +558,16 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       child: Scaffold(
         appBar: AppBar(
           leading: BackButton(onPressed: _back),
-          title: Text(_step == 6
-              ? 'Game Setup'
-              : 'New Round  ($_step of ${_totalSteps - 1})'),
+          title: Text(_step >= _totalSteps
+              ? (_isCupTournament ? 'Tournament Created' : 'Game Setup')
+              : (_isCupTournament
+                  ? 'New Cup Tournament  ($_step of ${_totalSteps - 1})'
+                  : 'New Round  ($_step of ${_totalSteps - 1})')),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(4),
             child: LinearProgressIndicator(
-              // Cap at 1.0 on step 6 (post-creation) so bar stays full
-              value: (_step >= 6 ? _totalSteps : _step + 1) / _totalSteps,
+              // Cap at 1.0 on the post-creation step so bar stays full
+              value: (_step >= _totalSteps ? _totalSteps : _step + 1) / _totalSteps,
               backgroundColor:
                   Theme.of(context).colorScheme.surfaceContainerHighest,
             ),
@@ -434,21 +581,65 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         bottomNavigationBar: _dataLoading || _dataError != null
             ? null
             : _BottomBar(
-                step      : _step,
-                totalSteps: _totalSteps,
-                canAdvance: _canAdvance(),
-                creating  : _creating,
-                onBack    : _back,
-                onNext    : _next,
-                onCreate  : _createRound,
-                onDone    : () => Navigator.of(context).pop(true),
+                step            : _step,
+                totalSteps      : _totalSteps,
+                canAdvance      : _canAdvance(),
+                creating        : _creating,
+                isCupTournament : _isCupTournament,
+                onBack          : _back,
+                onNext          : _next,
+                onCreate        : _createRound,
+                onDone          : () => Navigator.of(context).pop(true),
               ),
       ),
     );
   }
 
   Widget _stepBody() {
-    switch (_step) {
+    // For cup tournaments a "Cup Design" step sits at position 2, pushing
+    // players → groups → games → review each one position later.
+    final cup = _isCupTournament;
+
+    // --- Cup Design step (step 2, cup only) ---
+    if (cup && _step == 2) {
+      return _Step2CupDesign(
+        cupNameCtrl       : _cupNameCtrl,
+        teamCount         : _cupTeamCount,
+        onTeamCountChanged: (n) => setState(() => _cupTeamCount = n),
+        lowNetEnabled     : _tournamentActiveGames.contains('low_net'),
+        onToggleLowNet    : (on) => setState(() {
+          on ? _tournamentActiveGames.add('low_net')
+             : _tournamentActiveGames.remove('low_net');
+        }),
+      );
+    }
+
+    // --- Per-round game plan step (step 3, cup only) ---
+    if (cup && _step == 3) {
+      return _Step3CupRoundGames(
+        numRounds           : _numRounds,
+        roundCupGames       : _roundCupGames,
+        roundCupPoints      : _roundCupPoints,
+        roundCupGroupCounts : _roundCupGroupCounts,
+        selectedCourseId    : _selectedCourseId,
+        additionalRounds    : _additionalRounds,
+        courses             : _courses,
+        date                : _date,
+        onChanged           : (roundIdx, games) =>
+            setState(() => _roundCupGames[roundIdx] = games),
+        onPointsChanged     : (roundIdx, points) =>
+            setState(() => _roundCupPoints[roundIdx] = points),
+        onGroupCountsChanged: (roundIdx, counts) =>
+            setState(() => _roundCupGroupCounts[roundIdx] = counts),
+      );
+    }
+
+    // Map the raw step to a logical step for the shared step widgets.
+    // Cup:     step 4→logical 5 (review), step 5→logical 6 (post-create).
+    // Non-cup: no shift — step numbers match logical steps directly.
+    final logicalStep = (cup && _step >= 4) ? _step + 1 : _step;
+
+    switch (logicalStep) {
       case 0:
         return _Step0Tournament(
           createNew            : _createNewTournament,
@@ -465,15 +656,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           onPickTournament  : (t) => setState(() => _existingTournament = t),
           onNumRoundsChanged: (n) => setState(() {
             _numRounds = n;
-            final defaultCourse = _selectedCourseId;
             // Resize _additionalRounds to (n - 1)
             while (_additionalRounds.length < n - 1) {
-              // Stagger dates by 1 day each
+              // Stagger dates by 1 day each; no default course so user must pick
               final baseDate = _additionalRounds.isEmpty
                   ? _date
                   : _additionalRounds.last.date;
               _additionalRounds.add(_RoundDraft(
-                courseId: defaultCourse,
+                courseId: null,
                 date    : baseDate.add(const Duration(days: 1)),
               ));
             }
@@ -556,7 +746,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _lowNetNumPayouts  = nPays;
             _lowNetPayouts     = pays;
           }),
-          hasTournamentMatchPlay    : _tournamentActiveGames.contains(GameIds.matchPlay),
+          hasTournamentMatchPlay    : _tournamentActiveGames.contains(GameIds.singlesNassau),
           initialMatchPlayFee       : _matchPlayEntryFee,
           initialMatchPlayNumPayouts: _matchPlayNumPayouts,
           initialMatchPlayPayouts   : _matchPlayPayouts,
@@ -583,10 +773,15 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           playerTees           : _playerTees,
           createError          : _createError,
         );
-      case 6:
+      case 6:  // post-creation (logical 6 = step 6 non-cup or step 7 cup)
         return _Step6GameSetup(
           round               : _createdRound!,
+          tournamentId        : _createdTournamentId,
+          tournamentName      : _createNewTournament
+              ? _nameCtrl.text.trim()
+              : (_existingTournament?.name ?? ''),
           activeGames         : _activeGames,
+          isCupTournament     : _tournamentActiveGames.contains(GameIds.teamCup),
           matchPlayConfigured : _matchPlayStep6Configured,
         );
       default:
@@ -604,6 +799,7 @@ class _BottomBar extends StatelessWidget {
   final int totalSteps;
   final bool canAdvance;
   final bool creating;
+  final bool isCupTournament;
   final VoidCallback onBack;
   final VoidCallback onNext;
   final VoidCallback onCreate;
@@ -614,6 +810,7 @@ class _BottomBar extends StatelessWidget {
     required this.totalSteps,
     required this.canAdvance,
     required this.creating,
+    required this.isCupTournament,
     required this.onBack,
     required this.onNext,
     required this.onCreate,
@@ -622,8 +819,8 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Step 6 is post-create game setup — show Done only
-    if (step == 6) {
+    // Post-creation step — show Done only
+    if (step >= totalSteps) {
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -654,8 +851,8 @@ class _BottomBar extends StatelessWidget {
                       width: 16, height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2,
                           color: Colors.white))
-                  : const Icon(Icons.flag),
-              label: const Text('Create Round'),
+                  : Icon(isCupTournament ? Icons.emoji_events : Icons.flag),
+              label: Text(isCupTournament ? 'Save Tournament' : 'Create Round'),
             )
           else
             FilledButton(
@@ -771,10 +968,6 @@ class _Step0Tournament extends StatelessWidget {
                 icon: const Icon(Icons.add_circle_outline),
                 color: Theme.of(context).colorScheme.primary,
               ),
-              const SizedBox(width: 8),
-              Text(numRounds == 1 ? '(single round)' : '($numRounds days)',
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: Colors.grey)),
             ]),
 
             // ── Tournament-level games ───────────────────────────────────────
@@ -785,9 +978,9 @@ class _Step0Tournament extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               numRounds > 1
-                  ? 'Multi-day tournaments require Stroke Play or Stableford '
-                    'as the primary accumulator game.'
-                  : 'Games tracked across all rounds (configured separately).',
+                  ? 'Multi-day tournaments require Stroke Play, Stableford, '
+                    'or Cup Play as the primary format.'
+                  : 'Format tracked across all rounds (configured separately).',
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: Colors.grey),
             ),
@@ -809,10 +1002,11 @@ class _Step0Tournament extends StatelessWidget {
               Builder(builder: (ctx) {
                 final hasPrimary =
                     tournamentActiveGames.contains(GameIds.championshipStrokePlay) ||
-                    tournamentActiveGames.contains(GameIds.championshipStableford);
+                    tournamentActiveGames.contains(GameIds.championshipStableford) ||
+                    tournamentActiveGames.contains(GameIds.teamCup);
                 if (hasPrimary) return const SizedBox.shrink();
                 return Text(
-                  'Select Stroke Play or Stableford Championship to continue.',
+                  'Select Stroke Play, Stableford, or Cup Play to continue.',
                   style: Theme.of(ctx).textTheme.bodySmall
                       ?.copyWith(color: Theme.of(ctx).colorScheme.error),
                 );
@@ -1386,6 +1580,500 @@ class _Step3GroupsAndTees extends StatelessWidget {
 }
 
 // ===========================================================================
+// Step 2 (Cup) — Cup Design
+// ===========================================================================
+
+class _Step2CupDesign extends StatefulWidget {
+  final TextEditingController cupNameCtrl;
+  final int                   teamCount;
+  final void Function(int)    onTeamCountChanged;
+  final bool                  lowNetEnabled;
+  final void Function(bool)   onToggleLowNet;
+
+  const _Step2CupDesign({
+    required this.cupNameCtrl,
+    required this.teamCount,
+    required this.onTeamCountChanged,
+    required this.lowNetEnabled,
+    required this.onToggleLowNet,
+  });
+
+  @override
+  State<_Step2CupDesign> createState() => _Step2CupDesignState();
+}
+
+class _Step2CupDesignState extends State<_Step2CupDesign> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Cup Design', style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Give the cup a name and choose how many teams will compete. '
+          'Team names and player assignments come later.',
+          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+        ),
+        const SizedBox(height: 24),
+
+        // Cup name
+        TextField(
+          controller: widget.cupNameCtrl,
+          decoration: const InputDecoration(
+            labelText : 'Cup name',
+            hintText  : 'e.g. Bandon Cup 2026',
+            border    : OutlineInputBorder(),
+            prefixIcon: Icon(Icons.emoji_events_outlined),
+          ),
+          textCapitalization: TextCapitalization.words,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 24),
+
+        // Number of teams
+        Text('Number of Teams',
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Row(
+          children: [2, 3, 4].map((n) => Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text('$n teams'),
+              selected: widget.teamCount == n,
+              onSelected: (_) {
+                widget.onTeamCountChanged(n);
+                setState(() {});
+              },
+            ),
+          )).toList(),
+        ),
+        const SizedBox(height: 24),
+
+        // Secondary game
+        Text('Secondary Game (optional)',
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(
+          'A cross-team side game played by all golfers every round.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 10),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Low Net (Stroke Play)'),
+          subtitle: const Text('Individual net scores across all players'),
+          value: widget.lowNetEnabled,
+          onChanged: (v) {
+            widget.onToggleLowNet(v);
+            setState(() {});
+          },
+        ),
+        const SizedBox(height: 16),
+
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Icons.info_outline,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'After creating the tournament, tap "Assign Teams" on the '
+                'tournament card to name the teams and assign players. '
+                'Set up each round\'s foursomes and tee times from '
+                '"Set Up Round N" when you\'re ready to play.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+// ===========================================================================
+// Step 3 (Cup) — Per-round game plan
+// ===========================================================================
+
+const _kCupGameChoices = [
+  ('nassau',          'Four Ball (Nassau)'),
+  ('quota_nassau',    'Four Ball Quota (Nassau)'),
+  ('irish_rumble',    'Irish Rumble'),
+  ('singles_nassau',  'Singles Nassau (F9/B9/All)'),
+  ('singles_18',      '18-Hole Singles'),
+];
+
+class _Step3CupRoundGames extends StatelessWidget {
+  final int                                   numRounds;
+  final Map<int, List<String>>                roundCupGames;
+  final Map<int, Map<String, double>>         roundCupPoints;
+  final Map<int, Map<String, int>>            roundCupGroupCounts;
+  final int?                                  selectedCourseId;
+  final List<_RoundDraft>                     additionalRounds;
+  final List<CourseInfo>                      courses;
+  final DateTime                              date;
+  final void Function(int roundIdx, List<String> games)           onChanged;
+  final void Function(int roundIdx, Map<String, double> points)   onPointsChanged;
+  final void Function(int roundIdx, Map<String, int> counts)      onGroupCountsChanged;
+
+  const _Step3CupRoundGames({
+    super.key,
+    required this.numRounds,
+    required this.roundCupGames,
+    required this.roundCupPoints,
+    required this.roundCupGroupCounts,
+    required this.selectedCourseId,
+    required this.additionalRounds,
+    required this.courses,
+    required this.date,
+    required this.onChanged,
+    required this.onPointsChanged,
+    required this.onGroupCountsChanged,
+  });
+
+  String _courseName(int? courseId) {
+    if (courseId == null) return '—';
+    return courses.firstWhere((c) => c.id == courseId,
+            orElse: () => CourseInfo(id: courseId, name: '—'))
+        .name;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Games by Round', style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 4),
+        Text(
+          'For each round, add one entry per foursome. '
+          'The order defines which group plays which format.',
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(color: Colors.grey),
+        ),
+        const SizedBox(height: 20),
+        for (int r = 0; r < numRounds; r++) ...[
+          _RoundGameSlots(
+            roundIndex        : r,
+            roundNumber       : r + 1,
+            courseName        : r == 0
+                ? _courseName(selectedCourseId)
+                : _courseName(additionalRounds[r - 1].courseId),
+            date              : r == 0 ? date : additionalRounds[r - 1].date,
+            currentGames      : roundCupGames[r] ?? [],
+            currentPoints     : roundCupPoints[r] ?? {},
+            currentGroupCounts: roundCupGroupCounts[r] ?? {},
+            onChanged         : (games) => onChanged(r, games),
+            onPointsChanged   : (pts) => onPointsChanged(r, pts),
+            onGroupCountsChanged: (counts) => onGroupCountsChanged(r, counts),
+          ),
+          if (r < numRounds - 1) const SizedBox(height: 16),
+        ],
+      ]),
+    );
+  }
+}
+
+class _RoundGameSlots extends StatefulWidget {
+  final int                     roundIndex;
+  final int                     roundNumber;
+  final String                  courseName;
+  final DateTime                date;
+  final List<String>            currentGames;
+  final Map<String, double>     currentPoints;
+  final Map<String, int>        currentGroupCounts;
+  final void Function(List<String>)           onChanged;
+  final void Function(Map<String, double>)    onPointsChanged;
+  final void Function(Map<String, int>)       onGroupCountsChanged;
+
+  const _RoundGameSlots({
+    required this.roundIndex,
+    required this.roundNumber,
+    required this.courseName,
+    required this.date,
+    required this.currentGames,
+    required this.currentPoints,
+    required this.currentGroupCounts,
+    required this.onChanged,
+    required this.onPointsChanged,
+    required this.onGroupCountsChanged,
+  });
+
+  @override
+  State<_RoundGameSlots> createState() => _RoundGameSlotsState();
+}
+
+class _RoundGameSlotsState extends State<_RoundGameSlots> {
+  final Map<String, TextEditingController> _ptCtrl = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _syncControllers();
+  }
+
+  @override
+  void didUpdateWidget(_RoundGameSlots old) {
+    super.didUpdateWidget(old);
+    _syncControllers();
+  }
+
+  void _syncControllers() {
+    // currentGames is already a unique list — one entry per game type
+    final unique = widget.currentGames.toSet();
+    // Add controllers for new game types
+    for (final g in unique) {
+      if (!_ptCtrl.containsKey(g)) {
+        final initial = widget.currentPoints[g] ?? 1.0;
+        final ctrl = TextEditingController(
+          text: initial % 1 == 0 ? initial.toInt().toString() : initial.toString(),
+        );
+        ctrl.addListener(() {
+          final pts = double.tryParse(ctrl.text.trim()) ?? 1.0;
+          final updated = Map<String, double>.from(widget.currentPoints);
+          updated[g] = pts;
+          widget.onPointsChanged(updated);
+        });
+        _ptCtrl[g] = ctrl;
+      }
+    }
+    // Remove controllers for game types no longer in the list
+    _ptCtrl.removeWhere((g, ctrl) {
+      if (!unique.contains(g)) {
+        ctrl.dispose();
+        return true;
+      }
+      return false;
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final c in _ptCtrl.values) c.dispose();
+    super.dispose();
+  }
+
+  String _label(String id) =>
+      _kCupGameChoices.firstWhere((g) => g.$1 == id,
+              orElse: () => (id, id))
+          .$2;
+
+  void _addGame(BuildContext context) {
+    // Only show game types not already in the list
+    final existing = widget.currentGames.toSet();
+    final choices  = _kCupGameChoices.where((g) => !existing.contains(g.$1)).toList();
+    if (choices.isEmpty) return;
+    showModalBottomSheet<String>(
+      context: context,
+      builder: (_) => ListView(
+        shrinkWrap: true,
+        children: [
+          const ListTile(
+            title: Text('Add a game format',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          ...choices.map((g) => ListTile(
+            title: Text(g.$2),
+            onTap: () => Navigator.of(context).pop(g.$1),
+          )),
+        ],
+      ),
+    ).then((picked) {
+      if (picked == null) return;
+      // Add to games list and default to 1 group
+      widget.onChanged([...widget.currentGames, picked]);
+      final updatedCounts = Map<String, int>.from(widget.currentGroupCounts);
+      updatedCounts.putIfAbsent(picked, () => 1);
+      widget.onGroupCountsChanged(updatedCounts);
+    });
+  }
+
+  void _removeGame(String gameId) {
+    final updated = widget.currentGames.where((g) => g != gameId).toList();
+    widget.onChanged(updated);
+    final updatedPts = Map<String, double>.from(widget.currentPoints)
+      ..remove(gameId);
+    widget.onPointsChanged(updatedPts);
+    final updatedCounts = Map<String, int>.from(widget.currentGroupCounts)
+      ..remove(gameId);
+    widget.onGroupCountsChanged(updatedCounts);
+    _ptCtrl[gameId]?.dispose();
+    _ptCtrl.remove(gameId);
+  }
+
+  void _setGroupCount(String gameId, int delta) {
+    final current  = widget.currentGroupCounts[gameId] ?? 1;
+    final newCount = (current + delta).clamp(1, 8);
+    final updated  = Map<String, int>.from(widget.currentGroupCounts);
+    updated[gameId] = newCount;
+    widget.onGroupCountsChanged(updated);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme       = Theme.of(context);
+    final gameList    = widget.currentGames; // unique game types
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Header
+          Row(children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: Text('R${widget.roundNumber}',
+                  style: TextStyle(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(widget.courseName,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(DateFormat('EEE, MMM d').format(widget.date),
+                    style: theme.textTheme.bodySmall),
+              ]),
+            ),
+          ]),
+
+          const SizedBox(height: 12),
+
+          if (gameList.isEmpty)
+            Text('No games added yet.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontStyle: FontStyle.italic))
+          else ...[
+            // Column headers
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(children: [
+                Expanded(child: Text('Format',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
+                SizedBox(width: 90, child: Text('Groups',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
+                SizedBox(width: 72, child: Text('Pts/win',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
+                const SizedBox(width: 32), // delete button column
+              ]),
+            ),
+            const Divider(height: 1),
+            const SizedBox(height: 4),
+
+            // One row per game type
+            ...gameList.map((g) {
+              final groupCount = widget.currentGroupCounts[g] ?? 1;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(children: [
+                  Expanded(child: Text(_label(g),
+                      style: theme.textTheme.bodyMedium)),
+
+                  // Group count stepper
+                  SizedBox(
+                    width: 90,
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      InkWell(
+                        onTap: groupCount > 1 ? () => _setGroupCount(g, -1) : null,
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(Icons.remove,
+                              size: 16,
+                              color: groupCount > 1
+                                  ? theme.colorScheme.primary
+                                  : theme.disabledColor),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 28,
+                        child: Text('$groupCount',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.bold)),
+                      ),
+                      InkWell(
+                        onTap: () => _setGroupCount(g, 1),
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(Icons.add,
+                              size: 16,
+                              color: theme.colorScheme.primary),
+                        ),
+                      ),
+                    ]),
+                  ),
+
+                  // Points per win field
+                  SizedBox(
+                    width: 72,
+                    child: TextField(
+                      controller: _ptCtrl[g],
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      textAlign: TextAlign.center,
+                      decoration: const InputDecoration(
+                        suffixText: 'pt',
+                        border    : OutlineInputBorder(),
+                        isDense   : true,
+                        contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
+                      ),
+                    ),
+                  ),
+
+                  // Remove button
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16),
+                    onPressed: () => _removeGame(g),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ]),
+              );
+            }),
+          ],
+
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: gameList.length < _kCupGameChoices.length
+                ? () => _addGame(context)
+                : null,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add a game'),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+// ===========================================================================
 // Step 4 — Game Selection
 // ===========================================================================
 
@@ -1937,14 +2625,21 @@ class _ReviewRow extends StatelessWidget {
 
 class _Step6GameSetup extends StatelessWidget {
   final Round       round;
+  final int?        tournamentId;
+  final String      tournamentName;
   final Set<String> activeGames;
+  /// True when this tournament has Cup Play (team_cup) selected.
+  final bool        isCupTournament;
   /// True when match play entry fee / payouts were entered in Step 4 and
   /// auto-applied to all groups — no per-group setup needed.
   final bool        matchPlayConfigured;
 
   const _Step6GameSetup({
     required this.round,
+    this.tournamentId,
+    this.tournamentName      = '',
     required this.activeGames,
+    this.isCupTournament     = false,
     this.matchPlayConfigured = false,
   });
 
@@ -1954,7 +2649,7 @@ class _Step6GameSetup extends StatelessWidget {
     final hasIrishRumble = activeGames.contains(GameIds.irishRumble);
     final hasStrokePlay  = activeGames.contains(GameIds.strokePlay);
     final hasPinkBall    = activeGames.contains(GameIds.pinkBall);
-    final hasMatchPlay   = activeGames.contains(GameIds.matchPlay);
+    final hasMatchPlay   = activeGames.contains(GameIds.singlesNassau);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -1971,6 +2666,30 @@ class _Step6GameSetup extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 24),
+
+          // ── Cup Play setup ─────────────────────────────────────────────────
+          if (isCupTournament && tournamentId != null) ...[
+            _SetupButton(
+              icon : Icons.emoji_events_outlined,
+              label: 'Set Up Cup Teams & Draft',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => RyderCupDraftScreen(
+                  tournamentId  : tournamentId!,
+                  tournamentName: tournamentName,
+                ),
+              )),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                'Create your teams and draft players before the tournament begins.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           if (hasIrishRumble) ...[
             _SetupButton(

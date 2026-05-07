@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django.core.validators import MinValueValidator
 
 from core.models import GameType, RoundStatus, MatchStatus, Player, Tee, Course
 
@@ -51,6 +52,24 @@ class Round(models.Model):
     active_games        = models.JSONField(
                             default=list,
                             help_text="List of GameType values active for this round."
+                        )
+    game_point_values   = models.JSONField(
+                            default=dict, blank=True,
+                            help_text=(
+                                "Cup point value per game type, e.g. "
+                                '{"nassau": 1.0, "singles_nassau": 2.0}. '
+                                "Used only for Cup rounds. Stored at wizard time and "
+                                "applied per-foursome when the round is set up."
+                            )
+                        )
+    cup_group_counts    = models.JSONField(
+                            default=dict, blank=True,
+                            help_text=(
+                                "Number of groups (foursomes) playing each game type "
+                                "in this cup round. Set at wizard time so total_possible "
+                                "can be computed before the round is configured. "
+                                'e.g. {"quota_nassau": 3} or {"irish_rumble": 2, "singles_nassau": 1}.'
+                            )
                         )
     bet_unit            = models.DecimalField(max_digits=6, decimal_places=2, default=5.00)
     handicap_mode       = models.CharField(
@@ -109,6 +128,10 @@ class Foursome(models.Model):
                             )
                         )
     has_phantom         = models.BooleanField(default=False)
+    tee_time            = models.TimeField(
+                            null=True, blank=True,
+                            help_text="Scheduled tee time for this group (HH:MM)."
+                        )
 
     class Meta:
         unique_together = ('round', 'group_number')
@@ -215,3 +238,372 @@ class ChampionshipSeed(models.Model):
 
     def __str__(self):
         return f"Seed {self.seed_number}: {self.player.name}"
+
+
+# ---------------------------------------------------------------------------
+# TEAM TOURNAMENT  (Ryder Cup style — N teams, M players each)
+# ---------------------------------------------------------------------------
+#
+# Design goals:
+#   • Any number of teams (default 2 for Ryder Cup format).
+#   • Any number of players per team — draft size is advisory, not enforced.
+#   • Layers on top of the existing Tournament/Round/Foursome/Game stack;
+#     nothing below is changed.
+#   • Each round references existing GameType values so the organiser picks
+#     from the full list of games already supported by the app.
+# ---------------------------------------------------------------------------
+
+# Reusable result choices for Ryder Cup segment outcomes.
+RYDER_RESULT_CHOICES = [
+    ('team1',  'Team 1'),
+    ('team2',  'Team 2'),
+    ('halved', 'Halved'),
+]
+
+
+# ── 1. TEAM SELECTION ────────────────────────────────────────────────────────
+
+class TeamTournament(models.Model):
+    """
+    A Ryder Cup style team competition layered on top of a Tournament.
+
+    Supports any number of teams (typically 2) of any size.
+    players_per_team is a target for draft purposes — it is not enforced
+    programmatically so organisers can start the tournament while the
+    draft is still in progress.
+
+    draft_complete should be set True when team rosters are locked.
+    After that point the UI should prevent further player moves between teams.
+    """
+    tournament       = models.OneToOneField(
+                           Tournament, on_delete=models.CASCADE,
+                           related_name='team_tournament'
+                       )
+    cup_name         = models.CharField(
+                           max_length=100,
+                           default='Ryder Cup',
+                           help_text=(
+                               "Display name for the team competition — e.g. "
+                               "'Ryder Cup', 'Presidents Cup', 'Bandon Cup'. "
+                               "Shown in the app header and scoreboard."
+                           )
+                       )
+    players_per_team = models.PositiveSmallIntegerField(
+                           default=6,
+                           help_text=(
+                               "Target roster size per team. Advisory — the app "
+                               "does not prevent uneven rosters."
+                           )
+                       )
+    draft_complete   = models.BooleanField(
+                           default=False,
+                           help_text=(
+                               "Set True to lock team rosters before play begins. "
+                               "The UI should block player moves after this."
+                           )
+                       )
+    created_at       = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Team Tournament — {self.tournament.name}"
+
+
+class TournamentTeam(models.Model):
+    """
+    One team in a TeamTournament.
+
+    team_number is 1-based (Team 1, Team 2, …).
+    players is a many-to-many so any number of players can be assigned
+    and the roster can be edited up until draft_complete is True.
+
+    colour / short_code are optional display helpers for the mobile UI
+    (e.g. colour="Blue", short_code="BLU").
+    """
+    tournament  = models.ForeignKey(
+                      TeamTournament, on_delete=models.CASCADE,
+                      related_name='teams'
+                  )
+    name        = models.CharField(max_length=100)
+    team_number = models.PositiveSmallIntegerField()
+    players     = models.ManyToManyField(
+                      Player, related_name='tournament_teams', blank=True
+                  )
+    colour      = models.CharField(
+                      max_length=50, blank=True,
+                      help_text="Display colour name shown in the mobile UI."
+                  )
+    short_code  = models.CharField(
+                      max_length=5, blank=True,
+                      help_text="Up to 5-char abbreviation for scorecards (e.g. 'USA')."
+                  )
+
+    class Meta:
+        unique_together = ('tournament', 'team_number')
+        ordering        = ['team_number']
+
+    def __str__(self):
+        return f"{self.name} (Team {self.team_number}) — {self.tournament.tournament.name}"
+
+
+# ── 2. ROUND / GAME SETUP ────────────────────────────────────────────────────
+
+class RyderCupRoundConfig(models.Model):
+    """
+    Ryder Cup scoring layer for one Round.
+
+    Links a Round to a TeamTournament and defines how Ryder Cup points
+    are earned in that round.
+
+    nassau_point_value  — points per Nassau-segment win (halves = half this).
+    point_multiplier    — applied to every point earned in this round
+                          (set > 1.0 to make later rounds worth more).
+    notes               — organiser memo visible in the setup screen.
+    """
+    round              = models.OneToOneField(
+                             Round, on_delete=models.CASCADE,
+                             related_name='ryder_cup_config'
+                         )
+    tournament         = models.ForeignKey(
+                             TeamTournament, on_delete=models.CASCADE,
+                             related_name='round_configs'
+                         )
+    nassau_point_value = models.DecimalField(
+                             max_digits=5, decimal_places=2, default='1.00',
+                             help_text=(
+                                 "Ryder Cup points awarded per Nassau-segment win. "
+                                 "A halved segment gives each team half this value."
+                             )
+                         )
+    point_multiplier   = models.DecimalField(
+                             max_digits=5, decimal_places=2, default='1.00',
+                             validators=[MinValueValidator('0.01')],
+                             help_text=(
+                                 "Multiplier applied to all points in this round. "
+                                 "E.g. 2.0 makes every point worth double."
+                             )
+                         )
+    notes              = models.TextField(blank=True)
+    # Optional declaration of the game formats this round will contain.
+    # Used to compute total_possible for rounds whose foursomes haven't been
+    # configured yet, so that "pts needed to win" is correct from day one.
+    #
+    # Format: list of objects, one per game type in the round:
+    #   [
+    #     {"game_type": "quota_nassau", "units": 1, "point_value": "3.00"},
+    #     {"game_type": "irish_rumble", "units": 1, "point_value": "3.00"},
+    #     {"game_type": "singles_18",   "units": 1, "point_value": "1.00"}
+    #   ]
+    #
+    # "units" means:
+    #   nassau / quota_nassau / singles_nassau / singles_18 → number of foursomes
+    #   irish_rumble                                         → number of pairings
+    #                                                          (each pairing = 2 foursomes)
+    #
+    # Once the round's RyderCupFoursomeConfig records exist, the live computed
+    # total_possible takes over automatically and this field is ignored.
+    format_declarations = models.JSONField(
+                              null=True, blank=True,
+                              help_text=(
+                                  "Declared game formats for this round. "
+                                  "Used to compute total_possible before foursomes "
+                                  "are configured. See model docstring for format."
+                              )
+                          )
+
+    def __str__(self):
+        return f"Ryder Cup config — {self.round}"
+
+
+class RyderCupFoursomeConfig(models.Model):
+    """
+    Per-foursome Ryder Cup setup for a round.
+
+    game_type   — pick any GameType value the app supports (nassau,
+                  quota_nassau, irish_rumble, match_play, …).
+    team1/team2 — which TournamentTeams are competing in this foursome.
+                  For games where both teams are in the same group (Nassau,
+                  Quota Nassau, match_play): set both.
+                  For Irish Rumble head-to-head (whole foursome = one team):
+                  set team1 to the team whose players fill this foursome;
+                  the cross-foursome pairing is recorded in
+                  RyderCupIrishRumblePairing.
+
+    A foursome can have only one active Ryder Cup game config (OneToOne).
+    """
+    foursome     = models.OneToOneField(
+                       Foursome, on_delete=models.CASCADE,
+                       related_name='ryder_cup_foursome_config'
+                   )
+    round_config = models.ForeignKey(
+                       RyderCupRoundConfig, on_delete=models.CASCADE,
+                       related_name='foursome_configs'
+                   )
+    game_type    = models.CharField(
+                       max_length=30,
+                       choices=GameType.choices,
+                       help_text=(
+                           "Game this foursome plays. Must be a GameType value "
+                           "supported by the app (nassau, quota_nassau, "
+                           "irish_rumble, match_play, etc.)."
+                       )
+                   )
+    team1        = models.ForeignKey(
+                       TournamentTeam, on_delete=models.CASCADE,
+                       related_name='foursome_configs_as_t1',
+                       null=True, blank=True
+                   )
+    team2        = models.ForeignKey(
+                       TournamentTeam, on_delete=models.CASCADE,
+                       related_name='foursome_configs_as_t2',
+                       null=True, blank=True
+                   )
+    point_value  = models.DecimalField(
+                       max_digits=5, decimal_places=2, default='1.00',
+                       help_text=(
+                           "Cup points awarded per match/segment win for this "
+                           "group.  Overrides the round-level nassau_point_value "
+                           "so that different game types can carry different weights "
+                           "(e.g. Fourball = 2 pts, Singles = 1 pt)."
+                       )
+                   )
+
+    def __str__(self):
+        t1 = self.team1.name if self.team1 else '?'
+        t2 = self.team2.name if self.team2 else '?'
+        return (
+            f"Group {self.foursome.group_number} — "
+            f"{self.game_type} — {t1} vs {t2}"
+        )
+
+
+class RyderCupIrishRumblePairing(models.Model):
+    """
+    Links two foursomes for a head-to-head Irish Rumble comparison.
+
+    In a Ryder Cup Irish Rumble round, each foursome is a homogeneous
+    team (all 4 players on the same Ryder Cup team).  Two foursomes
+    then compete against each other by comparing their accumulated
+    Irish Rumble scores Nassau-style (F9 / B9 / Overall 18).
+
+    Lower cumulative score wins each segment (stroke-play comparison).
+    Segment results are stored here by calculate_ryder_cup_points()
+    after scores are entered.
+    """
+    round_config   = models.ForeignKey(
+                         RyderCupRoundConfig, on_delete=models.CASCADE,
+                         related_name='irish_rumble_pairings'
+                     )
+    foursome_a     = models.OneToOneField(
+                         Foursome, on_delete=models.CASCADE,
+                         related_name='ryder_cup_rumble_as_a'
+                     )
+    foursome_b     = models.OneToOneField(
+                         Foursome, on_delete=models.CASCADE,
+                         related_name='ryder_cup_rumble_as_b'
+                     )
+    team_a         = models.ForeignKey(
+                         TournamentTeam, on_delete=models.CASCADE,
+                         related_name='rumble_pairings_as_a'
+                     )
+    team_b         = models.ForeignKey(
+                         TournamentTeam, on_delete=models.CASCADE,
+                         related_name='rumble_pairings_as_b'
+                     )
+    # Resolved by calculate_ryder_cup_points() — null until enough scores are in.
+    front9_result  = models.CharField(
+                         max_length=10, choices=RYDER_RESULT_CHOICES,
+                         null=True, blank=True,
+                         help_text="'team1'=team_a won the front 9."
+                     )
+    back9_result   = models.CharField(
+                         max_length=10, choices=RYDER_RESULT_CHOICES,
+                         null=True, blank=True,
+                     )
+    overall_result = models.CharField(
+                         max_length=10, choices=RYDER_RESULT_CHOICES,
+                         null=True, blank=True,
+                     )
+
+    def __str__(self):
+        return (
+            f"IR pairing: Grp {self.foursome_a.group_number} ({self.team_a.name}) "
+            f"vs Grp {self.foursome_b.group_number} ({self.team_b.name})"
+        )
+
+
+# ── 3. RYDER CUP POINTS (score entry output) ─────────────────────────────────
+
+class RyderCupMatchPoints(models.Model):
+    """
+    One row per Ryder Cup point-earning segment within a round.
+
+    Every Nassau-style game produces up to 3 rows (front9, back9, overall).
+    Singles matches also produce 3 rows but include player1/player2 to
+    identify which players were paired.
+
+    Source of the match is identified by exactly one of:
+        foursome             — for within-group games (Nassau, Quota Nassau,
+                               Match Play, singles Nassau).
+        irish_rumble_pairing — for cross-group Irish Rumble matchups.
+
+    team1_points + team2_points always sum to nassau_point_value × multiplier
+    (or 0 if the segment is not yet resolved).
+    """
+    SEGMENT_CHOICES = [
+        ('front9',  'Front 9'),
+        ('back9',   'Back 9'),
+        ('overall', 'Overall 18'),
+    ]
+
+    round_config         = models.ForeignKey(
+                               RyderCupRoundConfig, on_delete=models.CASCADE,
+                               related_name='match_points'
+                           )
+    team1                = models.ForeignKey(
+                               TournamentTeam, on_delete=models.CASCADE,
+                               related_name='ryder_points_as_t1'
+                           )
+    team2                = models.ForeignKey(
+                               TournamentTeam, on_delete=models.CASCADE,
+                               related_name='ryder_points_as_t2'
+                           )
+    # Source — exactly one should be non-null
+    foursome             = models.ForeignKey(
+                               Foursome, on_delete=models.SET_NULL,
+                               null=True, blank=True,
+                               related_name='ryder_cup_points'
+                           )
+    irish_rumble_pairing = models.ForeignKey(
+                               RyderCupIrishRumblePairing, on_delete=models.SET_NULL,
+                               null=True, blank=True,
+                               related_name='match_points'
+                           )
+    # For singles matches: which two players were paired
+    player1              = models.ForeignKey(
+                               Player, on_delete=models.SET_NULL,
+                               null=True, blank=True,
+                               related_name='ryder_points_as_p1'
+                           )
+    player2              = models.ForeignKey(
+                               Player, on_delete=models.SET_NULL,
+                               null=True, blank=True,
+                               related_name='ryder_points_as_p2'
+                           )
+    segment              = models.CharField(max_length=10, choices=SEGMENT_CHOICES)
+    game_type            = models.CharField(max_length=30, choices=GameType.choices)
+    result               = models.CharField(
+                               max_length=10, choices=RYDER_RESULT_CHOICES,
+                               null=True, blank=True
+                           )
+    team1_points         = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    team2_points         = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['round_config', 'game_type', 'segment']
+
+    def __str__(self):
+        return (
+            f"{self.segment} | {self.game_type} | "
+            f"{self.team1.name} {self.team1_points} – "
+            f"{self.team2.name} {self.team2_points}"
+        )

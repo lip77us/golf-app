@@ -329,7 +329,7 @@ def irish_rumble_summary(round_obj) -> dict:
     try:
         config = round_obj.irish_rumble_config
     except IrishRumbleConfig.DoesNotExist:
-        return {'segments': [], 'overall': []}
+        return {'configured': False, 'segments': [], 'overall': []}
 
     par_by_hole = _par_index_for_round(round_obj)
 
@@ -508,12 +508,18 @@ def irish_rumble_summary(round_obj) -> dict:
             'per_person_payout': round(group_payout / n_players, 2) if n_players else 0.0,
         })
 
+    # Extract balls_to_count from first segment (all segments may differ, but
+    # expose the dominant value so the UI can show e.g. "Best 2 of 4 count").
+    balls_to_count = config.segments[0]['balls_to_count'] if config.segments else None
+
     return {
+        'configured'   : True,
         'handicap_mode': config.handicap_mode,
         'net_percent'  : config.net_percent,
         'entry_fee'    : float(config.entry_fee),
         'payouts'      : payouts_list,
         'pool'         : pool,
+        'balls_to_count': balls_to_count,
         'segments'     : segments_out,
         'overall'      : overall_out,
     }
