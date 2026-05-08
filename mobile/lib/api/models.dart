@@ -2,6 +2,8 @@
 /// Dart data classes mirroring the Django API responses.
 /// All fromJson constructors handle null-safety explicitly.
 
+import 'package:flutter/foundation.dart';
+
 // ---------------------------------------------------------------------------
 // Shared formatting helpers
 // ---------------------------------------------------------------------------
@@ -1310,6 +1312,10 @@ class NassauSummary {
   // Four Ball phantom info (null when no cross-foursome phantom)
   final NassauPhantomInfo? phantom;
 
+  // Team colours from cup config (default Red / Blue)
+  final String team1Colour;
+  final String team2Colour;
+
   const NassauSummary({
     required this.status,
     required this.variant,
@@ -1343,6 +1349,8 @@ class NassauSummary {
     required this.canPress,
     this.pressAvailableNine,
     this.phantom,
+    this.team1Colour = 'Red',
+    this.team2Colour = 'Blue',
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -1409,9 +1417,22 @@ class NassauSummary {
           .toList(),
       canPress:           j['can_press']            as bool?   ?? false,
       pressAvailableNine: j['press_available_nine'] as String?,
-      phantom: j['phantom'] == null
-          ? null
-          : NassauPhantomInfo.fromJson(j['phantom'] as Map<String, dynamic>),
+      phantom: () {
+        // Defensive parse so a phantom type-cast error never breaks the summary.
+        final raw = j['phantom'];
+        if (raw == null) {
+          debugPrint('NassauSummary.fromJson: phantom field is null');
+          return null;
+        }
+        try {
+          return NassauPhantomInfo.fromJson(raw as Map<String, dynamic>);
+        } catch (e, st) {
+          debugPrint('NassauPhantomInfo.fromJson FAILED: $e\n$st');
+          return null;
+        }
+      }(),
+      team1Colour: j['team1_colour'] as String? ?? 'Red',
+      team2Colour: j['team2_colour'] as String? ?? 'Blue',
     );
   }
 }
@@ -1953,16 +1974,30 @@ class QuotaNassauMatchSummary {
 class QuotaNassauSummary {
   final String status;
   final List<QuotaNassauMatchSummary> matches;
+  final NassauPhantomInfo? phantom;
+  final String team1Colour;
+  final String team2Colour;
 
-  const QuotaNassauSummary({required this.status, required this.matches});
+  const QuotaNassauSummary({
+    required this.status,
+    required this.matches,
+    this.phantom,
+    this.team1Colour = 'Red',
+    this.team2Colour = 'Blue',
+  });
 
-  factory QuotaNassauSummary.fromJson(Map<String, dynamic> j) =>
-      QuotaNassauSummary(
-        status  : j['status'] as String? ?? 'pending',
-        matches : (j['matches'] as List? ?? [])
-            .map((m) => QuotaNassauMatchSummary.fromJson(m as Map<String, dynamic>))
-            .toList(),
-      );
+  factory QuotaNassauSummary.fromJson(Map<String, dynamic> j) {
+    final rawPhantom = j['phantom_info'] as Map<String, dynamic>?;
+    return QuotaNassauSummary(
+      status      : j['status'] as String? ?? 'pending',
+      matches     : (j['matches'] as List? ?? [])
+          .map((m) => QuotaNassauMatchSummary.fromJson(m as Map<String, dynamic>))
+          .toList(),
+      phantom     : rawPhantom != null ? NassauPhantomInfo.fromJson(rawPhantom) : null,
+      team1Colour : j['team1_colour'] as String? ?? 'Red',
+      team2Colour : j['team2_colour'] as String? ?? 'Blue',
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -3158,26 +3158,84 @@ class RyderCupRoundSetupView(APIView):
             elif fs_data['game_type'] == GameType.QUOTA_NASSAU:
                 # Auto-pair: team1[i] vs team2[i] cross-team 1v1 matches
                 from services.quota_nassau import setup_quota_nassau
-                foursome_pids = set(
+                real_pids_qn = set(
                     foursome.memberships.filter(player__is_phantom=False)
                     .values_list('player_id', flat=True)
                 )
                 t1_players = [p for p in (team1.players.all() if team1 else [])
-                              if p.pk in foursome_pids]
+                              if p.pk in real_pids_qn]
                 t2_players = [p for p in (team2.players.all() if team2 else [])
-                              if p.pk in foursome_pids]
+                              if p.pk in real_pids_qn]
+
+                # Detect phantom: same logic as Nassau — fill under-represented team
+                qn_phantom_team = None
+                if foursome.has_phantom:
+                    t1_all_pids = set(team1.players.values_list('id', flat=True)) if team1 else set()
+                    t2_all_pids = set(team2.players.values_list('id', flat=True)) if team2 else set()
+                    phantom_pid_qn = foursome.memberships.filter(
+                        player__is_phantom=True
+                    ).values_list('player_id', flat=True).first()
+                    if phantom_pid_qn:
+                        t1_real_count = len(real_pids_qn & t1_all_pids)
+                        t2_real_count = len(real_pids_qn & t2_all_pids)
+                        if t1_real_count < t2_real_count:
+                            # Phantom fills Team 1 — append a fake player object
+                            from core.models import Player as _Player
+                            _ph_player = _Player.objects.get(pk=phantom_pid_qn)
+                            t1_players = t1_players + [_ph_player]
+                            qn_phantom_team = team1
+                        else:
+                            from core.models import Player as _Player
+                            _ph_player = _Player.objects.get(pk=phantom_pid_qn)
+                            t2_players = t2_players + [_ph_player]
+                            qn_phantom_team = team2
+
+                # Pre-compute phantom quota: 36 − round(avg donor course_handicap)
+                phantom_quota_qn = None
+                if foursome.has_phantom and qn_phantom_team is not None:
+                    from tournament.models import FoursomeMembership as _FM
+                    _team_pids = set(
+                        qn_phantom_team.players.values_list('id', flat=True)
+                    )
+                    _donor_hcps = list(
+                        _FM.objects
+                        .filter(
+                            foursome__round=round_obj,
+                            player_id__in=_team_pids,
+                            player__is_phantom=False,
+                        )
+                        .exclude(foursome=foursome)
+                        .values_list('course_handicap', flat=True)
+                    )
+                    if _donor_hcps:
+                        _avg = sum(_donor_hcps) / len(_donor_hcps)
+                        phantom_quota_qn = max(0, 36 - round(_avg))
+
+                def _quota_qn(player):
+                    if getattr(player, 'is_phantom', False):
+                        return phantom_quota_qn if phantom_quota_qn is not None else 18
+                    return _quota_for_player(foursome, player.pk)
+
                 pairings = []
                 for i in range(min(len(t1_players), len(t2_players))):
                     p1 = t1_players[i]
                     p2 = t2_players[i]
                     pairings.append({
                         'player1_id'   : p1.pk,
-                        'player1_quota': _quota_for_player(foursome, p1.pk),
+                        'player1_quota': _quota_qn(p1),
                         'player2_id'   : p2.pk,
-                        'player2_quota': _quota_for_player(foursome, p2.pk),
+                        'player2_quota': _quota_qn(p2),
                     })
                 if pairings:
                     setup_quota_nassau(foursome, pairings)
+
+                print(f'[quota_nassau setup] foursome={foursome.id} has_phantom={foursome.has_phantom} phantom_team={qn_phantom_team}')
+                if foursome.has_phantom and qn_phantom_team is not None:
+                    _phantom_foursomes_to_configure.append(
+                        (foursome, qn_phantom_team)
+                    )
+                    print(f'[quota_nassau setup] queued phantom setup for foursome {foursome.id}')
+
                 existing_games = list(foursome.active_games or [])
                 if 'quota_nassau' not in existing_games:
                     existing_games.append('quota_nassau')

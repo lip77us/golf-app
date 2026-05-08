@@ -56,6 +56,17 @@ int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
 
 String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
 
+Color _nassauTeamColor(String? raw) {
+  switch ((raw ?? '').toLowerCase()) {
+    case 'red':    return Colors.red.shade700;
+    case 'green':  return Colors.green.shade700;
+    case 'gold':
+    case 'yellow': return Colors.amber.shade700;
+    case 'blue':
+    default:       return Colors.blue.shade700;
+  }
+}
+
 class _RunningTotal {
   final int grossVsPar;
   final int netVsPar;
@@ -675,6 +686,8 @@ class _NassauScreenState extends State<NassauScreen> {
         _PressesStrip(
           presses:     nas.presses,
           currentHole: _selectedHole,
+          t1Color:     _nassauTeamColor(nas.team1Colour),
+          t2Color:     _nassauTeamColor(nas.team2Colour),
         ),
 
       Expanded(
@@ -709,10 +722,9 @@ class _NassauScreenState extends State<NassauScreen> {
                   players:     players,
                   scorecard:   sc,
                   currentHole: _selectedHole,
-                  phantomInfo: nas.phantom,
                   onTapHole:   (h) => setState(() => _selectedHole = h),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
               ] else if (rp.loadingNassau) ...[
                 const Center(
                   child: Padding(
@@ -720,6 +732,16 @@ class _NassauScreenState extends State<NassauScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
+              ],
+
+              // Phantom info strip — HC and per-donor rotation summary.
+              // Placed here (outside the grid) matching the Quota Nassau layout.
+              if (nas?.phantom != null) ...[
+                _PhantomInfoStrip(
+                  phantomInfo: nas!.phantom!,
+                  players:     players,
+                ),
+                const SizedBox(height: 8),
               ],
 
               const SizedBox(height: 16),
@@ -772,6 +794,8 @@ class _NassauHoleScoreCard extends StatelessWidget {
 
   String get _mode       => nassau?.handicapMode ?? 'net';
   int    get _netPercent => nassau?.netPercent   ?? 100;
+  Color  get _t1Color    => _nassauTeamColor(nassau?.team1Colour);
+  Color  get _t2Color    => _nassauTeamColor(nassau?.team2Colour);
 
   int? get _lowPlayingHandicap {
     if (_mode != 'strokes_off' || players.isEmpty) return null;
@@ -952,6 +976,8 @@ class _NassauHoleScoreCard extends StatelessWidget {
                 strokesOnThisHole:   matchStrok,
                 showNetRunningTotal: _mode == 'net',
                 teamLabel:           _teamLabelFor(m.player.id),
+                t1Color:             _t1Color,
+                t2Color:             _t2Color,
                 onTap: (hasScore && !isHot) ? () => onEditTap(m) : null,
               ),
               if (isHot)
@@ -992,12 +1018,14 @@ class _HoleOutcomeBanner extends StatelessWidget {
       fg    = Colors.grey.shade700;
       label = 'Halved';
     } else if (winner == 'team1') {
-      bg    = Colors.blue.shade50;
-      fg    = Colors.blue.shade700;
+      final c = _nassauTeamColor(nassau.team1Colour);
+      bg    = c.withOpacity(0.10);
+      fg    = c;
       label = 'T1 wins hole';
     } else {
-      bg    = Colors.orange.shade50;
-      fg    = Colors.orange.shade800;
+      final c = _nassauTeamColor(nassau.team2Colour);
+      bg    = c.withOpacity(0.10);
+      fg    = c;
       label = 'T2 wins hole';
     }
 
@@ -1161,6 +1189,8 @@ class _NassauPlayerRow extends StatelessWidget {
   final int           strokesOnThisHole;
   final bool          showNetRunningTotal;
   final String?       teamLabel;
+  final Color         t1Color;
+  final Color         t2Color;
 
   const _NassauPlayerRow({
     required this.member,
@@ -1172,7 +1202,10 @@ class _NassauPlayerRow extends StatelessWidget {
     this.strokesOnThisHole = 0,
     this.showNetRunningTotal = true,
     this.teamLabel,
-  });
+    Color? t1Color,
+    Color? t2Color,
+  })  : t1Color = t1Color ?? const Color(0xFF1976D2),
+        t2Color = t2Color ?? const Color(0xFFD32F2F);
 
   @override
   Widget build(BuildContext context) {
@@ -1202,9 +1235,7 @@ class _NassauPlayerRow extends StatelessWidget {
             width: 28,
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
-              color: teamLabel == 'T1'
-                  ? Colors.blue.shade100
-                  : Colors.orange.shade100,
+              color: (teamLabel == 'T1' ? t1Color : t2Color).withOpacity(0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -1212,9 +1243,7 @@ class _NassauPlayerRow extends StatelessWidget {
               textAlign: TextAlign.center,
               style: theme.textTheme.labelSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: teamLabel == 'T1'
-                    ? Colors.blue.shade700
-                    : Colors.orange.shade800,
+                color: teamLabel == 'T1' ? t1Color : t2Color,
               ),
             ),
           ),
@@ -1542,7 +1571,6 @@ class _NassauSummaryGrid extends StatefulWidget {
   final List<Membership>   players;
   final Scorecard          scorecard;
   final int                currentHole;
-  final NassauPhantomInfo? phantomInfo;
   final void Function(int hole)? onTapHole;
 
   const _NassauSummaryGrid({
@@ -1550,7 +1578,6 @@ class _NassauSummaryGrid extends StatefulWidget {
     required this.players,
     required this.scorecard,
     required this.currentHole,
-    this.phantomInfo,
     this.onTapHole,
   });
 
@@ -1640,6 +1667,8 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
     final players   = widget.players;
     final scorecard = widget.scorecard;
     final currentHole = widget.currentHole;
+    final t1Color = _nassauTeamColor(nassau.team1Colour);
+    final t2Color = _nassauTeamColor(nassau.team2Colour);
     final onTapHole   = widget.onTapHole;
 
     const double labelColW = 56.0;
@@ -1773,12 +1802,12 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                         Color? fg;
                         String label = '·';
                         if (winner == 'team1') {
-                          bg    = Colors.blue.shade100;
-                          fg    = Colors.blue.shade700;
+                          bg    = t1Color.withOpacity(0.15);
+                          fg    = t1Color;
                           label = 'T1';
                         } else if (winner == 'team2') {
-                          bg    = Colors.orange.shade100;
-                          fg    = Colors.orange.shade800;
+                          bg    = t2Color.withOpacity(0.15);
+                          fg    = t2Color;
                           label = 'T2';
                         } else if (winner == 'halved') {
                           bg    = Colors.grey.shade100;
@@ -1820,12 +1849,12 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                           String lbl = '·';
                           if (delta != null) {
                             if (delta > 0) {
-                              bg  = Colors.blue.shade100;
-                              fg  = Colors.blue.shade700;
+                              bg  = t1Color.withOpacity(0.15);
+                              fg  = t1Color;
                               lbl = '+$delta';
                             } else if (delta < 0) {
-                              bg  = Colors.orange.shade100;
-                              fg  = Colors.orange.shade800;
+                              bg  = t2Color.withOpacity(0.15);
+                              fg  = t2Color;
                               lbl = '$delta';
                             } else {
                               bg  = Colors.grey.shade100;
@@ -1845,14 +1874,7 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                 ],
               ),
             ),
-          // Phantom info strip (shown below grid when cross-foursome phantom active)
-          if (widget.phantomInfo != null) ...[
-            const SizedBox(height: 8),
-            _PhantomInfoStrip(
-              phantomInfo: widget.phantomInfo!,
-              players:     players,
-            ),
-          ],
+          // (Phantom info strip is rendered outside this grid in _buildBody)
         ],
         ),
       ),
@@ -1877,14 +1899,12 @@ class _PhantomInfoStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // HC comes directly from the nassau summary phantom info (server-computed average).
-    // Fall back to the membership's playing_handicap if available.
-    final phantomMember = players
-        .where((m) => m.player.id == phantomInfo.phantomPlayerId)
-        .firstOrNull;
+    // HC is avg course_handicap of donor players, computed server-side.
+    // phantomPlayingHcp used to be stored as 0 (cross-foursome phantoms have no
+    // real players in their own foursome), but is now correctly computed from donors.
     final hc = phantomInfo.phantomPlayingHcp > 0
         ? phantomInfo.phantomPlayingHcp
-        : phantomMember?.playingHandicap;
+        : null;
 
     // Group holes by donor name for a compact rotation summary
     final Map<String, List<int>> byDonor = {};
@@ -1926,7 +1946,7 @@ class _PhantomInfoStrip extends StatelessWidget {
             const SizedBox(width: 8),
             if (hc != null)
               Text(
-                'Playing HC: $hc (avg of team)',
+                'Course HC: $hc (avg of donors)',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w500,
@@ -2142,16 +2162,23 @@ class _TeamBanner extends StatelessWidget {
     final theme = Theme.of(context);
     final t1 = summary.team1.map((p) => p.name).join(' & ');
     final t2 = summary.team2.map((p) => p.name).join(' & ');
+    final rawT1 = _nassauTeamColor(summary.team1Colour);
+    final rawT2 = _nassauTeamColor(summary.team2Colour);
+    final t1IsRed   = rawT1.red >= rawT1.blue;
+    final leftColor  = t1IsRed ? rawT1 : rawT2;
+    final rightColor = t1IsRed ? rawT2 : rawT1;
+    final leftLabel  = t1IsRed ? t1 : t2;
+    final rightLabel = t1IsRed ? t2 : t1;
 
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(children: [
         Expanded(
-          child: Text(t1,
+          child: Text(leftLabel,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.blue.shade700,
+                color: leftColor,
               ),
               overflow: TextOverflow.ellipsis),
         ),
@@ -2159,11 +2186,11 @@ class _TeamBanner extends StatelessWidget {
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         Expanded(
-          child: Text(t2,
+          child: Text(rightLabel,
               textAlign: TextAlign.right,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.orange.shade800,
+                color: rightColor,
               ),
               overflow: TextOverflow.ellipsis),
         ),
@@ -2180,7 +2207,15 @@ class _PressesStrip extends StatelessWidget {
   final List<NassauPressResult> presses;
   /// Current hole being viewed — used to filter which nine's presses to show.
   final int currentHole;
-  const _PressesStrip({required this.presses, required this.currentHole});
+  final Color t1Color;
+  final Color t2Color;
+  const _PressesStrip({
+    required this.presses,
+    required this.currentHole,
+    Color? t1Color,
+    Color? t2Color,
+  })  : t1Color = t1Color ?? const Color(0xFF1976D2),
+        t2Color = t2Color ?? const Color(0xFFD32F2F);
 
   @override
   Widget build(BuildContext context) {
@@ -2210,12 +2245,12 @@ class _PressesStrip extends StatelessWidget {
           Color  chipColor;
           String scoreText;
           if (result == 'team1') {
-            chipColor = Colors.blue.shade100;
+            chipColor = t1Color.withOpacity(0.15);
             scoreText = p.holesRemaining > 0
                 ? '$mAbs&${p.holesRemaining}'
                 : '${mAbs}UP';
           } else if (result == 'team2') {
-            chipColor = Colors.orange.shade100;
+            chipColor = t2Color.withOpacity(0.15);
             scoreText = p.holesRemaining > 0
                 ? '$mAbs&${p.holesRemaining}'
                 : '${mAbs}UP';
@@ -2311,6 +2346,9 @@ class _MatchStatusBar extends StatelessWidget {
     );
   }
 
+  Color get _t1Color => _nassauTeamColor(summary.team1Colour);
+  Color get _t2Color => _nassauTeamColor(summary.team2Colour);
+
   Widget _betChip(
     BuildContext context,
     String label,
@@ -2330,7 +2368,7 @@ class _MatchStatusBar extends StatelessWidget {
         bg       = Colors.grey.shade200;
         subtitle = 'AS';
       } else {
-        bg = result == 'team1' ? Colors.blue.shade100 : Colors.orange.shade100;
+        bg = result == 'team1' ? _t1Color.withOpacity(0.15) : _t2Color.withOpacity(0.15);
         // Use frozen decided score if the nine ended early (e.g. "5&4").
         final dm = bet.decidedMargin;
         final dr = bet.decidedRemaining;
@@ -2348,11 +2386,11 @@ class _MatchStatusBar extends StatelessWidget {
       subtitle = 'AS';
     } else if (holesLeft >= 0 && bet.margin.abs() > holesLeft) {
       // Mathematically decided before the last hole — show "5&4" notation.
-      bg       = t1Leads ? Colors.blue.shade100 : Colors.orange.shade100;
+      bg       = t1Leads ? _t1Color.withOpacity(0.15) : _t2Color.withOpacity(0.15);
       subtitle = '${bet.margin.abs()}&$holesLeft';
     } else {
       // In progress — colour by leader, no team label.
-      bg       = t1Leads ? Colors.blue.shade50 : Colors.orange.shade50;
+      bg       = t1Leads ? _t1Color.withOpacity(0.08) : _t2Color.withOpacity(0.08);
       subtitle = '${bet.margin.abs()}UP';
     }
 
@@ -2391,7 +2429,7 @@ class _MatchStatusBar extends StatelessWidget {
         bg       = Colors.grey.shade200;
         subtitle = 'AS';
       } else {
-        bg       = result == 'team1' ? Colors.blue.shade100 : Colors.orange.shade100;
+        bg       = result == 'team1' ? _t1Color.withOpacity(0.15) : _t2Color.withOpacity(0.15);
         subtitle = 'wins';
       }
     } else if (bet.holesPlayed == 0) {
@@ -2401,7 +2439,7 @@ class _MatchStatusBar extends StatelessWidget {
       bg       = theme.colorScheme.surfaceContainer;
       subtitle = 'AS';
     } else {
-      bg       = bet.margin > 0 ? Colors.blue.shade50 : Colors.orange.shade50;
+      bg       = bet.margin > 0 ? _t1Color.withOpacity(0.08) : _t2Color.withOpacity(0.08);
       subtitle = '${bet.margin > 0 ? '+' : ''}${bet.margin}';
     }
 

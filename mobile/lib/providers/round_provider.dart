@@ -585,8 +585,8 @@ class RoundProvider extends ChangeNotifier {
       _nassauSummary = await _client.getNassauSummary(foursomeId);
     } on NetworkException {
       // Offline — keep the previous summary around.
-    } catch (e) {
-      debugPrint('loadNassau error: $e');
+    } catch (e, st) {
+      debugPrint('loadNassau($foursomeId) ERROR: $e\n$st');
     } finally {
       _loadingNassau = false;
       notifyListeners();

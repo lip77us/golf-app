@@ -21,6 +21,18 @@ import '../widgets/net_score_button.dart';
 // Gross Stableford: eagle=4, birdie=3, par=2, bogey=1, dbl+=0
 int _gsf(int gross, int par) => (2 + par - gross).clamp(0, 99);
 
+/// Map a colour name string to a Color for team display.
+Color _qnTeamColor(String? raw) {
+  switch ((raw ?? '').toLowerCase()) {
+    case 'red':    return Colors.red.shade700;
+    case 'green':  return Colors.green.shade700;
+    case 'gold':
+    case 'yellow': return Colors.amber.shade700;
+    case 'blue':
+    default:       return Colors.blue.shade700;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -58,28 +70,34 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
   // ── Player helpers ─────────────────────────────────────────────────────────
 
   /// Returns players ordered: T1 first (player1 from each match), T2 second.
+  /// For cross-foursome phantoms the phantom membership is appended at the end
+  /// so it appears in the score grid but has no entry picker.
   List<Membership> _orderedPlayers(
       Foursome foursome, QuotaNassauSummary? summary) {
-    final members = foursome.realPlayers;
+    // All players including phantom for ordering against match pairings
+    final allMembers = foursome.memberships;
+    final members    = foursome.realPlayers;
     if (summary == null || summary.matches.isEmpty) return members;
 
     final ordered = <Membership>[];
+    // Interleave by match pair: T1 player then T2 player for each match.
+    // This ensures phantom's direct opponent (T1 of phantom's match) is
+    // immediately above the phantom row.
     for (final m in summary.matches) {
-      final mem = members
+      final mem1 = allMembers
           .where((x) => x.player.id == m.player1.playerId)
           .firstOrNull;
-      if (mem != null && !ordered.any((o) => o.player.id == mem.player.id)) {
-        ordered.add(mem);
+      if (mem1 != null && !ordered.any((o) => o.player.id == mem1.player.id)) {
+        ordered.add(mem1);
       }
-    }
-    for (final m in summary.matches) {
-      final mem = members
+      final mem2 = allMembers
           .where((x) => x.player.id == m.player2.playerId)
           .firstOrNull;
-      if (mem != null && !ordered.any((o) => o.player.id == mem.player.id)) {
-        ordered.add(mem);
+      if (mem2 != null && !ordered.any((o) => o.player.id == mem2.player.id)) {
+        ordered.add(mem2);
       }
     }
+    // Any real players not yet in the list
     for (final mem in members) {
       if (!ordered.any((o) => o.player.id == mem.player.id)) {
         ordered.add(mem);
@@ -112,7 +130,10 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
   void _jumpToFirstUnplayed(RoundProvider rp, List<Membership> players) {
     final sc = rp.scorecard;
     if (sc == null) return;
-    final realIds = players.map((m) => m.player.id).toSet();
+    final realIds = players
+        .where((m) => !m.player.isPhantom)
+        .map((m) => m.player.id)
+        .toSet();
     for (int h = 1; h <= 18; h++) {
       final hd = sc.holeData(h);
       if (hd == null) continue;
@@ -142,16 +163,30 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
     if (_hotPlayerOverride != null) {
       final idx =
           players.indexWhere((m) => m.player.id == _hotPlayerOverride);
-      if (idx >= 0) return idx;
+      if (idx >= 0 && !players[idx].player.isPhantom) return idx;
     }
     for (int i = 0; i < players.length; i++) {
+      if (players[i].player.isPhantom) continue; // phantom score comes via propagation
       if (!scores.containsKey(players[i].player.id)) return i;
     }
     return -1;
   }
 
-  bool _allScored(List<Membership> players, Map<int, int> scores) =>
-      players.every((m) => scores.containsKey(m.player.id));
+  bool _allScored(List<Membership> players, Map<int, int> scores,
+      {NassauPhantomInfo? phantomInfo, int? hole}) {
+    for (final m in players) {
+      if (m.player.isPhantom) {
+        // Cross-foursome phantom: block until the assigned donor has scored.
+        if (phantomInfo != null && hole != null) {
+          final donor = phantomInfo.donorForHole(hole);
+          if (donor != null && !donor.hasScore) return false;
+        }
+        continue; // phantom score arrives via propagation — never entered here
+      }
+      if (!scores.containsKey(m.player.id)) return false;
+    }
+    return true;
+  }
 
   static Map<int, Map<int, int>> _mergePending(
     Map<int, Map<int, int>> dbPending,
@@ -376,7 +411,7 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
               context, rp, sc, summary, foursome, players, isComplete),
       bottomNavigationBar: sc == null
           ? null
-          : _buildBottomBar(context, rp, sc, players),
+          : _buildBottomBar(context, rp, sc, players, summary?.phantom),
     );
   }
 
@@ -385,9 +420,11 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
     RoundProvider rp,
     Scorecard sc,
     List<Membership> players,
+    NassauPhantomInfo? phantomInfo,
   ) {
     final scores     = _effectiveScores(sc, _selectedHole);
-    final allDone    = _allScored(players, scores);
+    final allDone    = _allScored(players, scores,
+        phantomInfo: phantomInfo, hole: _selectedHole);
     final isComplete = rp.round?.status == 'complete';
     final par        = sc.holeData(_selectedHole)?.par ?? 4;
 
@@ -486,12 +523,130 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
                   }),
                 ),
 
+              // Phantom info strip
+              if (summary?.phantom != null) ...[
+                const SizedBox(height: 4),
+                _QNPhantomInfoStrip(
+                  phantomInfo: summary!.phantom!,
+                  players:     players,
+                  quotaMap:    quotaMap,
+                ),
+              ],
+
               const SizedBox(height: 16),
             ],
           ),
         ),
       ),
     ]);
+  }
+}
+
+// ===========================================================================
+// Phantom info strip (cross-foursome phantom for Quota Nassau)
+// ===========================================================================
+
+class _QNPhantomInfoStrip extends StatelessWidget {
+  final NassauPhantomInfo phantomInfo;
+  final List<Membership>  players;
+  final Map<int, int>     quotaMap;
+
+  const _QNPhantomInfoStrip({
+    required this.phantomInfo,
+    required this.players,
+    required this.quotaMap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // Derive course HC from quota: course_hc = 36 - quota.
+    // The stored phantomPlayingHcp is often 0 for phantoms, so use quotaMap.
+    final phantomQuota = quotaMap[phantomInfo.phantomPlayerId];
+    final hc = phantomQuota != null
+        ? 36 - phantomQuota
+        : (phantomInfo.phantomPlayingHcp > 0
+            ? phantomInfo.phantomPlayingHcp
+            : null);
+
+    // Group holes by donor name
+    final Map<String, List<int>> byDonor = {};
+    for (int h = 1; h <= 18; h++) {
+      final donor = phantomInfo.donorForHole(h);
+      if (donor == null) continue;
+      byDonor.putIfAbsent(donor.playerName, () => []).add(h);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: theme.colorScheme.secondaryContainer),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text('PHANTOM',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  )),
+            ),
+            const SizedBox(width: 8),
+            if (hc != null)
+              Text('Course HC: \$hc (avg of team)',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  )),
+          ]),
+          if (byDonor.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            ...byDonor.entries.map((e) {
+              final name    = e.key;
+              final holes   = e.value;
+              final scored  = holes.where((h) =>
+                  phantomInfo.donorForHole(h)?.hasScore ?? false).length;
+              final pending = holes.length - scored;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Row(children: [
+                  Container(
+                    width: 6, height: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: pending == 0
+                          ? Colors.green.shade400
+                          : theme.colorScheme.outline,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "$name — holes ${holes.join(', ')} "
+                      "($scored scored${pending > 0 ? ', $pending pending' : ''})",
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ]),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -513,15 +668,23 @@ class _QNTeamBanner extends StatelessWidget {
         ? 'Team 2'
         : summary!.matches.map((m) => m.player2.shortName).join(' & ');
 
+    final t1Color  = _qnTeamColor(summary?.team1Colour);
+    final t2Color  = _qnTeamColor(summary?.team2Colour);
+    final t1IsRed  = t1Color.red >= t1Color.blue;
+    final leftColor  = t1IsRed ? t1Color : t2Color;
+    final rightColor = t1IsRed ? t2Color : t1Color;
+    final leftLabel  = t1IsRed ? t1Label : t2Label;
+    final rightLabel = t1IsRed ? t2Label : t1Label;
+
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(children: [
         Expanded(
-          child: Text(t1Label,
+          child: Text(leftLabel,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.blue.shade700,
+                color: leftColor,
               ),
               overflow: TextOverflow.ellipsis),
         ),
@@ -529,11 +692,11 @@ class _QNTeamBanner extends StatelessWidget {
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         Expanded(
-          child: Text(t2Label,
+          child: Text(rightLabel,
               textAlign: TextAlign.right,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.red.shade700,
+                color: rightColor,
               ),
               overflow: TextOverflow.ellipsis),
         ),
@@ -570,6 +733,9 @@ class _QNHoleScoreCard extends StatelessWidget {
     required this.onScoreSelected,
     required this.onReTapPlayer,
   });
+
+  Color get _t1Color => _qnTeamColor(summary?.team1Colour);
+  Color get _t2Color => _qnTeamColor(summary?.team2Colour);
 
   String? _teamLabel(int playerId) {
     if (summary == null) return null;
@@ -665,11 +831,13 @@ class _QNHoleScoreCard extends StatelessWidget {
                 quota:     quota,
                 teamLabel: teamLbl,
                 par:       playerPar,
+                t1Color:   _t1Color,
+                t2Color:   _t2Color,
                 onTap: gross != null && !isHot
                     ? () => onReTapPlayer(m)
                     : null,
               ),
-              if (isHot)
+              if (isHot && !m.player.isPhantom)
                 _QNInlinePicker(
                   par:             playerPar,
                   currentScore:    gross,
@@ -695,6 +863,8 @@ class _QNPlayerRow extends StatelessWidget {
   final String?       teamLabel;
   final int           par;
   final VoidCallback? onTap;
+  final Color         t1Color;
+  final Color         t2Color;
 
   const _QNPlayerRow({
     required this.member,
@@ -704,7 +874,10 @@ class _QNPlayerRow extends StatelessWidget {
     this.quota,
     this.teamLabel,
     this.onTap,
-  });
+    Color? t1Color,
+    Color? t2Color,
+  })  : t1Color = t1Color ?? const Color(0xFF1976D2),
+        t2Color = t2Color ?? const Color(0xFFD32F2F);
 
   @override
   Widget build(BuildContext context) {
@@ -728,9 +901,7 @@ class _QNPlayerRow extends StatelessWidget {
             width: 28,
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
-              color: teamLabel == 'T1'
-                  ? Colors.blue.shade100
-                  : Colors.red.shade100,
+              color: (teamLabel == 'T1' ? t1Color : t2Color).withOpacity(0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -738,9 +909,7 @@ class _QNPlayerRow extends StatelessWidget {
               textAlign: TextAlign.center,
               style: theme.textTheme.labelSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: teamLabel == 'T1'
-                    ? Colors.blue.shade700
-                    : Colors.red.shade700,
+                color: teamLabel == 'T1' ? t1Color : t2Color,
               ),
             ),
           ),
@@ -1127,6 +1296,10 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
     final holeRange = List.generate(18, (i) => i + 1);
     final (t1, t2)  = _splitTeams();
 
+    // Team colors from summary.
+    final t1Color = _qnTeamColor(widget.summary?.team1Colour);
+    final t2Color = _qnTeamColor(widget.summary?.team2Colour);
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     Widget labelCell(String text,
@@ -1304,14 +1477,14 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
                   divider(),
 
                   // ── Team 1 ─────────────────────────────────────────────────
-                  ...t1.map((m) => playerRow(m, Colors.blue.shade700)),
-                  ptsRow(t1, Colors.blue.shade700, 'T1 stpl'),
+                  ...t1.map((m) => playerRow(m, t1Color)),
+                  ptsRow(t1, t1Color, 'T1 stpl'),
 
                   divider(),
 
                   // ── Team 2 ─────────────────────────────────────────────────
-                  ...t2.map((m) => playerRow(m, Colors.red.shade700)),
-                  ptsRow(t2, Colors.red.shade700, 'T2 stpl'),
+                  ...t2.map((m) => playerRow(m, t2Color)),
+                  ptsRow(t2, t2Color, 'T2 stpl'),
                 ],
               ),
             ),
@@ -1322,7 +1495,7 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
               Row(children: [
                 Expanded(
                   child: _QNFooterBlock(
-                    color:      Colors.blue.shade700,
+                    color:      t1Color,
                     total:      t1Total,
                     f9:         t1F9,
                     b9:         t1B9,
@@ -1341,7 +1514,7 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _QNFooterBlock(
-                    color:      Colors.red.shade700,
+                    color:      t2Color,
                     total:      t2Total,
                     f9:         t2F9,
                     b9:         t2B9,
@@ -1373,7 +1546,7 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.blue.shade700.withOpacity(0.12),
+                          color: t1Color.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -1381,7 +1554,7 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
                           style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade700),
+                              color: t1Color),
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -1395,7 +1568,7 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.red.shade700.withOpacity(0.12),
+                          color: t2Color.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -1403,7 +1576,7 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
                           style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: Colors.red.shade700),
+                              color: t2Color),
                         ),
                       ),
                       const SizedBox(width: 4),

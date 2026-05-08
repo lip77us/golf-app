@@ -88,7 +88,6 @@ def _stableford_index(foursome) -> dict:
     par_index: dict = {}
     for mem in (
         foursome.memberships
-        .filter(player__is_phantom=False)
         .select_related('tee', 'player')
     ):
         tee = mem.tee
@@ -104,7 +103,7 @@ def _stableford_index(foursome) -> dict:
     result: dict = {}
     qs = (
         HoleScore.objects
-        .filter(foursome=foursome, player__is_phantom=False)
+        .filter(foursome=foursome)
         .exclude(gross_score=None)
         .values('player_id', 'hole_number', 'gross_score')
     )
@@ -403,7 +402,43 @@ def quota_nassau_summary(foursome) -> 'dict | None':
             ],
         })
 
+    # Add cross-foursome phantom info if present
+    phantom_info = None
+    try:
+        from scoring.phantom import (
+            PhantomScoreProvider, CROSS_FOURSOME_ALGORITHM_ID
+        )
+        provider = PhantomScoreProvider(foursome)
+        if provider.has_phantom and provider.is_cross_foursome:
+            phantom_m = foursome.memberships.filter(
+                player__is_phantom=True
+            ).first()
+            phantom_info = {
+                'phantom_player_id'  : phantom_m.player_id if phantom_m else None,
+                'phantom_playing_hcp': phantom_m.playing_handicap if phantom_m else 0,
+                'algorithm'          : CROSS_FOURSOME_ALGORITHM_ID,
+                'by_hole'            : {
+                    str(h): v
+                    for h, v in provider.donor_status_by_hole().items()
+                },
+            }
+    except Exception:
+        pass
+
+    # Pull team colours from the cup config if available
+    t1_colour = 'Red'
+    t2_colour = 'Blue'
+    try:
+        cup_cfg   = foursome.ryder_cup_foursome_config
+        t1_colour = (cup_cfg.team1.colour or 'Red')  if cup_cfg.team1 else 'Red'
+        t2_colour = (cup_cfg.team2.colour or 'Blue') if cup_cfg.team2 else 'Blue'
+    except Exception:
+        pass
+
     return {
-        'status' : game.status,
-        'matches': matches_out,
+        'status'      : game.status,
+        'matches'     : matches_out,
+        'phantom_info': phantom_info,
+        'team1_colour': t1_colour,
+        'team2_colour': t2_colour,
     }

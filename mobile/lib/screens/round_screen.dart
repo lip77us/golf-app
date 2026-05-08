@@ -167,6 +167,11 @@ class _RoundScreenState extends State<RoundScreen> {
                       // Quota Nassau cup foursomes use the dedicated gross-only
                       // entry screen — not the universal score entry.
                       route = '/quota-nassau';
+                    } else if (round.isCupRound &&
+                        fs.configuredGames.contains('nassau')) {
+                      // Four Ball (Nassau) cup foursomes use the Nassau screen
+                      // so phantom donor info, HC, and donor-score row are shown.
+                      route = '/nassau';
                     } else if (round.isCupRound) {
                       route = '/score-entry';
                     } else if (fsGames.contains('three_person_match') &&

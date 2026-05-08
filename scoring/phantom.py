@@ -147,7 +147,7 @@ class CrossFoursomeRotation(PhantomAlgorithm):
     """
 
     algorithm_id    = 'cross_foursome_rotation'
-    algorithm_label = 'Cross-Foursome Rotation (Four Ball Phantom)'
+    algorithm_label = 'Cross-Foursome Rotation'
 
     def initial_config(self, real_player_ids: list) -> dict:
         """
@@ -443,9 +443,9 @@ def propagate_phantom_score(round_obj, hole_number: int,
 
 def setup_cross_foursome_phantom(foursome, phantom_team, round_obj) -> bool:
     """
-    Configure a Four Ball phantom for cross-foursome rotation.
+    Configure a cross-foursome phantom for any cup game type (Nassau, Quota Nassau, …).
 
-    Called from RyderCupRoundSetupView when a Nassau foursome has a phantom.
+    Called from RyderCupRoundSetupView after ALL foursome memberships are committed.
 
     phantom_team: the TournamentTeam whose player the phantom represents.
     round_obj:    the Round being configured.
