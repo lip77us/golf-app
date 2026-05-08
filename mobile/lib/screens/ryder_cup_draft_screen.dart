@@ -503,8 +503,9 @@ class _TeamCard extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(team.name,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: _teamColor(team.colour))),
             ),
             Text('${team.players.length} player${team.players.length != 1 ? "s" : ""}',
                 style: theme.textTheme.bodySmall),
@@ -535,7 +536,8 @@ class _TeamCard extends StatelessWidget {
                 child: Text(p.shortName,
                     style: const TextStyle(fontSize: 11)),
               ),
-              title: Text(p.name),
+              title: Text(p.name,
+                  style: TextStyle(color: _teamColor(team.colour))),
               trailing: isLocked ? null : IconButton(
                 icon: Icon(Icons.remove_circle_outline,
                     color: theme.colorScheme.error, size: 20),

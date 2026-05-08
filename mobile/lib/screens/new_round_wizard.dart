@@ -573,11 +573,15 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             ),
           ),
         ),
-        body: _dataLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _dataError != null
-                ? ErrorView(message: _dataError!, onRetry: _loadReferenceData)
-                : _stepBody(),
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.translucent,
+          child: _dataLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _dataError != null
+                  ? ErrorView(message: _dataError!, onRetry: _loadReferenceData)
+                  : _stepBody(),
+        ),
         bottomNavigationBar: _dataLoading || _dataError != null
             ? null
             : _BottomBar(
@@ -2033,6 +2037,8 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
                       controller: _ptCtrl[g],
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
                       textAlign: TextAlign.center,
                       decoration: const InputDecoration(
                         suffixText: 'pt',

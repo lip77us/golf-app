@@ -251,17 +251,59 @@ def _build_scorecard(foursome: Foursome) -> dict:
 
     # Inject phantom hole scores
     if foursome.has_phantom:
+        from scoring.phantom import CROSS_FOURSOME_ALGORITHM_ID
         provider = PhantomScoreProvider(foursome)
         if provider.has_phantom:
             phantom_gross = provider.phantom_gross_scores()
-            for h in holes_out:
-                hole_num = h['hole_number']
-                if hole_num in phantom_gross:
-                    h['phantom'] = {
-                        'gross_score'            : phantom_gross[hole_num],
-                        'is_phantom'             : True,
-                        'phantom_source_player_id': provider.get_source_player_id(hole_num),
-                    }
+
+            # For cross-foursome phantoms, include the phantom as a regular
+            # score entry in each hole's `scores` list so the Flutter client
+            # can detect when their score has arrived and block hole
+            # submission accordingly.
+            if provider.is_cross_foursome:
+                phantom_m = foursome.memberships.filter(
+                    player__is_phantom=True
+                ).select_related('player', 'tee').first()
+                if phantom_m:
+                    phantom_si_map = {}
+                    if phantom_m.tee_id:
+                        for hd in phantom_m.tee.holes:
+                            phantom_si_map[hd['number']] = hd.get('stroke_index', 18)
+
+                    for h in holes_out:
+                        hole_num   = h['hole_number']
+                        gross      = phantom_gross.get(hole_num)
+                        ph_si      = phantom_si_map.get(hole_num, 18)
+                        ph_strokes = phantom_m.handicap_strokes_on_hole(ph_si)
+                        h['scores'].append({
+                            'player_id'        : phantom_m.player_id,
+                            'player_name'      : phantom_m.player.name,
+                            'hole_number'      : hole_num,
+                            'stroke_index'     : ph_si,
+                            'par'              : h['par'],
+                            'yards'            : None,
+                            'gross_score'      : gross,
+                            'handicap_strokes' : ph_strokes,
+                            'net_score'        : (gross - ph_strokes) if gross is not None else None,
+                            'stableford_points': None,
+                            'is_phantom'       : True,
+                        })
+                        if hole_num in phantom_gross:
+                            h['phantom'] = {
+                                'gross_score'             : phantom_gross[hole_num],
+                                'is_phantom'              : True,
+                                'phantom_source_player_id': provider.get_source_player_id(hole_num),
+                            }
+            else:
+                # Intra-foursome phantom: legacy h['phantom'] only
+                for h in holes_out:
+                    hole_num = h['hole_number']
+                    if hole_num in phantom_gross:
+                        h['phantom'] = {
+                            'gross_score'             : phantom_gross[hole_num],
+                            'is_phantom'              : True,
+                            'phantom_source_player_id': provider.get_source_player_id(hole_num),
+                        }
 
     totals = []
     for m in real_members:
@@ -436,10 +478,14 @@ def _build_leaderboard(round_obj: Round) -> dict:
             }
             # Augment with cup metadata if this is a cup nassau match
             if cup_cfg is not None:
+                t1 = cup_cfg.team1
+                t2 = cup_cfg.team2
                 group_entry['is_cup_match']     = True
-                group_entry['cup_point_value']   = float(cup_cfg.point_value)
-                group_entry['team1_name']        = cup_cfg.team1.name if cup_cfg.team1 else ''
-                group_entry['team2_name']        = cup_cfg.team2.name if cup_cfg.team2 else ''
+                group_entry['cup_point_value']  = float(cup_cfg.point_value)
+                group_entry['team1_name']       = t1.name             if t1 else ''
+                group_entry['team2_name']       = t2.name             if t2 else ''
+                group_entry['team1_colour']     = (t1.colour or 'Red')  if t1 else 'Red'
+                group_entry['team2_colour']     = (t2.colour or 'Blue') if t2 else 'Blue'
             nassau_groups.append(group_entry)
         games['nassau'] = {
             'label'   : 'Four Ball',
@@ -1480,6 +1526,19 @@ class ScoreSubmitView(APIView):
             hs.handicap_strokes = hcp_strokes
             hs.save()
 
+        # Propagate scores to any cross-foursome phantom in the same round.
+        # A real player's gross score may be the donor for a phantom in another
+        # foursome — if so, write the phantom's HoleScore now so the Nassau
+        # calculator picks it up during _recalculate_games.
+        from scoring.phantom import propagate_phantom_score
+        for s in scores:
+            try:
+                propagate_phantom_score(
+                    foursome.round, hole_number, s['player_id'], s['gross_score']
+                )
+            except Exception:
+                pass  # never block score submission due to phantom propagation
+
         # Pink ball lost flag
         if pink_ball_lost and 'pink_ball' in (foursome.round.active_games or []):
             from games.models import PinkBallHoleResult
@@ -1999,9 +2058,10 @@ class MatchPlaySetupView(APIView):
                     setup_cup_singles(foursome, cup_cfg.team1, cup_cfg.team2)
                 except ValueError as exc:
                     return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+                game_key = cup_cfg.game_type  # 'singles_nassau' or 'singles_18'
                 games = list(foursome.active_games or [])
-                if 'match_play' not in games:
-                    games.append('match_play')
+                if game_key not in games:
+                    games.append(game_key)
                     foursome.active_games = games
                     foursome.save(update_fields=['active_games'])
                 recalculate = request.data.get('recalculate', True)
@@ -2969,6 +3029,10 @@ class RyderCupRoundSetupView(APIView):
         )
 
         # Per-foursome configs
+        # Collect phantom foursomes to configure after all Nassau games are set up
+        # (donors from other foursomes need their memberships to exist first).
+        _phantom_foursomes_to_configure: list = []
+
         for fs_data in d.get('foursomes', []):
             foursome = get_object_or_404(Foursome, pk=fs_data['foursome_id'])
             team1 = get_object_or_404(TournamentTeam, pk=fs_data['team1_id'], tournament=tt) if fs_data.get('team1_id') else None
@@ -2991,6 +3055,34 @@ class RyderCupRoundSetupView(APIView):
                 )
                 t1_ids = [p.pk for p in team1.players.all() if p.pk in foursome_player_ids] if team1 else []
                 t2_ids = [p.pk for p in team2.players.all() if p.pk in foursome_player_ids] if team2 else []
+
+                # Detect which team's real players are under-represented —
+                # that team has the phantom. Include the phantom in the Nassau
+                # team (it participates in best-ball via cross-foursome scores).
+                if foursome.has_phantom:
+                    real_pids = set(foursome.memberships.filter(
+                        player__is_phantom=False
+                    ).values_list('player_id', flat=True))
+                    t1_all_pids = set(team1.players.values_list('id', flat=True)) if team1 else set()
+                    t2_all_pids = set(team2.players.values_list('id', flat=True)) if team2 else set()
+                    phantom_pid = foursome.memberships.filter(
+                        player__is_phantom=True
+                    ).values_list('player_id', flat=True).first()
+                    if phantom_pid:
+                        t1_real_count = len(real_pids & t1_all_pids)
+                        t2_real_count = len(real_pids & t2_all_pids)
+                        # Phantom fills the under-represented team
+                        if t1_real_count < t2_real_count:
+                            t1_ids = t1_ids + [phantom_pid]
+                            phantom_team = team1
+                        else:
+                            t2_ids = t2_ids + [phantom_pid]
+                            phantom_team = team2
+                    else:
+                        phantom_team = None
+                else:
+                    phantom_team = None
+
                 # Delete any existing Nassau game for this foursome to avoid duplicates
                 from games.models import NassauGame
                 NassauGame.objects.filter(foursome=foursome).delete()
@@ -3001,6 +3093,17 @@ class RyderCupRoundSetupView(APIView):
                     handicap_mode=round_obj.handicap_mode,
                     net_percent=round_obj.net_percent,
                 )
+
+                # If this foursome has a Four Ball phantom, configure the
+                # cross-foursome rotation after ALL foursome configs have
+                # been created (deferred to after loop). Store for later.
+                print(f'[nassau setup] foursome={foursome.id} has_phantom={foursome.has_phantom} phantom_team={phantom_team}')
+                if foursome.has_phantom and phantom_team is not None:
+                    _phantom_foursomes_to_configure.append(
+                        (foursome, phantom_team)
+                    )
+                    print(f'[nassau setup] queued phantom setup for foursome {foursome.id}')
+
                 # Ensure 'nassau' is in the foursome's active_games so
                 # the score entry screen loads the Nassau summary.
                 existing_games = list(foursome.active_games or [])
@@ -3080,6 +3183,36 @@ class RyderCupRoundSetupView(APIView):
                     existing_games.append('quota_nassau')
                     foursome.active_games = existing_games
                     foursome.save(update_fields=['active_games'])
+
+        # Configure cross-foursome phantom rotation for Four Ball foursomes.
+        # Done after the main loop so all foursomes have memberships and the
+        # donor players (from other foursomes on the same team) are in the DB.
+        phantom_setup_results = []
+        if _phantom_foursomes_to_configure:
+            from scoring.phantom import setup_cross_foursome_phantom
+            for _ph_fs, _ph_team in _phantom_foursomes_to_configure:
+                try:
+                    ok = setup_cross_foursome_phantom(_ph_fs, _ph_team, round_obj)
+                    phantom_setup_results.append({
+                        'foursome_id': _ph_fs.id,
+                        'team': _ph_team.name if _ph_team else None,
+                        'success': ok,
+                    })
+                    print(f'[phantom setup] foursome={_ph_fs.id} team={_ph_team.name if _ph_team else None} ok={ok}')
+                except Exception as _e:
+                    import logging, traceback
+                    logging.getLogger(__name__).warning(
+                        'cross-foursome phantom setup failed for foursome %s: %s',
+                        _ph_fs.id, _e,
+                    )
+                    print(f'[phantom setup] EXCEPTION foursome={_ph_fs.id}: {_e}\n{traceback.format_exc()}')
+                    phantom_setup_results.append({
+                        'foursome_id': _ph_fs.id,
+                        'error': str(_e),
+                        'success': False,
+                    })
+        else:
+            print(f'[phantom setup] no phantom foursomes to configure (_phantom_foursomes_to_configure is empty)')
 
         # Ensure 'quota_nassau' appears in round.active_games when any
         # foursome is configured for it (so _build_leaderboard picks it up).
@@ -3164,7 +3297,9 @@ class RyderCupRoundSetupView(APIView):
         rc.format_declarations = declarations
         rc.save(update_fields=['format_declarations'])
 
-        return Response(_round_ryder_config(rc), status=status.HTTP_201_CREATED)
+        resp = _round_ryder_config(rc)
+        resp['_phantom_setup_debug'] = phantom_setup_results
+        return Response(resp, status=status.HTTP_201_CREATED)
 
 
 class RyderCupRoundResultView(APIView):

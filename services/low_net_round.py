@@ -111,16 +111,27 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
         par    = par_index.get(fid, {}).get(hole, 4)
         capped = min(adjusted, par + 2)
 
+        strokes_given = hs['gross_score'] - adjusted  # positive = strokes received
+
         entry = totals.setdefault(pid, {
             'name'        : hs['player__name'],
             'total'       : 0,
             'holes_played': 0,
             'par_played'  : 0,
             'foursome_id' : fid,
+            'handicap'    : membership.playing_handicap,
+            'holes'       : {},   # {hole_number: {par, gross, net_adj, capped}}
         })
         entry['total']        += capped
         entry['holes_played'] += 1
         entry['par_played']   += par
+        entry['holes'][hole]   = {
+            'par'    : par,
+            'gross'  : hs['gross_score'],
+            'strokes': strokes_given,
+            'net'    : adjusted,
+            'capped' : capped,
+        }
 
     return totals
 
@@ -236,6 +247,7 @@ def low_net_round_standings(round_obj) -> list:
             'foursome_id' : data.get('foursome_id'),
             'excluded'    : is_excluded,
             'payout'      : payout,
+            'holes'       : data.get('holes', {}),   # {hole_number: hole_data}
         })
 
     return standings
@@ -283,6 +295,10 @@ def low_net_round_summary(round_obj) -> dict:
                 'foursome_id' : s['foursome_id'],
                 'excluded'    : s.get('excluded', False),
                 'payout'      : s['payout'],
+                'holes'       : [
+                    {'hole': h, **v}
+                    for h, v in sorted(s.get('holes', {}).items())
+                ],
             }
             for s in standings
         ],

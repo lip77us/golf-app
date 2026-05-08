@@ -464,20 +464,147 @@ class _RedBallView extends StatelessWidget {
 
 // ---- Low Net ----
 
-class _LowNetView extends StatelessWidget {
+class _LowNetView extends StatefulWidget {
   final Map<String, dynamic> data;
   const _LowNetView({required this.data});
 
   @override
-  Widget build(BuildContext context) {
-    final theme     = Theme.of(context);
-    final results   = (data['results'] as List? ?? []);
-    final entryFee  = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
-    final payouts   = (data['payouts'] as List? ?? []);
-    final hmode     = data['handicap_mode']?.toString() ?? 'net';
-    final npct      = data['net_percent'] as int? ?? 100;
+  State<_LowNetView> createState() => _LowNetViewState();
+}
 
-    // Subtitle: handicap mode label
+class _LowNetViewState extends State<_LowNetView> {
+  // Tracks which player rows are expanded (by '$rank:$name' key).
+  final Set<String> _expanded = {};
+
+  static String _ntpLabel(int? ntp) {
+    if (ntp == null) return '—';
+    if (ntp == 0)   return 'E';
+    return ntp < 0 ? '$ntp' : '+$ntp';
+  }
+
+  static Color? _ntpColor(int? ntp, ThemeData theme) {
+    if (ntp == null || ntp == 0) return null;
+    return ntp < 0 ? Colors.green.shade700 : theme.colorScheme.error;
+  }
+
+  /// Compact 9-hole scorecard grid.
+  /// [holes] is the full 18-hole list from the API; [isFront] selects 1-9 vs 10-18.
+  Widget _nineGrid(BuildContext context, List holes,
+      {required bool isFront, required bool showNet}) {
+    final theme = Theme.of(context);
+
+    // Column widths: hole, par, gross, net
+    const double cHole = 26, cPar = 24, cGross = 28, cNet = 28;
+
+    final headerStyle = theme.textTheme.labelSmall!.copyWith(
+      fontWeight: FontWeight.bold,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    const cellStyle = TextStyle(fontSize: 11);
+
+    Widget cell(double w, Widget child) =>
+        SizedBox(width: w, child: Center(child: child));
+
+    Widget gridRow({
+      required String hole,
+      required String par,
+      required String gross,
+      String? net,
+      Color? grossColor,
+      Color? netColor,
+      bool bold = false,
+    }) {
+      final style = bold
+          ? cellStyle.copyWith(fontWeight: FontWeight.bold)
+          : cellStyle;
+      return Row(children: [
+        cell(cHole,  Text(hole,  style: style)),
+        cell(cPar,   Text(par,   style: style)),
+        cell(cGross, Text(gross, style: style.copyWith(color: grossColor))),
+        if (showNet && net != null)
+          cell(cNet, Text(net,   style: style.copyWith(color: netColor))),
+      ]);
+    }
+
+    final segment = holes
+        .where((h) {
+          final n = (h as Map)['hole'] as int? ?? 0;
+          return isFront ? n <= 9 : n > 9;
+        })
+        .cast<Map>()
+        .toList();
+
+    int totPar = 0, totGross = 0, totNet = 0;
+    for (final h in segment) {
+      totPar   += (h['par']    as int? ?? 0);
+      totGross += (h['gross']  as int? ?? 0);
+      totNet   += (h['capped'] as int? ?? 0);
+    }
+    final totNtp = segment.isEmpty ? null : totNet - totPar;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section label
+        Text(
+          isFront ? 'Front 9' : 'Back 9',
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        // Header
+        Row(children: [
+          cell(cHole,  Text('Hole', style: headerStyle)),
+          cell(cPar,   Text('Par',  style: headerStyle)),
+          cell(cGross, Text('Grs',  style: headerStyle)),
+          if (showNet) cell(cNet, Text('Net', style: headerStyle)),
+        ]),
+        const Divider(height: 5, thickness: 0.5),
+        // Per-hole rows
+        ...segment.map((h) {
+          final hNum   = h['hole']   as int? ?? 0;
+          final par    = h['par']    as int? ?? 0;
+          final gross  = h['gross']  as int? ?? 0;
+          final capped = h['capped'] as int? ?? 0;
+          final gDiff  = gross  - par;
+          final nDiff  = capped - par;
+          return gridRow(
+            hole:       '$hNum',
+            par:        '$par',
+            gross:      '$gross',
+            net:        '$capped',
+            grossColor: gDiff < 0 ? Colors.green.shade700
+                      : gDiff > 0 ? theme.colorScheme.error : null,
+            netColor:   nDiff < 0 ? Colors.green.shade700
+                      : nDiff > 0 ? theme.colorScheme.error : null,
+          );
+        }),
+        const Divider(height: 6, thickness: 0.5),
+        // Totals
+        gridRow(
+          hole:     isFront ? 'Out' : 'In',
+          par:      '$totPar',
+          gross:    '$totGross',
+          net:      _ntpLabel(totNtp),
+          netColor: _ntpColor(totNtp, theme),
+          bold:     true,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme      = Theme.of(context);
+    final results    = (widget.data['results'] as List? ?? []);
+    final entryFee   = (widget.data['entry_fee'] as num?)?.toDouble() ?? 0.0;
+    final payouts    = (widget.data['payouts'] as List? ?? []);
+    final hmode      = widget.data['handicap_mode']?.toString() ?? 'net';
+    final npct       = widget.data['net_percent'] as int? ?? 100;
+    final showNet    = hmode != 'gross';
+
     final modeLabel = hmode == 'gross' ? 'Gross'
         : hmode == 'strokes_off' ? 'Strokes Off'
         : npct == 100 ? 'Full Net'
@@ -486,7 +613,7 @@ class _LowNetView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Info row
+        // Info chips
         Row(children: [
           Chip(
             label: Text(modeLabel, style: const TextStyle(fontSize: 11)),
@@ -506,7 +633,9 @@ class _LowNetView extends StatelessWidget {
             const SizedBox(width: 8),
             Chip(
               label: Text(
-                  payouts.length == 1 ? 'Winner takes all' : '${payouts.length} places paid',
+                  payouts.length == 1
+                      ? 'Winner takes all'
+                      : '${payouts.length} places paid',
                   style: const TextStyle(fontSize: 11)),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
@@ -515,91 +644,142 @@ class _LowNetView extends StatelessWidget {
         ]),
         const SizedBox(height: 8),
 
-        // Results
+        // Player rows
         ...results.map((r) {
-          final row        = r as Map<String, dynamic>;
-          final rank       = row['rank'] as int? ?? 0;
-          final name       = row['name']?.toString() ?? '—';
-          final netToPar   = row['net_to_par'] as int?;
-          final holes      = row['holes_played'] as int? ?? 0;
-          final foursomeId = row['foursome_id'] as int?;
-          final payout     = (row['payout'] as num?)?.toDouble();
-          final partial    = holes < 18;
-
-          // Net-to-par label: "E", "-3", "+5"
-          final parLabel = netToPar == null ? '—'
-              : netToPar == 0 ? 'E'
-              : netToPar < 0 ? '$netToPar'
-              : '+$netToPar';
-          final parColor = netToPar == null
-              ? null
-              : netToPar < 0
-                  ? Colors.green.shade700
-                  : netToPar > 0
-                      ? theme.colorScheme.error
-                      : null;
+          final row         = r as Map<String, dynamic>;
+          final rank        = row['rank']         as int?  ?? 0;
+          final name        = row['name']?.toString()      ?? '—';
+          final netToPar    = row['net_to_par']   as int?;
+          final holesPlayed = row['holes_played'] as int?  ?? 0;
+          final foursomeId  = row['foursome_id']  as int?;
+          final payout      = (row['payout'] as num?)?.toDouble();
+          final holesList   = (row['holes'] as List? ?? []);
+          final key         = '$rank:$name';
+          final isExpanded  = _expanded.contains(key);
+          final parLabel    = _ntpLabel(netToPar);
+          final parColor    = _ntpColor(netToPar, theme);
 
           return Card(
             margin: const EdgeInsets.only(bottom: 6),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: rank == 1
-                    ? Colors.amber
-                    : rank == 2
-                        ? Colors.grey.shade400
-                        : rank == 3
-                            ? const Color(0xFFcd7f32)
-                            : theme.colorScheme.surfaceContainerHighest,
-                child: Text('$rank',
-                    style: TextStyle(
-                        color: rank <= 3 ? Colors.white : null,
-                        fontWeight: FontWeight.bold)),
-              ),
-              title: Text(name),
-              subtitle: Text(
-                holes == 18 ? 'F'
-                    : holes > 0 ? 'Thru $holes'
-                    : 'No scores',
-                style: theme.textTheme.bodySmall,
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        parLabel,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: parColor,
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                // ── Summary row (always visible, tappable) ──────────────────
+                InkWell(
+                  onTap: holesList.isNotEmpty
+                      ? () => setState(() {
+                            if (isExpanded) _expanded.remove(key);
+                            else            _expanded.add(key);
+                          })
+                      : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: rank == 1
+                              ? Colors.amber
+                              : rank == 2
+                                  ? Colors.grey.shade400
+                                  : rank == 3
+                                      ? const Color(0xFFcd7f32)
+                                      : theme.colorScheme.surfaceContainerHighest,
+                          child: Text('$rank',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: rank <= 3 ? Colors.white : null,
+                                  fontWeight: FontWeight.bold)),
                         ),
-                      ),
-                      if (payout != null)
-                        Text('\$${payout.formatBet()}',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: Colors.green.shade700)),
-                    ],
-                  ),
-                  // Scorecard icon — navigates to that player's foursome card
-                  if (foursomeId != null) ...[
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.table_chart_outlined, size: 20),
-                      tooltip: 'View scorecard',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        context.read<RoundProvider>().loadScorecard(foursomeId);
-                        Navigator.of(context).pushNamed('/scorecard',
-                            arguments: {'foursomeId': foursomeId, 'readOnly': true});
-                      },
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(name,
+                                  style: theme.textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                              Text(
+                                holesPlayed == 18
+                                    ? 'F'
+                                    : holesPlayed > 0
+                                        ? 'Thru $holesPlayed'
+                                        : 'No scores',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(parLabel,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: parColor)),
+                            if (payout != null)
+                              Text('\$${payout.formatBet()}',
+                                  style: theme.textTheme.bodySmall
+                                      ?.copyWith(color: Colors.green.shade700)),
+                          ],
+                        ),
+                        const SizedBox(width: 4),
+                        if (holesList.isNotEmpty)
+                          Icon(
+                            isExpanded ? Icons.expand_less : Icons.expand_more,
+                            size: 20,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          )
+                        else if (foursomeId != null)
+                          IconButton(
+                            icon: const Icon(Icons.table_chart_outlined, size: 20),
+                            tooltip: 'View scorecard',
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            onPressed: () {
+                              context.read<RoundProvider>().loadScorecard(foursomeId);
+                              Navigator.of(context).pushNamed('/scorecard',
+                                  arguments: {
+                                    'foursomeId': foursomeId,
+                                    'readOnly': true,
+                                  });
+                            },
+                          ),
+                      ],
                     ),
-                  ],
-                ],
-              ),
+                  ),
+                ),
+
+                // ── Expandable scorecard ────────────────────────────────────
+                if (isExpanded && holesList.isNotEmpty)
+                  Container(
+                    color: theme.colorScheme.surfaceContainerLowest,
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                    child: Column(
+                      children: [
+                        const Divider(height: 1),
+                        const SizedBox(height: 10),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _nineGrid(context, holesList,
+                                  isFront: true, showNet: showNet),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _nineGrid(context, holesList,
+                                  isFront: false, showNet: showNet),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           );
         }),
@@ -1362,8 +1542,13 @@ class _NassauGroupCard extends StatelessWidget {
     final t1Names = nas.team1.map((p) => p.shortName).join(' & ');
     final t2Names = nas.team2.map((p) => p.shortName).join(' & ');
 
-    // Team 2 color: red for cup matches, orange for casual
-    final team2Color = isCupMatch ? Colors.red.shade700 : Colors.orange.shade800;
+    // Team colors: use actual cup team colours for cup matches, orange for casual
+    final t1Color    = isCupMatch
+        ? _cupTeamColor(group['team1_colour'] as String?)
+        : Colors.blue.shade700;
+    final team2Color = isCupMatch
+        ? _cupTeamColor(group['team2_colour'] as String?)
+        : Colors.orange.shade800;
 
     Color totalColor(double total) {
       if (total > 0) return Colors.green.shade700;
@@ -1378,19 +1563,18 @@ class _NassauGroupCard extends StatelessWidget {
     }
 
     // ── Cup match: QuotaNassau-style layout ──────────────────────────────
-    final t1Color = Colors.blue.shade700;
     if (isCupMatch) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Header: red (team2) on left, blue (team1) on right
+            // Header: team1 (left) vs team2 (right)
             Row(children: [
               Expanded(child: Padding(
                 padding: const EdgeInsets.only(right: 14),
-                child: Text(t2Names, textAlign: TextAlign.end,
+                child: Text(t1Names, textAlign: TextAlign.end,
                     style: theme.textTheme.titleSmall?.copyWith(
-                        color: team2Color, fontWeight: FontWeight.bold)),
+                        color: t1Color, fontWeight: FontWeight.bold)),
               )),
               SizedBox(width: 68, child: Center(
                 child: Text('vs.', style: TextStyle(
@@ -1399,16 +1583,16 @@ class _NassauGroupCard extends StatelessWidget {
               )),
               Expanded(child: Padding(
                 padding: const EdgeInsets.only(left: 14),
-                child: Text(t1Names,
+                child: Text(t2Names,
                     style: theme.textTheme.titleSmall?.copyWith(
-                        color: t1Color, fontWeight: FontWeight.bold)),
+                        color: team2Color, fontWeight: FontWeight.bold)),
               )),
             ]),
             const Divider(height: 14),
-            // Red (team2) on left, blue (team1) on right
-            _cupSegRow('F9',  nas.front9,  team2Color, t1Color, theme, leftIsTeam2: true),
-            _cupSegRow('B9',  nas.back9,   team2Color, t1Color, theme, leftIsTeam2: true),
-            _cupSegRow('All', nas.overall, team2Color, t1Color, theme, leftIsTeam2: true),
+            // Team1 on left, team2 on right
+            _cupSegRow('F9',  nas.front9,  t1Color, team2Color, theme),
+            _cupSegRow('B9',  nas.back9,   t1Color, team2Color, theme),
+            _cupSegRow('All', nas.overall, t1Color, team2Color, theme),
           ]),
         ),
       );
@@ -1632,7 +1816,7 @@ class _NassauGroupCard extends StatelessWidget {
 
     String upText(int abs) {
       final holesLeft = segLen - holes;
-      if (holes > 0 && abs > holesLeft) return '$abs&$holesLeft';
+      if (holes > 0 && holesLeft > 0 && abs > holesLeft) return '$abs&$holesLeft';
       return '$abs UP';
     }
 
@@ -1712,7 +1896,7 @@ class _NassauGroupCard extends StatelessWidget {
         display = bet.holesPlayed == 0 ? 'Not started' : 'AS';
       } else {
         final leader = m > 0 ? t1Names : t2Names;
-        if (bet.holesPlayed > 0 && m.abs() > holesLeft) {
+        if (bet.holesPlayed > 0 && holesLeft > 0 && m.abs() > holesLeft) {
           // Mathematically decided before last hole — match-play "&" notation.
           display = '$leader ${m.abs()}&$holesLeft';
         } else {
@@ -3496,18 +3680,29 @@ class _BandonCupScoreboard extends StatelessWidget {
             ),
           ),
 
-          // Solid colour team score blocks
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                teamBlock(t1Name, t1Pts, t1Colour, t1Leads || tied),
-                // Thin divider between blocks
-                Container(width: 3, color: Colors.white),
-                teamBlock(t2Name, t2Pts, t2Colour, !t1Leads || tied),
-              ],
-            ),
-          ),
+          // Solid colour team score blocks — red team always on left.
+          // Detect which team is "red" by comparing the red channel, same
+          // logic used in the Irish Rumble section of _BandonCupLiveCard.
+          Builder(builder: (ctx) {
+            final leftIsT1  = t1Colour.red >= t2Colour.red;
+            final leftName  = leftIsT1 ? t1Name   : t2Name;
+            final leftPts   = leftIsT1 ? t1Pts    : t2Pts;
+            final leftCol   = leftIsT1 ? t1Colour : t2Colour;
+            final rightName = leftIsT1 ? t2Name   : t1Name;
+            final rightPts  = leftIsT1 ? t2Pts    : t1Pts;
+            final rightCol  = leftIsT1 ? t2Colour : t1Colour;
+            final leftLeads = leftPts > rightPts;
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  teamBlock(leftName,  leftPts,  leftCol,  leftLeads || tied),
+                  Container(width: 3, color: Colors.white),
+                  teamBlock(rightName, rightPts, rightCol, !leftLeads || tied),
+                ],
+              ),
+            );
+          }),
 
           // Status / to-win footer — always show points needed when known
           if (toWin != null)
@@ -3631,53 +3826,68 @@ class _BandonCupLiveCard extends StatelessWidget {
                 ]);
               }),
             ] else if (gameType == 'nassau')
-              Row(children: [
-                Expanded(child: Padding(
-                  padding: const EdgeInsets.only(right: 14),
-                  child: Text(t2Players.join(' & '),
-                      textAlign: TextAlign.end,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: t2Colour,
-                          fontWeight: FontWeight.bold, fontSize: 13)),
-                )),
-                SizedBox(
-                  width: 68,
-                  child: Center(child: Text('vs.',
-                      style: TextStyle(fontSize: 12,
-                          color: theme.colorScheme.onSurfaceVariant))),
-                ),
-                Expanded(child: Padding(
-                  padding: const EdgeInsets.only(left: 14),
-                  child: Text(t1Players.join(' & '),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: t1Colour,
-                          fontWeight: FontWeight.bold, fontSize: 13)),
-                )),
-              ])
+              Builder(builder: (ctx) {
+                // Red team always on left — detect by comparing red channel.
+                final leftIsT1   = t1Colour.red >= t2Colour.red;
+                final leftPly    = leftIsT1 ? t1Players : t2Players;
+                final leftColor  = leftIsT1 ? t1Colour  : t2Colour;
+                final rightPly   = leftIsT1 ? t2Players : t1Players;
+                final rightColor = leftIsT1 ? t2Colour  : t1Colour;
+                return Row(children: [
+                  Expanded(child: Padding(
+                    padding: const EdgeInsets.only(right: 14),
+                    child: Text(leftPly.join(' & '),
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: leftColor,
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+                  )),
+                  SizedBox(
+                    width: 68,
+                    child: Center(child: Text('vs.',
+                        style: TextStyle(fontSize: 12,
+                            color: Theme.of(ctx).colorScheme.onSurfaceVariant))),
+                  ),
+                  Expanded(child: Padding(
+                    padding: const EdgeInsets.only(left: 14),
+                    child: Text(rightPly.join(' & '),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: rightColor,
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+                  )),
+                ]);
+              })
             else if (gameType == 'quota_nassau')
-              Row(children: [
-                Expanded(child: Padding(
-                  padding: const EdgeInsets.only(right: 14),
-                  child: Text(t1Players.join(' & '),
-                      textAlign: TextAlign.end,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: t1Colour,
-                          fontWeight: FontWeight.bold, fontSize: 13)),
-                )),
-                SizedBox(
-                  width: 68,
-                  child: Center(child: Text('vs.',
-                      style: TextStyle(fontSize: 12,
-                          color: theme.colorScheme.onSurfaceVariant))),
-                ),
-                Expanded(child: Padding(
-                  padding: const EdgeInsets.only(left: 14),
-                  child: Text(t2Players.join(' & '),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: t2Colour,
-                          fontWeight: FontWeight.bold, fontSize: 13)),
-                )),
-              ])
+              Builder(builder: (ctx) {
+                final leftIsT1   = t1Colour.red >= t2Colour.red;
+                final leftPly    = leftIsT1 ? t1Players : t2Players;
+                final leftColor  = leftIsT1 ? t1Colour  : t2Colour;
+                final rightPly   = leftIsT1 ? t2Players : t1Players;
+                final rightColor = leftIsT1 ? t2Colour  : t1Colour;
+                return Row(children: [
+                  Expanded(child: Padding(
+                    padding: const EdgeInsets.only(right: 14),
+                    child: Text(leftPly.join(' & '),
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: leftColor,
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+                  )),
+                  SizedBox(
+                    width: 68,
+                    child: Center(child: Text('vs.',
+                        style: TextStyle(fontSize: 12,
+                            color: Theme.of(ctx).colorScheme.onSurfaceVariant))),
+                  ),
+                  Expanded(child: Padding(
+                    padding: const EdgeInsets.only(left: 14),
+                    child: Text(rightPly.join(' & '),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: rightColor,
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+                  )),
+                ]);
+              })
             else
               Row(children: [
                 Expanded(child: Text(t1Players.join(', '),
@@ -3701,7 +3911,8 @@ class _BandonCupLiveCard extends StatelessWidget {
                   segments: segments,
                   t1Colour: t1Colour, t2Colour: t2Colour,
                   t1Players: t1Players, t2Players: t2Players,
-                  leftIsTeam2: true)
+                  // Red team on left: team2 is on left when t2 is redder
+                  leftIsTeam2: t2Colour.red >= t1Colour.red)
             else if (gameType == 'irish_rumble')
               _IRLiveRows(
                   segments: segments,
@@ -3981,7 +4192,7 @@ class _NassauLiveRows extends StatelessWidget {
         } else {
           final abs       = margin.abs();
           final holesLeft = segLen - holes;
-          final text      = abs > holesLeft ? '$abs&$holesLeft' : '$abs UP';
+          final text      = (holesLeft > 0 && abs > holesLeft) ? '$abs&$holesLeft' : '$abs UP';
           // margin > 0 means team1 is winning
           final team1Wins = margin > 0;
           if (leftIsTeam2) {
@@ -4724,7 +4935,7 @@ class _CupSinglesGroupCard extends StatelessWidget {
   const _CupSinglesGroupCard({required this.group});
 
   // ── Segment row — mirrors _NassauGroupCard._cupSegRow ────────────────────
-  // leftColor = team2/player2 (red), rightColor = team1/player1 (blue)
+  // leftColor = team1/player1, rightColor = team2/player2
   static Widget _singlesSegRow(
     String  label,
     String? segStatus,    // 'pending' | 'in_progress' | 'complete'
@@ -4734,8 +4945,9 @@ class _CupSinglesGroupCard extends StatelessWidget {
     int     endHole,      // 9 for F9/B9-segment, 18 for All
     Color   leftColor,
     Color   rightColor,
-    ThemeData theme,
-  ) {
+    ThemeData theme, {
+    bool p1OnLeft = true,
+  }) {
     Widget badge(String text, Color color) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -4768,12 +4980,12 @@ class _CupSinglesGroupCard extends StatelessWidget {
         } else {
           text = '${up.abs()} UP';
         }
-        if (p1Leads) {
-          // player1 (blue) is on the right
-          rightW = badge(text, rightColor);
+        // Badge goes on the winning player's side.
+        final winnerOnLeft = p1Leads == p1OnLeft;
+        if (winnerOnLeft) {
+          leftW  = badge(text, leftColor);
         } else {
-          // player2 (red) is on the left
-          leftW = badge(text, leftColor);
+          rightW = badge(text, rightColor);
         }
       }
     }
@@ -4835,6 +5047,11 @@ class _CupSinglesGroupCard extends StatelessWidget {
         .map((m) => Map<String, dynamic>.from(m as Map))
         .toList();
 
+    // Red always on the left.
+    final p1OnLeft    = t1Color.red >= t2Color.red;
+    final leftColor   = p1OnLeft ? t1Color : t2Color;
+    final rightColor  = p1OnLeft ? t2Color : t1Color;
+
     if (matches.isEmpty) {
       return Card(
         child: Padding(
@@ -4854,20 +5071,22 @@ class _CupSinglesGroupCard extends StatelessWidget {
           children: matches.asMap().entries.expand<Widget>((entry) {
             final i           = entry.key;
             final m           = entry.value;
-            // player1 = blue (team1), player2 = red (team2)
-            final p1          = m['player1']      as String? ?? '?';
-            final p2          = m['player2']      as String? ?? '?';
+            final p1Raw       = m['player1']      as String? ?? '?';
+            final p2Raw       = m['player2']      as String? ?? '?';
             final holesPlayed = m['holes_played'] as int?    ?? 0;
+            // Arrange so red team is on the left.
+            final leftName  = p1OnLeft ? p1Raw : p2Raw;
+            final rightName = p1OnLeft ? p2Raw : p1Raw;
             return [
               if (i > 0) const Divider(height: 22),
 
-              // Header: p2 (red) on left, "vs. / thru X" center, p1 (blue) on right
+              // Header: red player on left, blue player on right
               Row(children: [
                 Expanded(child: Padding(
                   padding: const EdgeInsets.only(right: 14),
-                  child: Text(p2, textAlign: TextAlign.end,
+                  child: Text(leftName, textAlign: TextAlign.end,
                       style: theme.textTheme.titleSmall?.copyWith(
-                          color: t2Color, fontWeight: FontWeight.bold)),
+                          color: leftColor, fontWeight: FontWeight.bold)),
                 )),
                 SizedBox(width: 68, child: Center(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -4884,14 +5103,14 @@ class _CupSinglesGroupCard extends StatelessWidget {
                 )),
                 Expanded(child: Padding(
                   padding: const EdgeInsets.only(left: 14),
-                  child: Text(p1,
+                  child: Text(rightName,
                       style: theme.textTheme.titleSmall?.copyWith(
-                          color: t1Color, fontWeight: FontWeight.bold)),
+                          color: rightColor, fontWeight: FontWeight.bold)),
                 )),
               ]),
               const Divider(height: 14),
 
-              // F9 segment
+              // F9 segment (leftColor=red p1OnLeft, badge logic uses p1OnLeft)
               _singlesSegRow(
                 'F9',
                 m['f9_status']           as String?,
@@ -4899,7 +5118,7 @@ class _CupSinglesGroupCard extends StatelessWidget {
                 m['f9_holes_up']         as int?,
                 m['f9_finished_on_hole'] as int?,
                 9,
-                t2Color, t1Color, theme,
+                leftColor, rightColor, theme, p1OnLeft: p1OnLeft,
               ),
               // B9 segment
               _singlesSegRow(
@@ -4909,7 +5128,7 @@ class _CupSinglesGroupCard extends StatelessWidget {
                 m['b9_holes_up']         as int?,
                 m['b9_finished_on_hole'] as int?,
                 18,
-                t2Color, t1Color, theme,
+                leftColor, rightColor, theme, p1OnLeft: p1OnLeft,
               ),
               // All segment
               _singlesSegRow(
@@ -4919,7 +5138,7 @@ class _CupSinglesGroupCard extends StatelessWidget {
                 m['overall_holes_up']    as int?,
                 m['finished_on_hole']    as int?,
                 18,
-                t2Color, t1Color, theme,
+                leftColor, rightColor, theme, p1OnLeft: p1OnLeft,
               ),
             ];
           }).toList(),
@@ -4943,10 +5162,11 @@ class _CupSingles18GroupCard extends StatelessWidget {
     String? result,
     int?    holesUp,
     int?    finishedOn,
-    Color   leftColor,   // p2 / red
-    Color   rightColor,  // p1 / blue
-    ThemeData theme,
-  ) {
+    Color   leftColor,
+    Color   rightColor,
+    ThemeData theme, {
+    bool p1OnLeft = true,
+  }) {
     Widget badge(String text, Color color) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -4974,10 +5194,11 @@ class _CupSingles18GroupCard extends StatelessWidget {
         } else {
           text = '${up.abs()} UP';
         }
-        if (p1Leads) {
-          rightW = badge(text, rightColor);
+        final winnerOnLeft = p1Leads == p1OnLeft;
+        if (winnerOnLeft) {
+          leftW  = badge(text, leftColor);
         } else {
-          leftW = badge(text, leftColor);
+          rightW = badge(text, rightColor);
         }
       }
     }
@@ -5039,6 +5260,11 @@ class _CupSingles18GroupCard extends StatelessWidget {
         .map((m) => Map<String, dynamic>.from(m as Map))
         .toList();
 
+    // Red always on the left.
+    final p1OnLeft   = t1Color.red >= t2Color.red;
+    final leftColor  = p1OnLeft ? t1Color : t2Color;
+    final rightColor = p1OnLeft ? t2Color : t1Color;
+
     if (matches.isEmpty) {
       return Card(
         child: Padding(
@@ -5058,19 +5284,21 @@ class _CupSingles18GroupCard extends StatelessWidget {
           children: matches.asMap().entries.expand<Widget>((entry) {
             final i           = entry.key;
             final m           = entry.value;
-            final p1          = m['player1']      as String? ?? '?';
-            final p2          = m['player2']      as String? ?? '?';
+            final p1Raw       = m['player1']      as String? ?? '?';
+            final p2Raw       = m['player2']      as String? ?? '?';
             final holesPlayed = m['holes_played'] as int?    ?? 0;
+            final leftName    = p1OnLeft ? p1Raw : p2Raw;
+            final rightName   = p1OnLeft ? p2Raw : p1Raw;
             return [
               if (i > 0) const Divider(height: 22),
 
-              // Header: p2 (red) on left, "vs. / thru X" center, p1 (blue) on right
+              // Header: red player on left, blue player on right
               Row(children: [
                 Expanded(child: Padding(
                   padding: const EdgeInsets.only(right: 14),
-                  child: Text(p2, textAlign: TextAlign.end,
+                  child: Text(leftName, textAlign: TextAlign.end,
                       style: theme.textTheme.titleSmall?.copyWith(
-                          color: t2Color, fontWeight: FontWeight.bold)),
+                          color: leftColor, fontWeight: FontWeight.bold)),
                 )),
                 SizedBox(width: 68, child: Center(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -5087,9 +5315,9 @@ class _CupSingles18GroupCard extends StatelessWidget {
                 )),
                 Expanded(child: Padding(
                   padding: const EdgeInsets.only(left: 14),
-                  child: Text(p1,
+                  child: Text(rightName,
                       style: theme.textTheme.titleSmall?.copyWith(
-                          color: t1Color, fontWeight: FontWeight.bold)),
+                          color: rightColor, fontWeight: FontWeight.bold)),
                 )),
               ]),
               const Divider(height: 14),
@@ -5100,7 +5328,7 @@ class _CupSingles18GroupCard extends StatelessWidget {
                 m['result']           as String?,
                 m['overall_holes_up'] as int?,
                 m['finished_on_hole'] as int?,
-                t2Color, t1Color, theme,
+                leftColor, rightColor, theme, p1OnLeft: p1OnLeft,
               ),
             ];
           }).toList(),

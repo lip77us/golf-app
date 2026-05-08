@@ -1307,6 +1307,9 @@ class NassauSummary {
   final bool    canPress;
   final String? pressAvailableNine;  // 'front' | 'back' | null
 
+  // Four Ball phantom info (null when no cross-foursome phantom)
+  final NassauPhantomInfo? phantom;
+
   const NassauSummary({
     required this.status,
     required this.variant,
@@ -1339,6 +1342,7 @@ class NassauSummary {
     required this.holes,
     required this.canPress,
     this.pressAvailableNine,
+    this.phantom,
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -1405,8 +1409,71 @@ class NassauSummary {
           .toList(),
       canPress:           j['can_press']            as bool?   ?? false,
       pressAvailableNine: j['press_available_nine'] as String?,
+      phantom: j['phantom'] == null
+          ? null
+          : NassauPhantomInfo.fromJson(j['phantom'] as Map<String, dynamic>),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Nassau phantom info (Four Ball cross-foursome phantom)
+// ---------------------------------------------------------------------------
+
+/// Per-hole donor info for the cross-foursome phantom.
+class NassauPhantomDonorHole {
+  final int    playerId;
+  final String playerName;
+  final bool   hasScore;
+
+  const NassauPhantomDonorHole({
+    required this.playerId,
+    required this.playerName,
+    required this.hasScore,
+  });
+
+  factory NassauPhantomDonorHole.fromJson(Map<String, dynamic> j) =>
+      NassauPhantomDonorHole(
+        playerId:   j['player_id']   as int,
+        playerName: j['player_name'] as String? ?? '',
+        hasScore:   j['has_score']   as bool?   ?? false,
+      );
+}
+
+/// Phantom info attached to a NassauSummary when a cross-foursome phantom
+/// is active (Four Ball, one team has 3 players across all foursomes).
+class NassauPhantomInfo {
+  final int                              phantomPlayerId;
+  final int                              phantomPlayingHcp;
+  final Map<int, NassauPhantomDonorHole> byHole;  // hole 1-18
+
+  const NassauPhantomInfo({
+    required this.phantomPlayerId,
+    required this.phantomPlayingHcp,
+    required this.byHole,
+  });
+
+  factory NassauPhantomInfo.fromJson(Map<String, dynamic> j) {
+    final rawByHole = j['by_hole'] as Map<String, dynamic>? ?? {};
+    final byHole = rawByHole.map((k, v) => MapEntry(
+      int.parse(k),
+      NassauPhantomDonorHole.fromJson(v as Map<String, dynamic>),
+    ));
+    return NassauPhantomInfo(
+      phantomPlayerId:  j['phantom_player_id']   as int? ?? 0,
+      phantomPlayingHcp: j['phantom_playing_hcp'] as int? ?? 0,
+      byHole: byHole,
+    );
+  }
+
+  /// Returns donor info for [hole], or null if not configured.
+  NassauPhantomDonorHole? donorForHole(int hole) => byHole[hole];
+
+  /// True if the phantom's donor has scored [hole].
+  bool donorHasScoredHole(int hole) => byHole[hole]?.hasScore ?? false;
+
+  /// Name of the donor player for [hole].
+  String donorNameForHole(int hole) => byHole[hole]?.playerName ?? 'Donor';
 }
 
 // ---------------------------------------------------------------------------

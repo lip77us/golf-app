@@ -1033,6 +1033,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 sixesSummary:    games.contains('sixes')      ? rp.sixesSummary    : null,
                 points531Summary: games.contains('points_531') ? rp.points531Summary : null,
                 matchPlayData:   rp.matchPlayData,
+                isCupSingles:    games.contains('singles_nassau') || games.contains('singles_18'),
                 handicapMode:    hMode,
                 netPercent:      hPct,
                 allowJunk:       allowJunk,
@@ -1105,36 +1106,63 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     final current = (_pending[hole] ?? {})[player.player.id]
         ?? sc?.holeData(hole)?.scoreFor(player.player.id)?.grossScore;
 
-    final lowPlaying = hMode == 'strokes_off' && players.isNotEmpty
-        ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
-        : null;
-    final effective = _effectiveHandicap(
-      mode:                  hMode,
-      netPercent:            hPct,
-      playingHandicap:       player.playingHandicap,
-      lowestPlayingHandicap: lowPlaying,
-    );
     final holeEntry = sc?.holeData(hole)?.scoreFor(player.player.id);
     final si        = holeEntry?.strokeIndex ?? sc?.holeData(hole)?.strokeIndex ?? 18;
 
-    // Sixes SO: use the exact per-segment algorithm so the modal picker
-    // colors match the inline picker and the backend calculation.
-    // Guard on games.contains('sixes') so a stale sixesSummary from a prior
-    // Sixes game never bleeds into P531 or other strokes-off games.
     final int strokes;
-    final games = _activeGames(rp.round);
-    if (hMode == 'strokes_off' && games.contains('sixes') &&
-        rp.sixesSummary != null && sc != null) {
-      final so = effective; // _effectiveHandicap already computed SO = own - low
-      strokes = _sixesSoStrokesOnHole(
-        playerSo:    so,
-        holeNumber:  hole,
-        strokeIndex: si,
-        summary:     rp.sixesSummary!,
-        scorecard:   sc,
-      );
+    final mpData   = rp.matchPlayData;
+    final games    = _activeGames(rp.round);
+    final isCupSng = games.contains('singles_nassau') || games.contains('singles_18');
+
+    // Cup singles: match-play handicap per pairing (lower = 0, higher = diff).
+    if (isCupSng) {
+      int so = 0;
+      if (mpData != null && mpData['bracket_type'] == 'cup_singles') {
+        // Exact per-match differential from loaded bracket data.
+        final matches = (mpData['matches'] as List?) ?? [];
+        for (final raw in matches) {
+          final match = Map<String, dynamic>.from(raw as Map);
+          final p1Id  = match['player1_id'] as int?;
+          final p2Id  = match['player2_id'] as int?;
+          int? opponentId;
+          if (p1Id == player.player.id)      opponentId = p2Id;
+          else if (p2Id == player.player.id) opponentId = p1Id;
+          else continue;
+          final opp = players.where((x) => x.player.id == opponentId).firstOrNull;
+          if (opp != null) so = player.playingHandicap - opp.playingHandicap;
+          break;
+        }
+      } else if (players.isNotEmpty) {
+        // Fallback before matchPlayData loads: strokes off foursome low.
+        final low = players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b);
+        so = player.playingHandicap - low;
+      }
+      strokes = so > 0 ? _strokesOnHole(so, si) : 0;
     } else {
-      strokes = _strokesOnHole(effective, si);
+      final lowPlaying = hMode == 'strokes_off' && players.isNotEmpty
+          ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
+          : null;
+      final effective = _effectiveHandicap(
+        mode:                  hMode,
+        netPercent:            hPct,
+        playingHandicap:       player.playingHandicap,
+        lowestPlayingHandicap: lowPlaying,
+      );
+      // Sixes SO: use the exact per-segment algorithm so the modal picker
+      // colors match the inline picker and the backend calculation.
+      final games = _activeGames(rp.round);
+      if (hMode == 'strokes_off' && games.contains('sixes') &&
+          rp.sixesSummary != null && sc != null) {
+        strokes = _sixesSoStrokesOnHole(
+          playerSo:    effective,
+          holeNumber:  hole,
+          strokeIndex: si,
+          summary:     rp.sixesSummary!,
+          scorecard:   sc,
+        );
+      } else {
+        strokes = _strokesOnHole(effective, si);
+      }
     }
 
     final score = await showModalBottomSheet<int>(
@@ -1198,6 +1226,11 @@ class _HoleScoreCard extends StatelessWidget {
   /// Cup singles bracket data — used to color player names by team.
   final Map<String, dynamic>?   matchPlayData;
 
+  /// True when this foursome is playing cup singles (singles_nassau or
+  /// singles_18).  Set from the active-games list so match-play handicap
+  /// activates immediately, even before matchPlayData has loaded.
+  final bool                    isCupSingles;
+
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership)      onEditTap;
   final void Function(int pid)  onJunkAdd;
@@ -1217,6 +1250,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.sixesSummary,
     this.points531Summary,
     this.matchPlayData,
+    this.isCupSingles = false,
     required this.handicapMode,
     required this.netPercent,
     required this.allowJunk,
@@ -1265,10 +1299,70 @@ class _HoleScoreCard extends StatelessWidget {
     return result;
   }
 
+  /// The overall match-play handicap differential for [m] in cup singles:
+  /// 0 if [m] is the lower handicap, (m.hcp - opponent.hcp) if higher.
+  /// Used for the label next to the player name ("-0", "-3", etc.).
+  int _cupSinglesHandicapFor(Membership m) {
+    // Prefer exact per-match differential from loaded bracket data.
+    final matches = (matchPlayData?['matches'] as List?) ?? [];
+    for (final raw in matches) {
+      final match = Map<String, dynamic>.from(raw as Map);
+      final p1Id  = match['player1_id'] as int?;
+      final p2Id  = match['player2_id'] as int?;
+      int? opponentId;
+      if (p1Id == m.player.id)      opponentId = p2Id;
+      else if (p2Id == m.player.id) opponentId = p1Id;
+      else continue;
+      final opp = players.where((x) => x.player.id == opponentId).firstOrNull;
+      if (opp == null) return 0;
+      return (m.playingHandicap - opp.playingHandicap).clamp(0, 99);
+    }
+    // Fallback before matchPlayData loads: strokes off foursome low.
+    if (players.isEmpty) return 0;
+    final low = players.map((x) => x.playingHandicap).reduce((a, b) => a < b ? a : b);
+    return (m.playingHandicap - low).clamp(0, 99);
+  }
+
+  /// Cup singles match-play handicap: lower of the two paired players gets 0
+  /// strokes; higher gets (own_hcp - opponent_hcp) strokes allocated by SI.
+  int _cupSinglesStrokesFor(Membership m, int si) {
+    final matches = (matchPlayData?['matches'] as List?) ?? [];
+    for (final raw in matches) {
+      final match = Map<String, dynamic>.from(raw as Map);
+      final p1Id  = match['player1_id'] as int?;
+      final p2Id  = match['player2_id'] as int?;
+      int? opponentId;
+      if (p1Id == m.player.id)      opponentId = p2Id;
+      else if (p2Id == m.player.id) opponentId = p1Id;
+      else continue;
+      final opp = players.where((x) => x.player.id == opponentId).firstOrNull;
+      if (opp == null) return 0;
+      final so = m.playingHandicap - opp.playingHandicap;
+      if (so <= 0) return 0;
+      return _strokesOnHole(so, si);
+    }
+    return 0;
+  }
+
   int _strokesForHole(Membership m, ScorecardHole? h) {
     if (h == null || handicapMode == 'gross') return 0;
     final entry = h.scoreFor(m.player.id);
     final mySi  = entry?.strokeIndex ?? h.strokeIndex;
+
+    // Cup singles: match-play handicap (lower of the pair = 0, higher = diff).
+    // isCupSingles is set from the games list so this fires even before
+    // matchPlayData has loaded.  When matchPlayData is available we can compute
+    // the exact per-match differential; otherwise fall back to strokes-off-low
+    // across all four players (better than full net).
+    if (isCupSingles) {
+      if (matchPlayData?['bracket_type'] == 'cup_singles') {
+        return _cupSinglesStrokesFor(m, mySi);
+      }
+      // Fallback: strokes off the lowest handicap in the foursome.
+      final low = players.map((x) => x.playingHandicap).reduce((a, b) => a < b ? a : b);
+      final so  = m.playingHandicap - low;
+      return so > 0 ? _strokesOnHole(so, mySi) : 0;
+    }
 
     if (handicapMode == 'net') {
       if (netPercent == 100 && entry != null) return entry.handicapStrokes;
@@ -1477,7 +1571,13 @@ class _HoleScoreCard extends StatelessWidget {
             final matchStrok = _strokesForHole(m, holeData);
 
             String? hcapLabel;
-            if (handicapMode == 'net' || handicapMode == 'strokes_off') {
+            if (isCupSingles) {
+              // Singles: show match-play differential (0 for lower player,
+              // difference for higher player), plus stroke dots for this hole.
+              final so = _cupSinglesHandicapFor(m);
+              final dots = matchStrok > 0 ? ' ${'•' * matchStrok}' : '';
+              hcapLabel = '-$so$dots';
+            } else if (handicapMode == 'net' || handicapMode == 'strokes_off') {
               final dots = matchStrok > 0 ? ' ${'•' * matchStrok}' : '';
               hcapLabel = '-${_effectiveHcap(m)}$dots';
             }

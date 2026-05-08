@@ -328,3 +328,62 @@ def build_score_index(
         adjusted = r['gross_score'] - strokes
         index.setdefault(r['player_id'], {})[r['hole_number']] = adjusted
     return index
+
+
+def build_match_play_score_index(foursome, p1_id: int, p2_id: int) -> dict:
+    """
+    Match-play handicap for a 1-v-1 pairing.
+
+    The lower-handicap player receives 0 strokes; the higher-handicap player
+    receives (higher_playing_handicap - lower_playing_handicap) strokes
+    allocated by stroke index.  This is the standard USGA match-play
+    handicap allowance for singles.
+
+    Returns {player_id: {hole_number: adjusted_score}} containing only
+    holes that have a gross score on file.
+    """
+    memberships = {
+        m.player_id: m
+        for m in foursome.memberships
+        .select_related('player', 'tee')
+        .filter(player_id__in=[p1_id, p2_id], player__is_phantom=False)
+    }
+    m1 = memberships.get(p1_id)
+    m2 = memberships.get(p2_id)
+
+    # Fall back to full-net if memberships are missing
+    if not m1 or not m2:
+        return build_score_index(foursome, HandicapMode.NET)
+
+    hcp1 = m1.playing_handicap or 0
+    hcp2 = m2.playing_handicap or 0
+
+    # Strokes received: lower player gets 0, higher gets the differential
+    so1 = max(0, hcp1 - hcp2)
+    so2 = max(0, hcp2 - hcp1)
+
+    # Gross scores for both players only
+    rows = (
+        HoleScore.objects
+        .filter(foursome=foursome, player_id__in=[p1_id, p2_id])
+        .exclude(gross_score=None)
+        .values('player_id', 'hole_number', 'gross_score')
+    )
+
+    index: dict = {}
+    for r in rows:
+        pid  = r['player_id']
+        so   = so1 if pid == p1_id else so2
+        m    = m1  if pid == p1_id else m2
+        gross = r['gross_score']
+
+        if so == 0 or m.tee_id is None:
+            adjusted = gross
+        else:
+            si       = m.tee.hole(r['hole_number']).get('stroke_index', 18)
+            strokes  = _strokes_on_hole(so, si)
+            adjusted = gross - strokes
+
+        index.setdefault(pid, {})[r['hole_number']] = adjusted
+
+    return index

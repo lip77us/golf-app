@@ -72,14 +72,42 @@ def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
 
     SI comes from m.tee.hole(hole_num) — NOT from HoleScore (which stores
     no stroke_index column).
-    """
-    score_index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
 
-    memberships = list(
+    For Four Ball phantoms (cross_foursome_rotation algorithm), the phantom
+    IS included so their donated scores count towards best-ball.
+    """
+    # Determine whether this foursome has a cross-foursome phantom
+    from scoring.phantom import CROSS_FOURSOME_ALGORITHM_ID
+    has_cross_phantom = (
+        foursome.has_phantom
+        and foursome.memberships.filter(
+            player__is_phantom=True,
+            phantom_algorithm=CROSS_FOURSOME_ALGORITHM_ID,
+        ).exists()
+    )
+
+    # Include phantom scores in gross index only for cross-foursome phantoms
+    score_index = build_score_index(
+        foursome,
+        handicap_mode=HandicapMode.GROSS,
+        include_phantom=has_cross_phantom,
+    )
+
+    # Build membership list: always exclude phantom, then add it back for
+    # cross-foursome so it participates in the strokes-off calculation.
+    real_memberships = list(
         foursome.memberships
         .select_related('player', 'tee')
         .filter(player__is_phantom=False)
     )
+    if has_cross_phantom:
+        phantom_m = foursome.memberships.filter(
+            player__is_phantom=True
+        ).select_related('player', 'tee').first()
+        memberships = real_memberships + ([phantom_m] if phantom_m else [])
+    else:
+        memberships = real_memberships
+
     if not memberships:
         return score_index
 
@@ -110,9 +138,25 @@ def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
     return score_index
 
 
+def _is_cup_nassau(foursome) -> bool:
+    """Return True when this foursome's Nassau is part of a Ryder/Bandon Cup round."""
+    try:
+        from tournament.models import RyderCupRoundConfig
+        RyderCupRoundConfig.objects.get(round=foursome.round)
+        return True
+    except Exception:
+        return False
+
+
 def _get_score_index(foursome, game) -> dict:
-    """Return player_id → hole_number → adjusted_score based on game's handicap mode."""
-    if game.handicap_mode == HandicapMode.STROKES_OFF:
+    """
+    Return player_id → hole_number → adjusted_score based on game's handicap mode.
+
+    Cup Nassau is always fourball (2v2 best-ball), so handicap is always
+    strokes-off the lowest player in the group regardless of the stored
+    handicap_mode.  Casual Nassau uses whatever mode was configured.
+    """
+    if game.handicap_mode == HandicapMode.STROKES_OFF or _is_cup_nassau(foursome):
         return _build_so_score_index(foursome, net_percent=game.net_percent)
     return build_score_index(foursome, game.handicap_mode, game.net_percent)
 
@@ -655,6 +699,45 @@ def calculate_nassau(foursome) -> NassauGame | None:
 
 
 # ---------------------------------------------------------------------------
+# Phantom helpers
+# ---------------------------------------------------------------------------
+
+def _build_phantom_info(foursome) -> 'dict | None':
+    """
+    Return phantom donor status for a Four Ball phantom (cross_foursome_rotation),
+    or None if this foursome has no cross-foursome phantom.
+
+    Shape:
+    {
+        'phantom_player_id': int,
+        'algorithm': 'cross_foursome_rotation',
+        'by_hole': {
+            1:  {'player_id': int, 'player_name': str, 'has_score': bool},
+            2:  {...},
+            ...
+            18: {...},
+        }
+    }
+    """
+    if not foursome.has_phantom:
+        return None
+    from scoring.phantom import PhantomScoreProvider, CROSS_FOURSOME_ALGORITHM_ID
+    provider = PhantomScoreProvider(foursome)
+    if not provider.has_phantom or not provider.is_cross_foursome:
+        return None
+    phantom_m = foursome.memberships.filter(player__is_phantom=True).first()
+    return {
+        'phantom_player_id'    : phantom_m.player_id if phantom_m else None,
+        'phantom_playing_hcp'  : phantom_m.playing_handicap if phantom_m else 0,
+        'algorithm'            : CROSS_FOURSOME_ALGORITHM_ID,
+        'by_hole'              : {
+            str(h): v
+            for h, v in provider.donor_status_by_hole().items()
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 
@@ -883,10 +966,18 @@ def nassau_summary(foursome) -> dict | None:
             for p in teams[team_num].players.all()
         ]
 
+    # Cup nassau always uses strokes-off-low regardless of stored handicap_mode.
+    # Report the effective mode so the client UI draws dots correctly.
+    effective_hcp_mode = (
+        'strokes_off'
+        if (game.handicap_mode != 'strokes_off' and _is_cup_nassau(foursome))
+        else game.handicap_mode
+    )
+
     return {
         'status'        : game.status,
         'variant'       : game.variant,
-        'handicap_mode' : game.handicap_mode,
+        'handicap_mode' : effective_hcp_mode,
         'net_percent'   : game.net_percent,
         'press_mode'    : game.press_mode,
         'bet_unit'      : bet_unit,
@@ -971,4 +1062,5 @@ def nassau_summary(foursome) -> dict | None:
         'holes'               : holes_out,
         'can_press'           : can_press,
         'press_available_nine': press_available_nine,
+        'phantom'             : _build_phantom_info(foursome),
     }

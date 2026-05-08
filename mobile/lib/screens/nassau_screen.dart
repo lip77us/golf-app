@@ -12,6 +12,8 @@
 ///   • Presses strip (active/completed presses)
 ///   • F9 / B9 / Overall match status chips + Call Press button
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -80,6 +82,11 @@ class _NassauScreenState extends State<NassauScreen> {
   bool _prevHadPending  = false;
   bool _initialJumpDone = false;
 
+  // Polling timer used when a cross-foursome phantom is waiting for a donor
+  // to score.  Refreshes the scorecard every 8 s so the phantom row updates
+  // automatically without needing user interaction.
+  Timer? _phantomPollTimer;
+
   @override
   void initState() {
     super.initState();
@@ -94,25 +101,68 @@ class _NassauScreenState extends State<NassauScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _phantomPollTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Start / stop the phantom polling timer based on whether a phantom is
+  /// waiting to score the current hole.
+  void _updatePhantomPolling(NassauSummary? nas, Map<int, int> scores,
+      List<Membership> players) {
+    final hasPhantom = nas?.phantom != null;
+    final phantomWaiting = hasPhantom &&
+        !scores.containsKey(nas!.phantom!.phantomPlayerId);
+
+    if (phantomWaiting && _phantomPollTimer == null) {
+      _phantomPollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+        if (!mounted) return;
+        final rp = context.read<RoundProvider>();
+        rp.loadScorecard(widget.foursomeId);
+        rp.loadNassau(widget.foursomeId);
+      });
+    } else if (!phantomWaiting && _phantomPollTimer != null) {
+      _phantomPollTimer!.cancel();
+      _phantomPollTimer = null;
+    }
+  }
+
   // ── Player helpers ──────────────────────────────────────────────────────────
 
-  /// Real (non-phantom) players ordered T1 first, T2 second per the nassau
-  /// summary.  Falls back to natural membership order when summary not yet loaded.
+  /// Players ordered T1 first, T2 second per the nassau summary.
+  /// Includes the cross-foursome phantom (if any) so its donor-status row
+  /// is shown in the hole card and submission is blocked until it has a score.
   List<Membership> _orderedPlayers(
       Scorecard sc, Round? round, NassauSummary? nas) {
     final foursome = round?.foursomes
         .where((f) => f.id == widget.foursomeId)
         .firstOrNull;
 
-    List<Membership> members;
+    List<Membership> realMembers;
+    Membership? phantomMember;
+
     if (foursome != null) {
-      members = foursome.memberships
+      realMembers = foursome.memberships
           .where((m) => !m.player.isPhantom)
           .toList();
+      // Include the cross-foursome phantom so its score entry blocks
+      // "Save & Advance" until the donor has posted.
+      // We check both nas.phantom (algorithm confirmed) AND whether the
+      // scorecard already has a phantom score entry (cross-foursome path
+      // in _build_scorecard appends it to h['scores'] always).
+      final hasCrossPhantomEntry = sc.holes.isNotEmpty &&
+          sc.holes.first.scores.any((s) =>
+            foursome.memberships.any((m) => m.player.isPhantom && m.player.id == s.playerId));
+      if (nas?.phantom != null || hasCrossPhantomEntry) {
+        phantomMember = foursome.memberships
+            .where((m) => m.player.isPhantom)
+            .firstOrNull;
+      }
     } else if (sc.holes.isEmpty) {
       return const [];
     } else {
-      members = sc.holes.first.scores
+      realMembers = sc.holes.first.scores
           .map((s) => Membership(
                 id: s.playerId,
                 player: PlayerProfile(
@@ -128,19 +178,27 @@ class _NassauScreenState extends State<NassauScreen> {
           .toList();
     }
 
-    if (nas == null) return members;
+    if (nas == null) return realMembers;
 
     final ordered = <Membership>[];
     for (final id in [
       ...nas.team1.map((p) => p.playerId),
       ...nas.team2.map((p) => p.playerId),
     ]) {
-      final m = members.where((m) => m.player.id == id).firstOrNull;
+      final m = realMembers.where((m) => m.player.id == id).firstOrNull;
       if (m != null) ordered.add(m);
+      // Phantom sits at the end of its team
+      if (phantomMember != null && id == phantomMember.player.id) {
+        ordered.add(phantomMember);
+      }
     }
-    // Include any players not assigned to a team (safety net).
-    for (final m in members) {
+    // Include any real players not in a team (safety net) — never add phantom twice
+    for (final m in realMembers) {
       if (!ordered.any((o) => o.player.id == m.player.id)) ordered.add(m);
+    }
+    if (phantomMember != null &&
+        !ordered.any((o) => o.player.id == phantomMember!.player.id)) {
+      ordered.add(phantomMember);
     }
     return ordered;
   }
@@ -179,6 +237,8 @@ class _NassauScreenState extends State<NassauScreen> {
 
   int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
     for (int i = 0; i < players.length; i++) {
+      // Phantom players are never a hot-spot — their score arrives automatically
+      if (players[i].player.isPhantom) continue;
       if (!scores.containsKey(players[i].player.id)) return i;
     }
     return -1;
@@ -481,6 +541,46 @@ class _NassauScreenState extends State<NassauScreen> {
                   : null,
               submitting: rp.submitting,
             ),
+          // Phantom waiting banner — shown when phantom blocks hole submission
+          if (nas?.phantom != null && !allDone) ...[
+            Builder(builder: (ctx2) {
+              final realDone = _allScored(
+                players.where((m) => !m.player.isPhantom).toList(),
+                scores,
+              );
+              if (!realDone) return const SizedBox.shrink();
+              final donorName = nas!.phantom!
+                  .donorNameForHole(_selectedHole);
+              return Container(
+                width: double.infinity,
+                color: Theme.of(ctx2).colorScheme.errorContainer,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                child: Row(children: [
+                  Icon(Icons.hourglass_top,
+                      size: 14,
+                      color: Theme.of(ctx2)
+                          .colorScheme
+                          .onErrorContainer),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Waiting for $donorName to post '
+                      'hole $_selectedHole…',
+                      style: Theme.of(ctx2)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(
+                            color: Theme.of(ctx2)
+                                .colorScheme
+                                .onErrorContainer,
+                          ),
+                    ),
+                  ),
+                ]),
+              );
+            }),
+          ],
           // Hole navigation
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -560,6 +660,11 @@ class _NassauScreenState extends State<NassauScreen> {
     final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
     final par      = holeData?.par ?? 4;
 
+    // Start / stop phantom polling based on whether the phantom has scored
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updatePhantomPolling(nas, scores, players);
+    });
+
     return Column(children: [
       // Team banner (T1 vs T2 names)
       if (nas != null) _TeamBanner(summary: nas),
@@ -589,6 +694,7 @@ class _NassauScreenState extends State<NassauScreen> {
                 hotSpotIdx:      hotSpot,
                 par:             par,
                 nassau:          nas,
+                phantomInfo:     nas?.phantom,
                 onScoreSelected: (m, score) =>
                     _selectScore(m, score, _selectedHole),
                 onEditTap: (m) =>
@@ -603,6 +709,7 @@ class _NassauScreenState extends State<NassauScreen> {
                   players:     players,
                   scorecard:   sc,
                   currentHole: _selectedHole,
+                  phantomInfo: nas.phantom,
                   onTapHole:   (h) => setState(() => _selectedHole = h),
                 ),
                 const SizedBox(height: 12),
@@ -644,6 +751,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
   final int                     hotSpotIdx;
   final int                     par;
   final NassauSummary?          nassau;
+  final NassauPhantomInfo?      phantomInfo;
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership)      onEditTap;
 
@@ -657,6 +765,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
     required this.hotSpotIdx,
     required this.par,
     required this.nassau,
+    this.phantomInfo,
     required this.onScoreSelected,
     required this.onEditTap,
   });
@@ -804,6 +913,23 @@ class _NassauHoleScoreCard extends StatelessWidget {
           ...players.asMap().entries.expand((entry) {
             final idx        = entry.key;
             final m          = entry.value;
+
+            // Phantom player: show read-only donor-status row
+            if (m.player.isPhantom && phantomInfo != null) {
+              final donor     = phantomInfo!.donorForHole(holeNumber);
+              final hasScore  = scores.containsKey(m.player.id);
+              final gross     = scores[m.player.id];
+              return [
+                _PhantomDonorRow(
+                  holeNumber:  holeNumber,
+                  gross:       gross,
+                  donorName:   donor?.playerName ?? 'Donor',
+                  donorScored: donor?.hasScore ?? hasScore,
+                  teamLabel:   _teamLabelFor(m.player.id),
+                ),
+              ];
+            }
+
             final rt         = _running(m.player.id);
             final gross      = scores[m.player.id];
             final isHot      = idx == hotSpotIdx;
@@ -890,6 +1016,130 @@ class _HoleOutcomeBanner extends StatelessWidget {
           style: theme.textTheme.bodySmall?.copyWith(
             fontWeight: FontWeight.w600,
             color: fg,
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phantom donor status row (read-only, shown in place of score entry)
+// ---------------------------------------------------------------------------
+
+class _PhantomDonorRow extends StatelessWidget {
+  final int     holeNumber;
+  final int?    gross;          // phantom's gross score (null = not yet available)
+  final String  donorName;     // player whose score the phantom is copying
+  final bool    donorScored;   // whether the donor has posted their score
+  final String? teamLabel;
+
+  const _PhantomDonorRow({
+    required this.holeNumber,
+    required this.gross,
+    required this.donorName,
+    required this.donorScored,
+    this.teamLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasScore = gross != null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: hasScore
+            ? theme.colorScheme.surfaceContainerLow
+            : theme.colorScheme.errorContainer.withOpacity(0.15),
+        border: Border(
+          left: BorderSide(
+            color: hasScore
+                ? theme.colorScheme.outline.withOpacity(0.3)
+                : theme.colorScheme.error.withOpacity(0.4),
+            width: 3,
+          ),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(children: [
+        // Phantom label
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            'PHM',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSecondaryContainer,
+              fontWeight: FontWeight.bold,
+              fontSize: 9,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: hasScore
+              ? Text(
+                  'Score from $donorName',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
+                  ),
+                )
+              : Row(children: [
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Waiting for $donorName…',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.error,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ]),
+        ),
+        if (teamLabel != null) ...[
+          const SizedBox(width: 8),
+          Text(
+            teamLabel!,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        const SizedBox(width: 8),
+        // Score chip
+        Container(
+          width: 36,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: hasScore
+                ? theme.colorScheme.primaryContainer
+                : theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            hasScore ? '$gross' : '—',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: hasScore
+                  ? theme.colorScheme.onPrimaryContainer
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ]),
@@ -1288,10 +1538,11 @@ class _NassauScorePickerSheet extends StatelessWidget {
 // ===========================================================================
 
 class _NassauSummaryGrid extends StatefulWidget {
-  final NassauSummary    nassau;
-  final List<Membership> players;
-  final Scorecard        scorecard;
-  final int              currentHole;
+  final NassauSummary      nassau;
+  final List<Membership>   players;
+  final Scorecard          scorecard;
+  final int                currentHole;
+  final NassauPhantomInfo? phantomInfo;
   final void Function(int hole)? onTapHole;
 
   const _NassauSummaryGrid({
@@ -1299,6 +1550,7 @@ class _NassauSummaryGrid extends StatefulWidget {
     required this.players,
     required this.scorecard,
     required this.currentHole,
+    this.phantomInfo,
     this.onTapHole,
   });
 
@@ -1487,7 +1739,7 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                     color: theme.colorScheme.outlineVariant,
                     margin: const EdgeInsets.symmetric(vertical: 2),
                   ),
-                  // Player score rows
+                  // Player score rows (real players + phantom)
                   for (final m in players)
                     _NassauGridPlayerRow(
                       member:        m,
@@ -1499,6 +1751,7 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                       cellW:         cellW,
                       rowH:          rowH,
                       strokesOnHole: (h) => _strokesOnHoleFor(m, h),
+                      isPhantom:     m.player.isPhantom,
                     ),
                   // Hole winner row (top bet)
                   Row(children: [
@@ -1592,8 +1845,148 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                 ],
               ),
             ),
+          // Phantom info strip (shown below grid when cross-foursome phantom active)
+          if (widget.phantomInfo != null) ...[
+            const SizedBox(height: 8),
+            _PhantomInfoStrip(
+              phantomInfo: widget.phantomInfo!,
+              players:     players,
+            ),
           ],
+        ],
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phantom info strip — shows HC and hole-by-donor rotation
+// ---------------------------------------------------------------------------
+
+class _PhantomInfoStrip extends StatelessWidget {
+  final NassauPhantomInfo phantomInfo;
+  final List<Membership>  players;
+
+  const _PhantomInfoStrip({
+    required this.phantomInfo,
+    required this.players,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // HC comes directly from the nassau summary phantom info (server-computed average).
+    // Fall back to the membership's playing_handicap if available.
+    final phantomMember = players
+        .where((m) => m.player.id == phantomInfo.phantomPlayerId)
+        .firstOrNull;
+    final hc = phantomInfo.phantomPlayingHcp > 0
+        ? phantomInfo.phantomPlayingHcp
+        : phantomMember?.playingHandicap;
+
+    // Group holes by donor name for a compact rotation summary
+    final Map<String, List<int>> byDonor = {};
+    for (int h = 1; h <= 18; h++) {
+      final donor = phantomInfo.donorForHole(h);
+      if (donor == null) continue;
+      byDonor.putIfAbsent(donor.playerName, () => []).add(h);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: theme.colorScheme.secondaryContainer,
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'PHANTOM',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSecondaryContainer,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (hc != null)
+              Text(
+                'Playing HC: $hc (avg of team)',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+          ]),
+          // Donor rotation
+          if (byDonor.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            ...byDonor.entries.map((e) {
+              final name  = e.key;
+              final holes = e.value;
+              // Show scored/pending counts
+              final scored  = holes.where((h) =>
+                  phantomInfo.donorForHole(h)?.hasScore ?? false).length;
+              final pending = holes.length - scored;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Row(children: [
+                  Container(
+                    width: 6, height: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: pending == 0
+                          ? Colors.green.shade400
+                          : theme.colorScheme.outline,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(children: [
+                        TextSpan(
+                          text: name,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        TextSpan(
+                          text: '  holes ${holes.join(', ')}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (pending > 0)
+                          TextSpan(
+                            text: '  ($pending pending)',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.error,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                      ]),
+                    ),
+                  ),
+                ]),
+              );
+            }),
+          ],
+        ],
       ),
     );
   }
@@ -1610,6 +2003,7 @@ class _NassauGridPlayerRow extends StatelessWidget {
   final double       cellW;
   final double       rowH;
   final int Function(int hole) strokesOnHole;
+  final bool         isPhantom;
 
   const _NassauGridPlayerRow({
     required this.member,
@@ -1621,6 +2015,7 @@ class _NassauGridPlayerRow extends StatelessWidget {
     required this.cellW,
     required this.rowH,
     required this.strokesOnHole,
+    this.isPhantom = false,
   });
 
   Widget _cell(int h, BuildContext ctx, {required Widget child}) {
@@ -1650,16 +2045,27 @@ class _NassauGridPlayerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Phantom rows are shown with a subdued style and "PHM hc:N" label
+    final labelStyle = isPhantom
+        ? theme.textTheme.bodySmall?.copyWith(
+            fontStyle: FontStyle.italic,
+            color: theme.colorScheme.onSurfaceVariant,
+            fontSize: 10,
+          )
+        : theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600);
+
+    final String label = isPhantom
+        ? 'PHM hc:${member.playingHandicap}'
+        : member.player.displayShort;
 
     return Row(children: [
       SizedBox(
         width: labelColW, height: rowH,
         child: Align(
           alignment: Alignment.centerLeft,
-          child: Text(member.player.displayShort,
+          child: Text(label,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontWeight: FontWeight.w600)),
+              style: labelStyle),
         ),
       ),
       for (final h in holeRange)
@@ -1673,38 +2079,46 @@ class _NassauGridPlayerRow extends StatelessWidget {
                         .holeData(h)
                         ?.scoreFor(member.player.id);
                     final gross = saved?.grossScore;
+                    final textColor = isPhantom
+                        ? (gross == null
+                            ? theme.colorScheme.outlineVariant
+                            : theme.colorScheme.onSurfaceVariant)
+                        : (gross == null
+                            ? theme.colorScheme.onSurfaceVariant
+                            : null);
                     return Text(
                       gross == null ? '–' : '$gross',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: gross == null
-                            ? theme.colorScheme.onSurfaceVariant
-                            : null,
+                        fontWeight: isPhantom ? FontWeight.normal : FontWeight.w600,
+                        fontStyle: isPhantom ? FontStyle.italic : FontStyle.normal,
+                        color: textColor,
+                        fontSize: isPhantom ? 10 : null,
                       ),
                     );
                   }),
                 ),
-                Positioned(
-                  top: 2, right: 2,
-                  child: Builder(builder: (_) {
-                    final strokes = strokesOnHole(h);
-                    if (strokes <= 0) return const SizedBox.shrink();
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(
-                        strokes.clamp(0, 2),
-                        (i) => Container(
-                          width: 4, height: 4,
-                          margin: const EdgeInsets.only(left: 1),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary,
-                            shape: BoxShape.circle,
+                if (!isPhantom)
+                  Positioned(
+                    top: 2, right: 2,
+                    child: Builder(builder: (_) {
+                      final strokes = strokesOnHole(h);
+                      if (strokes <= 0) return const SizedBox.shrink();
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(
+                          strokes.clamp(0, 2),
+                          (i) => Container(
+                            width: 4, height: 4,
+                            margin: const EdgeInsets.only(left: 1),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  }),
-                ),
+                      );
+                    }),
+                  ),
               ]),
             )),
     ]);

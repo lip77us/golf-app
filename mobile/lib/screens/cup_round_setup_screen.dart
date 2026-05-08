@@ -9,8 +9,8 @@
 /// Composition rules
 /// -----------------
 ///   Irish Rumble  → 4 players, ALL from the same team
-///   Four Ball    → 4 players, exactly 2 from each team
-///   Four Ball Quota→ 4 players, exactly 2 from each team
+///   Four Ball    → 4 players (2+2), or 3 players (1+2 / 2+1) — solo side gets a phantom
+///   Four Ball Quota→ 4 players (2+2), or 3 players (1+2 / 2+1) — solo side gets a phantom
 ///   Singles       → 2 OR 4 players, split evenly (1+1 or 2+2)
 ///
 /// For a 4-player Singles group the user additionally pairs each Team-A
@@ -141,17 +141,18 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
   Set<int> get _assignedIds =>
       _foursomes.expand((f) => f.playerIds).toSet();
 
-  /// True only when every player on every team has been placed in a group.
-  /// This gates the "Start Round" button so the round can't be started with
-  /// players left unassigned.
-  bool get _allPlayersAssigned {
-    if (_cup == null) return false;
-    final allIds = _cup!.teams
+  /// True when at least one foursome is ready to go.
+  /// Unassigned players (sitting out due to uneven singles etc.) are allowed.
+  bool get _allPlayersAssigned =>
+      _cup != null && _foursomes.isNotEmpty;
+
+  /// Players not placed in any group for this round (sitting out).
+  List<CupPlayer> get _sittingOut {
+    if (_cup == null) return [];
+    return _cup!.teams
         .expand((t) => t.players)
-        .map((p) => p.id)
-        .toSet();
-    if (allIds.isEmpty) return false;
-    return allIds.every((id) => _assignedIds.contains(id));
+        .where((p) => !_assignedIds.contains(p.id))
+        .toList();
   }
 
   /// Players in [team] not yet assigned to any completed foursome.
@@ -221,22 +222,27 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         return _selectedIds.every((id) => _teamIndexOf(id) == teamIdx);
       case 'singles_nassau':
       case 'singles_18':
-        // 2 or 4 players, split evenly (1+1 or 2+2)
-        if (n != 2 && n != 4) return false;
+        // 2 players (1+1), 3 players (1+2 or 2+1), or 4 players (2+2)
+        if (n != 2 && n != 3 && n != 4) return false;
         final a = _selectedForTeam(0).length;
         final b = _selectedForTeam(1).length;
-        return a == b;
+        if (n == 2) return a == 1 && b == 1;
+        if (n == 3) return (a == 1 && b == 2) || (a == 2 && b == 1);
+        return a == 2 && b == 2;
       default:
-        // nassau / quota_nassau: exactly 4, 2 from each team
-        if (n != 4) return false;
-        return _selectedForTeam(0).length == 2 &&
-               _selectedForTeam(1).length == 2;
+        // nassau / quota_nassau: 4 players (2+2) or 3 players (1+2 / 2+1 — phantom fills the gap)
+        if (n != 4 && n != 3) return false;
+        final a = _selectedForTeam(0).length;
+        final b = _selectedForTeam(1).length;
+        if (n == 4) return a == 2 && b == 2;
+        // 3 players: one team has 1 real player, other has 2 — phantom fills solo side
+        return (a == 1 && b == 2) || (a == 2 && b == 1);
     }
   }
 
   bool get _needsMatchupStep =>
       (_gameType == 'singles_nassau' || _gameType == 'singles_18') &&
-      _selectedIds.length == 4;
+      (_selectedIds.length == 4 || _selectedIds.length == 3);
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -378,9 +384,25 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
     final teamB = _selectedForTeam(1);
     _matchupA.clear();
     _matchupB.clear();
-    for (int i = 0; i < teamA.length; i++) {
-      _matchupA.add(teamA[i]);
-      _matchupB.add(teamB.length > i ? teamB[i] : null);
+
+    if (teamA.length == 1 && teamB.length == 2) {
+      // A1 plays both B1 and B2
+      _matchupA.add(teamA[0]);
+      _matchupA.add(teamA[0]);
+      _matchupB.add(teamB[0]);
+      _matchupB.add(teamB[1]);
+    } else if (teamA.length == 2 && teamB.length == 1) {
+      // A1 and A2 both play B1
+      _matchupA.add(teamA[0]);
+      _matchupA.add(teamA[1]);
+      _matchupB.add(teamB[0]);
+      _matchupB.add(teamB[0]);
+    } else {
+      // Even teams (1+1 or 2+2)
+      for (int i = 0; i < teamA.length; i++) {
+        _matchupA.add(teamA[i]);
+        _matchupB.add(teamB.length > i ? teamB[i] : null);
+      }
     }
   }
 
@@ -402,8 +424,13 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
     if (_gameType == 'irish_rumble') {
       ordered = _selectedIds.toList();
     } else if ((_gameType == 'singles_nassau' || _gameType == 'singles_18') && matchups.isNotEmpty) {
-      // Interleave matchup pairs so foursomes have A1,B1,A2,B2 order
-      ordered = matchups.expand((m) => [m.$1, m.$2]).toList();
+      // Interleave matchup pairs, deduplicating so a player who appears in
+      // two matches (uneven teams) is only in the foursome once.
+      final seen = <int>{};
+      ordered = matchups
+          .expand((m) => [m.$1, m.$2])
+          .where((id) => seen.add(id))
+          .toList();
     } else {
       // Interleave team A and B players
       final a = _selectedForTeam(0);
@@ -618,6 +645,8 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         playerName   : _playerName,
         onSwapB      : (matchIdx, playerId) =>
             setState(() => _matchupB[matchIdx] = playerId),
+        onSwapA      : (matchIdx, playerId) =>
+            setState(() => _matchupA[matchIdx] = playerId),
       );
       case _BuildStep.review:    return _ReviewPage(
         foursomes      : _foursomes,
@@ -625,6 +654,7 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         onRemove       : _removeFoursome,
         onAddAnother   : _startNewFoursome,
         submitError    : _submitError,
+        sittingOut     : _sittingOut,
       );
     }
   }
@@ -801,9 +831,9 @@ class _PlayerPicker extends StatelessWidget {
         return 'Pick 4 players from the same team.';
       case 'singles_nassau':
       case 'singles_18':
-        return 'Pick 1 or 2 players from each team (2 or 4 total).';
+        return 'Pick 1–2 per team. Uneven (1 vs 2) — the solo player plays two matches.';
       default:
-        return 'Pick exactly 2 players from each team (4 total).';
+        return 'Pick 2 per team (4 total), or 1 vs 2 — the solo side gets a phantom partner.';
     }
   }
 
@@ -1087,6 +1117,7 @@ class _MatchupBuilder extends StatelessWidget {
   final String           teamBName;
   final String Function(int) playerName;
   final void Function(int matchIdx, int playerId) onSwapB;
+  final void Function(int matchIdx, int playerId)? onSwapA;
 
   const _MatchupBuilder({
     required this.matchupA,
@@ -1097,7 +1128,17 @@ class _MatchupBuilder extends StatelessWidget {
     required this.teamBName,
     required this.playerName,
     required this.onSwapB,
+    this.onSwapA,
   });
+
+  // Is one side "solo" (same player ID in all matchup slots)?
+  bool get _aIsSolo => teamAPlayers.length == 1;
+  bool get _bIsSolo => teamBPlayers.length == 1;
+  bool get _isUneven => _aIsSolo || _bIsSolo;
+  String get _soloName => _aIsSolo
+      ? playerName(teamAPlayers.first)
+      : playerName(teamBPlayers.first);
+  String get _soloTeamName => _aIsSolo ? teamAName : teamBName;
 
   @override
   Widget build(BuildContext context) {
@@ -1107,43 +1148,109 @@ class _MatchupBuilder extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Define Matchups', style: theme.textTheme.headlineSmall),
         const SizedBox(height: 4),
-        Text('Pair each $teamAName player with a $teamBName player.',
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey)),
+        Text(
+          _isUneven
+              ? 'Uneven group — $_soloName ($_soloTeamName) plays 2 matches.'
+              : 'Pair each $teamAName player with a $teamBName player.',
+          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+        ),
+
+        // Banner for uneven groups
+        if (_isUneven) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              Icon(Icons.info_outline,
+                  size: 16, color: theme.colorScheme.onSecondaryContainer),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$_soloName will use their single scorecard for both matches. '
+                  'They can earn points in each match independently.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer),
+                ),
+              ),
+            ]),
+          ),
+        ],
+
         const SizedBox(height: 24),
 
         ...List.generate(matchupA.length, (i) {
           final aId = matchupA[i];
+          final bId = matchupB[i];
+
+          Widget aWidget = _aIsSolo
+              // Solo A player — fixed, show as text
+              ? Text(aId != null ? playerName(aId) : '—',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600))
+              // Multiple A players — dropdown (for 2v1 swap)
+              : (onSwapA != null && teamAPlayers.length > 1)
+                  ? DropdownButton<int>(
+                      value: aId,
+                      isExpanded: true,
+                      hint: Text('Pick $teamAName player'),
+                      items: teamAPlayers.map((id) => DropdownMenuItem(
+                        value: id,
+                        child: Text(playerName(id)),
+                      )).toList(),
+                      onChanged: (id) { if (id != null) onSwapA!(i, id); },
+                    )
+                  : Text(aId != null ? playerName(aId) : '—',
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600));
+
+          Widget bWidget = _bIsSolo
+              // Solo B player — fixed, show as text
+              ? Text(bId != null ? playerName(bId) : '—',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600))
+              // Multiple B players — dropdown
+              : DropdownButton<int>(
+                  value: bId,
+                  isExpanded: true,
+                  hint: Text('Pick $teamBName player'),
+                  items: teamBPlayers.map((id) => DropdownMenuItem(
+                    value: id,
+                    child: Text(playerName(id)),
+                  )).toList(),
+                  onChanged: (id) { if (id != null) onSwapB(i, id); },
+                );
+
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(children: [
-                Expanded(
-                  child: Text(aId != null ? playerName(aId) : '—',
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('vs',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                ),
-                Expanded(
-                  child: DropdownButton<int>(
-                    value: matchupB[i],
-                    isExpanded: true,
-                    hint: Text('Pick ${teamBName} player'),
-                    items: teamBPlayers.map((id) => DropdownMenuItem(
-                      value: id,
-                      child: Text(playerName(id)),
-                    )).toList(),
-                    onChanged: (id) {
-                      if (id != null) onSwapB(i, id);
-                    },
-                  ),
-                ),
-              ]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_isUneven)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text('Match ${i + 1}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  Row(children: [
+                    Expanded(child: aWidget),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('vs',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
+                    ),
+                    Expanded(child: bWidget),
+                  ]),
+                ],
+              ),
             ),
           );
         }),
@@ -1162,6 +1269,7 @@ class _ReviewPage extends StatelessWidget {
   final void Function(int)   onRemove;
   final VoidCallback         onAddAnother;
   final String?              submitError;
+  final List<CupPlayer>      sittingOut;
 
   const _ReviewPage({
     required this.foursomes,
@@ -1169,6 +1277,7 @@ class _ReviewPage extends StatelessWidget {
     required this.onRemove,
     required this.onAddAnother,
     this.submitError,
+    this.sittingOut = const [],
   });
 
   @override
@@ -1200,7 +1309,13 @@ class _ReviewPage extends StatelessWidget {
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(draft.playerIds.map(playerName).join(', ')),
+                  Text(
+                    draft.playerIds.map(playerName).join(', ') +
+                    ((draft.playerIds.length == 3 &&
+                        (draft.gameType == 'nassau' || draft.gameType == 'quota_nassau'))
+                        ? ' + Phantom'
+                        : ''),
+                  ),
                   if (draft.teeTime != null)
                     Text('Tee: ${draft.teeTime}',
                         style: theme.textTheme.bodySmall),
@@ -1229,6 +1344,39 @@ class _ReviewPage extends StatelessWidget {
           icon: const Icon(Icons.add),
           label: const Text('Add another group'),
         ),
+
+        // Sitting-out players (e.g. leftover from uneven singles)
+        if (sittingOut.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(Icons.event_busy,
+                      size: 16,
+                      color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text('Sitting out this round',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ]),
+                const SizedBox(height: 6),
+                Text(
+                  sittingOut.map((p) => p.name).join(', '),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
 
         if (submitError != null) ...[
           const SizedBox(height: 16),

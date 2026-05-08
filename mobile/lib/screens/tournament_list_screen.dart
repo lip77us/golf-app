@@ -273,31 +273,14 @@ class _AppDrawer extends StatelessWidget {
       child: Column(
         children: [
           DrawerHeader(
-            decoration: BoxDecoration(color: theme.colorScheme.primary),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Icon(Icons.golf_course,
-                    size: 40, color: theme.colorScheme.onPrimary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Golf App',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                              color: theme.colorScheme.onPrimary,
-                              fontWeight: FontWeight.bold)),
-                      if (playerName != null)
-                        Text(playerName!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onPrimary
-                                    .withOpacity(0.85))),
-                    ],
-                  ),
-                ),
-              ],
+            decoration: const BoxDecoration(),
+            margin: EdgeInsets.zero,
+            padding: EdgeInsets.zero,
+            child: Center(
+              child: Image.asset(
+                'assets/images/bandon_cup_logo.png',
+                height: 148,
+              ),
             ),
           ),
           ListTile(

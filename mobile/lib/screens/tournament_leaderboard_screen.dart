@@ -193,11 +193,17 @@ class _GameView extends StatelessWidget {
 // Low Net Championship view
 // ===========================================================================
 
-class _LowNetChampView extends StatelessWidget {
+class _LowNetChampView extends StatefulWidget {
   final Map<String, dynamic> data;
   const _LowNetChampView({required this.data});
 
-  /// "F" when all holes in the tournament are complete, otherwise "1"–"36".
+  @override
+  State<_LowNetChampView> createState() => _LowNetChampViewState();
+}
+
+class _LowNetChampViewState extends State<_LowNetChampView> {
+  final Set<String> _expanded = {};
+
   static String _thruLabel(int holesPlayed, int totalHoles) {
     if (holesPlayed <= 0)          return '—';
     if (holesPlayed >= totalHoles) return 'F';
@@ -217,17 +223,147 @@ class _LowNetChampView extends StatelessWidget {
     return theme.colorScheme.onSurface;
   }
 
+  static String _modeLabel(String m) {
+    switch (m) {
+      case 'gross':       return 'Gross';
+      case 'strokes_off': return 'Strokes Off';
+      default:            return 'Net';
+    }
+  }
+
+  /// Compact F9/B9 scorecard grid for one round's hole data.
+  Widget _nineGrid(BuildContext context, List holes,
+      {required bool isFront, required String label}) {
+    final theme = Theme.of(context);
+    const double cHole = 26, cPar = 24, cGross = 28, cNet = 28;
+
+    final headerStyle = theme.textTheme.labelSmall!.copyWith(
+      fontWeight: FontWeight.bold,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    const cellStyle = TextStyle(fontSize: 11);
+
+    Widget cell(double w, Widget child) =>
+        SizedBox(width: w, child: Center(child: child));
+
+    Widget gridRow({
+      required String hole, required String par,
+      required String gross, required String net,
+      Color? grossColor, Color? netColor, bool bold = false,
+    }) {
+      final st = bold ? cellStyle.copyWith(fontWeight: FontWeight.bold) : cellStyle;
+      return Row(children: [
+        cell(cHole,  Text(hole,  style: st)),
+        cell(cPar,   Text(par,   style: st)),
+        cell(cGross, Text(gross, style: st.copyWith(color: grossColor))),
+        cell(cNet,   Text(net,   style: st.copyWith(color: netColor))),
+      ]);
+    }
+
+    final segment = holes
+        .where((h) {
+          final n = (h as Map)['hole'] as int? ?? 0;
+          return isFront ? n <= 9 : n > 9;
+        })
+        .cast<Map>()
+        .toList();
+
+    int totPar = 0, totGross = 0, totNet = 0;
+    for (final h in segment) {
+      totPar   += (h['par']    as int? ?? 0);
+      totGross += (h['gross']  as int? ?? 0);
+      totNet   += (h['capped'] as int? ?? 0);
+    }
+    final totNtp = segment.isEmpty ? null : totNet - totPar;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(isFront ? 'Front 9' : 'Back 9',
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+        const SizedBox(height: 4),
+        Row(children: [
+          cell(cHole,  const SizedBox.shrink()),
+          cell(cPar,   Text('Par',  style: headerStyle)),
+          cell(cGross, Text('Grs',  style: headerStyle)),
+          cell(cNet,   Text('Net',  style: headerStyle)),
+        ]),
+        const Divider(height: 5, thickness: 0.5),
+        ...segment.map((h) {
+          final hNum   = h['hole']   as int? ?? 0;
+          final par    = h['par']    as int? ?? 0;
+          final gross  = h['gross']  as int? ?? 0;
+          final capped = h['capped'] as int? ?? 0;
+          final gDiff  = gross  - par;
+          final nDiff  = capped - par;
+          return gridRow(
+            hole: '$hNum', par: '$par', gross: '$gross', net: '$capped',
+            grossColor: gDiff < 0 ? Colors.green.shade700
+                      : gDiff > 0 ? theme.colorScheme.error : null,
+            netColor:   nDiff < 0 ? Colors.green.shade700
+                      : nDiff > 0 ? theme.colorScheme.error : null,
+          );
+        }),
+        const Divider(height: 6, thickness: 0.5),
+        gridRow(
+          hole: isFront ? 'Out' : 'In',
+          par: '$totPar', gross: '$totGross',
+          net: _ntpLabel(totNtp),
+          netColor: _ntpColor(totNtp, theme),
+          bold: true,
+        ),
+      ],
+    );
+  }
+
+  /// Full 18-hole totals row shown below the F9/B9 grids.
+  Widget _totalsRow(BuildContext context, List holes) {
+    final theme = Theme.of(context);
+    const double cHole = 26, cPar = 24, cGross = 28, cNet = 28;
+    const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.bold);
+
+    Widget cell(double w, Widget child) =>
+        SizedBox(width: w, child: Center(child: child));
+
+    int totPar = 0, totGross = 0, totNet = 0;
+    for (final h in holes.cast<Map>()) {
+      totPar   += (h['par']    as int? ?? 0);
+      totGross += (h['gross']  as int? ?? 0);
+      totNet   += (h['capped'] as int? ?? 0);
+    }
+    final ntp    = holes.isEmpty ? null : totNet - totPar;
+    final ntpCol = _ntpColor(ntp, theme);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+      child: Row(children: [
+        cell(cHole,  Text('Tot', style: cellStyle.copyWith(
+            color: theme.colorScheme.onSurfaceVariant))),
+        cell(cPar,   Text('$totPar',  style: cellStyle)),
+        cell(cGross, Text('$totGross', style: cellStyle)),
+        cell(cNet,   Text(_ntpLabel(ntp),
+            style: cellStyle.copyWith(color: ntpCol))),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme       = Theme.of(context);
-    final results     = (data['results'] as List? ?? [])
+    final results     = (widget.data['results'] as List? ?? [])
         .cast<Map<String, dynamic>>();
-    final totalRounds = data['total_rounds'] as int? ?? 1;
+    final totalRounds = widget.data['total_rounds'] as int? ?? 1;
     final totalHoles  = totalRounds * 18;
-    final entryFee    = (data['entry_fee'] as num? ?? 0).toDouble();
-    final payouts     = (data['payouts'] as List? ?? [])
+    final entryFee    = (widget.data['entry_fee'] as num? ?? 0).toDouble();
+    final payouts     = (widget.data['payouts'] as List? ?? [])
         .cast<Map<String, dynamic>>();
     final hasPrize    = payouts.isNotEmpty;
+    final hmode       = widget.data['handicap_mode'] as String? ?? 'net';
 
     if (results.isEmpty) {
       return const Center(
@@ -242,44 +378,40 @@ class _LowNetChampView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-
         // ── Header info ────────────────────────────────────────────────────
         Card(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(children: [
-              _InfoChip('Mode',
-                  _modeLabel(data['handicap_mode'] as String? ?? 'net')),
+              _InfoChip('Mode', _modeLabel(hmode)),
               const SizedBox(width: 12),
-              if ((data['net_percent'] as int? ?? 100) != 100)
-                _InfoChip('Hcp %', '${data['net_percent']}%'),
+              if ((widget.data['net_percent'] as int? ?? 100) != 100)
+                _InfoChip('Hcp %', '${widget.data['net_percent']}%'),
               if (entryFee > 0) ...[
                 const SizedBox(width: 12),
                 _InfoChip('Entry', '\$${entryFee.toStringAsFixed(0)}'),
               ],
               const Spacer(),
               Text(
-                '${data['rounds_played'] ?? 0} / $totalRounds rounds',
+                '${widget.data['rounds_played'] ?? 0} / $totalRounds rounds',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant),
               ),
             ]),
           ),
         ),
-
         const SizedBox(height: 8),
 
         // ── Column headers ─────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(children: [
-            const SizedBox(width: 36),          // rank
+            const SizedBox(width: 36),
             const Expanded(child: Text('Player',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
             const SizedBox(width: 34, child: Text('Thru',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
-            // Hide per-round columns when only 1 round — they'd duplicate Total.
             if (totalRounds > 1)
               for (int r = 1; r <= totalRounds; r++)
                 SizedBox(width: 40,
@@ -294,22 +426,33 @@ class _LowNetChampView extends StatelessWidget {
               const SizedBox(width: 46, child: Text('Prize',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
+            const SizedBox(width: 24), // chevron space
           ]),
         ),
 
         // ── Standing rows ──────────────────────────────────────────────────
         ...results.map((r) {
-          final rank        = r['rank'] as int?;
-          final ntp         = r['net_to_par'] as int?;
+          final rank        = r['rank']         as int?;
+          final name        = r['name']?.toString() ?? '—';
+          final handicap    = r['handicap']     as int? ?? 0;
+          final ntp         = r['net_to_par']   as int?;
           final holesPlayed = r['holes_played'] as int? ?? 0;
-          final roundNtps   = (r['round_ntps'] as List? ?? [])
+          final roundNtps   = (r['round_ntps']  as List? ?? [])
               .map((v) => v as int).toList();
+          final roundHoles  = (r['round_holes'] as List? ?? []);
+          final roundLabels = (r['round_labels'] as List? ?? [])
+              .map((v) => v.toString()).toList();
           final payout      = (r['payout'] as num?)?.toDouble();
           final isLeading   = rank == 1;
+          final hasHoles    = roundHoles.isNotEmpty &&
+              (roundHoles.first as List?)?.isNotEmpty == true;
+          final key         = '$rank:$name';
+          final isExpanded  = _expanded.contains(key);
 
           return Card(
             margin   : const EdgeInsets.only(bottom: 6),
             elevation: isLeading ? 1 : 0,
+            clipBehavior: Clip.antiAlias,
             color: isLeading
                 ? theme.colorScheme.primaryContainer.withOpacity(0.25)
                 : null,
@@ -321,92 +464,166 @@ class _LowNetChampView extends StatelessWidget {
                     : theme.colorScheme.outlineVariant,
               ),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(children: [
-                // Rank
-                SizedBox(
-                  width: 28,
-                  child: Text(
-                    rank != null ? '$rank' : '—',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize  : 14,
-                        color: isLeading
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurface),
+            child: Column(
+              children: [
+                // ── Summary row ───────────────────────────────────────────
+                InkWell(
+                  onTap: hasHoles
+                      ? () => setState(() {
+                            if (isExpanded) _expanded.remove(key);
+                            else            _expanded.add(key);
+                          })
+                      : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    child: Row(children: [
+                      SizedBox(
+                        width: 28,
+                        child: Text(
+                          rank != null ? '$rank' : '—',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14,
+                              color: isLeading
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurface),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(children: [
+                            TextSpan(text: name,
+                                style: const TextStyle(fontWeight: FontWeight.w500)),
+                            TextSpan(
+                              text: ' ($handicap)',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.normal,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ]),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 34,
+                        child: Text(
+                          _thruLabel(holesPlayed, totalHoles),
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: holesPlayed >= totalHoles
+                                  ? theme.colorScheme.onSurface
+                                  : Colors.green.shade700,
+                              fontWeight: holesPlayed >= totalHoles
+                                  ? FontWeight.normal : FontWeight.w600),
+                        ),
+                      ),
+                      if (totalRounds > 1)
+                        for (int ri = 0; ri < totalRounds; ri++) ...[
+                          SizedBox(
+                            width: 40,
+                            child: ri < roundNtps.length
+                                ? Text(_ntpLabel(roundNtps[ri]),
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                        color: _ntpColor(roundNtps[ri], theme),
+                                        fontWeight: FontWeight.w500))
+                                : Text('—',
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.onSurfaceVariant)),
+                          ),
+                        ],
+                      SizedBox(
+                        width: 46,
+                        child: Text(_ntpLabel(ntp),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15,
+                                color: _ntpColor(ntp, theme))),
+                      ),
+                      if (hasPrize)
+                        SizedBox(
+                          width: 46,
+                          child: Text(
+                            payout != null && payout > 0
+                                ? '\$${payout.toStringAsFixed(0)}' : '',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green.shade700),
+                          ),
+                        ),
+                      SizedBox(
+                        width: 24,
+                        child: hasHoles
+                            ? Icon(
+                                isExpanded
+                                    ? Icons.expand_less
+                                    : Icons.expand_more,
+                                size: 18,
+                                color: theme.colorScheme.onSurfaceVariant)
+                            : const SizedBox.shrink(),
+                      ),
+                    ]),
                   ),
                 ),
-                const SizedBox(width: 8),
-                // Name
-                Expanded(
-                  child: Text(r['name'] as String? ?? '—',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w500)),
-                ),
-                // Thru
-                SizedBox(
-                  width: 34,
-                  child: Text(
-                    _thruLabel(holesPlayed, totalHoles),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: holesPlayed >= totalHoles
-                            ? theme.colorScheme.onSurface
-                            : Colors.green.shade700,
-                        fontWeight: holesPlayed >= totalHoles
-                            ? FontWeight.normal
-                            : FontWeight.w600),
-                  ),
-                ),
-                // Per-round net-to-par (hidden when only 1 round)
-                if (totalRounds > 1)
-                  for (int ri = 0; ri < totalRounds; ri++) ...[
-                    SizedBox(
-                      width: 40,
-                      child: ri < roundNtps.length
-                          ? Text(
-                              _ntpLabel(roundNtps[ri]),
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                  color: _ntpColor(roundNtps[ri], theme),
-                                  fontWeight: FontWeight.w500),
-                            )
-                          : Text('—',
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant)),
+
+                // ── Expandable per-round scorecards ───────────────────────
+                if (isExpanded && hasHoles)
+                  Container(
+                    color: theme.colorScheme.surfaceContainerLowest,
+                    padding: const EdgeInsets.fromLTRB(10, 4, 10, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (int ri = 0; ri < roundHoles.length; ri++) ...[
+                          const Divider(height: 1),
+                          const SizedBox(height: 8),
+                          if (totalRounds > 1)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(
+                                ri < roundLabels.length
+                                    ? roundLabels[ri] : 'Round ${ri + 1}',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _nineGrid(
+                                  context,
+                                  (roundHoles[ri] as List),
+                                  isFront: true,
+                                  label: 'Front 9',
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _nineGrid(
+                                  context,
+                                  (roundHoles[ri] as List),
+                                  isFront: false,
+                                  label: 'Back 9',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          _totalsRow(context, (roundHoles[ri] as List)),
+                          if (ri < roundHoles.length - 1)
+                            const SizedBox(height: 12),
+                        ],
+                      ],
                     ),
-                  ],
-                // Net-to-par total
-                SizedBox(
-                  width: 46,
-                  child: Text(
-                    _ntpLabel(ntp),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize  : 15,
-                        color     : _ntpColor(ntp, theme)),
                   ),
-                ),
-                // Payout
-                if (hasPrize)
-                  SizedBox(
-                    width: 46,
-                    child: Text(
-                      payout != null && payout > 0
-                          ? '\$${payout.toStringAsFixed(0)}'
-                          : '',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize  : 12,
-                          fontWeight: FontWeight.w600,
-                          color     : Colors.green.shade700),
-                    ),
-                  ),
-              ]),
+              ],
             ),
           );
         }),
@@ -420,14 +637,6 @@ class _LowNetChampView extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  static String _modeLabel(String m) {
-    switch (m) {
-      case 'gross':       return 'Gross';
-      case 'strokes_off': return 'Strokes Off';
-      default:            return 'Net';
-    }
   }
 }
 

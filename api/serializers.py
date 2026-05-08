@@ -154,14 +154,28 @@ class FoursomeSerializer(serializers.ModelSerializer):
         Return the effective active-games list for this foursome.
 
         Priority:
-          1. Explicit per-foursome override (foursome.active_games non-empty)
+          1. Explicit per-foursome override (foursome.active_games non-empty),
+             BUT if the stored list is ['match_play'] and this is a cup singles
+             foursome (singles_nassau / singles_18), correct it to the proper key
+             so Flutter can detect cup singles handicap mode correctly.
           2. Cup match assignment (RyderCupFoursomeConfig.game_type) — so the
              score-entry screen title shows only the game this group is playing,
              not the full round-level union of all cup game types.
           3. Empty list (caller falls back to round.active_games)
         """
         if obj.active_games:
-            return list(obj.active_games)
+            games = list(obj.active_games)
+            # Fix legacy foursomes that were saved with 'match_play' instead of
+            # the correct 'singles_nassau' or 'singles_18' key.
+            if games == ['match_play']:
+                try:
+                    cup_cfg = obj.ryder_cup_foursome_config
+                    from core.models import GameType as GT
+                    if cup_cfg.game_type in (GT.SINGLES_NASSAU, GT.SINGLES_18):
+                        return [cup_cfg.game_type]
+                except Exception:
+                    pass
+            return games
         try:
             cup_cfg   = obj.ryder_cup_foursome_config
             game_key  = self._CUP_GAME_TYPE_MAP.get(cup_cfg.game_type, cup_cfg.game_type)

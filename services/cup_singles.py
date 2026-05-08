@@ -25,7 +25,7 @@ Public API
 from django.db import transaction
 
 from games.models import MatchPlayBracket, MatchPlayMatch, MatchPlayHoleResult
-from scoring.handicap import build_score_index
+from scoring.handicap import build_match_play_score_index
 from tournament.models import FoursomeMembership
 
 
@@ -153,11 +153,6 @@ def calculate_cup_singles(foursome):
     except MatchPlayBracket.DoesNotExist:
         return None
 
-    round_obj   = foursome.round
-    score_index = build_score_index(
-        foursome, round_obj.handicap_mode, round_obj.net_percent
-    )
-
     # Rebuild all hole results from scratch
     MatchPlayHoleResult.objects.filter(match__bracket=bracket).delete()
 
@@ -165,6 +160,12 @@ def calculate_cup_singles(foursome):
     all_complete = True
 
     for match in bracket.matches.select_related('player1', 'player2').all():
+        # Match-play handicap: lower of the two gets 0 strokes, higher gets
+        # the differential.  Build a fresh score index per match because each
+        # pairing may have a different differential.
+        score_index = build_match_play_score_index(
+            foursome, match.player1_id, match.player2_id
+        )
         results = _play_18_hole_match(match, score_index)
         all_hole_results.extend(results)
         if match.status != 'complete':

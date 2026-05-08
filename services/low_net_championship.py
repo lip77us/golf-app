@@ -68,8 +68,11 @@ def _aggregate_rounds(tournament, handicap_mode: str, net_percent: int) -> dict:
                 'holes_played' : 0,
                 'par_played'   : 0,
                 'rounds_played': 0,
+                'handicap'     : data.get('handicap', 0),
                 'round_totals' : [],   # per-round net strokes
                 'round_pars'   : [],   # par played per round (parallel)
+                'round_holes'  : [],   # per-round hole detail lists
+                'round_labels' : [],   # "R1", "R2", …
             })
             entry['total']         += data['total']
             entry['holes_played']  += data['holes_played']
@@ -77,6 +80,12 @@ def _aggregate_rounds(tournament, handicap_mode: str, net_percent: int) -> dict:
             entry['rounds_played'] += 1
             entry['round_totals'].append(data['total'])
             entry['round_pars'].append(data['par_played'])
+            holes_list = [
+                {'hole': h, **v}
+                for h, v in sorted(data.get('holes', {}).items())
+            ]
+            entry['round_holes'].append(holes_list)
+            entry['round_labels'].append(f'R{round_obj.round_number}')
 
     return aggregated
 
@@ -171,8 +180,11 @@ def low_net_championship_standings(tournament) -> list:
             'net_to_par'    : ntp,
             'holes_played'  : hp,
             'rounds_played' : data['rounds_played'],
+            'handicap'      : data.get('handicap', 0),
             'round_totals'  : data['round_totals'],
-            'round_ntps'    : round_ntps,   # per-round net-to-par for display
+            'round_ntps'    : round_ntps,
+            'round_holes'   : data.get('round_holes', []),
+            'round_labels'  : data.get('round_labels', []),
             'payout'        : rank_payout.get(r),
         })
 
@@ -229,6 +241,10 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
                 if data['holes_played'] == 0:
                     continue
                 ntp = (data['total'] - data['par_played']) if data['holes_played'] > 0 else None
+                holes_list = [
+                    {'hole': h, **v}
+                    for h, v in sorted(data.get('holes', {}).items())
+                ]
                 single_round_standings.append({
                     'rank'         : 0,
                     'player_name'  : data['name'],
@@ -236,8 +252,11 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
                     'net_to_par'   : ntp,
                     'holes_played' : data['holes_played'],
                     'rounds_played': 1,
+                    'handicap'     : data.get('handicap', 0),
                     'round_totals' : [data['total']],
                     'round_ntps'   : [ntp] if ntp is not None else [],
+                    'round_holes'  : [holes_list],
+                    'round_labels' : [f'R{round_obj.round_number}'],
                     'payout'       : None,
                 })
             single_round_standings.sort(key=lambda x: (x['net_to_par'] if x['net_to_par'] is not None else 999, -x['holes_played']))
@@ -273,8 +292,11 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
                 'net_to_par'    : s['net_to_par'],
                 'holes_played'  : s['holes_played'],
                 'rounds_played' : s['rounds_played'],
+                'handicap'      : s.get('handicap', 0),
                 'round_totals'  : s['round_totals'],
                 'round_ntps'    : s['round_ntps'],
+                'round_holes'   : s.get('round_holes', []),
+                'round_labels'  : s.get('round_labels', []),
                 'payout'        : s['payout'],
             }
             for s in standings
