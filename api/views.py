@@ -3447,7 +3447,7 @@ class RyderCupRoundCalculateView(APIView):
         for foursome in round_obj.foursomes.prefetch_related(
             'memberships', 'match_play_brackets'
         ):
-            _recalculate_games(foursome, round_obj)
+            _recalculate_games(foursome)
         # _recalculate_games calls calculate_ryder_cup_points once per foursome;
         # run it one final time to guarantee all foursomes are reflected.
         calculate_ryder_cup_points(round_obj)

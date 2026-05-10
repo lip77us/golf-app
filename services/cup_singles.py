@@ -190,18 +190,26 @@ def _play_18_hole_match(match: MatchPlayMatch, score_index: dict) -> list:
     Score a single 18-hole 1-v-1 match play match.
 
     Updates match.status, match.result, match.finished_on_hole in place.
-    Returns a list of unsaved MatchPlayHoleResult objects.
+    Returns a list of unsaved MatchPlayHoleResult objects (always up to 18
+    entries as long as scores exist, even when the overall match closes early
+    by dormie).
+
+    IMPORTANT: we continue recording hole results after the overall match is
+    decided by dormie so that Nassau sub-match calculations (_compute_sub_match
+    for F9 / B9) have the full 18-hole dataset.  In practice golfers play out
+    all remaining holes for the side bets even after the overall match is over.
     """
     p1 = match.player1
     p2 = match.player2
     p1_scores = score_index.get(p1.pk, {})
     p2_scores = score_index.get(p2.pk, {})
 
-    holes_up = 0   # positive = p1 leading
-    results: list = []
+    holes_up        = 0      # positive = p1 leading
+    results: list   = []
+    match_decided   = False  # True once overall match result is locked in
 
-    match.status         = 'in_progress'
-    match.result         = None
+    match.status          = 'in_progress'
+    match.result          = None
     match.finished_on_hole = None
 
     for hole_num in range(1, 19):
@@ -209,7 +217,7 @@ def _play_18_hole_match(match: MatchPlayMatch, score_index: dict) -> list:
         p2_net = p2_scores.get(hole_num)
 
         if p1_net is None or p2_net is None:
-            break  # score not entered yet for this hole
+            break  # score not yet entered for this hole
 
         if p1_net < p2_net:
             winner = p1
@@ -229,16 +237,18 @@ def _play_18_hole_match(match: MatchPlayMatch, score_index: dict) -> list:
             holes_up_after = holes_up,
         ))
 
-        # Dormie: match over when lead exceeds holes remaining
+        # Dormie: overall match decided when lead > holes remaining.
+        # Lock in the overall result but keep looping so all scored holes are
+        # captured for Nassau sub-match (B9) accounting.
         remaining = 18 - hole_num
-        if abs(holes_up) > remaining:
-            match.result         = 'player1' if holes_up > 0 else 'player2'
-            match.status         = 'complete'
+        if not match_decided and abs(holes_up) > remaining:
+            match.result          = 'player1' if holes_up > 0 else 'player2'
+            match.status          = 'complete'
             match.finished_on_hole = hole_num
-            return results
+            match_decided         = True
 
-    # All 18 holes scored
-    if len(results) == 18:
+    # All 18 holes scored and match wasn't already decided by dormie
+    if len(results) == 18 and not match_decided:
         if holes_up > 0:
             match.result = 'player1'
         elif holes_up < 0:
