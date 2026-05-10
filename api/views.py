@@ -3440,6 +3440,16 @@ class RyderCupRoundCalculateView(APIView):
                 {'detail': 'No Ryder Cup config for this round.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        # Rebuild every game's intermediate results from raw hole scores first
+        # (e.g. MatchPlayHoleResult for cup-singles foursomes), then finalize
+        # cup points.  This ensures a manual score edit in the admin is picked
+        # up without needing a full score re-submission.
+        for foursome in round_obj.foursomes.prefetch_related(
+            'memberships', 'match_play_brackets'
+        ):
+            _recalculate_games(foursome, round_obj)
+        # _recalculate_games calls calculate_ryder_cup_points once per foursome;
+        # run it one final time to guarantee all foursomes are reflected.
         calculate_ryder_cup_points(round_obj)
         return Response(_round_ryder_config(rc))
 
