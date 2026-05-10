@@ -170,37 +170,81 @@ def _extract_foursome_points(
                     team2_points = t2p,
                 ))
 
-    # ── Singles / Match Play (each completed match = 1 Ryder Cup point) ────
-    # Both MATCH_PLAY (with optional Nassau bet overlay) and SINGLES (pure
-    # match play, no bet) use MatchPlayBracket.  Cup points are identical:
-    # 1 point per match win, 0.5 each for a halve.
-    elif gtype in (GameType.MATCH_PLAY, GameType.SINGLES):
+    # ── Singles Nassau / 18-Hole Singles ──────────────────────────────────
+    # SINGLES_NASSAU: 3 cup points per match (F9 / B9 / Overall), each worth pv.
+    # SINGLES_18: 1 cup point per match (Overall only), worth pv.
+    # Both formats use MatchPlayBracket with hole-level MatchPlayHoleResult rows.
+    elif gtype in (GameType.SINGLES_NASSAU, GameType.SINGLES_18):
+        from services.cup_singles import _compute_sub_match
+
+        def _mp_to_cup(r):
+            """MatchPlayMatch result → Ryder Cup result."""
+            if r == 'player1': return 'team1'
+            if r == 'player2': return 'team2'
+            return r  # 'halved' or None pass through
+
         try:
             bracket = MatchPlayBracket.objects.prefetch_related(
-                'matches__player1', 'matches__player2'
+                'matches__player1', 'matches__player2', 'matches__hole_results'
             ).get(foursome=foursome)
         except MatchPlayBracket.DoesNotExist:
             return []
 
         for mp_match in bracket.matches.all():
-            if mp_match.result is None:
-                continue
-            # MatchPlayMatch.result: 'player1'|'player2'|'halved'
-            result = _quota_to_ryder(mp_match.result)  # same mapping works
-            t1p, t2p = _pts(result, pv, mul)
-            rows.append(RyderCupMatchPoints(
-                round_config = fs_config.round_config,
-                team1        = t1,
-                team2        = t2,
-                foursome     = foursome,
-                player1      = mp_match.player1,
-                player2      = mp_match.player2,
-                segment      = 'overall',   # each MP match = one point block
-                game_type    = gtype,
-                result       = result,
-                team1_points = t1p,
-                team2_points = t2p,
-            ))
+            if gtype == GameType.SINGLES_NASSAU:
+                # Derive F9 / B9 / Overall results from hole-by-hole data.
+                holes_data = [
+                    {
+                        'hole_number': r.hole_number,
+                        'p1_net'     : r.p1_net,
+                        'p2_net'     : r.p2_net,
+                    }
+                    for r in sorted(
+                        mp_match.hole_results.all(),
+                        key=lambda r: r.hole_number,
+                    )
+                ]
+                f9    = _compute_sub_match(holes_data, 1,  9)
+                b9    = _compute_sub_match(holes_data, 10, 18)
+                all18 = _compute_sub_match(holes_data, 1,  18)
+
+                for seg, sub in [
+                    ('front9',  f9),
+                    ('back9',   b9),
+                    ('overall', all18),
+                ]:
+                    result   = _mp_to_cup(sub['result'])
+                    t1p, t2p = _pts(result, pv, mul)
+                    rows.append(RyderCupMatchPoints(
+                        round_config = fs_config.round_config,
+                        team1        = t1,
+                        team2        = t2,
+                        foursome     = foursome,
+                        player1      = mp_match.player1,
+                        player2      = mp_match.player2,
+                        segment      = seg,
+                        game_type    = gtype,
+                        result       = result,
+                        team1_points = t1p,
+                        team2_points = t2p,
+                    ))
+            else:
+                # SINGLES_18: single overall result stored on the match record.
+                result   = _mp_to_cup(mp_match.result)
+                t1p, t2p = _pts(result, pv, mul)
+                rows.append(RyderCupMatchPoints(
+                    round_config = fs_config.round_config,
+                    team1        = t1,
+                    team2        = t2,
+                    foursome     = foursome,
+                    player1      = mp_match.player1,
+                    player2      = mp_match.player2,
+                    segment      = 'overall',
+                    game_type    = gtype,
+                    result       = result,
+                    team1_points = t1p,
+                    team2_points = t2p,
+                ))
 
     return rows
 

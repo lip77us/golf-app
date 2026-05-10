@@ -180,6 +180,16 @@ def _recalculate_games(foursome: Foursome) -> None:
         from services.quota_nassau import calculate_quota_nassau
         calculate_quota_nassau(foursome)
 
+    # ── Ryder Cup points ───────────────────────────────────────────────────────
+    # Auto-recalculate cup points whenever any game result changes so the
+    # scoreboard stays current without requiring a manual trigger.
+    try:
+        _ = round_obj.ryder_cup_config   # raises DoesNotExist for non-cup rounds
+        from services.ryder_cup import calculate_ryder_cup_points
+        calculate_ryder_cup_points(round_obj)
+    except Exception:
+        pass  # not a cup round — skip silently
+
 
 def _build_scorecard(foursome: Foursome) -> dict:
     """Build the scorecard dict for a foursome."""
@@ -1599,6 +1609,14 @@ class RoundCompleteView(APIView):
         if round_obj.status != 'complete':
             round_obj.status = 'complete'
             round_obj.save(update_fields=['status'])
+
+        # Finalise cup points so the scoreboard reflects the completed round.
+        try:
+            _ = round_obj.ryder_cup_config
+            from services.ryder_cup import calculate_ryder_cup_points
+            calculate_ryder_cup_points(round_obj)
+        except Exception:
+            pass
 
         lb_games = _build_leaderboard(round_obj)
         return Response({

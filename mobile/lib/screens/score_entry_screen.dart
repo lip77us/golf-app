@@ -691,7 +691,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (!mounted) return;
     _loadGameSummaries(rp);
     if (roundId != null) {
-      Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
+      Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
 

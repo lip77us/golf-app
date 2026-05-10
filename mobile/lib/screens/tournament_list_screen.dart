@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
@@ -241,6 +242,36 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                       gamePointValues : round.gamePointValues,
                     )))
                 .then((_) { if (mounted) _load(); }),
+            onRecalculateCupPoints: (round) async {
+              final client = context.read<AuthProvider>().client;
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const AlertDialog(
+                  content: Row(children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 16),
+                    Text('Recalculating…'),
+                  ]),
+                ),
+              );
+              try {
+                await client.postRyderCupCalculate(round.id);
+                if (!mounted) return;
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('R${round.roundNumber} cup points updated ✓'),
+                  backgroundColor: Colors.green.shade700,
+                ));
+              } catch (e) {
+                if (!mounted) return;
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Failed: $e'),
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                ));
+              }
+            },
             onDelete         : () => _deleteTournament(t),
           );
         },
@@ -322,6 +353,7 @@ class _TournamentCard extends StatelessWidget {
   final VoidCallback onOpenCupDraft;
   final VoidCallback onOpenCupScoreboard;
   final void Function(RoundSummary round) onSetupCupRound;
+  final void Function(RoundSummary round) onRecalculateCupPoints;
   final VoidCallback onDelete;
 
   const _TournamentCard({
@@ -334,6 +366,7 @@ class _TournamentCard extends StatelessWidget {
     required this.onOpenCupDraft,
     required this.onOpenCupScoreboard,
     required this.onSetupCupRound,
+    required this.onRecalculateCupPoints,
     required this.onDelete,
   });
 
@@ -393,12 +426,13 @@ class _TournamentCard extends StatelessWidget {
                       onTap: () => onRoundTap(r.id),
                     )),
             ] else ...[
-              // Cup tournament: only show tiles for rounds that are in_progress
-              // (pending rounds are accessed via the "Set Up Cup Round" button below).
-              if (tournament.rounds.any((r) => r.status == 'in_progress')) ...[
+              // Cup tournament: show in_progress and complete rounds so players
+              // can view scorecards and leaderboards from past rounds.
+              // Pending rounds are accessed via the "Set Up Cup Round" button.
+              if (tournament.rounds.any((r) => r.status != 'pending')) ...[
                 const Divider(height: 20),
                 ...tournament.rounds
-                    .where((r) => r.status == 'in_progress')
+                    .where((r) => r.status != 'pending')
                     .map((r) => _RoundTile(
                           round: r,
                           onTap: () => onRoundTap(r.id),
@@ -441,13 +475,21 @@ class _TournamentCard extends StatelessWidget {
                 label: 'Cup Draft & Teams',
                 onTap: onOpenCupDraft,
               ),
-              // Round setup: show for all rounds (pending or not) so staff
-              // can build foursomes & assign games when the round is ready.
-              ...tournament.rounds.map((r) => _ActionButton(
-                    icon : Icons.tune_outlined,
-                    label: 'R${r.roundNumber} · Set Up Cup Round',
-                    onTap: () => onSetupCupRound(r),
-                  )),
+              // Round setup + recalculate: show for all rounds so staff
+              // can build foursomes and fix cup points after score corrections.
+              ...tournament.rounds.expand((r) => [
+                _ActionButton(
+                  icon : Icons.tune_outlined,
+                  label: 'R${r.roundNumber} · Set Up Cup Round',
+                  onTap: () => onSetupCupRound(r),
+                ),
+                if (r.status != 'pending')
+                  _ActionButton(
+                    icon : Icons.calculate_outlined,
+                    label: 'R${r.roundNumber} · Recalculate Cup Points',
+                    onTap: () => onRecalculateCupPoints(r),
+                  ),
+              ]),
             ],
           ],
         ]),

@@ -502,7 +502,7 @@ class _SixesScreenState extends State<SixesScreen> {
     rp.loadSixes(widget.foursomeId);
 
     if (roundId != null) {
-      Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
+      Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
 

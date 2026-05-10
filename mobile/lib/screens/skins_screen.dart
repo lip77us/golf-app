@@ -372,7 +372,7 @@ class _SkinsScreenState extends State<SkinsScreen> {
     if (!mounted) return;
     rp.loadSkins(widget.foursomeId);
     if (roundId != null) {
-      Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
+      Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
 

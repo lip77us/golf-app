@@ -376,7 +376,7 @@ class _Points531ScreenState extends State<Points531Screen> {
     if (!mounted) return;
     rp.loadPoints531(widget.foursomeId);
     if (roundId != null) {
-      Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
+      Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
 

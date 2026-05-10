@@ -311,7 +311,7 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
     if (!mounted) return;
     rp.loadQuotaNassau(widget.foursomeId);
     if (roundId != null) {
-      Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
+      Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
 

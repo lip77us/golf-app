@@ -422,7 +422,7 @@ class _NassauScreenState extends State<NassauScreen> {
     if (!mounted) return;
     rp.loadNassau(widget.foursomeId);
     if (roundId != null) {
-      Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
+      Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
 
