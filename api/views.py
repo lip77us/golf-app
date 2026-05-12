@@ -2860,8 +2860,6 @@ def debug_singles_matches(request):
                     (mb.playing_handicap for mb in members if mb.player_id == m.player1_id), None
                 )
                 hcp2 = next(
-                    (mb.playing_handicap for mb in members if mb.player2_id == m.player2_id), None
-                ) or next(
                     (mb.playing_handicap for mb in members if mb.player_id == m.player2_id), None
                 )
                 diff_p1 = max(0, (hcp1 or 0) - (hcp2 or 0))
