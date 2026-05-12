@@ -8,6 +8,10 @@ class Migration(migrations.Migration):
 
     Replaces the earlier (never-deployed) total_possible_points field on
     TeamTournament — that approach was too coarse-grained.
+
+    Uses IF NOT EXISTS so the migration is safe to apply against a database
+    that already has the column (e.g. from a previous manual migration or
+    out-of-order deploy).
     """
 
     dependencies = [
@@ -15,7 +19,21 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
+        # Use raw SQL with IF NOT EXISTS so this is idempotent — safe to run
+        # even if the column was already added by a previous deploy or manually.
+        migrations.RunSQL(
+            sql="""
+                ALTER TABLE tournament_rydercuproundconfig
+                ADD COLUMN IF NOT EXISTS format_declarations jsonb NULL;
+            """,
+            reverse_sql="""
+                ALTER TABLE tournament_rydercuproundconfig
+                DROP COLUMN IF EXISTS format_declarations;
+            """,
+        ),
+        # Tell Django's ORM about the field so subsequent AlterField migrations
+        # have a consistent state to work from.
+        migrations.AlterField(
             model_name='rydercuproundconfig',
             name='format_declarations',
             field=models.JSONField(

@@ -2072,8 +2072,26 @@ class MatchPlaySetupView(APIView):
                     calculate_cup_singles,
                     cup_singles_summary,
                 )
+                # Preserve explicit matchups from any existing bracket so that
+                # a 1v2 (or 2v1) group keeps both matches when re-setup is called.
+                existing_matchups = []
                 try:
-                    setup_cup_singles(foursome, cup_cfg.team1, cup_cfg.team2)
+                    from games.models import MatchPlayBracket
+                    existing_bracket = MatchPlayBracket.objects.filter(
+                        foursome=foursome, bracket_type='cup_singles'
+                    ).prefetch_related('matches__player1', 'matches__player2').first()
+                    if existing_bracket:
+                        existing_matchups = [
+                            {'player1_id': m.player1_id, 'player2_id': m.player2_id}
+                            for m in existing_bracket.matches.all()
+                        ]
+                except Exception:
+                    pass
+                try:
+                    setup_cup_singles(
+                        foursome, cup_cfg.team1, cup_cfg.team2,
+                        singles_matchups=existing_matchups or None,
+                    )
                 except ValueError as exc:
                     return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
                 game_key = cup_cfg.game_type  # 'singles_nassau' or 'singles_18'
@@ -2772,6 +2790,131 @@ class PinkBallFoursomeOrderView(APIView):
 
 def health_check(request):
     return JsonResponse({'status': 'ok'})
+
+
+# ---------------------------------------------------------------------------
+# Debug / admin helper — list singles_18 matches
+# GET /api/debug/singles-matches/?player=ryan
+# GET /api/debug/singles-matches/?round=6
+# Lists every cup_singles bracket with player names, IDs, handicaps, and
+# per-match stroke differentials.  Read-only, no auth required.
+# ---------------------------------------------------------------------------
+def debug_singles_matches(request):
+    from games.models import MatchPlayBracket
+    from tournament.models import Foursome, FoursomeMembership
+
+    player_q     = (request.GET.get('player') or '').strip().lower()
+    round_number = request.GET.get('round')
+
+    # All foursomes with a cup_singles bracket or singles_18 in active_games
+    bracket_fs_ids = set(
+        MatchPlayBracket.objects
+        .filter(bracket_type='cup_singles')
+        .values_list('foursome_id', flat=True)
+    )
+    singles_fs_ids = set(
+        Foursome.objects
+        .filter(active_games__contains=['singles_18'])
+        .values_list('id', flat=True)
+    )
+    all_ids = bracket_fs_ids | singles_fs_ids
+
+    qs = Foursome.objects.filter(pk__in=all_ids).select_related(
+        'round__tournament'
+    ).order_by('round__round_number', 'group_number')
+
+    if round_number:
+        qs = qs.filter(round__round_number=round_number)
+
+    if player_q:
+        matching_fs = FoursomeMembership.objects.filter(
+            player__name__icontains=player_q,
+            player__is_phantom=False,
+        ).values_list('foursome_id', flat=True)
+        qs = qs.filter(pk__in=matching_fs)
+
+    results = []
+    for fs in qs:
+        members = list(
+            FoursomeMembership.objects
+            .filter(foursome=fs, player__is_phantom=False)
+            .select_related('player')
+        )
+
+        try:
+            bracket = (
+                MatchPlayBracket.objects
+                .prefetch_related(
+                    'matches__player1',
+                    'matches__player2',
+                    'matches__hole_results',
+                )
+                .get(foursome=fs, bracket_type='cup_singles')
+            )
+            matches_out = []
+            player_ids_in_matches = set()
+            for m in bracket.matches.all():
+                player_ids_in_matches.add(m.player1_id)
+                player_ids_in_matches.add(m.player2_id)
+                hcp1 = next(
+                    (mb.playing_handicap for mb in members if mb.player_id == m.player1_id), None
+                )
+                hcp2 = next(
+                    (mb.playing_handicap for mb in members if mb.player2_id == m.player2_id), None
+                ) or next(
+                    (mb.playing_handicap for mb in members if mb.player_id == m.player2_id), None
+                )
+                diff_p1 = max(0, (hcp1 or 0) - (hcp2 or 0))
+                diff_p2 = max(0, (hcp2 or 0) - (hcp1 or 0))
+                matches_out.append({
+                    'match_id'        : m.id,
+                    'player1'         : m.player1.name,
+                    'player1_id'      : m.player1_id,
+                    'player1_hcp'     : hcp1,
+                    'player1_strokes' : diff_p1,
+                    'player2'         : m.player2.name,
+                    'player2_id'      : m.player2_id,
+                    'player2_hcp'     : hcp2,
+                    'player2_strokes' : diff_p2,
+                    'holes_played'    : m.hole_results.count(),
+                    'result'          : m.result,
+                    'status'          : m.status,
+                })
+
+            missing = [
+                {'name': mb.player.name, 'id': mb.player_id}
+                for mb in members
+                if mb.player_id not in player_ids_in_matches
+            ]
+            bracket_info = {
+                'bracket_id'    : bracket.id,
+                'bracket_status': bracket.status,
+                'match_count'   : len(matches_out),
+                'matches'       : matches_out,
+                'players_missing_from_matches': missing,
+                'warning'       : (
+                    'One or more players have no match — likely a 1v2 setup bug'
+                    if missing else None
+                ),
+            }
+        except MatchPlayBracket.DoesNotExist:
+            bracket_info = {'bracket_id': None, 'warning': 'No cup_singles bracket'}
+
+        results.append({
+            'foursome_id'  : fs.id,
+            'group_number' : fs.group_number,
+            'round_number' : fs.round.round_number if fs.round else None,
+            'round_id'     : fs.round_id,
+            'tournament'   : fs.round.tournament.name if (fs.round and fs.round.tournament) else None,
+            'active_games' : fs.active_games,
+            'players'      : [
+                {'name': mb.player.name, 'id': mb.player_id, 'hcp': mb.playing_handicap}
+                for mb in members
+            ],
+            'bracket'      : bracket_info,
+        })
+
+    return JsonResponse({'count': len(results), 'foursomes': results}, json_dumps_params={'indent': 2})
 
 
 # ===========================================================================

@@ -102,6 +102,9 @@ urlpatterns = [
     # ---- Health check ----
     path('health/', views.health_check, name='api-health'),
 
+    # ---- Debug / admin helpers ----
+    path('debug/singles-matches/', views.debug_singles_matches, name='api-debug-singles'),
+
     # ---- Course import from GolfCourseAPI ----
     path('courses/golf-api/search/',                   views.GolfApiSearchView.as_view(),        name='api-golf-api-search'),
     path('courses/golf-api/courses/<int:course_id>/',  views.GolfApiCourseDetailView.as_view(),  name='api-golf-api-course-detail'),

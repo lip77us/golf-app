@@ -85,7 +85,20 @@ def setup_cup_singles(foursome, team1, team2, singles_matchups=None):
     )
 
     if t1_members and t2_members:
-        pairs = [(m1.player, m2.player) for m1, m2 in zip(t1_members, t2_members)]
+        # When teams are unequal (1v2 or 2v1), the solo player plays one match
+        # against EACH opponent — do NOT use zip() which silently drops extras.
+        pairs = []
+        longer, shorter = (
+            (t1_members, t2_members) if len(t1_members) >= len(t2_members)
+            else (t2_members, t1_members)
+        )
+        for i, m_long in enumerate(longer):
+            m_short = shorter[i % len(shorter)]
+            # Preserve convention: team1 player is player1, team2 is player2
+            if longer is t1_members:
+                pairs.append((m_long.player, m_short.player))
+            else:
+                pairs.append((m_short.player, m_long.player))
         return _create_bracket(foursome, pairs)
 
     # ── Last resort: alternate positions (p0 vs p1, p2 vs p3, …) ────────────
