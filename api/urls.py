@@ -104,6 +104,7 @@ urlpatterns = [
 
     # ---- Debug / admin helpers ----
     path('debug/singles-matches/', views.debug_singles_matches, name='api-debug-singles'),
+    path('debug/singles-matches/<int:foursome_id>/fix/', views.debug_fix_singles_match, name='api-debug-singles-fix'),
 
     # ---- Course import from GolfCourseAPI ----
     path('courses/golf-api/search/',                   views.GolfApiSearchView.as_view(),        name='api-golf-api-search'),

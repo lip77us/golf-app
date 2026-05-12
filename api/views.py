@@ -48,6 +48,7 @@ from django.contrib.auth import authenticate
 from django.http import JsonResponse
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework import status
 from rest_framework.authtoken.models import Token
@@ -2913,6 +2914,102 @@ def debug_singles_matches(request):
         })
 
     return JsonResponse({'count': len(results), 'foursomes': results}, json_dumps_params={'indent': 2})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/debug/singles-matches/<foursome_id>/fix/
+# Body: {"pairs": [[player1_id, player2_id], ...]}
+# Re-creates the cup_singles bracket with the given pairings and recalculates.
+# ---------------------------------------------------------------------------
+@csrf_exempt
+def debug_fix_singles_match(request, foursome_id):
+    import json
+    from django.db import transaction
+    from tournament.models import Foursome
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        foursome = Foursome.objects.select_related('round').get(pk=foursome_id)
+    except Foursome.DoesNotExist:
+        return JsonResponse({'error': f'No foursome with id={foursome_id}'}, status=404)
+
+    try:
+        body = json.loads(request.body)
+        raw_pairs = body.get('pairs', [])
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+
+    if not raw_pairs:
+        return JsonResponse({'error': '"pairs" list is required, e.g. [[10,5],[9,5]]'}, status=400)
+
+    singles_matchups = [
+        {'player1_id': int(p[0]), 'player2_id': int(p[1])}
+        for p in raw_pairs
+    ]
+
+    try:
+        with transaction.atomic():
+            from services.cup_singles import setup_cup_singles, calculate_cup_singles
+            from games.models import MatchPlayBracket
+
+            setup_cup_singles(foursome, None, None, singles_matchups=singles_matchups)
+            calculate_cup_singles(foursome)
+
+            bracket = (
+                MatchPlayBracket.objects
+                .prefetch_related('matches__player1', 'matches__player2', 'matches__hole_results')
+                .get(foursome=foursome, bracket_type='cup_singles')
+            )
+
+            from tournament.models import FoursomeMembership
+            members = {
+                m.player_id: m.playing_handicap
+                for m in FoursomeMembership.objects.filter(
+                    foursome=foursome, player__is_phantom=False
+                )
+            }
+
+            matches_out = []
+            for m in bracket.matches.all():
+                hcp1 = members.get(m.player1_id, 0)
+                hcp2 = members.get(m.player2_id, 0)
+                matches_out.append({
+                    'match_id'        : m.id,
+                    'player1'         : m.player1.name,
+                    'player1_id'      : m.player1_id,
+                    'player1_hcp'     : hcp1,
+                    'player1_strokes' : max(0, hcp1 - hcp2),
+                    'player2'         : m.player2.name,
+                    'player2_id'      : m.player2_id,
+                    'player2_hcp'     : hcp2,
+                    'player2_strokes' : max(0, hcp2 - hcp1),
+                    'holes_played'    : m.hole_results.count(),
+                    'result'          : m.result,
+                    'status'          : m.status,
+                })
+
+            # Refresh Ryder Cup standings
+            cup_updated = False
+            try:
+                from services.ryder_cup import calculate_ryder_cup_points
+                calculate_ryder_cup_points(foursome.round)
+                cup_updated = True
+            except Exception:
+                pass
+
+            return JsonResponse({
+                'ok'                  : True,
+                'foursome_id'         : foursome_id,
+                'bracket_id'          : bracket.id,
+                'bracket_status'      : bracket.status,
+                'matches'             : matches_out,
+                'cup_standings_updated': cup_updated,
+            }, json_dumps_params={'indent': 2})
+
+    except Exception as exc:
+        return JsonResponse({'error': str(exc)}, status=500)
 
 
 # ===========================================================================
