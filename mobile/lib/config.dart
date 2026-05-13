@@ -19,4 +19,9 @@ class Config {
   static const String _local   = 'http://localhost:8000/api';
 
   static const String baseUrl = _useLocal ? _local : _railway;
+
+  /// The version string of this build.  Must be kept in sync with pubspec.yaml.
+  /// The server's GET /api/version/ endpoint returns a min_client_version;
+  /// if this value is older the app will show a blocking update dialog.
+  static const String appVersion = '1.1.1';
 }

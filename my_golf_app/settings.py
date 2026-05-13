@@ -202,6 +202,18 @@ GOLF_API_KEY      = os.environ.get('GOLF_API_KEY', '')
 GOLF_API_BASE_URL = os.environ.get('GOLF_API_BASE_URL', 'https://api.golfcourseapi.com')
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Client version compatibility
+# ---------------------------------------------------------------------------
+# Bump SERVER_VERSION with each deploy.
+# Bump CLIENT_MIN_VERSION only when a server change is incompatible with
+# older clients — this will force users to update the app before they can
+# continue.  Leave CLIENT_MIN_VERSION at the last compatible release to
+# allow older clients to keep working.
+SERVER_VERSION    = '1.1.0'
+CLIENT_MIN_VERSION = '1.1.0'
+
+# ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
 # Logs appear in the terminal where you run `python manage.py runserver`.

@@ -150,6 +150,15 @@ class ApiClient {
     throw ApiException(res.statusCode, message);
   }
 
+  // ---- Version check ----
+
+  /// Fetches the server's version info.  No auth token required.
+  /// Returns a map with keys: server_version, min_client_version.
+  Future<Map<String, dynamic>> getVersion() async {
+    final data = await _get('/version/');
+    return data as Map<String, dynamic>;
+  }
+
   // ---- Auth ----
 
   Future<AuthResult> login(String username, String password) async {

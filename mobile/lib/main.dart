@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'api/client.dart';
+import 'config.dart';
 
 import 'local/local_database.dart';
 import 'sync/sync_service.dart';
@@ -156,16 +158,74 @@ class _GolfAppState extends State<GolfApp> {
     );
   }
 
+  // ---- Version check helpers ----
+
+  /// Called when the splash animation finishes.  Checks client/server version
+  /// compatibility and shows a blocking dialog when the app needs updating,
+  /// then routes to login or tournaments.  Any network error is silently
+  /// swallowed so an offline first launch still works.
+  Future<void> _navigateAfterSplash() async {
+    final destination = widget.auth.isLoggedIn ? '/tournaments' : '/login';
+
+    try {
+      // Use a short timeout so a slow server doesn't delay the startup.
+      const shortTimeout = Duration(seconds: 8);
+      final client = const ApiClient();          // no auth needed
+      final data = await client.getVersion().timeout(shortTimeout);
+      final minVersion = (data['min_client_version'] as String?) ?? '1.0.0';
+
+      if (_isVersionOutdated(Config.appVersion, minVersion)) {
+        final ctx = navigatorKey.currentContext;
+        if (ctx != null) {
+          await showDialog<void>(
+            context: ctx,
+            barrierDismissible: false,
+            builder: (dialogCtx) => AlertDialog(
+              title: const Text('Update Required'),
+              content: Text(
+                'This version of the app (${Config.appVersion}) is no longer '
+                'supported.\n\nPlease update to version $minVersion or later '
+                'to continue.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      // Network unavailable or server error — proceed without blocking.
+    }
+
+    navigatorKey.currentState?.pushReplacementNamed(destination);
+  }
+
+  /// Returns true if [current] is strictly older than [minimum].
+  /// Compares dot-separated integer segments, e.g. "1.0.0" vs "1.1.0".
+  bool _isVersionOutdated(String current, String minimum) {
+    int _seg(String v, int i) {
+      final parts = v.split('.');
+      return i < parts.length ? (int.tryParse(parts[i]) ?? 0) : 0;
+    }
+    for (int i = 0; i < 3; i++) {
+      final c = _seg(current, i);
+      final m = _seg(minimum, i);
+      if (c < m) return true;
+      if (c > m) return false;
+    }
+    return false; // equal
+  }
+
   Route<dynamic>? _router(RouteSettings settings) {
     switch (settings.name) {
       case '/splash':
         return MaterialPageRoute(
           builder: (_) => SplashScreen(
-            onComplete: () {
-              navigatorKey.currentState?.pushReplacementNamed(
-                widget.auth.isLoggedIn ? '/tournaments' : '/login',
-              );
-            },
+            onComplete: () => _navigateAfterSplash(),
           ),
         );
       case '/login':

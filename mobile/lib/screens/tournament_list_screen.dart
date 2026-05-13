@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/models.dart';
+import '../config.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import 'new_round_wizard.dart';
@@ -284,6 +285,83 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
 // App Drawer
 // ---------------------------------------------------------------------------
 
+/// Shows an About dialog that displays the local app version and fetches
+/// the server version for comparison.
+void _showAboutDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => _AboutDialog(),
+  );
+}
+
+class _AboutDialog extends StatefulWidget {
+  @override
+  State<_AboutDialog> createState() => _AboutDialogState();
+}
+
+class _AboutDialogState extends State<_AboutDialog> {
+  String? _serverVersion;
+  bool    _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchServerVersion();
+  }
+
+  Future<void> _fetchServerVersion() async {
+    try {
+      final data = await const ApiClient().getVersion();
+      if (mounted) {
+        setState(() {
+          _serverVersion = data['server_version'] as String?;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() { _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('The Bandon Cup'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Text('App version: ',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            Text(Config.appVersion),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            const Text('Server version: ',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            if (_loading)
+              const SizedBox(
+                width: 14, height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Text(_serverVersion ?? '—'),
+          ]),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+
 class _AppDrawer extends StatelessWidget {
   final String? playerName;
   final VoidCallback onPlayersTap;
@@ -330,6 +408,15 @@ class _AppDrawer extends StatelessWidget {
             onTap: onPlayersTap,
           ),
           const Spacer(),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('About'),
+            onTap: () {
+              Navigator.of(context).pop(); // close drawer
+              _showAboutDialog(context);
+            },
+          ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.logout),

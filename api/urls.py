@@ -99,6 +99,9 @@ urlpatterns = [
     path('foursomes/<int:pk>/quota-nassau/',        views.QuotaNassauResultView.as_view(), name='api-quota-nassau-result'),
     path('foursomes/<int:pk>/quota-nassau/setup/',  views.QuotaNassauSetupView.as_view(),  name='api-quota-nassau-setup'),
 
+    # ---- Version check ----
+    path('version/', views.VersionCheckView.as_view(), name='api-version'),
+
     # ---- Health check ----
     path('health/', views.health_check, name='api-health'),
 

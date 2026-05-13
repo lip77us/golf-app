@@ -2786,6 +2786,38 @@ class PinkBallFoursomeOrderView(APIView):
 
 
 # ---------------------------------------------------------------------------
+# Version check — called by the mobile app on startup to verify compatibility
+# GET /api/version/   (no authentication required)
+# ---------------------------------------------------------------------------
+
+class VersionCheckView(APIView):
+    """
+    Returns the server version and the minimum client version that this server
+    is willing to talk to.
+
+    Response:
+        {
+          "server_version":    "1.1.0",
+          "min_client_version": "1.1.0"
+        }
+
+    The Flutter app compares its own hardcoded version against
+    min_client_version.  If the client is older, it shows a blocking
+    "please update" dialog.  Raise CLIENT_MIN_VERSION in settings.py
+    whenever a server change breaks older clients.
+    """
+    permission_classes = []   # public — no token required
+    authentication_classes = []
+
+    def get(self, request):
+        from django.conf import settings as django_settings
+        return Response({
+            'server_version':     getattr(django_settings, 'SERVER_VERSION',     '1.0.0'),
+            'min_client_version': getattr(django_settings, 'CLIENT_MIN_VERSION', '1.0.0'),
+        })
+
+
+# ---------------------------------------------------------------------------
 # Health check — used by Railway to confirm the app is running
 # ---------------------------------------------------------------------------
 
