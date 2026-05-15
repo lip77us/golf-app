@@ -86,12 +86,12 @@ def _strokes_on_hole(effective_hcp: int, stroke_index: int) -> int:
 # ---------------------------------------------------------------------------
 
 def _net_double_bogey_cap_enabled(foursome) -> bool:
-    """True iff this foursome's round is in a tournament that has the
-    net-double-bogey cap turned on.  Casual rounds (no tournament) are
-    always uncapped."""
-    rnd   = getattr(foursome, 'round', None)
-    tourn = getattr(rnd, 'tournament', None) if rnd else None
-    return bool(tourn and tourn.net_max_double_bogey)
+    """True iff this foursome's round has the net-double-bogey cap on.
+    The flag lives on Round so casual rounds can set it directly; for
+    tournament rounds, the Tournament admin bulk action propagates the
+    value to every Round in the tournament."""
+    rnd = getattr(foursome, 'round', None)
+    return bool(rnd and rnd.net_max_double_bogey)
 
 
 def _par_by_hole(foursome) -> dict:

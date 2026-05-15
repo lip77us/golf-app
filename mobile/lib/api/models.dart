@@ -450,6 +450,10 @@ class Round {
   final String handicapMode;
   /// Percentage of handicap applied when mode=net (0–200, default 100).
   final int netPercent;
+  /// USGA-style max score: when true, every per-hole score is capped at
+  /// net par + 2 for game scoring (Net and Strokes-Off only; Gross mode
+  /// games ignore the cap).  Stored gross scores are unaffected.
+  final bool netMaxDoubleBogey;
   final List<Foursome> foursomes;
   /// True when this round has been configured via CupRoundSetupScreen
   /// (i.e. a RyderCupRoundConfig exists on the backend).
@@ -469,6 +473,7 @@ class Round {
     required this.betUnit,
     this.handicapMode = 'net',
     this.netPercent   = 100,
+    this.netMaxDoubleBogey = false,
     required this.foursomes,
     this.isCupRound    = false,
     this.irBallsConfig = const [],
@@ -484,6 +489,7 @@ class Round {
         betUnit:      double.parse(j['bet_unit'].toString()),
         handicapMode: j['handicap_mode'] as String? ?? 'net',
         netPercent:   j['net_percent']   as int?    ?? 100,
+        netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? false,
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
         irBallsConfig: (j['ir_balls_config'] as List? ?? [])
             .map((s) => Map<String, dynamic>.from(s as Map))

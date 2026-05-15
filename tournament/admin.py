@@ -304,13 +304,37 @@ class TournamentAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     ordering      = ('-start_date',)
     inlines       = [RoundInline]
+    actions       = ['enable_net_max_double_bogey', 'disable_net_max_double_bogey']
+
+    @admin.action(description='Net double-bogey cap: ENABLE on all rounds')
+    def enable_net_max_double_bogey(self, request, queryset):
+        n = Round.objects.filter(tournament__in=queryset).update(
+            net_max_double_bogey=True,
+        )
+        self.message_user(
+            request,
+            f'Enabled net-double-bogey cap on {n} round(s).',
+            level=messages.SUCCESS,
+        )
+
+    @admin.action(description='Net double-bogey cap: DISABLE on all rounds')
+    def disable_net_max_double_bogey(self, request, queryset):
+        n = Round.objects.filter(tournament__in=queryset).update(
+            net_max_double_bogey=False,
+        )
+        self.message_user(
+            request,
+            f'Disabled net-double-bogey cap on {n} round(s).',
+            level=messages.SUCCESS,
+        )
 
 
 @admin.register(Round)
 class RoundAdmin(admin.ModelAdmin):
     form          = RoundAdminForm
-    list_display  = ('__str__', 'tournament', 'status', 'bet_unit', 'date')
-    list_filter   = ('status', 'tournament')
+    list_display  = ('__str__', 'tournament', 'status', 'bet_unit', 'date',
+                     'net_max_double_bogey')
+    list_filter   = ('status', 'tournament', 'net_max_double_bogey')
     search_fields = ('course__course_name',)
     ordering      = ('-date',)
     inlines       = [FoursomeInline]

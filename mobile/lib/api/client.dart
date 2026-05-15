@@ -371,6 +371,7 @@ class ApiClient {
     int roundNumber = 1,
     String handicapMode = 'net',
     int netPercent = 100,
+    bool netMaxDoubleBogey = false,
   }) async {
     final data = await _post('/rounds/', {
       'course_id'          : courseId,
@@ -379,6 +380,7 @@ class ApiClient {
       'round_number'       : roundNumber,
       'handicap_mode'      : handicapMode,
       'net_percent'        : netPercent,
+      'net_max_double_bogey': netMaxDoubleBogey,
       if (gamePointValues.isNotEmpty) 'game_point_values': gamePointValues,
       if (cupGroupCounts.isNotEmpty)  'cup_group_counts' : cupGroupCounts,
       if (tournamentId != null) 'tournament_id': tournamentId,

@@ -1115,6 +1115,7 @@ class RoundCreateView(APIView):
             bet_unit          = d['bet_unit'],
             handicap_mode     = d.get('handicap_mode', 'net'),
             net_percent       = d.get('net_percent', 100),
+            net_max_double_bogey = d.get('net_max_double_bogey', False),
             notes             = d['notes'],
             created_by        = created_by,
         )

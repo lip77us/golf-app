@@ -263,7 +263,7 @@ class RoundSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'round_number', 'date', 'course', 'status',
             'active_games', 'game_point_values', 'bet_unit',
-            'handicap_mode', 'net_percent',
+            'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'scramble_config', 'notes', 'foursomes',
             'is_cup_round', 'ir_balls_config',
         ]
@@ -364,6 +364,7 @@ class RoundCreateSerializer(serializers.Serializer):
         choices=['gross', 'net', 'strokes_off'], default='net'
     )
     net_percent       = serializers.IntegerField(default=100, min_value=0, max_value=200)
+    net_max_double_bogey = serializers.BooleanField(default=False)
 
 
 class PlayerTeeSelectionSerializer(serializers.Serializer):
