@@ -40,6 +40,37 @@ const _kCupGames = [
 String _gameLabel(String id) =>
     _kCupGames.firstWhere((g) => g.$1 == id, orElse: () => (id, id, Icons.sports_golf)).$2;
 
+/// Formats a [TimeOfDay] as a zero-padded "HH:MM" string — the only format
+/// accepted by the backend's `TimeField` serializer.
+String _formatTeeTime(TimeOfDay t) =>
+    '${t.hour.toString().padLeft(2, '0')}:'
+    '${t.minute.toString().padLeft(2, '0')}';
+
+/// Parses an "HH:MM" or "HH:MM:SS" string back into a [TimeOfDay].  Returns
+/// null on any malformed input so the caller can fall back to a sensible
+/// default when opening the time picker.
+TimeOfDay? _parseTeeTime(String? s) {
+  if (s == null || s.trim().isEmpty) return null;
+  final parts = s.split(':');
+  if (parts.length < 2) return null;
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null) return null;
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return TimeOfDay(hour: h, minute: m);
+}
+
+/// Opens the platform time picker and returns the result formatted as
+/// "HH:MM", or null if the user cancelled.  Centralised so every entry
+/// point produces the same backend-friendly string.
+Future<String?> _pickTeeTime(BuildContext context, String? initial) async {
+  final result = await showTimePicker(
+    context: context,
+    initialTime: _parseTeeTime(initial) ?? const TimeOfDay(hour: 8, minute: 0),
+  );
+  return result == null ? null : _formatTeeTime(result);
+}
+
 // ---------------------------------------------------------------------------
 // Data holder for one completed foursome draft
 // ---------------------------------------------------------------------------
@@ -480,6 +511,36 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
     if (_foursomes.isEmpty) _startNewFoursome();
   }
 
+  Future<void> _editFoursomeTeeTime(int idx) async {
+    final draft  = _foursomes[idx];
+    final picked = await _pickTeeTime(context, draft.teeTime);
+    if (picked == null) return;     // user cancelled — leave value as-is
+    setState(() {
+      _foursomes[idx] = _FoursomeDraft(
+        gameType        : draft.gameType,
+        playerIds       : draft.playerIds,
+        playerTees      : draft.playerTees,
+        teeTime         : picked,
+        pointValue      : draft.pointValue,
+        singlesMatchups : draft.singlesMatchups,
+      );
+    });
+  }
+
+  void _clearFoursomeTeeTime(int idx) {
+    final draft = _foursomes[idx];
+    setState(() {
+      _foursomes[idx] = _FoursomeDraft(
+        gameType        : draft.gameType,
+        playerIds       : draft.playerIds,
+        playerTees      : draft.playerTees,
+        teeTime         : null,
+        pointValue      : draft.pointValue,
+        singlesMatchups : draft.singlesMatchups,
+      );
+    });
+  }
+
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
@@ -652,6 +713,8 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         foursomes      : _foursomes,
         playerName     : _playerName,
         onRemove       : _removeFoursome,
+        onEditTeeTime  : _editFoursomeTeeTime,
+        onClearTeeTime : _clearFoursomeTeeTime,
         onAddAnother   : _startNewFoursome,
         submitError    : _submitError,
         sittingOut     : _sittingOut,
@@ -1054,7 +1117,7 @@ class _TeePicker extends StatelessWidget {
 // Step D — Tee Time
 // ===========================================================================
 
-class _TeeTimePicker extends StatelessWidget {
+class _TeeTimePicker extends StatefulWidget {
   final TextEditingController ctrl;
   final int                   foursomeNumber;
   final String                gameType;
@@ -1070,31 +1133,64 @@ class _TeeTimePicker extends StatelessWidget {
   });
 
   @override
+  State<_TeeTimePicker> createState() => _TeeTimePickerState();
+}
+
+class _TeeTimePickerState extends State<_TeeTimePicker> {
+  Future<void> _pick() async {
+    final picked = await _pickTeeTime(context, widget.ctrl.text);
+    if (picked != null) {
+      setState(() { widget.ctrl.text = picked; });
+    }
+  }
+
+  void _clear() {
+    setState(() { widget.ctrl.clear(); });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme   = Theme.of(context);
+    final current = widget.ctrl.text.trim();
+    final hasValue = current.isNotEmpty;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Group $foursomeNumber — Tee Time',
+        Text('Group ${widget.foursomeNumber} — Tee Time',
             style: theme.textTheme.headlineSmall),
         const SizedBox(height: 4),
-        Text('${_gameLabel(gameType)} · ${playerIds.length} players',
+        Text('${_gameLabel(widget.gameType)} · '
+             '${widget.playerIds.length} players',
             style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey)),
         const SizedBox(height: 8),
-        Text(playerIds.map(playerName).join(', '),
+        Text(widget.playerIds.map(widget.playerName).join(', '),
             style: theme.textTheme.bodySmall),
         const SizedBox(height: 24),
 
-        TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.datetime,
-          decoration: const InputDecoration(
-            labelText  : 'Tee time (optional)',
-            hintText   : '08:00',
-            border     : OutlineInputBorder(),
-            prefixIcon : Icon(Icons.schedule),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _pick,
+              icon: const Icon(Icons.schedule),
+              label: Text(
+                hasValue ? 'Tee time: $current' : 'Set tee time (optional)',
+              ),
+              style: OutlinedButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 16),
+              ),
+            ),
           ),
-        ),
+          if (hasValue) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Clear tee time',
+              onPressed: _clear,
+            ),
+          ],
+        ]),
         const SizedBox(height: 12),
         Text('Leave blank if tee times aren\'t set yet.',
             style: theme.textTheme.bodySmall
@@ -1267,6 +1363,8 @@ class _ReviewPage extends StatelessWidget {
   final List<_FoursomeDraft> foursomes;
   final String Function(int) playerName;
   final void Function(int)   onRemove;
+  final Future<void> Function(int) onEditTeeTime;
+  final void Function(int)   onClearTeeTime;
   final VoidCallback         onAddAnother;
   final String?              submitError;
   final List<CupPlayer>      sittingOut;
@@ -1275,6 +1373,8 @@ class _ReviewPage extends StatelessWidget {
     required this.foursomes,
     required this.playerName,
     required this.onRemove,
+    required this.onEditTeeTime,
+    required this.onClearTeeTime,
     required this.onAddAnother,
     this.submitError,
     this.sittingOut = const [],
@@ -1316,9 +1416,40 @@ class _ReviewPage extends StatelessWidget {
                         ? ' + Phantom'
                         : ''),
                   ),
-                  if (draft.teeTime != null)
-                    Text('Tee: ${draft.teeTime}',
-                        style: theme.textTheme.bodySmall),
+                  // Tee time row: tap to edit (opens time picker); a clear
+                  // button appears next to it when a time is already set.
+                  InkWell(
+                    onTap: () => onEditTeeTime(i),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(children: [
+                        Icon(Icons.schedule, size: 14,
+                            color: theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 4),
+                        Text(
+                          draft.teeTime != null
+                              ? 'Tee: ${draft.teeTime}'
+                              : 'Set tee time',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: draft.teeTime != null
+                                ? null
+                                : theme.colorScheme.primary,
+                            decoration: draft.teeTime != null
+                                ? null
+                                : TextDecoration.underline,
+                          ),
+                        ),
+                        if (draft.teeTime != null) ...[
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: () => onClearTeeTime(i),
+                            child: Icon(Icons.close, size: 14,
+                                color: theme.colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ]),
+                    ),
+                  ),
                   Text(
                     '${draft.pointValue % 1 == 0 ? draft.pointValue.toInt() : draft.pointValue} pt${draft.pointValue == 1.0 ? '' : 's'} per win',
                     style: theme.textTheme.bodySmall?.copyWith(

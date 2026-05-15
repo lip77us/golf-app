@@ -652,6 +652,14 @@ class _FoursomeCard extends StatelessWidget {
                     style: TextStyle(color: Colors.white, fontSize: 11)),
               ),
             ],
+            if (foursome.teeTime != null) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.schedule,
+                  size: 14, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 2),
+              Text(foursome.teeTime!,
+                  style: theme.textTheme.bodySmall),
+            ],
             // Game toggle icon — hidden for cup rounds (games are fixed per
             // foursome and can't be changed mid-tournament).
             if (isAdmin && !isComplete && !isCupRound) ...[
