@@ -798,6 +798,53 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  // ── Reopen round ───────────────────────────────────────────────────────────
+
+  Future<bool> reopenRound(int roundId) async {
+    _submitting = true;
+    _clearError();
+    notifyListeners();
+    try {
+      await _client.reopenRound(roundId);
+      if (_round != null && _round!.id == roundId) {
+        _round = Round(
+          id:          _round!.id,
+          roundNumber: _round!.roundNumber,
+          date:        _round!.date,
+          course:      _round!.course,
+          status:      'in_progress',
+          activeGames: _round!.activeGames,
+          betUnit:     _round!.betUnit,
+          foursomes:   _round!.foursomes,
+        );
+      }
+      if (_leaderboard != null && _leaderboard!.roundId == roundId) {
+        _leaderboard = Leaderboard(
+          roundId:               _leaderboard!.roundId,
+          roundDate:             _leaderboard!.roundDate,
+          course:                _leaderboard!.course,
+          status:                'in_progress',
+          isCupRound:            _leaderboard!.isCupRound,
+          activeGames:           _leaderboard!.activeGames,
+          games:                 _leaderboard!.games,
+          tournamentId:          _leaderboard!.tournamentId,
+          tournamentName:        _leaderboard!.tournamentName,
+          tournamentActiveGames: _leaderboard!.tournamentActiveGames,
+        );
+      }
+      return true;
+    } on NetworkException {
+      _error = 'No connection — cannot reopen round while offline.';
+      return false;
+    } catch (e) {
+      _error = friendlyError(e);
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();

@@ -34,6 +34,7 @@ urlpatterns = [
     path('rounds/<int:pk>/',             views.RoundDetailView.as_view(),     name='api-round-detail'),
     path('rounds/<int:pk>/setup/',       views.RoundSetupView.as_view(),    name='api-round-setup'),
     path('rounds/<int:pk>/complete/',    views.RoundCompleteView.as_view(), name='api-round-complete'),
+    path('rounds/<int:pk>/reopen/',      views.RoundReopenView.as_view(),   name='api-round-reopen'),
     path('rounds/<int:pk>/leaderboard/', views.LeaderboardView.as_view(),   name='api-leaderboard'),
 
     # ---- Foursomes ----

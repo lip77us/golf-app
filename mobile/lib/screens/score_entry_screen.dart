@@ -506,6 +506,27 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   bool _allScored(List<Membership> players, Map<int, int> scores) =>
       players.every((m) => scores.containsKey(m.player.id));
 
+  /// True when every real player has a gross score on every hole 1–18,
+  /// considering both saved scores and locally-pending edits.
+  bool _allHolesScored(Scorecard sc, List<Membership> players) {
+    for (int h = 1; h <= 18; h++) {
+      final scores = _effectiveScores(sc, h);
+      if (!_allScored(players, scores)) return false;
+    }
+    return true;
+  }
+
+  /// First hole number that is missing at least one score, or null if all
+  /// 18 holes are fully scored.  Used for the "jump to first missing"
+  /// navigation on the Complete Round confirmation.
+  int? _firstMissingHole(Scorecard sc, List<Membership> players) {
+    for (int h = 1; h <= 18; h++) {
+      final scores = _effectiveScores(sc, h);
+      if (!_allScored(players, scores)) return h;
+    }
+    return null;
+  }
+
   static Map<int, Map<int, int>> _mergePending(
     Map<int, Map<int, int>> dbPending,
     Map<int, Map<int, int>> uiEdits,
@@ -646,17 +667,23 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     }
   }
 
-  Future<void> _finishRound(
+  /// Save pending scores/junk for the current hole without navigating.
+  /// Used by the auto-advance trigger on hole 18 (where there's no next
+  /// hole to jump to) and by the "Save scores" button on hole 18.
+  Future<bool> _saveCurrentHole(
     BuildContext ctx,
     List<Membership> players,
     int par,
   ) async {
-    final rp      = context.read<RoundProvider>();
-    final sync    = context.read<SyncService>();
-    final roundId = rp.round?.id;
+    final rp = context.read<RoundProvider>();
 
     final scoreEdits = _pending[_selectedHole];
     final junkEdits  = _pendingJunk[_selectedHole];
+
+    if ((scoreEdits == null || scoreEdits.isEmpty) &&
+        (junkEdits == null || junkEdits.isEmpty)) {
+      return true;
+    }
 
     if (scoreEdits != null && scoreEdits.isNotEmpty) {
       final scores = scoreEdits.entries
@@ -667,7 +694,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         holeNumber: _selectedHole,
         scores:     scores,
       );
-      if (!mounted) return;
+      if (!mounted) return false;
       if (!ok) {
         ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
           content: Text(rp.error ?? 'Failed to save hole.'),
@@ -675,10 +702,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
           action: SnackBarAction(
             label: 'Retry',
             textColor: Theme.of(ctx).colorScheme.onError,
-            onPressed: () => _finishRound(ctx, players, par),
+            onPressed: () => _saveCurrentHole(ctx, players, par),
           ),
         ));
-        return;
+        return false;
       }
       setState(() { _pending.remove(_selectedHole); });
     }
@@ -687,12 +714,66 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       await _submitJunk(_selectedHole, junkEdits);
     }
 
-    await sync.waitUntilIdle();
-    if (!mounted) return;
     _loadGameSummaries(rp);
-    if (roundId != null) {
-      Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
+    context.read<SyncService>().waitUntilIdle().then((_) {
+      if (mounted) _loadGameSummaries(context.read<RoundProvider>());
+    });
+    return true;
+  }
+
+  /// Explicit "Complete Round" action: confirm, save any pending edits,
+  /// mark the round complete via the API, then navigate to the leaderboard.
+  Future<void> _completeRound(
+    BuildContext ctx,
+    List<Membership> players,
+    int par,
+  ) async {
+    final rp      = context.read<RoundProvider>();
+    final roundId = rp.round?.id;
+    if (roundId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        title: const Text('Complete Round?'),
+        content: const Text(
+          'This will mark the round as finished and lock all scores. '
+          'You can still view the final results afterwards, and the '
+          'round can be reopened from the leaderboard if needed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dctx).pop(true),
+            child: const Text('Complete Round'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Save any still-pending current-hole edits first.
+    final saved = await _saveCurrentHole(ctx, players, par);
+    if (!mounted || !saved) return;
+
+    await context.read<SyncService>().waitUntilIdle();
+    if (!mounted) return;
+
+    final lb = await rp.completeRound(roundId);
+    if (!mounted) return;
+
+    if (lb == null) {
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+        content: Text(rp.error ?? 'Could not complete round.'),
+        backgroundColor: Theme.of(ctx).colorScheme.error,
+      ));
+      return;
     }
+
+    Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
   }
 
   // ── Nassau press ─────────────────────────────────────────────────────────────
@@ -897,7 +978,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
               ]),
             );
           }),
-          // Hole navigation
+          // Hole navigation / completion
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Row(children: [
@@ -910,34 +991,110 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _selectedHole == 18 || isComplete
-                    ? FilledButton.icon(
-                        onPressed: rp.submitting
-                            ? null
-                            : () => _finishRound(ctx, players, par),
-                        icon: const Icon(Icons.emoji_events, size: 20),
-                        label: const Text('Done'),
-                      )
-                    : FilledButton.icon(
-                        onPressed: (allDone && !rp.submitting)
-                            ? () => _saveAndAdvance(ctx, players, par)
-                            : null,
-                        icon: rp.submitting
-                            ? const SizedBox(
-                                width: 16, height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.chevron_right, size: 20),
-                        label: Text(rp.submitting
-                            ? 'Saving…'
-                            : 'Hole ${_selectedHole + 1}'),
-                        iconAlignment: IconAlignment.end,
-                      ),
+                child: _buildPrimaryActionButton(
+                  ctx, rp, sc, players, par, allDone, isComplete,
+                ),
               ),
             ]),
           ),
         ],
       ),
+    );
+  }
+
+  /// The right-hand primary action button.  Behavior depends on hole and
+  /// round status:
+  ///   • Round complete            → "View Leaderboard"
+  ///   • Hole 1–17, current hole done → "Hole N+1" (manual advance)
+  ///   • Hole 1–17, not done        → "Hole N+1" disabled
+  ///   • Hole 18, current hole pending → "Save scores" (saves, stays)
+  ///   • Hole 18, all 18 holes done   → "Complete Round" (confirm + complete)
+  ///   • Hole 18, missing earlier holes → "Complete Round" disabled
+  Widget _buildPrimaryActionButton(
+    BuildContext ctx,
+    RoundProvider rp,
+    Scorecard sc,
+    List<Membership> players,
+    int par,
+    bool allDone,
+    bool isComplete,
+  ) {
+    if (isComplete) {
+      final roundId = rp.round?.id;
+      return FilledButton.icon(
+        onPressed: roundId == null
+            ? null
+            : () => Navigator.of(ctx)
+                .pushNamed('/leaderboard', arguments: roundId),
+        icon: const Icon(Icons.emoji_events, size: 20),
+        label: const Text('View Leaderboard'),
+      );
+    }
+
+    if (_selectedHole < 18) {
+      return FilledButton.icon(
+        onPressed: (allDone && !rp.submitting)
+            ? () => _saveAndAdvance(ctx, players, par)
+            : null,
+        icon: rp.submitting
+            ? const SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.chevron_right, size: 20),
+        label: Text(rp.submitting ? 'Saving…' : 'Hole ${_selectedHole + 1}'),
+        iconAlignment: IconAlignment.end,
+      );
+    }
+
+    // Hole 18.
+    final pendingHere = (_pending[18]?.isNotEmpty ?? false) ||
+                       (_pendingJunk[18]?.isNotEmpty ?? false);
+
+    if (pendingHere) {
+      return FilledButton.icon(
+        onPressed: (allDone && !rp.submitting)
+            ? () => _saveCurrentHole(ctx, players, par)
+            : null,
+        icon: rp.submitting
+            ? const SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.save_outlined, size: 20),
+        label: Text(rp.submitting ? 'Saving…' : 'Save scores'),
+      );
+    }
+
+    final allHolesDone = _allHolesScored(sc, players);
+    final missingHole  = _firstMissingHole(sc, players);
+
+    return FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: Theme.of(ctx).colorScheme.tertiary,
+        foregroundColor: Theme.of(ctx).colorScheme.onTertiary,
+      ),
+      onPressed: (allHolesDone && !rp.submitting)
+          ? () => _completeRound(ctx, players, par)
+          : (missingHole != null && !rp.submitting)
+              ? () {
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text('Hole $missingHole still has missing scores.'),
+                    action: SnackBarAction(
+                      label: 'Go to hole $missingHole',
+                      onPressed: () =>
+                          setState(() => _selectedHole = missingHole),
+                    ),
+                  ));
+                }
+              : null,
+      icon: rp.submitting
+          ? const SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white))
+          : const Icon(Icons.flag_rounded, size: 20),
+      label: Text(rp.submitting ? 'Completing…' : 'Complete Round'),
     );
   }
 
@@ -1042,8 +1199,32 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 onOpenExtraTeamsPicker: needsTeamsSeg == null
                     ? null
                     : () => _showExtraTeamPicker(needsTeamsSeg, players),
-                onScoreSelected: (m, score) =>
-                    _selectScore(m, score, _selectedHole),
+                onScoreSelected: (m, score) {
+                  final hole = _selectedHole;
+                  final wasAllScored = _allScored(
+                    players, _effectiveScores(sc, hole));
+                  _selectScore(m, score, hole);
+                  // Auto-save+advance the moment the last player on the hole
+                  // gets a positive score.  Skip when clearing (score == -1)
+                  // and when the hole was already complete (user is editing).
+                  if (score > 0 && !wasAllScored) {
+                    final nowAllScored = _allScored(
+                      players, _effectiveScores(sc, hole));
+                    if (nowAllScored) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        if (_selectedHole != hole) return;
+                        final rp = context.read<RoundProvider>();
+                        if (rp.submitting) return;
+                        if (hole < 18) {
+                          _saveAndAdvance(ctx, players, par);
+                        } else {
+                          _saveCurrentHole(ctx, players, par);
+                        }
+                      });
+                    }
+                  }
+                },
                 onEditTap: (m) =>
                     _editScore(ctx, m, par, _selectedHole, players, hMode, hPct),
                 onJunkAdd:    (pid) => _adjustJunk(pid, _selectedHole, 1),

@@ -60,6 +60,47 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     super.dispose();
   }
 
+  Future<void> _confirmReopen(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: const Text('Reopen Round?'),
+        content: const Text(
+          'This will unlock the round so scores can be edited again. '
+          'Any score changes will recalculate the game results.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dctx).pop(true),
+            child: const Text('Reopen'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+
+    final rp = context.read<RoundProvider>();
+    final success = await rp.reopenRound(widget.roundId);
+    if (!context.mounted) return;
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(rp.error ?? 'Could not reopen round.'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Round reopened — scores can be edited.'),
+    ));
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final rp = context.watch<RoundProvider>();
@@ -80,6 +121,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             onPressed: () =>
                 context.read<RoundProvider>().loadLeaderboard(widget.roundId),
           ),
+          if (isFinal)
+            IconButton(
+              tooltip: 'Reopen round',
+              icon: const Icon(Icons.lock_open_outlined),
+              onPressed: rp.submitting ? null : () => _confirmReopen(context),
+            ),
         ],
         bottom: (_tabController != null && _gameTabs.isNotEmpty)
             ? TabBar(

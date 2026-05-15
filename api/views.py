@@ -1630,6 +1630,31 @@ class RoundCompleteView(APIView):
         })
 
 
+class RoundReopenView(APIView):
+    """
+    POST /api/rounds/{id}/reopen/
+    Flips a completed round back to in_progress so scores can be edited.
+    Idempotent — already-open rounds are returned unchanged.
+    """
+    def post(self, request, pk):
+        round_obj = get_object_or_404(
+            Round.objects
+                 .select_related('course')
+                 .prefetch_related('foursomes__memberships__player'),
+            pk=pk,
+        )
+        if round_obj.status == 'complete':
+            round_obj.status = 'in_progress'
+            round_obj.save(update_fields=['status'])
+
+        return Response({
+            'round_id'  : round_obj.id,
+            'status'    : round_obj.status,
+            'round_date': str(round_obj.date),
+            'course'    : str(round_obj.course),
+        })
+
+
 # ---------------------------------------------------------------------------
 # Leaderboard
 # ---------------------------------------------------------------------------

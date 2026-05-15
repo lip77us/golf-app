@@ -412,6 +412,10 @@ class ApiClient {
     return Leaderboard.fromJson(data as Map<String, dynamic>);
   }
 
+  Future<void> reopenRound(int roundId) async {
+    await _post('/rounds/$roundId/reopen/', {});
+  }
+
   // ---- Foursomes ----
 
   Future<Foursome> getFoursome(int id) async {
