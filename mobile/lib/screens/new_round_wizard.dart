@@ -7,6 +7,7 @@ import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
 import '../widgets/error_view.dart';
+import '../widgets/net_double_bogey_card.dart';
 import '../widgets/payout_config_field.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
@@ -92,6 +93,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   DateTime          _date           = DateTime.now();
   String            _handicapMode   = 'net';
   int               _netPercent     = 100;
+  bool              _netMaxDoubleBogey = true;
 
   // ---- Step 4: Side-game selection + buy-in config ----
   final Set<String> _activeGames = {}; // no defaults — user picks
@@ -368,6 +370,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       roundNumber     : 1,
       handicapMode    : _handicapMode,
       netPercent      : _netPercent,
+      netMaxDoubleBogey: _netMaxDoubleBogey,
     );
     if (!mounted) return;
 
@@ -392,6 +395,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         roundNumber     : i + 2,
         handicapMode    : _handicapMode,
         netPercent      : _netPercent,
+        netMaxDoubleBogey: _netMaxDoubleBogey,
       );
       if (!mounted) return;
     }
@@ -477,6 +481,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           roundNumber : i + 2,
           handicapMode: _handicapMode,
           netPercent  : _netPercent,
+          netMaxDoubleBogey: _netMaxDoubleBogey,
         );
       }
     }
@@ -491,6 +496,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       roundNumber : _createNewTournament ? 1 : existing + 1,
       handicapMode: _handicapMode,
       netPercent  : _netPercent,
+      netMaxDoubleBogey: _netMaxDoubleBogey,
     );
 
     final playersList = _orderedPlayerIds.map((id) {
@@ -686,6 +692,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           date              : _date,
           handicapMode      : _handicapMode,
           netPercent        : _netPercent,
+          netMaxDoubleBogey : _netMaxDoubleBogey,
           formKey           : _step1Key,
           additionalRounds  : _additionalRounds,
           onPickCourse      : (id) => setState(() {
@@ -698,6 +705,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _handicapMode = mode;
             _netPercent   = pct;
           }),
+          onChangeNetMaxDoubleBogey: (v) =>
+              setState(() => _netMaxDoubleBogey = v),
           onPickAdditionalCourse: (idx, id) => setState(() {
             _additionalRounds[idx].courseId = id;
           }),
@@ -1054,11 +1063,13 @@ class _Step1Details extends StatelessWidget {
   final DateTime          date;
   final String            handicapMode;
   final int               netPercent;
+  final bool              netMaxDoubleBogey;
   final GlobalKey<FormState> formKey;
   final List<_RoundDraft> additionalRounds;
   final ValueChanged<int?>      onPickCourse;
   final ValueChanged<DateTime>  onPickDate;
   final void Function(String mode, int pct) onChangeHandicap;
+  final ValueChanged<bool> onChangeNetMaxDoubleBogey;
   final void Function(int idx, int? courseId) onPickAdditionalCourse;
   final void Function(int idx, DateTime date) onPickAdditionalDate;
 
@@ -1068,11 +1079,13 @@ class _Step1Details extends StatelessWidget {
     required this.date,
     required this.handicapMode,
     required this.netPercent,
+    required this.netMaxDoubleBogey,
     required this.formKey,
     required this.additionalRounds,
     required this.onPickCourse,
     required this.onPickDate,
     required this.onChangeHandicap,
+    required this.onChangeNetMaxDoubleBogey,
     required this.onPickAdditionalCourse,
     required this.onPickAdditionalDate,
   });
@@ -1259,6 +1272,15 @@ class _Step1Details extends StatelessWidget {
                       ?.copyWith(color: Colors.grey)),
             ]),
           ],
+
+          const SizedBox(height: 16),
+
+          // Net double-bogey cap — round-level rule, applied to every
+          // round in this tournament at creation time.
+          NetDoubleBogeyCard(
+            value: netMaxDoubleBogey,
+            onChanged: onChangeNetMaxDoubleBogey,
+          ),
         ]),
       ),
     );

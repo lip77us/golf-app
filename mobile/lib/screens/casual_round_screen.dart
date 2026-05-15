@@ -430,7 +430,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(children: [
-                                Text(player.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                Flexible(
+                                  child: Text(
+                                    player.name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                                 if (isLockedIn) ...[
                                   const SizedBox(width: 6),
                                   const Chip(

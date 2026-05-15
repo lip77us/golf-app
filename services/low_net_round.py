@@ -15,7 +15,9 @@ Scoring
                       strokes allocated by hole stroke_index.
   The strokes_off reference is the lowest playing_handicap across ALL
   foursomes in the round.
-* A double-bogey cap is always applied: effective = min(adjusted, par + 2).
+* Net-double-bogey cap: when Round.net_max_double_bogey is on, every
+  per-hole effective score is capped at par + 2 (net par + 2 in gross
+  terms).  When the flag is off, raw adjusted scores feed the total.
 
 Public API
 ~~~~~~~~~~
@@ -36,9 +38,11 @@ from tournament.models import Foursome
 def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
     """
     Return {player_id: {'name': str, 'total': int, 'holes_played': int}}
-    for all real players in the round, with handicap adjustment and
-    double-bogey cap applied.
+    for all real players in the round, with handicap adjustment and the
+    optional net-double-bogey cap applied per Round.net_max_double_bogey.
     """
+    cap_enabled = bool(round_obj.net_max_double_bogey)
+
     foursomes = list(
         Foursome.objects
         .filter(round=round_obj)
@@ -107,9 +111,9 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
             so       = max(0, membership.playing_handicap - low_hcp)
             adjusted = hs['gross_score'] - _strokes_on_hole(so, si)
 
-        # ── Double-bogey cap ────────────────────────────────────────────────
+        # ── Net-double-bogey cap (round-level toggle) ───────────────────────
         par    = par_index.get(fid, {}).get(hole, 4)
-        capped = min(adjusted, par + 2)
+        capped = min(adjusted, par + 2) if cap_enabled else adjusted
 
         strokes_given = hs['gross_score'] - adjusted  # positive = strokes received
 

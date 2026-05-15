@@ -12,14 +12,17 @@
 ///   Holes 13–17 → best 3 nets per group
 ///   Hole 18     → all 4 nets per group
 ///
-/// A double-bogey cap (par + 2 max per hole) is always applied server-side.
+/// The net-double-bogey cap (per-hole net par + 2 max) honors the
+/// round-level `Round.net_max_double_bogey` flag; toggle it here.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/net_double_bogey_card.dart';
 
 class IrishRumbleSetupScreen extends StatefulWidget {
   final int roundId;
@@ -264,8 +267,8 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
                 _SegmentRow('Hole 18',     'All 4 nets count'),
                 const SizedBox(height: 8),
                 Text(
-                  'A double-bogey cap (par + 2 max) is applied to every '
-                  'score before the best-N selection.',
+                  'Each score may be capped at net par + 2 first — see the '
+                  'Net Double-Bogey Cap toggle below.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
                 ),
@@ -287,6 +290,19 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
               soNote: 'Strokes are based on the lowest handicap across all '
                   'players in the tournament round — not just within each group.',
             ),
+
+          const SizedBox(height: 16),
+
+          // ── Net double-bogey cap (round-level) ──────────────────────────
+          Builder(builder: (ctx) {
+            final round = ctx.watch<RoundProvider>().round;
+            if (round == null) return const SizedBox.shrink();
+            return NetDoubleBogeyCard(
+              value: round.netMaxDoubleBogey,
+              onChanged: (v) =>
+                  ctx.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v),
+            );
+          }),
 
           const SizedBox(height: 16),
 
@@ -817,6 +833,19 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
               soNote: 'Strokes are based on the lowest handicap across all '
                   'players in the tournament round.',
             ),
+
+          const SizedBox(height: 16),
+
+          // ── Net double-bogey cap (round-level) ──────────────────────────
+          Builder(builder: (ctx) {
+            final round = ctx.watch<RoundProvider>().round;
+            if (round == null) return const SizedBox.shrink();
+            return NetDoubleBogeyCard(
+              value: round.netMaxDoubleBogey,
+              onChanged: (v) =>
+                  ctx.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v),
+            );
+          }),
 
           const SizedBox(height: 16),
 

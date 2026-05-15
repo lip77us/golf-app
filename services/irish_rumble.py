@@ -25,10 +25,11 @@ Scoring
                       strokes allocated by hole stroke_index.
   The reference for strokes_off is the lowest playing_handicap across ALL
   foursomes in the round (not just within each group).
-* A double-bogey cap is applied after handicap adjustment:
-    effective = min(adjusted, par + 2)
-  This is the Stableford-style damage limiter that prevents a single blowup
-  hole from tanking a team's score.
+* Net-double-bogey cap: when Round.net_max_double_bogey is on, every
+  per-hole effective score is capped at par + 2 after handicap adjustment.
+  When the flag is off, raw adjusted scores feed the segment math.  This
+  damage limiter is opt-in per round (see the Settings toggle on the IR
+  setup screen, or the Tournament bulk-admin action).
 * Reported as net-to-par (sum of counting scores minus sum of hole pars).
 
 Public API
@@ -55,10 +56,12 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent):
     Build {foursome_id: {player_id: {hole_number: capped_score}}} for all
     real players in the round.
 
-    Applies the handicap adjustment and the double-bogey cap (par + 2 max).
-    For strokes_off mode, SO strokes are relative to the lowest playing_handicap
-    across ALL foursomes in the round.
+    Applies the handicap adjustment.  The net-double-bogey cap (per-hole
+    net par + 2) is only applied when the round's `net_max_double_bogey`
+    flag is on.  For strokes_off mode, SO strokes are relative to the
+    lowest playing_handicap across ALL foursomes in the round.
     """
+    cap_enabled = bool(round_obj.net_max_double_bogey)
     foursomes = list(
         Foursome.objects
         .filter(round=round_obj)
@@ -136,11 +139,12 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent):
             so       = max(0, membership.playing_handicap - low_hcp)
             adjusted = hs['gross_score'] - _strokes_on_hole(so, si)
 
-        # ── Double-bogey cap ────────────────────────────────────────────────
-        par    = par_index.get(fid, {}).get(hole, 4)
-        capped = min(adjusted, par + 2)
+        # ── Net-double-bogey cap (round-level toggle) ───────────────────────
+        if cap_enabled:
+            par     = par_index.get(fid, {}).get(hole, 4)
+            adjusted = min(adjusted, par + 2)
 
-        result.setdefault(fid, {}).setdefault(pid, {})[hole] = capped
+        result.setdefault(fid, {}).setdefault(pid, {})[hole] = adjusted
 
     # ── Inject phantom scores ───────────────────────────────────────────────
     from scoring.phantom import PhantomScoreProvider

@@ -1426,10 +1426,7 @@ class NassauSummary {
       phantom: () {
         // Defensive parse so a phantom type-cast error never breaks the summary.
         final raw = j['phantom'];
-        if (raw == null) {
-          debugPrint('NassauSummary.fromJson: phantom field is null');
-          return null;
-        }
+        if (raw == null) return null;
         try {
           return NassauPhantomInfo.fromJson(raw as Map<String, dynamic>);
         } catch (e, st) {
