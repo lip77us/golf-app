@@ -5,8 +5,10 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
 import 'casual_round_screen.dart';
+import 'player_list_screen.dart';
 
 /// Lists the authenticated player's casual rounds with a toggle between
 /// Active (in_progress) and Completed views.
@@ -103,11 +105,36 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
       appBar: AppBar(
         title: const Text('Casual Rounds'),
         actions: [
+          if (auth.isStaff)
+            IconButton(
+              icon: const Icon(Icons.golf_course),
+              tooltip: 'Manage Courses',
+              onPressed: () => Navigator.of(context).pushNamed('/course-search'),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _load,
           ),
         ],
+      ),
+      drawer: AppDrawer(
+        playerName: auth.player?.name,
+        onTournamentsTap: () {
+          // Tournaments is the route below us in the stack (splash pushed it
+          // first).  Close the drawer, then pop back to it.
+          Navigator.of(context).pop();
+          Navigator.of(context)
+              .popUntil((r) => r.settings.name == '/tournaments' || r.isFirst);
+        },
+        // Already on casual rounds — the entry just closes the drawer.
+        onCasualRoundsTap: () => Navigator.of(context).pop(),
+        onPlayersTap: () {
+          Navigator.of(context).pop();
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const PlayerListScreen()))
+              .then((_) { if (mounted) _load(); });
+        },
+        onLogout: () => auth.logout(),
       ),
       // Only show FAB on the Active tab — no new rounds on the Completed tab.
       floatingActionButton: _showCompleted ? null : FloatingActionButton.extended(

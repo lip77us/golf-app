@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../api/client.dart';
 import '../api/models.dart';
-import '../config.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
 import 'new_round_wizard.dart';
 import 'player_list_screen.dart';
@@ -27,11 +26,25 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
   bool    _loading      = true;
   String? _error;
   bool    _networkError = false;
+  bool    _showCompleted = false;   // false = Active, true = Completed
+  bool    _didAutoRedirect = false; // first-load redirect to casual rounds
+                                    // when the user has no active tournaments
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  /// A tournament is "complete" when it has at least one round and every
+  /// round's status is 'complete'.  Tournaments with no rounds yet, or any
+  /// pending/in_progress round, are considered active.
+  bool _isComplete(Tournament t) =>
+      t.rounds.isNotEmpty && t.rounds.every((r) => r.status == 'complete');
+
+  void _onToggle(bool showCompleted) {
+    if (showCompleted == _showCompleted) return;
+    setState(() { _showCompleted = showCompleted; });
   }
 
   Future<void> _load() async {
@@ -40,6 +53,20 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       final client = context.read<AuthProvider>().client;
       final data   = await client.getTournaments();
       if (mounted) setState(() { _tournaments = data; });
+
+      // First-load only: if the user has no active tournaments, drop them
+      // straight onto the casual rounds list.  Use push (not replace) so the
+      // back-arrow still brings them back here to see completed tournaments
+      // or create a new one.
+      if (!_didAutoRedirect && mounted) {
+        _didAutoRedirect = true;
+        final hasActive = data.any((t) => !_isComplete(t));
+        if (!hasActive) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) Navigator.of(context).pushNamed('/casual-rounds');
+          });
+        }
+      }
     } catch (e) {
       if (mounted) setState(() { _error = friendlyError(e); _networkError = isNetworkError(e); });
     } finally {
@@ -135,18 +162,20 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
           ),
         ],
       ),
-      drawer: _AppDrawer(
+      drawer: AppDrawer(
         playerName: auth.player?.name,
-        onPlayersTap: () {
-          Navigator.of(context).pop();
-          Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const PlayerListScreen()))
-              .then((_) { if (mounted) _load(); });
-        },
+        // Already on tournaments — the entry just closes the drawer.
+        onTournamentsTap: () => Navigator.of(context).pop(),
         onCasualRoundsTap: () {
           Navigator.of(context).pop();
           Navigator.of(context)
               .pushNamed('/casual-rounds')
+              .then((_) { if (mounted) _load(); });
+        },
+        onPlayersTap: () {
+          Navigator.of(context).pop();
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const PlayerListScreen()))
               .then((_) { if (mounted) _load(); });
         },
         onLogout: () => auth.logout(),
@@ -186,21 +215,50 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         onRetry: _load,
       );
     }
-    final tournaments = _tournaments ?? [];
-    if (tournaments.isEmpty) {
-      return const Center(child: Text('No tournaments found.'));
-    }
+    final all      = _tournaments ?? [];
+    final filtered = all.where(
+      (t) => _showCompleted ? _isComplete(t) : !_isComplete(t),
+    ).toList();
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: tournaments.length,
-        itemBuilder: (_, i) {
-          final t = tournaments[i];
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(
+              value: false,
+              label: Text('Active'),
+              icon: Icon(Icons.play_circle_outline),
+            ),
+            ButtonSegment(
+              value: true,
+              label: Text('Completed'),
+              icon: Icon(Icons.check_circle_outline),
+            ),
+          ],
+          selected: {_showCompleted},
+          onSelectionChanged: (s) => _onToggle(s.first),
+          style: const ButtonStyle(
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+      ),
+      Expanded(
+        child: filtered.isEmpty
+            ? Center(child: Text(_showCompleted
+                ? 'No completed tournaments.'
+                : 'No active tournaments.'))
+            : RefreshIndicator(
+                onRefresh: _load,
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) {
+                    final t = filtered[i];
           return _TournamentCard(
             tournament       : t,
             isStaff          : context.read<AuthProvider>().isStaff,
+            isComplete       : _isComplete(t),
             onRoundTap       : (roundId) =>
                 Navigator.of(context).pushNamed('/round', arguments: roundId),
             onSetupRound     : (roundId) => Navigator.of(context)
@@ -275,164 +333,20 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
             },
             onDelete         : () => _deleteTournament(t),
           );
-        },
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// App Drawer
-// ---------------------------------------------------------------------------
-
-/// Shows an About dialog that displays the local app version and fetches
-/// the server version for comparison.
-void _showAboutDialog(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (ctx) => _AboutDialog(),
-  );
-}
-
-class _AboutDialog extends StatefulWidget {
-  @override
-  State<_AboutDialog> createState() => _AboutDialogState();
-}
-
-class _AboutDialogState extends State<_AboutDialog> {
-  String? _serverVersion;
-  bool    _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchServerVersion();
-  }
-
-  Future<void> _fetchServerVersion() async {
-    try {
-      final data = await const ApiClient().getVersion();
-      if (mounted) {
-        setState(() {
-          _serverVersion = data['server_version'] as String?;
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() { _loading = false; });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('The Bandon Cup'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Text('App version: ',
-                style: TextStyle(fontWeight: FontWeight.w500)),
-            Text(Config.appVersion),
-          ]),
-          const SizedBox(height: 6),
-          Row(children: [
-            const Text('Server version: ',
-                style: TextStyle(fontWeight: FontWeight.w500)),
-            if (_loading)
-              const SizedBox(
-                width: 14, height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              Text(_serverVersion ?? '—'),
-          ]),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-
-class _AppDrawer extends StatelessWidget {
-  final String? playerName;
-  final VoidCallback onPlayersTap;
-  final VoidCallback onCasualRoundsTap;
-  final VoidCallback onLogout;
-
-  const _AppDrawer({
-    required this.onPlayersTap,
-    required this.onCasualRoundsTap,
-    required this.onLogout,
-    this.playerName,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Drawer(
-      child: Column(
-        children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(),
-            margin: EdgeInsets.zero,
-            padding: EdgeInsets.zero,
-            child: Center(
-              child: Image.asset(
-                'assets/images/bandon_cup_logo.png',
-                height: 148,
+                  },
+                ),
               ),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.emoji_events_outlined),
-            title: const Text('Tournaments'),
-            onTap: () => Navigator.of(context).pop(),
-          ),
-          ListTile(
-            leading: const Icon(Icons.sports_golf),
-            title: const Text('Casual Rounds'),
-            onTap: onCasualRoundsTap,
-          ),
-          ListTile(
-            leading: const Icon(Icons.people_outline),
-            title: const Text('Players'),
-            onTap: onPlayersTap,
-          ),
-          const Spacer(),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('About'),
-            onTap: () {
-              Navigator.of(context).pop(); // close drawer
-              _showAboutDialog(context);
-            },
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('Sign Out'),
-            onTap: onLogout,
-          ),
-          const SizedBox(height: 8),
-        ],
       ),
-    );
+    ]);
   }
 }
 
 class _TournamentCard extends StatelessWidget {
   final Tournament tournament;
   final bool isStaff;
+  /// True when every round is complete.  Hides staff configuration actions
+  /// (setup, recalculate, etc.) so finished tournaments stay finished.
+  final bool isComplete;
   final void Function(int roundId) onRoundTap;
   final void Function(int roundId) onSetupRound;
   final VoidCallback onViewLeaderboard;
@@ -446,6 +360,7 @@ class _TournamentCard extends StatelessWidget {
   const _TournamentCard({
     required this.tournament,
     required this.isStaff,
+    required this.isComplete,
     required this.onRoundTap,
     required this.onSetupRound,
     required this.onViewLeaderboard,
@@ -539,7 +454,8 @@ class _TournamentCard extends StatelessWidget {
           ],
 
           // ── Staff configure buttons ────────────────────────────────────
-          if (isStaff && tournament.activeGames.isNotEmpty) ...[
+          // Hidden on completed tournaments — there's nothing left to configure.
+          if (isStaff && !isComplete && tournament.activeGames.isNotEmpty) ...[
             if (tournament.activeGames.contains('low_net'))
               _ActionButton(
                 icon : Icons.settings_outlined,
@@ -556,7 +472,10 @@ class _TournamentCard extends StatelessWidget {
               label: 'Cup Scoreboard',
               onTap: onOpenCupScoreboard,
             ),
-            if (isStaff) ...[
+            // Staff configuration actions — only while the tournament is
+            // still active.  Completed cup tournaments expose the scoreboard
+            // only, no setup or recalculate buttons.
+            if (isStaff && !isComplete) ...[
               _ActionButton(
                 icon : Icons.groups_outlined,
                 label: 'Cup Draft & Teams',
