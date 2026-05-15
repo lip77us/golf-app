@@ -29,6 +29,7 @@ import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/team_splitter_4.dart';
 
 // Top-level helper shared by _MatchGrid and _ExtraTeamPickerSheet.
 String _initials(String name) {
@@ -1916,17 +1917,11 @@ class _ExtraTeamPickerSheet extends StatefulWidget {
 }
 
 class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
-  /// Player IDs assigned to Team A.  Team B gets the remaining two.
-  final Set<int> _teamAIds = {};
+  late List<Membership> _ordered = List.of(widget.members);
 
   @override
   Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final teamBIds = widget.members
-        .where((m) => !_teamAIds.contains(m.player.id))
-        .map((m) => m.player.id)
-        .toList();
-    final canConfirm = _teamAIds.length == 2;
+    final theme = Theme.of(context);
 
     return SafeArea(
       child: Padding(
@@ -1951,66 +1946,17 @@ class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Tap two players to form Team A — the other two become Team B.',
+              'Drag rows to set Red vs Blue for this extra match.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
 
-            // Player tiles
-            ...widget.members.map((m) {
-              final inA    = _teamAIds.contains(m.player.id);
-              final inB    = !inA && canConfirm;
-              final color  = inA
-                  ? theme.colorScheme.primary
-                  : inB
-                      ? theme.colorScheme.tertiary
-                      : theme.colorScheme.surfaceContainerHighest;
-              final label  = inA ? 'Team A' : (inB ? 'Team B' : '—');
-
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: inA || inB ? color : theme.colorScheme.outlineVariant),
-                ),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: color,
-                    child: Text(
-                      m.player.displayShort,
-                      style: TextStyle(
-                        color: inA || inB ? Colors.white : theme.colorScheme.onSurfaceVariant,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  title: Text(m.player.name,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  trailing: Text(
-                    label,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: inA || inB ? color : theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  onTap: () {
-                    setState(() {
-                      if (inA) {
-                        _teamAIds.remove(m.player.id);
-                      } else if (_teamAIds.length < 2) {
-                        _teamAIds.add(m.player.id);
-                      }
-                      // If team A is full (2 players), tapping a team-B player
-                      // has no effect — they must deselect a team-A player first.
-                    });
-                  },
-                ),
-              );
-            }),
+            TeamSplitter4(
+              players: _ordered,
+              onChanged: (ordered) => setState(() => _ordered = ordered),
+            ),
 
             const SizedBox(height: 16),
 
@@ -2018,12 +1964,10 @@ class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
               width: double.infinity,
               height: 48,
               child: FilledButton(
-                onPressed: canConfirm
-                    ? () => Navigator.of(context).pop([
-                          _teamAIds.toList(),
-                          teamBIds,
-                        ])
-                    : null,
+                onPressed: () => Navigator.of(context).pop([
+                  _ordered.take(2).map((m) => m.player.id).toList(),
+                  _ordered.skip(2).take(2).map((m) => m.player.id).toList(),
+                ]),
                 child: const Text(
                   'Confirm Teams',
                   style: TextStyle(fontWeight: FontWeight.bold),

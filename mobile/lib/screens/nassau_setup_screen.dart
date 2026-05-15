@@ -19,6 +19,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/team_splitter_4.dart';
 
 class NassauSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -249,46 +250,62 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Tap a player to toggle which team they play on.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: 12),
-                ...members.map((m) {
-                  final pid  = m.player.id;
-                  final team = _teamMap[pid] ?? 1;
-                  final isT1 = team == 1;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(m.player.name,
-                                style: const TextStyle(fontWeight: FontWeight.w500)),
-                            Text('Hcp ${m.playingHandicap}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant)),
+                // 4-player foursomes use the shared TeamSplitter4 widget so
+                // the team-picking gesture matches Sixes and Sixes-extras.
+                // Smaller foursomes (1v1, 1v2, 2v1) keep the simple toggle
+                // since drag-and-drop is overkill for ≤3 players.
+                if (members.length == 4)
+                  TeamSplitter4(
+                    players: _splitterOrder(members),
+                    onChanged: (ordered) {
+                      setState(() {
+                        for (var i = 0; i < ordered.length; i++) {
+                          _teamMap[ordered[i].player.id] = i < 2 ? 1 : 2;
+                        }
+                      });
+                    },
+                  )
+                else ...[
+                  Text(
+                    'Tap a player to toggle which team they play on.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  ...members.map((m) {
+                    final pid  = m.player.id;
+                    final team = _teamMap[pid] ?? 1;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(m.player.name,
+                                  style: const TextStyle(fontWeight: FontWeight.w500)),
+                              Text('Hcp ${m.playingHandicap}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant)),
+                            ],
+                          ),
+                        ),
+                        SegmentedButton<int>(
+                          segments: const [
+                            ButtonSegment(value: 1, label: Text('T1')),
+                            ButtonSegment(value: 2, label: Text('T2')),
                           ],
+                          selected: {team},
+                          onSelectionChanged: (s) =>
+                              setState(() => _teamMap[pid] = s.first),
+                          style: SegmentedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                          ),
                         ),
-                      ),
-                      SegmentedButton<int>(
-                        segments: const [
-                          ButtonSegment(value: 1, label: Text('T1')),
-                          ButtonSegment(value: 2, label: Text('T2')),
-                        ],
-                        selected: {team},
-                        onSelectionChanged: (s) =>
-                            setState(() => _teamMap[pid] = s.first),
-                        style: SegmentedButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    ]),
-                  );
-                }),
+                      ]),
+                    );
+                  }),
+                ],
 
                 const SizedBox(height: 8),
 
@@ -447,6 +464,32 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         .map((m) => m.player.displayShort)
         .toList();
     return names.isEmpty ? '—' : names.join(' & ');
+  }
+
+  /// Order [members] for TeamSplitter4: T1 players first (positions 0,1)
+  /// followed by T2 players (positions 2,3).  When no team has been picked
+  /// yet, falls back to the original member order so the splitter has a
+  /// stable initial layout.
+  List<Membership> _splitterOrder(List<Membership> members) {
+    final t1 = members
+        .where((m) => (_teamMap[m.player.id] ?? 0) == 1)
+        .toList();
+    final t2 = members
+        .where((m) => (_teamMap[m.player.id] ?? 0) == 2)
+        .toList();
+    final assigned = {...t1.map((m) => m.player.id),
+                      ...t2.map((m) => m.player.id)};
+    final unassigned = members
+        .where((m) => !assigned.contains(m.player.id))
+        .toList();
+    // Fill T1 first, then T2, with the unassigned players.
+    while (t1.length < 2 && unassigned.isNotEmpty) {
+      t1.add(unassigned.removeAt(0));
+    }
+    while (t2.length < 2 && unassigned.isNotEmpty) {
+      t2.add(unassigned.removeAt(0));
+    }
+    return [...t1, ...t2];
   }
 
   Widget _pressChip(String value, String label) {

@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import '../widgets/team_splitter_4.dart';
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -294,12 +295,8 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                         holeData:       holeData,
                         startHole:      widget.startHole,
                         orderedPlayers: _orderedPlayers,
-                        onReorder: (oldIdx, newIdx) {
-                          setState(() {
-                            if (newIdx > oldIdx) newIdx--;
-                            final p = _orderedPlayers.removeAt(oldIdx);
-                            _orderedPlayers.insert(newIdx, p);
-                          });
+                        onOrderChanged: (ordered) {
+                          setState(() => _orderedPlayers = ordered);
                         },
                       ),
                       const SizedBox(height: 20),
@@ -371,16 +368,16 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
 // ===========================================================================
 
 class _HolePlayerCard extends StatelessWidget {
-  final ScorecardHole?   holeData;
-  final int              startHole;
-  final List<Membership> orderedPlayers;
-  final void Function(int, int) onReorder;
+  final ScorecardHole?               holeData;
+  final int                          startHole;
+  final List<Membership>             orderedPlayers;
+  final ValueChanged<List<Membership>> onOrderChanged;
 
   const _HolePlayerCard({
     required this.holeData,
     required this.startHole,
     required this.orderedPlayers,
-    required this.onReorder,
+    required this.onOrderChanged,
   });
 
   @override
@@ -418,8 +415,7 @@ class _HolePlayerCard extends StatelessWidget {
           ]),
         ),
 
-        // Drag-reorderable player rows
-        if (orderedPlayers.isEmpty)
+        if (orderedPlayers.length < 4)
           const Padding(
             padding: EdgeInsets.all(16),
             child: SizedBox(
@@ -428,82 +424,11 @@ class _HolePlayerCard extends StatelessWidget {
             ),
           )
         else
-          SizedBox(
-            height: orderedPlayers.length * 56.0,
-            child: ReorderableListView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              onReorder: onReorder,
-              proxyDecorator: (child, index, animation) => Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(8),
-                child: child,
-              ),
-              children: orderedPlayers.asMap().entries.map((entry) {
-                final idx       = entry.key;
-                final m         = entry.value;
-                final teamLabel = idx < 2 ? 'Team A' : 'Team B';
-                final teamColor = idx < 2
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.tertiary;
-
-                return Container(
-                  key: ValueKey(m.player.id),
-                  height: 56,
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(
-                          color: theme.colorScheme.outlineVariant),
-                    ),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Row(children: [
-                    ReorderableDragStartListener(
-                      index: idx,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Icon(Icons.drag_handle,
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                    ),
-                    Text('${idx + 1})  ',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.primary)),
-                    Expanded(
-                      child: Text(m.player.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: teamColor.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: teamColor.withOpacity(0.4)),
-                      ),
-                      child: Text(teamLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              color: teamColor,
-                              fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(width: 8),
-                    // Placeholder score box
-                    Container(
-                      width: 40,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                            color: theme.colorScheme.outlineVariant),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ]),
-                );
-              }).toList(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+            child: TeamSplitter4(
+              players: orderedPlayers,
+              onChanged: onOrderChanged,
             ),
           ),
       ]),

@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import 'models.dart';
@@ -144,6 +145,14 @@ class ApiClient {
       message = res.body.isNotEmpty ? res.body : 'HTTP ${res.statusCode}';
     }
     if (res.statusCode == 401) {
+      // Diagnostic for the intermittent silent-logout bug: capture which
+      // endpoint rejected the token so we can find what's sending stale or
+      // missing credentials.  Safe to remove once the root cause is fixed.
+      final req = res.request;
+      debugPrint(
+        '[AUTH-401] ${req?.method ?? '?'} ${req?.url ?? '?'} '
+        'tokenSent=${token != null} body="$message"',
+      );
       onSessionExpired?.call();
       throw AuthException(message);
     }
