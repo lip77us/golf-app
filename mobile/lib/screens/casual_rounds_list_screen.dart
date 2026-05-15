@@ -134,6 +134,10 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
               .push(MaterialPageRoute(builder: (_) => const PlayerListScreen()))
               .then((_) { if (mounted) _load(); });
         },
+        onSettingsTap: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).pushNamed('/settings');
+        },
         onLogout: () => auth.logout(),
       ),
       // Only show FAB on the Active tab — no new rounds on the Completed tab.

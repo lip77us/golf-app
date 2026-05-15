@@ -10,6 +10,7 @@ import 'local/local_database.dart';
 import 'sync/sync_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/round_provider.dart';
+import 'providers/settings_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/tournament_list_screen.dart';
 import 'screens/round_screen.dart';
@@ -37,6 +38,7 @@ import 'screens/score_entry_screen.dart';
 import 'screens/three_person_match_setup_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/quota_nassau_screen.dart';
+import 'screens/settings_screen.dart';
 
 /// Global navigator key — lets AuthProvider redirect to /login on 401
 /// from outside the widget tree.
@@ -59,14 +61,23 @@ void main() async {
   final auth = AuthProvider();
   await auth.restoreSession();
 
-  runApp(GolfApp(auth: auth, localDb: localDb));
+  final settings = SettingsProvider();
+  await settings.load();
+
+  runApp(GolfApp(auth: auth, localDb: localDb, settings: settings));
 }
 
 class GolfApp extends StatefulWidget {
-  final AuthProvider  auth;
-  final LocalDatabase localDb;
+  final AuthProvider     auth;
+  final LocalDatabase    localDb;
+  final SettingsProvider settings;
 
-  const GolfApp({super.key, required this.auth, required this.localDb});
+  const GolfApp({
+    super.key,
+    required this.auth,
+    required this.localDb,
+    required this.settings,
+  });
 
   @override
   State<GolfApp> createState() => _GolfAppState();
@@ -114,6 +125,7 @@ class _GolfAppState extends State<GolfApp> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: widget.auth),
+        ChangeNotifierProvider.value(value: widget.settings),
 
         // SyncService: monitors connectivity + drains the pending queue.
         // Created once; updated when the auth token changes.
@@ -234,6 +246,8 @@ class _GolfAppState extends State<GolfApp> {
         return MaterialPageRoute(builder: (_) => const TournamentListScreen());
       case '/casual-rounds':
         return MaterialPageRoute(builder: (_) => const CasualRoundsListScreen());
+      case '/settings':
+        return MaterialPageRoute(builder: (_) => const SettingsScreen());
       case '/round':
         final roundId = settings.arguments as int;
         return MaterialPageRoute(builder: (_) => RoundScreen(roundId: roundId));

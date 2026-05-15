@@ -12,6 +12,7 @@ class AppDrawer extends StatelessWidget {
   final VoidCallback onTournamentsTap;
   final VoidCallback onCasualRoundsTap;
   final VoidCallback onPlayersTap;
+  final VoidCallback onSettingsTap;
   final VoidCallback onLogout;
 
   const AppDrawer({
@@ -19,6 +20,7 @@ class AppDrawer extends StatelessWidget {
     required this.onTournamentsTap,
     required this.onCasualRoundsTap,
     required this.onPlayersTap,
+    required this.onSettingsTap,
     required this.onLogout,
     this.playerName,
   });
@@ -56,6 +58,11 @@ class AppDrawer extends StatelessWidget {
           ),
           const Spacer(),
           const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.settings_outlined),
+            title: const Text('Settings'),
+            onTap: onSettingsTap,
+          ),
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('About'),

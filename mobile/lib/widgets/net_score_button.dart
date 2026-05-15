@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/settings_provider.dart';
 
 /// A tappable score button that communicates a golf score's relationship to
-/// NET par (par + the player's handicap strokes on the hole).
+/// par.  When the user's Net Style Entry preference is on (the default),
+/// shapes and colors are driven by NET par (par + the player's strokes on
+/// the hole); the white "no shape" square then matches the stroke dots on
+/// the scorecard.  When the preference is off, the same encoding is driven
+/// by GROSS par instead.
 ///
-/// Visual encoding (netDiff = score - netPar):
-///   netDiff <= -2  (net eagle or better)  green fill, 2 concentric circles
-///   netDiff == -1  (net birdie)           green fill, 1 circle
-///   netDiff ==  0  (net par)              white fill, no shape
-///   netDiff ==  1  (net bogey)            red   fill, 1 square
-///   netDiff >=  2  (net double or worse)  red   fill, 2 concentric squares
+/// Visual encoding (diff = score - baseline, where baseline is net par
+/// or gross par depending on the preference):
+///   diff <= -2  (eagle or better)  green fill, 2 concentric circles
+///   diff == -1  (birdie)           green fill, 1 circle
+///   diff ==  0  (par)              white fill, no shape
+///   diff ==  1  (bogey)            red   fill, 1 square
+///   diff >=  2  (double or worse)  red   fill, 2 concentric squares
 ///
 /// Selection is shown with a thicker primary-colored outer border so it
-/// never hides the net-vs-par shape inside.
+/// never hides the par-vs-score shape inside.
 class NetScoreButton extends StatelessWidget {
   /// The score displayed on this button (1-based — never 0).
   final int score;
@@ -46,9 +54,11 @@ class NetScoreButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final netPar  = par + strokes;
-    final netDiff = score - netPar;
+    final theme         = Theme.of(context);
+    final netStyleEntry =
+        context.watch<SettingsProvider>().netStyleEntry;
+    final baseline      = netStyleEntry ? par + strokes : par;
+    final netDiff       = score - baseline;
 
     // Fill color driven purely by net diff.
     //   under par  -> green  (single shade)

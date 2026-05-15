@@ -178,6 +178,10 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
               .push(MaterialPageRoute(builder: (_) => const PlayerListScreen()))
               .then((_) { if (mounted) _load(); });
         },
+        onSettingsTap: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).pushNamed('/settings');
+        },
         onLogout: () => auth.logout(),
       ),
       body: _buildBody(),

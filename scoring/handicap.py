@@ -82,6 +82,43 @@ def _strokes_on_hole(effective_hcp: int, stroke_index: int) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Net-double-bogey cap (USGA-style max score) — tournament-level rule
+# ---------------------------------------------------------------------------
+
+def _net_double_bogey_cap_enabled(foursome) -> bool:
+    """True iff this foursome's round is in a tournament that has the
+    net-double-bogey cap turned on.  Casual rounds (no tournament) are
+    always uncapped."""
+    rnd   = getattr(foursome, 'round', None)
+    tourn = getattr(rnd, 'tournament', None) if rnd else None
+    return bool(tourn and tourn.net_max_double_bogey)
+
+
+def _par_by_hole(foursome) -> dict:
+    """Return {hole_number: par} pulled from any membership's tee.
+    Used by the cap; returns {} if no tee is on file (in which case
+    the cap silently no-ops to avoid hiding a bigger setup bug)."""
+    m = (
+        foursome.memberships
+        .select_related('tee')
+        .exclude(tee=None)
+        .first()
+    )
+    if not m or m.tee_id is None:
+        return {}
+    return {h: m.tee.hole(h).get('par') for h in range(1, 19)}
+
+
+def _cap_value(value: int, par, cap_enabled: bool) -> int:
+    """Clamp a net-adjusted hole value at par + 2 when the cap is on.
+    `value` must already have any strokes subtracted, so `par + 2` is
+    equivalent to a gross-side cap of (par + strokes + 2) == netPar + 2."""
+    if not cap_enabled or par is None:
+        return value
+    return min(value, par + 2)
+
+
+# ---------------------------------------------------------------------------
 # Strokes-Off helpers (Sixes-style spreading across three segments)
 # ---------------------------------------------------------------------------
 
@@ -282,12 +319,16 @@ def build_score_index(
         rows = base_qs.exclude(gross_score=None).values(
             'player_id', 'hole_number', 'gross_score'
         )
+        cap_enabled = _net_double_bogey_cap_enabled(foursome)
+        par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
         index = {}
         for r in rows:
             strokes = plan.get(r['player_id'], {}).get(r['hole_number'], 0)
-            index.setdefault(r['player_id'], {})[r['hole_number']] = (
-                r['gross_score'] - strokes
+            value   = r['gross_score'] - strokes
+            value   = _cap_value(
+                value, par_by_hole.get(r['hole_number']), cap_enabled,
             )
+            index.setdefault(r['player_id'], {})[r['hole_number']] = value
         return index
 
     # -- Net @ 100% (or STROKES_OFF fallback when no segments): use stored --
@@ -298,9 +339,14 @@ def build_score_index(
         rows = base_qs.exclude(net_score=None).values(
             'player_id', 'hole_number', 'net_score'
         )
+        cap_enabled = _net_double_bogey_cap_enabled(foursome)
+        par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
         index = {}
         for r in rows:
-            index.setdefault(r['player_id'], {})[r['hole_number']] = r['net_score']
+            value = _cap_value(
+                r['net_score'], par_by_hole.get(r['hole_number']), cap_enabled,
+            )
+            index.setdefault(r['player_id'], {})[r['hole_number']] = value
         return index
 
     # -- Net at a custom percentage: re-derive strokes per hole ------------
@@ -316,6 +362,8 @@ def build_score_index(
     rows = base_qs.exclude(gross_score=None).values(
         'player_id', 'hole_number', 'gross_score'
     )
+    cap_enabled = _net_double_bogey_cap_enabled(foursome)
+    par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
     index = {}
     for r in rows:
         m = membership_by_player.get(r['player_id'])
@@ -326,6 +374,9 @@ def build_score_index(
         stroke_index = m.tee.hole(r['hole_number']).get('stroke_index', 18)
         strokes = _strokes_on_hole(effective, stroke_index)
         adjusted = r['gross_score'] - strokes
+        adjusted = _cap_value(
+            adjusted, par_by_hole.get(r['hole_number']), cap_enabled,
+        )
         index.setdefault(r['player_id'], {})[r['hole_number']] = adjusted
     return index
 
@@ -370,6 +421,9 @@ def build_match_play_score_index(foursome, p1_id: int, p2_id: int) -> dict:
         .values('player_id', 'hole_number', 'gross_score')
     )
 
+    cap_enabled = _net_double_bogey_cap_enabled(foursome)
+    par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
+
     index: dict = {}
     for r in rows:
         pid  = r['player_id']
@@ -384,6 +438,9 @@ def build_match_play_score_index(foursome, p1_id: int, p2_id: int) -> dict:
             strokes  = _strokes_on_hole(so, si)
             adjusted = gross - strokes
 
+        adjusted = _cap_value(
+            adjusted, par_by_hole.get(r['hole_number']), cap_enabled,
+        )
         index.setdefault(pid, {})[r['hole_number']] = adjusted
 
     return index

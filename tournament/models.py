@@ -30,6 +30,17 @@ class Tournament(models.Model):
                             default=list,
                             help_text="List of GameType values active for this tournament."
                         )
+    net_max_double_bogey = models.BooleanField(
+                            default=False,
+                            help_text=(
+                                "When true, every player's per-hole score in this "
+                                "tournament's rounds is capped at net par + 2 for "
+                                "game-scoring purposes (max-double-bogey rule). "
+                                "Applies only to games whose handicap mode is Net "
+                                "or Strokes-Off; gross-mode games are unaffected. "
+                                "Stored gross scores are never modified."
+                            )
+                        )
     created_at          = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
