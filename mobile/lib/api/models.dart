@@ -473,7 +473,7 @@ class Round {
     required this.betUnit,
     this.handicapMode = 'net',
     this.netPercent   = 100,
-    this.netMaxDoubleBogey = false,
+    this.netMaxDoubleBogey = true,
     required this.foursomes,
     this.isCupRound    = false,
     this.irBallsConfig = const [],
@@ -489,7 +489,7 @@ class Round {
         betUnit:      double.parse(j['bet_unit'].toString()),
         handicapMode: j['handicap_mode'] as String? ?? 'net',
         netPercent:   j['net_percent']   as int?    ?? 100,
-        netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? false,
+        netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? true,
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
         irBallsConfig: (j['ir_balls_config'] as List? ?? [])
             .map((s) => Map<String, dynamic>.from(s as Map))

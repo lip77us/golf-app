@@ -21,6 +21,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/net_double_bogey_card.dart';
 
 class SkinsSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -195,6 +196,20 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
             onModeChanged:    (m) => setState(() => _mode = m),
             onPercentChanged: (p) => setState(() => _netPercent = p),
           ),
+
+          const SizedBox(height: 16),
+
+          // ── Net double-bogey cap (round-level) ──
+          Builder(builder: (ctx) {
+            final round = ctx.watch<RoundProvider>().round;
+            if (round == null) return const SizedBox.shrink();
+            return NetDoubleBogeyCard(
+              value: round.netMaxDoubleBogey,
+              onChanged: (v) {
+                ctx.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v);
+              },
+            );
+          }),
 
           const SizedBox(height: 16),
 

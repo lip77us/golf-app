@@ -364,7 +364,7 @@ class RoundCreateSerializer(serializers.Serializer):
         choices=['gross', 'net', 'strokes_off'], default='net'
     )
     net_percent       = serializers.IntegerField(default=100, min_value=0, max_value=200)
-    net_max_double_bogey = serializers.BooleanField(default=False)
+    net_max_double_bogey = serializers.BooleanField(default=True)
 
 
 class PlayerTeeSelectionSerializer(serializers.Serializer):

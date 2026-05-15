@@ -83,7 +83,7 @@ class Round(models.Model):
                             help_text="Percentage of handicap applied when mode=net (0–200).",
                         )
     net_max_double_bogey = models.BooleanField(
-                            default=False,
+                            default=True,
                             help_text=(
                                 "When true, every player's per-hole score in this "
                                 "round is capped at net par + 2 for game-scoring "

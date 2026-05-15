@@ -380,27 +380,42 @@ class RoundProvider extends ChangeNotifier {
     }
     try {
       final updated = await _client.updateRound(_round!.id, betUnit: betUnit);
-      // Preserve the foursomes the local Round is carrying — updateRound
-      // returns a fully-populated Round anyway, but we defensively copy
-      // over the updated bet_unit onto the existing instance's fields to
-      // avoid any fields drifting if the serializer shape changes later.
-      _round = Round(
-        id:          updated.id,
-        roundNumber: updated.roundNumber,
-        date:        updated.date,
-        course:      updated.course,
-        status:      updated.status,
-        activeGames: updated.activeGames,
-        betUnit:     updated.betUnit,
-        foursomes:   updated.foursomes.isNotEmpty
-            ? updated.foursomes
-            : _round!.foursomes,
-      );
+      _round = updated.foursomes.isNotEmpty ? updated : _round;
       _cacheRound(_round!.id, _round!);
       notifyListeners();
       return true;
     } on NetworkException {
       _error = 'No connection — cannot update bet unit while offline.';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = friendlyError(e);
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Persist the round-level net-double-bogey cap flag.  Fire-and-
+  /// listenable from any setup screen so the SwitchListTile change
+  /// reaches the server immediately and the local Round mirrors the
+  /// updated value for other screens that watch the provider.
+  Future<bool> updateRoundNetMaxDoubleBogey(bool value) async {
+    if (_round == null) {
+      _error = 'No round loaded — cannot update cap.';
+      notifyListeners();
+      return false;
+    }
+    try {
+      final updated = await _client.updateRound(
+        _round!.id,
+        netMaxDoubleBogey: value,
+      );
+      _round = updated.foursomes.isNotEmpty ? updated : _round;
+      _cacheRound(_round!.id, _round!);
+      notifyListeners();
+      return true;
+    } on NetworkException {
+      _error = 'No connection — cannot update cap while offline.';
       notifyListeners();
       return false;
     } catch (e) {

@@ -31,11 +31,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   // The catalog drives which games are shown and which can combine.
   final Set<String> _activeGames = {};
 
-  // USGA-style net double-bogey cap. When on, every per-hole score is
-  // capped at net par + 2 for game scoring. Net / Strokes-Off only;
-  // Gross-mode games are unaffected.
-  bool _netMaxDoubleBogey = false;
-
   @override
   void initState() {
     super.initState();
@@ -206,12 +201,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       final client = context.read<AuthProvider>().client;
       final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-      // Create standalone round
+      // Create standalone round.  The cap defaults to True on the
+      // server; each game's setup screen lets the user opt out alongside
+      // the handicap-mode picker, so there's no need to surface it here.
       final round = await client.createRound(
         courseId: _selectedCourse!.id,
         date: dateStr,
         activeGames: _activeGames.toList(),
-        netMaxDoubleBogey: _netMaxDoubleBogey,
       );
 
       // Setup foursome with players and their specific tees
@@ -293,8 +289,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       body: _buildBody(),
       floatingActionButton: _loading || _error != null ? null : FloatingActionButton.extended(
         onPressed: _creating ? null : _createRound,
-        icon: _creating ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.play_arrow),
-        label: Text(_creating ? 'Starting...' : 'Start Round'),
+        icon: _creating ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.tune),
+        label: Text(_creating ? 'Configuring...' : 'Configure Round'),
       ),
     );
   }
@@ -397,34 +393,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               );
             }),
           ],
-          const SizedBox(height: 16),
-
-          // Round-level rule: USGA-style max double-bogey cap. Applies to
-          // every game in this round whose handicap mode is Net or
-          // Strokes-Off.  Gross-mode games are unaffected.
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(
-                color: Theme.of(context).colorScheme.outline,
-              ),
-            ),
-            child: SwitchListTile(
-              title: const Text('Net Double-Bogey Cap'),
-              subtitle: Text(
-                _netMaxDoubleBogey
-                    ? 'Each per-hole score is capped at net par + 2 for game '
-                      'scoring (Net / Strokes-Off only). Gross scores are '
-                      'stored as entered.'
-                    : 'No cap — raw net scores drive every game.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
-              value: _netMaxDoubleBogey,
-              onChanged: (v) => setState(() => _netMaxDoubleBogey = v),
-            ),
-          ),
           const SizedBox(height: 24),
 
           Text('Select Players & Tees', style: Theme.of(context).textTheme.titleLarge),

@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import '../widgets/net_double_bogey_card.dart';
 import '../widgets/team_splitter_4.dart';
 
 // ---------------------------------------------------------------------------
@@ -308,6 +309,17 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                         onModeChanged: (m) => setState(() => _handicapMode = m),
                         onPercentChanged: (p) => setState(() => _netPercent = p),
                       ),
+                      const SizedBox(height: 20),
+
+                      // ── Net double-bogey cap (round-level) ──
+                      if (rp.round != null)
+                        NetDoubleBogeyCard(
+                          value: rp.round!.netMaxDoubleBogey,
+                          onChanged: (v) {
+                            context.read<RoundProvider>()
+                                .updateRoundNetMaxDoubleBogey(v);
+                          },
+                        ),
                       const SizedBox(height: 20),
 
                       // ── Bet unit (round-level, editable here) ──

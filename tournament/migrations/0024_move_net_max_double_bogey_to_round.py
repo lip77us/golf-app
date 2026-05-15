@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             model_name='round',
             name='net_max_double_bogey',
             field=models.BooleanField(
-                default=False,
+                default=True,
                 help_text=(
                     "When true, every player's per-hole score in this "
                     "round is capped at net par + 2 for game-scoring "

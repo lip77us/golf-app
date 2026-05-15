@@ -371,7 +371,7 @@ class ApiClient {
     int roundNumber = 1,
     String handicapMode = 'net',
     int netPercent = 100,
-    bool netMaxDoubleBogey = false,
+    bool netMaxDoubleBogey = true,
   }) async {
     final data = await _post('/rounds/', {
       'course_id'          : courseId,
@@ -388,13 +388,17 @@ class ApiClient {
     return Round.fromJson(data as Map<String, dynamic>);
   }
 
-  /// Partial update of a round.  Currently only `bet_unit` is wired
-  /// through, used by the Sixes setup screen so the user can adjust the
-  /// round-level bet unit without leaving the match setup flow.  Adding
-  /// more fields just means passing them in the map.
-  Future<Round> updateRound(int roundId, {double? betUnit}) async {
+  /// Partial update of a round.  Used by the game-setup screens (bet
+  /// unit, net-double-bogey cap).  Adding more fields just means passing
+  /// them in the map.
+  Future<Round> updateRound(
+    int roundId, {
+    double? betUnit,
+    bool?   netMaxDoubleBogey,
+  }) async {
     final body = <String, dynamic>{};
-    if (betUnit != null) body['bet_unit'] = betUnit;
+    if (betUnit != null)            body['bet_unit'] = betUnit;
+    if (netMaxDoubleBogey != null)  body['net_max_double_bogey'] = netMaxDoubleBogey;
     final data = await _patch('/rounds/$roundId/', body);
     return Round.fromJson(data as Map<String, dynamic>);
   }
