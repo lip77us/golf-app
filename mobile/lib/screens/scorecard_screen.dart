@@ -906,7 +906,6 @@ class _HoleScoreCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Stack(
-                      clipBehavior: Clip.none,
                       children: [
                         Center(
                           child: gross != null
@@ -920,7 +919,7 @@ class _HoleScoreCard extends StatelessWidget {
                         ),
                         if (strokes > 0)
                           Positioned(
-                            top: -3, right: -3,
+                            top: 1, right: 1,
                             child: _StrokeDots(count: strokes),
                           ),
                       ],
