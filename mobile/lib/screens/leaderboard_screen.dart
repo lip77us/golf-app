@@ -132,7 +132,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             ? TabBar(
                 controller: _tabController,
                 isScrollable: true,
-                tabs: _gameTabs.map((g) => Tab(text: _label(g))).toList(),
+                tabs: _gameTabs
+                    .map((g) => Tab(text: _label(g, lb?.tournamentName)))
+                    .toList(),
               )
             : null,
       ),
@@ -239,7 +241,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     );
   }
 
-  String _label(String g) {
+  String _label(String g, [String? tournamentName]) {
+    // Cup tab title tracks the tournament's actual name — fall back to
+    // "Bandon Cup" for the original Bandon-only deployment.
+    if (g == '__bandon_cup__') {
+      return tournamentName ?? 'Bandon Cup';
+    }
     const labels = {
       'skins':             'Skins',
       'stableford':        'Stableford',
@@ -256,8 +263,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       'scramble':          'Scramble',
       'low_net_round':     'Stroke Play',
       '__championship__':  'Low Net',
-      '__bandon_cup__':    'Bandon Cup',
-
     };
     return labels[g] ?? g;
   }
