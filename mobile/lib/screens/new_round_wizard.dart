@@ -70,9 +70,26 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   // ---- Cup Design (step 2 for cup tournaments) ----
   // Team NAMES are set later during Phase 2 (team roster screen).
-  // The wizard only captures the cup name and team count here.
+  // The wizard only captures the cup name, team count, and team colours
+  // here.  Default palette avoids the red/blue political read by going
+  // SF-Giants-style on the second team for 2-team setups.
   final _cupNameCtrl = TextEditingController(text: 'Ryder Cup');
   int   _cupTeamCount = 2;
+  /// Colour name per team index (0-based).  Length always matches
+  /// _cupTeamCount; trimmed / extended whenever the team count changes.
+  /// Default palette: Red, Blue, Green, Yellow.
+  List<String> _cupTeamColours = ['Red', 'Blue'];
+
+  void _resizeCupTeamColours(int newCount) {
+    const defaults = ['Red', 'Blue', 'Green', 'Yellow'];
+    if (newCount == _cupTeamColours.length) return;
+    final next = <String>[..._cupTeamColours];
+    while (next.length < newCount) {
+      next.add(defaults[next.length % defaults.length]);
+    }
+    if (next.length > newCount) next.removeRange(newCount, next.length);
+    _cupTeamColours = next;
+  }
 
   // ---- Cup Round Games (step 3 for cup tournaments) ----
   // Per-round game plan: round index (0 = round 1, 1 = round 2, …) →
@@ -400,11 +417,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       if (!mounted) return;
     }
 
-    // 4. Create TeamTournament with placeholder team names.
-    //    Real names and player assignments come from the Phase 2 roster screen.
+    // 4. Create TeamTournament with placeholder team names + chosen
+    //    colours.  Real names and player assignments come from the
+    //    Phase 2 roster screen; the colour persists from here.
+    _resizeCupTeamColours(_cupTeamCount);
     final placeholderTeams = List.generate(_cupTeamCount, (i) => <String, dynamic>{
       'team_number': i + 1,
       'name'       : 'Team ${i + 1}',
+      'colour'     : _cupTeamColours[i],
     });
     await client.postTeamTournamentSetup(
       tournamentId,
@@ -612,10 +632,20 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
     // --- Cup Design step (step 2, cup only) ---
     if (cup && _step == 2) {
+      _resizeCupTeamColours(_cupTeamCount);
       return _Step2CupDesign(
         cupNameCtrl       : _cupNameCtrl,
         teamCount         : _cupTeamCount,
-        onTeamCountChanged: (n) => setState(() => _cupTeamCount = n),
+        teamColours       : _cupTeamColours,
+        onTeamCountChanged: (n) => setState(() {
+          _cupTeamCount = n;
+          _resizeCupTeamColours(n);
+        }),
+        onTeamColourChanged: (idx, colour) => setState(() {
+          if (idx >= 0 && idx < _cupTeamColours.length) {
+            _cupTeamColours[idx] = colour;
+          }
+        }),
         lowNetEnabled     : _tournamentActiveGames.contains('low_net'),
         onToggleLowNet    : (on) => setState(() {
           on ? _tournamentActiveGames.add('low_net')
@@ -1619,14 +1649,18 @@ class _Step3GroupsAndTees extends StatelessWidget {
 class _Step2CupDesign extends StatefulWidget {
   final TextEditingController cupNameCtrl;
   final int                   teamCount;
+  final List<String>          teamColours;
   final void Function(int)    onTeamCountChanged;
+  final void Function(int teamIdx, String colour) onTeamColourChanged;
   final bool                  lowNetEnabled;
   final void Function(bool)   onToggleLowNet;
 
   const _Step2CupDesign({
     required this.cupNameCtrl,
     required this.teamCount,
+    required this.teamColours,
     required this.onTeamCountChanged,
+    required this.onTeamColourChanged,
     required this.lowNetEnabled,
     required this.onToggleLowNet,
   });
@@ -1685,6 +1719,33 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
         ),
         const SizedBox(height: 24),
 
+        // Team colours
+        Text('Team Colours',
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(
+          'Pick a colour for each team — used throughout the score-entry '
+          'and leaderboard screens.  Defaults to Red / Blue / Green / '
+          'Yellow; swap for Orange / Black / Purple to suit your event.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 10),
+        for (int i = 0; i < widget.teamCount; i++) ...[
+          _CupTeamColourRow(
+            teamNumber: i + 1,
+            current:    i < widget.teamColours.length
+                ? widget.teamColours[i] : 'Red',
+            onChanged:  (c) {
+              widget.onTeamColourChanged(i, c);
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+        const SizedBox(height: 16),
+
         // Secondary game
         Text('Secondary Game (optional)',
             style: theme.textTheme.titleMedium
@@ -1732,6 +1793,83 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
           ]),
         ),
       ]),
+    );
+  }
+}
+
+// Available team colours for cup tournaments — must match the colour
+// names the server-side TournamentTeam.colour accepts and the mobile
+// _nassauTeamColor / _cupTeamColor helpers map.
+const _kCupColourChoices = <(String, Color)>[
+  ('Red',    Color(0xFFB71C1C)),
+  ('Blue',   Color(0xFF0D47A1)),
+  ('Green',  Color(0xFF1B5E20)),
+  ('Orange', Color(0xFFE65100)),
+  ('Black',  Colors.black87),
+  ('Yellow', Color(0xFFF57F17)),
+  ('Purple', Color(0xFF4A148C)),
+];
+
+class _CupTeamColourRow extends StatelessWidget {
+  final int                  teamNumber;
+  final String               current;
+  final ValueChanged<String> onChanged;
+
+  const _CupTeamColourRow({
+    required this.teamNumber,
+    required this.current,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Team $teamNumber',
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _kCupColourChoices.map((entry) {
+              final (name, color) = entry;
+              final selected = name.toLowerCase() == current.toLowerCase();
+              return GestureDetector(
+                onTap: () => onChanged(name),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(selected ? 1.0 : 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: selected ? color : color.withOpacity(0.4),
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      color: selected ? Colors.white : color,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 }

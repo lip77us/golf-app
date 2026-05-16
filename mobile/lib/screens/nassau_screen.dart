@@ -62,6 +62,9 @@ Color _nassauTeamColor(String? raw) {
     case 'green':  return Colors.green.shade700;
     case 'gold':
     case 'yellow': return Colors.amber.shade700;
+    case 'orange': return Colors.deepOrange.shade700;
+    case 'purple': return Colors.purple.shade700;
+    case 'black':  return Colors.black87;
     case 'blue':
     default:       return Colors.blue.shade700;
   }

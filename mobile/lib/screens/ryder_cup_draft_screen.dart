@@ -566,8 +566,9 @@ class _TeamCard extends StatelessWidget {
       case 'blue':   return Colors.blue;
       case 'green':  return Colors.green;
       case 'yellow': return Colors.amber;
-      case 'orange': return Colors.orange;
+      case 'orange': return Colors.deepOrange;
       case 'purple': return Colors.purple;
+      case 'black':  return Colors.black87;
       default:       return Colors.grey;
     }
   }
