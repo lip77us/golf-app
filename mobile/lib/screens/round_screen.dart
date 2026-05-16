@@ -234,7 +234,16 @@ class _RoundScreenState extends State<RoundScreen> {
                     } else {
                       routeArgs = fs.id;
                     }
-                    Navigator.of(context).pushNamed(route, arguments: routeArgs);
+                    Navigator.of(context)
+                        .pushNamed(route, arguments: routeArgs)
+                        // Refresh the round on return so the foursome's
+                        // hasAnyScore (and any other server-computed
+                        // flag) reflects whatever happened during
+                        // scoring — keeps "Edit Tee Boxes" from
+                        // lingering on stale state.
+                        .then((_) {
+                      if (mounted) rp.loadRound(widget.roundId);
+                    });
                   },
                 );
               }),
