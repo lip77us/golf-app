@@ -98,10 +98,20 @@ class _NassauScreenState extends State<NassauScreen> {
   // automatically without needing user interaction.
   Timer? _phantomPollTimer;
 
+  // SyncService listener — fires every time the queue state changes.  We
+  // watch for the pending-count drop to zero (the moment our just-saved
+  // hole reaches the server) and reload the Nassau summary so the
+  // F9/B9/ALL chips and presses strip reflect the latest match state
+  // without the user having to navigate away and back.
+  SyncService? _syncRef;
+  VoidCallback? _syncWatcher;
+  bool          _wasPending = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final rp = context.read<RoundProvider>();
       if (rp.scorecard == null || rp.activeFoursomeId != widget.foursomeId) {
         rp.loadScorecard(widget.foursomeId);
@@ -109,12 +119,28 @@ class _NassauScreenState extends State<NassauScreen> {
         rp.refreshPendingOverlay();
       }
       rp.loadNassau(widget.foursomeId);
+
+      // Register a direct listener so we catch the pending → idle
+      // transition even when it completes within a single frame.
+      final sync   = context.read<SyncService>();
+      _syncRef     = sync;
+      _wasPending  = sync.hasPending;
+      _syncWatcher = () {
+        if (!mounted) return;
+        final nowPending = sync.hasPending;
+        if (_wasPending && !nowPending) {
+          context.read<RoundProvider>().loadNassau(widget.foursomeId);
+        }
+        _wasPending = nowPending;
+      };
+      sync.addListener(_syncWatcher!);
     });
   }
 
   @override
   void dispose() {
     _phantomPollTimer?.cancel();
+    if (_syncWatcher != null) _syncRef?.removeListener(_syncWatcher!);
     super.dispose();
   }
 
