@@ -2170,12 +2170,6 @@ class _PlayerRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (member.tee != null) ...[
-                  const SizedBox(width: 6),
-                  Text(member.tee!.teeName,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ],
                 if (matchHcapLabel != null) ...[
                   const SizedBox(width: 6),
                   Container(
@@ -2193,6 +2187,16 @@ class _PlayerRow extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
+                // Tee name lives next to the handicap index when there is
+                // one (net / strokes-off); falls back to right next to the
+                // player name in gross-mode games where the handicap chip
+                // is hidden.
+                if (member.tee != null) ...[
+                  const SizedBox(width: 6),
+                  Text(member.tee!.teeName,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
                 ],
               ]),
               // Skins junk controls below name
