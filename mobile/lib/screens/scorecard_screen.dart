@@ -545,6 +545,7 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
               pendingScores: rp.localPendingByHole,
               currentHole:   _selectedHole,
               totals:        sc.totals,
+              strokesForHole: _strokesForHole,
             ),
           ),
       ]),
@@ -814,36 +815,26 @@ class _HoleScoreCard extends StatelessWidget {
                       border: boxBorder,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Stack(children: [
-                      Center(
-                        child: gross != null
-                            ? Text(
-                                '$gross',
-                                style: theme.textTheme.titleSmall
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.bold),
-                              )
-                            : null,
-                      ),
-                      if (strokes > 0)
-                        Positioned(
-                          top: 2, right: 2,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: List.generate(
-                              strokes.clamp(0, 2),
-                              (_) => Container(
-                                width: 4, height: 4,
-                                margin: const EdgeInsets.only(left: 1),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                          ),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Center(
+                          child: gross != null
+                              ? Text(
+                                  '$gross',
+                                  style: theme.textTheme.titleSmall
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.bold),
+                                )
+                              : null,
                         ),
-                    ]),
+                        if (strokes > 0)
+                          Positioned(
+                            top: -3, right: -3,
+                            child: _StrokeDots(count: strokes),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ]),
@@ -1185,6 +1176,7 @@ class _LandscapeGrid extends StatefulWidget {
   final Map<int, Map<int, int>> pendingScores;
   final int currentHole;
   final List<PlayerTotals> totals;
+  final int Function(Membership, ScorecardHole?) strokesForHole;
 
   const _LandscapeGrid({
     required this.scorecard,
@@ -1192,6 +1184,7 @@ class _LandscapeGrid extends StatefulWidget {
     required this.pendingScores,
     required this.currentHole,
     required this.totals,
+    required this.strokesForHole,
   });
 
   @override
@@ -1391,13 +1384,15 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
 
   Widget _scoreCell(int hole, Membership m, double rowH) {
     final theme       = Theme.of(context);
-    final saved       = widget.scorecard.holeData(hole)?.scoreFor(m.player.id);
+    final holeData    = widget.scorecard.holeData(hole);
+    final saved       = holeData?.scoreFor(m.player.id);
     final pending     = widget.pendingScores[hole]?[m.player.id];
     final gross       = pending ?? saved?.grossScore;
     final net         = pending == null ? saved?.netScore : null;
-    final par         = widget.scorecard.holeData(hole)?.par ?? 4;
+    final par         = holeData?.par ?? 4;
     final isCurrent   = hole == widget.currentHole;
     final isLocalOnly = pending != null;
+    final strokes     = widget.strokesForHole(m, holeData);
 
     Color? bg;
     if (isCurrent) bg = theme.colorScheme.primaryContainer.withOpacity(0.3);
@@ -1410,14 +1405,30 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
 
     return TableCell(
       child: Container(
-        height: rowH, color: bg, alignment: Alignment.center,
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(gross != null ? '$gross' : '—',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          if (isLocalOnly)
-            Icon(Icons.cloud_upload_outlined,
-                size: 8, color: theme.colorScheme.tertiary),
-        ]),
+        height: rowH, color: bg,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(gross != null ? '$gross' : '—',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14)),
+                  if (isLocalOnly)
+                    Icon(Icons.cloud_upload_outlined,
+                        size: 8, color: theme.colorScheme.tertiary),
+                ],
+              ),
+            ),
+            if (strokes > 0)
+              Positioned(
+                top: 1, right: 1,
+                child: _StrokeDots(count: strokes),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1449,6 +1460,39 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stroke dots — small corner badge that shows how many handicap strokes a
+// player receives on a hole.  Big enough to actually see; clamped at 2 so
+// a 36-handicap player doesn't fill the cell.
+// ---------------------------------------------------------------------------
+
+class _StrokeDots extends StatelessWidget {
+  final int count;
+  const _StrokeDots({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final visible = count.clamp(1, 2);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(visible, (i) {
+        return Container(
+          width: 8,
+          height: 8,
+          margin: EdgeInsets.only(left: i == 0 ? 0 : 2),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary,
+            shape: BoxShape.circle,
+            border: Border.all(color: theme.colorScheme.onPrimary, width: 1),
+          ),
+        );
+      }),
     );
   }
 }
