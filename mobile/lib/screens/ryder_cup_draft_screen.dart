@@ -589,21 +589,38 @@ class _PlayerPickerDialog extends StatefulWidget {
 class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
   String _search = '';
 
+  List<PlayerProfile> get _filtered => widget.players
+      .where((p) => p.name.toLowerCase().contains(_search.toLowerCase()))
+      .toList();
+
+  void _commitFirst() {
+    final f = _filtered;
+    if (f.isNotEmpty) Navigator.pop(context, f.first);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final filtered = widget.players
-        .where((p) => p.name.toLowerCase().contains(_search.toLowerCase()))
-        .toList();
+    final filtered = _filtered;
+    // Shrink the result area when the on-screen keyboard is up so a
+    // single match isn't tucked behind the keyboard / prediction bar
+    // (the original 400px fixed height made the lone ListTile
+    // unreachable for tap on iOS — Tuesday-tournament bug).
+    final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
+    final maxH = MediaQuery.sizeOf(context).height;
+    final dialogH = (maxH - viewInsets - 200).clamp(220.0, 400.0);
 
     return AlertDialog(
       title: const Text('Add player'),
       contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       content: SizedBox(
         width: 300,
-        height: 400,
+        height: dialogH,
         child: Column(children: [
           TextField(
             autofocus: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            textInputAction: TextInputAction.done,
             decoration: const InputDecoration(
               hintText       : 'Search…',
               prefixIcon     : Icon(Icons.search),
@@ -611,11 +628,13 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
               isDense        : true,
               contentPadding : EdgeInsets.symmetric(vertical: 8),
             ),
-            onChanged: (v) => setState(() => _search = v),
+            onChanged:   (v) => setState(() => _search = v),
+            onSubmitted: (_) => _commitFirst(),
           ),
           const SizedBox(height: 8),
           Expanded(
             child: ListView.builder(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               itemCount: filtered.length,
               itemBuilder: (_, i) {
                 final p = filtered[i];
@@ -635,6 +654,11 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
+        if (filtered.length == 1)
+          FilledButton(
+            onPressed: _commitFirst,
+            child: Text('Add ${filtered.first.name}'),
+          ),
       ],
     );
   }
