@@ -45,6 +45,23 @@ int _effectiveHandicap({
 
 String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
 
+/// Short human label for the handicap mode driving the scorecard's dot
+/// allocations.  Shown in the AppBar so players can tell at a glance
+/// whether the dots reflect 100% net, 90% net, strokes-off, etc.
+String _modeLabel(String mode, int netPercent) {
+  switch (mode) {
+    case 'gross':
+      return 'Gross';
+    case 'strokes_off':
+      return netPercent == 100
+          ? 'Strokes Off'
+          : 'Strokes Off $netPercent%';
+    case 'net':
+    default:
+      return netPercent == 100 ? 'Net' : 'Net $netPercent%';
+  }
+}
+
 class _RunningTotal {
   final int grossVsPar;
   final int netVsPar;
@@ -392,9 +409,22 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       });
     }
 
+    final (modeName, modePct) = _handicapParams(rp);
+    final modeLabel           = _modeLabel(modeName, modePct);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Scorecard — Group ${sc?.groupNumber ?? ""}'),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Scorecard — Group ${sc?.groupNumber ?? ""}'),
+            Text(
+              modeLabel,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
         centerTitle: true,
         actions: [
           if (sync.hasPending)
@@ -587,11 +617,14 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
 
   Widget _buildLandscapeScaffold(
       BuildContext context, RoundProvider rp, SyncService sync) {
+    final (modeName, modePct) = _handicapParams(rp);
+    final modeLabel           = _modeLabel(modeName, modePct);
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 40,
         title: Text(
-          'Scorecard — Group ${rp.scorecard?.groupNumber ?? ""}',
+          'Scorecard — Group ${rp.scorecard?.groupNumber ?? ""}  ·  $modeLabel',
           style: const TextStyle(fontSize: 14),
         ),
         actions: [
