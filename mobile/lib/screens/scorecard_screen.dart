@@ -129,6 +129,14 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
           rp.lowNetConfig == null) {
         rp.loadLowNetConfig(rp.round!.id);
       }
+      // Cup Singles needs the bracket data so dots can be computed
+      // per-pair (player's strokes vs their actual opponent, not vs
+      // foursome-low).  Same direct-entry safeguard as lowNetConfig.
+      if ((games.contains('singles_nassau') ||
+              games.contains('singles_18')) &&
+          rp.matchPlayData == null) {
+        rp.loadMatchPlay(widget.foursomeId);
+      }
     });
   }
 
@@ -233,7 +241,19 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
   /// Effective handicap for a player under the active mode.  Used both
   /// to label the scorecard's per-player Hcp chip (matching the
   /// score-entry view) and as the input to per-hole stroke allocation.
+  ///
+  /// Cup Singles (singles_nassau / singles_18) gets its own branch:
+  /// strokes are computed per-pair against the player's bracket
+  /// opponent, not against the foursome low.  Mirrors score_entry's
+  /// _editScore cup-singles logic so the two views agree.
   int _effectiveHcapFor(Membership m, RoundProvider rp) {
+    final games        = rp.round?.activeGames ?? const [];
+    final isCupSingles = games.contains('singles_nassau') ||
+                         games.contains('singles_18');
+    if (isCupSingles) {
+      return _cupSinglesEffectiveHcap(m, rp);
+    }
+
     final (mode, pct) = _handicapParams(rp);
     int? lowestPlaying;
     if (mode == 'strokes_off') {
@@ -253,6 +273,48 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       playingHandicap:       m.playingHandicap,
       lowestPlayingHandicap: lowestPlaying,
     );
+  }
+
+  /// Cup Singles effective handicap: max(0, playerHcp − opponentHcp).
+  /// Falls back to foursome-low strokes-off when the bracket data
+  /// hasn't loaded yet (mirrors score_entry's fallback so the dots
+  /// don't disappear during the loading window).
+  int _cupSinglesEffectiveHcap(Membership m, RoundProvider rp) {
+    final mpData = rp.matchPlayData;
+    if (mpData != null && mpData['bracket_type'] == 'cup_singles') {
+      final matches = (mpData['matches'] as List?) ?? const [];
+      for (final raw in matches) {
+        final match = Map<String, dynamic>.from(raw as Map);
+        final p1Id  = match['player1_id'] as int?;
+        final p2Id  = match['player2_id'] as int?;
+        int? opponentId;
+        if (p1Id == m.player.id)      opponentId = p2Id;
+        else if (p2Id == m.player.id) opponentId = p1Id;
+        else continue;
+        final sc = rp.scorecard;
+        if (sc == null) return 0;
+        final opp = _realPlayers(sc, rp.round)
+            .where((x) => x.player.id == opponentId)
+            .firstOrNull;
+        if (opp != null) {
+          final so = m.playingHandicap - opp.playingHandicap;
+          return so > 0 ? so : 0;
+        }
+        break;
+      }
+    }
+    // Bracket data not yet loaded — fall back to foursome-low SO so the
+    // dots still show something sensible.  Score entry uses the same
+    // fallback (score_entry_screen.dart:1324).
+    final sc = rp.scorecard;
+    if (sc == null) return 0;
+    final players = _realPlayers(sc, rp.round);
+    if (players.isEmpty) return 0;
+    final low = players
+        .map((p) => p.playingHandicap)
+        .reduce((a, b) => a < b ? a : b);
+    final so = m.playingHandicap - low;
+    return so > 0 ? so : 0;
   }
 
   /// Returns handicap strokes on a specific hole for a player.  Always
