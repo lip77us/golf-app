@@ -23,5 +23,5 @@ class Config {
   /// The version string of this build.  Must be kept in sync with pubspec.yaml.
   /// The server's GET /api/version/ endpoint returns a min_client_version;
   /// if this value is older the app will show a blocking update dialog.
-  static const String appVersion = '1.1.1';
+  static const String appVersion = '1.3.0';
 }
