@@ -210,7 +210,7 @@ GOLF_API_BASE_URL = os.environ.get('GOLF_API_BASE_URL', 'https://api.golfcoursea
 # older clients — this will force users to update the app before they can
 # continue.  Leave CLIENT_MIN_VERSION at the last compatible release to
 # allow older clients to keep working.
-SERVER_VERSION    = '1.1.0'
+SERVER_VERSION    = '1.2.0'
 CLIENT_MIN_VERSION = '1.1.0'
 
 # ---------------------------------------------------------------------------
