@@ -503,8 +503,27 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
                 par:             par,
                 quotaMap:        quotaMap,
                 summary:         summary,
-                onScoreSelected: (m, score) =>
-                    _selectScore(m, score, _selectedHole),
+                onScoreSelected: (m, score) {
+                  final hole = _selectedHole;
+                  final wasAllScored = _allScored(players, scores);
+                  _selectScore(m, score, hole);
+                  // Auto-save+advance once the final player on this hole
+                  // gets a positive score.  Skip on clear (-1) and when
+                  // the hole was already complete (user is editing).
+                  if (score > 0 && !wasAllScored) {
+                    final nowAllScored = _allScored(
+                        players, _effectiveScores(sc, hole));
+                    if (nowAllScored) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        if (_selectedHole != hole) return;
+                        final rp = context.read<RoundProvider>();
+                        if (rp.submitting) return;
+                        _saveAndAdvance(ctx, players, par);
+                      });
+                    }
+                  }
+                },
                 onReTapPlayer:   (m) => _tapScoredPlayer(m.player.id),
               ),
               const SizedBox(height: 12),

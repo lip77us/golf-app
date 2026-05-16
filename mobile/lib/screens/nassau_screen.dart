@@ -708,8 +708,29 @@ class _NassauScreenState extends State<NassauScreen> {
                 par:             par,
                 nassau:          nas,
                 phantomInfo:     nas?.phantom,
-                onScoreSelected: (m, score) =>
-                    _selectScore(m, score, _selectedHole),
+                onScoreSelected: (m, score) {
+                  final hole = _selectedHole;
+                  final wasAllScored = _allScored(
+                      players, _effectiveScores(sc, hole));
+                  _selectScore(m, score, hole);
+                  // Auto-save+advance the moment the last player on the
+                  // hole gets a positive score.  Skip when clearing
+                  // (score == -1) and when the hole was already complete
+                  // (user is editing).
+                  if (score > 0 && !wasAllScored) {
+                    final nowAllScored = _allScored(
+                        players, _effectiveScores(sc, hole));
+                    if (nowAllScored) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        if (_selectedHole != hole) return;
+                        final rp = context.read<RoundProvider>();
+                        if (rp.submitting) return;
+                        _saveAndAdvance(ctx, players, par);
+                      });
+                    }
+                  }
+                },
                 onEditTap: (m) =>
                     _editScore(ctx, m, par, _selectedHole, players, nas),
               ),
