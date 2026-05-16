@@ -309,13 +309,24 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   void _loadGameSummaries(RoundProvider rp) {
     final games      = _activeGames(rp.round);
     final configured = _configuredGames(rp.round);
-    // Per-foursome summary loads must gate on configured_games, not the
-    // round-level active_games union — otherwise foursomes that haven't run
-    // setup yet (a normal pre-setup state) hit the server's 404 path.
-    if (configured.contains('nassau'))     rp.loadNassau(widget.foursomeId);
-    if (configured.contains('skins'))      rp.loadSkins(widget.foursomeId);
-    if (configured.contains('sixes'))      rp.loadSixes(widget.foursomeId);
-    if (configured.contains('points_531')) rp.loadPoints531(widget.foursomeId);
+    // Per-foursome summary loads gate on configured_games to avoid 404
+    // spam on pre-setup foursomes.  Once we've loaded a summary at least
+    // once (rp.<game>Summary != null) keep refreshing it even if the
+    // local Round's configured_games is stale — sync-drain refreshes
+    // after auto-advance hit this path when the user has set up the
+    // game but the cached Round hasn't been re-fetched yet.
+    if (configured.contains('nassau') || rp.nassauSummary != null) {
+      rp.loadNassau(widget.foursomeId);
+    }
+    if (configured.contains('skins') || rp.skinsSummary != null) {
+      rp.loadSkins(widget.foursomeId);
+    }
+    if (configured.contains('sixes') || rp.sixesSummary != null) {
+      rp.loadSixes(widget.foursomeId);
+    }
+    if (configured.contains('points_531') || rp.points531Summary != null) {
+      rp.loadPoints531(widget.foursomeId);
+    }
     // Stroke Play stores handicap mode in its own config (not the round object).
     // Both casual ('low_net_round') and championship ('low_net') use the same endpoint.
     if ((games.contains('low_net_round') || games.contains('low_net')) &&
@@ -4048,15 +4059,22 @@ class _MatchStatusBar extends StatelessWidget {
     final nineLen  = isNine ? 9 : 18;
     final holesLeft = nineLen - bet.holesPlayed;
     final t1Leads  = bet.margin > 0;
+    // Team colours used both for the chip fill and the subtitle text,
+    // so a glance tells you who's ahead in F9/B9/ALL.
+    final t1Color = Colors.blue.shade700;
+    final t2Color = Colors.red.shade700;
     Color  bg;
     String subtitle;
+    Color? subtitleColor;
 
     if (result != null) {
       if (result == 'halved') {
         bg       = Colors.grey.shade200;
         subtitle = 'AS';
       } else {
-        bg = result == 'team1' ? Colors.blue.shade100 : Colors.red.shade100;
+        final winsT1 = result == 'team1';
+        bg            = winsT1 ? Colors.blue.shade100 : Colors.red.shade100;
+        subtitleColor = winsT1 ? t1Color : t2Color;
         final dm = bet.decidedMargin;
         final dr = bet.decidedRemaining;
         if (dm != null && dr != null && dr > 0) {
@@ -4072,11 +4090,13 @@ class _MatchStatusBar extends StatelessWidget {
       bg       = theme.colorScheme.surfaceContainer;
       subtitle = 'AS';
     } else if (holesLeft >= 0 && bet.margin.abs() > holesLeft) {
-      bg       = t1Leads ? Colors.blue.shade100 : Colors.red.shade100;
-      subtitle = '${bet.margin.abs()}&$holesLeft';
+      bg            = t1Leads ? Colors.blue.shade100 : Colors.red.shade100;
+      subtitleColor = t1Leads ? t1Color : t2Color;
+      subtitle      = '${bet.margin.abs()}&$holesLeft';
     } else {
-      bg       = t1Leads ? Colors.blue.shade50 : Colors.red.shade50;
-      subtitle = '${bet.margin.abs()}UP';
+      bg            = t1Leads ? Colors.blue.shade50 : Colors.red.shade50;
+      subtitleColor = t1Leads ? t1Color : t2Color;
+      subtitle      = '${bet.margin.abs()}UP';
     }
 
     return Container(
@@ -4091,8 +4111,10 @@ class _MatchStatusBar extends StatelessWidget {
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
         Text(subtitle,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(fontWeight: FontWeight.bold)),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: subtitleColor,
+            )),
       ]),
     );
   }
@@ -4105,16 +4127,21 @@ class _MatchStatusBar extends StatelessWidget {
   ) {
     final theme  = Theme.of(context);
     final result = bet.result;
+    final t1Color = Colors.blue.shade700;
+    final t2Color = Colors.red.shade700;
     Color  bg;
     String subtitle;
+    Color? subtitleColor;
 
     if (result != null) {
       if (result == 'halved') {
         bg       = Colors.grey.shade200;
         subtitle = 'AS';
       } else {
-        bg       = result == 'team1' ? Colors.blue.shade100 : Colors.red.shade100;
-        subtitle = 'wins';
+        final winsT1 = result == 'team1';
+        bg            = winsT1 ? Colors.blue.shade100 : Colors.red.shade100;
+        subtitleColor = winsT1 ? t1Color : t2Color;
+        subtitle      = 'wins';
       }
     } else if (bet.holesPlayed == 0) {
       bg       = theme.colorScheme.surfaceContainer;
@@ -4123,8 +4150,10 @@ class _MatchStatusBar extends StatelessWidget {
       bg       = theme.colorScheme.surfaceContainer;
       subtitle = 'AS';
     } else {
-      bg       = bet.margin > 0 ? Colors.blue.shade50 : Colors.red.shade50;
-      subtitle = bet.margin > 0 ? '+${bet.margin}' : '${bet.margin}';
+      final t1Leads = bet.margin > 0;
+      bg            = t1Leads ? Colors.blue.shade50 : Colors.red.shade50;
+      subtitleColor = t1Leads ? t1Color : t2Color;
+      subtitle      = t1Leads ? '+${bet.margin}' : '${bet.margin}';
     }
 
     return Container(
@@ -4139,8 +4168,10 @@ class _MatchStatusBar extends StatelessWidget {
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
         Text(subtitle,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(fontWeight: FontWeight.bold)),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: subtitleColor,
+            )),
       ]),
     );
   }
