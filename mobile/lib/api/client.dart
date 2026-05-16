@@ -766,6 +766,21 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  /// Reassign each player's tee for a foursome.  Server-side this also
+  /// recomputes course_handicap + playing_handicap from the new tee.
+  /// Returns the updated scorecard payload.  Throws ApiException(400)
+  /// when any hole has already been scored — tees can only change
+  /// before the first score is entered.
+  Future<Map<String, dynamic>> patchFoursomeTees(
+    int foursomeId, {
+    required List<Map<String, int>> tees,
+  }) async {
+    final data = await _patch('/foursomes/$foursomeId/tees/', {
+      'tees': tees,
+    });
+    return data as Map<String, dynamic>;
+  }
+
   // ---- Low Net setup (round-level) ----
 
   Future<Map<String, dynamic>> getLowNetConfig(int roundId) async {

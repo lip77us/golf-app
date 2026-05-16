@@ -702,8 +702,14 @@ class _FoursomeCard extends StatelessWidget {
                 child: Row(children: [
                   const Icon(Icons.person_outline, size: 16),
                   const SizedBox(width: 6),
-                  Text(m.player.name),
-                  const Spacer(),
+                  Expanded(child: Text(m.player.name,
+                      overflow: TextOverflow.ellipsis)),
+                  if (m.tee != null) ...[
+                    Text(m.tee!.teeName,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                    const SizedBox(width: 8),
+                  ],
                   Text('Hcp ${m.playingHandicap}',
                       style: theme.textTheme.bodySmall),
                 ]),
@@ -735,6 +741,24 @@ class _FoursomeCard extends StatelessWidget {
                 ),
               ),
             ),
+            // Confirm Tee Boxes — only meaningful before any hole is
+            // scored.  Server-side the endpoint refuses tee changes
+            // once scoring starts; we hide the button at the same
+            // threshold so the user doesn't tap into a dead-end.
+            if (canEdit && !isComplete && !foursome.hasAnyScore) ...[
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).pushNamed(
+                    '/confirm-tees',
+                    arguments: foursome.id,
+                  ),
+                  icon: const Icon(Icons.golf_course_outlined, size: 18),
+                  label: const Text('Confirm Tee Boxes'),
+                ),
+              ),
+            ],
           ],
         ]),
       ),

@@ -136,6 +136,17 @@ class FoursomeSerializer(serializers.ModelSerializer):
     pink_ball_order  = serializers.JSONField(read_only=True)
     active_games     = serializers.SerializerMethodField()
     configured_games = serializers.SerializerMethodField()
+    has_any_score    = serializers.SerializerMethodField()
+
+    def get_has_any_score(self, obj):
+        """True iff at least one HoleScore with a gross_score exists for
+        this foursome.  Used by the mobile client to gate the
+        'Confirm Tee Boxes' button — once scoring begins the tees are
+        locked in (server-side validation refuses the change too)."""
+        from scoring.models import HoleScore
+        return HoleScore.objects.filter(
+            foursome=obj, gross_score__isnull=False
+        ).exists()
 
     # Map RyderCupFoursomeConfig.game_type → active_games key.
     # GameType enum values (strings) as stored in the DB.
@@ -232,7 +243,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'group_number', 'has_phantom',
             'pink_ball_order', 'active_games', 'configured_games',
-            'tee_time', 'memberships',
+            'tee_time', 'memberships', 'has_any_score',
         ]
         read_only_fields = ['id']
 

@@ -1383,6 +1383,86 @@ class FoursomeActiveGamesView(APIView):
         })
 
 
+class FoursomeTeesView(APIView):
+    """
+    PATCH /api/foursomes/{id}/tees/
+    Body: { "tees": [{"player_id": int, "tee_id": int}, ...] }
+
+    Reassigns each player's tee for this foursome and recomputes their
+    course_handicap + playing_handicap from the new tee's slope and
+    rating.  The original round-level handicap_allowance ratio is
+    preserved (we infer it from the existing playing/course ratio).
+
+    Refuses the request when any HoleScore with a gross_score exists
+    for the foursome — changing a tee changes the stroke-index
+    allocation, so applying new tees to already-scored holes would
+    silently corrupt every saved handicap_strokes value.
+    """
+    @transaction.atomic
+    def patch(self, request, pk):
+        foursome = get_object_or_404(
+            Foursome.objects.prefetch_related('memberships__player'),
+            pk=pk,
+        )
+
+        scored = HoleScore.objects.filter(
+            foursome=foursome, gross_score__isnull=False,
+        ).exists()
+        if scored:
+            return Response(
+                {'detail':
+                 'Cannot change tees after scores have been entered for '
+                 'this foursome.  Reopen the round and clear scores first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tees_data = request.data.get('tees', [])
+        if not isinstance(tees_data, list) or not tees_data:
+            return Response(
+                {'detail': 'tees must be a non-empty list of '
+                           '{player_id, tee_id} entries.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        memberships = {
+            m.player_id: m for m in foursome.memberships.select_related('tee').all()
+        }
+        updated = []
+        for item in tees_data:
+            if not isinstance(item, dict):
+                continue
+            pid = item.get('player_id')
+            tid = item.get('tee_id')
+            if pid is None or tid is None:
+                continue
+            m = memberships.get(pid)
+            if m is None:
+                continue
+            new_tee = get_object_or_404(Tee, pk=tid)
+
+            # Infer original handicap_allowance ratio from the existing
+            # playing/course handicaps so a non-100% allowance survives.
+            if m.course_handicap and m.course_handicap > 0:
+                allowance = m.playing_handicap / m.course_handicap
+            else:
+                allowance = 1.0
+
+            new_course_hcp  = m.player.course_handicap(new_tee)
+            new_playing_hcp = round(new_course_hcp * allowance)
+
+            m.tee              = new_tee
+            m.course_handicap  = new_course_hcp
+            m.playing_handicap = new_playing_hcp
+            m.save(update_fields=['tee', 'course_handicap', 'playing_handicap'])
+            updated.append(m.player_id)
+
+        return Response({
+            'foursome_id'      : foursome.id,
+            'updated_player_ids': updated,
+            'scorecard'        : _build_scorecard(foursome),
+        })
+
+
 # ---------------------------------------------------------------------------
 # Scorecard
 # ---------------------------------------------------------------------------

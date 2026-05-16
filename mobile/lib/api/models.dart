@@ -404,6 +404,11 @@ class Foursome {
   final List<String> configuredGames;
   /// Scheduled tee time, e.g. "08:00" or null if not set.
   final String? teeTime;
+  /// True iff at least one hole has been scored for this foursome.
+  /// Used to hide the "Confirm Tee Boxes" entry point on the Round
+  /// screen once scoring has begun — server refuses the tee change
+  /// in that case anyway.
+  final bool hasAnyScore;
 
   const Foursome({
     required this.id,
@@ -414,6 +419,7 @@ class Foursome {
     this.activeGames     = const [],
     this.configuredGames = const [],
     this.teeTime,
+    this.hasAnyScore     = false,
   });
 
   factory Foursome.fromJson(Map<String, dynamic> j) => Foursome(
@@ -424,6 +430,7 @@ class Foursome {
         activeGames:     List<String>.from(j['active_games'] as List? ?? []),
         configuredGames: List<String>.from(j['configured_games'] as List? ?? []),
         teeTime:         j['tee_time'] as String?,
+        hasAnyScore:     j['has_any_score'] as bool? ?? false,
         memberships:     (j['memberships'] as List? ?? [])
             .map((m) => Membership.fromJson(m as Map<String, dynamic>))
             .toList(),

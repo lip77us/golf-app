@@ -38,6 +38,7 @@ import 'screens/score_entry_screen.dart';
 import 'screens/three_person_match_setup_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/quota_nassau_screen.dart';
+import 'screens/confirm_tees_screen.dart';
 import 'screens/settings_screen.dart';
 
 /// Global navigator key — lets AuthProvider redirect to /login on 401
@@ -374,6 +375,10 @@ class _GolfAppState extends State<GolfApp> {
         final foursomeId = settings.arguments as int;
         return MaterialPageRoute(
             builder: (_) => ScoreEntryScreen(foursomeId: foursomeId));
+      case '/confirm-tees':
+        final foursomeId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => ConfirmTeesScreen(foursomeId: foursomeId));
       case '/quota-nassau':
         final foursomeId = settings.arguments as int;
         return MaterialPageRoute(

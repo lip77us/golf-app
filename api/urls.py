@@ -40,6 +40,7 @@ urlpatterns = [
     # ---- Foursomes ----
     path('foursomes/<int:pk>/',              views.FoursomeDetailView.as_view(),      name='api-foursome-detail'),
     path('foursomes/<int:pk>/active-games/', views.FoursomeActiveGamesView.as_view(), name='api-foursome-active-games'),
+    path('foursomes/<int:pk>/tees/',         views.FoursomeTeesView.as_view(),        name='api-foursome-tees'),
     path('foursomes/<int:pk>/phantom/init/', views.PhantomInitView.as_view(),         name='phantom-init'),
     path('foursomes/<int:pk>/scorecard/',    views.ScorecardView.as_view(),           name='api-scorecard'),
     path('foursomes/<int:pk>/scores/',       views.ScoreSubmitView.as_view(),         name='api-score-submit'),
