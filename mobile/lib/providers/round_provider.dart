@@ -230,9 +230,17 @@ class RoundProvider extends ChangeNotifier {
   Future<void> loadScorecard(int foursomeId) async {
     // If we're switching to a different foursome, clear stale scorecard data
     // immediately so any in-flight build() calls don't fire _jumpToFirstUnplayed
-    // with the wrong foursome's holes.
+    // with the wrong foursome's holes.  Also drop the per-game summaries
+    // from the previous foursome — they're foursome-scoped, and the
+    // score-entry sync-drain refresher uses "summary != null" as a
+    // "keep this summary fresh" signal, which would otherwise trigger
+    // 404s when the new foursome isn't configured for the same games.
     if (_activeFoursomeId != foursomeId) {
-      _scorecard = null;
+      _scorecard        = null;
+      _nassauSummary    = null;
+      _skinsSummary     = null;
+      _sixesSummary     = null;
+      _points531Summary = null;
     }
     _activeFoursomeId = foursomeId;
     _loadingScorecard = true;
