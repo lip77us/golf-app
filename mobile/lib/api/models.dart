@@ -1521,6 +1521,11 @@ class Leaderboard {
   final Map<String, LeaderboardGame> games;
   final int? tournamentId;
   final String? tournamentName;
+  /// The cup-competition display name (TeamTournament.cup_name) — e.g.
+  /// "ETC Cup" or "Bandon Cup".  Distinct from [tournamentName], which
+  /// is the underlying Tournament's name.  Null when the round isn't
+  /// part of a cup competition.
+  final String? cupName;
   final List<String> tournamentActiveGames;
 
   const Leaderboard({
@@ -1533,6 +1538,7 @@ class Leaderboard {
     required this.games,
     this.tournamentId,
     this.tournamentName,
+    this.cupName,
     this.tournamentActiveGames = const [],
   });
 
@@ -1556,6 +1562,7 @@ class Leaderboard {
       games: games,
       tournamentId: j['tournament_id'] as int?,
       tournamentName: j['tournament_name'] as String?,
+      cupName: j['cup_name'] as String?,
       tournamentActiveGames: List<String>.from(
           j['tournament_active_games'] as List? ?? []),
     );

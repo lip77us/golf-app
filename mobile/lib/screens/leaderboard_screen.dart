@@ -133,7 +133,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 controller: _tabController,
                 isScrollable: true,
                 tabs: _gameTabs
-                    .map((g) => Tab(text: _label(g, lb?.tournamentName)))
+                    .map((g) => Tab(text: _label(g, lb?.cupName)))
                     .toList(),
               )
             : null,
@@ -216,7 +216,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 return _BandonCupTabView(
                   roundId       : widget.roundId,
                   tournamentId  : lb.tournamentId,
-                  tournamentName: lb.tournamentName ?? 'Bandon Cup',
+                  tournamentName: lb.cupName ?? lb.tournamentName ?? 'Bandon Cup',
                 );
               }
               // Irish Rumble in cup context: show live card + per-foursome scorecards
@@ -241,11 +241,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     );
   }
 
-  String _label(String g, [String? tournamentName]) {
-    // Cup tab title tracks the tournament's actual name — fall back to
-    // "Bandon Cup" for the original Bandon-only deployment.
+  String _label(String g, [String? cupName]) {
+    // Cup tab title tracks the cup competition's display name — falls
+    // back to "Bandon Cup" only when no cup name is set on the
+    // TeamTournament row (e.g. older data or non-cup contexts).
     if (g == '__bandon_cup__') {
-      return tournamentName ?? 'Bandon Cup';
+      return cupName ?? 'Bandon Cup';
     }
     const labels = {
       'skins':             'Skins',

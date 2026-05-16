@@ -1667,6 +1667,14 @@ class LeaderboardView(APIView):
             pk=pk,
         )
         t          = round_obj.tournament
+        # Cup competitions store their display name on the TeamTournament
+        # row (e.g. "ETC Cup"); fall back to None when this tournament
+        # isn't running a cup, so the client can choose how to display.
+        cup_name = None
+        if t is not None:
+            tt = getattr(t, 'team_tournament', None)
+            if tt is not None:
+                cup_name = tt.cup_name
         lb_games   = _build_leaderboard(round_obj)
         is_cup_rnd = hasattr(round_obj, 'ryder_cup_config')
         return Response({
@@ -1678,6 +1686,7 @@ class LeaderboardView(APIView):
             'active_games'          : _leaderboard_active_games(round_obj, lb_games),
             'tournament_id'         : t.id   if t else None,
             'tournament_name'       : t.name if t else None,
+            'cup_name'              : cup_name,
             'tournament_active_games': t.active_games or [] if t else [],
             'games'                 : lb_games,
         })
