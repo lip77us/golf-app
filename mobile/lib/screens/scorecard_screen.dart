@@ -45,6 +45,17 @@ int _effectiveHandicap({
 
 String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
 
+/// One dot color per player slot (up to 4 players) used in the hole-
+/// strip stroke indicators.  A filled circle in the player's slot color
+/// means "this player gets a stroke on this hole"; an outline-only
+/// circle means "no stroke for this player on this hole."
+const _kPlayerDotColors = [
+  Color(0xFF1565C0), // blue
+  Color(0xFFE65100), // deep orange
+  Color(0xFF6A1B9A), // purple
+  Color(0xFF00695C), // teal
+];
+
 /// Short human label for the handicap mode driving the scorecard's dot
 /// allocations.  Shown in the AppBar so players can tell at a glance
 /// whether the dots reflect 100% net, 90% net, strokes-off, etc.
@@ -545,6 +556,8 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
           pendingScores: {...rp.localPendingByHole, ..._pending},
           selectedHole:  _selectedHole,
           onTap:         (h) => setState(() => _selectedHole = h),
+          strokesForHole: (m, hole) =>
+              _strokesForHole(m, sc.holeData(hole)),
         ),
         const SizedBox(height: 12),
 
@@ -712,6 +725,9 @@ class _HoleStrip extends StatelessWidget {
   final Map<int, Map<int, int>> pendingScores;
   final int        selectedHole;
   final void Function(int) onTap;
+  /// Returns the number of strokes [member] gets on [hole].  Used to
+  /// paint per-player stroke dots beneath the hole number.
+  final int Function(Membership member, int hole) strokesForHole;
 
   const _HoleStrip({
     required this.scorecard,
@@ -719,6 +735,7 @@ class _HoleStrip extends StatelessWidget {
     required this.pendingScores,
     required this.selectedHole,
     required this.onTap,
+    required this.strokesForHole,
   });
 
   bool _holeComplete(int hole) {
@@ -732,7 +749,7 @@ class _HoleStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SizedBox(
-      height: 36,
+      height: 52,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: 18,
@@ -740,11 +757,37 @@ class _HoleStrip extends StatelessWidget {
           final hole    = i + 1;
           final isSel   = hole == selectedHole;
           final isDone  = _holeComplete(hole);
+
+          // Per-player stroke dots beneath the hole number — coloured
+          // when that player gets a stroke, outline-only when they
+          // don't.  Each player has a distinct slot colour from
+          // _kPlayerDotColors so the dots are readable at a glance.
+          final dots = players.asMap().entries.map((e) {
+            final s = strokesForHole(e.value, hole);
+            return Container(
+              width: 5, height: 5,
+              margin: const EdgeInsets.symmetric(horizontal: 1),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: s > 0
+                    ? _kPlayerDotColors[e.key % _kPlayerDotColors.length]
+                    : Colors.transparent,
+                border: s == 0
+                    ? Border.all(
+                        color: theme.colorScheme.outlineVariant, width: 0.5)
+                    : null,
+              ),
+            );
+          }).toList();
+
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: GestureDetector(
               onTap: () => onTap(hole),
-              child: AnimatedContainer(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+              AnimatedContainer(
                 duration: const Duration(milliseconds: 120),
                 width: 32, height: 32,
                 alignment: Alignment.center,
@@ -768,6 +811,10 @@ class _HoleStrip extends StatelessWidget {
                             : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+              ),
+              const SizedBox(height: 3),
+              Row(mainAxisSize: MainAxisSize.min, children: dots),
+                ],
               ),
             ),
           );
