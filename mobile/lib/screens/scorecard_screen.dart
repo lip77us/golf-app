@@ -20,6 +20,14 @@ int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
 
 String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
 
+/// One dot color per player slot (up to 4 players) used in stroke indicators.
+const _kPlayerDotColors = [
+  Color(0xFF1565C0), // blue
+  Color(0xFFE65100), // deep orange
+  Color(0xFF6A1B9A), // purple
+  Color(0xFF00695C), // teal
+];
+
 class _RunningTotal {
   final int grossVsPar;
   final int netVsPar;
@@ -137,6 +145,64 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
         _pending.putIfAbsent(hole, () => {})[player.player.id] = score;
       }
     });
+  }
+
+  /// Pre-computes the "dots handicap" for every player — the effective
+  /// handicap used ONLY for stroke-indicator dots, based on the active
+  /// game's mode.  Net score totals continue to use playingHandicap.
+  ///
+  ///  gross        → 0 for everyone (no dots)
+  ///  net          → playingHandicap as-is
+  ///  strokes_off  → max(0, playingHandicap − minPlayingHandicap) × netPct%
+  Map<int, int> _computeDotsHandicaps(Scorecard sc, List<Membership> players) {
+    if (sc.gameIsGross) {
+      return {for (final m in players) m.player.id: 0};
+    }
+    if (sc.gameIsSO) {
+      // Singles games supply per-pair pairings so SO is computed 1v1 —
+      // each player's dots are relative to their own opponent only, not the
+      // lowest handicap in the whole foursome.
+      final pairings = sc.singlesPairings;
+      if (pairings != null && pairings.isNotEmpty) {
+        final result = <int, int>{};
+        final hcpById = {for (final m in players) m.player.id: m.playingHandicap};
+        for (final pair in pairings) {
+          if (pair.length < 2) continue;
+          final id1 = pair[0];
+          final id2 = pair[1];
+          final hcp1 = hcpById[id1] ?? 0;
+          final hcp2 = hcpById[id2] ?? 0;
+          final minHcp = hcp1 < hcp2 ? hcp1 : hcp2;
+          result[id1] = ((hcp1 - minHcp) * sc.gameNetPercent / 100)
+              .round()
+              .clamp(0, 99);
+          result[id2] = ((hcp2 - minHcp) * sc.gameNetPercent / 100)
+              .round()
+              .clamp(0, 99);
+        }
+        // Any player not in a pairing gets 0 dots (safety fallback).
+        for (final m in players) {
+          result.putIfAbsent(m.player.id, () => 0);
+        }
+        return result;
+      }
+      // Fallback: no pairing data yet — compute SO across all players.
+      final minHcp = players.isEmpty
+          ? 0
+          : players
+              .map((p) => p.playingHandicap)
+              .reduce((a, b) => a < b ? a : b);
+      return {
+        for (final m in players)
+          m.player.id: ((m.playingHandicap - minHcp) *
+                  sc.gameNetPercent /
+                  100)
+              .round()
+              .clamp(0, 99),
+      };
+    }
+    // net (default)
+    return {for (final m in players) m.player.id: m.playingHandicap};
   }
 
   /// Returns handicap strokes on a specific hole for a player.
@@ -394,13 +460,22 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
           _ErrorBanner(message: rp.error!, onDismiss: rp.clearError),
 
         // ── Hole strip ──────────────────────────────────────────────────
-        _HoleStrip(
-          scorecard:     sc,
-          players:       players,
-          pendingScores: {...rp.localPendingByHole, ..._pending},
-          selectedHole:  _selectedHole,
-          onTap:         (h) => setState(() => _selectedHole = h),
-        ),
+        Builder(builder: (ctx) {
+          final dotsHcps = _computeDotsHandicaps(sc, players);
+          return _HoleStrip(
+            scorecard:      sc,
+            players:        players,
+            pendingScores:  {...rp.localPendingByHole, ..._pending},
+            selectedHole:   _selectedHole,
+            onTap:          (h) => setState(() => _selectedHole = h),
+            strokesForHole: (m, h) {
+              final hd = sc.holeData(h);
+              if (hd == null) return 0;
+              return _strokesOnHole(
+                  dotsHcps[m.player.id] ?? m.playingHandicap, hd.strokeIndex);
+            },
+          );
+        }),
         const SizedBox(height: 12),
 
         // ── Hole score card (hole info + per-player entry) ────────────
@@ -539,13 +614,18 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
           const Expanded(child: Center(child: CircularProgressIndicator()))
         else if (rp.scorecard case final sc?)
           Expanded(
-            child: _LandscapeGrid(
-              scorecard:     sc,
-              players:       _realPlayers(sc, rp.round),
-              pendingScores: rp.localPendingByHole,
-              currentHole:   _selectedHole,
-              totals:        sc.totals,
-            ),
+            child: Builder(builder: (ctx) {
+              final players  = _realPlayers(sc, rp.round);
+              final dotsHcps = _computeDotsHandicaps(sc, players);
+              return _LandscapeGrid(
+                scorecard:     sc,
+                players:       players,
+                pendingScores: rp.localPendingByHole,
+                currentHole:   _selectedHole,
+                totals:        sc.totals,
+                dotsHandicaps: dotsHcps,
+              );
+            }),
           ),
       ]),
     );
@@ -562,6 +642,8 @@ class _HoleStrip extends StatelessWidget {
   final Map<int, Map<int, int>> pendingScores;
   final int        selectedHole;
   final void Function(int) onTap;
+  /// Returns strokes a player receives on a given hole number.
+  final int Function(Membership, int hole) strokesForHole;
 
   const _HoleStrip({
     required this.scorecard,
@@ -569,6 +651,7 @@ class _HoleStrip extends StatelessWidget {
     required this.pendingScores,
     required this.selectedHole,
     required this.onTap,
+    required this.strokesForHole,
   });
 
   bool _holeComplete(int hole) {
@@ -582,42 +665,72 @@ class _HoleStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SizedBox(
-      height: 36,
+      height: 52,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: 18,
         itemBuilder: (_, i) {
-          final hole    = i + 1;
-          final isSel   = hole == selectedHole;
-          final isDone  = _holeComplete(hole);
+          final hole  = i + 1;
+          final isSel = hole == selectedHole;
+          final isDone = _holeComplete(hole);
+
+          // Per-player stroke dots: colored = gets a stroke, transparent = no stroke.
+          final dots = players.asMap().entries.map((e) {
+            final s = strokesForHole(e.value, hole);
+            return Container(
+              width: 5, height: 5,
+              margin: const EdgeInsets.symmetric(horizontal: 1),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: s > 0
+                    ? _kPlayerDotColors[e.key % _kPlayerDotColors.length]
+                    : Colors.transparent,
+                border: s == 0
+                    ? Border.all(
+                        color: theme.colorScheme.outlineVariant, width: 0.5)
+                    : null,
+              ),
+            );
+          }).toList();
+
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: GestureDetector(
               onTap: () => onTap(hole),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                width: 32, height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isSel
-                      ? theme.colorScheme.primary
-                      : isDone
-                          ? theme.colorScheme.secondaryContainer
-                          : theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '$hole',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: isSel
-                        ? theme.colorScheme.onPrimary
-                        : isDone
-                            ? theme.colorScheme.onSecondaryContainer
-                            : theme.colorScheme.onSurfaceVariant,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    width: 32, height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSel
+                          ? theme.colorScheme.primary
+                          : isDone
+                              ? theme.colorScheme.secondaryContainer
+                              : theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$hole',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: isSel
+                            ? theme.colorScheme.onPrimary
+                            : isDone
+                                ? theme.colorScheme.onSecondaryContainer
+                                : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: dots,
+                  ),
+                ],
               ),
             ),
           );
@@ -1164,6 +1277,8 @@ class _LandscapeGrid extends StatefulWidget {
   final Map<int, Map<int, int>> pendingScores;
   final int currentHole;
   final List<PlayerTotals> totals;
+  /// playerId → effective handicap for stroke dots (game-mode-aware).
+  final Map<int, int> dotsHandicaps;
 
   const _LandscapeGrid({
     required this.scorecard,
@@ -1171,6 +1286,7 @@ class _LandscapeGrid extends StatefulWidget {
     required this.pendingScores,
     required this.currentHole,
     required this.totals,
+    required this.dotsHandicaps,
   });
 
   @override
@@ -1370,13 +1486,19 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
 
   Widget _scoreCell(int hole, Membership m, double rowH) {
     final theme       = Theme.of(context);
-    final saved       = widget.scorecard.holeData(hole)?.scoreFor(m.player.id);
+    final holeData    = widget.scorecard.holeData(hole);
+    final saved       = holeData?.scoreFor(m.player.id);
     final pending     = widget.pendingScores[hole]?[m.player.id];
     final gross       = pending ?? saved?.grossScore;
     final net         = pending == null ? saved?.netScore : null;
-    final par         = widget.scorecard.holeData(hole)?.par ?? 4;
+    final par         = holeData?.par ?? 4;
     final isCurrent   = hole == widget.currentHole;
     final isLocalOnly = pending != null;
+
+    // Stroke indicator — uses game-specific dots handicap, not course handicap.
+    final si        = holeData?.strokeIndex ?? 18;
+    final dotsHcp   = widget.dotsHandicaps[m.player.id] ?? m.playingHandicap;
+    final strokes   = _strokesOnHole(dotsHcp, si);
 
     Color? bg;
     if (isCurrent) bg = theme.colorScheme.primaryContainer.withOpacity(0.3);
@@ -1389,14 +1511,42 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
 
     return TableCell(
       child: Container(
-        height: rowH, color: bg, alignment: Alignment.center,
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(gross != null ? '$gross' : '—',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          if (isLocalOnly)
-            Icon(Icons.cloud_upload_outlined,
-                size: 8, color: theme.colorScheme.tertiary),
-        ]),
+        height: rowH, color: bg,
+        child: Stack(
+          children: [
+            Center(
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(gross != null ? '$gross' : '—',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    if (isLocalOnly)
+                      Icon(Icons.cloud_upload_outlined,
+                          size: 8, color: theme.colorScheme.tertiary),
+                  ]),
+            ),
+            // Stroke dots — top-right corner, one per stroke (usually 1, rarely 2).
+            if (strokes > 0)
+              Positioned(
+                top: 2, right: 2,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(
+                    strokes,
+                    (_) => Container(
+                      width: 4, height: 4,
+                      margin: const EdgeInsets.only(left: 1),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFF1565C0), // blue
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

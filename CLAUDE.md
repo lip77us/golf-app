@@ -88,5 +88,4 @@ I have decided to put in three modes to operate on single foursome games.  You c
 
 ---
 
-## Nassau — not yet implemented
-Reserved chip in the casual-round picker but disabled. When implementing, follow the Skins/Points 5-3-1 pattern.
+I am distributing this through Railway and am using test flight to distrubte the app.  I need to know when a server change will break my flutter code so I can update the versioning and require the user to download a new client.

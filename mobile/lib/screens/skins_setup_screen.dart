@@ -143,26 +143,34 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Skins — Setup')),
-      body: _buildBody(),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: (_starting || !_rosterValid) ? null : _start,
-              child: _starting
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Start Game',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Column(
+          children: [
+            Expanded(child: _buildBody()),
+            if (!_loading) SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: (_starting || !_rosterValid) ? null : _start,
+                    child: _starting
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Start Game',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -295,7 +303,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
             ),
           ),
 
-          const SizedBox(height: 80),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -482,6 +490,7 @@ class _BetUnitCard extends StatelessWidget {
               isDense: true,
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.done,
           ),
           const SizedBox(height: 6),
           Text(

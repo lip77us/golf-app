@@ -192,6 +192,65 @@ def _recalculate_games(foursome: Foursome) -> None:
         pass  # not a cup round — skip silently
 
 
+def _get_game_handicap_info(foursome):
+    """
+    Return (handicap_mode, net_percent) for the primary active game on
+    this foursome.  Used to drive stroke-indicator dots on the mobile
+    scorecard — the dots show which holes count in the actual game,
+    not just the round-level course handicap.
+
+    Priority order:
+      1. Casual foursome-level game (Nassau, Skins, Points 5-3-1, etc.)
+      2. Tournament round-level game config (Irish Rumble, Low Net Round)
+      3. Round-level handicap_mode fallback
+
+    Sixes is deliberately skipped — it uses segment-level calculations.
+    """
+    from games.models import (
+        NassauGame, SkinsGame, Points531Game, ThreePersonMatch,
+        IrishRumbleConfig, LowNetRoundConfig,
+    )
+
+    # Casual games — config lives on the foursome
+    FOURSOME_GAME_MAP = {
+        'nassau':             NassauGame,
+        'skins':              SkinsGame,
+        'points_531':         Points531Game,
+        'three_person_match': ThreePersonMatch,
+    }
+
+    # Tournament games — config lives on the round (OneToOneField related_name)
+    ROUND_GAME_MAP = {
+        'irish_rumble': 'irish_rumble_config',
+        'low_net_round': 'low_net_config',
+    }
+
+    active = list(foursome.active_games) or list(foursome.round.active_games)
+
+    for key in active:
+        if key == 'sixes':
+            continue
+
+        # 1. Casual foursome-level games
+        FoursomeModel = FOURSOME_GAME_MAP.get(key)
+        if FoursomeModel is not None:
+            game = FoursomeModel.objects.filter(foursome=foursome).first()
+            if game is not None:
+                return game.handicap_mode, getattr(game, 'net_percent', 100)
+
+        # 2. Tournament round-level games
+        related = ROUND_GAME_MAP.get(key)
+        if related is not None:
+            try:
+                cfg = getattr(foursome.round, related)
+                return cfg.handicap_mode, cfg.net_percent
+            except Exception:
+                pass
+
+    # 3. Fall back to round-level settings
+    return foursome.round.handicap_mode, getattr(foursome.round, 'net_percent', 100)
+
+
 def _build_scorecard(foursome: Foursome) -> dict:
     """Build the scorecard dict for a foursome."""
     memberships  = list(foursome.memberships.select_related('player', 'tee').all())
@@ -341,12 +400,38 @@ def _build_scorecard(foursome: Foursome) -> dict:
             'total_stableford': sf,
         })
 
-    return {
-        'foursome_id' : foursome.id,
-        'group_number': foursome.group_number,
-        'holes'       : holes_out,
-        'totals'      : totals,
+    game_hcp_mode, game_net_pct = _get_game_handicap_info(foursome)
+
+    # For singles games (singles_nassau / singles_18) the SO handicap must be
+    # computed per 1v1 match, not across all 4 players.  Expose the pairings so
+    # the mobile client can do per-pair SO dot calculations.
+    singles_pairings = None
+    active_for_singles = list(foursome.active_games) or list(foursome.round.active_games)
+    if 'singles_nassau' in active_for_singles or 'singles_18' in active_for_singles:
+        bracket = foursome.match_play_brackets.filter(bracket_type='cup_singles').first()
+        if bracket is not None:
+            from games.models import MatchPlayMatch
+            matches = MatchPlayMatch.objects.filter(bracket=bracket).select_related('player1', 'player2')
+            # Use round_number=1 matches (the actual pairings); in cup_singles
+            # each pairing is a single 18-hole match stored as round_number=1.
+            pairs = [
+                [m.player1_id, m.player2_id]
+                for m in matches
+            ]
+            if pairs:
+                singles_pairings = pairs
+
+    result = {
+        'foursome_id'       : foursome.id,
+        'group_number'      : foursome.group_number,
+        'holes'             : holes_out,
+        'totals'            : totals,
+        'game_handicap_mode': game_hcp_mode,
+        'game_net_percent'  : game_net_pct,
     }
+    if singles_pairings is not None:
+        result['singles_pairings'] = singles_pairings
+    return result
 
 
 def _build_leaderboard(round_obj: Round) -> dict:

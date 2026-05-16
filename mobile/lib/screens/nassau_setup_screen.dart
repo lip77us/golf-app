@@ -196,26 +196,34 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Nassau — Setup')),
-      body: _buildBody(rp),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: (_starting || !_rosterValid) ? null : _start,
-              child: _starting
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Start Match',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Column(
+          children: [
+            Expanded(child: _buildBody(rp)),
+            if (!_loading) SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: (_starting || !_rosterValid) ? null : _start,
+                    child: _starting
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Start Match',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -433,7 +441,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             ),
           ),
 
-          const SizedBox(height: 80),
+          const SizedBox(height: 16),
         ],
       ),
     ));

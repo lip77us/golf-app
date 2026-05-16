@@ -149,26 +149,34 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Points 5-3-1 — Setup')),
-      body: _buildBody(),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: (_starting || !_rosterValid) ? null : _start,
-              child: _starting
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Start Game',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Column(
+          children: [
+            Expanded(child: _buildBody()),
+            if (!_loading) SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: (_starting || !_rosterValid) ? null : _start,
+                    child: _starting
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Start Game',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -250,7 +258,7 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
             ),
           ),
 
-          const SizedBox(height: 80), // leave room for the bottom button
+          const SizedBox(height: 16),
         ],
       ),
     );

@@ -152,34 +152,44 @@ class _TournamentLowNetSetupScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Low Net Championship — Setup')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null && !_saving
-              ? ErrorView(
-                  message : friendlyError(_error!),
-                  isNetwork: isNetworkError(_error!),
-                  onRetry : _load,
-                )
-              : _buildBody(),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            width : double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Save Setup',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Column(
+          children: [
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null && !_saving
+                      ? ErrorView(
+                          message : friendlyError(_error!),
+                          isNetwork: isNetworkError(_error!),
+                          onRetry : _load,
+                        )
+                      : _buildBody(),
             ),
-          ),
+            if (!_loading) SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: SizedBox(
+                  width : double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Save Setup',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -399,7 +409,7 @@ class _TournamentLowNetSetupScreenState
             ),
           ],
 
-          const SizedBox(height: 80),
+          const SizedBox(height: 16),
         ],
       ),
     );

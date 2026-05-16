@@ -630,24 +630,46 @@ class Scorecard {
   final int groupNumber;
   final List<ScorecardHole> holes;
   final List<PlayerTotals> totals;
+  /// Handicap mode of the primary active game ('net' | 'gross' | 'strokes_off').
+  /// Used only for stroke-indicator dots — net score totals always use
+  /// playingHandicap regardless of this value.
+  final String gameHandicapMode;
+  /// Net percent applied in the active game (0–200). Relevant for SO dots.
+  final int gameNetPercent;
+  /// For singles games (singles_nassau / singles_18) each entry is a pair of
+  /// player IDs [p1_id, p2_id].  When present, SO dots are computed per-pair
+  /// (each player's strokes relative to their 1v1 opponent only).
+  /// Null for all non-singles games.
+  final List<List<int>>? singlesPairings;
 
   const Scorecard({
     required this.foursomeId,
     required this.groupNumber,
     required this.holes,
     required this.totals,
+    this.gameHandicapMode = 'net',
+    this.gameNetPercent   = 100,
+    this.singlesPairings,
   });
 
   factory Scorecard.fromJson(Map<String, dynamic> j) => Scorecard(
-        foursomeId: j['foursome_id'] as int,
-        groupNumber: j['group_number'] as int,
+        foursomeId:       j['foursome_id']        as int,
+        groupNumber:      j['group_number']        as int,
+        gameHandicapMode: j['game_handicap_mode']  as String? ?? 'net',
+        gameNetPercent:   j['game_net_percent']    as int?    ?? 100,
         holes: (j['holes'] as List? ?? [])
             .map((h) => ScorecardHole.fromJson(h as Map<String, dynamic>))
             .toList(),
         totals: (j['totals'] as List? ?? [])
             .map((t) => PlayerTotals.fromJson(t as Map<String, dynamic>))
             .toList(),
+        singlesPairings: (j['singles_pairings'] as List?)
+            ?.map((pair) => (pair as List).cast<int>())
+            .toList(),
       );
+
+  bool get gameIsGross => gameHandicapMode == 'gross';
+  bool get gameIsSO    => gameHandicapMode == 'strokes_off';
 
   ScorecardHole? holeData(int holeNumber) =>
       holes.where((h) => h.holeNumber == holeNumber).firstOrNull;
@@ -1420,10 +1442,7 @@ class NassauSummary {
       phantom: () {
         // Defensive parse so a phantom type-cast error never breaks the summary.
         final raw = j['phantom'];
-        if (raw == null) {
-          debugPrint('NassauSummary.fromJson: phantom field is null');
-          return null;
-        }
+        if (raw == null) return null;
         try {
           return NassauPhantomInfo.fromJson(raw as Map<String, dynamic>);
         } catch (e, st) {
