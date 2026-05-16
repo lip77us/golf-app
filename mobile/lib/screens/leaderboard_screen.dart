@@ -7,7 +7,17 @@ import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
-  const LeaderboardScreen({super.key, required this.roundId});
+  /// Pre-select a specific tab on first load.  Matched against the
+  /// game-key list ('nassau', 'skins', '__bandon_cup__', etc.).  If
+  /// the key isn't present in this round's tabs, falls through to the
+  /// default (first tab).  Used by Championship Leaderboard to drop
+  /// users straight onto the Cup tab for cup tournaments.
+  final String? initialTabKey;
+  const LeaderboardScreen({
+    super.key,
+    required this.roundId,
+    this.initialTabKey,
+  });
 
   @override
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
@@ -17,6 +27,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     with TickerProviderStateMixin {
   TabController? _tabController;
   List<String>   _gameTabs = [];
+  bool           _initialTabApplied = false;
 
   @override
   void initState() {
@@ -50,7 +61,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     if (_gameTabs.join(',') == games.join(',')) return;
     _gameTabs = games;
     _tabController?.dispose();
-    _tabController = TabController(length: games.length, vsync: this);
+    // Honor initialTabKey on the first build that produces a real tab
+    // list — subsequent rebuilds preserve whatever tab the user has
+    // since switched to.
+    int initialIndex = 0;
+    if (!_initialTabApplied && widget.initialTabKey != null) {
+      final i = games.indexOf(widget.initialTabKey!);
+      if (i >= 0) initialIndex = i;
+      _initialTabApplied = true;
+    }
+    _tabController = TabController(
+      length: games.length,
+      vsync: this,
+      initialIndex: initialIndex,
+    );
     setState(() {});
   }
 
@@ -1652,13 +1676,17 @@ class _NassauGroupCard extends StatelessWidget {
     }
 
     // ── Casual match: original layout ─────────────────────────────────────
+    // Use the Overall bet's holesPlayed as the "thru N" count — it
+    // tracks total holes played across the round, while F9/B9 cap at 9.
+    final thru = nas.overall.holesPlayed;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
           // Matchup line — player short names in team colors
-          RichText(
+          Center(
+            child: RichText(
               text: TextSpan(
                 style: theme.textTheme.bodyMedium
                     ?.copyWith(fontWeight: FontWeight.w600),
@@ -1676,6 +1704,20 @@ class _NassauGroupCard extends StatelessWidget {
                     style: TextStyle(color: team2Color),
                   ),
                 ],
+              ),
+            ),
+          ),
+
+          // "Thru N" — centered under the names while play is in progress.
+          if (thru > 0 && thru < 18)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'Thru $thru',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
               ),
             ),
 
@@ -3815,6 +3857,26 @@ class _BandonCupLiveCard extends StatelessWidget {
             ? '${pv.toInt()} pt${pv >= 2 ? "s" : ""}/seg'
             : '${fmtPts(pv)} pts/seg');
 
+    // Compute the match's "Thru N" — the furthest hole anyone in this
+    // match has scored.  Nassau segments report `holes_played`; Irish
+    // Rumble segments split it into `a_holes_played` / `b_holes_played`
+    // by segment half; per-pair singles modes use `holes_played` on
+    // each individual match row.
+    int thru = 0;
+    for (final s in segments) {
+      final hp  = (s['holes_played']   as num?)?.toInt() ?? 0;
+      final ah  = (s['a_holes_played'] as num?)?.toInt() ?? 0;
+      final bh  = (s['b_holes_played'] as num?)?.toInt() ?? 0;
+      if (hp > thru) thru = hp;
+      if (ah > thru) thru = ah;
+      if (bh > thru) thru = bh;
+    }
+    for (final m in indivs) {
+      final hp = (m['holes_played'] as num?)?.toInt() ?? 0;
+      if (hp > thru) thru = hp;
+    }
+    final thruLabel = (thru > 0 && thru < 18) ? '  •  Thru $thru' : '';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -3837,9 +3899,12 @@ class _BandonCupLiveCard extends StatelessWidget {
                         fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 8),
-              Text('$groupLabel • $pvLabel',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
+              Expanded(
+                child: Text('$groupLabel • $pvLabel$thruLabel',
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
             ]),
             const SizedBox(height: 10),
 

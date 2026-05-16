@@ -270,22 +270,47 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                     builder: (_) => SetupRoundPlayersScreen(roundId: roundId)))
                 .then((_) { if (mounted) _load(); }),
             // For Cup tournaments, the boring TournamentLeaderboardScreen
-            // doesn't show anything useful — the cup standings live on the
-            // RyderCupScoreboardScreen / per-round Cup leaderboard tab.
-            // Route Championship Leaderboard there directly so users don't
-            // hit a near-empty screen.
-            onViewLeaderboard: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => t.activeGames.contains('team_cup')
-                      ? RyderCupScoreboardScreen(
-                          tournamentId  : t.id,
-                          tournamentName: t.name,
-                        )
-                      : TournamentLeaderboardScreen(
-                          tournamentId  : t.id,
-                          tournamentName: t.name,
-                        ),
-                )),
+            // doesn't render anything useful — the cup leaderboard lives
+            // on the per-round LeaderboardScreen as the Cup tab (with
+            // live match cards + cumulative standings).  Drop the user
+            // straight onto that tab on the latest non-pending round
+            // (falling back to round 1 when nothing's started yet).
+            // No round at all → fall back to RyderCupScoreboardScreen.
+            onViewLeaderboard: () {
+              if (t.activeGames.contains('team_cup')) {
+                final rounds = t.rounds.toList()
+                  ..sort((a, b) => a.roundNumber.compareTo(b.roundNumber));
+                if (rounds.isEmpty) {
+                  // No rounds yet — fall back to the Ryder Cup
+                  // standings screen which can render an empty state.
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => RyderCupScoreboardScreen(
+                      tournamentId  : t.id,
+                      tournamentName: t.name,
+                    ),
+                  ));
+                  return;
+                }
+                final cupRound = rounds.lastWhere(
+                  (r) => r.status != 'pending',
+                  orElse: () => rounds.first,
+                );
+                Navigator.of(context).pushNamed(
+                  '/leaderboard',
+                  arguments: {
+                    'roundId': cupRound.id,
+                    'initialTabKey': '__bandon_cup__',
+                  },
+                );
+              } else {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => TournamentLeaderboardScreen(
+                    tournamentId  : t.id,
+                    tournamentName: t.name,
+                  ),
+                ));
+              }
+            },
             onConfigureLowNet: () => Navigator.of(context)
                 .push(MaterialPageRoute(
                     builder: (_) => TournamentLowNetSetupScreen(

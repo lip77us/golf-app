@@ -295,9 +295,17 @@ class _GolfAppState extends State<GolfApp> {
         return MaterialPageRoute(
             builder: (_) => NassauScreen(foursomeId: foursomeId));
       case '/leaderboard':
-        final roundId = settings.arguments as int;
+        // Arguments may be a plain int (legacy) or a Map with
+        // {'roundId': int, 'initialTabKey': String?}.
+        final args = settings.arguments;
+        final roundId = args is Map ? args['roundId'] as int : args as int;
+        final initialTabKey =
+            args is Map ? args['initialTabKey'] as String? : null;
         return MaterialPageRoute(
-            builder: (_) => LeaderboardScreen(roundId: roundId));
+            builder: (_) => LeaderboardScreen(
+                  roundId: roundId,
+                  initialTabKey: initialTabKey,
+                ));
       case '/irish-rumble-setup':
         final roundId = settings.arguments as int;
         return MaterialPageRoute(
