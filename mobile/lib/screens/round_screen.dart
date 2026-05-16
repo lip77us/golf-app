@@ -755,7 +755,7 @@ class _FoursomeCard extends StatelessWidget {
                     arguments: foursome.id,
                   ),
                   icon: const Icon(Icons.golf_course_outlined, size: 18),
-                  label: const Text('Confirm Tee Boxes'),
+                  label: const Text('Edit Tee Boxes'),
                 ),
               ),
             ],

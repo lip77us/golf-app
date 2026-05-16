@@ -142,7 +142,7 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Confirm Tee Boxes')),
+      appBar: AppBar(title: const Text('Edit Tee Boxes')),
       body: _buildBody(),
       bottomNavigationBar: (_loading || _error != null)
           ? null
