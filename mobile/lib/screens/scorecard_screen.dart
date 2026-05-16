@@ -219,6 +219,31 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     return (rp.round?.handicapMode ?? 'net', rp.round?.netPercent ?? 100);
   }
 
+  /// Effective handicap for a player under the active mode.  Used both
+  /// to label the scorecard's per-player Hcp chip (matching the
+  /// score-entry view) and as the input to per-hole stroke allocation.
+  int _effectiveHcapFor(Membership m, RoundProvider rp) {
+    final (mode, pct) = _handicapParams(rp);
+    int? lowestPlaying;
+    if (mode == 'strokes_off') {
+      final sc = rp.scorecard;
+      if (sc != null) {
+        final players = _realPlayers(sc, rp.round);
+        if (players.isNotEmpty) {
+          lowestPlaying = players
+              .map((p) => p.playingHandicap)
+              .reduce((a, b) => a < b ? a : b);
+        }
+      }
+    }
+    return _effectiveHandicap(
+      mode:                  mode,
+      netPercent:            pct,
+      playingHandicap:       m.playingHandicap,
+      lowestPlayingHandicap: lowestPlaying,
+    );
+  }
+
   /// Returns handicap strokes on a specific hole for a player.  Always
   /// computes locally from the active handicap mode (net / gross /
   /// strokes-off) so the dots match what the game services actually use
@@ -228,27 +253,8 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
   int _strokesForHole(Membership m, ScorecardHole? h) {
     if (h == null) return 0;
     final rp = context.read<RoundProvider>();
-    final (mode, pct) = _handicapParams(rp);
-    if (mode == 'gross') return 0;
-
-    int? lowestPlaying;
-    if (mode == 'strokes_off') {
-      final sc = rp.scorecard;
-      if (sc == null) return 0;
-      final players = _realPlayers(sc, rp.round);
-      if (players.isNotEmpty) {
-        lowestPlaying = players
-            .map((p) => p.playingHandicap)
-            .reduce((a, b) => a < b ? a : b);
-      }
-    }
-
-    final effective = _effectiveHandicap(
-      mode:                  mode,
-      netPercent:            pct,
-      playingHandicap:       m.playingHandicap,
-      lowestPlayingHandicap: lowestPlaying,
-    );
+    final effective = _effectiveHcapFor(m, rp);
+    if (effective <= 0) return 0;
     // Per-player SI is preferred — falls back to the shared hole SI.
     final entry = h.scoreFor(m.player.id);
     final si    = entry?.strokeIndex ?? h.strokeIndex;
@@ -513,6 +519,25 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
         if (rp.error != null)
           _ErrorBanner(message: rp.error!, onDismiss: rp.clearError),
 
+        // ── Rotate-for-full-scorecard hint ──────────────────────────────
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.screen_rotation_outlined,
+                  size: 14,
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text(
+                'Rotate to landscape for the full 18-hole scorecard.',
+                style: Theme.of(ctx).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+
         // ── Hole strip ──────────────────────────────────────────────────
         _HoleStrip(
           scorecard:     sc,
@@ -533,6 +558,7 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
           hotSpotIdx:      hotSpot,
           par:             holeData?.par ?? 4,
           strokesForHole:  (m) => _strokesForHole(m, holeData),
+          effectiveHcap:   (m) => _effectiveHcapFor(m, rp),
           running:         (pid) => _running(pid, sc),
           // Read-only: disable picker and edit sheet.
           onScoreSelected: readOnly ? null : (m, score) => _selectScore(m, score, _selectedHole),
@@ -764,6 +790,7 @@ class _HoleScoreCard extends StatelessWidget {
   final int               hotSpotIdx;
   final int               par;
   final int Function(Membership)          strokesForHole;
+  final int Function(Membership)          effectiveHcap;
   final _RunningTotal Function(int)       running;
   /// Null in read-only mode — tapping a player row does nothing.
   final void Function(Membership, int)?   onScoreSelected;
@@ -779,6 +806,7 @@ class _HoleScoreCard extends StatelessWidget {
     required this.hotSpotIdx,
     required this.par,
     required this.strokesForHole,
+    required this.effectiveHcap,
     required this.running,
     this.onScoreSelected,
     this.onEditTap,
@@ -903,7 +931,7 @@ class _HoleScoreCard extends StatelessWidget {
                             color: theme.colorScheme.outlineVariant),
                       ),
                       child: Text(
-                        'Hcp ${m.playingHandicap}',
+                        'Hcp ${effectiveHcap(m)}',
                         style: theme.textTheme.labelSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: theme.colorScheme
