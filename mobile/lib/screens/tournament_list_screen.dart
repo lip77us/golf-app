@@ -74,6 +74,37 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     }
   }
 
+  /// Cup tournaments don't have their own dedicated leaderboard screen
+  /// any more — both the "Championship Leaderboard" and "Cup Scoreboard"
+  /// buttons drop the user onto the latest non-pending round's
+  /// LeaderboardScreen with the Cup tab pre-selected.  If no rounds have
+  /// been created yet, fall through to the standings page so the user
+  /// still has somewhere to land.
+  void _openCupTab(BuildContext context, Tournament t) {
+    final rounds = t.rounds.toList()
+      ..sort((a, b) => a.roundNumber.compareTo(b.roundNumber));
+    if (rounds.isEmpty) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => RyderCupScoreboardScreen(
+          tournamentId  : t.id,
+          tournamentName: t.name,
+        ),
+      ));
+      return;
+    }
+    final cupRound = rounds.lastWhere(
+      (r) => r.status != 'pending',
+      orElse: () => rounds.first,
+    );
+    Navigator.of(context).pushNamed(
+      '/leaderboard',
+      arguments: {
+        'roundId'      : cupRound.id,
+        'initialTabKey': '__bandon_cup__',
+      },
+    );
+  }
+
   Future<void> _deleteTournament(Tournament t) async {
     final hasInProgress = t.rounds.any((r) => r.status == 'in_progress');
 
@@ -269,39 +300,15 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                 .push(MaterialPageRoute(
                     builder: (_) => SetupRoundPlayersScreen(roundId: roundId)))
                 .then((_) { if (mounted) _load(); }),
-            // For Cup tournaments, the boring TournamentLeaderboardScreen
-            // doesn't render anything useful — the cup leaderboard lives
-            // on the per-round LeaderboardScreen as the Cup tab (with
-            // live match cards + cumulative standings).  Drop the user
-            // straight onto that tab on the latest non-pending round
-            // (falling back to round 1 when nothing's started yet).
-            // No round at all → fall back to RyderCupScoreboardScreen.
+            // For Cup tournaments, both "Championship Leaderboard" and
+            // "Cup Scoreboard" buttons land on the per-round Cup tab —
+            // the standings page on its own is duplicative.  Local
+            // closure picks the latest non-pending round; falls back to
+            // round 1, then to RyderCupScoreboardScreen if no rounds at
+            // all have been created.
             onViewLeaderboard: () {
               if (t.activeGames.contains('team_cup')) {
-                final rounds = t.rounds.toList()
-                  ..sort((a, b) => a.roundNumber.compareTo(b.roundNumber));
-                if (rounds.isEmpty) {
-                  // No rounds yet — fall back to the Ryder Cup
-                  // standings screen which can render an empty state.
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => RyderCupScoreboardScreen(
-                      tournamentId  : t.id,
-                      tournamentName: t.name,
-                    ),
-                  ));
-                  return;
-                }
-                final cupRound = rounds.lastWhere(
-                  (r) => r.status != 'pending',
-                  orElse: () => rounds.first,
-                );
-                Navigator.of(context).pushNamed(
-                  '/leaderboard',
-                  arguments: {
-                    'roundId': cupRound.id,
-                    'initialTabKey': '__bandon_cup__',
-                  },
-                );
+                _openCupTab(context, t);
               } else {
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => TournamentLeaderboardScreen(
@@ -321,13 +328,7 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                   tournamentId  : t.id,
                   tournamentName: t.name,
                 ))),
-            onOpenCupScoreboard: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => RyderCupScoreboardScreen(
-                    tournamentId  : t.id,
-                    tournamentName: t.name,
-                  ),
-                )),
+            onOpenCupScoreboard: () => _openCupTab(context, t),
             onSetupCupRound: (round) => Navigator.of(context)
                 .push(MaterialPageRoute(
                     builder: (_) => CupRoundSetupScreen(

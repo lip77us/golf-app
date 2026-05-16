@@ -1640,6 +1640,10 @@ class _NassauGroupCard extends StatelessWidget {
     }
 
     // ── Cup match: QuotaNassau-style layout ──────────────────────────────
+    // Use the Overall bet's holesPlayed as the "thru N" count — it
+    // tracks total holes played across the round, while F9/B9 cap at 9.
+    final thru = nas.overall.holesPlayed;
+
     if (isCupMatch) {
       return Card(
         child: Padding(
@@ -1665,6 +1669,17 @@ class _NassauGroupCard extends StatelessWidget {
                         color: team2Color, fontWeight: FontWeight.bold)),
               )),
             ]),
+            if (thru > 0 && thru < 18)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    'Thru $thru',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ),
             const Divider(height: 14),
             // Team1 on left, team2 on right
             _cupSegRow('F9',  nas.front9,  t1Color, team2Color, theme),
@@ -1676,9 +1691,6 @@ class _NassauGroupCard extends StatelessWidget {
     }
 
     // ── Casual match: original layout ─────────────────────────────────────
-    // Use the Overall bet's holesPlayed as the "thru N" count — it
-    // tracks total holes played across the round, while F9/B9 cap at 9.
-    final thru = nas.overall.holesPlayed;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
