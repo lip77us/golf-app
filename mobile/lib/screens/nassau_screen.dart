@@ -2382,6 +2382,10 @@ class _MatchStatusBar extends StatelessWidget {
     final t1Leads  = bet.margin > 0;
     Color  bg;
     String subtitle;
+    // Subtitle text colour follows the team that's leading / has won, so
+    // F9 / B9 / ALL chips match the T1 / T2 colour convention used on the
+    // golfer rows.  Null = neutral (AS, no holes played).
+    Color? subtitleColor;
 
     if (result != null) {
       // Nine is fully resolved
@@ -2389,7 +2393,9 @@ class _MatchStatusBar extends StatelessWidget {
         bg       = Colors.grey.shade200;
         subtitle = 'AS';
       } else {
-        bg = result == 'team1' ? _t1Color.withOpacity(0.15) : _t2Color.withOpacity(0.15);
+        final winsT1 = result == 'team1';
+        bg            = winsT1 ? _t1Color.withOpacity(0.15) : _t2Color.withOpacity(0.15);
+        subtitleColor = winsT1 ? _t1Color : _t2Color;
         // Use frozen decided score if the nine ended early (e.g. "5&4").
         final dm = bet.decidedMargin;
         final dr = bet.decidedRemaining;
@@ -2407,12 +2413,14 @@ class _MatchStatusBar extends StatelessWidget {
       subtitle = 'AS';
     } else if (holesLeft >= 0 && bet.margin.abs() > holesLeft) {
       // Mathematically decided before the last hole — show "5&4" notation.
-      bg       = t1Leads ? _t1Color.withOpacity(0.15) : _t2Color.withOpacity(0.15);
-      subtitle = '${bet.margin.abs()}&$holesLeft';
+      bg            = t1Leads ? _t1Color.withOpacity(0.15) : _t2Color.withOpacity(0.15);
+      subtitleColor = t1Leads ? _t1Color : _t2Color;
+      subtitle      = '${bet.margin.abs()}&$holesLeft';
     } else {
       // In progress — colour by leader, no team label.
-      bg       = t1Leads ? _t1Color.withOpacity(0.08) : _t2Color.withOpacity(0.08);
-      subtitle = '${bet.margin.abs()}UP';
+      bg            = t1Leads ? _t1Color.withOpacity(0.08) : _t2Color.withOpacity(0.08);
+      subtitleColor = t1Leads ? _t1Color : _t2Color;
+      subtitle      = '${bet.margin.abs()}UP';
     }
 
     return Container(
@@ -2428,8 +2436,10 @@ class _MatchStatusBar extends StatelessWidget {
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
         Text(subtitle,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(fontWeight: FontWeight.bold)),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: subtitleColor,
+            )),
       ]),
     );
   }
@@ -2444,14 +2454,17 @@ class _MatchStatusBar extends StatelessWidget {
     final result  = bet.result;
     Color  bg;
     String subtitle;
+    Color? subtitleColor;
 
     if (result != null) {
       if (result == 'halved') {
         bg       = Colors.grey.shade200;
         subtitle = 'AS';
       } else {
-        bg       = result == 'team1' ? _t1Color.withOpacity(0.15) : _t2Color.withOpacity(0.15);
-        subtitle = 'wins';
+        final winsT1 = result == 'team1';
+        bg            = winsT1 ? _t1Color.withOpacity(0.15) : _t2Color.withOpacity(0.15);
+        subtitleColor = winsT1 ? _t1Color : _t2Color;
+        subtitle      = 'wins';
       }
     } else if (bet.holesPlayed == 0) {
       bg       = theme.colorScheme.surfaceContainer;
@@ -2460,8 +2473,10 @@ class _MatchStatusBar extends StatelessWidget {
       bg       = theme.colorScheme.surfaceContainer;
       subtitle = 'AS';
     } else {
-      bg       = bet.margin > 0 ? _t1Color.withOpacity(0.08) : _t2Color.withOpacity(0.08);
-      subtitle = '${bet.margin > 0 ? '+' : ''}${bet.margin}';
+      final t1Leads = bet.margin > 0;
+      bg            = t1Leads ? _t1Color.withOpacity(0.08) : _t2Color.withOpacity(0.08);
+      subtitleColor = t1Leads ? _t1Color : _t2Color;
+      subtitle      = '${t1Leads ? '+' : ''}${bet.margin}';
     }
 
     return Container(
@@ -2476,8 +2491,10 @@ class _MatchStatusBar extends StatelessWidget {
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
         Text(subtitle,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(fontWeight: FontWeight.bold)),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: subtitleColor,
+            )),
       ]),
     );
   }
