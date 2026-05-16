@@ -18,6 +18,31 @@ int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
   return full + (strokeIndex <= rem ? 1 : 0);
 }
 
+/// Mirror of score_entry_screen.dart's _effectiveHandicap.  Drops the
+/// player's playing handicap into the right "effective" number for the
+/// active handicap mode so the per-hole dot count matches what the
+/// game services use for scoring.
+int _effectiveHandicap({
+  required String mode,
+  required int    netPercent,
+  required int    playingHandicap,
+  int?            lowestPlayingHandicap,
+}) {
+  switch (mode) {
+    case 'gross':
+      return 0;
+    case 'strokes_off':
+      if (lowestPlayingHandicap == null) return playingHandicap;
+      final off = playingHandicap - lowestPlayingHandicap;
+      if (off <= 0) return 0;
+      return (off * netPercent / 100.0).round();
+    case 'net':
+    default:
+      if (netPercent == 100) return playingHandicap;
+      return (playingHandicap * netPercent / 100.0).round();
+  }
+}
+
 String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
 
 class _RunningTotal {
@@ -65,6 +90,16 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
         rp.loadScorecard(widget.foursomeId);
       } else {
         rp.refreshPendingOverlay();
+      }
+      // The dot-counting logic in _strokesForHole consults lowNetConfig
+      // when the round runs low_net (Stroke Play).  Load it on direct
+      // entry so the strokes-off mode is honored without first visiting
+      // the score-entry screen.
+      final games = rp.round?.activeGames ?? const [];
+      if ((games.contains('low_net_round') || games.contains('low_net')) &&
+          rp.round != null &&
+          rp.lowNetConfig == null) {
+        rp.loadLowNetConfig(rp.round!.id);
       }
     });
   }
@@ -139,13 +174,68 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     });
   }
 
-  /// Returns handicap strokes on a specific hole for a player.
-  /// Prefers the server-calculated value; falls back to playing handicap.
+  /// Mode + percentage that should drive stroke-dot display on the
+  /// scorecard.  Mirrors score_entry_screen.dart's _handicapParams so the
+  /// two views agree on what a player's strokes look like.  Priority:
+  /// low_net config → nassau → skins → sixes → points_531 → round-level.
+  (String mode, int netPercent) _handicapParams(RoundProvider rp) {
+    final games = rp.round?.activeGames ?? const [];
+    if ((games.contains('low_net_round') || games.contains('low_net')) &&
+        rp.lowNetConfig != null) {
+      final mode = rp.lowNetConfig!['handicap_mode'] as String? ?? 'net';
+      final pct  = rp.lowNetConfig!['net_percent']  as int?    ?? 100;
+      return (mode, pct);
+    }
+    if (games.contains('nassau') && rp.nassauSummary != null) {
+      return (rp.nassauSummary!.handicapMode, rp.nassauSummary!.netPercent);
+    }
+    if (games.contains('skins') && rp.skinsSummary != null) {
+      return (rp.skinsSummary!.handicapMode, rp.skinsSummary!.netPercent);
+    }
+    if (games.contains('sixes') && rp.sixesSummary != null) {
+      return (rp.sixesSummary!.handicapMode, rp.sixesSummary!.netPercent);
+    }
+    if (games.contains('points_531') && rp.points531Summary != null) {
+      return (rp.points531Summary!.handicapMode,
+              rp.points531Summary!.netPercent);
+    }
+    return (rp.round?.handicapMode ?? 'net', rp.round?.netPercent ?? 100);
+  }
+
+  /// Returns handicap strokes on a specific hole for a player.  Always
+  /// computes locally from the active handicap mode (net / gross /
+  /// strokes-off) so the dots match what the game services actually use
+  /// to score.  The server's persisted HoleScore.handicap_strokes is
+  /// mode-blind (always full playing-handicap), so we deliberately don't
+  /// trust it here.
   int _strokesForHole(Membership m, ScorecardHole? h) {
     if (h == null) return 0;
+    final rp = context.read<RoundProvider>();
+    final (mode, pct) = _handicapParams(rp);
+    if (mode == 'gross') return 0;
+
+    int? lowestPlaying;
+    if (mode == 'strokes_off') {
+      final sc = rp.scorecard;
+      if (sc == null) return 0;
+      final players = _realPlayers(sc, rp.round);
+      if (players.isNotEmpty) {
+        lowestPlaying = players
+            .map((p) => p.playingHandicap)
+            .reduce((a, b) => a < b ? a : b);
+      }
+    }
+
+    final effective = _effectiveHandicap(
+      mode:                  mode,
+      netPercent:            pct,
+      playingHandicap:       m.playingHandicap,
+      lowestPlayingHandicap: lowestPlaying,
+    );
+    // Per-player SI is preferred — falls back to the shared hole SI.
     final entry = h.scoreFor(m.player.id);
-    if (entry != null) return entry.handicapStrokes;
-    return _strokesOnHole(m.playingHandicap, h.strokeIndex);
+    final si    = entry?.strokeIndex ?? h.strokeIndex;
+    return _strokesOnHole(effective, si);
   }
 
   _RunningTotal _running(int playerId, Scorecard sc) {
