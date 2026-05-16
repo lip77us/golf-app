@@ -946,7 +946,8 @@ class _QNPlayerRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: isHot ? theme.colorScheme.primary : null,
+                  // Don't repaint the name green on the hot row — the
+                  // green score-box and row tint already mark it.
                 ),
               ),
               if (quota != null)

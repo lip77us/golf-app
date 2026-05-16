@@ -1306,7 +1306,12 @@ class _NassauPlayerRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: isHot ? theme.colorScheme.primary : null,
+                  // Tint the name with the player's team colour — the
+                  // green score-box outline + row tint already mark the
+                  // hot-spot player.
+                  color: teamLabel == 'T1'
+                      ? t1Color
+                      : (teamLabel == 'T2' ? t2Color : null),
                 ),
               ),
             ),

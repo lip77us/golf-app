@@ -1272,7 +1272,9 @@ class _PlayerScoreRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: isHot ? theme.colorScheme.primary : null,
+                  // Sixes shows the team via the row's group/position
+                  // header; keep the name in default theme colour rather
+                  // than going green on the hot row.
                 ),
               ),
             ),

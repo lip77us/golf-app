@@ -683,6 +683,13 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           }),
           onToggleTournamentGame: (g, on) => setState(() {
             on ? _tournamentActiveGames.add(g) : _tournamentActiveGames.remove(g);
+            // Picking Cup Play auto-enables Stroke Play Championship by
+            // default — without it the cup leaderboard has no place to
+            // show per-player round detail.  User can untoggle on the
+            // Cup Design step (2 of 4) if they really don't want it.
+            if (g == GameIds.teamCup && on) {
+              _tournamentActiveGames.add(GameIds.championshipStrokePlay);
+            }
           }),
         );
       case 1:

@@ -2162,7 +2162,11 @@ class _PlayerRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: isHot ? theme.colorScheme.primary : nameColor,
+                      // Keep the player's team colour (red / blue / cup
+                      // colour) regardless of hot-spot state — the row's
+                      // background highlight + the green score box make
+                      // the active picker obvious enough.
+                      color: nameColor,
                     ),
                   ),
                 ),

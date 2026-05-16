@@ -927,7 +927,9 @@ class _SkinsPlayerRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: isHot ? theme.colorScheme.primary : null,
+                  // No team colour here (Skins is per-player).  Keep the
+                  // name in the default theme colour rather than going
+                  // green on the hot row.
                 ),
               ),
             ),
