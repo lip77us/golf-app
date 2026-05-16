@@ -814,15 +814,36 @@ class _HoleScoreCard extends StatelessWidget {
                       border: boxBorder,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    alignment: Alignment.center,
-                    child: gross != null
-                        ? Text(
-                            '$gross',
-                            style: theme.textTheme.titleSmall
-                                ?.copyWith(
-                                    fontWeight: FontWeight.bold),
-                          )
-                        : null,
+                    child: Stack(children: [
+                      Center(
+                        child: gross != null
+                            ? Text(
+                                '$gross',
+                                style: theme.textTheme.titleSmall
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.bold),
+                              )
+                            : null,
+                      ),
+                      if (strokes > 0)
+                        Positioned(
+                          top: 2, right: 2,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: List.generate(
+                              strokes.clamp(0, 2),
+                              (_) => Container(
+                                width: 4, height: 4,
+                                margin: const EdgeInsets.only(left: 1),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ]),
                   ),
                 ),
               ]),

@@ -689,14 +689,6 @@ class _SixesScreenState extends State<SixesScreen> {
               },
             ),
           IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                      arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
-          ),
-          IconButton(
             tooltip: 'Leaderboard',
             icon: const Icon(Icons.leaderboard_outlined),
             onPressed: rp.round == null
@@ -705,6 +697,14 @@ class _SixesScreenState extends State<SixesScreen> {
                       '/leaderboard',
                       arguments: rp.round!.id,
                     ),
+          ),
+          IconButton(
+            tooltip: 'Full scorecard',
+            icon: const Icon(Icons.table_chart_outlined),
+            onPressed: sc == null
+                ? null
+                : () => Navigator.of(context).pushNamed('/scorecard',
+                      arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
           ),
         ],
       ),

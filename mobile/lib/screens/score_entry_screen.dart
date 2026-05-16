@@ -317,7 +317,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (configured.contains('sixes'))      rp.loadSixes(widget.foursomeId);
     if (configured.contains('points_531')) rp.loadPoints531(widget.foursomeId);
     // Stroke Play stores handicap mode in its own config (not the round object).
-    if (games.contains('low_net_round') && rp.round != null)
+    // Both casual ('low_net_round') and championship ('low_net') use the same endpoint.
+    if ((games.contains('low_net_round') || games.contains('low_net')) &&
+        rp.round != null)
       rp.loadLowNetConfig(rp.round!.id);
     // Load match play if it's in the active game list OR if a bracket has
     // already been configured (handles cases where match_play is set at the
@@ -356,7 +358,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     RoundProvider rp,
     List<String> games,
   ) {
-    if (games.contains('low_net_round') && rp.lowNetConfig != null) {
+    if ((games.contains('low_net_round') || games.contains('low_net')) &&
+        rp.lowNetConfig != null) {
       final mode = rp.lowNetConfig!['handicap_mode'] as String? ?? 'net';
       final pct  = rp.lowNetConfig!['net_percent']  as int?    ?? 100;
       return (mode, pct);
@@ -889,20 +892,20 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
               ),
             ),
           IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
-          ),
-          IconButton(
             tooltip: 'Leaderboard',
             icon: const Icon(Icons.leaderboard_outlined),
             onPressed: rp.round == null
                 ? null
                 : () => Navigator.of(context)
                     .pushNamed('/leaderboard', arguments: rp.round!.id),
+          ),
+          IconButton(
+            tooltip: 'Full scorecard',
+            icon: const Icon(Icons.table_chart_outlined),
+            onPressed: sc == null
+                ? null
+                : () => Navigator.of(context).pushNamed('/scorecard',
+                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
           ),
         ],
       ),
@@ -2294,6 +2297,27 @@ class _PlayerRow extends StatelessWidget {
                         : Border.all(color: theme.colorScheme.outline),
                     borderRadius: BorderRadius.circular(6),
                   ),
+                  child: strokesOnThisHole > 0
+                      ? Stack(children: [
+                          Positioned(
+                            top: 2, right: 2,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(
+                                strokesOnThisHole.clamp(0, 2),
+                                (_) => Container(
+                                  width: 4, height: 4,
+                                  margin: const EdgeInsets.only(left: 1),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ])
+                      : null,
                 ),
         ),
       ]),

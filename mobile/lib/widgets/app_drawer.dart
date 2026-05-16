@@ -30,33 +30,39 @@ class AppDrawer extends StatelessWidget {
     return Drawer(
       child: Column(
         children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(),
-            margin: EdgeInsets.zero,
-            padding: EdgeInsets.zero,
-            child: Center(
-              child: Image.asset(
-                'assets/images/bandon_cup_logo.png',
-                height: 148,
-              ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                DrawerHeader(
+                  decoration: const BoxDecoration(),
+                  margin: EdgeInsets.zero,
+                  padding: EdgeInsets.zero,
+                  child: Center(
+                    child: Image.asset(
+                      'assets/images/bandon_cup_logo.png',
+                      height: 148,
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.emoji_events_outlined),
+                  title: const Text('Tournaments'),
+                  onTap: onTournamentsTap,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.sports_golf),
+                  title: const Text('Casual Rounds'),
+                  onTap: onCasualRoundsTap,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.people_outline),
+                  title: const Text('Players'),
+                  onTap: onPlayersTap,
+                ),
+              ],
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.emoji_events_outlined),
-            title: const Text('Tournaments'),
-            onTap: onTournamentsTap,
-          ),
-          ListTile(
-            leading: const Icon(Icons.sports_golf),
-            title: const Text('Casual Rounds'),
-            onTap: onCasualRoundsTap,
-          ),
-          ListTile(
-            leading: const Icon(Icons.people_outline),
-            title: const Text('Players'),
-            onTap: onPlayersTap,
-          ),
-          const Spacer(),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.settings_outlined),

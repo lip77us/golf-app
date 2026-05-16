@@ -385,6 +385,14 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
               ),
             ),
           IconButton(
+            tooltip: 'Leaderboard',
+            icon: const Icon(Icons.leaderboard_outlined),
+            onPressed: round == null
+                ? null
+                : () => Navigator.of(context)
+                    .pushNamed('/leaderboard', arguments: round.id),
+          ),
+          IconButton(
             tooltip: 'Full scorecard',
             icon: const Icon(Icons.table_chart_outlined),
             onPressed: sc == null
@@ -394,14 +402,6 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
                       'foursomeId': widget.foursomeId,
                       'readOnly': true
                     }),
-          ),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: round == null
-                ? null
-                : () => Navigator.of(context)
-                    .pushNamed('/leaderboard', arguments: round.id),
           ),
         ],
       ),
