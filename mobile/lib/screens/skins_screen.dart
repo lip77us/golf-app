@@ -951,6 +951,12 @@ class _SkinsPlayerRow extends StatelessWidget {
                 ),
               ),
             ],
+            if (member.tee != null) ...[
+              const SizedBox(width: 6),
+              Text(member.tee!.teeName,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ],
           ]),
         ),
 

@@ -1336,6 +1336,15 @@ class _NassauPlayerRow extends StatelessWidget {
                 ),
               ),
             ],
+            // Tee name next to the handicap index (or right after the
+            // name when there's no chip — gross mode).  Same placement
+            // as the universal score-entry screen.
+            if (member.tee != null) ...[
+              const SizedBox(width: 6),
+              Text(member.tee!.teeName,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ],
           ]),
         ),
 

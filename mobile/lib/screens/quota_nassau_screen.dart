@@ -941,15 +941,25 @@ class _QNPlayerRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                member.player.name,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  // Don't repaint the name green on the hot row — the
-                  // green score-box and row tint already mark it.
+              Row(children: [
+                Flexible(
+                  child: Text(
+                    member.player.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      // Don't repaint the name green on the hot row — the
+                      // green score-box and row tint already mark it.
+                    ),
+                  ),
                 ),
-              ),
+                if (member.tee != null) ...[
+                  const SizedBox(width: 6),
+                  Text(member.tee!.teeName,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ]),
               if (quota != null)
                 Text(
                   // Show F9 / B9 / 18 quota: e.g. "12/12/24"
