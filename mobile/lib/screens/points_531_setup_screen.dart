@@ -151,41 +151,47 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Points 5-3-1 — Setup')),
-      body: _buildBody(),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: (_starting || !_rosterValid) ? null : _start,
-              child: _starting
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Start Game',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ),
-      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? ErrorView(
+                  message: friendlyError(_error!),
+                  isNetwork: isNetworkError(_error!),
+                  onRetry: _load,
+                )
+              : Column(children: [
+                  Expanded(child: _buildBody()),
+                  // Persistent Start Game button — inside the body Column so
+                  // resizeToAvoidBottomInset keeps it above the soft keyboard
+                  // when the bet field's number pad is open (the keyboard
+                  // covered Start when this lived in bottomNavigationBar).
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton(
+                          onPressed: (_starting || !_rosterValid) ? null : _start,
+                          child: _starting
+                              ? const SizedBox(
+                                  width: 20, height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Text('Start Game',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]),
     );
   }
 
   Widget _buildBody() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
-      return ErrorView(
-        message: friendlyError(_error!),
-        isNetwork: isNetworkError(_error!),
-        onRetry: _load,
-      );
-    }
-
     final theme = Theme.of(context);
 
     return SingleChildScrollView(

@@ -168,98 +168,118 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Multi-Group Skins')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text('Round-level skins pool. Lowest score on each hole wins '
-              '1 skin; tied holes die (no carryover).',
-              style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 16),
+      body: Column(children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text('Round-level skins pool. Lowest score on each hole wins '
+                  '1 skin; tied holes die (no carryover).',
+                  style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 16),
 
-          // ── Handicap mode ────────────────────────────────────────────
-          HandicapModeSelector(
-            mode:             _mode,
-            netPercent:       _netPercent,
-            onModeChanged:    (m) => setState(() => _mode = m),
-            onPercentChanged: (p) => setState(() => _netPercent = p),
-          ),
-          const Divider(height: 32),
+              // ── Handicap mode ────────────────────────────────────────────
+              HandicapModeSelector(
+                mode:             _mode,
+                netPercent:       _netPercent,
+                onModeChanged:    (m) => setState(() => _mode = m),
+                onPercentChanged: (p) => setState(() => _netPercent = p),
+              ),
+              const Divider(height: 32),
 
-          // ── Bet unit ─────────────────────────────────────────────────
-          Row(children: [
-            const Expanded(
-                flex: 2, child: Text('Entry fee per player (\$)')),
-            Expanded(
-              flex: 1,
-              child: TextField(
-                controller: _betCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                textAlign: TextAlign.end,
-                decoration: const InputDecoration(
-                  prefixText: '\$ ', isDense: true,
+              // ── Bet unit ─────────────────────────────────────────────────
+              Row(children: [
+                const Expanded(
+                    flex: 2, child: Text('Entry fee per player (\$)')),
+                Expanded(
+                  flex: 1,
+                  child: TextField(
+                    controller: _betCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.end,
+                    decoration: const InputDecoration(
+                      prefixText: '\$ ', isDense: true,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
                 ),
-                onChanged: (_) => setState(() {}),
+              ]),
+              const SizedBox(height: 8),
+              Text(
+                'Pool: \$${_pool.toStringAsFixed(2)} '
+                '($_participantCount × \$${_betUnit.toStringAsFixed(2)})',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-            ),
-          ]),
-          const SizedBox(height: 8),
-          Text(
-            'Pool: \$${_pool.toStringAsFixed(2)} '
-            '($_participantCount × \$${_betUnit.toStringAsFixed(2)})',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const Divider(height: 32),
+              const Divider(height: 32),
 
-          // ── Roster (per foursome) ────────────────────────────────────
-          Text('Participants',
-              style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          for (final fs in foursomes) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 12, bottom: 4),
-              child: Text('Group ${fs.groupNumber}',
-                  style: Theme.of(context).textTheme.labelLarge),
-            ),
-            for (final m in fs.memberships.where((m) => !m.player.isPhantom))
-              CheckboxListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(m.player.name),
-                subtitle: Text('Hcp ${m.player.handicapIndex}'),
-                value: _participants[m.player.id] ?? false,
-                onChanged: (v) => setState(() {
-                  _participants[m.player.id] = v ?? false;
-                }),
-              ),
-          ],
-          const SizedBox(height: 24),
-
-          // ── Start ────────────────────────────────────────────────────
-          FilledButton(
-            onPressed: _canStart && !_starting ? _start : null,
-            child: _starting
-                ? const SizedBox(
-                    height: 18, width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(_summary?.status == 'in_progress'
-                    ? 'Save Changes'
-                    : 'Start Multi-Group Skins'),
+              // ── Roster (per foursome) ────────────────────────────────────
+              Text('Participants',
+                  style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              for (final fs in foursomes) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                  child: Text('Group ${fs.groupNumber}',
+                      style: Theme.of(context).textTheme.labelLarge),
+                ),
+                for (final m in fs.memberships.where((m) => !m.player.isPhantom))
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(m.player.name),
+                    subtitle: Text('Hcp ${m.player.handicapIndex}'),
+                    value: _participants[m.player.id] ?? false,
+                    onChanged: (v) => setState(() {
+                      _participants[m.player.id] = v ?? false;
+                    }),
+                  ),
+              ],
+            ],
           ),
-          if (!_canStart)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                _participantCount < 2
-                    ? 'Pick at least 2 participants.'
-                    : 'Enter a positive entry fee.',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontSize: 12,
+        ),
+
+        // ── Persistent Start button (outside ListView so it stays above
+        // the soft keyboard when the bet field is being edited). ─────────
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(children: [
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton(
+                  onPressed: _canStart && !_starting ? _start : null,
+                  child: _starting
+                      ? const SizedBox(
+                          height: 20, width: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : Text(_summary?.status == 'in_progress'
+                          ? 'Save Changes'
+                          : 'Start Multi-Group Skins',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
-            ),
-        ],
-      ),
+              if (!_canStart)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    _participantCount < 2
+                        ? 'Pick at least 2 participants.'
+                        : 'Enter a positive entry fee.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+      ]),
     );
   }
 }
