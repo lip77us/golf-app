@@ -309,16 +309,21 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   void _loadGameSummaries(RoundProvider rp) {
     final games      = _activeGames(rp.round);
     final configured = _configuredGames(rp.round);
-    // Per-foursome summary loads gate on configured_games to avoid 404
-    // spam on pre-setup foursomes.  Once we've loaded a summary at least
-    // once (rp.<game>Summary != null) keep refreshing it even if the
-    // local Round's configured_games is stale — sync-drain refreshes
-    // after auto-advance hit this path when the user has set up the
-    // game but the cached Round hasn't been re-fetched yet.
-    if (configured.contains('nassau') || rp.nassauSummary != null) {
+    // Gate on the round's active games (games) for the common case where
+    // setup just completed and the cached Round hasn't been re-fetched
+    // yet — configured_games would be stale and the summary still null,
+    // which previously caused the status widget to never appear until the
+    // user navigated away and came back.  configured_games and any
+    // previously-loaded summary stay in the OR'd condition so e.g.
+    // tournament cup foursomes (whose game lives on the foursome, not the
+    // round) keep working.  Load methods swallow 404s silently, so an
+    // extra request for a foursome that hasn't been set up is harmless.
+    if (games.contains('nassau') ||
+        configured.contains('nassau') || rp.nassauSummary != null) {
       rp.loadNassau(widget.foursomeId);
     }
-    if (configured.contains('skins') || rp.skinsSummary != null) {
+    if (games.contains('skins') ||
+        configured.contains('skins') || rp.skinsSummary != null) {
       rp.loadSkins(widget.foursomeId);
     }
     // Multi-Group Skins is round-scoped (no foursome configured_games entry),
@@ -326,10 +331,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (games.contains('multi_skins') && rp.round != null) {
       rp.loadMultiSkins(rp.round!.id);
     }
-    if (configured.contains('sixes') || rp.sixesSummary != null) {
+    if (games.contains('sixes') ||
+        configured.contains('sixes') || rp.sixesSummary != null) {
       rp.loadSixes(widget.foursomeId);
     }
-    if (configured.contains('points_531') || rp.points531Summary != null) {
+    if (games.contains('points_531') ||
+        configured.contains('points_531') || rp.points531Summary != null) {
       rp.loadPoints531(widget.foursomeId);
     }
     // Stroke Play stores handicap mode in its own config (not the round object).
@@ -1280,6 +1287,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 loadingNassau:           rp.loadingNassau,
                 loadingSkins:            rp.loadingSkins,
                 loadingMultiSkins:       rp.loadingMultiSkins,
+                loadingSixes:            rp.loadingSixes,
                 loadingPoints531:        rp.loadingPoints531,
                 loadingMatchPlay:        rp.loadingMatchPlay,
                 loadingThreePersonMatch: rp.loadingThreePersonMatch,
@@ -2639,6 +2647,7 @@ class _GameStatusSection extends StatelessWidget {
   final bool                        loadingNassau;
   final bool                        loadingSkins;
   final bool                        loadingMultiSkins;
+  final bool                        loadingSixes;
   final bool                        loadingPoints531;
   final bool                        loadingMatchPlay;
   final bool                        loadingThreePersonMatch;
@@ -2663,6 +2672,7 @@ class _GameStatusSection extends StatelessWidget {
     required this.loadingNassau,
     required this.loadingSkins,
     this.loadingMultiSkins = false,
+    this.loadingSixes      = false,
     required this.loadingPoints531,
     required this.loadingMatchPlay,
     this.loadingThreePersonMatch = false,
@@ -2725,12 +2735,20 @@ class _GameStatusSection extends StatelessWidget {
         ],
 
         // Sixes match grid
-        if (games.contains('sixes') && sixesSummary != null) ...[
-          _SixesMatchGrid(
-            summary:     sixesSummary!,
-            members:     players,
-            currentHole: currentHole,
-          ),
+        if (games.contains('sixes')) ...[
+          if (sixesSummary != null)
+            _SixesMatchGrid(
+              summary:     sixesSummary!,
+              members:     players,
+              currentHole: currentHole,
+            )
+          else if (loadingSixes)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
           const SizedBox(height: 12),
         ],
 
