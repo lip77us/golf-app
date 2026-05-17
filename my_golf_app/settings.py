@@ -85,6 +85,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Logs every 401 with path / IP / auth-header presence so we can
+    # diagnose the intermittent client-side silent-logout bug.  See
+    # api/middleware.py for the rationale.
+    'api.middleware.AuthFailureLogger',
 ]
 
 ROOT_URLCONF = 'my_golf_app.urls'
