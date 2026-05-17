@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import '../widgets/handicap_mode_selector.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -303,7 +304,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       const SizedBox(height: 20),
 
                       // ── Handicap mode picker ──
-                      _HandicapModeCard(
+                      HandicapModeSelector(
                         mode:        _handicapMode,
                         netPercent:  _netPercent,
                         onModeChanged: (m) => setState(() => _handicapMode = m),
@@ -579,99 +580,3 @@ class _BetUnitCard extends StatelessWidget {
 }
 
 
-class _HandicapModeCard extends StatelessWidget {
-  /// 'net', 'gross', or 'strokes_off'.
-  final String mode;
-
-  /// 0–200.  Only meaningful when mode == 'net'.
-  final int netPercent;
-
-  final ValueChanged<String> onModeChanged;
-  final ValueChanged<int>    onPercentChanged;
-
-  const _HandicapModeCard({
-    required this.mode,
-    required this.netPercent,
-    required this.onModeChanged,
-    required this.onPercentChanged,
-  });
-
-  // Common allowance presets — 100% is the default, 90% is USGA recommended
-  // for 2v2 best-ball, 80% is sometimes used for bigger handicap spreads,
-  // 75% for very wide spreads.  Kept to four so they fit on one row and
-  // the bet unit card sits higher on the screen.
-  static const _presets = <int>[100, 90, 80, 75];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Handicap',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary)),
-          const SizedBox(height: 8),
-
-          // Net / Gross / SO segmented buttons.  "SO" = Strokes Off the
-          // low golfer in the foursome.
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'net',         label: Text('Net')),
-              ButtonSegment(value: 'gross',       label: Text('Gross')),
-              ButtonSegment(value: 'strokes_off', label: Text('SO')),
-            ],
-            selected: {mode},
-            onSelectionChanged: (s) => onModeChanged(s.first),
-          ),
-
-          // Mode-specific helper text / controls below the picker.
-          if (mode != 'gross') ...[
-            const SizedBox(height: 12),
-            Text('Handicap allowance',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: _presets.map((p) {
-                final selected = p == netPercent;
-                return ChoiceChip(
-                  label: Text('$p%'),
-                  selected: selected,
-                  onSelected: (_) => onPercentChanged(p),
-                );
-              }).toList(),
-            ),
-          ] else if (mode == 'gross') ...[
-            const SizedBox(height: 8),
-            Text('No strokes given — raw scores used.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant)),
-          ] else ...[
-            // 'strokes_off'
-            const SizedBox(height: 8),
-            Text(
-              'Low player in the foursome plays to 0. Others get '
-              '(own HCP − low HCP) strokes, spread across the three '
-              '6-hole matches and allocated to the hardest holes in each. '
-              'Strokes planned on unreached holes die; extra-match holes '
-              'use a stroke-index threshold.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ]),
-      ),
-    );
-  }
-}

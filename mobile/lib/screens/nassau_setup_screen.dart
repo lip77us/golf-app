@@ -19,6 +19,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/handicap_mode_selector.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -336,7 +337,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           const SizedBox(height: 16),
 
           // ── Handicap mode ─────────────────────────────────────────────────
-          _HandicapModeCard(
+          HandicapModeSelector(
             mode:             _mode,
             netPercent:       _netPercent,
             onModeChanged:    (m) => setState(() => _mode = m),
@@ -654,85 +655,3 @@ class _VariantCard extends StatelessWidget {
   }
 }
 
-// ===========================================================================
-// _HandicapModeCard — identical to the one in skins_setup_screen.dart
-// ===========================================================================
-
-class _HandicapModeCard extends StatelessWidget {
-  final String mode;
-  final int    netPercent;
-  final ValueChanged<String> onModeChanged;
-  final ValueChanged<int>    onPercentChanged;
-
-  const _HandicapModeCard({
-    required this.mode,
-    required this.netPercent,
-    required this.onModeChanged,
-    required this.onPercentChanged,
-  });
-
-  static const _presets = <int>[100, 90, 80, 75];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Handicap',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary)),
-          const SizedBox(height: 8),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'net',         label: Text('Net')),
-              ButtonSegment(value: 'gross',       label: Text('Gross')),
-              ButtonSegment(value: 'strokes_off', label: Text('SO')),
-            ],
-            selected: {mode},
-            onSelectionChanged: (s) => onModeChanged(s.first),
-          ),
-          if (mode != 'gross') ...[
-            const SizedBox(height: 12),
-            Text('Handicap allowance',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8, runSpacing: 4,
-              children: _presets.map((p) {
-                final selected = p == netPercent;
-                return ChoiceChip(
-                  label: Text('$p%'),
-                  selected: selected,
-                  onSelected: (_) => onPercentChanged(p),
-                );
-              }).toList(),
-            ),
-          ] else if (mode == 'gross') ...[
-            const SizedBox(height: 8),
-            Text('No strokes given — raw scores used.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant)),
-          ] else ...[
-            const SizedBox(height: 8),
-            Text(
-              'The lowest-handicap player plays to 0.  Every other player '
-              'gets one stroke on each hole whose stroke index is ≤ their '
-              '(own HCP − low HCP).',
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ]),
-      ),
-    );
-  }
-}

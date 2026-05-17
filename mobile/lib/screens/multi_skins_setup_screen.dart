@@ -16,6 +16,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/handicap_mode_selector.dart';
 
 class MultiSkinsSetupScreen extends StatefulWidget {
   final int roundId;
@@ -72,10 +73,13 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
         _mode       = _summary!.handicapMode;
         _netPercent = _summary!.netPercent;
         if (!_betCtrlInitialized) {
-          final v = _summary!.betUnit > 0
-              ? _summary!.betUnit
-              : (context.read<RoundProvider>().round?.betUnit ?? 10.0);
-          _betCtrl.text       = v.toStringAsFixed(2);
+          // Default to $10 (the common "everyone throw in a ten" amount).
+          // Existing game: use whatever the user previously saved.
+          final v = _summary!.betUnit > 0 ? _summary!.betUnit : 10.0;
+          // Drop trailing .00 so the placeholder reads "10" not "10.00".
+          _betCtrl.text = v == v.roundToDouble()
+              ? v.toStringAsFixed(0)
+              : v.toStringAsFixed(2);
           _betCtrlInitialized = true;
         }
         _loading = false;
@@ -173,34 +177,12 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
           const SizedBox(height: 16),
 
           // ── Handicap mode ────────────────────────────────────────────
-          Text('Handicap mode',
-              style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'net',         label: Text('Net')),
-              ButtonSegment(value: 'gross',       label: Text('Gross')),
-              ButtonSegment(value: 'strokes_off', label: Text('SO Low')),
-            ],
-            selected: {_mode},
-            onSelectionChanged: (s) => setState(() => _mode = s.first),
+          HandicapModeSelector(
+            mode:             _mode,
+            netPercent:       _netPercent,
+            onModeChanged:    (m) => setState(() => _mode = m),
+            onPercentChanged: (p) => setState(() => _netPercent = p),
           ),
-          if (_mode == 'net') ...[
-            const SizedBox(height: 12),
-            Row(children: [
-              const Text('Net %  '),
-              Expanded(
-                child: Slider(
-                  min: 50, max: 130, divisions: 16,
-                  value: _netPercent.toDouble(),
-                  label: '${_netPercent}%',
-                  onChanged: (v) =>
-                      setState(() => _netPercent = v.round()),
-                ),
-              ),
-              SizedBox(width: 48, child: Text('${_netPercent}%')),
-            ]),
-          ],
           const Divider(height: 32),
 
           // ── Bet unit ─────────────────────────────────────────────────
