@@ -277,8 +277,11 @@ class RoundSerializer(serializers.ModelSerializer):
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'scramble_config', 'notes', 'foursomes',
             'is_cup_round', 'ir_balls_config',
+            # Public spectator URL token — used by mobile's "Share Watch
+            # Link" button to construct /watch/<token>/.
+            'watch_token',
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'watch_token']
 
 
 class RoundListSerializer(serializers.ModelSerializer):

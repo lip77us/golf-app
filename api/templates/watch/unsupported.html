@@ -1,0 +1,13 @@
+{% extends "watch/base.html" %}
+
+{% block title %}Live Leaderboard{% endblock %}
+
+{% block body %}
+  <h1>Round {{ round.round_number }}</h1>
+  <p class="sub">{{ round.date|date:"D, M j, Y" }} · {{ round.course.name }}</p>
+
+  <div class="card empty">
+    The public spectator view currently supports Cup tournament rounds
+    (Four Ball + Singles).  Other formats are coming soon.
+  </div>
+{% endblock %}

@@ -469,6 +469,9 @@ class Round {
   /// Irish Rumble balls-per-segment config — list of
   /// {start_hole, end_hole, balls_to_count} maps.  Empty when IR is not active.
   final List<Map<String, dynamic>> irBallsConfig;
+  /// Short token used by the public spectator URL (/watch/<token>/).
+  /// Null on legacy rounds that haven't been re-saved post-migration.
+  final String? watchToken;
 
   const Round({
     required this.id,
@@ -484,6 +487,7 @@ class Round {
     required this.foursomes,
     this.isCupRound    = false,
     this.irBallsConfig = const [],
+    this.watchToken,
   });
 
   factory Round.fromJson(Map<String, dynamic> j) => Round(
@@ -498,6 +502,7 @@ class Round {
         netPercent:   j['net_percent']   as int?    ?? 100,
         netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? true,
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
+        watchToken:   j['watch_token']   as String?,
         irBallsConfig: (j['ir_balls_config'] as List? ?? [])
             .map((s) => Map<String, dynamic>.from(s as Map))
             .toList(),

@@ -17,7 +17,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+from api import watch_views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/',   include('api.urls')),
+
+    # Public spectator pages — token-gated, no auth, plain HTML.
+    # Shared by the mobile app's "Share Watch Link" button.
+    path('watch/<str:token>/', watch_views.watch_cup_round,
+         name='watch-cup-round'),
 ]

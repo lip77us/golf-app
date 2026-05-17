@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import '../api/models.dart';
+import '../config.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
@@ -84,6 +86,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     super.dispose();
   }
 
+  /// Build the public spectator URL for this round and copy it to the
+  /// clipboard.  Strips the `/api` suffix off Config.baseUrl since the
+  /// watch page is served from the bare host.
+  void _shareWatchLink(BuildContext context, String token) {
+    final api  = Config.baseUrl;
+    final host = api.endsWith('/api') ? api.substring(0, api.length - 4) : api;
+    final url  = '$host/watch/$token/';
+    Clipboard.setData(ClipboardData(text: url));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      duration: const Duration(seconds: 4),
+      content: Text('Spectator link copied: $url'),
+    ));
+  }
+
   Future<void> _confirmReopen(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -136,10 +152,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     final lb      = rp.leaderboard;
     final isFinal = lb?.status == 'complete';
 
+    final watchToken = rp.round?.watchToken;
+    final isCupRound = rp.round?.isCupRound ?? false;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Leaderboard'),
         actions: [
+          // Share the public spectator URL.  Currently the watch page only
+          // renders cup-round data, so hide the button on non-cup rounds
+          // until more formats are supported.
+          if (watchToken != null && isCupRound)
+            IconButton(
+              tooltip: 'Share spectator link',
+              icon: const Icon(Icons.share_outlined),
+              onPressed: () => _shareWatchLink(context, watchToken),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () =>

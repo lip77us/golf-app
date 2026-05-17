@@ -111,6 +111,33 @@ class Round(models.Model):
                             related_name='created_rounds',
                             help_text="Player who created this round. Only they may delete it."
                         )
+    # Token used by the public /watch/<token>/ live-leaderboard page so
+    # spectators can follow scores without logging in.  Auto-generated on
+    # first save if missing (see Round.save() override below).
+    watch_token         = models.CharField(
+                            max_length=12,
+                            unique=True,
+                            blank=True,
+                            null=True,
+                            help_text=(
+                                "Random short code used in the public "
+                                "spectator URL: /watch/<token>/."
+                            ),
+                        )
+
+    def save(self, *args, **kwargs):
+        # Lazily mint a watch_token on first save.  base32 over 8 chars
+        # gives 32**8 ≈ 1.1 trillion combinations — plenty for the
+        # collision-free lifetime of a single tournament.
+        if not self.watch_token:
+            import secrets, string
+            alphabet = string.ascii_uppercase + '23456789'  # base32-ish, no 0/1/I/O
+            for _ in range(5):
+                candidate = ''.join(secrets.choice(alphabet) for _ in range(8))
+                if not Round.objects.filter(watch_token=candidate).exists():
+                    self.watch_token = candidate
+                    break
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Round {self.round_number} — {self.date} @ {self.course.name}"
