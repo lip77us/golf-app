@@ -319,6 +319,88 @@ class SkinsPlayerHoleResult(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# MULTI-FOURSOME SKINS (Round-scoped, pooled across every participating group)
+# ---------------------------------------------------------------------------
+
+class MultiSkinsGame(models.Model):
+    """
+    Round-level skins pool that crosses foursomes.  Each player opts in
+    individually; the roster is explicit (not the union of every
+    foursome's roster).  Lowest score on a hole wins 1 skin; any tie
+    kills the skin.  No carryover, no junk — intentionally simple.
+
+    Settlement: pool = bet_unit × participants; payout is proportional
+    to skins won.  Players with zero skins receive nothing.
+    """
+    round           = models.OneToOneField(
+                        Round, on_delete=models.CASCADE,
+                        related_name='multi_skins_game',
+                    )
+    status          = models.CharField(
+                        max_length=20,
+                        choices=MatchStatus.choices,
+                        default=MatchStatus.PENDING,
+                    )
+    handicap_mode   = models.CharField(
+                        max_length=20,
+                        choices=HandicapMode.choices,
+                        default=HandicapMode.NET,
+                        help_text="How per-hole scores are adjusted for ranking.",
+                    )
+    net_percent     = models.PositiveSmallIntegerField(
+                        default=100,
+                        validators=[MinValueValidator(0), MaxValueValidator(200)],
+                        help_text="Percentage of playing handicap applied when "
+                                  "handicap_mode='net'.",
+                    )
+    bet_unit        = models.DecimalField(
+                        max_digits=6, decimal_places=2, default=10.00,
+                        help_text="Dollar entry fee per participating player.",
+                    )
+    participants    = models.ManyToManyField(
+                        Player,
+                        related_name='multi_skins_games',
+                        help_text="Players who paid into this pool. A player "
+                                  "may belong to any foursome in this round.",
+                    )
+    created_at      = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Multi-Skins — Round {self.round_id}"
+
+
+class MultiSkinsHoleResult(models.Model):
+    """
+    Calculated per-hole outcome for a MultiSkinsGame.  One row per hole
+    for which every participant has submitted a gross score.
+
+    winner: the player with the unique lowest score.  None when the
+            best score is tied (skin dies).
+    """
+    game            = models.ForeignKey(
+                        MultiSkinsGame, on_delete=models.CASCADE,
+                        related_name='hole_results',
+                    )
+    hole_number     = models.PositiveSmallIntegerField(
+                        validators=[MinValueValidator(1), MaxValueValidator(18)]
+                    )
+    winner          = models.ForeignKey(
+                        Player, on_delete=models.SET_NULL,
+                        null=True, blank=True,
+                        related_name='multi_skins_holes_won',
+                    )
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        if self.winner:
+            return f"Hole {self.hole_number} — {self.winner.name}"
+        return f"Hole {self.hole_number} — dead"
+
+
+# ---------------------------------------------------------------------------
 # NASSAU (9-9-18 fixed-team best ball match play with auto-press)
 # ---------------------------------------------------------------------------
 

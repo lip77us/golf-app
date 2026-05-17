@@ -64,6 +64,10 @@ urlpatterns = [
     path('foursomes/<int:pk>/skins/setup/',  views.SkinsSetupView.as_view(),  name='api-skins-setup'),
     path('foursomes/<int:pk>/skins/junk/',   views.SkinsJunkView.as_view(),   name='api-skins-junk'),
 
+    # ---- Multi-Foursome Skins (round-level) ----
+    path('rounds/<int:pk>/multi-skins/',       views.MultiSkinsResultView.as_view(), name='api-multi-skins-result'),
+    path('rounds/<int:pk>/multi-skins/setup/', views.MultiSkinsSetupView.as_view(),  name='api-multi-skins-setup'),
+
     # ---- Match Play ----
     path('foursomes/<int:pk>/match-play/',        views.MatchPlayResultView.as_view(), name='api-match-play-result'),
     path('foursomes/<int:pk>/match-play/setup/',  views.MatchPlaySetupView.as_view(),  name='api-match-play-setup'),

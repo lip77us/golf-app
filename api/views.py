@@ -161,6 +161,10 @@ def _recalculate_games(foursome: Foursome) -> None:
         calculate_three_person_match(foursome)
 
     # ---- Per-round ----
+    if 'multi_skins' in active_games:
+        from services.multi_skins import calculate_multi_skins
+        calculate_multi_skins(round_obj)
+
     if 'stableford' in active_games:
         from services.stableford import calculate_stableford
         calculate_stableford(round_obj)
@@ -2094,6 +2098,59 @@ class SkinsJunkView(APIView):
 
         from services.skins import skins_summary
         return Response(skins_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Multi-Foursome Skins (Round-scoped)
+# ---------------------------------------------------------------------------
+
+class MultiSkinsSetupView(APIView):
+    """
+    POST /api/rounds/{pk}/multi-skins/setup/
+    Body: {
+        "handicap_mode":   "net" | "gross" | "strokes_off",
+        "net_percent":     0..200,
+        "bet_unit":        "10.00",          (optional)
+        "participant_ids": [12, 13, 17, ...] (>= 2 player IDs in this round)
+    }
+
+    Replaces any existing Multi-Skins game on the round.  Also adds
+    'multi_skins' to round.active_games so the calculator fires on
+    subsequent score submissions.
+    """
+    def post(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+        from api.serializers import MultiSkinsSetupSerializer
+        ser = MultiSkinsSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.multi_skins import (
+            setup_multi_skins, calculate_multi_skins, multi_skins_summary,
+        )
+        setup_multi_skins(
+            round_obj,
+            participant_ids = d['participant_ids'],
+            handicap_mode   = d.get('handicap_mode', 'net'),
+            net_percent     = d.get('net_percent', 100),
+            bet_unit        = d.get('bet_unit'),
+        )
+        active = list(round_obj.active_games or [])
+        if 'multi_skins' not in active:
+            active.append('multi_skins')
+            round_obj.active_games = active
+            round_obj.save(update_fields=['active_games'])
+        calculate_multi_skins(round_obj)
+        return Response(multi_skins_summary(round_obj),
+                        status=status.HTTP_201_CREATED)
+
+
+class MultiSkinsResultView(APIView):
+    """GET /api/rounds/{pk}/multi-skins/"""
+    def get(self, request, pk):
+        round_obj = get_object_or_404(Round, pk=pk)
+        from services.multi_skins import multi_skins_summary
+        return Response(multi_skins_summary(round_obj))
 
 
 # ---------------------------------------------------------------------------

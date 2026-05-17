@@ -15,6 +15,14 @@ class GameType(models.TextChoices):
     SCRAMBLE        = 'scramble',        'Scramble'
     STABLEFORD      = 'stableford',      'Stableford'
     SKINS           = 'skins',           'Skins'
+    # Multi-Foursome Skins: round-level skins pool across every participating
+    # foursome.  Players opt in individually (roster is explicit, not the
+    # union of foursome rosters).  Lowest score on a hole wins 1 skin;
+    # ties kill the skin (no carryover, no junk).  Mutually exclusive with
+    # any other multi-foursome game, but compatible with per-foursome side
+    # games (sixes, points-531, single-foursome skins, etc.) running
+    # simultaneously inside each group.
+    MULTI_SKINS     = 'multi_skins',     'Multi-Group Skins'
     LOW_NET_ROUND   = 'low_net_round',   'Low Net (Round)'
     LOW_NET         = 'low_net',         'Low Net Championship'
     # Points 5-3-1: a 3-player, per-hole points game.  Per-hole rank awards

@@ -535,6 +535,34 @@ class SkinsSetupSerializer(serializers.Serializer):
     allow_junk    = serializers.BooleanField(default=False)
 
 
+class MultiSkinsSetupSerializer(serializers.Serializer):
+    """
+    POST /api/rounds/{id}/multi-skins/setup/
+
+    Round-level skins pool across every participating foursome.  The
+    roster is explicit — only the player IDs in participant_ids buy in.
+    """
+    handicap_mode   = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'],
+                        default='net',
+                    )
+    net_percent     = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100,
+                    )
+    bet_unit        = serializers.DecimalField(
+                        max_digits=6, decimal_places=2, required=False,
+                        help_text="Entry fee per player.  Defaults to "
+                                  "Round.bet_unit if omitted.",
+                    )
+    participant_ids = serializers.ListField(
+                        child=serializers.IntegerField(),
+                        min_length=2,
+                        help_text="Player IDs paying into the pool. Must "
+                                  "be at least 2 and all must be in this "
+                                  "round.",
+                    )
+
+
 class IrishRumbleSetupSerializer(serializers.Serializer):
     """POST /api/rounds/{id}/irish-rumble/setup/"""
     handicap_mode = serializers.ChoiceField(
