@@ -50,6 +50,27 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
+/// Logs every Navigator push / pop / replace so we can see exactly which
+/// route operation lands the user on /login during the intermittent
+/// silent-logout bug.  Keep until the root cause is pinned down.
+class _NavTrace extends NavigatorObserver {
+  void _log(String op, Route<dynamic>? to, Route<dynamic>? from) {
+    final t = to?.settings.name   ?? '(unnamed)';
+    final f = from?.settings.name ?? '(unnamed)';
+    final line = '[NAV] $op  to=$t  from=$f';
+    debugPrint(line);
+    developer.log(line, name: 'NAV');
+  }
+  @override void didPush(Route route, Route? previousRoute) =>
+      _log('push',    route,        previousRoute);
+  @override void didPop(Route route, Route? previousRoute) =>
+      _log('pop',     previousRoute, route);
+  @override void didReplace({Route? newRoute, Route? oldRoute}) =>
+      _log('replace', newRoute,     oldRoute);
+  @override void didRemove(Route route, Route? previousRoute) =>
+      _log('remove',  route,        previousRoute);
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -207,6 +228,7 @@ class _GolfAppState extends State<GolfApp> {
         ),
         initialRoute: '/splash',
         onGenerateRoute: _router,
+        navigatorObservers: [_NavTrace()],
       ),
     );
   }
