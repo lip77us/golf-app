@@ -227,7 +227,31 @@ class _GolfAppState extends State<GolfApp> {
           useMaterial3: true,
         ),
         initialRoute: '/splash',
+        // Override the default initial-route generation so Flutter doesn't
+        // split '/splash' into ['/', '/splash'] and silently push a
+        // LoginScreen at the bottom of the stack (via the onGenerateRoute
+        // default case).  That hidden LoginScreen was the destination
+        // every popUntil-to-isFirst was bottoming out on.
+        onGenerateInitialRoutes: (initialRoute) {
+          final route = _router(RouteSettings(name: initialRoute));
+          return route == null ? const [] : [route];
+        },
         onGenerateRoute: _router,
+        onUnknownRoute: (settings) {
+          // Last-resort fallback — log loudly so we catch any future
+          // navigation to an unregistered route.  Don't return null
+          // (that crashes the navigator); show LoginScreen but with a
+          // real name so popUntil can still find it deliberately.
+          debugPrint('[NAV-UNKNOWN] route=${settings.name} args=${settings.arguments}');
+          developer.log(
+            '[NAV-UNKNOWN] route=${settings.name} args=${settings.arguments}',
+            name: 'NAV',
+          );
+          return MaterialPageRoute(
+            settings: const RouteSettings(name: '/unknown'),
+            builder: (_) => const LoginScreen(),
+          );
+        },
         navigatorObservers: [_NavTrace()],
       ),
     );
@@ -296,75 +320,71 @@ class _GolfAppState extends State<GolfApp> {
   }
 
   Route<dynamic>? _router(RouteSettings settings) {
+    // Helper: always propagate `settings` to the MaterialPageRoute so the
+    // navigator preserves route names.  Without this, `r.settings.name`
+    // comes back null on every route and popUntil predicates like
+    // `r.settings.name == '/tournaments'` are dead — the navigator pops
+    // all the way down to whatever happens to be at the bottom of the
+    // stack, which is how users were ending up on a hidden LoginScreen.
+    MaterialPageRoute<dynamic> page(WidgetBuilder builder) =>
+        MaterialPageRoute(settings: settings, builder: builder);
+
     switch (settings.name) {
       case '/splash':
-        return MaterialPageRoute(
-          builder: (_) => SplashScreen(
-            onComplete: () => _navigateAfterSplash(),
-          ),
-        );
+        return page((_) => SplashScreen(
+              onComplete: () => _navigateAfterSplash(),
+            ));
       case '/login':
-        return MaterialPageRoute(builder: (_) => const LoginScreen());
+        return page((_) => const LoginScreen());
       case '/tournaments':
-        return MaterialPageRoute(builder: (_) => const TournamentListScreen());
+        return page((_) => const TournamentListScreen());
       case '/casual-rounds':
-        return MaterialPageRoute(builder: (_) => const CasualRoundsListScreen());
+        return page((_) => const CasualRoundsListScreen());
       case '/settings':
-        return MaterialPageRoute(builder: (_) => const SettingsScreen());
+        return page((_) => const SettingsScreen());
       case '/round':
         final roundId = settings.arguments as int;
-        return MaterialPageRoute(builder: (_) => RoundScreen(roundId: roundId));
+        return page((_) => RoundScreen(roundId: roundId));
       case '/scorecard':
         // Arguments may be a plain int (edit mode) or a Map with
         // {'foursomeId': int, 'readOnly': bool} (view mode).
         final args       = settings.arguments;
         final foursomeId = args is Map ? args['foursomeId'] as int : args as int;
         final readOnly   = args is Map ? (args['readOnly'] as bool? ?? false) : false;
-        return MaterialPageRoute(
-            builder: (_) => ScorecardScreen(
-                  foursomeId: foursomeId,
-                  readOnly:   readOnly,
-                ));
+        return page((_) => ScorecardScreen(
+              foursomeId: foursomeId,
+              readOnly:   readOnly,
+            ));
       case '/sixes-setup':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => SixesSetupScreen(foursomeId: foursomeId));
+        return page((_) => SixesSetupScreen(foursomeId: foursomeId));
       case '/sixes':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => SixesScreen(foursomeId: foursomeId));
+        return page((_) => SixesScreen(foursomeId: foursomeId));
       case '/points-531-setup':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => Points531SetupScreen(foursomeId: foursomeId));
+        return page((_) => Points531SetupScreen(foursomeId: foursomeId));
       case '/points-531':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => Points531Screen(foursomeId: foursomeId));
+        return page((_) => Points531Screen(foursomeId: foursomeId));
       case '/skins-setup':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => SkinsSetupScreen(foursomeId: foursomeId));
+        return page((_) => SkinsSetupScreen(foursomeId: foursomeId));
       case '/skins':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => SkinsScreen(foursomeId: foursomeId));
+        return page((_) => SkinsScreen(foursomeId: foursomeId));
       case '/multi-skins-setup':
         final roundId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => MultiSkinsSetupScreen(roundId: roundId));
+        return page((_) => MultiSkinsSetupScreen(roundId: roundId));
       case '/multi-skins':
         final roundId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => MultiSkinsScreen(roundId: roundId));
+        return page((_) => MultiSkinsScreen(roundId: roundId));
       case '/nassau-setup':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => NassauSetupScreen(foursomeId: foursomeId));
+        return page((_) => NassauSetupScreen(foursomeId: foursomeId));
       case '/nassau':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => NassauScreen(foursomeId: foursomeId));
+        return page((_) => NassauScreen(foursomeId: foursomeId));
       case '/leaderboard':
         // Arguments may be a plain int (legacy) or a Map with
         // {'roundId': int, 'initialTabKey': String?}.
@@ -372,43 +392,35 @@ class _GolfAppState extends State<GolfApp> {
         final roundId = args is Map ? args['roundId'] as int : args as int;
         final initialTabKey =
             args is Map ? args['initialTabKey'] as String? : null;
-        return MaterialPageRoute(
-            builder: (_) => LeaderboardScreen(
-                  roundId: roundId,
-                  initialTabKey: initialTabKey,
-                ));
+        return page((_) => LeaderboardScreen(
+              roundId: roundId,
+              initialTabKey: initialTabKey,
+            ));
       case '/irish-rumble-setup':
         final roundId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => IrishRumbleSetupScreen(roundId: roundId));
+        return page((_) => IrishRumbleSetupScreen(roundId: roundId));
       case '/low-net-setup':
         final roundId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => LowNetSetupScreen(roundId: roundId));
+        return page((_) => LowNetSetupScreen(roundId: roundId));
       case '/pink-ball-setup':
         final roundId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => PinkBallSetupScreen(roundId: roundId));
+        return page((_) => PinkBallSetupScreen(roundId: roundId));
       case '/pink-ball':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => PinkBallScreen(foursomeId: foursomeId));
+        return page((_) => PinkBallScreen(foursomeId: foursomeId));
       case '/tournament-leaderboard':
         final args           = settings.arguments as Map<String, dynamic>;
         final tournamentId   = args['tournamentId'] as int;
         final tournamentName = args['tournamentName'] as String? ?? '';
-        return MaterialPageRoute(
-            builder: (_) => TournamentLeaderboardScreen(
-                tournamentId: tournamentId, tournamentName: tournamentName));
+        return page((_) => TournamentLeaderboardScreen(
+              tournamentId: tournamentId, tournamentName: tournamentName));
       case '/tournament-low-net-setup':
         final tournamentId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) =>
-                TournamentLowNetSetupScreen(tournamentId: tournamentId));
+        return page((_) =>
+            TournamentLowNetSetupScreen(tournamentId: tournamentId));
       case '/setup-round-players':
         final roundId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => SetupRoundPlayersScreen(roundId: roundId));
+        return page((_) => SetupRoundPlayersScreen(roundId: roundId));
       case '/match-play-setup':
         // Arguments may be a plain int (legacy) or a Map with extra context.
         final args = settings.arguments;
@@ -424,37 +436,34 @@ class _GolfAppState extends State<GolfApp> {
           allMatchPlayIds = [];
           peerIds         = [];
         }
-        return MaterialPageRoute(
-            builder: (_) => MatchPlaySetupScreen(
+        return page((_) => MatchPlaySetupScreen(
               foursomeId:      foursomeId,
               allMatchPlayIds: allMatchPlayIds,
               peerIds:         peerIds,
             ));
       case '/match-play':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => MatchPlayScreen(foursomeId: foursomeId));
+        return page((_) => MatchPlayScreen(foursomeId: foursomeId));
       case '/three-person-match-setup':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) =>
-                ThreePersonMatchSetupScreen(foursomeId: foursomeId));
+        return page((_) =>
+            ThreePersonMatchSetupScreen(foursomeId: foursomeId));
       case '/course-search':
-        return MaterialPageRoute(builder: (_) => const CourseSearchScreen());
+        return page((_) => const CourseSearchScreen());
       case '/score-entry':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => ScoreEntryScreen(foursomeId: foursomeId));
+        return page((_) => ScoreEntryScreen(foursomeId: foursomeId));
       case '/confirm-tees':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => ConfirmTeesScreen(foursomeId: foursomeId));
+        return page((_) => ConfirmTeesScreen(foursomeId: foursomeId));
       case '/quota-nassau':
         final foursomeId = settings.arguments as int;
-        return MaterialPageRoute(
-            builder: (_) => QuotaNassauScreen(foursomeId: foursomeId));
+        return page((_) => QuotaNassauScreen(foursomeId: foursomeId));
       default:
-        return MaterialPageRoute(builder: (_) => const LoginScreen());
+        // Unknown route — let MaterialApp.onUnknownRoute handle it (with
+        // logging) so we never silently drop the user on a stray
+        // LoginScreen the way the old default branch did.
+        return null;
     }
   }
 }
