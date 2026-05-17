@@ -169,7 +169,11 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.stableford,
     displayName  : 'Stableford',
-    casual       : true,
+    // Hidden from the casual-round picker until the casual implementation
+    // is complete (scoring service + UI screens still TODO).  Keep
+    // tournament: true so the championship-Stableford code path is
+    // unaffected; the casualGames getter filters on `casual && enabled`.
+    casual       : false,
     tournament   : true,
     canBePrimary : true,
     minPlayers   : 2,
