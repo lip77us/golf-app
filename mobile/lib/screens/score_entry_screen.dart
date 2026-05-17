@@ -321,6 +321,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (configured.contains('skins') || rp.skinsSummary != null) {
       rp.loadSkins(widget.foursomeId);
     }
+    // Multi-Group Skins is round-scoped (no foursome configured_games entry),
+    // so gate purely on the round's active_games list.
+    if (games.contains('multi_skins') && rp.round != null) {
+      rp.loadMultiSkins(rp.round!.id);
+    }
     if (configured.contains('sixes') || rp.sixesSummary != null) {
       rp.loadSixes(widget.foursomeId);
     }
@@ -1263,6 +1268,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 games:                   games,
                 nassau:                  nas,
                 skins:                   skins,
+                multiSkins:              games.contains('multi_skins')       ? rp.multiSkinsSummary         : null,
                 sixesSummary:            games.contains('sixes')             ? rp.sixesSummary              : null,
                 points531Summary:        games.contains('points_531')        ? rp.points531Summary           : null,
                 matchPlayData:           rp.matchPlayData,
@@ -1273,6 +1279,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 currentHole:             _selectedHole,
                 loadingNassau:           rp.loadingNassau,
                 loadingSkins:            rp.loadingSkins,
+                loadingMultiSkins:       rp.loadingMultiSkins,
                 loadingPoints531:        rp.loadingPoints531,
                 loadingMatchPlay:        rp.loadingMatchPlay,
                 loadingThreePersonMatch: rp.loadingThreePersonMatch,
@@ -2620,6 +2627,7 @@ class _GameStatusSection extends StatelessWidget {
   final List<String>          games;
   final NassauSummary?        nassau;
   final SkinsSummary?         skins;
+  final MultiSkinsSummary?    multiSkins;
   final SixesSummary?         sixesSummary;
   final Points531Summary?     points531Summary;
   final Map<String, dynamic>?       matchPlayData;
@@ -2630,6 +2638,7 @@ class _GameStatusSection extends StatelessWidget {
   final int                         currentHole;
   final bool                        loadingNassau;
   final bool                        loadingSkins;
+  final bool                        loadingMultiSkins;
   final bool                        loadingPoints531;
   final bool                        loadingMatchPlay;
   final bool                        loadingThreePersonMatch;
@@ -2642,6 +2651,7 @@ class _GameStatusSection extends StatelessWidget {
     required this.games,
     required this.nassau,
     required this.skins,
+    this.multiSkins,
     required this.sixesSummary,
     this.points531Summary,
     required this.matchPlayData,
@@ -2652,6 +2662,7 @@ class _GameStatusSection extends StatelessWidget {
     required this.currentHole,
     required this.loadingNassau,
     required this.loadingSkins,
+    this.loadingMultiSkins = false,
     required this.loadingPoints531,
     required this.loadingMatchPlay,
     this.loadingThreePersonMatch = false,
@@ -2690,6 +2701,20 @@ class _GameStatusSection extends StatelessWidget {
           if (skins != null)
             _SkinsStandingsCard(skins: skins!, currentHole: currentHole)
           else if (loadingSkins)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          const SizedBox(height: 12),
+        ],
+
+        // Multi-Group Skins standings (round-level pool across foursomes)
+        if (games.contains('multi_skins')) ...[
+          if (multiSkins != null)
+            _MultiSkinsStandingsCard(summary: multiSkins!)
+          else if (loadingMultiSkins)
             const Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
@@ -4350,6 +4375,83 @@ class _MatchPlayStatusBar extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 // Sixes match grid (ported from sixes_screen.dart _MatchGrid / _SegmentCard)
+// ---------------------------------------------------------------------------
+// Multi-Group Skins standings card — compact round-level pool snapshot for
+// the score-entry screen.  Shows pool, Thru, skins, payout per participant
+// and the per-hole winner strip ("—" = dead skin).  Tapping the title bar
+// navigates to the full /multi-skins screen.
+// ---------------------------------------------------------------------------
+
+class _MultiSkinsStandingsCard extends StatelessWidget {
+  final MultiSkinsSummary summary;
+  const _MultiSkinsStandingsCard({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.attach_money, size: 18),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                'Multi-Group Skins — '
+                '\$${summary.pool.toStringAsFixed(2)} pool, '
+                '${summary.totalSkins} skin(s) won',
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          // Standings table (Thru / Skins / Payout)
+          Table(
+            columnWidths: const {
+              0: FlexColumnWidth(),
+              1: FixedColumnWidth(36),
+              2: FixedColumnWidth(40),
+              3: FixedColumnWidth(56),
+            },
+            children: [
+              TableRow(children: [
+                Text('Player',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold)),
+                Text('Thru', textAlign: TextAlign.right,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold)),
+                Text('Skins', textAlign: TextAlign.right,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold)),
+                Text('Payout', textAlign: TextAlign.right,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold)),
+              ]),
+              for (final p in summary.players)
+                TableRow(children: [
+                  Text('${p.shortName.isNotEmpty ? p.shortName : p.name} '
+                       '(G${p.groupNumber})',
+                      style: theme.textTheme.bodySmall),
+                  Text(p.thru == 0 ? '—' : '${p.thru}',
+                      textAlign: TextAlign.right,
+                      style: theme.textTheme.bodySmall),
+                  Text('${p.skinsWon}',
+                      textAlign: TextAlign.right,
+                      style: theme.textTheme.bodySmall),
+                  Text('\$${p.payout.toStringAsFixed(2)}',
+                      textAlign: TextAlign.right,
+                      style: theme.textTheme.bodySmall),
+                ]),
+            ],
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 
 String _sixesInitials(String name) {
