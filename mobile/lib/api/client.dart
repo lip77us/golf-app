@@ -643,6 +643,32 @@ class ApiClient {
     return SkinsSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  // ---- Multi-Foursome Skins (round-scoped) ----
+
+  /// GET /api/rounds/{id}/multi-skins/
+  Future<MultiSkinsSummary> getMultiSkinsSummary(int roundId) async {
+    final data = await _get('/rounds/$roundId/multi-skins/');
+    return MultiSkinsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/rounds/{id}/multi-skins/setup/
+  Future<MultiSkinsSummary> postMultiSkinsSetup(
+    int roundId, {
+    required List<int> participantIds,
+    String   handicapMode = 'net',
+    int      netPercent   = 100,
+    double?  betUnit,
+  }) async {
+    final body = <String, dynamic>{
+      'handicap_mode'  : handicapMode,
+      'net_percent'    : netPercent,
+      'participant_ids': participantIds,
+    };
+    if (betUnit != null) body['bet_unit'] = betUnit.toStringAsFixed(2);
+    final data = await _post('/rounds/$roundId/multi-skins/setup/', body);
+    return MultiSkinsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Match Play ----
 
   Future<Map<String, dynamic>> getMatchPlay(int foursomeId) async {

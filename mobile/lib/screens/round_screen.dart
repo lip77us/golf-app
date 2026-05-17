@@ -8,6 +8,7 @@ import '../widgets/error_view.dart';
 // ── Human-readable labels for game keys ──────────────────────────────────────
 const _kGameLabels = {
   'skins'        : 'Skins',
+  'multi_skins'  : 'Multi-Group Skins',
   'stableford'   : 'Stableford',
   'pink_ball'    : 'Pink Ball',
   'nassau'       : 'Nassau',
@@ -108,6 +109,7 @@ class _RoundScreenState extends State<RoundScreen> {
     final hasLowNet      = round.activeGames.contains('low_net_round');
     final hasPinkBall    = round.activeGames.contains('pink_ball');
     final hasMatchPlay   = round.activeGames.contains('match_play');
+    final hasMultiSkins  = round.activeGames.contains('multi_skins');
     final hasSetupGames  = hasIrishRumble || hasLowNet || hasPinkBall || hasMatchPlay;
 
     return RefreshIndicator(
@@ -116,6 +118,20 @@ class _RoundScreenState extends State<RoundScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         children: [
           _RoundInfoCard(round: round),
+          if (hasMultiSkins) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.attach_money),
+                title: const Text('Multi-Group Skins'),
+                subtitle: const Text('Round-level pool across all groups'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).pushNamed(
+                  '/multi-skins', arguments: widget.roundId,
+                ),
+              ),
+            ),
+          ],
           if (hasSetupGames && !isComplete && isAdmin && !round.isCupRound) ...[
             const SizedBox(height: 16),
             Text('Game Setup',

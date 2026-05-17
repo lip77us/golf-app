@@ -256,6 +256,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           case GameIds.skins:
             directRoute = '/skins-setup';
             directArgs  = firstFs.id;
+          case GameIds.multiSkins:
+            directRoute = '/multi-skins-setup';
+            directArgs  = fullRound.id;
           case GameIds.nassau:
             directRoute = '/nassau-setup';
             directArgs  = firstFs.id;

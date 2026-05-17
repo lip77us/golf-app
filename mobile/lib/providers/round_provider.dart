@@ -86,6 +86,7 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?    _sixesSummary;
   Points531Summary? _points531Summary;
   SkinsSummary?    _skinsSummary;
+  MultiSkinsSummary? _multiSkinsSummary;
   NassauSummary?         _nassauSummary;
   QuotaNassauSummary?    _quotaNassauSummary;
   Map<String, dynamic>? _matchPlayData;
@@ -105,6 +106,7 @@ class RoundProvider extends ChangeNotifier {
   bool    _loadingSixes       = false;
   bool    _loadingPoints531   = false;
   bool    _loadingSkins       = false;
+  bool    _loadingMultiSkins  = false;
   bool    _loadingNassau      = false;
   bool    _loadingQuotaNassau = false;
   bool    _loadingMatchPlay          = false;
@@ -126,6 +128,7 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?     get sixesSummary       => _sixesSummary;
   Points531Summary? get points531Summary   => _points531Summary;
   SkinsSummary?     get skinsSummary       => _skinsSummary;
+  MultiSkinsSummary? get multiSkinsSummary  => _multiSkinsSummary;
   NassauSummary?        get nassauSummary      => _nassauSummary;
   QuotaNassauSummary?   get quotaNassauSummary => _quotaNassauSummary;
   bool                  get loadingQuotaNassau => _loadingQuotaNassau;
@@ -144,6 +147,7 @@ class RoundProvider extends ChangeNotifier {
   bool              get loadingSixes       => _loadingSixes;
   bool              get loadingPoints531   => _loadingPoints531;
   bool              get loadingSkins       => _loadingSkins;
+  bool              get loadingMultiSkins  => _loadingMultiSkins;
   bool              get loadingNassau      => _loadingNassau;
   bool              get loadingMatchPlay          => _loadingMatchPlay;
   bool              get loadingThreePersonMatch   => _loadingThreePersonMatch;
@@ -171,6 +175,13 @@ class RoundProvider extends ChangeNotifier {
         for (final fs in _round!.foursomes) {
           loadSixes(fs.id); // intentionally unawaited — non-fatal
         }
+      }
+      // Pre-load the round-level Multi-Skins summary so the round screen
+      // can show payout/skins running totals alongside per-foursome cards.
+      if (_round!.activeGames.contains('multi_skins')) {
+        loadMultiSkins(roundId); // unawaited
+      } else {
+        _multiSkinsSummary = null;
       }
     } on NetworkException {
       final cached = await _localDb.getCachedRound(roundId);
@@ -593,6 +604,23 @@ class RoundProvider extends ChangeNotifier {
       debugPrint('loadSkins error: $e');
     } finally {
       _loadingSkins = false;
+      notifyListeners();
+    }
+  }
+
+  /// Load the round-level Multi-Foursome Skins summary.
+  /// Non-fatal on network errors.
+  Future<void> loadMultiSkins(int roundId) async {
+    _loadingMultiSkins = true;
+    notifyListeners();
+    try {
+      _multiSkinsSummary = await _client.getMultiSkinsSummary(roundId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadMultiSkins error: $e');
+    } finally {
+      _loadingMultiSkins = false;
       notifyListeners();
     }
   }

@@ -21,6 +21,8 @@ import 'screens/points_531_setup_screen.dart';
 import 'screens/points_531_screen.dart';
 import 'screens/skins_setup_screen.dart';
 import 'screens/skins_screen.dart';
+import 'screens/multi_skins_setup_screen.dart';
+import 'screens/multi_skins_screen.dart';
 import 'screens/nassau_setup_screen.dart';
 import 'screens/nassau_screen.dart';
 import 'screens/leaderboard_screen.dart';
@@ -287,6 +289,14 @@ class _GolfAppState extends State<GolfApp> {
         final foursomeId = settings.arguments as int;
         return MaterialPageRoute(
             builder: (_) => SkinsScreen(foursomeId: foursomeId));
+      case '/multi-skins-setup':
+        final roundId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => MultiSkinsSetupScreen(roundId: roundId));
+      case '/multi-skins':
+        final roundId = settings.arguments as int;
+        return MaterialPageRoute(
+            builder: (_) => MultiSkinsScreen(roundId: roundId));
       case '/nassau-setup':
         final foursomeId = settings.arguments as int;
         return MaterialPageRoute(

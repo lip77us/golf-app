@@ -12,10 +12,11 @@
 
 class GameIds {
   // Casual-only
-  static const String sixes     = 'sixes';
-  static const String points531 = 'points_531';
-  static const String nassau    = 'nassau';
-  static const String skins     = 'skins';
+  static const String sixes      = 'sixes';
+  static const String points531  = 'points_531';
+  static const String nassau     = 'nassau';
+  static const String skins      = 'skins';
+  static const String multiSkins = 'multi_skins';
 
   // Casual + Tournament (can accumulate across days)
   static const String strokePlay  = 'low_net_round'; // display: "Stroke Play"
@@ -138,6 +139,19 @@ const List<GameMeta> kGameCatalog = [
     // Skins CAN combine with Nassau or Six's.  Only Points 5-3-1 is excluded
     // because it completely owns the three-player entry model.
     excludes    : {GameIds.points531},
+  ),
+  GameMeta(
+    id          : GameIds.multiSkins,
+    displayName : 'Multi-Group Skins',
+    casual      : true,
+    // Round-level pool that crosses foursomes.  Needs at least 2 participants;
+    // there's no upper limit — the round may have any number of groups.
+    minPlayers  : 2,
+    // Multi-Group Skins is the only multi-foursome game in the casual flow;
+    // mutually exclusive with other multi-foursome games as they're added.
+    // It CAN combine with per-foursome side games (sixes / nassau / points
+    // / single-foursome skins) which run independently inside each group.
+    excludes    : const {},
   ),
 
   // ── Casual + Tournament ───────────────────────────────────────────────────

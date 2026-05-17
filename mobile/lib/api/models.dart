@@ -1083,6 +1083,107 @@ class SkinsSummary {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-Foursome Skins (round-scoped)
+// ---------------------------------------------------------------------------
+
+class MultiSkinsPlayerTotal {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final int    foursomeId;
+  final int    groupNumber;
+  final int    skinsWon;
+  final double payout;
+
+  const MultiSkinsPlayerTotal({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.foursomeId,
+    required this.groupNumber,
+    required this.skinsWon,
+    required this.payout,
+  });
+
+  factory MultiSkinsPlayerTotal.fromJson(Map<String, dynamic> j) =>
+      MultiSkinsPlayerTotal(
+        playerId:    j['player_id']    as int,
+        name:        j['name']         as String? ?? '',
+        shortName:   j['short_name']   as String? ?? '',
+        foursomeId:  j['foursome_id']  as int?    ?? 0,
+        groupNumber: j['group_number'] as int?    ?? 0,
+        skinsWon:    j['skins_won']    as int?    ?? 0,
+        payout:      (j['payout']      as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+class MultiSkinsHole {
+  final int     hole;
+  final int?    winnerId;
+  final String? winnerShort;
+  final bool    isDead;
+
+  const MultiSkinsHole({
+    required this.hole,
+    required this.winnerId,
+    required this.winnerShort,
+    required this.isDead,
+  });
+
+  factory MultiSkinsHole.fromJson(Map<String, dynamic> j) => MultiSkinsHole(
+        hole:        j['hole']         as int? ?? 0,
+        winnerId:    j['winner_id']    as int?,
+        winnerShort: j['winner_short'] as String?,
+        isDead:      j['is_dead']      as bool? ?? false,
+      );
+}
+
+class MultiSkinsSummary {
+  final String status;
+  final String handicapMode;
+  final int    netPercent;
+  final List<MultiSkinsPlayerTotal> players;
+  final List<MultiSkinsHole>        holes;
+  final double betUnit;
+  final double pool;
+  final int    totalSkins;
+
+  const MultiSkinsSummary({
+    required this.status,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.players,
+    required this.holes,
+    required this.betUnit,
+    required this.pool,
+    required this.totalSkins,
+  });
+
+  bool get isNet        => handicapMode == 'net';
+  bool get isGross      => handicapMode == 'gross';
+  bool get isStrokesOff => handicapMode == 'strokes_off';
+
+  factory MultiSkinsSummary.fromJson(Map<String, dynamic> j) {
+    final hcap  = j['handicap'] as Map<String, dynamic>? ?? {};
+    final money = j['money']    as Map<String, dynamic>? ?? {};
+    return MultiSkinsSummary(
+      status:       j['status']        as String? ?? 'pending',
+      handicapMode: hcap['mode']        as String? ?? 'net',
+      netPercent:   hcap['net_percent'] as int?    ?? 100,
+      players: (j['players'] as List? ?? [])
+          .map((p) => MultiSkinsPlayerTotal.fromJson(p as Map<String, dynamic>))
+          .toList(),
+      holes: (j['holes'] as List? ?? [])
+          .map((h) => MultiSkinsHole.fromJson(h as Map<String, dynamic>))
+          .toList(),
+      betUnit:    (money['bet_unit']    as num?)?.toDouble() ?? 0.0,
+      pool:       (money['pool']        as num?)?.toDouble() ?? 0.0,
+      totalSkins: (money['total_skins'] as num?)?.toInt()    ?? 0,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Nassau
 // ---------------------------------------------------------------------------
 
