@@ -309,34 +309,27 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   void _loadGameSummaries(RoundProvider rp) {
     final games      = _activeGames(rp.round);
     final configured = _configuredGames(rp.round);
-    // Gate on the round's active games (games) for the common case where
-    // setup just completed and the cached Round hasn't been re-fetched
-    // yet — configured_games would be stale and the summary still null,
-    // which previously caused the status widget to never appear until the
-    // user navigated away and came back.  configured_games and any
-    // previously-loaded summary stay in the OR'd condition so e.g.
-    // tournament cup foursomes (whose game lives on the foursome, not the
-    // round) keep working.  Load methods swallow 404s silently, so an
-    // extra request for a foursome that hasn't been set up is harmless.
-    if (games.contains('nassau') ||
-        configured.contains('nassau') || rp.nassauSummary != null) {
+    // Per-foursome summary loads gate on configured_games (a row exists
+    // on the server) OR on a previously-loaded summary — together they
+    // ensure we don't 404-spam foursomes that haven't set up the game
+    // yet, while still refreshing after setup completes.  Each setup
+    // screen pre-loads its own summary before navigating to score-entry
+    // so `summary != null` is reliably true on first paint.
+    if (configured.contains('nassau') || rp.nassauSummary != null) {
       rp.loadNassau(widget.foursomeId);
     }
-    if (games.contains('skins') ||
-        configured.contains('skins') || rp.skinsSummary != null) {
+    if (configured.contains('skins') || rp.skinsSummary != null) {
       rp.loadSkins(widget.foursomeId);
     }
-    // Multi-Group Skins is round-scoped (no foursome configured_games entry),
-    // so gate purely on the round's active_games list.
+    // Multi-Group Skins is round-scoped (no foursome configured_games
+    // entry), so gate purely on the round's active_games list.
     if (games.contains('multi_skins') && rp.round != null) {
       rp.loadMultiSkins(rp.round!.id);
     }
-    if (games.contains('sixes') ||
-        configured.contains('sixes') || rp.sixesSummary != null) {
+    if (configured.contains('sixes') || rp.sixesSummary != null) {
       rp.loadSixes(widget.foursomeId);
     }
-    if (games.contains('points_531') ||
-        configured.contains('points_531') || rp.points531Summary != null) {
+    if (configured.contains('points_531') || rp.points531Summary != null) {
       rp.loadPoints531(widget.foursomeId);
     }
     // Stroke Play stores handicap mode in its own config (not the round object).

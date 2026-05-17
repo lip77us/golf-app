@@ -125,6 +125,11 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
         allowJunk:    _allowJunk,
       );
 
+      // Pre-load the Skins summary so the score-entry status widget
+      // renders immediately on first paint (configured_games on the
+      // local foursome is stale right after setup).
+      await rp.loadSkins(widget.foursomeId);
+
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed(
         '/score-entry',

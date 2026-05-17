@@ -125,12 +125,12 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
         netPercent:   _netPercent,
       );
 
+      // Pre-load the Points 5-3-1 summary so the score-entry status
+      // widget renders immediately on first paint (configured_games on
+      // the local foursome is stale right after setup).
+      await rp.loadPoints531(widget.foursomeId);
+
       if (!mounted) return;
-      // Hand off to the dedicated Points 5-3-1 entry screen — one hole
-      // at a time, gaming points inline, shortcuts to the full scorecard
-      // and the leaderboard in the app bar.  Score entry there drives
-      // recalculation of Points 5-3-1 automatically via
-      // _run_active_game_calculators on the server.
       Navigator.of(context).pushReplacementNamed(
         '/score-entry',
         arguments: widget.foursomeId,

@@ -240,6 +240,12 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
       return;
     }
 
+    // Pre-load the Sixes summary so the score-entry status widget renders
+    // immediately on first paint — score-entry's _loadGameSummaries gates
+    // on summary != null (foursome configured_games is stale right after
+    // pushReplacement, so we can't rely on that signal alone).
+    await rp.loadSixes(widget.foursomeId);
+    if (!ctx.mounted) return;
     Navigator.of(ctx).pushReplacementNamed('/score-entry', arguments: widget.foursomeId);
   }
 
