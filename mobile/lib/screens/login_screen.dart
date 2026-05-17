@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -15,22 +14,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _userCtrl   = TextEditingController();
   final _passCtrl   = TextEditingController();
   bool  _obscure    = true;
-  String? _last401;
-
-  @override
-  void initState() {
-    super.initState();
-    // Surface what caused the silent logout (if any), so we can finally
-    // pin down the intermittent auth-loss bug.  Check the broader
-    // auth_last_logout (any logout path) first; fall back to the
-    // narrower auth_last_401 (HTTP 401 only).  Both clear on successful
-    // login.
-    SharedPreferences.getInstance().then((prefs) {
-      final reason = prefs.getString('auth_last_logout')
-                  ?? prefs.getString('auth_last_401');
-      if (reason != null && mounted) setState(() => _last401 = reason);
-    });
-  }
 
   @override
   void dispose() {
@@ -44,12 +27,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     await auth.login(_userCtrl.text.trim(), _passCtrl.text);
     if (auth.isLoggedIn && mounted) {
-      // Clear the auth-failure breadcrumbs on successful re-login.
-      SharedPreferences.getInstance().then((p) {
-        p.remove('auth_last_401');
-        p.remove('auth_last_logout');
-        p.remove('auth_401_history');
-      });
       Navigator.of(context).pushReplacementNamed('/tournaments');
     }
   }
@@ -145,46 +122,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           : const Text('Sign In'),
                     ),
                   ),
-
-                  // Auth-failure breadcrumb (only present after a silent
-                  // logout caused by a 401 mid-session).  Tap to copy.
-                  if (_last401 != null) ...[
-                    const SizedBox(height: 24),
-                    InkWell(
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Last 401: $_last401')),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.errorContainer
-                              .withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                              color: theme.colorScheme.error,
-                              width: 0.5),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Auto-logout cause (tap to see full):',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.error,
-                                    fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text(
-                              _last401!,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),

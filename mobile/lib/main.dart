@@ -116,40 +116,6 @@ class _GolfAppState extends State<GolfApp> {
   void _onAuthChanged() {
     final isLoggedIn = widget.auth.isLoggedIn;
     if (_wasLoggedIn && !isLoggedIn) {
-      // Capture the navigator's current route so the breadcrumb has the
-      // screen the user was on when they got bumped out.  Helps correlate
-      // intermittent silent-logout reports.
-      String? currentRoute;
-      navigatorKey.currentState?.popUntil((r) {
-        currentRoute = r.settings.name;
-        return true;
-      });
-      // Use developer.log + debugPrint so the message shows in BOTH
-      // `flutter logs` and the `flutter run` terminal — debugPrint
-      // alone seems to occasionally not surface for the user.
-      developer.log(
-        '[AUTH-REDIRECT] logged out from route=$currentRoute',
-        name: 'AUTH',
-      );
-      debugPrint('[AUTH-REDIRECT] logged out from route=$currentRoute');
-
-      // Show an in-app SnackBar so the user has an immediate, visible
-      // signal of what's happening.  Stays for 8s so they can read it
-      // before the redirect repaints over the previous screen.
-      final messenger = scaffoldMessengerKey.currentState;
-      if (messenger != null) {
-        messenger.removeCurrentSnackBar();
-        messenger.showSnackBar(SnackBar(
-          backgroundColor: Colors.red.shade700,
-          duration: const Duration(seconds: 8),
-          content: Text(
-            'Auto-logout from $currentRoute. Check the login-screen '
-            'panel for details.',
-            style: const TextStyle(color: Colors.white),
-          ),
-        ));
-      }
-
       // Clear cached data on sign-out so another user doesn't see it.
       widget.localDb.clearAll();
       navigatorKey.currentState?.pushNamedAndRemoveUntil(

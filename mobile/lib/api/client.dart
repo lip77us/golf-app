@@ -5,9 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../config.dart';
 import 'models.dart';
 
@@ -146,29 +144,6 @@ class ApiClient {
       message = res.body.isNotEmpty ? res.body : 'HTTP ${res.statusCode}';
     }
     if (res.statusCode == 401) {
-      // Diagnostic for the intermittent silent-logout bug: capture which
-      // endpoint rejected the token so we can find what's sending stale or
-      // missing credentials.  Safe to remove once the root cause is fixed.
-      final req = res.request;
-      final line =
-          '${DateTime.now().toIso8601String()} '
-          '${req?.method ?? '?'} ${req?.url ?? '?'} '
-          'tokenSent=${token != null} body="$message"';
-      debugPrint('[AUTH-401] $line');
-      // Persist to SharedPreferences so the login screen can surface what
-      // triggered the silent logout, even on release builds with no dev
-      // console attached.  Keep only the last 5 entries.  Fire-and-forget —
-      // diagnostic failure must never break the request flow.
-      SharedPreferences.getInstance().then((prefs) {
-        final history =
-            (prefs.getStringList('auth_401_history') ?? <String>[]).toList()
-              ..add(line);
-        while (history.length > 5) {
-          history.removeAt(0);
-        }
-        prefs.setStringList('auth_401_history', history);
-        prefs.setString('auth_last_401', line);
-      }).catchError((_) {});
       onSessionExpired?.call();
       throw AuthException(message);
     }
