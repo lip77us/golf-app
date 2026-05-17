@@ -1122,24 +1122,60 @@ class MultiSkinsPlayerTotal {
       );
 }
 
+class MultiSkinsHoleScore {
+  final int playerId;
+  final int gross;
+  final int strokes;
+
+  const MultiSkinsHoleScore({
+    required this.playerId,
+    required this.gross,
+    required this.strokes,
+  });
+
+  factory MultiSkinsHoleScore.fromJson(Map<String, dynamic> j) =>
+      MultiSkinsHoleScore(
+        playerId: j['player_id'] as int,
+        gross:    j['gross']     as int? ?? 0,
+        strokes:  j['strokes']   as int? ?? 0,
+      );
+
+  int get net => gross - strokes;
+}
+
 class MultiSkinsHole {
   final int     hole;
+  final int?    par;
+  final int?    strokeIndex;
   final int?    winnerId;
   final String? winnerShort;
   final bool    isDead;
+  /// Per-player gross + handicap-strokes for this hole.  Populated for
+  /// every participant that has a score on file (so the leaderboard can
+  /// render a full scorecard grid).  Empty until any participant has
+  /// scored the hole.
+  final List<MultiSkinsHoleScore> scores;
 
   const MultiSkinsHole({
     required this.hole,
+    this.par,
+    this.strokeIndex,
     required this.winnerId,
     required this.winnerShort,
     required this.isDead,
+    this.scores = const [],
   });
 
   factory MultiSkinsHole.fromJson(Map<String, dynamic> j) => MultiSkinsHole(
         hole:        j['hole']         as int? ?? 0,
+        par:         j['par']          as int?,
+        strokeIndex: j['stroke_index'] as int?,
         winnerId:    j['winner_id']    as int?,
         winnerShort: j['winner_short'] as String?,
         isDead:      j['is_dead']      as bool? ?? false,
+        scores: (j['scores'] as List? ?? [])
+            .map((s) => MultiSkinsHoleScore.fromJson(s as Map<String, dynamic>))
+            .toList(),
       );
 }
 

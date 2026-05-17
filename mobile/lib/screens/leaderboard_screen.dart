@@ -1560,8 +1560,6 @@ class _MultiSkinsView extends StatelessWidget {
     final money   = (data['money']   as Map?  ?? {}).cast<String, dynamic>();
     final hcap    = (data['handicap'] as Map? ?? {}).cast<String, dynamic>();
 
-    final byHole = {for (final h in holes) (h['hole'] as int): h};
-
     // Group standings by foursome for the section headers + scorecard
     // nav icon — same visual as the play screen.
     final byGroup = <int, List<Map<String, dynamic>>>{};
@@ -1664,21 +1662,14 @@ class _MultiSkinsView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        // ── Per-hole winner grid ────────────────────────────────────
+        // ── Full scorecard grid ─────────────────────────────────────
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Hole-by-hole',
-                  style: theme.textTheme.titleSmall),
-              const SizedBox(height: 8),
-              _MsNineRow(start: 1,  label: 'Front', byHole: byHole),
-              const SizedBox(height: 6),
-              _MsNineRow(start: 10, label: 'Back',  byHole: byHole),
-              const SizedBox(height: 6),
-              Text('— = no clear winner (dead)',
-                  style: theme.textTheme.bodySmall),
-            ]),
+            padding: const EdgeInsets.all(8),
+            child: _MsScorecard(
+              holes:        holes,
+              participants: players,
+            ),
           ),
         ),
       ],
@@ -1719,55 +1710,213 @@ class _MsGroupHeader extends StatelessWidget {
   }
 }
 
-class _MsNineRow extends StatelessWidget {
-  final int start;
-  final String label;
-  final Map<int, Map<String, dynamic>> byHole;
-  const _MsNineRow({
-    required this.start,
-    required this.label,
-    required this.byHole,
-  });
+/// Horizontally-scrollable scorecard for Multi-Group Skins.
+///
+/// Columns: hole numbers + par.  Rows: one per participant showing their
+/// gross score per hole with stroke-dot overlays.  The cell of the hole's
+/// skin winner is highlighted green so the player + score that won each
+/// skin is obvious at a glance; dead-skin holes get a grey "—" header.
+class _MsScorecard extends StatefulWidget {
+  /// `holes` items are the per-hole payload from the multi-skins summary:
+  ///   { hole, par, stroke_index, winner_id, winner_short, is_dead,
+  ///     scores: [{player_id, gross, strokes}, …] }
+  final List<Map<String, dynamic>> holes;
+  /// Standings entries (used for the player labels in the leftmost column,
+  /// in the same order the standings table shows them).
+  final List<Map<String, dynamic>> participants;
+
+  const _MsScorecard({required this.holes, required this.participants});
+
+  @override
+  State<_MsScorecard> createState() => _MsScorecardState();
+}
+
+class _MsScorecardState extends State<_MsScorecard> {
+  static const double _labelColW = 78.0;
+  static const double _cellW     = 32.0;
+  static const double _rowH      = 26.0;
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      SizedBox(width: 40, child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.bold))),
-      const SizedBox(width: 4),
-      Expanded(
-        child: Row(
-          children: [
-            for (int h = start; h < start + 9; h++)
-              Expanded(
-                child: Column(children: [
-                  Text('$h', style: const TextStyle(fontSize: 10)),
-                  Container(
-                    height: 22,
-                    margin: const EdgeInsets.symmetric(horizontal: 1),
+    final theme  = Theme.of(context);
+    final holes  = widget.holes;
+    final winBg  = Colors.green.shade100;
+    final winFg  = Colors.green.shade900;
+    final deadBg = Colors.grey.shade200;
+
+    final holeMap = {for (final h in holes) (h['hole'] as int): h};
+    final visibleHoles = List.generate(18, (i) => i + 1);
+
+    Widget headerCell(int h) {
+      final entry  = holeMap[h];
+      final isDead = entry?['is_dead'] == true;
+      return Container(
+        width: _cellW, height: _rowH,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isDead ? deadBg : null,
+        ),
+        child: Text(
+          '$h',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: isDead ? Colors.grey.shade600 : null,
+          ),
+        ),
+      );
+    }
+
+    Widget parCell(int h) {
+      final par = holeMap[h]?['par'] as int?;
+      return SizedBox(
+        width: _cellW, height: _rowH,
+        child: Center(
+          child: Text(
+            par == null ? '–' : '$par',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(fontStyle: FontStyle.italic),
+          ),
+        ),
+      );
+    }
+
+    Widget scoreCell(int playerId, int h) {
+      final entry = holeMap[h];
+      if (entry == null) {
+        return SizedBox(width: _cellW, height: _rowH);
+      }
+      final scores = (entry['scores'] as List? ?? []).cast<Map<String, dynamic>>();
+      final mine = scores.firstWhere(
+        (s) => s['player_id'] == playerId,
+        orElse: () => const {},
+      );
+      if (mine.isEmpty) {
+        // Participant didn't score this hole yet.
+        return SizedBox(width: _cellW, height: _rowH);
+      }
+      final gross   = mine['gross'] as int;
+      final strokes = mine['strokes'] as int? ?? 0;
+      final isWinner = entry['winner_id'] == playerId;
+
+      return Container(
+        width: _cellW, height: _rowH,
+        decoration: BoxDecoration(
+          color: isWinner ? winBg : null,
+          border: isWinner
+              ? Border.all(color: Colors.green.shade400, width: 1)
+              : null,
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Stack(children: [
+          Center(
+            child: Text(
+              '$gross',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: isWinner ? FontWeight.bold : FontWeight.w500,
+                color: isWinner ? winFg : null,
+              ),
+            ),
+          ),
+          if (strokes > 0)
+            Positioned(
+              top: 2, right: 2,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(
+                  strokes.clamp(0, 2),
+                  (i) => Container(
+                    width: 4, height: 4,
+                    margin: const EdgeInsets.only(left: 1),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Theme.of(context).dividerColor),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      _cellText(byHole[h]),
-                      style: const TextStyle(fontSize: 11),
-                      overflow: TextOverflow.ellipsis,
+                      color: isWinner ? winFg : Colors.red.shade700,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                ]),
+                ),
               ),
-          ],
-        ),
-      ),
-    ]);
-  }
+            ),
+        ]),
+      );
+    }
 
-  String _cellText(Map<String, dynamic>? h) {
-    if (h == null)                  return '';
-    if (h['is_dead'] == true)       return '—';
-    return (h['winner_short'] as String?) ?? '?';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(children: [
+            Text('Scorecard',
+                style: theme.textTheme.titleSmall),
+            const Spacer(),
+            Text('green = skin winner',
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant)),
+          ]),
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Hole-number row
+              Row(children: [
+                SizedBox(
+                  width: _labelColW, height: _rowH,
+                  child: const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Hole',
+                        style: TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                for (final h in visibleHoles) headerCell(h),
+              ]),
+              // Par row
+              Row(children: [
+                SizedBox(
+                  width: _labelColW, height: _rowH,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Par',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(fontStyle: FontStyle.italic)),
+                  ),
+                ),
+                for (final h in visibleHoles) parCell(h),
+              ]),
+              Container(
+                height: 1,
+                width: _labelColW + _cellW * visibleHoles.length,
+                color: theme.colorScheme.outlineVariant,
+                margin: const EdgeInsets.symmetric(vertical: 2),
+              ),
+              // One row per participant
+              for (final p in widget.participants)
+                Row(children: [
+                  SizedBox(
+                    width: _labelColW, height: _rowH,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${(p['short_name'] as String?)?.isNotEmpty == true
+                            ? p['short_name']
+                            : p['name']} '
+                        '(G${p['group_number']})',
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  for (final h in visibleHoles)
+                    scoreCell(p['player_id'] as int, h),
+                ]),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 

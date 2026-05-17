@@ -346,15 +346,73 @@ def multi_skins_summary(round_obj) -> dict:
         })
     players_out.sort(key=lambda x: (-x['skins_won'], x['name']))
 
-    holes_out: list = [
-        {
-            'hole'        : hr.hole_number,
-            'winner_id'   : hr.winner_id,
-            'winner_short': hr.winner.short_name if hr.winner else None,
-            'is_dead'     : hr.winner_id is None,
-        }
-        for hr in hole_results
-    ]
+    # Build per-hole per-player gross + strokes (gross − adjusted-net) so the
+    # leaderboard can render a full scorecard grid with stroke dots and a
+    # highlight on the winning cell.  Sourced from raw HoleScore rows and
+    # the multi-skins score_index used by the calculator (which already
+    # applies handicap_mode + net_percent correctly).
+    score_index = _build_round_score_index(round_obj, game)
+    gross_rows = (
+        HoleScore.objects
+        .filter(foursome__round=round_obj,
+                player_id__in=thru_by_pid.keys())
+        .exclude(gross_score=None)
+        .values('player_id', 'hole_number', 'gross_score')
+    )
+    gross_index: dict = {}
+    for r in gross_rows:
+        gross_index.setdefault(r['player_id'], {})[r['hole_number']] = r['gross_score']
+
+    # Pull par + stroke_index per hole from the first foursome's first tee
+    # — the round is on a single course so the layout is shared.
+    sample_tee = None
+    for fs in round_obj.foursomes.all():
+        for m in fs.memberships.select_related('tee').all():
+            if m.tee_id is not None:
+                sample_tee = m.tee
+                break
+        if sample_tee is not None:
+            break
+
+    par_by_hole: dict = {}
+    si_by_hole:  dict = {}
+    if sample_tee is not None:
+        for h in range(1, 19):
+            hd = sample_tee.hole(h)
+            par_by_hole[h] = hd.get('par')
+            si_by_hole[h]  = hd.get('stroke_index')
+
+    winner_by_hole = {hr.hole_number: hr for hr in hole_results}
+
+    holes_out: list = []
+    for hole_num in range(1, 19):
+        hr = winner_by_hole.get(hole_num)
+        scored_pids = [
+            pid for pid in thru_by_pid.keys()
+            if hole_num in gross_index.get(pid, {})
+        ]
+        # Skip holes nobody has played yet AND that don't have a result row.
+        if hr is None and not scored_pids:
+            continue
+        scores = []
+        for pid in scored_pids:
+            gross   = gross_index[pid][hole_num]
+            net     = score_index.get(pid, {}).get(hole_num)
+            strokes = (gross - net) if net is not None else 0
+            scores.append({
+                'player_id': pid,
+                'gross'    : gross,
+                'strokes'  : max(0, strokes),
+            })
+        holes_out.append({
+            'hole'        : hole_num,
+            'par'         : par_by_hole.get(hole_num),
+            'stroke_index': si_by_hole.get(hole_num),
+            'winner_id'   : hr.winner_id if hr else None,
+            'winner_short': hr.winner.short_name if hr and hr.winner else None,
+            'is_dead'     : hr is not None and hr.winner_id is None,
+            'scores'      : scores,
+        })
 
     return {
         'status'   : game.status,
