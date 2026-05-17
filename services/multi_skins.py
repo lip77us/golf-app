@@ -299,7 +299,6 @@ def multi_skins_summary(round_obj) -> dict:
         )
         .select_related('player', 'foursome')
     )
-    by_pid = {m.player_id: m for m in memberships}
 
     skins_won: dict = {m.player_id: 0 for m in memberships}
     hole_results = list(
@@ -311,6 +310,21 @@ def multi_skins_summary(round_obj) -> dict:
     for hr in hole_results:
         if hr.winner_id and hr.winner_id in skins_won:
             skins_won[hr.winner_id] += 1
+
+    # Compute "Thru N" per participant — the highest hole_number that has
+    # a gross_score on file.  Drives the leaderboard's Thru column.
+    from scoring.models import HoleScore
+    thru_by_pid: dict = {m.player_id: 0 for m in memberships}
+    for r in (
+        HoleScore.objects
+        .filter(foursome__round=round_obj,
+                player_id__in=thru_by_pid.keys())
+        .exclude(gross_score=None)
+        .values('player_id', 'hole_number')
+    ):
+        pid = r['player_id']
+        if r['hole_number'] > thru_by_pid[pid]:
+            thru_by_pid[pid] = r['hole_number']
 
     grand_total = sum(skins_won.values())
     pool        = len(memberships) * bet_unit
@@ -328,6 +342,7 @@ def multi_skins_summary(round_obj) -> dict:
             'group_number': m.foursome.group_number,
             'skins_won'   : won,
             'payout'      : round(payout, 2),
+            'thru'        : thru_by_pid[pid],
         })
     players_out.sort(key=lambda x: (-x['skins_won'], x['name']))
 

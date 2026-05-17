@@ -63,10 +63,18 @@ class HandicapModeSelector extends StatelessWidget {
           selected: {mode},
           onSelectionChanged: (s) => onModeChanged(s.first),
         ),
-        if (mode == 'net') ...[
+        if (mode == 'gross') ...[
+          const SizedBox(height: 8),
+          Text('No strokes given — raw scores used.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant)),
+        ] else ...[
+          // Net OR Strokes-Off-Low — both scale the resulting stroke
+          // allocation by net_percent (100% = full allowance, 90% =
+          // USGA recommended for 2v2 best-ball, etc.).
           const SizedBox(height: 12),
           Row(children: [
-            const Text('Net %  '),
+            Text(mode == 'net' ? 'Net %  ' : 'SO %  '),
             Expanded(
               child: Slider(
                 min: 50, max: 130, divisions: 16,
@@ -77,21 +85,17 @@ class HandicapModeSelector extends StatelessWidget {
             ),
             SizedBox(width: 48, child: Text('$netPercent%')),
           ]),
-        ] else if (mode == 'gross') ...[
-          const SizedBox(height: 8),
-          Text('No strokes given — raw scores used.',
+          if (mode == 'strokes_off') ...[
+            const SizedBox(height: 4),
+            Text(
+              soNote ??
+                  'The lowest-handicap player plays to 0.  Every other '
+                  'player gets one stroke on each hole whose stroke '
+                  'index is ≤ their (own HCP − low HCP), scaled by SO %.',
               style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant)),
-        ] else ...[
-          const SizedBox(height: 8),
-          Text(
-            soNote ??
-                'The lowest-handicap player plays to 0.  Every other player '
-                'gets one stroke on each hole whose stroke index is ≤ their '
-                '(own HCP − low HCP).',
-            style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant),
-          ),
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
         ],
       ],
     );

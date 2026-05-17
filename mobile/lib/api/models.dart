@@ -1094,6 +1094,9 @@ class MultiSkinsPlayerTotal {
   final int    groupNumber;
   final int    skinsWon;
   final double payout;
+  /// Highest hole number with a gross_score on file for this player.
+  /// 0 means no scores yet.
+  final int    thru;
 
   const MultiSkinsPlayerTotal({
     required this.playerId,
@@ -1103,6 +1106,7 @@ class MultiSkinsPlayerTotal {
     required this.groupNumber,
     required this.skinsWon,
     required this.payout,
+    this.thru = 0,
   });
 
   factory MultiSkinsPlayerTotal.fromJson(Map<String, dynamic> j) =>
@@ -1114,6 +1118,7 @@ class MultiSkinsPlayerTotal {
         groupNumber: j['group_number'] as int?    ?? 0,
         skinsWon:    j['skins_won']    as int?    ?? 0,
         payout:      (j['payout']      as num?)?.toDouble() ?? 0.0,
+        thru:        j['thru']         as int?    ?? 0,
       );
 }
 

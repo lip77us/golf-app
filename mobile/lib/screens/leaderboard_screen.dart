@@ -274,6 +274,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     }
     const labels = {
       'skins':             'Skins',
+      'multi_skins':       'Multi-Group Skins',
       'stableford':        'Stableford',
       'pink_ball':         'Pink Ball',
       'nassau':            'Four Ball',
@@ -316,6 +317,8 @@ class _GameView extends StatelessWidget {
         return _LowNetView(data: data);
       case 'skins':
         return _ByGroupView(data: data, builder: _SkinsGroupCard.new);
+      case 'multi_skins':
+        return _MultiSkinsView(data: data);
       case 'nassau':
         return _ByGroupView(data: data, builder: _NassauGroupCard.new);
       case 'quota_nassau':
@@ -1534,6 +1537,237 @@ class _ByGroupView extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+// ---- Multi-Foursome Skins view (round-level, crosses every group) ----
+
+class _MultiSkinsView extends StatelessWidget {
+  /// Multi-skins summary as returned by the backend.  Shape:
+  ///   { status, handicap{mode, net_percent},
+  ///     players: [{player_id, name, short_name, foursome_id,
+  ///                group_number, skins_won, payout, thru}],
+  ///     holes:   [{hole, winner_id, winner_short, is_dead}],
+  ///     money:   {bet_unit, pool, total_skins} }
+  final Map<String, dynamic> data;
+  const _MultiSkinsView({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final players = (data['players'] as List? ?? []).cast<Map<String, dynamic>>();
+    final holes   = (data['holes']   as List? ?? []).cast<Map<String, dynamic>>();
+    final money   = (data['money']   as Map?  ?? {}).cast<String, dynamic>();
+    final hcap    = (data['handicap'] as Map? ?? {}).cast<String, dynamic>();
+
+    final byHole = {for (final h in holes) (h['hole'] as int): h};
+
+    // Group standings by foursome for the section headers + scorecard
+    // nav icon — same visual as the play screen.
+    final byGroup = <int, List<Map<String, dynamic>>>{};
+    for (final p in players) {
+      byGroup.putIfAbsent((p['group_number'] as int? ?? 0), () => []).add(p);
+    }
+    final groupNums = byGroup.keys.toList()..sort();
+
+    final pool       = (money['pool']        as num?)?.toDouble() ?? 0.0;
+    final totalSkins = (money['total_skins'] as num?)?.toInt()    ?? 0;
+    final mode       = hcap['mode']        as String? ?? 'net';
+    final netPct     = hcap['net_percent'] as int?    ?? 100;
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        // ── Money / mode summary ────────────────────────────────────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Pool — \$${pool.toStringAsFixed(2)}',
+                  style: theme.textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text(
+                '${players.length} players  •  '
+                '$totalSkins skin(s) won  •  '
+                'Mode: ${mode.toUpperCase()}'
+                '${mode == "net" && netPct != 100 ? " ($netPct%)" : ""}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Standings (grouped, with Thru + scorecard icon) ────────
+        Card(
+          child: Column(children: [
+            ListTile(
+              dense: true,
+              title: const Text('Standings',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              trailing: SizedBox(
+                width: 140,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: const [
+                    SizedBox(width: 36,
+                        child: Text('Thru', textAlign: TextAlign.right,
+                            style: TextStyle(fontWeight: FontWeight.bold))),
+                    SizedBox(width: 8),
+                    SizedBox(width: 36,
+                        child: Text('Skins', textAlign: TextAlign.right,
+                            style: TextStyle(fontWeight: FontWeight.bold))),
+                    SizedBox(width: 8),
+                    SizedBox(width: 52,
+                        child: Text('Payout', textAlign: TextAlign.right,
+                            style: TextStyle(fontWeight: FontWeight.bold))),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            for (final gn in groupNums) ...[
+              _MsGroupHeader(
+                groupNumber: gn,
+                foursomeId : byGroup[gn]!.first['foursome_id'] as int? ?? 0,
+              ),
+              for (final p in byGroup[gn]!)
+                ListTile(
+                  dense: true,
+                  title: Text(p['name'] as String? ?? ''),
+                  trailing: SizedBox(
+                    width: 140,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(width: 36,
+                            child: Text(
+                              (p['thru'] as int? ?? 0) == 0
+                                  ? '—' : '${p['thru']}',
+                              textAlign: TextAlign.right)),
+                        const SizedBox(width: 8),
+                        SizedBox(width: 36,
+                            child: Text('${p['skins_won'] ?? 0}',
+                                textAlign: TextAlign.right)),
+                        const SizedBox(width: 8),
+                        SizedBox(width: 52,
+                            child: Text(
+                              '\$${((p['payout'] as num?)?.toDouble() ?? 0.0)
+                                  .toStringAsFixed(2)}',
+                              textAlign: TextAlign.right)),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ]),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Per-hole winner grid ────────────────────────────────────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Hole-by-hole',
+                  style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              _MsNineRow(start: 1,  label: 'Front', byHole: byHole),
+              const SizedBox(height: 6),
+              _MsNineRow(start: 10, label: 'Back',  byHole: byHole),
+              const SizedBox(height: 6),
+              Text('— = no clear winner (dead)',
+                  style: theme.textTheme.bodySmall),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MsGroupHeader extends StatelessWidget {
+  final int groupNumber;
+  final int foursomeId;
+  const _MsGroupHeader({required this.groupNumber, required this.foursomeId});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      color: theme.colorScheme.surfaceContainerHighest,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(children: [
+        Text('Group $groupNumber',
+            style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.bold)),
+        const Spacer(),
+        IconButton(
+          icon: const Icon(Icons.assignment, size: 20),
+          tooltip: 'View scorecard',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: foursomeId == 0
+              ? null
+              : () => Navigator.of(context).pushNamed(
+                    '/scorecard',
+                    arguments: {'foursomeId': foursomeId, 'readOnly': true},
+                  ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _MsNineRow extends StatelessWidget {
+  final int start;
+  final String label;
+  final Map<int, Map<String, dynamic>> byHole;
+  const _MsNineRow({
+    required this.start,
+    required this.label,
+    required this.byHole,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      SizedBox(width: 40, child: Text(label,
+          style: const TextStyle(fontWeight: FontWeight.bold))),
+      const SizedBox(width: 4),
+      Expanded(
+        child: Row(
+          children: [
+            for (int h = start; h < start + 9; h++)
+              Expanded(
+                child: Column(children: [
+                  Text('$h', style: const TextStyle(fontSize: 10)),
+                  Container(
+                    height: 22,
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Theme.of(context).dividerColor),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _cellText(byHole[h]),
+                      style: const TextStyle(fontSize: 11),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ]),
+              ),
+          ],
+        ),
+      ),
+    ]);
+  }
+
+  String _cellText(Map<String, dynamic>? h) {
+    if (h == null)                  return '';
+    if (h['is_dead'] == true)       return '—';
+    return (h['winner_short'] as String?) ?? '?';
   }
 }
 

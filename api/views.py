@@ -370,6 +370,13 @@ def _build_leaderboard(round_obj: Round) -> dict:
             ],
         }
 
+    if 'multi_skins' in active_games:
+        from services.multi_skins import multi_skins_summary
+        games['multi_skins'] = {
+            'label': 'Multi-Group Skins',
+            **multi_skins_summary(round_obj),
+        }
+
     if 'stableford' in active_games:
         from services.stableford import stableford_summary
         games['stableford'] = {
