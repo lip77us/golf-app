@@ -1296,6 +1296,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                     ? (rp.round?.irBallsConfig ?? const [])
                     : const [],
                 irHandicapMode:          rp.round?.handicapMode ?? 'net',
+                strokePlayHandicapMode:
+                    rp.lowNetConfig?['handicap_mode'] as String? ?? 'net',
+                strokePlayNetPercent:
+                    rp.lowNetConfig?['net_percent']   as int?    ?? 100,
               ),
 
               const SizedBox(height: 16),
@@ -2655,6 +2659,10 @@ class _GameStatusSection extends StatelessWidget {
   // Irish Rumble
   final List<Map<String, dynamic>>  irBallsConfig;
   final String                      irHandicapMode;
+  // Stroke Play (low_net_round) — handicap settings from the game config
+  // (not the round-level handicap_mode, which casual stroke play overrides).
+  final String                      strokePlayHandicapMode;
+  final int                         strokePlayNetPercent;
 
   const _GameStatusSection({
     required this.games,
@@ -2679,6 +2687,8 @@ class _GameStatusSection extends StatelessWidget {
     required this.onTapHole,
     this.irBallsConfig   = const [],
     this.irHandicapMode  = 'net',
+    this.strokePlayHandicapMode = 'net',
+    this.strokePlayNetPercent   = 100,
   });
 
   @override
@@ -2769,6 +2779,19 @@ class _GameStatusSection extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
+          const SizedBox(height: 12),
+        ],
+
+        // Stroke Play — per-player net scores grid (no winner row).
+        if (games.contains('low_net_round')) ...[
+          _StrokePlayProgressGrid(
+            players:      players,
+            scorecard:    scorecard,
+            currentHole:  currentHole,
+            onTapHole:    onTapHole,
+            handicapMode: strokePlayHandicapMode,
+            netPercent:   strokePlayNetPercent,
+          ),
           const SizedBox(height: 12),
         ],
 
@@ -3700,6 +3723,236 @@ class _GridPlayerRow extends StatelessWidget {
           ),
         ),
     ]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stroke Play (low_net_round) per-hole grid — modelled on _NassauProgressGrid
+// but without team tinting or a winner row.  Shows hole #, par, then per-
+// player gross scores with stroke-dot indicators in the corner so the user
+// can see both the raw score and the strokes used to compute net.
+// ---------------------------------------------------------------------------
+
+class _StrokePlayProgressGrid extends StatefulWidget {
+  final List<Membership> players;
+  final Scorecard        scorecard;
+  final int              currentHole;
+  final void Function(int hole)? onTapHole;
+  final String           handicapMode;   // 'net' | 'gross' | 'strokes_off'
+  final int              netPercent;
+
+  const _StrokePlayProgressGrid({
+    required this.players,
+    required this.scorecard,
+    required this.currentHole,
+    this.onTapHole,
+    required this.handicapMode,
+    required this.netPercent,
+  });
+
+  @override
+  State<_StrokePlayProgressGrid> createState() =>
+      _StrokePlayProgressGridState();
+}
+
+class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
+  final ScrollController _scrollCtrl = ScrollController();
+  static const double _labelColW = 56.0;
+  static const double _cellW     = 34.0;
+  static const double _rowH      = 28.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToHole(widget.currentHole));
+  }
+
+  @override
+  void didUpdateWidget(_StrokePlayProgressGrid old) {
+    super.didUpdateWidget(old);
+    if (old.currentHole != widget.currentHole) {
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scrollToHole(widget.currentHole));
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToHole(int hole) {
+    if (!_scrollCtrl.hasClients) return;
+    final target = (_labelColW + (hole - 7) * _cellW)
+        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
+    _scrollCtrl.animateTo(
+      target,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  // Strokes this player gets on hole [h] under the active handicap mode —
+  // mirrors the per-game logic so the dots match what the calculator used.
+  int _strokesOnHoleFor(Membership m, int h) {
+    if (widget.handicapMode == 'gross') return 0;
+
+    final hole = widget.scorecard.holeData(h);
+    if (hole == null) return 0;
+    final entry = hole.scoreFor(m.player.id);
+    final si    = entry?.strokeIndex ?? hole.strokeIndex;
+
+    if (widget.handicapMode == 'net') {
+      if (widget.netPercent == 100 && entry != null) {
+        return entry.handicapStrokes;
+      }
+      final effective =
+          (m.playingHandicap * widget.netPercent / 100.0).round();
+      return _strokesOnHole(effective, si);
+    }
+    // strokes_off — anchored on the foursome low.
+    if (widget.players.isEmpty) return 0;
+    final low = widget.players
+        .map((p) => p.playingHandicap)
+        .reduce((a, b) => a < b ? a : b);
+    final rawSo = m.playingHandicap - low;
+    if (rawSo <= 0) return 0;
+    final so = (rawSo * widget.netPercent / 100.0).round();
+    if (so <= 0) return 0;
+    return _strokesOnHole(so, si);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme       = Theme.of(context);
+    final players     = widget.players;
+    final scorecard   = widget.scorecard;
+    final currentHole = widget.currentHole;
+    final onTapHole   = widget.onTapHole;
+    final holeRange   = List.generate(18, (i) => i + 1);
+
+    Widget holeCell(int h, {required Widget child, Color? bg}) {
+      final isCurrent = h == currentHole;
+      return GestureDetector(
+        onTap: onTapHole == null ? null : () => onTapHole!(h),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: _cellW, height: _rowH,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: bg ?? (isCurrent
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.35)
+                : null),
+            border: isCurrent
+                ? Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.6),
+                    width: 1.2)
+                : null,
+          ),
+          child: child,
+        ),
+      );
+    }
+
+    String _modeLabel() {
+      switch (widget.handicapMode) {
+        case 'gross':       return 'Gross';
+        case 'strokes_off': return 'SO ${widget.netPercent}%';
+        default:            return 'Net ${widget.netPercent}%';
+      }
+    }
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Text('Stroke play progress',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary)),
+              const Spacer(),
+              Text(_modeLabel(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ]),
+            const SizedBox(height: 4),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              controller: _scrollCtrl,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Hole numbers
+                  Row(children: [
+                    SizedBox(
+                      width: _labelColW, height: _rowH,
+                      child: const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Hole',
+                            style: TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    for (final h in holeRange)
+                      holeCell(h,
+                          child: Text('$h',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.bold))),
+                  ]),
+                  // Par row
+                  Row(children: [
+                    SizedBox(
+                      width: _labelColW, height: _rowH,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Par',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(fontStyle: FontStyle.italic)),
+                      ),
+                    ),
+                    for (final h in holeRange)
+                      holeCell(h,
+                          child: Text(
+                            '${scorecard.holeData(h)?.par ?? "-"}',
+                            style: theme.textTheme.bodySmall,
+                          )),
+                  ]),
+                  Container(
+                    height: 1,
+                    width: _labelColW + _cellW * holeRange.length,
+                    color: theme.colorScheme.outlineVariant,
+                    margin: const EdgeInsets.symmetric(vertical: 2),
+                  ),
+                  // Per-player gross scores with stroke-dot indicators.
+                  for (final m in players)
+                    _GridPlayerRow(
+                      member:        m,
+                      scorecard:     scorecard,
+                      holeRange:     holeRange,
+                      currentHole:   currentHole,
+                      onTapHole:     onTapHole,
+                      labelColW:     _labelColW,
+                      cellW:         _cellW,
+                      rowH:          _rowH,
+                      strokesOnHole: (h) => _strokesOnHoleFor(m, h),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
