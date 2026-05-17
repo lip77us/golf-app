@@ -6,6 +6,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 
+/// Persist a one-line breadcrumb describing why the session ended.  The
+/// login screen reads `auth_last_401` (an HTTP 401 trigger) AND
+/// `auth_last_logout` (anything else: manual tap, restoreSession failure,
+/// etc.) so we can finally pin down the intermittent silent-logout bug.
+Future<void> _writeLogoutBreadcrumb(String reason) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final stamp = DateTime.now().toIso8601String();
+    await prefs.setString('auth_last_logout', '$stamp  $reason');
+  } catch (_) {}
+}
+
 class AuthProvider extends ChangeNotifier {
   static const _tokenKey = 'auth_token';
 
@@ -24,7 +36,10 @@ class AuthProvider extends ChangeNotifier {
 
   ApiClient get client => ApiClient(
         token: _token,
-        onSessionExpired: () => logout(silent: true),
+        onSessionExpired: () {
+          _writeLogoutBreadcrumb('401 onSessionExpired callback');
+          logout(silent: true, reason: '401');
+        },
       );
 
   /// Called at app startup — restore saved token and fetch profile.
@@ -37,8 +52,11 @@ class AuthProvider extends ChangeNotifier {
       final result = await ApiClient(token: saved).me();
       _player  = result.player;
       _isStaff = result.isStaff;
-    } catch (_) {
-      // Token expired or server unreachable — clear it
+    } catch (e) {
+      // Token expired or server unreachable — clear it.  Breadcrumb the
+      // error so the login screen can tell the user (and us) which path
+      // dropped them: 401 vs network blip vs other.
+      await _writeLogoutBreadcrumb('restoreSession failed: $e');
       _token = null;
       await prefs.remove(_tokenKey);
     }
@@ -76,7 +94,16 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> logout({bool silent = false}) async {
+  /// `reason` is an internal diagnostic tag for the silent-logout bug —
+  /// callers from app code don't need to pass it; the breadcrumb defaults
+  /// to "manual tap" since drawer logout is the only public entry point.
+  Future<void> logout({bool silent = false, String reason = 'manual'}) async {
+    // Capture the call stack so we can identify which code path triggered
+    // the logout when the user reports the next intermittent silent-out.
+    final stack = StackTrace.current.toString().split('\n').take(8).join(' | ');
+    debugPrint('[AUTH-LOGOUT] reason=$reason silent=$silent stack=$stack');
+    await _writeLogoutBreadcrumb('logout reason=$reason  stack=$stack');
+
     if (!silent) {
       try {
         await client.logout();

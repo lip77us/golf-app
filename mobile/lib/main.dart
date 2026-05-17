@@ -113,6 +113,15 @@ class _GolfAppState extends State<GolfApp> {
   void _onAuthChanged() {
     final isLoggedIn = widget.auth.isLoggedIn;
     if (_wasLoggedIn && !isLoggedIn) {
+      // Capture the navigator's current route so the breadcrumb has the
+      // screen the user was on when they got bumped out.  Helps correlate
+      // intermittent silent-logout reports.
+      String? currentRoute;
+      navigatorKey.currentState?.popUntil((r) {
+        currentRoute = r.settings.name;
+        return true;
+      });
+      debugPrint('[AUTH-REDIRECT] logged out from route=$currentRoute');
       // Clear cached data on sign-out so another user doesn't see it.
       widget.localDb.clearAll();
       navigatorKey.currentState?.pushNamedAndRemoveUntil(

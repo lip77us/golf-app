@@ -20,12 +20,15 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // Surface the request that triggered the silent logout (if any), so we
-    // can finally pin down the intermittent auth-loss bug.  The flag is
-    // cleared from prefs after a successful login.
+    // Surface what caused the silent logout (if any), so we can finally
+    // pin down the intermittent auth-loss bug.  Check the broader
+    // auth_last_logout (any logout path) first; fall back to the
+    // narrower auth_last_401 (HTTP 401 only).  Both clear on successful
+    // login.
     SharedPreferences.getInstance().then((prefs) {
-      final line = prefs.getString('auth_last_401');
-      if (line != null && mounted) setState(() => _last401 = line);
+      final reason = prefs.getString('auth_last_logout')
+                  ?? prefs.getString('auth_last_401');
+      if (reason != null && mounted) setState(() => _last401 = reason);
     });
   }
 
@@ -41,9 +44,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     await auth.login(_userCtrl.text.trim(), _passCtrl.text);
     if (auth.isLoggedIn && mounted) {
-      // Clear the auth-failure breadcrumb on successful re-login.
+      // Clear the auth-failure breadcrumbs on successful re-login.
       SharedPreferences.getInstance().then((p) {
         p.remove('auth_last_401');
+        p.remove('auth_last_logout');
         p.remove('auth_401_history');
       });
       Navigator.of(context).pushReplacementNamed('/tournaments');
