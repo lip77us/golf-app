@@ -379,8 +379,13 @@ class RoundCreateSerializer(serializers.Serializer):
 
 
 class PlayerTeeSelectionSerializer(serializers.Serializer):
-    player_id = serializers.IntegerField()
-    tee_id    = serializers.IntegerField()
+    player_id    = serializers.IntegerField()
+    tee_id       = serializers.IntegerField()
+    # Optional explicit group assignment.  When supplied for ANY player,
+    # all players must also supply one — and setup_round will build
+    # foursomes from these numbers instead of auto-partitioning.  Groups
+    # can have 1–4 players in this mode (no phantom padding).
+    group_number = serializers.IntegerField(required=False, min_value=1)
 
 class RoundSetupSerializer(serializers.Serializer):
     """

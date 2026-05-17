@@ -132,10 +132,21 @@ def setup_round(
     Parameters
     ----------
     round_obj          : tournament.models.Round instance
-    players            : list of dicts: [{"player_id": 1, "tee_id": 2}, ...]
+    players            : list of dicts.  Required keys per entry:
+                            player_id (int), tee_id (int).
+                         Optional:
+                            group_number (int) — explicit group assignment.
+                         If *any* entry has group_number, ALL entries must;
+                         we then build foursomes by group_number (1..N) and
+                         skip the automatic 4-then-3 partition.  Groups can
+                         be size 1–4, and groups smaller than 4 do NOT get
+                         a phantom player (single-player groups are valid
+                         for multi-foursome skins where each golfer keeps
+                         their own card).
     handicap_allowance : fraction of course handicap applied as playing
                          handicap — 1.0 = full, 0.9 = 90 %, etc.
-    randomise          : shuffle players before grouping (default True)
+    randomise          : shuffle players before grouping (default True).
+                         Ignored when explicit group_numbers are supplied.
 
     Returns
     -------
@@ -162,24 +173,55 @@ def setup_round(
 
     tee_map = {p['player_id']: Tee.objects.get(pk=p['tee_id']) for p in players}
 
-    if randomise:
-        # If randomise is true, we shuffle everything EXCEPT the first player
-        # so the logged in user remains player 1.
-        if len(player_objs) > 1:
-            first = player_objs[0]
-            rest = player_objs[1:]
-            random.shuffle(rest)
-            player_objs = [first] + rest
+    # Detect explicit-grouping mode.  If any caller-supplied entry has a
+    # group_number, every entry must — and we group by that instead of
+    # using _group_players.
+    explicit_groups = any('group_number' in p for p in players)
+    if explicit_groups:
+        missing = [p['player_id'] for p in players if 'group_number' not in p]
+        if missing:
+            raise ValueError(
+                f"group_number is required for every player when any are "
+                f"supplied; missing for {missing}"
+            )
+        group_map: dict = {}
+        for p in players:
+            pid = p['player_id']
+            if pid in obj_map:
+                group_map.setdefault(int(p['group_number']), []).append(
+                    obj_map[pid]
+                )
+        # 1..N in order; empty group numbers between filled ones are fine
+        # (we just don't create them).
+        groups = [group_map[k] for k in sorted(group_map.keys())]
+        for g in groups:
+            if not (1 <= len(g) <= 4):
+                raise ValueError(
+                    f"Each group must have 1–4 players (got {len(g)})."
+                )
+    else:
+        if randomise:
+            # If randomise is true, we shuffle everything EXCEPT the first
+            # player so the logged-in user remains player 1.
+            if len(player_objs) > 1:
+                first = player_objs[0]
+                rest = player_objs[1:]
+                random.shuffle(rest)
+                player_objs = [first] + rest
+
+        groups = _group_players(player_objs, max_size=4)
 
     # Wipe any previous setup for this round so re-running is safe
     Foursome.objects.filter(round=round_obj).delete()
-
-    groups  = _group_players(player_objs, max_size=4)
     phantom = None
     created = []
 
     for group_number, group in enumerate(groups, start=1):
-        needs_phantom = len(group) < 4   # pad any group smaller than 4
+        # Explicit groups can be any size 1–4 and DON'T get a phantom
+        # (single-player and 2-player groups in multi-foursome skins are
+        # valid; padding would distort the skins pool).  Auto-grouped
+        # foursomes keep the existing phantom-pad-to-4 behaviour.
+        needs_phantom = (not explicit_groups) and len(group) < 4
 
         if needs_phantom and phantom is None:
             phantom = _get_or_create_phantom()

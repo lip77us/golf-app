@@ -26,10 +26,29 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   CourseInfo? _selectedCourse;
   // Map of Player ID to Tee ID
   final Map<int, int> _playerTees = {};
+  // Map of Player ID to Group # (only consulted when multi_skins is active;
+  // single-foursome casual rounds ignore this entirely).  Defaults to 1.
+  final Map<int, int> _playerGroups = {};
 
   // Active games set — starts empty so the user must explicitly pick.
   // The catalog drives which games are shown and which can combine.
   final Set<String> _activeGames = {};
+
+  /// True when the user picked Multi-Group Skins — turns on the per-player
+  /// Group dropdown and lets the foursome count exceed one.
+  bool get _multiGroup => _activeGames.contains(GameIds.multiSkins);
+
+  /// Highest group number currently assigned, plus one (so the dropdown
+  /// always offers "create a new group" if there's room).  Capped so the
+  /// menu doesn't grow unbounded.
+  int get _maxGroupOption {
+    final used = _playerGroups.values.toSet();
+    final highest = used.isEmpty ? 0 : used.reduce((a, b) => a > b ? a : b);
+    // Allow one extra slot beyond the current max so users can split off
+    // a new group.  Hard cap at the number of participating players —
+    // there's no point offering more groups than there are players.
+    return (highest + 1).clamp(1, _playerTees.length.clamp(1, 99));
+  }
 
   @override
   void initState() {
@@ -64,7 +83,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           // If the auth player exists in the players list, add them to the selection map.
           // We will assign a default tee later when a course is chosen.
           if (_players.any((p) => p.id == authPlayer.id)) {
-            _playerTees[authPlayer.id] = 0; // 0 means unassigned tee
+            _playerTees[authPlayer.id]   = 0; // 0 means unassigned tee
+            _playerGroups[authPlayer.id] = 1;
           }
         }
 
@@ -136,8 +156,11 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         // men get their lowest-priority men's tee.
         final player = _players.firstWhere((p) => p.id == playerId);
         _playerTees[playerId] = _defaultTeeIdForPlayer(player);
+        // Default to group 1 — user can move them with the Group dropdown.
+        _playerGroups[playerId] = 1;
       } else {
         _playerTees.remove(playerId);
+        _playerGroups.remove(playerId);
       }
     });
   }
@@ -210,16 +233,26 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         activeGames: _activeGames.toList(),
       );
 
-      // Setup foursome with players and their specific tees
-      final playersSetup = _playerTees.entries.map((e) => {
-        'player_id': e.key,
-        'tee_id': e.value,
+      // Setup foursome with players and their specific tees.  In
+      // multi-group mode we also pass group_number per player so the
+      // server respects the user's group assignments (and skips the
+      // automatic 4-then-3 partition + phantom padding).
+      final playersSetup = _playerTees.entries.map((e) {
+        final entry = <String, int>{
+          'player_id': e.key,
+          'tee_id'   : e.value,
+        };
+        if (_multiGroup) {
+          entry['group_number'] = _playerGroups[e.key] ?? 1;
+        }
+        return entry;
       }).toList();
 
       final fullRound = await client.setupRound(
         round.id,
         players: playersSetup,
-        randomise: true,
+        // Don't randomise in multi-group mode — the user picked the groups.
+        randomise: !_multiGroup,
         autoSetupGames: false,
       );
 
@@ -455,7 +488,27 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                             ],
                           ),
                         ),
-                        if (isSelected)
+                        if (isSelected) ...[
+                          if (_multiGroup)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: DropdownButton<int>(
+                                value: _playerGroups[player.id] ?? 1,
+                                hint: const Text('Group'),
+                                items: [
+                                  for (int g = 1; g <= _maxGroupOption; g++)
+                                    DropdownMenuItem(
+                                      value: g,
+                                      child: Text('G$g'),
+                                    ),
+                                ],
+                                onChanged: (g) {
+                                  if (g != null) {
+                                    setState(() => _playerGroups[player.id] = g);
+                                  }
+                                },
+                              ),
+                            ),
                           Padding(
                             padding: const EdgeInsets.only(right: 16),
                             child: Builder(builder: (_) {
@@ -485,7 +538,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                                 },
                               );
                             }),
-                          )
+                          ),
+                        ],
                       ],
                     ),
                   ),
