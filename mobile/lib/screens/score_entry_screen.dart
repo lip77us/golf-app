@@ -4651,11 +4651,88 @@ class _SixesSegmentCard extends StatelessWidget {
                 style: theme.textTheme.labelSmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
+              const SizedBox(height: 6),
+              // Per-hole match-status strip: one cell per hole in the
+              // segment's potential range, coloured by who won that hole
+              // (from this card's perspective — bottom team flips colours
+              // when teamsSwapped is true).
+              _SixesSegmentHoleStrip(
+                segment:      segment,
+                teamsSwapped: teamsSwapped,
+                currentHole:  currentHole,
+              ),
             ],
           ],
         ),
       ),
     );
+  }
+}
+
+// Compact 6-cell strip (one per hole) showing each hole's outcome for the
+// current Sixes segment.  Green = top team won (card-relative), red =
+// bottom team won, white = halved, outline = not yet played.
+class _SixesSegmentHoleStrip extends StatelessWidget {
+  final SixesSegment segment;
+  final bool         teamsSwapped;
+  final int          currentHole;
+
+  const _SixesSegmentHoleStrip({
+    required this.segment,
+    required this.teamsSwapped,
+    required this.currentHole,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme       = Theme.of(context);
+    final holesByNum  = {for (final h in segment.holes) h.hole: h};
+    final greenWin    = Colors.green.shade400;
+    final redWin      = Colors.red.shade400;
+    final halved      = Colors.grey.shade200;
+    final notPlayed   = theme.colorScheme.surface;
+
+    Color cellColor(int holeNum) {
+      final h = holesByNum[holeNum];
+      if (h == null || h.winner == null) return notPlayed;
+      // Winner string is 'T1' | 'T2' | 'Halved'; map to card-relative
+      // top/bottom so the strip stays consistent with the team labels
+      // above.
+      final w = h.winner!;
+      if (w == 'Halved') return halved;
+      final topWon = teamsSwapped ? (w == 'T2') : (w == 'T1');
+      return topWon ? greenWin : redWin;
+    }
+
+    return Row(children: [
+      for (int h = segment.startHole; h <= segment.endHole; h++)
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.only(right: 2),
+            height: 18,
+            decoration: BoxDecoration(
+              color: cellColor(h),
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(
+                color: h == currentHole
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outlineVariant,
+                width: h == currentHole ? 1.5 : 1,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '$h',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 9,
+                fontWeight: h == currentHole
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+              ),
+            ),
+          ),
+        ),
+    ]);
   }
 }
 
