@@ -4695,8 +4695,7 @@ class _MultiSkinsStandingsCard extends StatelessWidget {
               ]),
               for (final p in summary.players)
                 TableRow(children: [
-                  Text('${p.shortName.isNotEmpty ? p.shortName : p.name} '
-                       '(G${p.groupNumber})',
+                  Text(p.shortName.isNotEmpty ? p.shortName : p.name,
                       style: theme.textTheme.bodySmall),
                   Text(p.thru == 0 ? '—' : '${p.thru}',
                       textAlign: TextAlign.right,

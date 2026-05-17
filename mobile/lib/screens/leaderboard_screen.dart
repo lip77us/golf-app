@@ -1560,14 +1560,6 @@ class _MultiSkinsView extends StatelessWidget {
     final money   = (data['money']   as Map?  ?? {}).cast<String, dynamic>();
     final hcap    = (data['handicap'] as Map? ?? {}).cast<String, dynamic>();
 
-    // Group standings by foursome for the section headers + scorecard
-    // nav icon — same visual as the play screen.
-    final byGroup = <int, List<Map<String, dynamic>>>{};
-    for (final p in players) {
-      byGroup.putIfAbsent((p['group_number'] as int? ?? 0), () => []).add(p);
-    }
-    final groupNums = byGroup.keys.toList()..sort();
-
     final pool       = (money['pool']        as num?)?.toDouble() ?? 0.0;
     final totalSkins = (money['total_skins'] as num?)?.toInt()    ?? 0;
     final mode       = hcap['mode']        as String? ?? 'net';
@@ -1576,89 +1568,85 @@ class _MultiSkinsView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        // ── Money / mode summary ────────────────────────────────────
+        // ── Compact standings card — matches the per-game block at the
+        // bottom of the score-entry screen so the user sees the same
+        // pool/Thru/Skins/Payout summary in both places. ─────────────
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Pool — \$${pool.toStringAsFixed(2)}',
-                  style: theme.textTheme.titleMedium),
-              const SizedBox(height: 4),
-              Text(
-                '${players.length} players  •  '
-                '$totalSkins skin(s) won  •  '
-                'Mode: ${mode.toUpperCase()}'
-                '${mode == "net" && netPct != 100 ? " ($netPct%)" : ""}',
-                style: theme.textTheme.bodySmall,
-              ),
-            ]),
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // ── Standings (grouped, with Thru + scorecard icon) ────────
-        Card(
-          child: Column(children: [
-            ListTile(
-              dense: true,
-              title: const Text('Standings',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              trailing: SizedBox(
-                width: 140,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: const [
-                    SizedBox(width: 36,
-                        child: Text('Thru', textAlign: TextAlign.right,
-                            style: TextStyle(fontWeight: FontWeight.bold))),
-                    SizedBox(width: 8),
-                    SizedBox(width: 36,
-                        child: Text('Skins', textAlign: TextAlign.right,
-                            style: TextStyle(fontWeight: FontWeight.bold))),
-                    SizedBox(width: 8),
-                    SizedBox(width: 52,
-                        child: Text('Payout', textAlign: TextAlign.right,
-                            style: TextStyle(fontWeight: FontWeight.bold))),
-                  ],
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-            for (final gn in groupNums) ...[
-              _MsGroupHeader(
-                groupNumber: gn,
-                foursomeId : byGroup[gn]!.first['foursome_id'] as int? ?? 0,
-              ),
-              for (final p in byGroup[gn]!)
-                ListTile(
-                  dense: true,
-                  title: Text(p['name'] as String? ?? ''),
-                  trailing: SizedBox(
-                    width: 140,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(width: 36,
-                            child: Text(
-                              (p['thru'] as int? ?? 0) == 0
-                                  ? '—' : '${p['thru']}',
-                              textAlign: TextAlign.right)),
-                        const SizedBox(width: 8),
-                        SizedBox(width: 36,
-                            child: Text('${p['skins_won'] ?? 0}',
-                                textAlign: TextAlign.right)),
-                        const SizedBox(width: 8),
-                        SizedBox(width: 52,
-                            child: Text(
-                              '\$${((p['payout'] as num?)?.toDouble() ?? 0.0)
-                                  .toStringAsFixed(2)}',
-                              textAlign: TextAlign.right)),
-                      ],
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Icon(Icons.attach_money, size: 18),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Multi-Group Skins — '
+                      '\$${pool.toStringAsFixed(2)} pool, '
+                      '$totalSkins skin(s) won',
+                      style: theme.textTheme.titleSmall,
                     ),
                   ),
+                  Text(
+                    'Mode: ${mode.toUpperCase()}'
+                    '${mode == "net" && netPct != 100 ? " ($netPct%)" : ""}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ]),
+                const SizedBox(height: 4),
+                Table(
+                  columnWidths: const {
+                    0: FlexColumnWidth(),
+                    1: FixedColumnWidth(36),
+                    2: FixedColumnWidth(40),
+                    3: FixedColumnWidth(56),
+                  },
+                  children: [
+                    TableRow(children: [
+                      Text('Player',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.bold)),
+                      Text('Thru', textAlign: TextAlign.right,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.bold)),
+                      Text('Skins', textAlign: TextAlign.right,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.bold)),
+                      Text('Payout', textAlign: TextAlign.right,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.bold)),
+                    ]),
+                    for (final p in players)
+                      TableRow(children: [
+                        Text(
+                          (p['short_name'] as String?)?.isNotEmpty == true
+                              ? p['short_name'] as String
+                              : (p['name'] as String? ?? ''),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        Text(
+                          (p['thru'] as int? ?? 0) == 0
+                              ? '—' : '${p['thru']}',
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        Text('${p['skins_won'] ?? 0}',
+                            textAlign: TextAlign.right,
+                            style: theme.textTheme.bodySmall),
+                        Text(
+                          '\$${((p['payout'] as num?)?.toDouble() ?? 0.0)
+                              .toStringAsFixed(2)}',
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ]),
+                  ],
                 ),
-            ],
-          ]),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 12),
 
@@ -1673,39 +1661,6 @@ class _MultiSkinsView extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _MsGroupHeader extends StatelessWidget {
-  final int groupNumber;
-  final int foursomeId;
-  const _MsGroupHeader({required this.groupNumber, required this.foursomeId});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(children: [
-        Text('Group $groupNumber',
-            style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.bold)),
-        const Spacer(),
-        IconButton(
-          icon: const Icon(Icons.assignment, size: 20),
-          tooltip: 'View scorecard',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: foursomeId == 0
-              ? null
-              : () => Navigator.of(context).pushNamed(
-                    '/scorecard',
-                    arguments: {'foursomeId': foursomeId, 'readOnly': true},
-                  ),
-        ),
-      ]),
     );
   }
 }
@@ -1899,10 +1854,9 @@ class _MsScorecardState extends State<_MsScorecard> {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        '${(p['short_name'] as String?)?.isNotEmpty == true
-                            ? p['short_name']
-                            : p['name']} '
-                        '(G${p['group_number']})',
+                        (p['short_name'] as String?)?.isNotEmpty == true
+                            ? p['short_name'] as String
+                            : (p['name'] as String? ?? ''),
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
                             fontWeight: FontWeight.w600),
