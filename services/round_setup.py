@@ -216,12 +216,24 @@ def setup_round(
     phantom = None
     created = []
 
+    # Phantom padding is a tournament-only convenience for games that
+    # require exactly 4 players (Pink Ball, Sixes, etc.).  Casual rounds
+    # — with no parent Tournament — should always honour the user's
+    # actual roster: a 3-player Stroke Play or Points 5-3-1 game would
+    # be distorted by a phantom 4th.
+    is_tournament_round = round_obj.tournament_id is not None
+
     for group_number, group in enumerate(groups, start=1):
         # Explicit groups can be any size 1–4 and DON'T get a phantom
         # (single-player and 2-player groups in multi-foursome skins are
-        # valid; padding would distort the skins pool).  Auto-grouped
-        # foursomes keep the existing phantom-pad-to-4 behaviour.
-        needs_phantom = (not explicit_groups) and len(group) < 4
+        # valid; padding would distort the skins pool).  Tournament
+        # auto-grouped foursomes keep the existing phantom-pad-to-4
+        # behaviour; casual rounds never pad.
+        needs_phantom = (
+            not explicit_groups
+            and is_tournament_round
+            and len(group) < 4
+        )
 
         if needs_phantom and phantom is None:
             phantom = _get_or_create_phantom()

@@ -92,19 +92,40 @@ class ExplicitGroupSetupTests(TestCase):
 
     def test_auto_group_path_unchanged_for_legacy_callers(self):
         """No group_number → original auto-partition behaviour.  5 real
-        players auto-partition into 3 groups (the existing 4-then-3
-        logic gives 3+1+1?  Actually 5 falls through to the even-distribution
-        fallback → 3, 2)."""
+        players auto-partition into 2 groups (size 3 + 2 via the
+        even-distribution fallback).  This Round has no parent Tournament,
+        so the smaller groups DO NOT get a phantom — casual rounds keep
+        the user's exact roster."""
         players_no_groups = [
             {'player_id': p.id, 'tee_id': self.tee.id}
             for p in self.players  # 5 players
         ]
         fs_list = setup_round(self.round, players=players_no_groups,
                               randomise=False)
-        # 5 players → fallback even distribution: 2 groups of size 3, 2
-        # (3 + 2 = 5).  Group with 3 reals gets padded to 4 with a phantom.
         assert len(fs_list) >= 1
-        # Every group with < 4 reals must have a phantom in legacy mode.
+        # Casual rounds: never pad with a phantom.
+        for fs in fs_list:
+            assert fs.has_phantom is False, fs
+
+    def test_tournament_auto_group_still_pads_with_phantom(self):
+        """Tournament rounds keep the old behaviour: any auto-grouped
+        foursome smaller than 4 real players gets a phantom 4th to fill
+        the team for games that require exactly 4 (Sixes, Pink Ball)."""
+        from tournament.models import Tournament
+        from datetime import date
+        tournament = Tournament.objects.create(
+            name='T1', start_date=date.today(),
+        )
+        t_round = make_round(self.tee.course)
+        t_round.tournament = tournament
+        t_round.save(update_fields=['tournament'])
+
+        players_no_groups = [
+            {'player_id': p.id, 'tee_id': self.tee.id}
+            for p in self.players  # 5 players
+        ]
+        fs_list = setup_round(t_round, players=players_no_groups,
+                              randomise=False)
         for fs in fs_list:
             real_count = fs.real_players().count()
             assert fs.has_phantom == (real_count < 4), (real_count, fs.has_phantom)
