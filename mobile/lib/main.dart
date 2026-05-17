@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -46,6 +47,8 @@ import 'screens/settings_screen.dart';
 /// Global navigator key — lets AuthProvider redirect to /login on 401
 /// from outside the widget tree.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,7 +124,32 @@ class _GolfAppState extends State<GolfApp> {
         currentRoute = r.settings.name;
         return true;
       });
+      // Use developer.log + debugPrint so the message shows in BOTH
+      // `flutter logs` and the `flutter run` terminal — debugPrint
+      // alone seems to occasionally not surface for the user.
+      developer.log(
+        '[AUTH-REDIRECT] logged out from route=$currentRoute',
+        name: 'AUTH',
+      );
       debugPrint('[AUTH-REDIRECT] logged out from route=$currentRoute');
+
+      // Show an in-app SnackBar so the user has an immediate, visible
+      // signal of what's happening.  Stays for 8s so they can read it
+      // before the redirect repaints over the previous screen.
+      final messenger = scaffoldMessengerKey.currentState;
+      if (messenger != null) {
+        messenger.removeCurrentSnackBar();
+        messenger.showSnackBar(SnackBar(
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 8),
+          content: Text(
+            'Auto-logout from $currentRoute. Check the login-screen '
+            'panel for details.',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ));
+      }
+
       // Clear cached data on sign-out so another user doesn't see it.
       widget.localDb.clearAll();
       navigatorKey.currentState?.pushNamedAndRemoveUntil(
@@ -160,7 +188,8 @@ class _GolfAppState extends State<GolfApp> {
         ),
       ],
       child: MaterialApp(
-        navigatorKey: navigatorKey,
+        navigatorKey:         navigatorKey,
+        scaffoldMessengerKey: scaffoldMessengerKey,
         title: 'The Bandon Cup',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(

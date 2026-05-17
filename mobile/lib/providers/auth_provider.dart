@@ -1,6 +1,7 @@
 /// providers/auth_provider.dart
 /// Manages login state and persists the auth token across restarts.
 
+import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/client.dart';
@@ -101,7 +102,9 @@ class AuthProvider extends ChangeNotifier {
     // Capture the call stack so we can identify which code path triggered
     // the logout when the user reports the next intermittent silent-out.
     final stack = StackTrace.current.toString().split('\n').take(8).join(' | ');
-    debugPrint('[AUTH-LOGOUT] reason=$reason silent=$silent stack=$stack');
+    final msg   = '[AUTH-LOGOUT] reason=$reason silent=$silent stack=$stack';
+    debugPrint(msg);
+    developer.log(msg, name: 'AUTH');
     await _writeLogoutBreadcrumb('logout reason=$reason  stack=$stack');
 
     if (!silent) {
