@@ -222,30 +222,37 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
                   isNetwork: isNetworkError(_error!),
                   onRetry: _load,
                 )
-              : _buildBody(),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: (_saving || !_poolBalanced) ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Text(
-                      _configured ? 'Save Changes' : 'Save Setup',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
+              : Column(children: [
+                  Expanded(child: _buildBody()),
+                  // Persistent Save button — in-body so it stays above
+                  // the soft keyboard when the entry-fee / payout fields
+                  // are open.
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton(
+                          onPressed:
+                              (_saving || !_poolBalanced) ? null : _save,
+                          child: _saving
+                              ? const SizedBox(
+                                  width: 20, height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : Text(
+                                  _configured ? 'Save Changes' : 'Save Setup',
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                        ),
+                      ),
                     ),
-            ),
-          ),
-        ),
-      ),
+                  ),
+                ]),
     );
   }
 
@@ -625,30 +632,37 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                   isNetwork: isNetworkError(_error!),
                   onRetry: _load,
                 )
-              : _buildBody(),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: (_saving || !_poolBalanced) ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Text(
-                      _configured ? 'Save Changes' : 'Save Setup',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
+              : Column(children: [
+                  Expanded(child: _buildBody()),
+                  // Persistent Save button — in-body so it stays above
+                  // the soft keyboard when the entry-fee / payout fields
+                  // are open.
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton(
+                          onPressed:
+                              (_saving || !_poolBalanced) ? null : _save,
+                          child: _saving
+                              ? const SizedBox(
+                                  width: 20, height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : Text(
+                                  _configured ? 'Save Changes' : 'Save Setup',
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                        ),
+                      ),
                     ),
-            ),
-          ),
-        ),
-      ),
+                  ),
+                ]),
     );
   }
 

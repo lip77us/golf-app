@@ -199,40 +199,45 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Nassau — Setup')),
-      body: _buildBody(rp),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: (_starting || !_rosterValid) ? null : _start,
-              child: _starting
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Start Match',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ),
-      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? ErrorView(
+                  message: friendlyError(_error!),
+                  isNetwork: isNetworkError(_error!),
+                  onRetry: _load,
+                )
+              : Column(children: [
+                  Expanded(child: _buildBody(rp)),
+                  // Persistent Start Match button — in-body so it stays
+                  // above the soft keyboard when the bet field is open.
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton(
+                          onPressed: (_starting || !_rosterValid) ? null : _start,
+                          child: _starting
+                              ? const SizedBox(
+                                  width: 20, height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Text('Start Match',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]),
     );
   }
 
   Widget _buildBody(RoundProvider rp) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
-      return ErrorView(
-        message: friendlyError(_error!),
-        isNetwork: isNetworkError(_error!),
-        onRetry: _load,
-      );
-    }
 
     final theme   = Theme.of(context);
     final members = _realMembers;
