@@ -1259,8 +1259,20 @@ class CasualRoundListView(APIView):
                 .first()
             )
 
-            # Casual rounds have exactly one foursome.
-            first_fs = r.foursomes.first()
+            # Pick the foursome that contains the requesting player.
+            # Casual rounds used to always have a single foursome, but
+            # Multi-Group Skins introduced multi-foursome casual rounds —
+            # returning r.foursomes.first() always took the user to group
+            # 1's score-entry regardless of which group they actually play
+            # in.  Fall back to the first foursome only if no membership
+            # matches (legacy admin-created rounds, edge cases).
+            user_fs = next(
+                (fs for fs in r.foursomes.all()
+                 if any(m.player_id == requesting_player.id
+                        for m in fs.memberships.all())),
+                None,
+            )
+            chosen_fs = user_fs or r.foursomes.first()
 
             results.append({
                 'id':                   r.id,
@@ -1271,7 +1283,7 @@ class CasualRoundListView(APIView):
                 'bet_unit':             r.bet_unit,
                 'current_hole':         max_hole or 0,
                 'created_by_player_id': r.created_by_id,
-                'foursome_id':          first_fs.id if first_fs else None,
+                'foursome_id':          chosen_fs.id if chosen_fs else None,
                 'players':              players,
             })
 
