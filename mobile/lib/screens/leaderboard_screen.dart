@@ -478,18 +478,21 @@ class _RedBallView extends StatelessWidget {
           final netToPar        = row['net_to_par'] as int?;
           final eliminatedOn    = row['eliminated_on_hole'] as int?;
           final currentHole     = row['current_hole'] as int?;
+          final lostBy          = row['lost_by'] as String?;
 
           // Subtitle:
-          //   "Not started"    — no holes played yet
-          //   "Alive Thru 7"   — ball still in play, round not finished
-          //   "Survived"       — all 18 holes completed with ball intact
-          //   "Lost on Hole 4" — ball was lost
+          //   "Not started"          — no holes played yet
+          //   "Alive Thru 7"         — ball still in play, round not done
+          //   "Survived"             — all 18 holes completed
+          //   "Lost by RyanL (hole 8)" — ball was lost; carrier named when known
           final notStarted = currentHole == null || currentHole == 0;
           final activelyAlive = survived && !notStarted;
           final String subtitle;
           final Color  subtitleColor;
           if (!survived && eliminatedOn != null) {
-            subtitle      = 'Lost on Hole $eliminatedOn';
+            subtitle      = lostBy != null
+                ? 'Lost by $lostBy (hole $eliminatedOn)'
+                : 'Lost on Hole $eliminatedOn';
             subtitleColor = theme.colorScheme.onSurfaceVariant;
           } else if (notStarted) {
             subtitle      = 'Not started';
