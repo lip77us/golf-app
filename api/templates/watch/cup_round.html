@@ -5,6 +5,26 @@
 {% endblock %}
 
 {% block body %}
+  {# Per-page colour helpers — tint chips / names with the team colour. #}
+  <style>
+    {% if summary.team1_colour %}
+      .t1-name, .pts.t1 { color: {{ summary.team1_colour }}; }
+      .chip-t1 {
+        background: {{ summary.team1_colour }}22;
+        color: {{ summary.team1_colour }};
+        border-color: {{ summary.team1_colour }}55;
+      }
+    {% endif %}
+    {% if summary.team2_colour %}
+      .t2-name, .pts.t2 { color: {{ summary.team2_colour }}; }
+      .chip-t2 {
+        background: {{ summary.team2_colour }}22;
+        color: {{ summary.team2_colour }};
+        border-color: {{ summary.team2_colour }}55;
+      }
+    {% endif %}
+  </style>
+
   <h1>
     {% if tournament %}{{ tournament.name }}{% else %}Cup Round{% endif %}
   </h1>
@@ -12,110 +32,9 @@
     Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
   </p>
 
-  {# ── Team scoreboard ───────────────────────────────────────────────── #}
-  <div class="card">
-    {# Inline custom colours from the TournamentTeam.colour field when set. #}
-    <style>
-      {% if summary.team1_colour %}
-        .t1-name { color: {{ summary.team1_colour }}; }
-        .pts.t1  { color: {{ summary.team1_colour }}; }
-        .result-t1 { background: {{ summary.team1_colour }}22; color: {{ summary.team1_colour }}; }
-      {% endif %}
-      {% if summary.team2_colour %}
-        .t2-name { color: {{ summary.team2_colour }}; }
-        .pts.t2  { color: {{ summary.team2_colour }}; }
-        .result-t2 { background: {{ summary.team2_colour }}22; color: {{ summary.team2_colour }}; }
-      {% endif %}
-    </style>
-
-    <div class="scoreboard">
-      <div>
-        <div class="team-name t1-name">{{ summary.team1_name|default:"Team 1" }}</div>
-        <div class="team-pts t1-name">{{ summary.team1_points|floatformat:"-1" }}</div>
-      </div>
-      <div class="dash">–</div>
-      <div style="text-align:right;">
-        <div class="team-name t2-name">{{ summary.team2_name|default:"Team 2" }}</div>
-        <div class="team-pts t2-name">{{ summary.team2_points|floatformat:"-1" }}</div>
-      </div>
-    </div>
-    <div class="total">
-      of {{ summary.total_possible|floatformat:"-1" }} points available
-    </div>
-  </div>
-
-  {# ── Per-match cards ───────────────────────────────────────────────── #}
+  {# ── Per-match cards (full list — Matches tab keeps decided sides) ── #}
   {% for match in summary.matches %}
-    <div class="card match-card">
-      <div class="match-head">
-        <span class="game-label">{{ match.game_label }}</span>
-        <span class="group-label">
-          {% if match.groups|length == 1 %}
-            Group {{ match.groups.0 }}
-          {% else %}
-            Groups {{ match.groups|join:", " }}
-          {% endif %}
-        </span>
-      </div>
-
-      <div class="lineup">
-        <div class="t1-side t1-name">
-          {{ match.team1_players|join:" / " }}
-        </div>
-        <div class="vs">vs</div>
-        <div class="t2-side t2-name">
-          {{ match.team2_players|join:" / " }}
-        </div>
-      </div>
-
-      {# Nassau-style segment rows (Four Ball + Singles Nassau) #}
-      {% for seg in match.segments %}
-        <div class="seg-row">
-          <span class="seg-label">{{ seg.label }}</span>
-          <span>
-            {% if seg.result == 'team1' %}
-              <span class="seg-result result-t1">{{ summary.team1_name }}</span>
-            {% elif seg.result == 'team2' %}
-              <span class="seg-result result-t2">{{ summary.team2_name }}</span>
-            {% elif seg.result == 'halved' %}
-              <span class="seg-result result-halved">Halved</span>
-            {% else %}
-              <span class="result-pending">in progress</span>
-            {% endif %}
-          </span>
-          <span class="pts t1">{{ seg.t1_pts|floatformat:"-1" }}</span>
-          <span class="pts t2">{{ seg.t2_pts|floatformat:"-1" }}</span>
-        </div>
-      {% endfor %}
-
-      {# Singles match rows (18-Hole Singles, Cup Singles 18) #}
-      {% for im in match.individual_matches %}
-        <div class="seg-row">
-          <span class="seg-label" style="min-width:auto;">
-            {{ im.player1 }} <span style="color:var(--muted);">vs</span> {{ im.player2 }}
-          </span>
-          <span>
-            {% if im.result == 'team1' %}
-              <span class="seg-result result-t1">
-                {% if im.status %}{{ im.status }}{% else %}{{ summary.team1_name }}{% endif %}
-              </span>
-            {% elif im.result == 'team2' %}
-              <span class="seg-result result-t2">
-                {% if im.status %}{{ im.status }}{% else %}{{ summary.team2_name }}{% endif %}
-              </span>
-            {% elif im.result == 'halved' %}
-              <span class="seg-result result-halved">{{ im.status|default:"Halved" }}</span>
-            {% else %}
-              <span class="result-pending">
-                {% if im.status %}{{ im.status }}{% else %}in progress{% endif %}
-              </span>
-            {% endif %}
-          </span>
-          <span class="pts t1">{{ im.t1_pts|floatformat:"-1" }}</span>
-          <span class="pts t2">{{ im.t2_pts|floatformat:"-1" }}</span>
-        </div>
-      {% endfor %}
-    </div>
+    {% include "watch/_match_card.html" with match=match summary=summary segments=match.segments individuals=match.individual_matches %}
   {% empty %}
     <div class="card empty">
       No matches set up for this round yet.

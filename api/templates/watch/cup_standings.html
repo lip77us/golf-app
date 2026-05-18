@@ -1,0 +1,99 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:cup_name }} · {{ cup_name }}
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}{{ cup_name }}{% endif %}
+  </h1>
+  <p class="sub">{{ cup_name }} · cumulative standings</p>
+
+  {% if summary %}
+    <style>
+      {% if summary.team1_colour %}
+        .t1-name, .pts.t1 { color: {{ summary.team1_colour }}; }
+        .chip-t1 {
+          background: {{ summary.team1_colour }}22;
+          color: {{ summary.team1_colour }};
+          border-color: {{ summary.team1_colour }}55;
+        }
+        .cup-team-1 { background: {{ summary.team1_colour }}; }
+      {% endif %}
+      {% if summary.team2_colour %}
+        .t2-name, .pts.t2 { color: {{ summary.team2_colour }}; }
+        .chip-t2 {
+          background: {{ summary.team2_colour }}22;
+          color: {{ summary.team2_colour }};
+          border-color: {{ summary.team2_colour }}55;
+        }
+        .cup-team-2 { background: {{ summary.team2_colour }}; }
+      {% endif %}
+    </style>
+
+    {# ── Cup-name pill ───────────────────────────────────────────── #}
+    {% if cup_name %}
+      <div class="cup-pill-row">
+        <span class="cup-name-pill">{{ cup_name|upper }}</span>
+      </div>
+    {% endif %}
+
+    {# ── Big colored team-box scoreboard ─────────────────────────── #}
+    <div class="cup-board">
+      <div class="cup-team cup-team-1">
+        <div class="cup-team-label">{{ summary.team1_name|default:"Team 1" }}</div>
+        <div class="cup-team-pts">{{ summary.team1_points|floatformat:"-1" }}</div>
+      </div>
+      <div class="cup-team cup-team-2">
+        <div class="cup-team-label">{{ summary.team2_name|default:"Team 2" }}</div>
+        <div class="cup-team-pts">{{ summary.team2_points|floatformat:"-1" }}</div>
+      </div>
+    </div>
+    {% if summary.to_win %}
+      <div class="cup-need">{{ summary.to_win|floatformat:"-1" }} pts needed to win</div>
+    {% endif %}
+
+    {# ── Live "in progress" match cards (decided sides hidden) ──── #}
+    {% if pending_matches %}
+      <div class="section-divider"><span>LIVE NOW</span></div>
+      {% for match in pending_matches %}
+        {% include "watch/_match_card.html" with match=match summary=live_summary segments=match.segments individuals=match.individual_matches %}
+      {% endfor %}
+    {% endif %}
+
+    {# ── Per-round cumulative totals table ───────────────────────── #}
+    {% if summary.rounds %}
+      <div class="section-divider"><span>BY ROUND</span></div>
+      <div class="card" style="padding: 4px 0;">
+        <table class="lb-table">
+          <thead>
+            <tr>
+              <th>Round</th>
+              <th class="num">{{ summary.team1_name }}</th>
+              <th class="num">{{ summary.team2_name }}</th>
+              <th class="num">Possible</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in summary.rounds %}
+              <tr>
+                <td>Round {{ r.round_number }}</td>
+                <td class="num pts t1">{{ r.team1_points|floatformat:"-1" }}</td>
+                <td class="num pts t2">{{ r.team2_points|floatformat:"-1" }}</td>
+                <td class="num">{{ r.total_possible|floatformat:"-1" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
+    <div class="total" style="margin-top: 8px;">
+      of {{ summary.total_possible|floatformat:"-1" }} points available
+      · {{ summary.to_win|floatformat:"-1" }} to win
+    </div>
+  {% else %}
+    <div class="card empty">No {{ cup_name }} standings yet.</div>
+  {% endif %}
+{% endblock %}

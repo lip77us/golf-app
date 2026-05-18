@@ -1,0 +1,115 @@
+<div class="card match-card">
+  <div class="match-meta">
+    <span class="game-pill">{{ match.game_label }}</span>
+    <span class="meta-text">
+      {% if match.groups|length == 1 %}Group {{ match.groups.0 }}{% else %}Groups {{ match.groups|join:", " }}{% endif %}
+      {% if match.point_value %} · {{ match.point_value|floatformat:"-1" }} pt/seg{% endif %}
+      {% if match.thru_label %} · {{ match.thru_label }}{% endif %}
+    </span>
+  </div>
+
+  <div class="lineup">
+    <div class="t1-side t1-name">{{ match.team1_players|join:" / " }}</div>
+    <div class="vs">vs</div>
+    <div class="t2-side t2-name">{{ match.team2_players|join:" / " }}</div>
+  </div>
+
+  {# ── Four Ball / Nassau-style team segments ──────────────────────── #}
+  {% for seg in segments %}
+    <div class="result-line">
+      <span class="lbl">{{ seg.label }}</span>
+      <span class="t1-cell">
+        {% if seg.display_team == 'team1' %}
+          <span class="chip chip-t1">{{ seg.short_display }}</span>
+        {% endif %}
+      </span>
+      <span class="center-cell">
+        {% if seg.display_team %}
+          <span class="v-div"></span>
+        {% elif seg.result == 'halved' %}
+          <span class="chip chip-halved">Halved</span>
+        {% elif seg.short_display %}
+          <span class="chip chip-halved">{{ seg.short_display }}</span>
+        {% else %}
+          <span class="v-div"></span>
+        {% endif %}
+      </span>
+      <span class="t2-cell">
+        {% if seg.display_team == 'team2' %}
+          <span class="chip chip-t2">{{ seg.short_display }}</span>
+        {% endif %}
+      </span>
+    </div>
+  {% endfor %}
+
+  {# ── Individual matchups (Singles Nassau / 18-Hole Singles) ─────── #}
+  {% for im in individuals %}
+    {% if im.sub_segments %}
+      <div class="matchup-row">
+        <span class="p1 t1-name">{{ im.player1 }}</span>
+        <span class="vs-info">vs<br><em>{{ im.thru_label }}</em></span>
+        <span class="p2 t2-name">{{ im.player2 }}</span>
+      </div>
+      {% for sub in im.sub_segments %}
+        <div class="result-line">
+          <span class="lbl">{{ sub.label }}</span>
+          <span class="t1-cell">
+            {% if sub.display_team == 'team1' %}
+              <span class="chip chip-t1">{{ sub.short_display }}</span>
+            {% endif %}
+          </span>
+          <span class="center-cell">
+            {% if sub.display_team %}
+              <span class="v-div"></span>
+            {% elif sub.result == 'halved' %}
+              <span class="chip chip-halved">Halved</span>
+            {% elif sub.short_display %}
+              <span class="chip chip-halved">{{ sub.short_display }}</span>
+            {% else %}
+              <span class="chip-empty">—</span>
+            {% endif %}
+          </span>
+          <span class="t2-cell">
+            {% if sub.display_team == 'team2' %}
+              <span class="chip chip-t2">{{ sub.short_display }}</span>
+            {% endif %}
+          </span>
+        </div>
+      {% endfor %}
+    {% else %}
+      {# 18-Hole Singles: single overall row per matchup #}
+      <div class="result-line">
+        <span class="lbl-wide">
+          <span class="t1-name">{{ im.player1 }}</span>
+          <span class="muted">vs</span>
+          <span class="t2-name">{{ im.player2 }}</span>
+        </span>
+        <span class="t1-cell">
+          {% if im.display_team == 'team1' %}
+            <span class="chip chip-t1">{{ im.short_display }}</span>
+          {% endif %}
+        </span>
+        <span class="center-cell">
+          {% if im.display_team %}
+            <span class="v-div"></span>
+          {% elif im.result == 'halved' %}
+            <span class="chip chip-halved">Halved</span>
+          {% elif im.short_display %}
+            <span class="chip chip-halved">{{ im.short_display }}</span>
+          {% else %}
+            <span class="v-div"></span>
+          {% endif %}
+        </span>
+        <span class="t2-cell">
+          {% if im.display_team == 'team2' %}
+            <span class="chip chip-t2">{{ im.short_display }}</span>
+          {% endif %}
+        </span>
+      </div>
+    {% endif %}
+  {% endfor %}
+
+  {% if not segments and not individuals %}
+    <div class="empty" style="padding: 12px 4px;">All sides resolved.</div>
+  {% endif %}
+</div>

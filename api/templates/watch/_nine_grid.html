@@ -1,0 +1,36 @@
+{# Compact 9-hole scorecard grid.  Expects context: grid (from _build_nine_grid). #}
+<div class="nine-grid {% if grid.empty %}nine-empty{% endif %}">
+  <div class="nine-label">{{ grid.label }}</div>
+  <table class="nine">
+    <thead>
+      <tr>
+        <th>Hole</th>
+        <th>Par</th>
+        <th>Grs</th>
+        {% if grid.show_net %}<th>Net</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in grid.rows %}
+        <tr>
+          <td>{{ row.hole }}</td>
+          <td>{{ row.par|default:"–" }}</td>
+          <td class="{{ row.gross_cls }}">{{ row.gross|default:"–" }}</td>
+          {% if grid.show_net %}
+            <td class="{{ row.net_cls }}">{{ row.net|default:"–" }}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      {% if not grid.empty %}
+        <tr class="nine-tot">
+          <td>{{ grid.totals.label }}</td>
+          <td>{{ grid.totals.par|default:"–" }}</td>
+          <td>{{ grid.totals.gross|default:"–" }}</td>
+          {% if grid.show_net %}
+            <td class="{{ grid.totals.net_cls }}">{{ grid.totals.net_label }}</td>
+          {% endif %}
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>

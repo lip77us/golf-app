@@ -251,6 +251,7 @@ def low_net_round_standings(round_obj) -> list:
             'foursome_id' : data.get('foursome_id'),
             'excluded'    : is_excluded,
             'payout'      : payout,
+            'handicap'    : data.get('handicap', 0),  # raw playing handicap
             'holes'       : data.get('holes', {}),   # {hole_number: hole_data}
         })
 
@@ -299,6 +300,7 @@ def low_net_round_summary(round_obj) -> dict:
                 'foursome_id' : s['foursome_id'],
                 'excluded'    : s.get('excluded', False),
                 'payout'      : s['payout'],
+                'handicap'    : s.get('handicap', 0),
                 'holes'       : [
                     {'hole': h, **v}
                     for h, v in sorted(s.get('holes', {}).items())

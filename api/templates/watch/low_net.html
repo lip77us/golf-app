@@ -1,0 +1,59 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Low Net" }} · Low Net
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}Low Net{% endif %}
+  </h1>
+  <p class="sub">
+    {% if scope == 'championship' %}
+      Low Net Championship · {{ summary.rounds_played|default:0 }} of {{ summary.total_rounds|default:0 }} rounds played
+    {% else %}
+      Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+    {% endif %}
+  </p>
+
+  {% if summary and summary.results %}
+    {% for r in summary.results %}
+      <details class="ln-card{% if not r.has_scorecard %} ln-card-static{% endif %}">
+        <summary class="ln-summary">
+          <span class="ln-rank">{{ r.rank }}</span>
+          <span class="ln-name">
+            {{ r.name }}{% if r.net_handicap_label %} <span class="hcp">({{ r.net_handicap_label }})</span>{% endif %}
+          </span>
+          <span class="ln-thru">
+            {% if r.holes_played == 18 %}F
+            {% elif r.holes_played %}thru {{ r.holes_played }}
+            {% else %}—{% endif %}
+          </span>
+          <span class="ln-ntp">
+            {% if r.net_to_par is None %}—
+            {% elif r.net_to_par == 0 %}<span>E</span>
+            {% elif r.net_to_par > 0 %}<span class="over">+{{ r.net_to_par }}</span>
+            {% else %}<span class="under">{{ r.net_to_par }}</span>
+            {% endif %}
+          </span>
+          {% if r.has_scorecard %}<span class="ln-chev" aria-hidden="true">▾</span>{% endif %}
+        </summary>
+        {% if r.has_scorecard %}
+          <div class="ln-body">
+            {% for card in r.scorecards %}
+              {% if card.label %}
+                <div class="round-label">{{ card.label }}</div>
+              {% endif %}
+              <div class="sc-grids">
+                {% include "watch/_nine_grid.html" with grid=card.front %}
+                {% include "watch/_nine_grid.html" with grid=card.back  %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </details>
+    {% endfor %}
+  {% else %}
+    <div class="card empty">No Low Net scores yet.</div>
+  {% endif %}
+{% endblock %}
