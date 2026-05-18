@@ -485,6 +485,21 @@
       color: var(--muted); font-size: 12px;
       margin-top: 2px;
     }
+    /* Leader of an in-progress / completed Six's segment — bold and
+       tinted with the primary colour so the eye can scan the segment
+       list and see who's winning each match. */
+    .sixes-seg-sub .sixes-leader  {
+      color: var(--primary);
+      font-weight: 700;
+    }
+    .sixes-seg-sub .sep,
+    .sixes-seg-sub .sixes-trailer { color: var(--muted); font-weight: 400; }
+    .sixes-seg-sub.tone-won .sixes-leader {
+      /* Won matches keep the same emphasis as leading ones — same
+         green primary — so the visual treatment is consistent. */
+    }
+    .sixes-seg-sub.tone-halved,
+    .sixes-seg-sub.tone-pending { color: var(--muted); }
     .sixes-money-head {
       font-weight: 700; font-size: 13px;
       margin-bottom: 4px;

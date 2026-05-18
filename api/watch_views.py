@@ -867,9 +867,24 @@ def _sixes_segment_score(seg: dict) -> str:
     return 'Pending'
 
 
-def _sixes_segment_subtitle(seg: dict) -> str:
-    """Team line under each segment — e.g. "Paul & Mike beat Jul & Larry"
-    or "Halved — Paul & Mike vs Jul & Larry"."""
+def _sixes_segment_subtitle(seg: dict) -> dict:
+    """Team line under each segment, broken into parts so the template
+    can highlight the leading / winning team in a distinct style.
+
+    Returns:
+      {
+        'leader' : 'Paul & Mike',     # the team to emphasise (or None)
+        'joiner' : 'beat' | 'vs' | 'Halved — ',
+        'trailer': 'Jul & Larry',
+        'tone'   : 'won' | 'leading' | 'halved' | 'pending',
+      }
+
+    Rules:
+      • Complete win  → leader = winning team, joiner = 'beat'.
+      • In-progress lead (margin != 0) → leader = leading team, joiner = 'vs'.
+      • Halved        → no leader, joiner = 'Halved — '.
+      • AS / pending  → no leader, joiner = 'vs'.
+    """
     t1 = ((seg.get('team1') or {}).get('players') or [])
     t2 = ((seg.get('team2') or {}).get('players') or [])
 
@@ -882,10 +897,30 @@ def _sixes_segment_subtitle(seg: dict) -> str:
     t1s = _join(t1)
     t2s = _join(t2)
     winner = (seg.get('winner') or '').strip()
-    if winner == 'Team 1': return f'{t1s} beat {t2s}'
-    if winner == 'Team 2': return f'{t2s} beat {t1s}'
-    if winner == 'Halved': return f'Halved — {t1s} vs {t2s}'
-    return f'{t1s} vs {t2s}'
+    status = seg.get('status') or 'pending'
+
+    if winner == 'Team 1':
+        return {'leader': t1s, 'joiner': 'beat', 'trailer': t2s, 'tone': 'won'}
+    if winner == 'Team 2':
+        return {'leader': t2s, 'joiner': 'beat', 'trailer': t1s, 'tone': 'won'}
+    if winner == 'Halved':
+        return {'leader': None, 'joiner': 'Halved — ',
+                'trailer': f'{t1s} vs {t2s}', 'tone': 'halved'}
+
+    # Pending or in-progress.  Pull the last recorded margin to detect a
+    # leader: +ve → team1 leading, −ve → team2 leading, 0 → all square.
+    last_margin = 0
+    holes = seg.get('holes') or []
+    if holes:
+        last_margin = int((holes[-1].get('margin')) or 0)
+
+    if status == 'in_progress' and last_margin > 0:
+        return {'leader': t1s, 'joiner': 'vs', 'trailer': t2s, 'tone': 'leading'}
+    if status == 'in_progress' and last_margin < 0:
+        return {'leader': t2s, 'joiner': 'vs', 'trailer': t1s, 'tone': 'leading'}
+
+    return {'leader': None, 'joiner': '', 'trailer': f'{t1s} vs {t2s}',
+            'tone': 'pending'}
 
 
 def _render_casual_sixes(request, round_obj, token: str, tabs: list):
@@ -905,8 +940,8 @@ def _render_casual_sixes(request, round_obj, token: str, tabs: list):
         # the template stays free of conditionals.
         if summary:
             for seg in summary.get('segments') or []:
-                seg['score_text']    = _sixes_segment_score(seg)
-                seg['subtitle_text'] = _sixes_segment_subtitle(seg)
+                seg['score_text']     = _sixes_segment_score(seg)
+                seg['subtitle_parts'] = _sixes_segment_subtitle(seg)
         groups.append({
             'group_number': fs.group_number,
             'foursome_id' : fs.id,

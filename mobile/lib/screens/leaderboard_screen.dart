@@ -2563,24 +2563,48 @@ class _SixesGroupCard extends StatelessWidget {
     return names.join(', ');
   }
 
-  /// Team-vs-team subtitle for one segment.  Examples:
-  ///   "Paul & Mike beat John & Sarah"
-  ///   "Halved — Paul & Mike vs John & Sarah"
-  ///   "Paul & Mike vs John & Sarah" (pending / in-progress)
-  static String _segmentResult(Map<String, dynamic> seg) {
+  /// Team-vs-team subtitle for one segment, broken into parts so the
+  /// caller can render the leading / winning team with extra emphasis
+  /// (bold + primary colour).  The flat string the leaderboard used to
+  /// show buried the leader on in-progress segments; this returns
+  /// `leader`, `joiner`, and `trailer` instead so a RichText widget can
+  /// style each piece independently.
+  static ({String? leader, String joiner, String trailer, String tone})
+      _segmentParts(Map<String, dynamic> seg) {
     final t1  = (seg['team1'] as Map<String, dynamic>? ?? const {})['players']
         as List? ?? const [];
     final t2  = (seg['team2'] as Map<String, dynamic>? ?? const {})['players']
         as List? ?? const [];
-    final w   = seg['winner']?.toString() ?? '—';
     final t1s = _teamString(t1);
     final t2s = _teamString(t2);
-    switch (w) {
-      case 'Team 1': return '$t1s beat $t2s';
-      case 'Team 2': return '$t2s beat $t1s';
-      case 'Halved': return 'Halved — $t1s vs $t2s';
-      default      : return '$t1s vs $t2s';
+    final winner = seg['winner']?.toString() ?? '—';
+    final status = seg['status']?.toString() ?? 'pending';
+
+    if (winner == 'Team 1') {
+      return (leader: t1s, joiner: ' beat ', trailer: t2s, tone: 'won');
     }
+    if (winner == 'Team 2') {
+      return (leader: t2s, joiner: ' beat ', trailer: t1s, tone: 'won');
+    }
+    if (winner == 'Halved') {
+      return (leader: null, joiner: 'Halved — ',
+              trailer: '$t1s vs $t2s', tone: 'halved');
+    }
+
+    // In progress or pending — derive the leader from the last hole's
+    // signed margin (+ve = team 1 ahead, −ve = team 2 ahead).
+    final holes = (seg['holes'] as List? ?? const []);
+    final lastMargin = holes.isEmpty
+        ? 0
+        : (((holes.last as Map<String, dynamic>)['margin'] as num?)?.toInt() ?? 0);
+
+    if (status == 'in_progress' && lastMargin > 0) {
+      return (leader: t1s, joiner: ' vs ', trailer: t2s, tone: 'leading');
+    }
+    if (status == 'in_progress' && lastMargin < 0) {
+      return (leader: t2s, joiner: ' vs ', trailer: t1s, tone: 'leading');
+    }
+    return (leader: null, joiner: '', trailer: '$t1s vs $t2s', tone: 'pending');
   }
 
   /// Result text for one segment, shown to the right of the match label.
@@ -2662,11 +2686,26 @@ class _SixesGroupCard extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                   ]),
                   const SizedBox(height: 2),
-                  Text(
-                    _segmentResult(seg),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant),
-                  ),
+                  Builder(builder: (_) {
+                    final parts   = _segmentParts(seg);
+                    final muted   = theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant);
+                    final leader  = theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w700);
+                    return RichText(
+                      text: TextSpan(style: muted, children: [
+                        if (parts.joiner == 'Halved — ')
+                          TextSpan(text: parts.joiner),
+                        if (parts.leader != null) ...[
+                          TextSpan(text: parts.leader, style: leader),
+                          TextSpan(text: parts.joiner),
+                          TextSpan(text: parts.trailer),
+                        ] else
+                          TextSpan(text: parts.trailer),
+                      ]),
+                    );
+                  }),
                 ],
               ),
             );

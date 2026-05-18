@@ -34,7 +34,16 @@
                 {{ seg.score_text }}
               </span>
             </div>
-            <div class="sixes-seg-sub">{{ seg.subtitle_text }}</div>
+            <div class="sixes-seg-sub tone-{{ seg.subtitle_parts.tone }}">
+              {% if seg.subtitle_parts.joiner == 'Halved — ' %}{{ seg.subtitle_parts.joiner }}{% endif %}
+              {% if seg.subtitle_parts.leader %}
+                <span class="sixes-leader">{{ seg.subtitle_parts.leader }}</span>
+                <span class="sep">{{ seg.subtitle_parts.joiner }}</span>
+                <span class="sixes-trailer">{{ seg.subtitle_parts.trailer }}</span>
+              {% else %}
+                <span class="sixes-trailer">{{ seg.subtitle_parts.trailer }}</span>
+              {% endif %}
+            </div>
           </div>
         {% empty %}
           <div class="empty" style="padding: 20px 4px;">No matches set up yet.</div>
