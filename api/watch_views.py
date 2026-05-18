@@ -377,12 +377,30 @@ def _filter_pending_matches(matches: list) -> list:
 def _has_cup_matches(round_obj) -> bool:
     return hasattr(round_obj, 'ryder_cup_config')
 
+def _has_cup_standings(round_obj) -> bool:
+    """True when the tournament has a cup (team) competition configured."""
+    tourney = round_obj.tournament
+    return bool(tourney and hasattr(tourney, 'team_tournament'))
+
+def _is_casual_round(round_obj) -> bool:
+    """A round with no cup overlay — players just signed up for a few
+    side games (Skins, Multi-Skins, Sixes, …)."""
+    return not _has_cup_matches(round_obj) and not _has_cup_standings(round_obj)
+
+def _has_casual_skins(round_obj) -> bool:
+    return 'skins' in (round_obj.active_games or [])
+
+def _has_casual_multi_skins(round_obj) -> bool:
+    return 'multi_skins' in (round_obj.active_games or [])
+
 def _has_low_net(round_obj) -> bool:
     """True when the round (or its tournament) has any low-net offering.
 
     Mirrors the signals the mobile app uses to surface Low Net: prefer
     the canonical `active_games` array on round / tournament, fall back
-    to the presence of an explicit setup record."""
+    to the presence of an explicit setup record.  For casual rounds we
+    always include Low Net — the tab doubles as the spectator scorecard
+    view (the one game-specific leaderboards don't offer)."""
     if 'low_net_round' in (round_obj.active_games or []):
         return True
     if hasattr(round_obj, 'low_net_config'):
@@ -393,12 +411,9 @@ def _has_low_net(round_obj) -> bool:
             return True
         if hasattr(tourney, 'low_net_championship_config'):
             return True
+    if _is_casual_round(round_obj):
+        return True
     return False
-
-def _has_cup_standings(round_obj) -> bool:
-    """True when the tournament has a cup (team) competition configured."""
-    tourney = round_obj.tournament
-    return bool(tourney and hasattr(tourney, 'team_tournament'))
 
 def _cup_name(round_obj) -> str:
     """Display name for the cup tab — 'Ryder Cup' / 'ETC Cup' / etc."""
@@ -408,13 +423,31 @@ def _cup_name(round_obj) -> str:
     return 'Cup'
 
 def _build_tabs(round_obj, token: str, current: str) -> list:
-    """Returns [{key, label, url, active}] for tabs that have data."""
+    """Returns [{key, label, url, active}] for tabs that have data.
+
+    Order: cup-Matches, casual-game tabs, Low Net, cup standings.  The
+    first entry becomes the default landing tab when no `?view=` is
+    supplied — for cup rounds that's Matches, for casual rounds it's
+    the most prominent game (Multi-Skins or Skins).  Pure Low-Net
+    rounds collapse to a single Low Net tab."""
     base = f'/watch/{token}/'
     tabs = []
     if _has_cup_matches(round_obj):
         tabs.append({
             'key': 'matches', 'label': 'Matches',
             'url': base, 'active': current == 'matches',
+        })
+    if _has_casual_multi_skins(round_obj):
+        tabs.append({
+            'key': 'multi_skins', 'label': 'Multi-Skins',
+            'url': f'{base}?view=multi_skins',
+            'active': current == 'multi_skins',
+        })
+    if _has_casual_skins(round_obj):
+        tabs.append({
+            'key': 'skins', 'label': 'Skins',
+            'url': f'{base}?view=skins',
+            'active': current == 'skins',
         })
     if _has_low_net(round_obj):
         tabs.append({
@@ -598,7 +631,9 @@ def _render_low_net(request, round_obj, token: str, tabs: list):
         from services.low_net_championship import low_net_championship_summary
         summary = low_net_championship_summary(tourney)
         scope   = 'championship'
-    elif round_has_low_net:
+    elif round_has_low_net or _is_casual_round(round_obj):
+        # Casual rounds fall through here even without an explicit Low Net
+        # config — the tab serves as the spectator scorecard view.
         from services.low_net_round import low_net_round_summary
         summary = low_net_round_summary(round_obj)
         scope   = 'round'
@@ -648,10 +683,54 @@ def _render_cup_standings(request, round_obj, token: str, tabs: list):
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _render_casual_skins(request, round_obj, token: str, tabs: list):
+    """Per-foursome Skins leaderboards — mirrors the in-app Skins tab."""
+    from services.skins import skins_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = [
+        {
+            'group_number': fs.group_number,
+            'foursome_id' : fs.id,
+            'summary'     : skins_summary(fs),
+        }
+        for fs in foursomes
+    ]
+    return render(request, 'watch/casual_skins.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _render_casual_multi_skins(request, round_obj, token: str, tabs: list):
+    """Multi-Group Skins standings — pool, mode, and per-player payouts.
+    The scorecard view lives on the Low Net tab, mirroring how the
+    mobile leaderboard splits the standings from the scorecard grid."""
+    from services.multi_skins import multi_skins_summary
+    summary = multi_skins_summary(round_obj)
+    return render(request, 'watch/casual_multi_skins.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'summary':      summary,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
 _VIEW_DISPATCH = {
-    'matches': _render_matches,
-    'low_net': _render_low_net,
-    'cup':     _render_cup_standings,
+    'matches':     _render_matches,
+    'low_net':     _render_low_net,
+    'cup':         _render_cup_standings,
+    'skins':       _render_casual_skins,
+    'multi_skins': _render_casual_multi_skins,
 }
 
 

@@ -1,0 +1,60 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Multi-Skins" }} · Round {{ round.round_number }}
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}Multi-Group Skins{% endif %}
+  </h1>
+  <p class="sub">
+    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+  </p>
+
+  {% if summary %}
+    <div class="card">
+      <div class="match-meta">
+        <span class="game-pill">Multi-Group Skins</span>
+        <span class="meta-text">
+          <span class="pool-pill">${{ summary.money.pool|floatformat:"-1" }} pool</span>
+          · {{ summary.money.total_skins }} skin{{ summary.money.total_skins|pluralize }} won
+          {% if summary.handicap.mode %}
+            · {{ summary.handicap.mode|upper }}{% if summary.handicap.mode == 'net' and summary.handicap.net_percent != 100 %} ({{ summary.handicap.net_percent }}%){% endif %}
+          {% endif %}
+        </span>
+      </div>
+
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th class="num">Group</th>
+            <th class="num">Thru</th>
+            <th class="num">Skins</th>
+            <th class="num">Payout</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in summary.players %}
+            <tr>
+              <td>{{ p.name }}</td>
+              <td class="num">{{ p.group_number|default:"—" }}</td>
+              <td class="num">{% if p.thru %}{{ p.thru }}{% else %}—{% endif %}</td>
+              <td class="num">{{ p.skins_won }}</td>
+              <td class="num">${{ p.payout|floatformat:2 }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="empty" style="padding: 24px 4px;">No skins won yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub" style="text-align:center; margin-top: 8px;">
+      Full scorecard on the <strong>Low Net</strong> tab.
+    </p>
+  {% else %}
+    <div class="card empty">Multi-Skins isn't set up for this round yet.</div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Skins" }} · Round {{ round.round_number }}
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}Skins{% endif %}
+  </h1>
+  <p class="sub">
+    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+  </p>
+
+  {% for g in groups %}
+    {% with summary=g.summary %}
+      <div class="card">
+        <div class="match-meta">
+          <span class="game-pill">Group {{ g.group_number }}</span>
+          <span class="meta-text">
+            <span class="pool-pill">${{ summary.money.pool|floatformat:"-1" }} pool</span>
+            {% if summary.handicap.mode %}
+              · {{ summary.handicap.mode|upper }}{% if summary.handicap.mode == 'net' and summary.handicap.net_percent != 100 %} ({{ summary.handicap.net_percent }}%){% endif %}
+            {% endif %}
+            {% if summary.carryover %} · carryover{% endif %}
+            {% if summary.allow_junk %} · junk{% endif %}
+          </span>
+        </div>
+
+        {% for p in summary.players %}
+          <div class="lb-row">
+            <span class="name">{{ p.name }}</span>
+            <span class="detail">
+              {{ p.skins_won }} skin{{ p.skins_won|pluralize }}{% if p.junk_skins %} · {{ p.junk_skins }} junk{% endif %}
+            </span>
+            <span class="payout">${{ p.payout|floatformat:2 }}</span>
+          </div>
+        {% empty %}
+          <div class="empty" style="padding: 20px 4px;">No skins won yet.</div>
+        {% endfor %}
+      </div>
+    {% endwith %}
+  {% empty %}
+    <div class="card empty">No skins data for this round yet.</div>
+  {% endfor %}
+{% endblock %}

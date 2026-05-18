@@ -266,6 +266,33 @@
       border-color: var(--border);
     }
 
+    /* ── Casual game leaderboard rows (Skins / Multi-Skins) ─────────── */
+    .lb-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px; align-items: center;
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+    }
+    .lb-row:first-of-type { border-top: none; }
+    .lb-row .name    { font-weight: 600; font-size: 14px; }
+    .lb-row .detail  { color: var(--muted); font-size: 12px; }
+    .lb-row .payout  {
+      font-variant-numeric: tabular-nums; font-weight: 700;
+      font-size: 14px; min-width: 56px; text-align: right;
+    }
+    .game-meta-line {
+      color: var(--muted); font-size: 12px;
+      margin: 4px 0 8px 0;
+    }
+    .pool-pill {
+      display: inline-block; padding: 2px 8px;
+      background: var(--primary); color: #fff;
+      border-radius: 12px;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
     /* ── Low Net cards ──────────────────────────────────────────────── */
     .ln-card {
       background: var(--card);
