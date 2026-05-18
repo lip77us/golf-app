@@ -301,12 +301,33 @@ def red_ball_summary(round_obj) -> dict:
                                   .select_related('player')
                                   .order_by('player__name')
         )
-        players   = ', '.join(m.player.name for m in members)
+        players       = ', '.join(m.player.name for m in members)
+        short_names   = ' / '.join(m.player.short_name or m.player.name
+                                   for m in members)
         n_players = len(members)
-        status = (
-            'Survived' if r.eliminated_on_hole is None
-            else f'Lost on hole {r.eliminated_on_hole}'
-        )
+
+        # When the ball is lost, identify the carrier at the moment of
+        # loss so the spectator page can read "Lost by RyanL" instead of
+        # a generic hole number.
+        order_list_for_lost = r.foursome.pink_ball_order or []
+        lost_by_short_name  = None
+        if r.eliminated_on_hole is not None and order_list_for_lost:
+            carrier_pk = order_list_for_lost[
+                (r.eliminated_on_hole - 1) % len(order_list_for_lost)
+            ]
+            for m in members:
+                if m.player_id == carrier_pk:
+                    lost_by_short_name = (
+                        m.player.short_name or m.player.name
+                    )
+                    break
+
+        if r.eliminated_on_hole is None:
+            status = 'Survived'
+        elif lost_by_short_name:
+            status = f'Lost by {lost_by_short_name}'
+        else:
+            status = f'Lost on hole {r.eliminated_on_hole}'
 
         # current_hole: highest hole where ALL non-phantom members of this
         # foursome have a gross score recorded.  PinkBallHoleResult rows are
@@ -349,14 +370,26 @@ def red_ball_summary(round_obj) -> dict:
                 carrier_net = net_sum
 
         group_payout = _payout_for(r.rank)
+        # `display_thru` is what spectator pages render in the Thru
+        # column.  After the ball is lost, freeze at the elimination
+        # hole so the row reads e.g. "Thru 8 · Lost by RyanL" instead
+        # of advancing along with later side-game scoring.
+        display_thru = (
+            r.eliminated_on_hole
+            if r.eliminated_on_hole is not None
+            else current_hole
+        )
         summary_rows.append({
             'rank'              : r.rank,
             'group_number'      : r.foursome.group_number,
             'players'           : players,
+            'short_names'       : short_names,
             'n_players'         : n_players,
             'status'            : status,
+            'lost_by'           : lost_by_short_name,
             'eliminated_on_hole': r.eliminated_on_hole,
             'current_hole'      : current_hole,
+            'display_thru'      : display_thru,
             # Use freshly-computed carrier_net in preference to the stored
             # total_net_score which can lag when net_score isn't persisted.
             'total_net_score'   : carrier_net if carrier_net is not None else r.total_net_score,

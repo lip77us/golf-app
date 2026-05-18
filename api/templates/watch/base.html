@@ -512,6 +512,22 @@
     .sixes-money-row .amount        { font-weight: 700; color: var(--muted); }
     .sixes-money-row .amount.up     { color: #1f8a3a; }
     .sixes-money-row .amount.down   { color: #c0392b; }
+
+    /* Red/Pink Ball — lost-row gets muted text + a tinted status pill
+       so the eye can scan the table and spot which groups are out. */
+    .lb-table tr.lost-row td        { color: var(--muted); }
+    .rb-lost {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      background: #f8e1e1;
+      color: #b03030;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .rb-lost { background: #3a1c1c; color: #f4b9b9; }
+    }
     @media (prefers-color-scheme: dark) {
       .ms-card td .strk::before     { color: #f38a7d; }
       .ms-card td.win .strk::before { color: #c7f0cf; }

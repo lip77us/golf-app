@@ -26,21 +26,36 @@
         <thead>
           <tr>
             <th>#</th>
-            <th>Group</th>
             <th>Players</th>
-            <th>Status</th>
+            <th class="num">Thru</th>
             <th class="num">Net</th>
+            <th>Status</th>
             <th class="num">Payout</th>
           </tr>
         </thead>
         <tbody>
           {% for r in summary.results %}
-            <tr>
+            <tr class="{% if r.lost_by %}lost-row{% endif %}">
               <td>{{ r.rank|default:"—" }}</td>
-              <td>{{ r.group_number }}</td>
-              <td>{{ r.players }}</td>
-              <td>{{ r.status }}</td>
-              <td class="num">{{ r.total_net_score|default:"—" }}</td>
+              <td>{{ r.short_names|default:r.players }}</td>
+              <td class="num">{% if r.display_thru %}{{ r.display_thru }}{% else %}—{% endif %}</td>
+              <td class="num">
+                {% if r.net_to_par is not None %}
+                  {% if r.net_to_par == 0 %}E
+                  {% elif r.net_to_par > 0 %}+{{ r.net_to_par }}
+                  {% else %}{{ r.net_to_par }}
+                  {% endif %}
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if r.lost_by %}
+                  <span class="rb-lost">Lost by {{ r.lost_by }}</span>
+                {% elif r.eliminated_on_hole %}
+                  Lost hole {{ r.eliminated_on_hole }}
+                {% else %}
+                  Survived
+                {% endif %}
+              </td>
               <td class="num">{% if r.payout %}${{ r.payout|floatformat:"-2" }}{% else %}—{% endif %}</td>
             </tr>
           {% endfor %}
