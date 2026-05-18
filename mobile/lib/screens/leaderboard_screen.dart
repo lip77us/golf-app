@@ -269,8 +269,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                   tournamentName: lb.cupName ?? lb.tournamentName ?? 'Bandon Cup',
                 );
               }
-              // Irish Rumble in cup context: show live card + per-foursome scorecards
-              if (gameKey == 'irish_rumble' && lb.tournamentId != null) {
+              // Irish Rumble in cup context: show live card + per-foursome
+              // scorecards.  Tournament alone isn't enough — a casual side
+              // game running inside a non-cup tournament (e.g. low-net
+              // championship + IR + red ball) won't have a cup config, and
+              // _IrishRumbleTabView's cup-live API call would 404.  Gate on
+              // isCupRound so non-cup IR falls through to _GameView.
+              if (gameKey == 'irish_rumble'
+                  && lb.isCupRound
+                  && lb.tournamentId != null) {
                 return _IrishRumbleTabView(
                   roundId:      widget.roundId,
                   tournamentId: lb.tournamentId!,
