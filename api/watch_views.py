@@ -409,27 +409,66 @@ def _has_casual_points_531(round_obj) -> bool:
 def _has_casual_sixes(round_obj) -> bool:
     return 'sixes' in (round_obj.active_games or [])
 
-def _has_low_net(round_obj) -> bool:
-    """True when the round (or its tournament) has any low-net offering.
+def _has_casual_pink_ball(round_obj) -> bool:
+    return 'pink_ball' in (round_obj.active_games or [])
 
-    Mirrors the signals the mobile app uses to surface Low Net: prefer
-    the canonical `active_games` array on round / tournament, fall back
-    to the presence of an explicit setup record.  For casual rounds we
-    always include Low Net — the tab doubles as the spectator scorecard
-    view (the one game-specific leaderboards don't offer)."""
+def _has_casual_irish_rumble(round_obj) -> bool:
+    """Irish Rumble as a casual / tournament side game (not a cup
+    match — cup IR is rendered inside Matches/Four Ball)."""
+    if _has_cup_matches(round_obj):
+        return False
+    return 'irish_rumble' in (round_obj.active_games or [])
+
+def _has_low_net_championship(round_obj) -> bool:
+    """Tournament-wide Low Net (a.k.a. Stroke Play in the in-app
+    leaderboard) — aggregates across every round in the tournament."""
+    t = round_obj.tournament
+    if not t:
+        return False
+    if 'low_net' in (t.active_games or []):
+        return True
+    return hasattr(t, 'low_net_championship_config')
+
+def _has_low_net_round(round_obj) -> bool:
+    """Round-only Low Net.  Two paths:
+      * explicit round-level Low Net (active_games or low_net_config), or
+      * casual fallback — every casual round gets a "Low Net" tab that
+        doubles as the spectator scorecard view.
+
+    Tournament rounds with championship Low Net only (no round-level
+    competition) intentionally don't show this tab; the Stroke Play
+    tab covers that case and the spectator would otherwise see two
+    near-identical leaderboards."""
     if 'low_net_round' in (round_obj.active_games or []):
         return True
     if hasattr(round_obj, 'low_net_config'):
         return True
-    tourney = round_obj.tournament
-    if tourney:
-        if 'low_net' in (tourney.active_games or []):
-            return True
-        if hasattr(tourney, 'low_net_championship_config'):
-            return True
     if _is_casual_round(round_obj):
         return True
     return False
+
+def _has_low_net(round_obj) -> bool:
+    """Backward-compat union — True when either Low-Net tab applies."""
+    return _has_low_net_championship(round_obj) or _has_low_net_round(round_obj)
+
+def _stroke_play_label(round_obj) -> str:
+    """Tab label for the championship Low Net (Stroke Play) tab —
+    the tournament's display name, falling back to "Stroke Play"
+    when the tournament has no name set."""
+    t = round_obj.tournament
+    return (t.name if t and t.name else 'Stroke Play')
+
+def _red_ball_label(round_obj) -> str:
+    """Tab label for the Pink/Red Ball tab — picks up the configured
+    ball colour (e.g. "Red Ball" for a red-ball game, "Pink Ball"
+    when the colour is left at the default)."""
+    try:
+        colour = round_obj.pink_ball_config.ball_color
+        if colour:
+            return f'{colour} Ball'
+    except Exception:
+        pass
+    return 'Pink Ball'
 
 def _cup_name(round_obj) -> str:
     """Display name for the cup tab — 'Ryder Cup' / 'ETC Cup' / etc."""
@@ -483,10 +522,29 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'url': f'{base}?view=sixes',
             'active': current == 'sixes',
         })
-    if _has_low_net(round_obj):
+    if _has_casual_pink_ball(round_obj):
+        tabs.append({
+            'key': 'red_ball', 'label': _red_ball_label(round_obj),
+            'url': f'{base}?view=red_ball',
+            'active': current == 'red_ball',
+        })
+    if _has_casual_irish_rumble(round_obj):
+        tabs.append({
+            'key': 'irish_rumble', 'label': 'Irish Rumble',
+            'url': f'{base}?view=irish_rumble',
+            'active': current == 'irish_rumble',
+        })
+    if _has_low_net_championship(round_obj):
+        tabs.append({
+            'key': 'stroke_play', 'label': _stroke_play_label(round_obj),
+            'url': f'{base}?view=stroke_play',
+            'active': current == 'stroke_play',
+        })
+    if _has_low_net_round(round_obj):
         tabs.append({
             'key': 'low_net', 'label': 'Low Net',
-            'url': f'{base}?view=low_net', 'active': current == 'low_net',
+            'url': f'{base}?view=low_net',
+            'active': current == 'low_net',
         })
     if _has_cup_standings(round_obj):
         tabs.append({
@@ -644,43 +702,70 @@ def _render_matches(request, round_obj, token: str, tabs: list):
 
 
 def _render_low_net(request, round_obj, token: str, tabs: list):
-    """Prefer the tournament-wide Low Net Championship view whenever the
-    tournament has Low Net enabled (config record OR `'low_net'` in
-    active_games).  Otherwise fall back to the round-level summary when
-    the round itself enables Low Net.  Both summary helpers tolerate a
-    missing config (default to NET / 100%)."""
-    tourney = round_obj.tournament
-    scope   = None   # 'championship' or 'round'
-    summary = None
-
-    tourney_has_low_net = bool(tourney) and (
-        hasattr(tourney, 'low_net_championship_config')
-        or 'low_net' in (tourney.active_games or [])
-    )
-    round_has_low_net = (
-        hasattr(round_obj, 'low_net_config')
-        or 'low_net_round' in (round_obj.active_games or [])
-    )
-
-    if tourney_has_low_net:
-        from services.low_net_championship import low_net_championship_summary
-        summary = low_net_championship_summary(tourney)
-        scope   = 'championship'
-    elif round_has_low_net or _is_casual_round(round_obj):
-        # Casual rounds fall through here even without an explicit Low Net
-        # config — the tab serves as the spectator scorecard view.
-        from services.low_net_round import low_net_round_summary
-        summary = low_net_round_summary(round_obj)
-        scope   = 'round'
-
+    """Round-only Low Net tab — uses low_net_round_summary so a 2-round
+    tournament's round-2 best-of-the-day stays distinct from the
+    championship-wide Stroke Play tab.  Also serves as the casual-round
+    scorecard view when no explicit Low Net config exists."""
+    from services.low_net_round import low_net_round_summary
+    summary = low_net_round_summary(round_obj)
     if summary:
-        _enrich_low_net(summary, scope)
+        _enrich_low_net(summary, 'round')
+    return render(request, 'watch/low_net.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'summary':      summary,
+        'scope':        'round',
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _render_tournament_stroke_play(request, round_obj, token: str, tabs: list):
+    """Tournament-wide Stroke Play (Low Net Championship) tab.  Tab
+    label tracks the tournament's name (set in _stroke_play_label)."""
+    from services.low_net_championship import low_net_championship_summary
+    tourney = round_obj.tournament
+    summary = low_net_championship_summary(tourney) if tourney else None
+    if summary:
+        _enrich_low_net(summary, 'championship')
     return render(request, 'watch/low_net.html', {
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   tourney,
         'summary':      summary,
-        'scope':        scope,
+        'scope':        'championship',
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _render_casual_red_ball(request, round_obj, token: str, tabs: list):
+    """Red / Pink Ball spectator tab — ranked per-foursome results
+    pulled from red_ball_summary."""
+    from services.red_ball import red_ball_summary
+    summary = red_ball_summary(round_obj)
+    return render(request, 'watch/casual_red_ball.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'summary':      summary,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _render_casual_irish_rumble(request, round_obj, token: str, tabs: list):
+    """Irish Rumble spectator tab (non-cup).  Reuses
+    irish_rumble_summary — overall standings plus a section per
+    scoring segment."""
+    from services.irish_rumble import irish_rumble_summary
+    summary = irish_rumble_summary(round_obj)
+    return render(request, 'watch/casual_irish_rumble.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'summary':      summary,
         'refresh_secs': 30,
         'tabs':         tabs,
     })
@@ -1152,14 +1237,17 @@ def _render_cup_four_ball(request, round_obj, token: str, tabs: list):
 
 
 _VIEW_DISPATCH = {
-    'matches':     _render_matches,
-    'low_net':     _render_low_net,
-    'cup':         _render_cup_standings,
-    'skins':       _render_casual_skins,
-    'multi_skins': _render_casual_multi_skins,
-    'points_531':  _render_casual_points_531,
-    'sixes':       _render_casual_sixes,
-    'four_ball':   _render_cup_four_ball,
+    'matches':      _render_matches,
+    'low_net':      _render_low_net,
+    'stroke_play':  _render_tournament_stroke_play,
+    'cup':          _render_cup_standings,
+    'skins':        _render_casual_skins,
+    'multi_skins':  _render_casual_multi_skins,
+    'points_531':   _render_casual_points_531,
+    'sixes':        _render_casual_sixes,
+    'red_ball':     _render_casual_red_ball,
+    'irish_rumble': _render_casual_irish_rumble,
+    'four_ball':    _render_cup_four_ball,
 }
 
 

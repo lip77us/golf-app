@@ -1,0 +1,102 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Irish Rumble" }} · Round {{ round.round_number }}
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}Irish Rumble{% endif %}
+  </h1>
+  <p class="sub">
+    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+  </p>
+
+  {% if summary and summary.overall %}
+    <div class="card">
+      <div class="match-meta">
+        <span class="game-pill">Irish Rumble</span>
+        <span class="meta-text">
+          {% if summary.handicap_mode %}{{ summary.handicap_mode|upper }}{% if summary.handicap_mode == 'net' and summary.net_percent != 100 %} ({{ summary.net_percent }}%){% endif %}{% endif %}
+          {% if summary.entry_fee %} · ${{ summary.entry_fee|floatformat:"-2" }} entry{% endif %}
+          {% if summary.pool %} · ${{ summary.pool|floatformat:"-2" }} pool{% endif %}
+        </span>
+      </div>
+
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Group</th>
+            <th>Players</th>
+            <th class="num">Thru</th>
+            <th class="num">Net</th>
+            <th class="num">vs Par</th>
+            <th class="num">Payout</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in summary.overall %}
+            <tr>
+              <td>{{ r.rank|default:"—" }}</td>
+              <td>{{ r.group }}</td>
+              <td>{{ r.players }}</td>
+              <td class="num">{% if r.current_hole %}{{ r.current_hole }}{% else %}—{% endif %}</td>
+              <td class="num">{{ r.total_score|default:"—" }}</td>
+              <td class="num">
+                {% if r.net_to_par is not None %}
+                  {% if r.net_to_par == 0 %}E
+                  {% elif r.net_to_par > 0 %}+{{ r.net_to_par }}
+                  {% else %}{{ r.net_to_par }}
+                  {% endif %}
+                {% else %}—{% endif %}
+              </td>
+              <td class="num">{% if r.payout %}${{ r.payout|floatformat:"-2" }}{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% for seg in summary.segments %}
+      <div class="card">
+        <div class="match-meta">
+          <span class="game-pill">{{ seg.label }}</span>
+        </div>
+        {% if seg.results %}
+          <table class="lb-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Group</th>
+                <th class="num">Score</th>
+                <th class="num">vs Par</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sr in seg.results %}
+                <tr>
+                  <td>{{ sr.rank|default:"—" }}</td>
+                  <td>{{ sr.group }}</td>
+                  <td class="num">{{ sr.score|default:"—" }}</td>
+                  <td class="num">
+                    {% if sr.net_to_par is not None %}
+                      {% if sr.net_to_par == 0 %}E
+                      {% elif sr.net_to_par > 0 %}+{{ sr.net_to_par }}
+                      {% else %}{{ sr.net_to_par }}
+                      {% endif %}
+                    {% else %}—{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="empty" style="padding: 12px 4px;">Not started.</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="card empty">Irish Rumble isn't configured for this round yet.</div>
+  {% endif %}
+{% endblock %}

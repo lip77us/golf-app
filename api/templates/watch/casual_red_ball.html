@@ -1,0 +1,53 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Red Ball" }} · Round {{ round.round_number }}
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}{{ summary.ball_color|default:"Pink" }} Ball{% endif %}
+  </h1>
+  <p class="sub">
+    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+  </p>
+
+  {% if summary and summary.results %}
+    <div class="card">
+      <div class="match-meta">
+        <span class="game-pill">{{ summary.ball_color|default:"Pink" }} Ball</span>
+        <span class="meta-text">
+          {% if summary.entry_fee %}${{ summary.entry_fee|floatformat:"-2" }} entry · {% endif %}
+          ${{ summary.pool|floatformat:"-2" }} pool
+        </span>
+      </div>
+
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Group</th>
+            <th>Players</th>
+            <th>Status</th>
+            <th class="num">Net</th>
+            <th class="num">Payout</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in summary.results %}
+            <tr>
+              <td>{{ r.rank|default:"—" }}</td>
+              <td>{{ r.group_number }}</td>
+              <td>{{ r.players }}</td>
+              <td>{{ r.status }}</td>
+              <td class="num">{{ r.total_net_score|default:"—" }}</td>
+              <td class="num">{% if r.payout %}${{ r.payout|floatformat:"-2" }}{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card empty">No ball-game data yet for this round.</div>
+  {% endif %}
+{% endblock %}
