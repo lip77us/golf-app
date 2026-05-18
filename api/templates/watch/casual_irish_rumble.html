@@ -27,10 +27,8 @@
         <thead>
           <tr>
             <th>#</th>
-            <th>Group</th>
             <th>Players</th>
             <th class="num">Thru</th>
-            <th class="num">Net</th>
             <th class="num">vs Par</th>
             <th class="num">Payout</th>
           </tr>
@@ -39,10 +37,8 @@
           {% for r in summary.overall %}
             <tr>
               <td>{{ r.rank|default:"—" }}</td>
-              <td>{{ r.group }}</td>
-              <td>{{ r.players }}</td>
+              <td>{{ r.short_names|default:r.players }}</td>
               <td class="num">{% if r.current_hole %}{{ r.current_hole }}{% else %}—{% endif %}</td>
-              <td class="num">{{ r.total_score|default:"—" }}</td>
               <td class="num">
                 {% if r.net_to_par is not None %}
                   {% if r.net_to_par == 0 %}E
@@ -57,45 +53,6 @@
         </tbody>
       </table>
     </div>
-
-    {% for seg in summary.segments %}
-      <div class="card">
-        <div class="match-meta">
-          <span class="game-pill">{{ seg.label }}</span>
-        </div>
-        {% if seg.results %}
-          <table class="lb-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Group</th>
-                <th class="num">Score</th>
-                <th class="num">vs Par</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for sr in seg.results %}
-                <tr>
-                  <td>{{ sr.rank|default:"—" }}</td>
-                  <td>{{ sr.group }}</td>
-                  <td class="num">{{ sr.score|default:"—" }}</td>
-                  <td class="num">
-                    {% if sr.net_to_par is not None %}
-                      {% if sr.net_to_par == 0 %}E
-                      {% elif sr.net_to_par > 0 %}+{{ sr.net_to_par }}
-                      {% else %}{{ sr.net_to_par }}
-                      {% endif %}
-                    {% else %}—{% endif %}
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <div class="empty" style="padding: 12px 4px;">Not started.</div>
-        {% endif %}
-      </div>
-    {% endfor %}
   {% else %}
     <div class="card empty">Irish Rumble isn't configured for this round yet.</div>
   {% endif %}

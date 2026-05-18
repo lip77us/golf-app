@@ -492,17 +492,20 @@ def irish_rumble_summary(round_obj) -> dict:
         r        = running.get(fid)
         ntp      = (r['score'] - r['par']) if r else None
         n_players = player_counts_dict.get(fid, 4)
-        players  = ', '.join(
-            m.player.name
-            for m in fs.memberships.filter(player__is_phantom=False)
-                                   .select_related('player')
-                                   .order_by('player__name')
+        real_members = list(
+            fs.memberships.filter(player__is_phantom=False)
+                          .select_related('player')
+                          .order_by('player__name')
         )
+        players      = ', '.join(m.player.name for m in real_members)
+        short_names  = ' / '.join(m.player.short_name or m.player.name
+                                  for m in real_members)
         group_payout = _payout_for(row['rank'])
         overall_out.append({
             'rank'             : row['rank'],
             'group'            : f"Group {fs.group_number}",
             'players'          : players,
+            'short_names'      : short_names,
             'n_players'        : n_players,
             'has_phantom'      : fs.has_phantom,
             'total_score'      : r['score'] if r else None,
