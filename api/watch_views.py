@@ -91,6 +91,32 @@ def _seg_len(label: str) -> int:
     return 9 if label in ('Front 9', 'Back 9') else 18
 
 
+# Glyph appended to resolved "M UP" wins so the spectator can tell a
+# completed 1 UP win apart from an in-progress 1 UP lead.  "M&R"
+# notation already implies the match is over, so it doesn't get the
+# check; neither does a halved final (its own label is unambiguous).
+_WIN_TICK = ' ✓'
+
+
+def _resolved_or_short(result, margin, holes, seg_len,
+                       decided_margin=None, decided_remaining=None) -> str:
+    """Chip text for a Nassau-style segment.
+
+    Prefers `decided_margin` / `decided_remaining` (set by nassau_summary
+    at the moment the segment was locked) so "2&1" survives even when
+    the players keep scoring past the decision hole.  Falls back to the
+    live margin/holes view for in-progress sides."""
+    if result == 'halved':
+        return 'Halved'
+    if result in ('team1', 'team2'):
+        if decided_margin and decided_remaining and decided_remaining > 0:
+            return f'{abs(decided_margin)}&{decided_remaining}'
+        if margin:
+            return f'{abs(margin)} UP{_WIN_TICK}'
+        return 'Halved'
+    return _short_chip(margin, holes, result, seg_len)
+
+
 def _is_resolved(margin: int, holes: int, result, seg_len: int) -> bool:
     """True when this side has been decided — either the backend set a
     result OR the running margin is mathematically locked.  Used by the
@@ -171,15 +197,19 @@ def _enrich_summary(summary: dict) -> None:
                     max_holes_in_match = max(a_h, b_h)
                 continue
 
-            margin = seg.get('margin') or 0
-            holes  = seg.get('holes_played') or 0
+            margin  = seg.get('margin') or 0
+            holes   = seg.get('holes_played') or 0
             seg_len = _seg_len(seg.get('label') or '')
+            dec_m   = seg.get('decided_margin')
+            dec_r   = seg.get('decided_remaining')
             if result is None:
                 seg['display'] = _holes_up_text(margin, holes, t1, t2)
             else:
                 seg['display'] = _final_text(margin, t1, t2)
-            seg['display_team'] = _leader_from_margin(margin, result)
-            seg['short_display'] = _short_chip(margin, holes, result, seg_len)
+            seg['display_team']  = _leader_from_margin(margin, result)
+            seg['short_display'] = _resolved_or_short(
+                result, margin, holes, seg_len, dec_m, dec_r,
+            )
             seg['resolved']      = _is_resolved(margin, holes, result, seg_len)
             if holes > max_holes_in_match: max_holes_in_match = holes
 
@@ -196,9 +226,15 @@ def _enrich_summary(summary: dict) -> None:
                 im['display'] = _final_text(margin, p1, p2)
             im['display_team'] = _leader_from_margin(margin, result)
             # Singles 18 is an 18-hole match; honour finished_on_hole so
-            # "won on 17" reads "M&1" rather than "M UP".
+            # "won on 17" reads "M&1" rather than "M UP".  Resolved
+            # matches that go to the 18th green pick up the win-tick so
+            # they're distinguishable from an in-progress 1 UP lead.
             if result in ('team1', 'team2') and finished_on and finished_on < 18:
                 im['short_display'] = f'{abs(margin)}&{18 - finished_on}'
+            elif result in ('team1', 'team2'):
+                im['short_display'] = (
+                    f'{abs(margin)} UP{_WIN_TICK}' if margin else 'Halved'
+                )
             else:
                 im['short_display'] = _short_chip(margin, holes, result, 18)
             im['resolved']   = _is_resolved(margin, holes, result, 18)
@@ -273,12 +309,17 @@ def _build_singles_nassau_subsegments(
 
         # If the segment finished early, prefer the actual M&R from
         # finished_on_hole; otherwise fall back to margin-vs-holes-played.
+        # Resolved-at-the-final-hole wins pick up the check tick so
+        # they don't read identically to an in-progress lead.
         if result in ('team1', 'team2') and finished_on:
-            # finished_on is the absolute hole number the sub-match closed
-            # on; translate it to segment-local "remaining".
             seg_end_hole = 9 if label == 'Front 9' else 18
             rem = max(0, seg_end_hole - finished_on)
-            short = f'{abs(holes_up)}&{rem}' if rem > 0 else f'{abs(holes_up)} UP'
+            if rem > 0:
+                short = f'{abs(holes_up)}&{rem}'
+            else:
+                short = f'{abs(holes_up)} UP{_WIN_TICK}' if holes_up else 'Halved'
+        elif result in ('team1', 'team2'):
+            short = f'{abs(holes_up)} UP{_WIN_TICK}' if holes_up else 'Halved'
         else:
             short = _short_chip(holes_up, sub_holes, result, seg_len)
 

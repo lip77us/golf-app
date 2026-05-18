@@ -361,14 +361,20 @@ def cup_round_live_summary(round_obj) -> dict | None:
                 t1_match += t1p
                 t2_match += t2p
                 segments.append({
-                    'label'       : seg_lab,
-                    'segment'     : seg_key,
-                    'result'      : result,
-                    't1_pts'      : t1p,
-                    't2_pts'      : t2p,
-                    'is_resolved' : result is not None,
-                    'margin'      : margin,      # live holes-up margin
-                    'holes_played': holes,
+                    'label'            : seg_lab,
+                    'segment'          : seg_key,
+                    'result'           : result,
+                    't1_pts'           : t1p,
+                    't2_pts'           : t2p,
+                    'is_resolved'      : result is not None,
+                    'margin'           : margin,      # live holes-up margin
+                    'holes_played'     : holes,
+                    # Margin and remaining-holes at the moment the segment
+                    # was mathematically locked.  Preserved across the rest
+                    # of the round so "2&1" stays "2&1" even after the
+                    # players keep scoring through hole 9.
+                    'decided_margin'   : seg_data.get('decided_margin'),
+                    'decided_remaining': seg_data.get('decided_remaining'),
                 })
 
             possible     = pv * GAME_MULTIPLIERS[GameType.NASSAU]
