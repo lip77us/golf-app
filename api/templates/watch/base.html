@@ -293,6 +293,79 @@
       letter-spacing: 0.3px;
     }
 
+    /* ── Multi-Skins scorecard grid (gross + skin-winner highlight) ── */
+    .ms-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin: 0 -14px;       /* let the table bleed to the card edges */
+      padding: 0 14px 4px;
+    }
+    .ms-card {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .ms-card th, .ms-card td {
+      padding: 4px 0;
+      text-align: center;
+      font-size: 11px;
+      border-bottom: 1px solid var(--border);
+      min-width: 26px;
+    }
+    .ms-card .ms-name {
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      padding-right: 8px;
+      min-width: 72px;
+      position: sticky; left: 0;
+      background: var(--card);
+      z-index: 1;
+    }
+    .ms-card thead th.ms-name { z-index: 2; }
+    .ms-card .ms-par {
+      font-style: italic;
+      color: var(--muted);
+    }
+    .ms-card thead th {
+      font-weight: 700;
+      color: var(--fg);
+      border-bottom: 1px solid var(--border);
+    }
+    .ms-card thead th.dead {
+      background: var(--halved);
+      color: var(--muted);
+    }
+    .ms-card td.win {
+      background: #d6f1da;
+      color: #1f5a2a;
+      font-weight: 800;
+      border-radius: 4px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .ms-card td.win { background: #1f4628; color: #c7f0cf; }
+    }
+    .ms-card td .strk {
+      color: #c0392b;
+      font-size: 9px;
+      vertical-align: super;
+      margin-left: 1px;
+    }
+    .ms-legend {
+      color: var(--muted); font-size: 11px;
+      margin: 6px 0 0 0;
+      text-align: right;
+    }
+    .ms-legend .win-swatch {
+      display: inline-block;
+      width: 10px; height: 10px;
+      background: #d6f1da;
+      border: 1px solid #1f5a2a44;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+
     /* ── Low Net cards ──────────────────────────────────────────────── */
     .ln-card {
       background: var(--card);

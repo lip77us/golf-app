@@ -51,9 +51,52 @@
       </table>
     </div>
 
-    <p class="sub" style="text-align:center; margin-top: 8px;">
-      Full scorecard on the <strong>Low Net</strong> tab.
-    </p>
+    {# ── Per-hole skin-winner scorecard ─────────────────────────────
+       Gross scores per player per hole.  The cell of each hole's skin
+       winner is highlighted green so an observer can see who claimed
+       each skin at a glance.  Holes that were played but ended tied
+       (no skin awarded) get a grey "dead" header. #}
+    {% if scorecard %}
+      <div class="card">
+        <div class="match-meta" style="margin-bottom: 4px;">
+          <span class="game-pill">Scorecard</span>
+          <span class="meta-text">Gross scores · green = skin winner</span>
+        </div>
+        <div class="ms-scroll">
+          <table class="ms-card">
+            <thead>
+              <tr>
+                <th class="ms-name">Hole</th>
+                {% for h in scorecard.hole_headers %}
+                  <th class="{% if h.is_dead %}dead{% endif %}">{{ h.num }}</th>
+                {% endfor %}
+              </tr>
+              <tr>
+                <th class="ms-name ms-par">Par</th>
+                {% for h in scorecard.hole_headers %}
+                  <th class="ms-par">{{ h.par|default:"–" }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in scorecard.rows %}
+                <tr>
+                  <td class="ms-name">{{ row.name }}</td>
+                  {% for cell in row.cells %}
+                    <td class="{% if cell.is_winner %}win{% endif %}">
+                      {% if cell.gross %}{{ cell.gross }}{% if cell.strokes %}<span class="strk">{{ cell.strokes }}</span>{% endif %}{% endif %}
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="ms-legend">
+          <span class="win-swatch"></span> skin winner · grey header = tied (no skin)
+        </div>
+      </div>
+    {% endif %}
   {% else %}
     <div class="card empty">Multi-Skins isn't set up for this round yet.</div>
   {% endif %}

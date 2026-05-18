@@ -709,17 +709,74 @@ def _render_casual_skins(request, round_obj, token: str, tabs: list):
     })
 
 
+def _build_ms_scorecard(summary: dict) -> dict:
+    """Pre-compute the Multi-Skins scorecard grid for the template.
+
+    Returns:
+      {
+        'hole_headers': [{'num', 'par', 'is_dead'}, ...],     # 18 items
+        'rows'        : [
+            {'name', 'cells': [{'gross', 'strokes', 'is_winner'}, ...]},
+            ...
+        ],
+      }
+
+    Cells without a score show empty.  Dead holes (played but tied —
+    no skin awarded) get a grey header.  Winner cells are flagged so
+    the template can paint them green."""
+    holes_in  = summary.get('holes')   or []
+    players   = summary.get('players') or []
+    by_num    = {h.get('hole'): h for h in holes_in}
+    nums      = list(range(1, 19))
+
+    hole_headers = [
+        {
+            'num'    : n,
+            'par'    : (by_num.get(n) or {}).get('par'),
+            'is_dead': (by_num.get(n) or {}).get('is_dead', False),
+        }
+        for n in nums
+    ]
+
+    rows = []
+    for p in players:
+        pid = p.get('player_id')
+        cells = []
+        for n in nums:
+            entry = by_num.get(n)
+            cell  = {'gross': None, 'strokes': 0, 'is_winner': False}
+            if entry:
+                for s in entry.get('scores') or []:
+                    if s.get('player_id') == pid:
+                        cell['gross']     = s.get('gross')
+                        cell['strokes']   = s.get('strokes') or 0
+                        cell['is_winner'] = entry.get('winner_id') == pid
+                        break
+            cells.append(cell)
+        rows.append({
+            'name' : p.get('short_name') or p.get('name') or '',
+            'cells': cells,
+        })
+
+    return {'hole_headers': hole_headers, 'rows': rows}
+
+
 def _render_casual_multi_skins(request, round_obj, token: str, tabs: list):
-    """Multi-Group Skins standings — pool, mode, and per-player payouts.
-    The scorecard view lives on the Low Net tab, mirroring how the
-    mobile leaderboard splits the standings from the scorecard grid."""
+    """Multi-Group Skins standings + per-hole skin-winner scorecard.
+
+    The standings table mirrors the top of the in-app screen.  The
+    scorecard grid at the bottom is the only place an observer can see
+    which holes were won by whom (the Low Net tab shows net scores
+    only, not who claimed each skin)."""
     from services.multi_skins import multi_skins_summary
-    summary = multi_skins_summary(round_obj)
+    summary   = multi_skins_summary(round_obj)
+    scorecard = _build_ms_scorecard(summary) if summary else None
     return render(request, 'watch/casual_multi_skins.html', {
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
         'summary':      summary,
+        'scorecard':    scorecard,
         'refresh_secs': 30,
         'tabs':         tabs,
     })
