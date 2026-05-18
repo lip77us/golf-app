@@ -1,0 +1,92 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Points 5-3-1" }} · Round {{ round.round_number }}
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}Points 5-3-1{% endif %}
+  </h1>
+  <p class="sub">
+    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+  </p>
+
+  {% for g in groups %}
+    {% with summary=g.summary %}
+      <div class="card">
+        <div class="match-meta">
+          <span class="game-pill">Group {{ g.group_number }}</span>
+          <span class="meta-text">
+            Points 5-3-1
+            {% if summary.handicap.mode %}
+              · {{ summary.handicap.mode|upper }}{% if summary.handicap.mode == 'net' and summary.handicap.net_percent != 100 %} ({{ summary.handicap.net_percent }}%){% endif %}
+            {% endif %}
+            {% if summary.money.bet_unit %} · ${{ summary.money.bet_unit|floatformat:"-2" }} / pt{% endif %}
+            · Par is {{ summary.money.par_per_hole|default:3 }} pts/hole
+          </span>
+        </div>
+
+        {% for p in summary.players %}
+          {% with delta=p.points|add:0|stringformat:"s" %}
+          <div class="p531-row">
+            <span class="name">{{ p.name }}{% if p.phcp_in_play is not None %} <span class="phcp-inline">({{ p.phcp_in_play }})</span>{% endif %}</span>
+            <span class="pts">{{ p.points|floatformat:"-1" }} pts</span>
+            <span class="delta {% if p.money > 0 %}up{% elif p.money < 0 %}down{% endif %}">
+              {% if p.money > 0 %}+${{ p.money|floatformat:"-2" }}{% elif p.money < 0 %}−${{ p.money|floatformat:"-2"|cut:"-" }}{% else %}—{% endif %}
+            </span>
+          </div>
+          {% endwith %}
+        {% empty %}
+          <div class="empty" style="padding: 20px 4px;">No players yet.</div>
+        {% endfor %}
+
+        {% if g.progress and g.progress.rows %}
+          <div class="divider"></div>
+          <div class="ms-scroll" style="margin-top: 4px;">
+            <table class="ms-card p531-card">
+              <thead>
+                <tr>
+                  <th class="ms-name">Hole</th>
+                  {% for h in g.progress.hole_headers %}
+                    <th>{{ h.num }}</th>
+                  {% endfor %}
+                </tr>
+                <tr>
+                  <th class="ms-name ms-par">Par</th>
+                  {% for h in g.progress.hole_headers %}
+                    <th class="ms-par">{{ h.par|default:"–" }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in g.progress.rows %}
+                  <tr class="p531-score-row">
+                    <td class="ms-name" rowspan="2">{{ row.name }}{% if row.phcp_in_play is not None %} <span class="phcp">({{ row.phcp_in_play }})</span>{% endif %}</td>
+                    {% for cell in row.scores %}
+                      <td>
+                        {% if cell.gross %}{{ cell.gross }}{% if cell.strokes %}<span class="strk" data-strokes="{{ cell.strokes }}">{{ cell.strokes }}</span>{% endif %}{% endif %}
+                      </td>
+                    {% endfor %}
+                  </tr>
+                  <tr class="p531-points-row">
+                    {% for cell in row.points %}
+                      <td class="{% if cell.is_winner %}win{% endif %}">
+                        {% if cell.value is not None %}{{ cell.value|floatformat:"-1" }}{% endif %}
+                      </td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="ms-legend">
+            <span class="win-swatch"></span> 5-point hole winner · stroke = red dot
+          </div>
+        {% endif %}
+      </div>
+    {% endwith %}
+  {% empty %}
+    <div class="card empty">No Points 5-3-1 groups in this round.</div>
+  {% endfor %}
+{% endblock %}

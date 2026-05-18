@@ -403,6 +403,9 @@ def _has_casual_skins(round_obj) -> bool:
 def _has_casual_multi_skins(round_obj) -> bool:
     return 'multi_skins' in (round_obj.active_games or [])
 
+def _has_casual_points_531(round_obj) -> bool:
+    return 'points_531' in (round_obj.active_games or [])
+
 def _has_low_net(round_obj) -> bool:
     """True when the round (or its tournament) has any low-net offering.
 
@@ -464,6 +467,12 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'key': 'skins', 'label': 'Skins',
             'url': f'{base}?view=skins',
             'active': current == 'skins',
+        })
+    if _has_casual_points_531(round_obj):
+        tabs.append({
+            'key': 'points_531', 'label': 'Points 5-3-1',
+            'url': f'{base}?view=points_531',
+            'active': current == 'points_531',
         })
     if _has_low_net(round_obj):
         tabs.append({
@@ -809,6 +818,84 @@ def _render_casual_multi_skins(request, round_obj, token: str, tabs: list):
     })
 
 
+def _build_p531_progress(summary: dict) -> dict:
+    """Build the per-hole progress grid for a Points 5-3-1 foursome.
+
+    Mirrors the in-app score-entry progress card: hole-number row,
+    par row, then for each player a paired (gross, points-awarded)
+    row.  Cells with strokes carry a stroke-dot indicator just like
+    the Multi-Skins / Skins scorecards."""
+    holes_in = summary.get('holes')   or []
+    players  = summary.get('players') or []
+    by_num   = {h.get('hole'): h for h in holes_in}
+
+    hole_headers = [
+        {'num': n, 'par': (by_num.get(n) or {}).get('par')}
+        for n in range(1, 19)
+    ]
+
+    rows = []
+    for p in players:
+        pid     = p.get('player_id')
+        scores  = []
+        points  = []
+        for n in range(1, 19):
+            entry = by_num.get(n)
+            score_cell  = {'gross': None, 'strokes': 0}
+            points_cell = {'value': None, 'is_winner': False}
+            if entry:
+                for e in entry.get('entries') or []:
+                    if e.get('player_id') == pid:
+                        score_cell['gross']    = e.get('gross')
+                        score_cell['strokes']  = e.get('strokes') or 0
+                        pts = e.get('points')
+                        points_cell['value']   = pts
+                        # The "5" award is always the outright top score
+                        # on the hole.  Awards of 4 / 3.5 are ties and
+                        # not "winners" in the same visual sense.
+                        points_cell['is_winner'] = (pts == 5)
+                        break
+            scores.append(score_cell)
+            points.append(points_cell)
+        rows.append({
+            'name'         : p.get('short_name') or p.get('name') or '',
+            'phcp_in_play' : p.get('phcp_in_play'),
+            'scores'       : scores,
+            'points'       : points,
+        })
+
+    return {'hole_headers': hole_headers, 'rows': rows}
+
+
+def _render_casual_points_531(request, round_obj, token: str, tabs: list):
+    """Per-foursome Points 5-3-1 cards — leaderboard totals on top,
+    horizontal hole-by-hole progress grid (gross + per-hole award) on
+    the bottom."""
+    from services.points_531 import points_531_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = []
+    for fs in foursomes:
+        summary = points_531_summary(fs)
+        groups.append({
+            'group_number': fs.group_number,
+            'foursome_id' : fs.id,
+            'summary'     : summary,
+            'progress'    : _build_p531_progress(summary) if summary else None,
+        })
+    return render(request, 'watch/casual_points_531.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
 def _build_nassau_progress(ns_summary: dict) -> dict:
     """Build the hole-by-hole progress grid for a Four Ball match.
 
@@ -931,6 +1018,7 @@ _VIEW_DISPATCH = {
     'cup':         _render_cup_standings,
     'skins':       _render_casual_skins,
     'multi_skins': _render_casual_multi_skins,
+    'points_531':  _render_casual_points_531,
     'four_ball':   _render_cup_four_ball,
 }
 

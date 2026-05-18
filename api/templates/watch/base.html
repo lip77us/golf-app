@@ -411,6 +411,55 @@
     .ms-card td.fb-won-halved {
       color: var(--muted);
     }
+
+    /* Points 5-3-1 leaderboard rows: name · running points · money. */
+    .p531-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px; align-items: baseline;
+      padding: 6px 0;
+      border-top: 1px solid var(--border);
+    }
+    .p531-row:first-of-type { border-top: none; }
+    .p531-row .name    { font-weight: 600; font-size: 14px; }
+    .p531-row .name .phcp-inline {
+      color: var(--muted); font-weight: 400; font-size: 12px;
+      margin-left: 2px;
+    }
+    .p531-row .pts     { font-size: 13px; font-variant-numeric: tabular-nums; }
+    .p531-row .delta   {
+      font-weight: 700; font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      min-width: 64px; text-align: right;
+      color: var(--muted);
+    }
+    .p531-row .delta.up   { color: #1f8a3a; }
+    .p531-row .delta.down { color: #c0392b; }
+
+    /* Per-hole points row sits directly under each player's score row
+       — paired pair with the same hole grid.  Lighter weight so the
+       gross-score row still dominates visually. */
+    .p531-card tr.p531-points-row td {
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 10px;
+      padding-top: 0;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .p531-card tr.p531-points-row td.win {
+      background: #d6f1da;
+      color: #1f5a2a;
+      border-radius: 4px;
+    }
+    .p531-card tr.p531-score-row td {
+      border-bottom: none;
+    }
+    @media (prefers-color-scheme: dark) {
+      .p531-card tr.p531-points-row td.win {
+        background: #1f4628; color: #c7f0cf;
+      }
+    }
     @media (prefers-color-scheme: dark) {
       .ms-card td .strk::before     { color: #f38a7d; }
       .ms-card td.win .strk::before { color: #c7f0cf; }

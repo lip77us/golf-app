@@ -71,6 +71,7 @@ from django.db import transaction
 from core.models import HandicapMode, MatchStatus
 from games.models import Points531Game, Points531PlayerHoleResult
 from scoring.handicap import build_score_index
+from scoring.models import HoleScore
 from tournament.models import Foursome
 
 
@@ -370,6 +371,30 @@ def points_531_summary(foursome) -> dict:
         .filter(player__is_phantom=False)
     )
     by_pid = {m.player_id: m.player for m in real_members}
+    real_ids = list(by_pid.keys())
+
+    # Gross scores + par per hole — needed by the spectator/score-entry
+    # progress grid (gross is what shows in the player cells; net is
+    # used purely for the points calculation upstream).  Strokes per
+    # cell = gross − net.
+    gross_index: dict = {}
+    for r in (
+        HoleScore.objects
+        .filter(foursome=foursome, player_id__in=real_ids)
+        .exclude(gross_score=None)
+        .values('player_id', 'hole_number', 'gross_score')
+    ):
+        gross_index.setdefault(r['player_id'], {})[r['hole_number']] = r['gross_score']
+
+    sample_tee = next(
+        (m.tee for m in foursome.memberships.select_related('tee').all()
+         if m.tee_id is not None),
+        None,
+    )
+    par_by_hole: dict = {}
+    if sample_tee is not None:
+        for h in range(1, 19):
+            par_by_hole[h] = sample_tee.hole(h).get('par')
 
     # Pull all hole results, grouped by hole for the grid and by player
     # for the leaderboard totals.  One query + in-Python group keeps
@@ -387,21 +412,25 @@ def points_531_summary(foursome) -> dict:
     for r in results:
         by_hole.setdefault(r.hole_number, []).append(r)
     for hole_num in sorted(by_hole):
-        entries = [
-            {
+        entries = []
+        for r in by_hole[hole_num]:
+            gross   = gross_index.get(r.player_id, {}).get(hole_num)
+            strokes = max(0, gross - r.net_score) if gross is not None else 0
+            entries.append({
                 'player_id' : r.player_id,
                 'name'      : r.player.name,
                 'short_name': r.player.short_name,
                 'net_score' : r.net_score,
+                'gross'     : gross,
+                'strokes'   : strokes,
                 'points'    : float(r.points_awarded),
-            }
-            for r in by_hole[hole_num]
-        ]
+            })
         # Sort entries on the hole by points desc (winner first), then
         # by short_name for stable display.
         entries.sort(key=lambda e: (-e['points'], e['short_name']))
         holes_out.append({
             'hole'    : hole_num,
+            'par'     : par_by_hole.get(hole_num),
             'entries' : entries,
         })
 
@@ -416,6 +445,28 @@ def points_531_summary(foursome) -> dict:
             points_by_pid.get(r.player_id, Decimal('0')) + r.points_awarded
         )
 
+    # Net strokes in play per player — feeds the "(N)" label next to
+    # each name on the spectator progress grid.  Mirrors the arithmetic
+    # the upstream score index already uses, so the displayed number
+    # matches whichever handicap mode the game is set to.
+    mode    = game.handicap_mode
+    npct    = game.net_percent or 100
+    phcps   = [
+        (m.playing_handicap or 0) for m in real_members
+        if m.playing_handicap is not None
+    ]
+    low_phcp = min(phcps) if phcps else 0
+    def _phcp_in_play(phcp: int) -> int:
+        if mode == HandicapMode.GROSS:
+            return 0
+        if mode == HandicapMode.STROKES_OFF:
+            return round(max(0, phcp - low_phcp) * npct / 100)
+        return round(phcp * npct / 100)
+    phcp_by_pid = {
+        m.player_id: _phcp_in_play(m.playing_handicap or 0)
+        for m in real_members
+    }
+
     players_out: list = []
     for pid, player in by_pid.items():
         pts = float(points_by_pid.get(pid, Decimal('0')))
@@ -428,6 +479,7 @@ def points_531_summary(foursome) -> dict:
             'points'      : pts,
             'holes_played': hp,
             'money'       : money,
+            'phcp_in_play': phcp_by_pid.get(pid),
         })
     # Leaderboard: money desc, then name for stable ordering.
     players_out.sort(key=lambda e: (-e['money'], e['name']))
