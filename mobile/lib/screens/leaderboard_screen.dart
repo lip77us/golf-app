@@ -153,16 +153,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     final isFinal = lb?.status == 'complete';
 
     final watchToken = rp.round?.watchToken;
-    final isCupRound = rp.round?.isCupRound ?? false;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Leaderboard'),
         actions: [
-          // Share the public spectator URL.  Currently the watch page only
-          // renders cup-round data, so hide the button on non-cup rounds
-          // until more formats are supported.
-          if (watchToken != null && isCupRound)
+          // Share the public spectator URL — supported for cup rounds
+          // and casual Skins / Multi-Skins / Low-Net rounds.
+          if (watchToken != null)
             IconButton(
               tooltip: 'Share spectator link',
               icon: const Icon(Icons.share_outlined),
