@@ -1872,20 +1872,35 @@ class _MsScorecardState extends State<_MsScorecard> {
                 color: theme.colorScheme.outlineVariant,
                 margin: const EdgeInsets.symmetric(vertical: 2),
               ),
-              // One row per participant
+              // One row per participant — name plus "(N)" net strokes
+              // in play so an observer can see who is shooting net what.
               for (final p in widget.participants)
                 Row(children: [
                   SizedBox(
                     width: _labelColW, height: _rowH,
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        (p['short_name'] as String?)?.isNotEmpty == true
-                            ? p['short_name'] as String
-                            : (p['name'] as String? ?? ''),
+                      child: RichText(
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        softWrap: false,
+                        text: TextSpan(
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600),
+                          children: [
+                            TextSpan(text:
+                              (p['short_name'] as String?)?.isNotEmpty == true
+                                  ? p['short_name'] as String
+                                  : (p['name'] as String? ?? '')),
+                            if (p['phcp_in_play'] != null)
+                              TextSpan(
+                                text: ' (${p['phcp_in_play']})',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w400),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1912,7 +1927,8 @@ class _SkinsGroupCard extends StatelessWidget {
     //   allow_junk, players: [{player_id, name, skins_won, junk_skins,
     //   total_skins, payout}], money: {bet_unit, pool, total_skins} }
     final summary  = group['summary'] as Map<String, dynamic>? ?? {};
-    final players  = (summary['players'] as List? ?? []);
+    final players  = (summary['players'] as List? ?? []).cast<Map<String, dynamic>>();
+    final holes    = (summary['holes']   as List? ?? []).cast<Map<String, dynamic>>();
     final money    = summary['money'] as Map<String, dynamic>? ?? {};
     final pool     = money['pool'] ?? 0;
     final status   = summary['status']?.toString() ?? 'pending';
@@ -1932,8 +1948,7 @@ class _SkinsGroupCard extends StatelessWidget {
           Text('Status: ${status.replaceAll('_', ' ')}',
               style: const TextStyle(fontSize: 11, color: Colors.grey)),
           const Divider(height: 16),
-          ...players.map((t) {
-            final p        = t as Map<String, dynamic>;
+          ...players.map((p) {
             final skinsWon = p['skins_won'] ?? 0;
             final junk     = p['junk_skins'] ?? 0;
             final payout   = p['payout'];
@@ -1955,6 +1970,17 @@ class _SkinsGroupCard extends StatelessWidget {
               ]),
             );
           }),
+          // Per-hole scorecard — gross scores with the skin-winner cell
+          // highlighted, mirroring the Multi-Group Skins view.  Adds a
+          // visual answer to "who actually won each hole?" right next
+          // to the totals above.
+          if (holes.isNotEmpty) ...[
+            const Divider(height: 20),
+            _MsScorecard(
+              holes:        holes,
+              participants: players,
+            ),
+          ],
         ]),
       ),
     );

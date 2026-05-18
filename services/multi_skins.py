@@ -329,20 +329,40 @@ def multi_skins_summary(round_obj) -> dict:
     grand_total = sum(skins_won.values())
     pool        = len(memberships) * bet_unit
 
+    # Net strokes actually in play for each participant — drives the
+    # "(N)" label next to each name on the scorecard.  Mirrors the
+    # arithmetic _build_round_score_index uses (which is what the
+    # calculator already trusts).
+    mode = game.handicap_mode
+    npct = game.net_percent or 100
+    phcps = [
+        (m.playing_handicap or 0) for m in memberships
+        if m.playing_handicap is not None
+    ]
+    low_phcp = min(phcps) if phcps else 0
+
+    def _phcp_in_play(phcp: int) -> int:
+        if mode == HandicapMode.GROSS:
+            return 0
+        if mode == HandicapMode.STROKES_OFF:
+            return round(max(0, phcp - low_phcp) * npct / 100)
+        return round(phcp * npct / 100)   # NET
+
     players_out: list = []
     for m in memberships:
         pid    = m.player_id
         won    = skins_won[pid]
         payout = (won / grand_total * pool) if grand_total > 0 else 0.0
         players_out.append({
-            'player_id'   : pid,
-            'name'        : m.player.name,
-            'short_name'  : m.player.short_name,
-            'foursome_id' : m.foursome_id,
-            'group_number': m.foursome.group_number,
-            'skins_won'   : won,
-            'payout'      : round(payout, 2),
-            'thru'        : thru_by_pid[pid],
+            'player_id'    : pid,
+            'name'         : m.player.name,
+            'short_name'   : m.player.short_name,
+            'foursome_id'  : m.foursome_id,
+            'group_number' : m.foursome.group_number,
+            'skins_won'    : won,
+            'payout'       : round(payout, 2),
+            'thru'         : thru_by_pid[pid],
+            'phcp_in_play' : _phcp_in_play(m.playing_handicap or 0),
         })
     players_out.sort(key=lambda x: (-x['skins_won'], x['name']))
 

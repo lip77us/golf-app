@@ -53,6 +53,7 @@ from django.db import transaction
 from core.models import HandicapMode, MatchStatus
 from games.models import SkinsGame, SkinsHoleResult, SkinsPlayerHoleResult
 from scoring.handicap import build_score_index
+from scoring.models import HoleScore
 
 
 # ---------------------------------------------------------------------------
@@ -287,10 +288,16 @@ def skins_summary(foursome) -> dict:
             'holes'     : [
                 {
                     'hole'        : int,
+                    'par'         : int | null,
                     'winner_id'   : int | null,
                     'winner_short': str | null,
                     'skins_value' : int,
                     'is_carry'    : bool,
+                    'is_dead'     : bool,   # played, no winner, no carry
+                    'scores'      : [
+                        {'player_id': int, 'gross': int, 'strokes': int},
+                        ...
+                    ],
                     'junk'        : [
                         {'player_id': int, 'short_name': str, 'count': int},
                         ...
@@ -366,35 +373,124 @@ def skins_summary(foursome) -> dict:
     }
     grand_total = sum(total_skins_by_pid.values())
 
+    # Net strokes actually in play for each foursome member — drives
+    # the "(N)" label on the scorecard so observers can see whose
+    # handicap is feeding which gross-to-net adjustment.
+    mode    = game.handicap_mode
+    npct    = game.net_percent or 100
+    phcps   = [
+        (m.playing_handicap or 0) for m in real_members
+        if m.playing_handicap is not None
+    ]
+    low_phcp = min(phcps) if phcps else 0
+
+    def _phcp_in_play(phcp: int) -> int:
+        if mode == HandicapMode.GROSS:
+            return 0
+        if mode == HandicapMode.STROKES_OFF:
+            return round(max(0, phcp - low_phcp) * npct / 100)
+        return round(phcp * npct / 100)   # NET
+
     players_out: list = []
     for m in real_members:
         pid    = m.player_id
         ts     = total_skins_by_pid[pid]
         payout = (ts / grand_total * pool) if grand_total > 0 else 0.0
         players_out.append({
-            'player_id'  : pid,
-            'name'       : m.player.name,
-            'short_name' : m.player.short_name,
-            'skins_won'  : regular_skins[pid],
-            'junk_skins' : junk_skins[pid],
-            'total_skins': ts,
-            'payout'     : round(payout, 2),
+            'player_id'   : pid,
+            'name'        : m.player.name,
+            'short_name'  : m.player.short_name,
+            'skins_won'   : regular_skins[pid],
+            'junk_skins'  : junk_skins[pid],
+            'total_skins' : ts,
+            'payout'      : round(payout, 2),
+            'phcp_in_play': _phcp_in_play(m.playing_handicap or 0),
         })
     players_out.sort(key=lambda x: (-x['total_skins'], x['name']))
 
+    # ---- Per-hole gross + strokes index (for the scorecard grid) ────────────
+    # Gross scores straight from HoleScore — these are what the scorecard
+    # shows.  We pair them with the net/strokes-off index that the skins
+    # calculator already uses to derive how many strokes each player
+    # received on each hole.
+    real_pids = [m.player_id for m in real_members]
+    gross_index: dict = {}
+    for r in (
+        HoleScore.objects
+        .filter(foursome=foursome, player_id__in=real_pids)
+        .exclude(gross_score=None)
+        .values('player_id', 'hole_number', 'gross_score')
+    ):
+        gross_index.setdefault(r['player_id'], {})[r['hole_number']] = r['gross_score']
+
+    if game.handicap_mode == HandicapMode.STROKES_OFF:
+        score_index = _build_so_score_index(foursome, net_percent=game.net_percent)
+    else:
+        score_index = build_score_index(
+            foursome,
+            handicap_mode = game.handicap_mode,
+            net_percent   = game.net_percent,
+        )
+
+    # Par per hole from the first scoring member's tee — the foursome
+    # plays one course so every member's tee shares the same par layout.
+    par_by_hole: dict = {}
+    sample_tee = next(
+        (m.tee for m in real_members if m.tee_id is not None),
+        None,
+    )
+    if sample_tee is not None:
+        for h in range(1, 19):
+            par_by_hole[h] = sample_tee.hole(h).get('par')
+
     # ---- Holes grid ---------------------------------------------------------
+    # Index existing SkinsHoleResult rows so we can also emit a row for
+    # holes that have been scored but the calculator hasn't produced a
+    # result for yet (e.g. mid-round before recalc).
+    hr_by_hole = {hr.hole_number: hr for hr in hole_results}
     holes_out: list = []
-    for hr in hole_results:
+    for hole_num in range(1, 19):
+        hr            = hr_by_hole.get(hole_num)
+        scored_pids   = [
+            pid for pid in real_pids
+            if hole_num in gross_index.get(pid, {})
+        ]
+        if hr is None and not scored_pids:
+            continue   # nobody has played this hole yet
+
+        scores = []
+        for pid in scored_pids:
+            gross   = gross_index[pid][hole_num]
+            net     = score_index.get(pid, {}).get(hole_num)
+            strokes = max(0, gross - net) if net is not None else 0
+            scores.append({
+                'player_id': pid,
+                'gross'    : gross,
+                'strokes'  : strokes,
+            })
+
         junk_entries = [
             v for (hn, _pid), v in junk_by_hole_player.items()
-            if hn == hr.hole_number
+            if hn == hole_num
         ]
+
+        winner_id   = hr.winner_id if hr else None
+        is_carry    = hr.is_carry if hr else False
+        # "Dead" hole = a played hole with no winner that is not part of
+        # an active carry — i.e. the skin was killed (no-carryover rule).
+        # Carries already light up via the running-pot total, so we keep
+        # the dead-flag tight to the skin-killed case.
+        is_dead = (hr is not None and winner_id is None and not is_carry)
+
         holes_out.append({
-            'hole'        : hr.hole_number,
-            'winner_id'   : hr.winner_id,
-            'winner_short': hr.winner.short_name if hr.winner else None,
-            'skins_value' : hr.skins_value,
-            'is_carry'    : hr.is_carry,
+            'hole'        : hole_num,
+            'par'         : par_by_hole.get(hole_num),
+            'winner_id'   : winner_id,
+            'winner_short': hr.winner.short_name if hr and hr.winner else None,
+            'skins_value' : hr.skins_value if hr else 0,
+            'is_carry'    : is_carry,
+            'is_dead'     : is_dead,
+            'scores'      : scores,
             'junk'        : junk_entries,
         })
 

@@ -510,12 +510,13 @@ def _build_nine_grid(holes: list, is_front: bool, show_net: bool) -> dict:
     tot_par = tot_gross = tot_net = 0
     for h in segment:
         rows.append({
-            'hole'     : h.get('hole'),
-            'par'      : h.get('par'),
-            'gross'    : h.get('gross'),
-            'gross_cls': _hole_to_par_class(h, 'gross'),
-            'net'      : h.get('capped'),
-            'net_cls'  : _hole_to_par_class(h, 'capped'),
+            'hole'        : h.get('hole'),
+            'par'         : h.get('par'),
+            'stroke_index': h.get('stroke_index'),
+            'gross'       : h.get('gross'),
+            'gross_cls'   : _hole_to_par_class(h, 'gross'),
+            'net'         : h.get('capped'),
+            'net_cls'     : _hole_to_par_class(h, 'capped'),
         })
         tot_par   += h.get('par')    or 0
         tot_gross += h.get('gross')  or 0
@@ -684,21 +685,26 @@ def _render_cup_standings(request, round_obj, token: str, tabs: list):
 # ---------------------------------------------------------------------------
 
 def _render_casual_skins(request, round_obj, token: str, tabs: list):
-    """Per-foursome Skins leaderboards — mirrors the in-app Skins tab."""
+    """Per-foursome Skins leaderboards — mirrors the in-app Skins tab.
+
+    Each group card carries the standings up top and a per-hole gross
+    scorecard at the bottom (winner's cell highlighted), so observers
+    can see who won each skin at a glance."""
     from services.skins import skins_summary
     foursomes = list(
         round_obj.foursomes
         .prefetch_related('memberships__player')
         .order_by('group_number')
     )
-    groups = [
-        {
+    groups = []
+    for fs in foursomes:
+        summary = skins_summary(fs)
+        groups.append({
             'group_number': fs.group_number,
             'foursome_id' : fs.id,
-            'summary'     : skins_summary(fs),
-        }
-        for fs in foursomes
-    ]
+            'summary'     : summary,
+            'scorecard'   : _build_ms_scorecard(summary) if summary else None,
+        })
     return render(request, 'watch/casual_skins.html', {
         'round':        round_obj,
         'course_name':  round_obj.course.name,
@@ -754,8 +760,13 @@ def _build_ms_scorecard(summary: dict) -> dict:
                         break
             cells.append(cell)
         rows.append({
-            'name' : p.get('short_name') or p.get('name') or '',
-            'cells': cells,
+            'name'         : p.get('short_name') or p.get('name') or '',
+            # Net strokes this player is receiving in the game (set by
+            # skins_summary / multi_skins_summary).  Shown in parens
+            # after the name so observers can read each row's adjusted
+            # handicap at a glance.
+            'phcp_in_play' : p.get('phcp_in_play'),
+            'cells'        : cells,
         })
 
     return {'hole_headers': hole_headers, 'rows': rows}

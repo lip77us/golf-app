@@ -129,12 +129,19 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
         entry['total']        += capped
         entry['holes_played'] += 1
         entry['par_played']   += par
+        # Pull stroke index off the player's own tee so women's tees
+        # (which can have a different SI ordering than men's) show
+        # correctly on the scorecard.
+        si_for_hole = None
+        if membership.tee_id is not None:
+            si_for_hole = membership.tee.hole(hole).get('stroke_index')
         entry['holes'][hole]   = {
-            'par'    : par,
-            'gross'  : hs['gross_score'],
-            'strokes': strokes_given,
-            'net'    : adjusted,
-            'capped' : capped,
+            'par'         : par,
+            'gross'       : hs['gross_score'],
+            'strokes'     : strokes_given,
+            'net'         : adjusted,
+            'capped'      : capped,
+            'stroke_index': si_for_hole,
         }
 
     return totals

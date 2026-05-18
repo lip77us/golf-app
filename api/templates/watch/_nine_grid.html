@@ -5,6 +5,7 @@
     <thead>
       <tr>
         <th>Hole</th>
+        <th class="si">SI</th>
         <th>Par</th>
         <th>Grs</th>
         {% if grid.show_net %}<th>Net</th>{% endif %}
@@ -14,6 +15,7 @@
       {% for row in grid.rows %}
         <tr>
           <td>{{ row.hole }}</td>
+          <td class="si">{{ row.stroke_index|default:"–" }}</td>
           <td>{{ row.par|default:"–" }}</td>
           <td class="{{ row.gross_cls }}">{{ row.gross|default:"–" }}</td>
           {% if grid.show_net %}
@@ -24,6 +26,7 @@
       {% if not grid.empty %}
         <tr class="nine-tot">
           <td>{{ grid.totals.label }}</td>
+          <td class="si"></td>
           <td>{{ grid.totals.par|default:"–" }}</td>
           <td>{{ grid.totals.gross|default:"–" }}</td>
           {% if grid.show_net %}
