@@ -406,6 +406,9 @@ def _has_casual_multi_skins(round_obj) -> bool:
 def _has_casual_points_531(round_obj) -> bool:
     return 'points_531' in (round_obj.active_games or [])
 
+def _has_casual_sixes(round_obj) -> bool:
+    return 'sixes' in (round_obj.active_games or [])
+
 def _has_low_net(round_obj) -> bool:
     """True when the round (or its tournament) has any low-net offering.
 
@@ -473,6 +476,12 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'key': 'points_531', 'label': 'Points 5-3-1',
             'url': f'{base}?view=points_531',
             'active': current == 'points_531',
+        })
+    if _has_casual_sixes(round_obj):
+        tabs.append({
+            'key': 'sixes', 'label': "Six's",
+            'url': f'{base}?view=sixes',
+            'active': current == 'sixes',
         })
     if _has_low_net(round_obj):
         tabs.append({
@@ -818,6 +827,101 @@ def _render_casual_multi_skins(request, round_obj, token: str, tabs: list):
     })
 
 
+def _sixes_segment_score(seg: dict) -> str:
+    """Plain-English score for one Six's segment — mirrors the
+    in-app _SixesGroupCard._segmentScore so the same language shows
+    up in the spectator view.
+
+    Examples:
+      "4 and 2"        — match decided early, won 4-up with 2 to play
+      "3 UP"           — ran the full segment, won by 3
+      "Halved"         — segment finished tied
+      "AS thru 4"      — still in progress, all square through 4
+      "2 UP thru 5"    — still in progress, leader 2 up through 5
+      "Pending"        — not started
+    """
+    status = seg.get('status', 'pending')
+    winner = seg.get('winner') or '—'
+    holes  = seg.get('holes') or []
+    start  = int(seg.get('start_hole') or 1)
+    end    = int(seg.get('end_hole')   or start)
+    played = len(holes)
+    last_margin = 0
+    if holes:
+        last = holes[-1]
+        last_margin = int(last.get('margin') or 0)
+    abs_m = abs(last_margin)
+    total_h     = end - start + 1
+    holes_left  = total_h - played
+
+    if status in ('complete', 'halved'):
+        if winner == 'Halved':
+            return 'Halved'
+        if holes_left > 0:
+            return f'{abs_m} and {holes_left}'
+        return f'{abs_m} UP' if abs_m else 'Halved'
+    if status == 'in_progress':
+        if last_margin == 0:
+            return f'AS thru {played}'
+        return f'{abs_m} UP thru {played}'
+    return 'Pending'
+
+
+def _sixes_segment_subtitle(seg: dict) -> str:
+    """Team line under each segment — e.g. "Paul & Mike beat Jul & Larry"
+    or "Halved — Paul & Mike vs Jul & Larry"."""
+    t1 = ((seg.get('team1') or {}).get('players') or [])
+    t2 = ((seg.get('team2') or {}).get('players') or [])
+
+    def _join(team):
+        names = [str(p) for p in team]
+        if not names:        return '—'
+        if len(names) == 2:  return f'{names[0]} & {names[1]}'
+        return ', '.join(names)
+
+    t1s = _join(t1)
+    t2s = _join(t2)
+    winner = (seg.get('winner') or '').strip()
+    if winner == 'Team 1': return f'{t1s} beat {t2s}'
+    if winner == 'Team 2': return f'{t2s} beat {t1s}'
+    if winner == 'Halved': return f'Halved — {t1s} vs {t2s}'
+    return f'{t1s} vs {t2s}'
+
+
+def _render_casual_sixes(request, round_obj, token: str, tabs: list):
+    """Per-foursome Six's leaderboards — per-match score line ("4 and 2"
+    / "AS thru 3" / etc.) with the team composition underneath, plus
+    the running per-player money totals.  Mirrors _SixesGroupCard."""
+    from services.sixes import sixes_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = []
+    for fs in foursomes:
+        summary = sixes_summary(fs)
+        # Pre-compute the plain-English status text once per segment so
+        # the template stays free of conditionals.
+        if summary:
+            for seg in summary.get('segments') or []:
+                seg['score_text']    = _sixes_segment_score(seg)
+                seg['subtitle_text'] = _sixes_segment_subtitle(seg)
+        groups.append({
+            'group_number': fs.group_number,
+            'foursome_id' : fs.id,
+            'summary'     : summary,
+        })
+    return render(request, 'watch/casual_sixes.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
 def _build_p531_progress(summary: dict) -> dict:
     """Build the per-hole progress grid for a Points 5-3-1 foursome.
 
@@ -1019,6 +1123,7 @@ _VIEW_DISPATCH = {
     'skins':       _render_casual_skins,
     'multi_skins': _render_casual_multi_skins,
     'points_531':  _render_casual_points_531,
+    'sixes':       _render_casual_sixes,
     'four_ball':   _render_cup_four_ball,
 }
 

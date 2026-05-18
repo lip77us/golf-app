@@ -1,0 +1,60 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Six's" }} · Round {{ round.round_number }}
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}Six's{% endif %}
+  </h1>
+  <p class="sub">
+    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+  </p>
+
+  {% for g in groups %}
+    {% with summary=g.summary %}
+      <div class="card">
+        <div class="match-meta">
+          <span class="game-pill">Group {{ g.group_number }}</span>
+          <span class="meta-text">
+            Six's
+            {% if summary.handicap.mode %}
+              · {{ summary.handicap.mode|upper }}{% if summary.handicap.mode == 'net' and summary.handicap.net_percent != 100 %} ({{ summary.handicap.net_percent }}%){% endif %}
+            {% endif %}
+            {% if summary.money.bet_unit %} · ${{ summary.money.bet_unit|floatformat:"-2" }} unit{% endif %}
+          </span>
+        </div>
+
+        {% for seg in summary.segments %}
+          <div class="sixes-seg">
+            <div class="sixes-seg-line">
+              <span class="label">{{ seg.label }}</span>
+              <span class="score sixes-status-{{ seg.status }}{% if seg.winner == 'Halved' %} halved{% endif %}">
+                {{ seg.score_text }}
+              </span>
+            </div>
+            <div class="sixes-seg-sub">{{ seg.subtitle_text }}</div>
+          </div>
+        {% empty %}
+          <div class="empty" style="padding: 20px 4px;">No matches set up yet.</div>
+        {% endfor %}
+
+        {% if summary.money.by_player and summary.money.bet_unit %}
+          <div class="divider"></div>
+          <div class="sixes-money-head">Money (unit ${{ summary.money.bet_unit|floatformat:"-2" }})</div>
+          {% for row in summary.money.by_player %}
+            <div class="sixes-money-row">
+              <span class="name">{{ row.name }}</span>
+              <span class="amount {% if row.amount > 0 %}up{% elif row.amount < 0 %}down{% endif %}">
+                {% if row.amount > 0 %}+${{ row.amount|floatformat:"-2" }}{% elif row.amount < 0 %}−${{ row.amount|floatformat:"-2"|cut:"-" }}{% else %}—{% endif %}
+              </span>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    {% endwith %}
+  {% empty %}
+    <div class="card empty">No Six's groups in this round.</div>
+  {% endfor %}
+{% endblock %}

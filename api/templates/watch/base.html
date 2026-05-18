@@ -460,6 +460,43 @@
         background: #1f4628; color: #c7f0cf;
       }
     }
+
+    /* Six's — one row per segment (Match 1 / 2 / 3) with the score
+       text on the right and the team composition as a subtitle. */
+    .sixes-seg {
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+    }
+    .sixes-seg:first-of-type { border-top: none; }
+    .sixes-seg-line {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 12px;
+    }
+    .sixes-seg-line .label  { font-weight: 600; font-size: 14px; }
+    .sixes-seg-line .score  {
+      font-weight: 700; font-size: 14px;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary);
+    }
+    .sixes-seg-line .score.sixes-status-pending     { color: var(--muted); font-weight: 500; }
+    .sixes-seg-line .score.sixes-status-in_progress { color: var(--muted); font-weight: 600; }
+    .sixes-seg-line .score.halved                   { color: var(--muted); }
+    .sixes-seg-sub {
+      color: var(--muted); font-size: 12px;
+      margin-top: 2px;
+    }
+    .sixes-money-head {
+      font-weight: 700; font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .sixes-money-row {
+      display: flex; justify-content: space-between;
+      padding: 2px 0; font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+    .sixes-money-row .amount        { font-weight: 700; color: var(--muted); }
+    .sixes-money-row .amount.up     { color: #1f8a3a; }
+    .sixes-money-row .amount.down   { color: #c0392b; }
     @media (prefers-color-scheme: dark) {
       .ms-card td .strk::before     { color: #f38a7d; }
       .ms-card td.win .strk::before { color: #c7f0cf; }
