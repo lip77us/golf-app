@@ -47,7 +47,7 @@
                   {% endif %}
                 {% else %}—{% endif %}
               </td>
-              <td class="num">{% if r.payout %}${{ r.payout|floatformat:"-2" }}{% else %}—{% endif %}</td>
+              <td class="num">{% if r.per_person_payout %}${{ r.per_person_payout|floatformat:"-2" }}<span class="each">/each</span>{% else %}—{% endif %}</td>
             </tr>
           {% endfor %}
         </tbody>

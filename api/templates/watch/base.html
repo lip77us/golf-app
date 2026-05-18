@@ -525,6 +525,15 @@
       font-weight: 700;
       font-size: 12px;
     }
+    /* "/each" suffix on per-player payout cells — keep the dollar
+       amount prominent, mute the suffix so the eye reads it as a
+       qualifier, not part of the number. */
+    .lb-table td .each {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 10px;
+      margin-left: 1px;
+    }
     @media (prefers-color-scheme: dark) {
       .rb-lost { background: #3a1c1c; color: #f4b9b9; }
     }
