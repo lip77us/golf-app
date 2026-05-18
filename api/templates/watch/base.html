@@ -3,9 +3,6 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  {# JS users get a controllable timer (see footer-toggle below) so they
-     can pause auto-refresh while reading the 18-hole scorecard.  No-JS
-     users still get a hard meta-refresh as a fallback. #}
   <noscript><meta http-equiv="refresh" content="{{ refresh_secs|default:30 }}"></noscript>
   <title>{% block title %}Live Leaderboard{% endblock %}</title>
   <style>
@@ -394,6 +391,26 @@
       letter-spacing: -1px;
     }
     .ms-card td.win .strk::before { color: #1f5a2a; }
+
+    /* Four Ball progress grid — "Won by" row.  Renders T1/T2/= with
+       the matching team-colour swatch so the eye can scan the row and
+       see momentum across the round. */
+    .ms-card tr.fb-wonby td {
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.2px;
+    }
+    .ms-card td.fb-won-t1 {
+      background: var(--t1-bg);
+      color: var(--t1-fg);
+    }
+    .ms-card td.fb-won-t2 {
+      background: var(--t2-bg);
+      color: var(--t2-fg);
+    }
+    .ms-card td.fb-won-halved {
+      color: var(--muted);
+    }
     @media (prefers-color-scheme: dark) {
       .ms-card td .strk::before     { color: #f38a7d; }
       .ms-card td.win .strk::before { color: #c7f0cf; }

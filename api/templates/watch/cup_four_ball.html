@@ -1,0 +1,104 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Four Ball" }} · Round {{ round.round_number }}
+{% endblock %}
+
+{% block body %}
+  <style>
+    {% if summary.team1_colour %}
+      .t1-name, .pts.t1 { color: {{ summary.team1_colour }}; }
+      .badge.badge-t1 {
+        color: {{ summary.team1_colour }};
+        background: {{ summary.team1_colour }}1a;
+        border-color: {{ summary.team1_colour }};
+      }
+      .chip-t1 {
+        color: {{ summary.team1_colour }};
+        background: {{ summary.team1_colour }}22;
+        border-color: {{ summary.team1_colour }}55;
+      }
+      .fb-name.t1 { color: {{ summary.team1_colour }}; }
+    {% endif %}
+    {% if summary.team2_colour %}
+      .t2-name, .pts.t2 { color: {{ summary.team2_colour }}; }
+      .badge.badge-t2 {
+        color: {{ summary.team2_colour }};
+        background: {{ summary.team2_colour }}1a;
+        border-color: {{ summary.team2_colour }};
+      }
+      .chip-t2 {
+        color: {{ summary.team2_colour }};
+        background: {{ summary.team2_colour }}22;
+        border-color: {{ summary.team2_colour }}55;
+      }
+      .fb-name.t2 { color: {{ summary.team2_colour }}; }
+    {% endif %}
+  </style>
+
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}Four Ball{% endif %}
+  </h1>
+  <p class="sub">
+    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+  </p>
+
+  {% for card in cards %}
+    {% include "watch/_match_card.html" with match=card.match summary=summary segments=card.match.segments individuals=card.match.individual_matches %}
+
+    {% if card.progress %}
+      <div class="card" style="margin-top: -8px;">
+        <div class="match-meta" style="margin-bottom: 4px;">
+          <span class="game-pill">Nassau progress</span>
+          <span class="meta-text">Gross scores · "Won by" per hole</span>
+        </div>
+        <div class="ms-scroll">
+          <table class="ms-card">
+            <thead>
+              <tr>
+                <th class="ms-name">Hole</th>
+                {% for h in card.progress.hole_headers %}
+                  <th>{{ h.num }}</th>
+                {% endfor %}
+              </tr>
+              <tr>
+                <th class="ms-name ms-par">Par</th>
+                {% for h in card.progress.hole_headers %}
+                  <th class="ms-par">{{ h.par|default:"–" }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in card.progress.player_rows %}
+                <tr>
+                  <td class="ms-name fb-name t{{ row.team }}">{{ row.name }}{% if row.phcp_in_play is not None %} <span class="phcp">({{ row.phcp_in_play }})</span>{% endif %}</td>
+                  {% for cell in row.cells %}
+                    <td>
+                      {% if cell.gross %}{{ cell.gross }}{% if cell.strokes %}<span class="strk" data-strokes="{{ cell.strokes }}">{{ cell.strokes }}</span>{% endif %}{% endif %}
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+              <tr class="fb-wonby">
+                <td class="ms-name ms-par">Won by</td>
+                {% for w in card.progress.won_by %}
+                  {% if w == 'team1' %}
+                    <td class="fb-won-t1">T1</td>
+                  {% elif w == 'team2' %}
+                    <td class="fb-won-t2">T2</td>
+                  {% elif w == 'halved' %}
+                    <td class="fb-won-halved">=</td>
+                  {% else %}
+                    <td class="ms-par">·</td>
+                  {% endif %}
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+  {% empty %}
+    <div class="card empty">No Four Ball matches configured for this round yet.</div>
+  {% endfor %}
+{% endblock %}

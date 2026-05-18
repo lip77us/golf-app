@@ -377,6 +377,16 @@ def _filter_pending_matches(matches: list) -> list:
 def _has_cup_matches(round_obj) -> bool:
     return hasattr(round_obj, 'ryder_cup_config')
 
+def _has_cup_four_ball(round_obj) -> bool:
+    """True when the cup round contains at least one Four Ball (Nassau)
+    foursome — drives the dedicated Four Ball tab."""
+    try:
+        rc = round_obj.ryder_cup_config
+    except Exception:
+        return False
+    from core.models import GameType
+    return rc.foursome_configs.filter(game_type=GameType.NASSAU).exists()
+
 def _has_cup_standings(round_obj) -> bool:
     """True when the tournament has a cup (team) competition configured."""
     tourney = round_obj.tournament
@@ -436,6 +446,12 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
         tabs.append({
             'key': 'matches', 'label': 'Matches',
             'url': base, 'active': current == 'matches',
+        })
+    if _has_cup_four_ball(round_obj):
+        tabs.append({
+            'key': 'four_ball', 'label': 'Four Ball',
+            'url': f'{base}?view=four_ball',
+            'active': current == 'four_ball',
         })
     if _has_casual_multi_skins(round_obj):
         tabs.append({
@@ -793,12 +809,129 @@ def _render_casual_multi_skins(request, round_obj, token: str, tabs: list):
     })
 
 
+def _build_nassau_progress(ns_summary: dict) -> dict:
+    """Build the hole-by-hole progress grid for a Four Ball match.
+
+    Mirrors the in-app Nassau Progress card on the score-entry screen:
+      hole-number row, par row, one row per player (gross + stroke
+      dots, team-coloured name with playing handicap), and a "Won by"
+      row showing T1 / T2 / = for each completed hole.
+
+    Returns:
+      {
+        'hole_headers': [{'num': n, 'par': p}, ...],            # 18
+        'player_rows' : [
+            {'name', 'team': 1|2, 'phcp_in_play',
+             'cells': [{'gross', 'strokes'}, ...]},
+            ...
+        ],
+        'won_by'      : ['team1'|'team2'|'halved'|None, ...],   # 18
+      }
+    """
+    holes_in   = ns_summary.get('holes') or []
+    teams      = ns_summary.get('teams') or {}
+    t1_players = teams.get('team1') or []
+    t2_players = teams.get('team2') or []
+    by_num     = {h.get('hole'): h for h in holes_in}
+
+    hole_headers = [
+        {'num': n, 'par': (by_num.get(n) or {}).get('par')}
+        for n in range(1, 19)
+    ]
+    won_by = [(by_num.get(n) or {}).get('winner') for n in range(1, 19)]
+
+    def _player_row(p: dict, team_num: int) -> dict:
+        pid   = p.get('player_id')
+        cells = []
+        for n in range(1, 19):
+            entry = by_num.get(n) or {}
+            cell  = {'gross': None, 'strokes': 0}
+            for s in entry.get('scores') or []:
+                if s.get('player_id') == pid:
+                    cell['gross']   = s.get('gross')
+                    cell['strokes'] = s.get('strokes') or 0
+                    break
+            cells.append(cell)
+        return {
+            'name'         : p.get('short_name') or p.get('name') or '',
+            'team'         : team_num,
+            'phcp_in_play' : p.get('phcp_in_play'),
+            'cells'        : cells,
+        }
+
+    player_rows = (
+        [_player_row(p, 1) for p in t1_players] +
+        [_player_row(p, 2) for p in t2_players]
+    )
+    return {
+        'hole_headers': hole_headers,
+        'player_rows' : player_rows,
+        'won_by'      : won_by,
+    }
+
+
+def _render_cup_four_ball(request, round_obj, token: str, tabs: list):
+    """Per-foursome Four Ball cards — F9 / B9 / Overall result chips on
+    top (reuses _match_card.html) plus a horizontal hole-by-hole
+    progress grid on the bottom (gross scores per player with stroke
+    dots, team-coloured names, and a Won-by row)."""
+    from services.cup_standings import cup_round_live_summary
+    from services.nassau       import nassau_summary
+    from core.models           import GameType
+
+    summary = cup_round_live_summary(round_obj)
+    if summary is None:
+        return render(request, 'watch/unsupported.html', {
+            'round': round_obj, 'tabs': tabs,
+        })
+    _enrich_summary(summary)
+
+    # Map foursome_id → groups for nassau matches, so we can pair each
+    # cup-summary match card with its progress grid.
+    rc           = round_obj.ryder_cup_config
+    nassau_cfgs  = list(
+        rc.foursome_configs
+        .filter(game_type=GameType.NASSAU)
+        .select_related('foursome')
+    )
+    progress_by_group: dict = {}
+    for cfg in nassau_cfgs:
+        try:
+            ns = nassau_summary(cfg.foursome)
+        except Exception:
+            ns = None
+        if ns is None:
+            continue
+        progress_by_group[cfg.foursome.group_number] = _build_nassau_progress(ns)
+
+    # Filter the cup summary down to nassau matches and pair each with
+    # the corresponding progress grid (matched by group number).
+    cards = []
+    for m in summary.get('matches', []):
+        if m.get('game_type') != 'nassau':
+            continue
+        groups = m.get('groups') or []
+        progress = progress_by_group.get(groups[0]) if groups else None
+        cards.append({'match': m, 'progress': progress})
+
+    return render(request, 'watch/cup_four_ball.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'summary':      summary,
+        'cards':        cards,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
 _VIEW_DISPATCH = {
     'matches':     _render_matches,
     'low_net':     _render_low_net,
     'cup':         _render_cup_standings,
     'skins':       _render_casual_skins,
     'multi_skins': _render_casual_multi_skins,
+    'four_ball':   _render_cup_four_ball,
 }
 
 

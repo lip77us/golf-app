@@ -57,6 +57,7 @@ from django.db import transaction
 from core.models import HandicapMode, MatchStatus
 from games.models import NassauGame, NassauTeam, NassauHoleScore, NassauPress
 from scoring.handicap import build_score_index
+from scoring.models import HoleScore
 
 
 # ---------------------------------------------------------------------------
@@ -861,11 +862,57 @@ def nassau_summary(foursome) -> dict | None:
     is_claremont    = game.variant == 'claremont'
     is_tiebreak_2nd = game.variant == 'tiebreak_2nd'
 
+    # ── Per-player gross + par lookups (for the progress grid) ──────────
+    # Gross scores come from HoleScore directly so the summary can render
+    # the same hole-by-hole grid that the score-entry screen shows.
+    # Strokes = gross - net (whichever handicap mode the game is set to;
+    # `score_index` was just built with the right rules).
+    real_member_ids = [
+        m.player_id for m in foursome.memberships.filter(player__is_phantom=False)
+    ]
+    gross_index: dict = {}
+    for r in (
+        HoleScore.objects
+        .filter(foursome=foursome, player_id__in=real_member_ids)
+        .exclude(gross_score=None)
+        .values('player_id', 'hole_number', 'gross_score')
+    ):
+        gross_index.setdefault(r['player_id'], {})[r['hole_number']] = r['gross_score']
+
+    sample_tee = next(
+        (m.tee for m in foursome.memberships.select_related('tee').all()
+         if m.tee_id is not None),
+        None,
+    )
+    par_by_hole: dict = {}
+    si_by_hole:  dict = {}
+    if sample_tee is not None:
+        for h in range(1, 19):
+            hd = sample_tee.hole(h)
+            par_by_hole[h] = hd.get('par')
+            si_by_hole[h]  = hd.get('stroke_index')
+
     # ── Holes ─────────────────────────────────────────────────────────────
     holes_qs = NassauHoleScore.objects.filter(game=game).order_by('hole_number')
-    holes_out = [
-        {
+    holes_out = []
+    for h in holes_qs:
+        scores_row = []
+        for pid in real_member_ids:
+            gross = gross_index.get(pid, {}).get(h.hole_number)
+            if gross is None:
+                continue
+            net     = score_index.get(pid, {}).get(h.hole_number)
+            strokes = max(0, gross - net) if net is not None else 0
+            scores_row.append({
+                'player_id': pid,
+                'gross'    : gross,
+                'strokes'  : strokes,
+            })
+        holes_out.append({
             'hole'                  : h.hole_number,
+            'par'                   : par_by_hole.get(h.hole_number),
+            'stroke_index'          : si_by_hole.get(h.hole_number),
+            'scores'                : scores_row,
             'winner'                : h.winner,
             't1_net'                : h.team1_best_net,
             't2_net'                : h.team2_best_net,
@@ -878,9 +925,7 @@ def nassau_summary(foursome) -> dict | None:
             'bottom_front9_margin'  : h.bottom_front9_up_after,
             'bottom_back9_margin'   : h.bottom_back9_up_after,
             'bottom_overall_margin' : h.bottom_overall_up_after,
-        }
-        for h in holes_qs
-    ]
+        })
 
     # Running margins from last scored hole
     front9_margin = next(
@@ -996,18 +1041,6 @@ def nassau_summary(foursome) -> dict | None:
                 press_available_nine = 'back'
 
     # ── Team display ──────────────────────────────────────────────────────
-    def _team_players(team_num):
-        if team_num not in teams:
-            return []
-        return [
-            {
-                'player_id' : p.id,
-                'name'      : p.name,
-                'short_name': p.short_name,
-            }
-            for p in teams[team_num].players.all()
-        ]
-
     # Cup nassau always uses strokes-off-low regardless of stored handicap_mode.
     # Report the effective mode so the client UI draws dots correctly.
     effective_hcp_mode = (
@@ -1015,6 +1048,45 @@ def nassau_summary(foursome) -> dict | None:
         if (game.handicap_mode != 'strokes_off' and _is_cup_nassau(foursome))
         else game.handicap_mode
     )
+
+    # Net strokes actually in play for each player — drives the "(N)"
+    # label next to each name on the spectator progress grid.  Mirrors
+    # the arithmetic _build_so_score_index / build_score_index already
+    # use, so the displayed number matches the per-hole stroke dots.
+    phcp_by_pid: dict = {}
+    real_memberships = list(
+        foursome.memberships
+        .select_related('player')
+        .filter(player__is_phantom=False)
+    )
+    real_phcps = [
+        m.playing_handicap or 0 for m in real_memberships
+        if m.playing_handicap is not None
+    ]
+    low_phcp = min(real_phcps) if real_phcps else 0
+    npct = game.net_percent or 100
+    for m in real_memberships:
+        phcp = m.playing_handicap or 0
+        if effective_hcp_mode == 'gross':
+            in_play = 0
+        elif effective_hcp_mode == 'strokes_off':
+            in_play = round(max(0, phcp - low_phcp) * npct / 100)
+        else:   # net
+            in_play = round(phcp * npct / 100)
+        phcp_by_pid[m.player_id] = in_play
+
+    def _team_players(team_num):
+        if team_num not in teams:
+            return []
+        return [
+            {
+                'player_id'    : p.id,
+                'name'         : p.name,
+                'short_name'   : p.short_name,
+                'phcp_in_play' : phcp_by_pid.get(p.id),
+            }
+            for p in teams[team_num].players.all()
+        ]
 
     return {
         'status'        : game.status,
