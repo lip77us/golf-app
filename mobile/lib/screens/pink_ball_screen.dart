@@ -651,6 +651,20 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                       onScoreSelected: (score) {
                         setState(
                             () => _pendingScores[m.player.id] = score);
+                        // Auto-save + advance the moment the last player on
+                        // the hole gets a score — mirrors the universal
+                        // score-entry screen so the pink-ball flow doesn't
+                        // lag behind.  The picker is only rendered for the
+                        // hot (unscored) player so we don't need to guard
+                        // against "edit-existing-score" reentry.
+                        if (score > 0 &&
+                            hole != null &&
+                            _holeIsComplete(hole, realMembers)) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted || _saving) return;
+                            _save(advance: true);
+                          });
+                        }
                       },
                     ),
                 ];
