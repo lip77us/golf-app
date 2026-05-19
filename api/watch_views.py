@@ -387,6 +387,27 @@ def _has_cup_four_ball(round_obj) -> bool:
     from core.models import GameType
     return rc.foursome_configs.filter(game_type=GameType.NASSAU).exists()
 
+
+def _cup_has_non_four_ball_matches(round_obj) -> bool:
+    """True when the cup has match types beyond Nassau Four Ball —
+    Singles, Quota Nassau, Irish Rumble pairings, etc.  Used to
+    decide whether the generic Matches tab is worth showing; when
+    every cup match is Four Ball the dedicated Four Ball tab is a
+    strict superset and Matches becomes redundant."""
+    try:
+        rc = round_obj.ryder_cup_config
+    except Exception:
+        return False
+    from core.models import GameType
+    if rc.foursome_configs.exclude(game_type=GameType.NASSAU).exists():
+        return True
+    try:
+        if rc.irish_rumble_pairings.exists():
+            return True
+    except Exception:
+        pass
+    return False
+
 def _has_cup_standings(round_obj) -> bool:
     """True when the tournament has a cup (team) competition configured."""
     tourney = round_obj.tournament
@@ -452,9 +473,16 @@ def _has_low_net(round_obj) -> bool:
     return _has_low_net_championship(round_obj) or _has_low_net_round(round_obj)
 
 def _stroke_play_label(round_obj) -> str:
-    """Tab label for the championship Low Net (Stroke Play) tab —
-    the tournament's display name, falling back to "Stroke Play"
-    when the tournament has no name set."""
+    """Tab label for the championship Low Net (Stroke Play) tab.
+
+    * Cup tournaments → "Low Net".  Using tournament.name here would
+      collide with the cup-standings tab (which already uses
+      team_tournament.cup_name) — both would read "ETC Cup".
+    * Non-cup tournaments → tournament.name, so a stroke-play
+      championship reads e.g. "Pacific Grove Open".
+    * Fallback → "Stroke Play"."""
+    if _has_cup_matches(round_obj):
+        return 'Low Net'
     t = round_obj.tournament
     return (t.name if t and t.name else 'Stroke Play')
 
@@ -487,7 +515,11 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
     rounds collapse to a single Low Net tab."""
     base = f'/watch/{token}/'
     tabs = []
-    if _has_cup_matches(round_obj):
+    # Matches tab only when the cup has non-Four-Ball match types
+    # (Singles, Quota Nassau, IR pairings).  An all-Four-Ball cup
+    # round has its content fully rendered by the Four Ball tab, so
+    # Matches would just duplicate the chip rows.
+    if _has_cup_matches(round_obj) and _cup_has_non_four_ball_matches(round_obj):
         tabs.append({
             'key': 'matches', 'label': 'Matches',
             'url': base, 'active': current == 'matches',
