@@ -865,8 +865,8 @@ def nassau_summary(foursome) -> dict | None:
     # ── Per-player gross + par lookups (for the progress grid) ──────────
     # Gross scores come from HoleScore directly so the summary can render
     # the same hole-by-hole grid that the score-entry screen shows.
-    # Strokes = gross - net (whichever handicap mode the game is set to;
-    # `score_index` was just built with the right rules).
+    # Strokes = gross - net (whichever handicap mode the game is set to —
+    # build_score_index handles cup-nassau strokes-off-low automatically).
     real_member_ids = [
         m.player_id for m in foursome.memberships.filter(player__is_phantom=False)
     ]
@@ -878,6 +878,12 @@ def nassau_summary(foursome) -> dict | None:
         .values('player_id', 'hole_number', 'gross_score')
     ):
         gross_index.setdefault(r['player_id'], {})[r['hole_number']] = r['gross_score']
+
+    # Net scores via the same index the calculator uses so dot counts on
+    # the spectator progress grid line up with what the score-entry
+    # screen draws.  _get_score_index honours the game's handicap mode
+    # (and the cup-nassau strokes-off override).
+    score_index = _get_score_index(foursome, game)
 
     sample_tee = next(
         (m.tee for m in foursome.memberships.select_related('tee').all()
