@@ -310,7 +310,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       'multi_skins':       'Multi-Group Skins',
       'stableford':        'Stableford',
       'pink_ball':         'Pink Ball',
-      'nassau':            'Four Ball',
+      'nassau':            'Nassau',
       'quota_nassau':      'Quota Nassau',
       'sixes':             "Six's",
       'singles_nassau':    'Singles Nassau',
@@ -4066,6 +4066,7 @@ class _BandonCupTabViewState extends State<_BandonCupTabView> {
     final totalT1     = (src['team1_points']    as num?)?.toDouble() ?? 0.0;
     final totalT2     = (src['team2_points']    as num?)?.toDouble() ?? 0.0;
     final toWin       = (src['to_win']           as num?)?.toDouble();
+    final cupStatus   = src['cup_status'] as String? ?? 'in_progress';
     final liveMatches = (_live?['matches'] as List? ?? [])
         .cast<Map<String, dynamic>>();
 
@@ -4100,6 +4101,7 @@ class _BandonCupTabViewState extends State<_BandonCupTabView> {
             t1Pts    : totalT1,
             t2Pts    : totalT2,
             toWin    : toWin,
+            cupStatus: cupStatus,
             cupName  : widget.tournamentName,
             fmtPts   : _fmtPts,
           ),
@@ -4152,6 +4154,8 @@ class _BandonCupScoreboard extends StatelessWidget {
   final Color    t1Colour, t2Colour;
   final double   t1Pts, t2Pts;
   final double?  toWin;
+  /// 'in_progress' | 'team1_won' | 'team2_won' | 'tied'
+  final String   cupStatus;
   final String Function(double) fmtPts;
 
   const _BandonCupScoreboard({
@@ -4159,6 +4163,7 @@ class _BandonCupScoreboard extends StatelessWidget {
     required this.t1Colour, required this.t2Colour,
     required this.t1Pts,    required this.t2Pts,
     required this.cupName,  required this.fmtPts,
+    this.cupStatus = 'in_progress',
     this.toWin,
   });
 
@@ -4249,8 +4254,34 @@ class _BandonCupScoreboard extends StatelessWidget {
             );
           }),
 
-          // Status / to-win footer — always show points needed when known
-          if (toWin != null)
+          // Status / to-win footer.
+          // Winner banner takes precedence — once a side clinches (or the
+          // cup is mathematically tied with all points awarded), surface
+          // that outcome instead of the "X pts needed to win" hint.
+          if (cupStatus == 'team1_won' || cupStatus == 'team2_won')
+            _CupWinnerBanner(
+              winnerName: cupStatus == 'team1_won' ? t1Name : t2Name,
+              winnerColour:
+                  cupStatus == 'team1_won' ? t1Colour : t2Colour,
+              cupName: cupName,
+            )
+          else if (cupStatus == 'tied')
+            Container(
+              width: double.infinity,
+              color: Colors.amber.shade700,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: const Text(
+                'CUP TIED',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            )
+          else if (toWin != null)
             Container(
               width: double.infinity,
               color: theme.colorScheme.surfaceContainerLow,
@@ -4264,6 +4295,49 @@ class _BandonCupScoreboard extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Winner banner shown once a team has clinched the cup ──────────────────────
+
+class _CupWinnerBanner extends StatelessWidget {
+  final String winnerName;
+  final Color  winnerColour;
+  final String cupName;
+
+  const _CupWinnerBanner({
+    required this.winnerName,
+    required this.winnerColour,
+    required this.cupName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: winnerColour,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.emoji_events, color: Colors.white, size: 22),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              '${winnerName.toUpperCase()} WINS '
+              '${cupName.toUpperCase()}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -36,6 +36,21 @@ class SettingsScreen extends StatelessWidget {
             value: settings.netStyleEntry,
             onChanged: (v) => settings.setNetStyleEntry(v),
           ),
+          SwitchListTile(
+            title: const Text('Auto-advance to next hole'),
+            subtitle: Text(
+              settings.autoAdvanceHole
+                  ? 'After the last score is tapped, the hole saves and '
+                    'jumps to the next hole automatically.'
+                  : 'Stay on the current hole after the last score so you '
+                    'can verify before pressing the next-hole button.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            value: settings.autoAdvanceHole,
+            onChanged: (v) => settings.setAutoAdvanceHole(v),
+          ),
         ],
       ),
     );

@@ -71,6 +71,35 @@ def _declared_possible(rc, mul: float) -> float:
     return total
 
 
+def _compute_cup_status(team1_pts: float, team2_pts: float,
+                        total_possible: float) -> tuple[str, int | None]:
+    """
+    Determine whether the cup has been decided.
+
+    Returns (status, winner_team) where:
+        status      — 'in_progress' | 'team1_won' | 'team2_won' | 'tied'
+        winner_team — 1 | 2 | None (None when in progress OR tied)
+
+    A team has clinched once their points reach to_win = total/2 + 0.5,
+    i.e. more than half the available points — at that point even if every
+    remaining point goes to the other team, the leader still wins.
+
+    If all points have been awarded (team1 + team2 >= total) and neither
+    side reached to_win, the cup is tied.
+    """
+    if total_possible <= 0:
+        return ('in_progress', None)
+    to_win = total_possible / 2 + 0.5
+    if team1_pts >= to_win:
+        return ('team1_won', 1)
+    if team2_pts >= to_win:
+        return ('team2_won', 2)
+    # All points awarded but no clinch — possible only on an even split.
+    if team1_pts + team2_pts >= total_possible:
+        return ('tied', None)
+    return ('in_progress', None)
+
+
 def _planned_possible(round_obj) -> float:
     """
     Compute total_possible from Round.cup_group_counts + Round.game_point_values.
@@ -115,6 +144,9 @@ def cup_standings_summary(tournament) -> dict:
         'team2_points'  : float,
         'total_possible': float,
         'to_win'        : float,
+        'cup_status'    : str,   # 'in_progress' | 'team1_won' |
+                                 # 'team2_won' | 'tied'
+        'winner_team'   : int | None,   # 1, 2, or None (in-progress / tied)
         'rounds'        : [
             {
                 'round_number'  : int,
@@ -207,6 +239,9 @@ def cup_standings_summary(tournament) -> dict:
 
     total_possible = round(total_possible, 2)
     to_win         = total_possible / 2 + 0.5
+    cup_status, winner_team = _compute_cup_status(
+        team1_total, team2_total, total_possible,
+    )
 
     return {
         'team1_name'    : team1_name    or 'Team 1',
@@ -217,6 +252,8 @@ def cup_standings_summary(tournament) -> dict:
         'team2_points'  : round(team2_total, 2),
         'total_possible': total_possible,
         'to_win'        : round(to_win, 2),
+        'cup_status'    : cup_status,
+        'winner_team'   : winner_team,
         'rounds'        : rounds_out,
     }
 

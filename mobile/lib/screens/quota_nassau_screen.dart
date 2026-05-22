@@ -15,6 +15,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/net_score_button.dart';
 
@@ -508,9 +509,12 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
                   final wasAllScored = _allScored(players, scores);
                   _selectScore(m, score, hole);
                   // Auto-save+advance once the final player on this hole
-                  // gets a positive score.  Skip on clear (-1) and when
-                  // the hole was already complete (user is editing).
-                  if (score > 0 && !wasAllScored) {
+                  // gets a positive score.  Gated by the Auto-advance
+                  // setting; when off, stay on the hole so the scorer can
+                  // verify before pressing next.
+                  final autoAdvance =
+                      context.read<SettingsProvider>().autoAdvanceHole;
+                  if (autoAdvance && score > 0 && !wasAllScored) {
                     final nowAllScored = _allScored(
                         players, _effectiveScores(sc, hole));
                     if (nowAllScored) {

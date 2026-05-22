@@ -50,7 +50,18 @@
         <div class="cup-team-pts">{{ summary.team2_points|floatformat:"-1" }}</div>
       </div>
     </div>
-    {% if summary.to_win %}
+    {# ── Winner banner takes precedence over the "to win" footer ── #}
+    {% if summary.cup_status == 'team1_won' %}
+      <div class="cup-winner" style="background: {{ summary.team1_colour|default:'#888' }};">
+        🏆 {{ summary.team1_name|default:"Team 1"|upper }} WINS {{ cup_name|upper }}
+      </div>
+    {% elif summary.cup_status == 'team2_won' %}
+      <div class="cup-winner" style="background: {{ summary.team2_colour|default:'#888' }};">
+        🏆 {{ summary.team2_name|default:"Team 2"|upper }} WINS {{ cup_name|upper }}
+      </div>
+    {% elif summary.cup_status == 'tied' %}
+      <div class="cup-winner cup-tied">CUP TIED</div>
+    {% elif summary.to_win %}
       <div class="cup-need">{{ summary.to_win|floatformat:"-1" }} pts needed to win</div>
     {% endif %}
 

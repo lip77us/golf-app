@@ -19,6 +19,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/net_score_button.dart';
 
@@ -743,10 +744,12 @@ class _NassauScreenState extends State<NassauScreen> {
                       players, _effectiveScores(sc, hole));
                   _selectScore(m, score, hole);
                   // Auto-save+advance the moment the last player on the
-                  // hole gets a positive score.  Skip when clearing
-                  // (score == -1) and when the hole was already complete
-                  // (user is editing).
-                  if (score > 0 && !wasAllScored) {
+                  // hole gets a positive score.  Gated by the Auto-advance
+                  // setting; when off, stay on the hole so the scorer can
+                  // verify the entries before pressing next.
+                  final autoAdvance =
+                      context.read<SettingsProvider>().autoAdvanceHole;
+                  if (autoAdvance && score > 0 && !wasAllScored) {
                     final nowAllScored = _allScored(
                         players, _effectiveScores(sc, hole));
                     if (nowAllScored) {

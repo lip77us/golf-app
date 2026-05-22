@@ -20,6 +20,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/net_score_button.dart';
 
@@ -656,8 +657,13 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                         // score-entry screen so the pink-ball flow doesn't
                         // lag behind.  The picker is only rendered for the
                         // hot (unscored) player so we don't need to guard
-                        // against "edit-existing-score" reentry.
-                        if (score > 0 &&
+                        // against "edit-existing-score" reentry.  Gated by
+                        // the Auto-advance setting; when off the scorer
+                        // stays on the hole and presses next manually.
+                        final autoAdvance = context
+                            .read<SettingsProvider>().autoAdvanceHole;
+                        if (autoAdvance &&
+                            score > 0 &&
                             hole != null &&
                             _holeIsComplete(hole, realMembers)) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -1805,7 +1805,6 @@ const _kCupColourChoices = <(String, Color)>[
   ('Blue',   Color(0xFF0D47A1)),
   ('Green',  Color(0xFF1B5E20)),
   ('Orange', Color(0xFFE65100)),
-  ('Black',  Colors.black87),
   ('Yellow', Color(0xFFF57F17)),
   ('Purple', Color(0xFF4A148C)),
 ];

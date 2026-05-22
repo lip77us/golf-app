@@ -1076,12 +1076,31 @@ class _JunkDots extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // When count is 0 show only the + button — no dash, no label.
+    // When count is 0 show a labeled "+ junk" affordance so it is
+    // discoverable.  A bare icon at 14px is too subtle and reads as
+    // decoration rather than a control.
     if (count == 0) {
       return GestureDetector(
         onTap: onAdd,
-        child: Icon(Icons.add_circle_outline,
-            size: 14, color: theme.colorScheme.onSurfaceVariant),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add_circle,
+                  size: 18, color: theme.colorScheme.tertiary),
+              const SizedBox(width: 3),
+              Text(
+                'junk',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.tertiary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -1091,10 +1110,14 @@ class _JunkDots extends StatelessWidget {
       children: [
         GestureDetector(
           onTap: onRemove,
-          child: Icon(Icons.remove_circle_outline,
-              size: 14, color: theme.colorScheme.onSurfaceVariant),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: Icon(Icons.remove_circle,
+                size: 18, color: theme.colorScheme.tertiary),
+          ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 2),
         Text(
           '$count junk',
           style: theme.textTheme.labelSmall?.copyWith(
@@ -1102,11 +1125,15 @@ class _JunkDots extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 2),
         GestureDetector(
           onTap: onAdd,
-          child: Icon(Icons.add_circle_outline,
-              size: 14, color: theme.colorScheme.onSurfaceVariant),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: Icon(Icons.add_circle,
+                size: 18, color: theme.colorScheme.tertiary),
+          ),
         ),
       ],
     );

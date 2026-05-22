@@ -24,6 +24,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/team_splitter_4.dart';
@@ -309,16 +310,23 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   void _loadGameSummaries(RoundProvider rp) {
     final games      = _activeGames(rp.round);
     final configured = _configuredGames(rp.round);
-    // Per-foursome summary loads gate on configured_games (a row exists
-    // on the server) OR on a previously-loaded summary — together they
-    // ensure we don't 404-spam foursomes that haven't set up the game
-    // yet, while still refreshing after setup completes.  Each setup
-    // screen pre-loads its own summary before navigating to score-entry
-    // so `summary != null` is reliably true on first paint.
-    if (configured.contains('nassau') || rp.nassauSummary != null) {
+    // Per-foursome summary loads gate on active_games (set at round
+    // creation) OR configured_games (set after the per-game setup row
+    // exists) OR a previously-loaded summary.  The active_games branch
+    // is the key one for first paint after a fresh setup: loadScorecard
+    // clears the summary when the foursome ID changes, and the mobile's
+    // cached round object doesn't pick up configured_games until the
+    // round is re-fetched, so without active_games as a fallback the
+    // handicap chip falls back to round-level 'net' for the rest of the
+    // session.
+    if (games.contains('nassau') ||
+        configured.contains('nassau') ||
+        rp.nassauSummary != null) {
       rp.loadNassau(widget.foursomeId);
     }
-    if (configured.contains('skins') || rp.skinsSummary != null) {
+    if (games.contains('skins') ||
+        configured.contains('skins') ||
+        rp.skinsSummary != null) {
       rp.loadSkins(widget.foursomeId);
     }
     // Multi-Group Skins is round-scoped (no foursome configured_games
@@ -326,10 +334,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (games.contains('multi_skins') && rp.round != null) {
       rp.loadMultiSkins(rp.round!.id);
     }
-    if (configured.contains('sixes') || rp.sixesSummary != null) {
+    if (games.contains('sixes') ||
+        configured.contains('sixes') ||
+        rp.sixesSummary != null) {
       rp.loadSixes(widget.foursomeId);
     }
-    if (configured.contains('points_531') || rp.points531Summary != null) {
+    if (games.contains('points_531') ||
+        configured.contains('points_531') ||
+        rp.points531Summary != null) {
       rp.loadPoints531(widget.foursomeId);
     }
     // Stroke Play stores handicap mode in its own config (not the round object).
@@ -825,7 +837,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   String _appBarTitle(List<String> games, NassauSummary? nas, SkinsSummary? sk) {
     final parts = <String>[];
     const labels = {
-      'nassau'       : 'Four Ball',
+      'nassau'       : 'Nassau',
       'skins'        : 'Skins',
       'sixes'        : "Six's",
       'points_531'   : 'Points 5-3-1',
@@ -838,7 +850,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       String label = labels[g] ?? g;
       if (g == 'nassau' && nas != null) {
         final modeStr = _modeLabel(nas.handicapMode, nas.netPercent);
-        label = 'Four Ball ($modeStr)';
+        label = 'Nassau ($modeStr)';
       } else if (g == 'skins' && sk != null) {
         final modeStr = _modeLabel(sk.handicapMode, sk.netPercent);
         label = 'Skins ($modeStr)';
@@ -1230,7 +1242,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                   // Auto-save+advance the moment the last player on the hole
                   // gets a positive score.  Skip when clearing (score == -1)
                   // and when the hole was already complete (user is editing).
-                  if (score > 0 && !wasAllScored) {
+                  // Gated by the Auto-advance setting — when off, the user
+                  // stays on the hole to verify and presses next manually.
+                  final autoAdvance =
+                      context.read<SettingsProvider>().autoAdvanceHole;
+                  if (autoAdvance && score > 0 && !wasAllScored) {
                     final nowAllScored = _allScored(
                       players, _effectiveScores(sc, hole));
                     if (nowAllScored) {
