@@ -39,12 +39,46 @@ class AppDrawer extends StatelessWidget {
                 DrawerHeader(
                   decoration: const BoxDecoration(),
                   margin: EdgeInsets.zero,
-                  padding: EdgeInsets.zero,
-                  child: Center(
-                    child: Image.asset(
-                      'assets/images/bandon_cup_logo.png',
-                      height: 148,
-                    ),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/images/bandon_cup_logo.png',
+                        height: 112,
+                      ),
+                      const SizedBox(height: 6),
+                      // Who's logged in — username @ account.  Reads
+                      // AuthProvider directly so the host screens
+                      // don't have to thread the data through.
+                      Builder(builder: (ctx) {
+                        final auth = ctx.watch<AuthProvider>();
+                        final player  = auth.player?.name;
+                        final account = auth.account?.name;
+                        if (account == null) {
+                          return const SizedBox.shrink();
+                        }
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (player != null && player.isNotEmpty)
+                              Text(
+                                player,
+                                style: Theme.of(ctx).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            Text(
+                              account,
+                              style: Theme.of(ctx).textTheme.bodySmall
+                                  ?.copyWith(color: Theme.of(ctx)
+                                      .colorScheme.onSurfaceVariant),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        );
+                      }),
+                    ],
                   ),
                 ),
                 ListTile(
@@ -144,6 +178,7 @@ class _AboutDialogState extends State<_AboutDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
     return AlertDialog(
       title: const Text('The Bandon Cup'),
       content: Column(
@@ -167,6 +202,24 @@ class _AboutDialogState extends State<_AboutDialog> {
             else
               Text(_serverVersion ?? '—'),
           ]),
+          if (auth.account != null) ...[
+            const SizedBox(height: 6),
+            Row(children: [
+              const Text('Account: ',
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              Flexible(child: Text(auth.account!.name,
+                  overflow: TextOverflow.ellipsis)),
+            ]),
+          ],
+          if (auth.player != null) ...[
+            const SizedBox(height: 6),
+            Row(children: [
+              const Text('Signed in as: ',
+                  style: TextStyle(fontWeight: FontWeight.w500)),
+              Flexible(child: Text(auth.player!.name,
+                  overflow: TextOverflow.ellipsis)),
+            ]),
+          ],
         ],
       ),
       actions: [

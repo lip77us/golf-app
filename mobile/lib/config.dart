@@ -20,8 +20,12 @@ class Config {
 
   static const String baseUrl = _useLocal ? _local : _railway;
 
-  /// The version string of this build.  Must be kept in sync with pubspec.yaml.
-  /// The server's GET /api/version/ endpoint returns a min_client_version;
+  /// The version string of this build.  Must be kept in sync with
+  /// pubspec.yaml's `version:` field (the part before the `+`).  The
+  /// server's GET /api/version/ endpoint returns a min_client_version;
   /// if this value is older the app will show a blocking update dialog.
-  static const String appVersion = '1.3.1';
+  ///
+  /// TODO: read this from pubspec at build time via package_info_plus
+  /// so we stop having two sources of truth.
+  static const String appVersion = '1.5.0';
 }
