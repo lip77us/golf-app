@@ -64,9 +64,18 @@ class UserAdmin(BaseUserAdmin):
         )}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
+    # The add form needs every field required to make a usable user
+    # in one round-trip: account assignment, is_account_admin (so the
+    # bootstrap admin for a fresh Account is admin from minute one),
+    # and the standard password-confirmation pair.  Email is included
+    # because the bootstrap of a new tenant usually wants it on file.
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'account', 'password1', 'password2'),
+            'fields': (
+                'username', 'account', 'email',
+                'is_account_admin',
+                'password1', 'password2',
+            ),
         }),
     )
