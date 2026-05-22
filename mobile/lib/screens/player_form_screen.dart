@@ -384,12 +384,28 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
                         setState(() => _linkedUserId = id),
                   )
                 else ...[
-                  // Add mode: pick one of three branches.
+                  // Add mode: pick one of three branches.  Labels are
+                  // one short word each because the three-segment row
+                  // is tight on narrow phones — the helper text above
+                  // ("Either link an existing member or create a
+                  // brand-new login") carries the longer description.
                   SegmentedButton<String>(
                     segments: const [
-                      ButtonSegment(value: 'none',     label: Text('No login')),
-                      ButtonSegment(value: 'existing', label: Text('Link existing')),
-                      ButtonSegment(value: 'new',      label: Text('Create new')),
+                      ButtonSegment(
+                        value: 'none',
+                        label: Text('None'),
+                        icon: Icon(Icons.person_off_outlined),
+                      ),
+                      ButtonSegment(
+                        value: 'existing',
+                        label: Text('Existing'),
+                        icon: Icon(Icons.link),
+                      ),
+                      ButtonSegment(
+                        value: 'new',
+                        label: Text('New'),
+                        icon: Icon(Icons.person_add_alt_1),
+                      ),
                     ],
                     selected: {_newLoginMode},
                     onSelectionChanged: (s) => setState(() {
