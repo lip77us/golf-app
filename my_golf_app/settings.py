@@ -69,12 +69,21 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     # Local
+    # 'accounts' must come BEFORE every app that references
+    # settings.AUTH_USER_MODEL, otherwise the swappable-dependency
+    # resolution at migrate-time can't find the User table.
+    'accounts',
     'core',
     'scoring',
     'games',
     'tournament',
     'api',
 ]
+
+# Custom user model lives in the `accounts` app.  Every Player /
+# Course / Tournament / Round / etc. is scoped to user.account so two
+# users in different accounts see entirely separate data sets.
+AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
