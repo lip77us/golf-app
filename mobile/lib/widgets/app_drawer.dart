@@ -36,16 +36,26 @@ class AppDrawer extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                DrawerHeader(
-                  decoration: const BoxDecoration(),
-                  margin: EdgeInsets.zero,
+                // Plain Container instead of DrawerHeader — DrawerHeader
+                // imposes a fixed height that's just short of the room
+                // we need for the logo + signed-in-as block, which
+                // produced an 18px overflow.  We pick our own padding
+                // and draw the divider ourselves so the height grows
+                // with the content.
+                Container(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(
+                      color: Color(0x1F000000),
+                      width: 1,
+                    )),
+                  ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Image.asset(
                         'assets/images/bandon_cup_logo.png',
-                        height: 112,
+                        height: 96,
                       ),
                       const SizedBox(height: 6),
                       // Who's logged in — username @ account.  Reads
