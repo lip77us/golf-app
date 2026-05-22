@@ -89,7 +89,14 @@ AUTH_USER_MODEL = 'accounts.User'
 # uniqueness boundary is (account, username), not just username.  The
 # matching authenticate() path goes through accounts.backends.AccountBackend
 # which takes account_name as an extra credential.
-SILENCED_SYSTEM_CHECKS = ['auth.E003']
+SILENCED_SYSTEM_CHECKS = [
+    # USERNAME_FIELD doesn't need global uniqueness; see comment above
+    # AUTH_USER_MODEL.
+    'auth.E003',
+    # Same reasoning: the auth.W004 warning is the soft variant of E003
+    # and our AccountBackend explicitly handles non-unique usernames.
+    'auth.W004',
+]
 
 # Authentication backends.  AccountBackend reads `account_name` from
 # the login payload and looks the user up by (Account.name CI-match,
@@ -125,7 +132,10 @@ ROOT_URLCONF = 'my_golf_app.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        # Project-level templates win over Django's built-in templates;
+        # currently used to override admin/login.html so the
+        # account_name field renders alongside username/password.
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

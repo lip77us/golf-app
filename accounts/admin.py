@@ -10,7 +10,17 @@ fields and extend the columns / filters / fieldsets.
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
+from .admin_forms import AccountAdminAuthenticationForm
 from .models import Account, User
+
+
+# Replace the stock admin login form with the account-aware one so
+# /admin/login/ can authenticate users now that usernames are non-unique
+# globally (AccountBackend is the only backend, and it needs
+# account_name to disambiguate).  The matching template lives at
+# templates/admin/login.html — it inserts the account_name row above
+# the existing username row.
+admin.site.login_form = AccountAdminAuthenticationForm
 
 
 @admin.register(Account)
