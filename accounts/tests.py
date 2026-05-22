@@ -669,3 +669,87 @@ class PlayerLinkingTests(TestCase):
             'password':       'freshpass1',
         }, format='json')
         self.assertEqual(r.status_code, 400)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DELETE /api/players/{id}/
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PlayerDeleteTests(TestCase):
+    """
+    Admins can delete a Player row from their own account.  Players
+    who have played in any rounds are PROTECT-blocked and return a
+    400.  Non-admins can't delete.  Cross-account 404s.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.acct_a, cls.admin_a = _make_account('Acct A',
+                                                admin_username='alice')
+        cls.acct_b, cls.admin_b = _make_account('Acct B',
+                                                admin_username='bob')
+
+        # Plain member in Acct A (non-admin).
+        cls.member_a = User.objects.create_user(
+            username='m_a', password='memberapw', account=cls.acct_a,
+        )
+
+        cls.player_a = Player.objects.create(
+            account=cls.acct_a, name='Spare Player A',
+            handicap_index=Decimal('10.0'),
+        )
+        cls.player_b = Player.objects.create(
+            account=cls.acct_b, name='Spare Player B',
+            handicap_index=Decimal('11.0'),
+        )
+
+        cls.tok_admin_a  = Token.objects.create(user=cls.admin_a).key
+        cls.tok_member_a = Token.objects.create(user=cls.member_a).key
+
+    def _client(self, token):
+        c = APIClient()
+        c.credentials(HTTP_AUTHORIZATION=f'Token {token}')
+        return c
+
+    def test_admin_can_delete_unused_player(self):
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/players/{self.player_a.id}/')
+        self.assertEqual(r.status_code, 204, r.content)
+        self.assertFalse(
+            Player.objects.filter(pk=self.player_a.pk).exists(),
+        )
+
+    def test_non_admin_cannot_delete(self):
+        c = self._client(self.tok_member_a)
+        r = c.delete(f'/api/players/{self.player_a.id}/')
+        self.assertEqual(r.status_code, 403)
+
+    def test_cross_account_delete_returns_404(self):
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/players/{self.player_b.id}/')
+        self.assertEqual(r.status_code, 404)
+
+    def test_protected_player_returns_400(self):
+        # Wire the player up to a foursome so the FK PROTECT fires.
+        from core.models import Course
+        course = Course.objects.create(account=self.acct_a,
+                                       name='Test Course')
+        round_obj = Round.objects.create(
+            account=self.acct_a, course=course, round_number=1,
+        )
+        from tournament.models import Foursome, FoursomeMembership
+        fs = Foursome.objects.create(round=round_obj, group_number=1)
+        FoursomeMembership.objects.create(
+            foursome=fs, player=self.player_a,
+            course_handicap=10, playing_handicap=10,
+        )
+
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/players/{self.player_a.id}/')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('rounds', r.json().get('detail', '').lower())
+        # Player still exists.
+        self.assertTrue(
+            Player.objects.filter(pk=self.player_a.pk).exists(),
+        )

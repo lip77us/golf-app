@@ -279,6 +279,14 @@ class ApiClient {
     return PlayerProfile.fromJson(data as Map<String, dynamic>);
   }
 
+  /// DELETE /api/players/{id}/.  Admin-only.  Returns 400 if the
+  /// player has played in any rounds (FoursomeMembership / HoleScore
+  /// FKs are PROTECT) — surface the API's `detail` message to the
+  /// user in that case.
+  Future<void> deletePlayer(int id) async {
+    await _delete('/players/$id/');
+  }
+
   Future<PlayerProfile> updatePlayer(
     int id, {
     String? name,

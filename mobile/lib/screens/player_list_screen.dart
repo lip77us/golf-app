@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
@@ -63,6 +64,64 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
     if (saved == true) _load();
   }
 
+  Future<bool> _confirmDelete(PlayerProfile p) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove player?'),
+        content: Text(
+          'Remove ${p.name} from the player list?  Any rounds they\'ve '
+          'already played stay intact, but new rounds won\'t include '
+          'them.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _delete(PlayerProfile p) async {
+    if (!await _confirmDelete(p)) return;
+    try {
+      await context.read<AuthProvider>().client.deletePlayer(p.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Removed ${p.name}.')),
+      );
+      _load();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      // The API returns a friendly `detail` for the PROTECT case
+      // ("X has played in rounds and can't be removed…") — show it.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(friendlyError(e)),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -114,13 +173,15 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
       );
     }
 
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
+
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 100),
       itemCount: players.length,
       separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
       itemBuilder: (_, i) {
         final p = players[i];
-        return ListTile(
+        final tile = ListTile(
           leading: CircleAvatar(
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             child: Text(
@@ -139,8 +200,67 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
             ].join('  ·  '),
             style: const TextStyle(fontSize: 13),
           ),
-          trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+          // Admins get an explicit delete icon as well as swipe-to-
+          // dismiss — discoverability beats hiding deletion behind
+          // a swipe gesture.
+          trailing: isAdmin
+              ? IconButton(
+                  icon: Icon(Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.error),
+                  tooltip: 'Remove player',
+                  onPressed: () => _delete(p),
+                )
+              : const Icon(Icons.chevron_right, color: Colors.grey),
           onTap: () => _openForm(player: p),
+        );
+
+        if (!isAdmin) return tile;
+        // Swipe-to-delete for admins.  The confirmDismiss callback
+        // wraps the existing confirm + API call so a successful
+        // dismiss reuses the same code path as the trash button.
+        return Dismissible(
+          key: ValueKey('player-${p.id}'),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            color: Theme.of(context).colorScheme.error,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: const Icon(Icons.delete, color: Colors.white),
+          ),
+          confirmDismiss: (_) async {
+            if (!await _confirmDelete(p)) return false;
+            try {
+              await context.read<AuthProvider>().client.deletePlayer(p.id);
+              if (!mounted) return false;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Removed ${p.name}.')),
+              );
+              return true;
+            } on ApiException catch (e) {
+              if (!mounted) return false;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(e.message),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                duration: const Duration(seconds: 5),
+              ));
+              return false;
+            } catch (e) {
+              if (!mounted) return false;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(friendlyError(e)),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ));
+              return false;
+            }
+          },
+          onDismissed: (_) {
+            // Local list update so the row animates out smoothly;
+            // the next _load() (already triggered nowhere here, but
+            // future actions will refresh) catches up the canonical
+            // state from the server.
+            setState(() => _all.removeWhere((x) => x.id == p.id));
+          },
+          child: tile,
         );
       },
     );

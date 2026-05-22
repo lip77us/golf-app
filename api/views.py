@@ -927,6 +927,39 @@ class PlayerDetailView(APIView):
         player = ser.save()
         return Response(PlayerSerializer(player).data)
 
+    def delete(self, request, pk):
+        """
+        DELETE /api/players/{id}/ — remove a player from the roster.
+
+        Admin-only (is_staff OR is_account_admin).  Players who have
+        played any rounds are protected by FoursomeMembership /
+        HoleScore FKs and can't be hard-deleted; we surface that as a
+        clear 400 so the client can show a helpful message rather
+        than a raw 500.
+
+        Phantom rows are managed by round setup and never deletable
+        from this endpoint.
+        """
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response(
+                {'detail': 'Only admins can delete players.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        player = account_get_or_404(
+            Player, request.user.account, pk=pk, is_phantom=False,
+        )
+        from django.db.models import ProtectedError
+        try:
+            player.delete()
+        except ProtectedError:
+            return Response(
+                {'detail': f'{player.name} has played in rounds and '
+                           'can\'t be removed.  Remove or archive '
+                           'their rounds first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class CourseListView(APIView):
     def get(self, request):
