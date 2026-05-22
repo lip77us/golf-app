@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator
 
+from accounts.scoping import AccountScopedManager
 from core.models import GameType, RoundStatus, MatchStatus, Player, Tee, Course
 
 
@@ -17,7 +18,15 @@ class Tournament(models.Model):
         - rounds_to_count=3 with total_rounds=5 means best 3 of 5
     For Match Play Championship the foursome winners from match_play rounds
     are collected and seeded into a separate bracket (see MatchPlayChampionship).
+
+    `account` is the tenant boundary — tournaments belong to one Account.
     """
+    account             = models.ForeignKey(
+                            'accounts.Account',
+                            on_delete=models.CASCADE,
+                            related_name='tournaments',
+                            help_text="Tenant this tournament belongs to.",
+                        )
     name                = models.CharField(max_length=150)
     start_date          = models.DateField()
     end_date            = models.DateField(null=True, blank=True)
@@ -32,6 +41,8 @@ class Tournament(models.Model):
                         )
     created_at          = models.DateTimeField(auto_now_add=True)
 
+    objects             = AccountScopedManager()
+
     def __str__(self):
         return self.name
 
@@ -40,7 +51,19 @@ class Round(models.Model):
     """
     A single day of golf. Can belong to a Tournament or stand alone.
     bet_unit is the dollar value of one unit for all games in this round.
+
+    `account` is the tenant boundary — a Round always lives inside one
+    Account.  For tournament rounds the account matches the parent
+    Tournament's account; for casual rounds it's just the account that
+    owns the data.  Stored directly on the Round (not just inherited
+    via Tournament) because casual rounds have no tournament parent.
     """
+    account             = models.ForeignKey(
+                            'accounts.Account',
+                            on_delete=models.CASCADE,
+                            related_name='rounds',
+                            help_text="Tenant this round belongs to.",
+                        )
     tournament          = models.ForeignKey(
                             Tournament, on_delete=models.SET_NULL,
                             null=True, blank=True, related_name='rounds'
@@ -138,6 +161,8 @@ class Round(models.Model):
                     self.watch_token = candidate
                     break
         super().save(*args, **kwargs)
+
+    objects = AccountScopedManager()
 
     def __str__(self):
         return f"Round {self.round_number} — {self.date} @ {self.course.name}"

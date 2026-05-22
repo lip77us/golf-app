@@ -2,6 +2,8 @@ from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
+from accounts.scoping import AccountScopedManager
+
 
 # ---------------------------------------------------------------------------
 # ENUMS / CHOICES
@@ -111,7 +113,19 @@ class Player(models.Model):
     Course handicap is calculated per-round per-tee using:
         CH = round( handicap_index × (slope / 113) + (course_rating - par) )
     is_phantom flags ghost players created to pad 3-somes to 4.
+
+    `account` is the tenant boundary — every Player lives inside exactly
+    one Account.  The phantom (is_phantom=True) singleton is shared
+    across accounts via a per-account row; we keep one phantom per
+    account so scoring code that filters by `account` continues to
+    find a phantom player without leaking across tenants.
     """
+    account         = models.ForeignKey(
+                        'accounts.Account',
+                        on_delete=models.CASCADE,
+                        related_name='players',
+                        help_text="Tenant this player belongs to.",
+                    )
     user            = models.OneToOneField(
                         settings.AUTH_USER_MODEL,
                         on_delete=models.SET_NULL,
@@ -153,6 +167,8 @@ class Player(models.Model):
     is_phantom      = models.BooleanField(default=False)
     created_at      = models.DateTimeField(auto_now_add=True)
 
+    objects         = AccountScopedManager()
+
     def course_handicap(self, tee):
         """
         Calculate course handicap for a given Tee.
@@ -190,9 +206,22 @@ class Player(models.Model):
 class Course(models.Model):
     """
     A golf course that has multiple tees.
+
+    `account` is the tenant boundary — courses are per-account so each
+    group maintains its own catalog (their actual home courses, plus
+    any custom layouts).  Two accounts may both have a "Pebble Beach"
+    row with independent edits and tee configurations.
     """
+    account         = models.ForeignKey(
+                        'accounts.Account',
+                        on_delete=models.CASCADE,
+                        related_name='courses',
+                        help_text="Tenant this course belongs to.",
+                    )
     name            = models.CharField(max_length=150)
     created_at      = models.DateTimeField(auto_now_add=True)
+
+    objects         = AccountScopedManager()
 
     def __str__(self):
         return self.name
