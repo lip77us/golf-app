@@ -27,10 +27,29 @@ User = get_user_model()
 # ===========================================================================
 
 class PlayerSerializer(serializers.ModelSerializer):
+    """
+    Read + update view for a Player row.
+
+    `user_id` is the FK to the linked Account member (or null when the
+    Player has no app login).  PATCH accepts:
+      * an int  → link this Player to that user (replacing any previous
+        link the user had; the previous Player's `user` is cleared).
+      * 0       → explicit unlink.  Plain `null` is also accepted.
+      * omitted → no change.
+
+    The picker on the mobile player form drives this — see
+    PlayerFormScreen's "Linked App User" section.
+    """
+    user_id = serializers.IntegerField(
+        required=False, allow_null=True,
+        help_text='ID of the Account member to link to this Player. '
+                  'Pass null or 0 to unlink.',
+    )
+
     class Meta:
         model  = Player
         fields = ['id', 'name', 'short_name', 'handicap_index', 'is_phantom',
-                  'email', 'phone', 'sex']
+                  'email', 'phone', 'sex', 'user_id']
         read_only_fields = ['id']
         # short_name is writeable but optional — the Player.save() override
         # auto-fills it from initials when blank, so the mobile form can
@@ -39,40 +58,104 @@ class PlayerSerializer(serializers.ModelSerializer):
             'short_name': {'required': False, 'allow_blank': True},
         }
 
+    def validate_user_id(self, value):
+        """
+        Treat 0 as null (mobile dropdowns often surface 0 as "none") and
+        verify that the target user exists in the same account as the
+        Player being edited.  Cross-account links would defeat the
+        whole multi-tenant model.
+        """
+        if value in (None, 0):
+            return None
+        try:
+            user = User.objects.select_related('account').get(pk=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError('No such account member.')
+        # The instance is set on the serializer for partial updates.
+        # When creating a new player via this serializer (which we
+        # don't do today), instance is None — fall through to the
+        # request context.
+        target_account_id = (
+            self.instance.account_id if self.instance is not None
+            else self.context.get('account_id')
+        )
+        if target_account_id and user.account_id != target_account_id:
+            raise serializers.ValidationError(
+                'Member is not in this account.'
+            )
+        return value
+
+    def update(self, instance, validated_data):
+        # Handle the user_id rebind separately so we can clear any
+        # other Player that was previously linked to the same user
+        # (User.player is OneToOne, so the constraint would otherwise
+        # raise IntegrityError on save).
+        if 'user_id' in validated_data:
+            new_user_id = validated_data.pop('user_id')
+            if new_user_id is None:
+                instance.user = None
+            else:
+                # Detach the user from whichever Player held it before
+                # (if any) so the OneToOne move is atomic.
+                Player.objects.filter(
+                    account_id=instance.account_id,
+                    user_id=new_user_id,
+                ).exclude(pk=instance.pk).update(user=None)
+                instance.user_id = new_user_id
+        return super().update(instance, validated_data)
+
 
 class PlayerCreateSerializer(serializers.ModelSerializer):
     """
     Used only when creating a new player via POST /api/players/.
-    Accepts optional username + password to create a linked Django User
-    account so the player can log in to the mobile app.
-    If username/password are omitted the Player is created without a
-    linked User (admin-only account, usable only via the admin panel).
+
+    Three ways to associate a login with the new Player:
+      * `user_id`            — link to an existing account member.
+                               Useful after Manage Members created the
+                               member but no Player row exists yet.
+      * `username`+`password` — create a brand-new account member +
+                               link them in one step.
+      * none of the above    — Player has no login (admin-only / not
+                               yet onboarded).
+
+    user_id and (username, password) are mutually exclusive — the
+    form picks one path.
     """
     username = serializers.CharField(required=False, allow_blank=True, write_only=True)
     password = serializers.CharField(required=False, allow_blank=True, write_only=True,
                                      style={'input_type': 'password'})
+    user_id  = serializers.IntegerField(required=False, allow_null=True,
+                                        write_only=True)
 
     class Meta:
         model  = Player
         fields = ['id', 'name', 'short_name', 'handicap_index',
-                  'email', 'phone', 'sex', 'username', 'password']
+                  'email', 'phone', 'sex', 'username', 'password', 'user_id']
         read_only_fields = ['id']
         extra_kwargs = {
             'short_name': {'required': False, 'allow_blank': True},
         }
 
     def validate(self, attrs):
-        username = attrs.get('username', '').strip()
-        password = attrs.get('password', '').strip()
-        # Both or neither — don't allow partial credentials
+        username = (attrs.get('username') or '').strip()
+        password = (attrs.get('password') or '').strip()
+        user_id  = attrs.get('user_id') or 0
+
+        # Either link OR create — never both.
+        if user_id and (username or password):
+            raise serializers.ValidationError(
+                'Provide either an existing user_id OR username+password '
+                'to create a new login, not both.'
+            )
         if bool(username) != bool(password):
             raise serializers.ValidationError(
                 'Provide both username and password, or leave both blank.'
             )
-        if username and User.objects.filter(username=username).exists():
-            raise serializers.ValidationError(
-                {'username': 'A user with that username already exists.'}
-            )
+
+        # Normalise into validated_data
+        attrs['user_id']  = user_id or None
+        attrs['username'] = username
+        attrs['password'] = password
         return attrs
 
     def create(self, validated_data):
@@ -88,11 +171,40 @@ class PlayerCreateSerializer(serializers.ModelSerializer):
             )
         username = validated_data.pop('username', '').strip()
         password = validated_data.pop('password', '').strip()
+        user_id  = validated_data.pop('user_id', None)
+
+        # Resolve / validate the existing-user link before we create
+        # anything so we can fail cleanly without an orphan Player.
+        existing_user = None
+        if user_id is not None:
+            try:
+                existing_user = User.objects.get(pk=user_id, account=account)
+            except User.DoesNotExist:
+                raise serializers.ValidationError(
+                    {'user_id': 'No such member in this account.'}
+                )
+
+        # New-login path: ensure the username is unique within this account.
+        if username:
+            if User.objects.filter(
+                account=account, username__iexact=username,
+            ).exists():
+                raise serializers.ValidationError({
+                    'username': 'A user with that username already '
+                                'exists in this account.',
+                })
 
         player = Player(account=account, **validated_data)
         player.save()
 
-        if username and password:
+        if existing_user is not None:
+            # Re-target whichever Player previously held this user.
+            Player.objects.filter(
+                account=account, user=existing_user,
+            ).exclude(pk=player.pk).update(user=None)
+            player.user = existing_user
+            player.save(update_fields=['user'])
+        elif username and password:
             name_parts = (validated_data.get('name') or '').split()
             user = User.objects.create_user(
                 username=username,

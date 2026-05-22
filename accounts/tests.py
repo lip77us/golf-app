@@ -536,3 +536,136 @@ class MemberManagementTests(TestCase):
         c = self._client(self.tok_member_a)
         r = c.get(f'/api/account/members/{self.admin_a.id}/')
         self.assertEqual(r.status_code, 403)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Player ↔ Member linking via PATCH /api/players/{id}/
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PlayerLinkingTests(TestCase):
+    """
+    Admins can link a Player row to one of their account's members via
+    PATCH user_id, and unlink with user_id: null.  Cross-account user
+    ids are rejected.  Re-linking moves the user atomically — the old
+    Player gets its `user` cleared without raising an IntegrityError.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.acct_a, cls.admin_a = _make_account('Acct A',
+                                                admin_username='alice')
+        cls.acct_b, cls.admin_b = _make_account('Acct B',
+                                                admin_username='bob')
+
+        # Two members + two empty Player rows in Acct A.
+        cls.member_x = User.objects.create_user(
+            username='xavier', password='xavierpw', account=cls.acct_a,
+        )
+        cls.member_y = User.objects.create_user(
+            username='yannick', password='yannickpw', account=cls.acct_a,
+        )
+        cls.player_p = Player.objects.create(
+            account=cls.acct_a, name='Player P',
+            handicap_index=Decimal('10.0'),
+        )
+        cls.player_q = Player.objects.create(
+            account=cls.acct_a, name='Player Q',
+            handicap_index=Decimal('15.0'),
+        )
+
+        cls.tok_admin_a = Token.objects.create(user=cls.admin_a).key
+
+    def _client(self):
+        c = APIClient()
+        c.credentials(HTTP_AUTHORIZATION=f'Token {self.tok_admin_a}')
+        return c
+
+    def test_link_user_to_player(self):
+        c = self._client()
+        r = c.patch(
+            f'/api/players/{self.player_p.id}/',
+            {'user_id': self.member_x.id},
+            format='json',
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.player_p.refresh_from_db()
+        self.assertEqual(self.player_p.user_id, self.member_x.id)
+
+    def test_unlink_user_from_player(self):
+        self.player_p.user = self.member_x
+        self.player_p.save(update_fields=['user'])
+        c = self._client()
+        r = c.patch(
+            f'/api/players/{self.player_p.id}/',
+            {'user_id': None},
+            format='json',
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.player_p.refresh_from_db()
+        self.assertIsNone(self.player_p.user_id)
+
+    def test_zero_user_id_unlinks(self):
+        # Mobile dropdowns sometimes coerce "no selection" to 0;
+        # serializer treats it as unlink.
+        self.player_p.user = self.member_x
+        self.player_p.save(update_fields=['user'])
+        c = self._client()
+        r = c.patch(
+            f'/api/players/{self.player_p.id}/',
+            {'user_id': 0},
+            format='json',
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.player_p.refresh_from_db()
+        self.assertIsNone(self.player_p.user_id)
+
+    def test_relinking_moves_member_off_previous_player(self):
+        # member_x starts linked to player_p; link them to player_q
+        # in one PATCH and confirm player_p drops the link cleanly.
+        self.player_p.user = self.member_x
+        self.player_p.save(update_fields=['user'])
+        c = self._client()
+        r = c.patch(
+            f'/api/players/{self.player_q.id}/',
+            {'user_id': self.member_x.id},
+            format='json',
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.player_p.refresh_from_db()
+        self.player_q.refresh_from_db()
+        self.assertIsNone(self.player_p.user_id)
+        self.assertEqual(self.player_q.user_id, self.member_x.id)
+
+    def test_cross_account_user_id_rejected(self):
+        c = self._client()
+        r = c.patch(
+            f'/api/players/{self.player_p.id}/',
+            {'user_id': self.admin_b.id},   # Acct B
+            format='json',
+        )
+        self.assertEqual(r.status_code, 400)
+        self.player_p.refresh_from_db()
+        self.assertIsNone(self.player_p.user_id)
+
+    def test_create_player_with_existing_user_id(self):
+        c = self._client()
+        r = c.post('/api/players/', {
+            'name':           'New Player',
+            'handicap_index': '12.3',
+            'user_id':        self.member_y.id,
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        created = Player.objects.get(name='New Player')
+        self.assertEqual(created.user_id, self.member_y.id)
+
+    def test_create_player_rejects_both_user_id_and_credentials(self):
+        c = self._client()
+        r = c.post('/api/players/', {
+            'name':           'Conflict',
+            'handicap_index': '5.0',
+            'user_id':        self.member_y.id,
+            'username':       'fresh',
+            'password':       'freshpass1',
+        }, format='json')
+        self.assertEqual(r.status_code, 400)

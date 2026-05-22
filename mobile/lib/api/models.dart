@@ -166,6 +166,11 @@ class PlayerProfile {
   /// 'M' or 'W' — picks the default tee during round setup. Older
   /// server responses without the field fall back to 'M'.
   final String sex;
+  /// ID of the Account member linked to this Player (so they can log
+  /// in and record their own scores), or null when the Player has no
+  /// linked login.  Editing this via PATCH /api/players/{id}/ is how
+  /// the player form's "Linked App User" picker rebinds.
+  final int? userId;
 
   const PlayerProfile({
     required this.id,
@@ -176,6 +181,7 @@ class PlayerProfile {
     required this.email,
     this.phone = '',
     this.sex = 'M',
+    this.userId,
   });
 
   factory PlayerProfile.fromJson(Map<String, dynamic> j) => PlayerProfile(
@@ -187,6 +193,7 @@ class PlayerProfile {
         email: j['email'] as String? ?? '',
         phone: j['phone'] as String? ?? '',
         sex: j['sex'] as String? ?? 'M',
+        userId: j['user_id'] as int?,
       );
 
   /// Compute a safe fallback initials string from a full name.  Matches

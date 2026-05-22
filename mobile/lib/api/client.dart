@@ -256,8 +256,12 @@ class ApiClient {
     // Optional 5-char display label.  Omitted → server auto-fills from
     // initials.  Empty-string is also safe (server treats it as blank).
     String? shortName,
-    // Optional login credentials — when provided the server creates a
-    // linked Django User so the player can log in to the mobile app.
+    // Choose one path for the linked login:
+    //   * `userId`               — link to an existing account member.
+    //   * `username` + `password` — create a brand-new member.
+    //   * none of the above       — Player has no linked login.
+    // Passing both userId and username/password is rejected by the API.
+    int?    userId,
     String? username,
     String? password,
   }) async {
@@ -268,6 +272,7 @@ class ApiClient {
       if (shortName != null && shortName.isNotEmpty) 'short_name': shortName,
       if (email.isNotEmpty) 'email': email,
       if (phone.isNotEmpty) 'phone': phone,
+      if (userId != null) 'user_id': userId,
       if (username != null && username.isNotEmpty) 'username': username,
       if (password != null && password.isNotEmpty) 'password': password,
     });
@@ -284,6 +289,12 @@ class ApiClient {
     // Pass a non-null value to update short_name.  Empty string clears
     // it on the server (which then re-derives from initials on save).
     String? shortName,
+    // Member-link rebinding:
+    //   userId != null         → link this Player to that member.
+    //   unlinkUser = true      → clear the existing link.
+    //   neither (the default)  → leave the link unchanged.
+    int?    userId,
+    bool    unlinkUser = false,
   }) async {
     final body = <String, dynamic>{
       if (name != null) 'name': name,
@@ -292,6 +303,8 @@ class ApiClient {
       if (phone != null) 'phone': phone,
       if (sex != null) 'sex': sex,
       if (shortName != null) 'short_name': shortName,
+      if (unlinkUser) 'user_id': null
+      else if (userId != null) 'user_id': userId,
     };
     final data = await _patch('/players/$id/', body);
     return PlayerProfile.fromJson(data as Map<String, dynamic>);
