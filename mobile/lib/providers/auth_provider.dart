@@ -7,36 +7,54 @@ import '../api/client.dart';
 import '../api/models.dart';
 
 class AuthProvider extends ChangeNotifier {
-  static const _tokenKey = 'auth_token';
+  static const _tokenKey       = 'auth_token';
+  // Remembered last-used account name so the login screen can
+  // pre-fill it on next launch.  Account names are typically stable
+  // (a group name), so pre-filling beats forcing re-entry every time.
+  static const _accountNameKey = 'last_account_name';
 
   String?        _token;
   PlayerProfile? _player;
-  bool           _isStaff = false;
-  bool           _loading = false;
+  AccountInfo?   _account;
+  bool           _isStaff        = false;
+  bool           _isAccountAdmin = false;
+  bool           _loading        = false;
   String?        _error;
+  String?        _lastAccountName;
 
-  String?        get token     => _token;
-  PlayerProfile? get player    => _player;
-  bool           get isStaff   => _isStaff;
-  bool           get loading   => _loading;
-  String?        get error     => _error;
-  bool           get isLoggedIn => _token != null;
+  String?        get token            => _token;
+  PlayerProfile? get player           => _player;
+  AccountInfo?   get account          => _account;
+  bool           get isStaff          => _isStaff;
+  bool           get isAccountAdmin   => _isAccountAdmin;
+  bool           get loading          => _loading;
+  String?        get error            => _error;
+  String?        get lastAccountName  => _lastAccountName;
+  bool           get isLoggedIn       => _token != null;
 
   ApiClient get client => ApiClient(
         token: _token,
         onSessionExpired: () => logout(silent: true),
       );
 
-  /// Called at app startup — restore saved token and fetch profile.
+  /// Called at app startup — restore saved token, fetch profile, and
+  /// load the last-used account name for the login screen pre-fill.
   Future<void> restoreSession() async {
     final prefs = await SharedPreferences.getInstance();
+    _lastAccountName = prefs.getString(_accountNameKey);
+
     final saved = prefs.getString(_tokenKey);
-    if (saved == null) return;
+    if (saved == null) {
+      notifyListeners();
+      return;
+    }
     _token = saved;
     try {
       final result = await ApiClient(token: saved).me();
-      _player  = result.player;
-      _isStaff = result.isStaff;
+      _player         = result.player;
+      _account        = result.account;
+      _isStaff        = result.isStaff;
+      _isAccountAdmin = result.isAccountAdmin;
     } catch (_) {
       // Token expired or server unreachable — clear it.
       _token = null;
@@ -45,31 +63,40 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> login(String username, String password) async {
+  Future<void> login(String accountName, String username, String password) async {
     _loading = true;
     _error   = null;
     notifyListeners();
 
     try {
-      final result = await ApiClient().login(username, password);
-      // Persist and apply atomically so we don't end up half-logged-in if
-      // a side call fails after the token has been set.  The login
-      // response already contains the player profile, so no follow-up
-      // /auth/me/ request is needed — that second call was the source of
-      // the previous "login twice" bug when it hit a transient failure.
+      final result = await ApiClient().login(
+        accountName: accountName,
+        username:    username,
+        password:    password,
+      );
+      // Persist token + remembered account name atomically with the
+      // local state, so a side-call failure can't leave us
+      // half-logged-in.  The login response already contains the
+      // player + account, so no follow-up /auth/me/ is needed.
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, result.token);
-      _token   = result.token;
-      _player  = result.player;
-      _isStaff = result.isStaff;
+      await prefs.setString(_tokenKey,       result.token);
+      await prefs.setString(_accountNameKey, accountName);
+      _token            = result.token;
+      _player           = result.player;
+      _account          = result.account;
+      _isStaff          = result.isStaff;
+      _isAccountAdmin   = result.isAccountAdmin;
+      _lastAccountName  = accountName;
     } on ApiException catch (e) {
-      _error  = e.message;
-      _token  = null;
-      _player = null;
+      _error   = e.message;
+      _token   = null;
+      _player  = null;
+      _account = null;
     } catch (e) {
-      _error  = 'Could not reach server. Check your connection.';
-      _token  = null;
-      _player = null;
+      _error   = 'Could not reach server. Check your connection.';
+      _token   = null;
+      _player  = null;
+      _account = null;
     } finally {
       _loading = false;
       notifyListeners();
@@ -82,11 +109,15 @@ class AuthProvider extends ChangeNotifier {
         await client.logout();
       } catch (_) {}
     }
-    _token   = null;
-    _player  = null;
-    _isStaff = false;
+    _token          = null;
+    _player         = null;
+    _account        = null;
+    _isStaff        = false;
+    _isAccountAdmin = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
+    // Intentionally KEEP _accountNameKey — the next login screen
+    // pre-fills it as a convenience.
     notifyListeners();
   }
 }

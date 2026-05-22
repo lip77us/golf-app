@@ -21,6 +21,7 @@ inherited AbstractUser behavior.
 """
 
 from django.contrib.auth.models import AbstractUser, UserManager
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
 from django.db.models.functions import Lower
 
@@ -97,7 +98,23 @@ class User(AbstractUser):
     games at tournament level, etc.) — distinct from Django's
     `is_staff` flag, which is reserved for the Django admin site and
     not used for any app-level authorization.
+
+    `username` is overridden to drop AbstractUser's global unique=True:
+    two accounts can each have a "paul".  The (account, username)
+    UniqueConstraint below keeps uniqueness intact within an account.
+    Authentication runs through `accounts.backends.AccountBackend`,
+    which disambiguates by also taking the account name.
     """
+    username = models.CharField(
+        max_length=150,
+        validators=[UnicodeUsernameValidator()],
+        error_messages={
+            'unique': 'A user with that username already exists in this '
+                      'account.',
+        },
+        help_text='150 characters or fewer.  Letters, digits and '
+                  '@/./+/-/_ only.  Unique within the account.',
+    )
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
@@ -116,12 +133,14 @@ class User(AbstractUser):
     class Meta:
         constraints = [
             # Same username may exist in different accounts, but never
-            # twice within one.
+            # twice within one.  Case-insensitive so "Paul" and "paul"
+            # collide in the same account (same convention as Account.name).
             models.UniqueConstraint(
-                fields=['account', 'username'],
-                name='accounts_user_account_username_unique',
+                Lower('username'), 'account',
+                name='accounts_user_account_username_ci_unique',
             ),
         ]
+
 
     def __str__(self) -> str:
         return f"{self.username}@{self.account.name}"

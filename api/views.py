@@ -794,10 +794,19 @@ def _auto_setup_games(round_obj: Round, foursomes: list) -> None:
 class LoginView(APIView):
     """
     POST /api/auth/login/
-    Body: { "username": "...", "password": "..." }
+    Body: { "account_name": "Golden Glove",
+            "username":     "paul",
+            "password":     "..." }
+
     Returns:
-        { "token": "...", "player": { id, name, handicap_index, is_phantom, email, phone } }
-        `player` is omitted if the user has no linked Player profile (admins).
+        { "token":            "...",
+          "is_staff":         bool,
+          "is_account_admin": bool,
+          "account": { "id": ..., "name": "Golden Glove" },
+          "player":  { id, name, handicap_index, is_phantom, email, phone } }
+
+        `player` is omitted if the user has no linked Player profile
+        (admins, etc.).
 
     The full player profile is returned so the client doesn't have to make
     a follow-up /auth/me/ call — that second round-trip was responsible for
@@ -807,16 +816,22 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get('username', '').strip()
-        password = request.data.get('password', '').strip()
+        account_name = request.data.get('account_name', '').strip()
+        username     = request.data.get('username', '').strip()
+        password     = request.data.get('password', '').strip()
 
-        if not username or not password:
+        if not account_name or not username or not password:
             return Response(
-                {'detail': 'username and password are required.'},
+                {'detail': 'account_name, username and password are required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = authenticate(request, username=username, password=password)
+        user = authenticate(
+            request,
+            account_name=account_name,
+            username=username,
+            password=password,
+        )
         if user is None:
             return Response(
                 {'detail': 'Invalid credentials.'},
@@ -825,7 +840,15 @@ class LoginView(APIView):
 
         token, _ = Token.objects.get_or_create(user=user)
 
-        body = {'token': token.key, 'is_staff': user.is_staff}
+        body = {
+            'token':            token.key,
+            'is_staff':         user.is_staff,
+            'is_account_admin': user.is_account_admin,
+            'account': {
+                'id':   user.account_id,
+                'name': user.account.name,
+            },
+        }
         try:
             body['player'] = PlayerSerializer(user.player_profile).data
         except Exception:
@@ -846,11 +869,18 @@ class LogoutView(APIView):
 
 
 class MeView(APIView):
-    """GET /api/auth/me/ — current user info (is_staff + optional player profile)."""
+    """GET /api/auth/me/ — current user info (account, is_staff, optional player)."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        body = {'is_staff': request.user.is_staff}
+        body = {
+            'is_staff':         request.user.is_staff,
+            'is_account_admin': request.user.is_account_admin,
+            'account': {
+                'id':   request.user.account_id,
+                'name': request.user.account.name,
+            },
+        }
         try:
             body['player'] = PlayerSerializer(request.user.player_profile).data
         except Exception:

@@ -85,6 +85,26 @@ INSTALLED_APPS = [
 # users in different accounts see entirely separate data sets.
 AUTH_USER_MODEL = 'accounts.User'
 
+# We deliberately drop the global unique=True on User.username — the
+# uniqueness boundary is (account, username), not just username.  The
+# matching authenticate() path goes through accounts.backends.AccountBackend
+# which takes account_name as an extra credential.
+SILENCED_SYSTEM_CHECKS = ['auth.E003']
+
+# Authentication backends.  AccountBackend reads `account_name` from
+# the login payload and looks the user up by (Account.name CI-match,
+# username).  We deliberately drop django.contrib.auth.backends.ModelBackend:
+# once usernames are non-unique a global lookup raises
+# MultipleObjectsReturned, and silently falling through to "first
+# match" would defeat the whole point of multi-tenancy.
+#
+# Django admin (/admin/) needs an account-aware login form to keep
+# working — that's phase 4.  Until then admin access happens via the
+# usual API token, or via `manage.py shell` for ops tasks.
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.AccountBackend',
+]
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # serve static files in production

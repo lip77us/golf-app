@@ -133,12 +133,32 @@ class AccountIsolationTests(TestCase):
         with self.assertRaises(ValueError):
             User.objects.create_user(username='lonely', password='x')
 
-    # NOTE: We don't yet test that the same username can exist in two
-    # accounts.  AbstractUser still ships with username=unique globally,
-    # and the (account, username) UniqueConstraint is layered on top.
-    # Phase 3 (3-field login) will override the username field to drop
-    # the global uniqueness — at that point add a
-    # `test_same_username_different_accounts_is_allowed` here.
+    def test_same_username_different_accounts_is_allowed(self):
+        """Two accounts may both contain a user named 'paul'."""
+        u1 = User.objects.create_user(
+            username='paul', password='x', account=self.acct_a,
+        )
+        u2 = User.objects.create_user(
+            username='paul', password='x', account=self.acct_b,
+        )
+        self.assertNotEqual(u1.pk, u2.pk)
+        self.assertNotEqual(u1.account_id, u2.account_id)
+
+    def test_duplicate_username_within_account_rejected(self):
+        from django.db import IntegrityError, transaction
+        User.objects.create_user(username='dup', password='x',
+                                 account=self.acct_a)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            User.objects.create_user(username='dup', password='y',
+                                     account=self.acct_a)
+
+    def test_username_case_insensitive_within_account(self):
+        from django.db import IntegrityError, transaction
+        User.objects.create_user(username='Paul', password='x',
+                                 account=self.acct_a)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            User.objects.create_user(username='PAUL', password='y',
+                                     account=self.acct_a)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -258,3 +278,78 @@ class APIIsolationTests(TestCase):
         c = self._client_as(self.token_a)
         resp = c.get(f'/api/rounds/{self.round_a.id}/')
         self.assertEqual(resp.status_code, 200)
+
+
+class LoginEndpointTests(TestCase):
+    """
+    /api/auth/login/ accepts (account_name, username, password) and
+    returns a token only when all three match the same user row.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.acct_a, _ = _make_account('Golden Glove')
+        cls.acct_b, _ = _make_account('Saturday Group')
+
+        cls.paul_a = User.objects.create_user(
+            username='paul', password='aaaa1111', account=cls.acct_a,
+        )
+        cls.paul_b = User.objects.create_user(
+            username='paul', password='bbbb2222', account=cls.acct_b,
+        )
+
+    def _login(self, **body):
+        client = APIClient()
+        return client.post('/api/auth/login/', body, format='json')
+
+    def test_login_resolves_to_correct_account(self):
+        # Both Pauls share a username; only the account_name + password
+        # combo picks one row.
+        r = self._login(account_name='Golden Glove',
+                        username='paul', password='aaaa1111')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['account']['name'], 'Golden Glove')
+
+        r = self._login(account_name='Saturday Group',
+                        username='paul', password='bbbb2222')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['account']['name'], 'Saturday Group')
+
+    def test_login_account_name_is_case_insensitive(self):
+        r = self._login(account_name='golden glove',
+                        username='paul', password='aaaa1111')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['account']['name'], 'Golden Glove')
+
+    def test_login_username_is_case_insensitive(self):
+        r = self._login(account_name='Golden Glove',
+                        username='Paul', password='aaaa1111')
+        self.assertEqual(r.status_code, 200, r.content)
+
+    def test_login_wrong_password_for_correct_account(self):
+        r = self._login(account_name='Golden Glove',
+                        username='paul', password='bbbb2222')
+        self.assertEqual(r.status_code, 401)
+
+    def test_login_cross_account_password_rejected(self):
+        # paul/bbbb2222 lives in Saturday Group, not Golden Glove.
+        r = self._login(account_name='Golden Glove',
+                        username='paul', password='bbbb2222')
+        self.assertEqual(r.status_code, 401)
+
+    def test_login_unknown_account_returns_401(self):
+        r = self._login(account_name='No Such Group',
+                        username='paul', password='aaaa1111')
+        self.assertEqual(r.status_code, 401)
+
+    def test_login_missing_account_name_400(self):
+        r = self._login(username='paul', password='aaaa1111')
+        self.assertEqual(r.status_code, 400)
+
+    def test_login_response_includes_account_and_admin_flag(self):
+        r = self._login(account_name='Golden Glove',
+                        username='paul', password='aaaa1111')
+        body = r.json()
+        self.assertIn('token', body)
+        self.assertEqual(body['account']['name'], 'Golden Glove')
+        self.assertEqual(body['is_account_admin'], False)

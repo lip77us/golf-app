@@ -19,6 +19,21 @@ extension BetUnitFormat on num {
 // Auth
 // ---------------------------------------------------------------------------
 
+/// Account that the logged-in user belongs to.  The tenant boundary —
+/// every Player / Course / Tournament / Round the API returns is owned
+/// by this Account.
+class AccountInfo {
+  final int    id;
+  final String name;
+
+  const AccountInfo({required this.id, required this.name});
+
+  factory AccountInfo.fromJson(Map<String, dynamic> j) => AccountInfo(
+        id:   j['id']   as int,
+        name: j['name'] as String,
+      );
+}
+
 class AuthResult {
   final String token;
 
@@ -31,31 +46,54 @@ class AuthResult {
   /// tournaments regardless of whether they also have a linked player.
   final bool isStaff;
 
+  /// True when this user is an admin within their Account.  Distinct from
+  /// is_staff (Django admin site access).  Used to gate the future Manage
+  /// Members screen.
+  final bool isAccountAdmin;
+
+  /// The Account this user belongs to.
+  final AccountInfo account;
+
   const AuthResult({
     required this.token,
+    required this.account,
     this.player,
-    this.isStaff = false,
+    this.isStaff        = false,
+    this.isAccountAdmin = false,
   });
 
   factory AuthResult.fromJson(Map<String, dynamic> j) => AuthResult(
-        token:   j['token'] as String,
-        isStaff: j['is_staff'] as bool? ?? false,
-        player:  j['player'] is Map<String, dynamic>
+        token:          j['token'] as String,
+        isStaff:        j['is_staff']         as bool? ?? false,
+        isAccountAdmin: j['is_account_admin'] as bool? ?? false,
+        account:        AccountInfo.fromJson(
+                          j['account'] as Map<String, dynamic>),
+        player:         j['player'] is Map<String, dynamic>
             ? PlayerProfile.fromJson(j['player'] as Map<String, dynamic>)
             : null,
       );
 }
 
-/// Result of GET /api/auth/me/ — is_staff flag plus optional player profile.
+/// Result of GET /api/auth/me/.
 class MeResult {
   final bool isStaff;
+  final bool isAccountAdmin;
+  final AccountInfo account;
   final PlayerProfile? player;
 
-  const MeResult({this.isStaff = false, this.player});
+  const MeResult({
+    required this.account,
+    this.isStaff        = false,
+    this.isAccountAdmin = false,
+    this.player,
+  });
 
   factory MeResult.fromJson(Map<String, dynamic> j) => MeResult(
-        isStaff: j['is_staff'] as bool? ?? false,
-        player:  j['player'] is Map<String, dynamic>
+        isStaff:        j['is_staff']         as bool? ?? false,
+        isAccountAdmin: j['is_account_admin'] as bool? ?? false,
+        account:        AccountInfo.fromJson(
+                          j['account'] as Map<String, dynamic>),
+        player:         j['player'] is Map<String, dynamic>
             ? PlayerProfile.fromJson(j['player'] as Map<String, dynamic>)
             : null,
       );

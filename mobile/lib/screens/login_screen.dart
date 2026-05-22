@@ -10,13 +10,16 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey    = GlobalKey<FormState>();
-  final _userCtrl   = TextEditingController();
-  final _passCtrl   = TextEditingController();
-  bool  _obscure    = true;
+  final _formKey      = GlobalKey<FormState>();
+  final _accountCtrl  = TextEditingController();
+  final _userCtrl     = TextEditingController();
+  final _passCtrl     = TextEditingController();
+  bool  _obscure      = true;
+  bool  _prefilled    = false;
 
   @override
   void dispose() {
+    _accountCtrl.dispose();
     _userCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
@@ -25,7 +28,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthProvider>();
-    await auth.login(_userCtrl.text.trim(), _passCtrl.text);
+    await auth.login(
+      _accountCtrl.text.trim(),
+      _userCtrl.text.trim(),
+      _passCtrl.text,
+    );
     if (auth.isLoggedIn && mounted) {
       Navigator.of(context).pushReplacementNamed('/tournaments');
     }
@@ -35,6 +42,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final auth  = context.watch<AuthProvider>();
     final theme = Theme.of(context);
+
+    // Pre-fill the account name on first build after the provider
+    // restored its session — saves the user from retyping their
+    // (typically stable) group name every launch.
+    if (!_prefilled && auth.lastAccountName != null) {
+      _accountCtrl.text = auth.lastAccountName!;
+      _prefilled = true;
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -54,6 +69,22 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: theme.textTheme.headlineMedium
                           ?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 40),
+
+                  // Account name
+                  TextFormField(
+                    controller: _accountCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Account',
+                      helperText: 'Your club / group / family name',
+                      prefixIcon: Icon(Icons.groups_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    textInputAction: TextInputAction.next,
+                    autocorrect: false,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
 
                   // Username
                   TextFormField(

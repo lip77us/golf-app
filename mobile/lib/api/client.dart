@@ -161,10 +161,15 @@ class ApiClient {
 
   // ---- Auth ----
 
-  Future<AuthResult> login(String username, String password) async {
+  Future<AuthResult> login({
+    required String accountName,
+    required String username,
+    required String password,
+  }) async {
     final data = await _post('/auth/login/', {
-      'username': username,
-      'password': password,
+      'account_name': accountName,
+      'username':     username,
+      'password':     password,
     });
     return AuthResult.fromJson(data as Map<String, dynamic>);
   }
