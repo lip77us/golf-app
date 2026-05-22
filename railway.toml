@@ -2,6 +2,18 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "python manage.py migrate --noinput && gunicorn my_golf_app.wsgi --bind 0.0.0.0:$PORT --log-file -"
+# Start sequence:
+#   1. swap_to_accounts — one-time, idempotent migration from
+#      auth.User to the new accounts.User schema.  On every restart
+#      after the first it's a no-op (detects auth_user is gone and
+#      returns immediately), so leaving it in the start command
+#      forever is safe.  Pass --account-name to name the production
+#      tenant; existing users are attached to it.
+#   2. migrate --noinput — applies any other pending migrations
+#      (core.0004_account_fk, tournament.0027_account_fk, etc).
+#      swap_to_accounts pre-marks accounts.0001_initial as applied
+#      so the InconsistentMigrationHistory check passes.
+#   3. gunicorn — serves the app.
+startCommand = "python manage.py swap_to_accounts --account-name 'Golden Glove' && python manage.py migrate --noinput && gunicorn my_golf_app.wsgi --bind 0.0.0.0:$PORT --log-file -"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
