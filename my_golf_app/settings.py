@@ -196,7 +196,10 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',  # browsable API
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        # IsAccountMember = authenticated AND user.account_id is not null.
+        # All tenant-scoped endpoints inherit this; public / login views
+        # override with [AllowAny] or [IsAuthenticated] as needed.
+        'accounts.scoping.IsAccountMember',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',

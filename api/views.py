@@ -56,6 +56,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
+from accounts.scoping import (
+    account_get_or_404,
+    account_qs,
+    IsAccountMember,
+    IsAccountAdmin,
+)
 from core.models import Player, Tee, Course, HandicapMode, GameType
 from tournament.models import Tournament, Round, Foursome, FoursomeMembership
 from scoring.models import HoleScore
@@ -858,23 +864,34 @@ class MeView(APIView):
 
 class PlayerListView(APIView):
     def get(self, request):
-        players = Player.objects.filter(is_phantom=False).order_by('name')
+        players = (
+            Player.objects
+            .for_account(request.user.account)
+            .filter(is_phantom=False)
+            .order_by('name')
+        )
         return Response(PlayerSerializer(players, many=True).data)
 
     def post(self, request):
         ser = PlayerCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        player = ser.save()
+        # account is injected via save() so the client can never
+        # spoof which tenant a new Player belongs to.
+        player = ser.save(account=request.user.account)
         return Response(PlayerSerializer(player).data, status=status.HTTP_201_CREATED)
 
 
 class PlayerDetailView(APIView):
     def get(self, request, pk):
-        player = get_object_or_404(Player, pk=pk, is_phantom=False)
+        player = account_get_or_404(
+            Player, request.user.account, pk=pk, is_phantom=False,
+        )
         return Response(PlayerSerializer(player).data)
 
     def patch(self, request, pk):
-        player = get_object_or_404(Player, pk=pk, is_phantom=False)
+        player = account_get_or_404(
+            Player, request.user.account, pk=pk, is_phantom=False,
+        )
         ser = PlayerSerializer(player, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         player = ser.save()
@@ -883,13 +900,19 @@ class PlayerDetailView(APIView):
 
 class CourseListView(APIView):
     def get(self, request):
-        courses = Course.objects.all().order_by('name')
+        courses = (
+            Course.objects
+            .for_account(request.user.account)
+            .order_by('name')
+        )
         return Response(CourseSerializer(courses, many=True).data)
 
 
 class TeeListView(APIView):
     def get(self, request):
-        tees = Tee.objects.all().order_by('course__name', 'tee_name')
+        tees = account_qs(Tee, request.user.account).order_by(
+            'course__name', 'tee_name',
+        )
         return Response(TeeSerializer(tees, many=True).data)
 
 
@@ -901,6 +924,7 @@ class TournamentListView(APIView):
     def get(self, request):
         tournaments = (
             Tournament.objects
+            .for_account(request.user.account)
             .prefetch_related('rounds__course')
             .order_by('-start_date')
         )
@@ -917,6 +941,7 @@ class TournamentListView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
         tournament = Tournament.objects.create(
+            account      = request.user.account,
             name         = d['name'],
             start_date   = d['start_date'],
             active_games = d['active_games'],
@@ -928,8 +953,9 @@ class TournamentListView(APIView):
 
 class TournamentDetailView(APIView):
     def get(self, request, pk):
-        tournament = get_object_or_404(
-            Tournament.objects.prefetch_related('rounds__course'), pk=pk
+        tournament = account_get_or_404(
+            Tournament, request.user.account, pk=pk,
+            base=Tournament.objects.prefetch_related('rounds__course'),
         )
         return Response(TournamentSerializer(tournament).data)
 
@@ -940,7 +966,9 @@ class TournamentDetailView(APIView):
                 {'detail': 'Only staff members can delete tournaments.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(
+            Tournament, request.user.account, pk=pk,
+        )
         tournament.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -961,7 +989,7 @@ class TournamentLowNetSetupView(APIView):
         payouts       : [{"place": 1, "amount": 200.00}, ...]
     """
     def get(self, request, pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         from games.models import LowNetChampionshipConfig
         from core.models import HandicapMode
         try:
@@ -982,7 +1010,7 @@ class TournamentLowNetSetupView(APIView):
         return Response(data)
 
     def post(self, request, pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         from games.models import LowNetChampionshipConfig
         d = request.data
         cfg, _ = LowNetChampionshipConfig.objects.update_or_create(
@@ -1005,7 +1033,7 @@ class TournamentLowNetSetupView(APIView):
 class TournamentLowNetView(APIView):
     """GET /api/tournaments/{id}/low-net/ — cumulative Low Net standings."""
     def get(self, request, pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         from services.low_net_championship import low_net_championship_summary
         return Response(low_net_championship_summary(tournament))
 
@@ -1105,16 +1133,21 @@ class RoundCreateView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
-        course = get_object_or_404(Course, pk=d['course_id'])
+        course = account_get_or_404(
+            Course, request.user.account, pk=d['course_id'],
+        )
         tournament = None
         if d.get('tournament_id'):
-            tournament = get_object_or_404(Tournament, pk=d['tournament_id'])
+            tournament = account_get_or_404(
+                Tournament, request.user.account, pk=d['tournament_id'],
+            )
 
         # Resolve the creating player from the authenticated user (may be None
         # for admin/staff accounts that have no linked Player profile).
         created_by = getattr(request.user, 'player_profile', None)
 
         round_obj = Round.objects.create(
+            account           = request.user.account,
             tournament        = tournament,
             round_number      = d['round_number'],
             date              = d['date'],
@@ -1135,15 +1168,16 @@ class RoundCreateView(APIView):
 
 
 class RoundDetailView(APIView):
+    # Shared queryset used by GET / PATCH / DELETE so the prefetches
+    # stay in sync across handlers.
+    _ROUND_QS = Round.objects.select_related('course').prefetch_related(
+        'foursomes__memberships__player',
+        'foursomes__ryder_cup_foursome_config',
+    )
+
     def get(self, request, pk):
-        round_obj = get_object_or_404(
-            Round.objects
-                 .select_related('course')
-                 .prefetch_related(
-                     'foursomes__memberships__player',
-                     'foursomes__ryder_cup_foursome_config',
-                 ),
-            pk=pk,
+        round_obj = account_get_or_404(
+            Round, request.user.account, pk=pk, base=self._ROUND_QS,
         )
         return Response(RoundSerializer(round_obj).data)
 
@@ -1155,14 +1189,8 @@ class RoundDetailView(APIView):
         bet_unit as writable and excludes read-only fields, so we just
         delegate to it with partial=True.
         """
-        round_obj = get_object_or_404(
-            Round.objects
-                 .select_related('course')
-                 .prefetch_related(
-                     'foursomes__memberships__player',
-                     'foursomes__ryder_cup_foursome_config',
-                 ),
-            pk=pk,
+        round_obj = account_get_or_404(
+            Round, request.user.account, pk=pk, base=self._ROUND_QS,
         )
         ser = RoundSerializer(round_obj, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
@@ -1174,7 +1202,9 @@ class RoundDetailView(APIView):
         DELETE /api/rounds/{id}/ — permanently remove a casual round.
         Only the player who created the round may delete it.
         """
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(
+            Round, request.user.account, pk=pk,
+        )
         requesting_player = getattr(request.user, 'player_profile', None)
         if round_obj.created_by_id is None or requesting_player is None:
             return Response(
@@ -1213,6 +1243,7 @@ class CasualRoundListView(APIView):
 
         rounds = (
             Round.objects
+            .for_account(request.user.account)
             .filter(
                 tournament__isnull=True,
                 status=requested_status,
@@ -1305,7 +1336,7 @@ class RoundSetupView(APIView):
     """
     @transaction.atomic
     def post(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         ser = RoundSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
@@ -1390,7 +1421,7 @@ class FoursomeActiveGamesView(APIView):
                 {'detail': 'Only staff members can configure foursome games.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         games = request.data.get('active_games', [])
         if not isinstance(games, list):
             return Response(
@@ -1526,7 +1557,7 @@ class PhantomInitView(APIView):
         }
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         if not foursome.has_phantom:
             return Response({'detail': 'This foursome has no phantom player.'},
                             status=400)
@@ -1815,7 +1846,7 @@ class NassauSetupView(APIView):
     reflected immediately.  Safe to call repeatedly.
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         ser = NassauSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
@@ -1845,7 +1876,7 @@ class NassauPressView(APIView):
     Returns the updated nassau summary.
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         ser = NassauPressSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -1861,7 +1892,7 @@ class NassauPressView(APIView):
 class NassauResultView(APIView):
     """GET /api/foursomes/{id}/nassau/"""
     def get(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         from services.nassau import nassau_summary
         summary = nassau_summary(foursome)
         if summary is None:
@@ -1883,7 +1914,7 @@ class SixesSetupView(APIView):
     See services/sixes.py for segment dict format.
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         ser = SixesSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -1907,7 +1938,7 @@ class SixesExtraTeamsView(APIView):
     standard segments or hole results.  Returns the full sixes summary.
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         from games.models import SixesSegment, SixesTeam
         from services.sixes import sixes_summary
 
@@ -1973,7 +2004,7 @@ class SixesExtraTeamsView(APIView):
 class SixesResultView(APIView):
     """GET /api/foursomes/{id}/sixes/"""
     def get(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         from services.sixes import sixes_summary
         return Response(sixes_summary(foursome))
 
@@ -1995,7 +2026,7 @@ class Points531SetupView(APIView):
     idempotent.
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         ser = Points531SetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -2021,7 +2052,7 @@ class Points531SetupView(APIView):
 class Points531ResultView(APIView):
     """GET /api/foursomes/{id}/points_531/"""
     def get(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         from services.points_531 import points_531_summary
         return Response(points_531_summary(foursome))
 
@@ -2046,7 +2077,7 @@ class SkinsSetupView(APIView):
     repeatedly.
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         from api.serializers import SkinsSetupSerializer
         ser = SkinsSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -2067,7 +2098,7 @@ class SkinsSetupView(APIView):
 class SkinsResultView(APIView):
     """GET /api/foursomes/{id}/skins/"""
     def get(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         from services.skins import skins_summary
         return Response(skins_summary(foursome))
 
@@ -2085,7 +2116,7 @@ class SkinsJunkView(APIView):
     mistake without leaving orphan rows).  Returns the updated summary.
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         from api.serializers import SkinsJunkSerializer
         ser = SkinsJunkSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -2138,7 +2169,7 @@ class MultiSkinsSetupView(APIView):
     subsequent score submissions.
     """
     def post(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         from api.serializers import MultiSkinsSetupSerializer
         ser = MultiSkinsSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -2167,7 +2198,7 @@ class MultiSkinsSetupView(APIView):
 class MultiSkinsResultView(APIView):
     """GET /api/rounds/{pk}/multi-skins/"""
     def get(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         from services.multi_skins import multi_skins_summary
         return Response(multi_skins_summary(round_obj))
 
@@ -2182,7 +2213,7 @@ class MatchPlayResultView(APIView):
         import logging
         _log = logging.getLogger(__name__)
 
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
 
         # Cup Singles — detected by RyderCupFoursomeConfig game_type.
         _cup_cfg = None
@@ -2252,7 +2283,7 @@ class MatchPlaySetupView(APIView):
     bracket reflects any scores already on file.
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
 
         # Cup foursomes with SINGLES or MATCH_PLAY game type use cup_singles setup
         try:
@@ -2342,7 +2373,7 @@ class MatchPlaySetupView(APIView):
 class ThreePersonMatchResultView(APIView):
     """GET /api/foursomes/{id}/three-person-match/"""
     def get(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         from services.three_person_match import three_person_match_summary
         summary = three_person_match_summary(foursome)
         if summary is None:
@@ -2368,7 +2399,7 @@ class ThreePersonMatchSetupView(APIView):
     Returns the full summary after an immediate calculate pass.
     """
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         ser = ThreePersonMatchSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -2466,7 +2497,7 @@ class IrishRumbleSetupView(APIView):
         return Response(data)
 
     def post(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         ser = IrishRumbleSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
@@ -2591,7 +2622,7 @@ class LowNetSetupView(APIView):
         return Response(data)
 
     def post(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         ser = LowNetSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
@@ -2694,7 +2725,7 @@ class PinkBallSetupView(APIView):
         })
 
     def post(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         from api.serializers import PinkBallSetupSerializer
         ser = PinkBallSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -2757,7 +2788,11 @@ class GolfApiSearchView(APIView):
         # Annotate with local DB existence.
         # Match on the canonical course name we'd assign on import.
         from core.models import Course as CourseModel
-        existing_names = set(CourseModel.objects.values_list('name', flat=True))
+        existing_names = set(
+            CourseModel.objects
+            .for_account(request.user.account)
+            .values_list('name', flat=True)
+        )
         for c in courses:
             c['already_imported'] = _course_display_name(c) in existing_names
 
@@ -2793,7 +2828,11 @@ class GolfApiCourseDetailView(APIView):
             )
 
         from core.models import Course as CourseModel
-        existing_names = set(CourseModel.objects.values_list('name', flat=True))
+        existing_names = set(
+            CourseModel.objects
+            .for_account(request.user.account)
+            .values_list('name', flat=True)
+        )
         course['already_imported'] = _course_display_name(course) in existing_names
 
         return Response(course)
@@ -2870,7 +2909,14 @@ class CourseImportView(APIView):
         from core.models import Course as CourseModel, Tee as TeeModel
         from .serializers import CourseSerializer
 
-        existing = CourseModel.objects.filter(name=course_name).first()
+        # Limit duplicate-name detection to THIS account so a name
+        # collision in another tenant doesn't block import.
+        existing = (
+            CourseModel.objects
+            .for_account(request.user.account)
+            .filter(name=course_name)
+            .first()
+        )
 
         if existing and not force_update:
             return Response(
@@ -2886,7 +2932,10 @@ class CourseImportView(APIView):
             course_obj = existing
             TeeModel.objects.filter(course=course_obj).delete()
         else:
-            course_obj = CourseModel.objects.create(name=course_name)
+            course_obj = CourseModel.objects.create(
+                account=request.user.account,
+                name=course_name,
+            )
 
         # ── Create Tee rows ───────────────────────────────────────────────────
         import logging as _logging
@@ -2953,7 +3002,7 @@ class PinkBallFoursomeOrderView(APIView):
     """
 
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         from api.serializers import PinkBallOrderSerializer
         ser = PinkBallOrderSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -3323,7 +3372,7 @@ class TeamTournamentSetupView(APIView):
 
     @transaction.atomic
     def post(self, request, pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         ser = TeamTournamentSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
@@ -3361,7 +3410,7 @@ class TeamTournamentDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         tt = get_object_or_404(TeamTournament, tournament=tournament)
         return Response(ryder_cup_summary(tt))
 
@@ -3376,7 +3425,7 @@ class TeamTournamentDraftCompleteView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         tt = get_object_or_404(TeamTournament, tournament=tournament)
         tt.draft_complete = True
         tt.save(update_fields=['draft_complete'])
@@ -3395,7 +3444,7 @@ class TeamPlayerView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk, team_pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         tt         = get_object_or_404(TeamTournament, tournament=tournament)
         team       = get_object_or_404(TournamentTeam, pk=team_pk, tournament=tt)
 
@@ -3408,7 +3457,9 @@ class TeamPlayerView(APIView):
         ser = TeamPlayerSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         player_id = ser.validated_data['player_id']
-        player    = get_object_or_404(Player, pk=player_id)
+        player    = account_get_or_404(
+            Player, request.user.account, pk=player_id,
+        )
 
         # Remove player from any other team in this tournament first
         for other_team in tt.teams.exclude(pk=team.pk):
@@ -3418,7 +3469,7 @@ class TeamPlayerView(APIView):
         return Response(_team_roster(team))
 
     def delete(self, request, pk, team_pk, player_pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         tt         = get_object_or_404(TeamTournament, tournament=tournament)
         team       = get_object_or_404(TournamentTeam, pk=team_pk, tournament=tt)
 
@@ -3428,7 +3479,9 @@ class TeamPlayerView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        player = get_object_or_404(Player, pk=player_pk)
+        player = account_get_or_404(
+            Player, request.user.account, pk=player_pk,
+        )
         team.players.remove(player)
         return Response(_team_roster(team))
 
@@ -3442,7 +3495,7 @@ class TeamRenameView(APIView):
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, pk, team_pk):
-        tournament = get_object_or_404(Tournament, pk=pk)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         tt         = get_object_or_404(TeamTournament, tournament=tournament)
         team       = get_object_or_404(TournamentTeam, pk=team_pk, tournament=tt)
 
@@ -3477,7 +3530,7 @@ class RyderCupRoundSetupView(APIView):
 
     @transaction.atomic
     def post(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
 
         if not round_obj.tournament_id:
             return Response(
@@ -3851,7 +3904,7 @@ class RyderCupRoundResultView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         try:
             rc = round_obj.ryder_cup_config
         except RyderCupRoundConfig.DoesNotExist:
@@ -3873,7 +3926,7 @@ class CupRoundLiveView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         from services.cup_standings import cup_round_live_summary
         summary = cup_round_live_summary(round_obj)
         if summary is None:
@@ -3893,7 +3946,7 @@ class RyderCupRoundCalculateView(APIView):
 
     @transaction.atomic
     def post(self, request, pk):
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         try:
             rc = round_obj.ryder_cup_config
         except RyderCupRoundConfig.DoesNotExist:
@@ -3931,7 +3984,7 @@ class QuotaNassauSetupView(APIView):
 
     @transaction.atomic
     def post(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         ser = QuotaNassauSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -3975,7 +4028,7 @@ class QuotaNassauResultView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        foursome = get_object_or_404(Foursome, pk=pk)
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
         summary  = quota_nassau_summary(foursome)
         if summary is None:
             return Response(
@@ -4086,7 +4139,7 @@ class TeeTimeBulkView(APIView):
     """
     def patch(self, request, pk):
         from api.serializers import TeeTimeBulkSerializer, FoursomeSerializer
-        round_obj = get_object_or_404(Round, pk=pk)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         ser = TeeTimeBulkSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 

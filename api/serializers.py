@@ -76,18 +76,30 @@ class PlayerCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        # `account` is injected by the view (PlayerListView.post) — it is
+        # the requesting user's tenant.  Falling through to a manager
+        # default would let a client create a player in another account
+        # by omitting / spoofing the field.
+        account  = validated_data.pop('account', None)
+        if account is None:
+            raise serializers.ValidationError(
+                'Internal error: PlayerCreateSerializer requires '
+                'account to be passed via save(account=...).'
+            )
         username = validated_data.pop('username', '').strip()
         password = validated_data.pop('password', '').strip()
 
-        player = Player(**validated_data)
+        player = Player(account=account, **validated_data)
         player.save()
 
         if username and password:
+            name_parts = (validated_data.get('name') or '').split()
             user = User.objects.create_user(
                 username=username,
                 password=password,
                 email=validated_data.get('email', ''),
-                first_name=validated_data.get('name', '').split()[0] if validated_data.get('name') else '',
+                first_name=name_parts[0] if name_parts else '',
+                account=account,
             )
             player.user = user
             player.save(update_fields=['user'])
