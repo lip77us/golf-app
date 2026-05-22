@@ -962,7 +962,7 @@ class TournamentListView(APIView):
 
     def post(self, request):
         """POST /api/tournaments/ — create a new tournament (staff only)."""
-        if not request.user.is_staff:
+        if not (request.user.is_staff or request.user.is_account_admin):
             return Response(
                 {'detail': 'Only staff members can create tournaments.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -991,7 +991,7 @@ class TournamentDetailView(APIView):
 
     def delete(self, request, pk):
         """DELETE /api/tournaments/{id}/ — remove tournament and all associated data (staff only)."""
-        if not request.user.is_staff:
+        if not (request.user.is_staff or request.user.is_account_admin):
             return Response(
                 {'detail': 'Only staff members can delete tournaments.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -1446,7 +1446,7 @@ class FoursomeActiveGamesView(APIView):
     Staff only — regular players cannot reassign games mid-round.
     """
     def patch(self, request, pk):
-        if not request.user.is_staff:
+        if not (request.user.is_staff or request.user.is_account_admin):
             return Response(
                 {'detail': 'Only staff members can configure foursome games.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -2790,7 +2790,7 @@ class GolfApiSearchView(APIView):
     Staff only — regular players don't manage the course library.
     """
     def get(self, request):
-        if not request.user.is_staff:
+        if not (request.user.is_staff or request.user.is_account_admin):
             return Response(
                 {'detail': 'Only staff members can search for courses.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -2838,7 +2838,7 @@ class GolfApiCourseDetailView(APIView):
     before committing to an import.
     """
     def get(self, request, course_id):
-        if not request.user.is_staff:
+        if not (request.user.is_staff or request.user.is_account_admin):
             return Response(
                 {'detail': 'Only staff members can fetch course details.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -2903,7 +2903,7 @@ class CourseImportView(APIView):
     """
     @transaction.atomic
     def post(self, request):
-        if not request.user.is_staff:
+        if not (request.user.is_staff or request.user.is_account_admin):
             return Response(
                 {'detail': 'Only staff members can import courses.'},
                 status=status.HTTP_403_FORBIDDEN,

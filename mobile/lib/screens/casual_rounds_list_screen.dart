@@ -105,7 +105,7 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
       appBar: AppBar(
         title: const Text('Casual Rounds'),
         actions: [
-          if (auth.isStaff)
+          if (auth.isAdmin)
             IconButton(
               icon: const Icon(Icons.golf_course),
               tooltip: 'Manage Courses',

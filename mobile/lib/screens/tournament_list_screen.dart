@@ -181,7 +181,7 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       appBar: AppBar(
         title: const Text('Tournaments'),
         actions: [
-          if (auth.isStaff)
+          if (auth.isAdmin)
             IconButton(
               icon: const Icon(Icons.golf_course),
               tooltip: 'Manage Courses',
@@ -216,7 +216,7 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         onLogout: () => auth.logout(),
       ),
       body: _buildBody(),
-      floatingActionButton: !auth.isStaff ? null :
+      floatingActionButton: !auth.isAdmin ? null :
         FloatingActionButton.extended(
           onPressed: () async {
             final created = await Navigator.of(context).push<bool>(
@@ -292,7 +292,7 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                     final t = filtered[i];
           return _TournamentCard(
             tournament       : t,
-            isStaff          : context.read<AuthProvider>().isStaff,
+            isStaff          : context.read<AuthProvider>().isAdmin,
             isComplete       : _isComplete(t),
             onRoundTap       : (roundId) =>
                 Navigator.of(context).pushNamed('/round', arguments: roundId),

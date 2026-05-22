@@ -101,9 +101,10 @@ class _RoundScreenState extends State<RoundScreen> {
 
     final isComplete = round.status == 'complete';
 
-    // Staff users (is_staff=true on the Django User) get full admin access
-    // regardless of whether they also have a linked player profile.
-    final isAdmin = context.read<AuthProvider>().isStaff;
+    // Anyone with admin privileges in this app — Django staff OR
+    // account admins — gets full edit access on the round screen,
+    // regardless of whether they're a member of any foursome.
+    final isAdmin = context.read<AuthProvider>().isAdmin;
 
     final hasIrishRumble = round.activeGames.contains('irish_rumble');
     final hasLowNet      = round.activeGames.contains('low_net_round');

@@ -27,6 +27,12 @@ class AuthProvider extends ChangeNotifier {
   AccountInfo?   get account          => _account;
   bool           get isStaff          => _isStaff;
   bool           get isAccountAdmin   => _isAccountAdmin;
+  /// True for anyone who should see admin-level controls in the app
+  /// (configure games, edit other foursomes, create tournaments, etc.).
+  /// `isStaff` = Django superuser-style access (legacy, pre-accounts).
+  /// `isAccountAdmin` = elevated role within the user's Account.
+  /// Either one grants admin powers within the user's own tenant.
+  bool           get isAdmin          => _isStaff || _isAccountAdmin;
   bool           get loading          => _loading;
   String?        get error            => _error;
   String?        get lastAccountName  => _lastAccountName;

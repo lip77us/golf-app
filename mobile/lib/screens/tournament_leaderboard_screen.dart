@@ -93,7 +93,7 @@ class _TournamentLeaderboardScreenState
 
   @override
   Widget build(BuildContext context) {
-    final isStaff = context.read<AuthProvider>().isStaff;
+    final isStaff = context.read<AuthProvider>().isAdmin;
     final activeGames =
         (_payload?['active_games'] as List? ?? []).map((g) => g as String).toList();
 
