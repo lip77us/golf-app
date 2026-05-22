@@ -77,13 +77,18 @@ def _get(path: str, params: dict | None = None) -> dict:
 
     import logging
     logger = logging.getLogger(__name__)
-    logger.info('GolfCourseAPI request: %s', url)
+    # Drop the per-request trace to DEBUG — it logged the full response
+    # body (up to 3000 chars) on every course load, which spammed the
+    # server log.  INFO-level callers still see the higher-level
+    # "CourseImportView" summary; flip the level to DEBUG via
+    # DJANGO_LOG_LEVEL=DEBUG if you need the raw API payload again.
+    logger.debug('GolfCourseAPI request: %s', url)
 
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read().decode('utf-8')
             data = json.loads(body)
-            logger.info('GolfCourseAPI response (%s): %s', url, body[:3000])
+            logger.debug('GolfCourseAPI response (%s): %s', url, body[:3000])
             return data
     except HTTPError as exc:
         body = exc.read().decode('utf-8', errors='replace')
