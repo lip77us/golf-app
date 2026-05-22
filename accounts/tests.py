@@ -353,3 +353,186 @@ class LoginEndpointTests(TestCase):
         self.assertIn('token', body)
         self.assertEqual(body['account']['name'], 'Golden Glove')
         self.assertEqual(body['is_account_admin'], False)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Member management — /api/account/members/
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class MemberManagementTests(TestCase):
+    """
+    Admin can list / create / update / delete members of their own
+    account, and only their own.  Non-admins can list / read self.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.acct_a, cls.admin_a = _make_account('Acct A',
+                                                admin_username='alice')
+        cls.acct_b, cls.admin_b = _make_account('Acct B',
+                                                admin_username='bob')
+
+        # Regular (non-admin) member in Acct A.
+        cls.member_a = User.objects.create_user(
+            username='charlie', password='charliepw', account=cls.acct_a,
+        )
+
+        cls.tok_admin_a  = Token.objects.create(user=cls.admin_a).key
+        cls.tok_member_a = Token.objects.create(user=cls.member_a).key
+        cls.tok_admin_b  = Token.objects.create(user=cls.admin_b).key
+
+    def _client(self, token: str) -> APIClient:
+        c = APIClient()
+        c.credentials(HTTP_AUTHORIZATION=f'Token {token}')
+        return c
+
+    # ── List ────────────────────────────────────────────────────────────────
+
+    def test_list_returns_only_own_account_members(self):
+        c = self._client(self.tok_admin_a)
+        r = c.get('/api/account/members/')
+        self.assertEqual(r.status_code, 200)
+        usernames = {m['username'] for m in r.json()}
+        self.assertEqual(usernames, {'alice', 'charlie'})
+
+    def test_list_open_to_non_admin_members(self):
+        c = self._client(self.tok_member_a)
+        r = c.get('/api/account/members/')
+        self.assertEqual(r.status_code, 200)
+
+    # ── Create ──────────────────────────────────────────────────────────────
+
+    def test_admin_creates_new_member(self):
+        c = self._client(self.tok_admin_a)
+        r = c.post('/api/account/members/', {
+            'username': 'dave',
+            'password': 'davepass1',
+            'email':    'dave@example.com',
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        # The new member is in Acct A.
+        new = User.objects.get(username='dave')
+        self.assertEqual(new.account_id, self.acct_a.id)
+        self.assertFalse(new.is_account_admin)
+
+    def test_non_admin_cannot_create_member(self):
+        c = self._client(self.tok_member_a)
+        r = c.post('/api/account/members/', {
+            'username': 'ghost',
+            'password': 'ghostpass1',
+        }, format='json')
+        self.assertEqual(r.status_code, 403)
+
+    def test_create_duplicate_username_in_same_account_rejected(self):
+        c = self._client(self.tok_admin_a)
+        r = c.post('/api/account/members/', {
+            'username': 'charlie',  # already exists in Acct A
+            'password': 'newpass12',
+        }, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_create_same_username_other_account_ok(self):
+        # Acct B admin can add a "charlie" — that name only exists in A.
+        c = self._client(self.tok_admin_b)
+        r = c.post('/api/account/members/', {
+            'username': 'charlie',
+            'password': 'b_charlie1',
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+
+    def test_create_short_password_rejected(self):
+        c = self._client(self.tok_admin_a)
+        r = c.post('/api/account/members/', {
+            'username': 'eve',
+            'password': 'short',
+        }, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    # ── Update ──────────────────────────────────────────────────────────────
+
+    def test_admin_can_promote_member_to_admin(self):
+        c = self._client(self.tok_admin_a)
+        r = c.patch(f'/api/account/members/{self.member_a.id}/', {
+            'is_account_admin': True,
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.member_a.refresh_from_db()
+        self.assertTrue(self.member_a.is_account_admin)
+
+    def test_admin_cannot_demote_self_when_sole_admin(self):
+        # alice is the only admin in Acct A.
+        c = self._client(self.tok_admin_a)
+        r = c.patch(f'/api/account/members/{self.admin_a.id}/', {
+            'is_account_admin': False,
+        }, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.admin_a.refresh_from_db()
+        self.assertTrue(self.admin_a.is_account_admin)
+
+    def test_admin_can_demote_self_when_other_admin_exists(self):
+        # Promote charlie first, then alice can step down.
+        c = self._client(self.tok_admin_a)
+        c.patch(f'/api/account/members/{self.member_a.id}/', {
+            'is_account_admin': True,
+        }, format='json')
+        r = c.patch(f'/api/account/members/{self.admin_a.id}/', {
+            'is_account_admin': False,
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+    def test_password_reset_via_patch(self):
+        c = self._client(self.tok_admin_a)
+        r = c.patch(f'/api/account/members/{self.member_a.id}/', {
+            'password': 'reset12345',
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.member_a.refresh_from_db()
+        self.assertTrue(self.member_a.check_password('reset12345'))
+
+    # ── Cross-account ──────────────────────────────────────────────────────
+
+    def test_admin_cannot_see_other_account_member(self):
+        c = self._client(self.tok_admin_a)
+        r = c.get(f'/api/account/members/{self.admin_b.id}/')
+        self.assertEqual(r.status_code, 404)
+
+    def test_admin_cannot_patch_other_account_member(self):
+        c = self._client(self.tok_admin_a)
+        r = c.patch(f'/api/account/members/{self.admin_b.id}/', {
+            'is_account_admin': False,
+        }, format='json')
+        self.assertEqual(r.status_code, 404)
+
+    def test_admin_cannot_delete_other_account_member(self):
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/account/members/{self.admin_b.id}/')
+        self.assertEqual(r.status_code, 404)
+
+    # ── Delete ──────────────────────────────────────────────────────────────
+
+    def test_admin_can_delete_non_admin_member(self):
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/account/members/{self.member_a.id}/')
+        self.assertEqual(r.status_code, 204)
+        self.assertFalse(
+            User.objects.filter(pk=self.member_a.pk).exists(),
+        )
+
+    def test_admin_cannot_delete_self(self):
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/account/members/{self.admin_a.id}/')
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue(
+            User.objects.filter(pk=self.admin_a.pk).exists(),
+        )
+
+    def test_non_admin_member_self_read_allowed(self):
+        c = self._client(self.tok_member_a)
+        r = c.get(f'/api/account/members/{self.member_a.id}/')
+        self.assertEqual(r.status_code, 200)
+
+    def test_non_admin_member_other_read_forbidden(self):
+        c = self._client(self.tok_member_a)
+        r = c.get(f'/api/account/members/{self.admin_a.id}/')
+        self.assertEqual(r.status_code, 403)

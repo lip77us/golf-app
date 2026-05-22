@@ -5,7 +5,7 @@ URL patterns for the Golf App REST API.
 All routes are mounted under /api/ in the project urls.py.
 """
 
-from django.urls import path
+from django.urls import include, path
 from . import views
 
 urlpatterns = [
@@ -13,6 +13,9 @@ urlpatterns = [
     path('auth/login/',   views.LoginView.as_view(),  name='api-login'),
     path('auth/logout/',  views.LogoutView.as_view(), name='api-logout'),
     path('auth/me/',      views.MeView.as_view(),     name='api-me'),
+
+    # ---- Account-member management ----
+    path('account/', include('accounts.urls')),
 
     # ---- Reference data ----
     path('players/',           views.PlayerListView.as_view(),   name='api-players'),

@@ -34,6 +34,53 @@ class AccountInfo {
       );
 }
 
+/// One row from /api/account/members/.  Represents an active or
+/// inactive user in the current account; admins use this to manage
+/// roster + roles.
+class Member {
+  final int     id;
+  final String  username;
+  final String  email;
+  final String  firstName;
+  final String  lastName;
+  final bool    isAccountAdmin;
+  final bool    isActive;
+  final bool    hasPlayerProfile;
+  final String? dateJoined;
+  final String? lastLogin;
+
+  const Member({
+    required this.id,
+    required this.username,
+    required this.email,
+    required this.firstName,
+    required this.lastName,
+    required this.isAccountAdmin,
+    required this.isActive,
+    required this.hasPlayerProfile,
+    this.dateJoined,
+    this.lastLogin,
+  });
+
+  String get displayName {
+    final full = ('$firstName $lastName').trim();
+    return full.isEmpty ? username : full;
+  }
+
+  factory Member.fromJson(Map<String, dynamic> j) => Member(
+        id:               j['id']               as int,
+        username:         j['username']         as String,
+        email:            j['email']            as String? ?? '',
+        firstName:        j['first_name']       as String? ?? '',
+        lastName:         j['last_name']        as String? ?? '',
+        isAccountAdmin:   j['is_account_admin'] as bool?   ?? false,
+        isActive:         j['is_active']        as bool?   ?? true,
+        hasPlayerProfile: j['has_player_profile'] as bool? ?? false,
+        dateJoined:       j['date_joined']      as String?,
+        lastLogin:        j['last_login']       as String?,
+      );
+}
+
 class AuthResult {
   final String token;
 

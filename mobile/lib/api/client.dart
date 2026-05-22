@@ -178,6 +178,61 @@ class ApiClient {
     await _post('/auth/logout/', {});
   }
 
+  // ---- Account-member management ----
+
+  Future<List<Member>> getAccountMembers() async {
+    final data = await _get('/account/members/');
+    return (data as List)
+        .map((m) => Member.fromJson(m as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Member> createAccountMember({
+    required String username,
+    required String password,
+    String email     = '',
+    String firstName = '',
+    String lastName  = '',
+    bool   isAccountAdmin = false,
+  }) async {
+    final data = await _post('/account/members/', {
+      'username':         username,
+      'password':         password,
+      'email':            email,
+      'first_name':       firstName,
+      'last_name':        lastName,
+      'is_account_admin': isAccountAdmin,
+    });
+    return Member.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// PATCH /api/account/members/{id}/.  Pass only the fields you want
+  /// to change — omitted fields are left alone server-side.  Pass
+  /// `password` (≥8 chars) to reset; omit to leave the hash alone.
+  Future<Member> updateAccountMember(
+    int memberId, {
+    String? email,
+    String? firstName,
+    String? lastName,
+    bool?   isAccountAdmin,
+    bool?   isActive,
+    String? password,
+  }) async {
+    final body = <String, dynamic>{};
+    if (email          != null) body['email']            = email;
+    if (firstName      != null) body['first_name']       = firstName;
+    if (lastName       != null) body['last_name']        = lastName;
+    if (isAccountAdmin != null) body['is_account_admin'] = isAccountAdmin;
+    if (isActive       != null) body['is_active']        = isActive;
+    if (password       != null) body['password']         = password;
+    final data = await _patch('/account/members/$memberId/', body);
+    return Member.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteAccountMember(int memberId) async {
+    await _delete('/account/members/$memberId/');
+  }
+
   Future<MeResult> me() async {
     final data = await _get('/auth/me/');
     return MeResult.fromJson(data as Map<String, dynamic>);

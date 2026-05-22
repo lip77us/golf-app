@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../config.dart';
+import '../providers/auth_provider.dart';
 
 /// Shared navigation drawer used by both Tournaments and Casual Rounds.
 /// Each host screen passes the callbacks for the entries it wants active;
@@ -60,6 +62,18 @@ class AppDrawer extends StatelessWidget {
                   title: const Text('Players'),
                   onTap: onPlayersTap,
                 ),
+                // Manage Members shows up only for account admins.  The
+                // drawer reads AuthProvider directly so host screens
+                // don't have to plumb yet another callback down.
+                if (context.watch<AuthProvider>().isAccountAdmin)
+                  ListTile(
+                    leading: const Icon(Icons.admin_panel_settings_outlined),
+                    title: const Text('Manage Members'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pushNamed('/manage-members');
+                    },
+                  ),
               ],
             ),
           ),

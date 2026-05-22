@@ -121,6 +121,7 @@ class AccountScopedAPIView:
 
 SCOPE_PATHS: dict[str, str] = {
     # Tenant roots — `account` directly on the model.
+    'accounts.User':                  'account',
     'core.Player':                    'account',
     'core.Course':                    'account',
     'tournament.Tournament':          'account',
