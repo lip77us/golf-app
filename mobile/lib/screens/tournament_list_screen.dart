@@ -106,57 +106,24 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     );
   }
 
-  /// Bottom-sheet picker for swapping a round's cup game without
-  /// rebuilding its foursomes.  Used when Day 2 of a cup tournament
-  /// switches formats but keeps the same player roster and team
-  /// draft.  Backend rejects irish_rumble / match_play targets — for
-  /// those the user has to go through the full Set Up Cup Round.
+  /// Dialog for swapping a round's cup game without rebuilding its
+  /// foursomes.  Lets the user pick both the new game AND the
+  /// per-segment point value — necessary because different games
+  /// award different numbers of segments per foursome and the user
+  /// often wants to scale up / down to keep the round total
+  /// comparable (Singles Nassau has 6 segments/foursome, Singles 18
+  /// has 2; if both should be worth the same total cup points,
+  /// Singles 18's per-segment value needs to be 3× Singles Nassau's).
+  ///
+  /// Backend rejects irish_rumble / match_play targets — for those
+  /// the user has to go through the full Set Up Cup Round wizard.
   Future<void> _showChangeCupGameSheet(
       RoundSummary round, Tournament t) async {
-    final options = <(String value, String label)>[
-      ('nassau',         'Four Ball (Nassau)'),
-      ('quota_nassau',   'Four Ball Quota'),
-      ('singles_nassau', 'Singles Nassau (1v1)'),
-      ('singles_18',     'Singles 18 (1v1 overall)'),
-    ];
-
-    final picked = await showModalBottomSheet<String>(
+    final result = await showDialog<_CupGameChange>(
       context: context,
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Change Round ${round.roundNumber} cup game',
-                        style: Theme.of(ctx).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Foursomes and team assignments are kept.  The '
-                      'existing per-foursome game data for this round '
-                      'will be replaced.',
-                      style: Theme.of(ctx).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              for (final opt in options)
-                ListTile(
-                  title: Text(opt.$2),
-                  onTap: () => Navigator.of(ctx).pop(opt.$1),
-                ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
+      builder: (_) => _ChangeCupGameDialog(roundNumber: round.roundNumber),
     );
-    if (picked == null) return;
+    if (result == null) return;
 
     final client = context.read<AuthProvider>().client;
     showDialog(
@@ -171,15 +138,18 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       ),
     );
     try {
-      final result = await client.postRyderCupChangeGame(
-        round.id, gameType: picked,
+      final res = await client.postRyderCupChangeGame(
+        round.id,
+        gameType:   result.gameType,
+        pointValue: result.pointValue,
       );
       if (!mounted) return;
       Navigator.of(context).pop();
-      final changed = result['changed'] as int? ?? 0;
-      final skipped = (result['skipped'] as List? ?? []).cast<int>();
+      final changed = res['changed'] as int? ?? 0;
+      final skipped = (res['skipped'] as List? ?? []).cast<int>();
       final msg = StringBuffer(
-        'R${round.roundNumber} → ${_gameLabelFor(picked)}'
+        'R${round.roundNumber} → ${_gameLabelFor(result.gameType)}'
+        ' @ ${result.pointValue} pts/seg'
         ' · $changed foursome${changed == 1 ? '' : 's'} updated',
       );
       if (skipped.isNotEmpty) {
@@ -775,6 +745,175 @@ class _RoundTile extends StatelessWidget {
         visualDensity: VisualDensity.compact,
       ),
       onTap: onTap,
+    );
+  }
+}
+
+
+/// Result of the Change Cup Game dialog.
+class _CupGameChange {
+  final String gameType;
+  /// Points per segment, sent as a string so the backend's
+  /// Decimal parser doesn't lose precision on values like "0.5".
+  final String pointValue;
+
+  const _CupGameChange({required this.gameType, required this.pointValue});
+}
+
+/// Picks the new cup game AND the per-segment point value in one
+/// step.  The selected game's segments-per-foursome count is shown
+/// alongside a "to keep the round-total comparable" hint, so admins
+/// can scale points up or down accordingly.
+class _ChangeCupGameDialog extends StatefulWidget {
+  final int roundNumber;
+  const _ChangeCupGameDialog({required this.roundNumber});
+
+  @override
+  State<_ChangeCupGameDialog> createState() => _ChangeCupGameDialogState();
+}
+
+class _ChangeCupGameDialogState extends State<_ChangeCupGameDialog> {
+  /// Per-game segments awarded per foursome — see
+  /// services/cup_standings.GAME_MULTIPLIERS on the backend.  Used
+  /// to compute the "equivalent" point value the user might want.
+  static const _segments = <String, int>{
+    'nassau':         3,
+    'quota_nassau':   3,
+    'singles_nassau': 6,
+    'singles_18':     2,
+  };
+  static const _labels = <String, String>{
+    'nassau':         'Four Ball (Nassau)',
+    'quota_nassau':   'Four Ball Quota',
+    'singles_nassau': 'Singles Nassau (1v1)',
+    'singles_18':     'Singles 18 (1v1 overall)',
+  };
+
+  String _game  = 'nassau';
+  final _pvCtrl = TextEditingController(text: '1.00');
+  String? _err;
+
+  @override
+  void dispose() {
+    _pvCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final segs = _segments[_game] ?? 0;
+    final pv   = double.tryParse(_pvCtrl.text.trim()) ?? 0;
+    final foursomeTotal = pv * segs;
+
+    return AlertDialog(
+      title: Text('Change R${widget.roundNumber} Cup Game'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Foursomes and team assignments stay put.  The '
+              'per-foursome game model for this round is replaced.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            const Text('New cup game',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            for (final entry in _labels.entries)
+              RadioListTile<String>(
+                value: entry.key,
+                groupValue: _game,
+                title: Text(entry.value),
+                subtitle: Text(
+                  '${_segments[entry.key]} segment'
+                  '${_segments[entry.key] == 1 ? '' : 's'}/foursome',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                onChanged: (v) => setState(() {
+                  if (v != null) _game = v;
+                }),
+                contentPadding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+              ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _pvCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Points per segment',
+                border: const OutlineInputBorder(),
+                errorText: _err,
+                helperText: foursomeTotal > 0
+                    ? '$segs × ${pv.toStringAsFixed(2)} = '
+                      '${foursomeTotal.toStringAsFixed(2)} cup pts per '
+                      'foursome'
+                    : null,
+                helperMaxLines: 2,
+              ),
+              onChanged: (_) => setState(() { _err = null; }),
+            ),
+            const SizedBox(height: 12),
+            // Helper card with the scaling hint.  Pulled out so it's
+            // obvious — different cup games hand out different point
+            // counts per foursome, and re-rating point_value is the
+            // lever to keep the round's contribution to the cup
+            // total in line with the others.
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondaryContainer
+                    .withOpacity(0.45),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Per-foursome cup points by game',
+                      style: Theme.of(context).textTheme.labelMedium
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Four Ball: 3·pv  ·  4-Ball Quota: 3·pv  ·  '
+                    'Singles Nassau: 6·pv  ·  Singles 18: 2·pv',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'To roughly match Singles Nassau\'s 6 pts/foursome '
+                    '(at pv = 1.0), use pv ≈ 2.00 for Four Ball /'
+                    ' Quota or 3.00 for Singles 18.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final v = _pvCtrl.text.trim();
+            final d = double.tryParse(v);
+            if (d == null || d <= 0) {
+              setState(() => _err = 'Enter a positive number');
+              return;
+            }
+            Navigator.of(context).pop(_CupGameChange(
+              gameType:   _game,
+              pointValue: v,
+            ));
+          },
+          child: const Text('Change Game'),
+        ),
+      ],
     );
   }
 }
