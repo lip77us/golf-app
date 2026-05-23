@@ -221,11 +221,34 @@ class PlayerCreateSerializer(serializers.ModelSerializer):
 
 from core.models import Course
 
+
+class CourseTeeSummarySerializer(serializers.ModelSerializer):
+    """
+    Compact tee view nested inside CourseSerializer.  Skips the
+    18-element `holes` JSON so the course list payload stays small
+    while still giving the client enough to render the tee list.
+    """
+    class Meta:
+        model  = Tee
+        fields = ['id', 'tee_name', 'slope', 'course_rating', 'par',
+                  'sex', 'sort_priority']
+        read_only_fields = fields
+
+
 class CourseSerializer(serializers.ModelSerializer):
+    """
+    Course list / detail.  `tees` is a nested compact-tee list so a
+    single GET /courses/ gives the management screen everything it
+    needs to render per-tee delete affordances without a follow-up
+    fetch.  Holes are intentionally omitted from this shape — pull
+    them via GET /tees/ when actually scoring a round.
+    """
+    tees = CourseTeeSummarySerializer(many=True, read_only=True)
+
     class Meta:
         model  = Course
-        fields = ['id', 'name', 'created_at']
-        read_only_fields = ['id']
+        fields = ['id', 'name', 'created_at', 'tees']
+        read_only_fields = ['id', 'created_at', 'tees']
 
 
 class TeeSerializer(serializers.ModelSerializer):

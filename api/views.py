@@ -966,9 +966,49 @@ class CourseListView(APIView):
         courses = (
             Course.objects
             .for_account(request.user.account)
+            .prefetch_related('tees')
             .order_by('name')
         )
         return Response(CourseSerializer(courses, many=True).data)
+
+
+class CourseDetailView(APIView):
+    """GET / DELETE /api/courses/{id}/."""
+
+    def get(self, request, pk):
+        course = account_get_or_404(
+            Course, request.user.account, pk=pk,
+            base=Course.objects.prefetch_related('tees'),
+        )
+        return Response(CourseSerializer(course).data)
+
+    def delete(self, request, pk):
+        """
+        Admin-only.  Course → Tee is CASCADE, so deleting a Course
+        also wipes its Tees.  Tee → FoursomeMembership is PROTECT,
+        so a Course that's been used in any round can't be hard-
+        deleted: we surface that as a clear 400 the client can show
+        instead of a generic 500.
+        """
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response(
+                {'detail': 'Only admins can delete courses.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        course = account_get_or_404(
+            Course, request.user.account, pk=pk,
+        )
+        from django.db.models import ProtectedError
+        try:
+            course.delete()
+        except ProtectedError:
+            return Response(
+                {'detail': f'{course.name} has been used in rounds and '
+                           'can\'t be removed.  Delete or archive '
+                           'those rounds first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class TeeListView(APIView):
@@ -977,6 +1017,38 @@ class TeeListView(APIView):
             'course__name', 'tee_name',
         )
         return Response(TeeSerializer(tees, many=True).data)
+
+
+class TeeDetailView(APIView):
+    """DELETE /api/tees/{id}/."""
+
+    def delete(self, request, pk):
+        """
+        Admin-only.  Removes a single tee set from a course (useful
+        when a course discontinues a colour, etc.).  Tee →
+        FoursomeMembership is PROTECT, so a tee that's been
+        assigned to any player in any round returns a clean 400.
+        """
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response(
+                {'detail': 'Only admins can delete tees.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        tee = account_get_or_404(
+            Tee, request.user.account, pk=pk,
+            base=Tee.objects.select_related('course'),
+        )
+        from django.db.models import ProtectedError
+        try:
+            tee.delete()
+        except ProtectedError:
+            return Response(
+                {'detail': f'The {tee.tee_name} tees at {tee.course.name} '
+                           'have been used in rounds and can\'t be '
+                           'removed.  Delete those rounds first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------

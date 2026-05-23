@@ -21,7 +21,9 @@ urlpatterns = [
     path('players/',           views.PlayerListView.as_view(),   name='api-players'),
     path('players/<int:pk>/',  views.PlayerDetailView.as_view(), name='api-player-detail'),
     path('courses/',           views.CourseListView.as_view(),   name='api-courses'),
+    path('courses/<int:pk>/',  views.CourseDetailView.as_view(), name='api-course-detail'),
     path('tees/',              views.TeeListView.as_view(),      name='api-tees'),
+    path('tees/<int:pk>/',     views.TeeDetailView.as_view(),    name='api-tee-detail'),
 
     # ---- Tournaments ----
     path('tournaments/',                              views.TournamentListView.as_view(),        name='api-tournament-list'),

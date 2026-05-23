@@ -185,7 +185,7 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
             IconButton(
               icon: const Icon(Icons.golf_course),
               tooltip: 'Manage Courses',
-              onPressed: () => Navigator.of(context).pushNamed('/course-search'),
+              onPressed: () => Navigator.of(context).pushNamed('/manage-courses'),
             ),
           IconButton(
             icon: const Icon(Icons.refresh),

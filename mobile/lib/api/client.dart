@@ -425,12 +425,29 @@ class ApiClient {
   }
 
   Future<List<CourseInfo>> getCourses() async {
-    // Reusing the tees endpoint but returning courses might be tricky if we don't have a dedicated endpoint.
-    // However, since TeeInfo embeds CourseInfo, we can extract them if needed, or better, we can assume a `/courses/` endpoint.
     final data = await _get('/courses/');
     return (data as List)
         .map((c) => CourseInfo.fromJson(c as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<CourseInfo> getCourse(int id) async {
+    final data = await _get('/courses/$id/');
+    return CourseInfo.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// DELETE /api/courses/{id}/.  Admin-only.  Cascades to the course's
+  /// tees; returns 400 if any tee has been used in a round (the
+  /// FoursomeMembership FK is PROTECT).  Surface the API's `detail`
+  /// to the user.
+  Future<void> deleteCourse(int id) async {
+    await _delete('/courses/$id/');
+  }
+
+  /// DELETE /api/tees/{id}/.  Admin-only.  Same PROTECT story as
+  /// deleteCourse — surface the `detail` on 400.
+  Future<void> deleteTee(int id) async {
+    await _delete('/tees/$id/');
   }
 
   Future<Round> createRound({

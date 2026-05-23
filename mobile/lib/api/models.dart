@@ -217,15 +217,23 @@ class PlayerProfile {
 class CourseInfo {
   final int id;
   final String name;
+  /// Tees configured on this course.  Populated by GET /courses/
+  /// (which prefetches them); empty when this CourseInfo was
+  /// inflated from a thinner payload (e.g. round.course).
+  final List<CourseTeeSummary> tees;
 
   const CourseInfo({
     required this.id,
     required this.name,
+    this.tees = const [],
   });
 
   factory CourseInfo.fromJson(Map<String, dynamic> j) => CourseInfo(
         id: j['id'] as int,
         name: j['name'] as String,
+        tees: (j['tees'] as List? ?? const [])
+            .map((t) => CourseTeeSummary.fromJson(t as Map<String, dynamic>))
+            .toList(),
       );
 
   @override
@@ -233,6 +241,40 @@ class CourseInfo {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+
+/// Compact tee shape nested inside CourseInfo for the manage-courses
+/// screen.  No `holes` payload — pull that via `getTees()` if you
+/// actually need per-hole par/SI/yards.
+class CourseTeeSummary {
+  final int     id;
+  final String  teeName;
+  final int     slope;
+  final double  courseRating;
+  final int     par;
+  final String? sex;
+  final int     sortPriority;
+
+  const CourseTeeSummary({
+    required this.id,
+    required this.teeName,
+    required this.slope,
+    required this.courseRating,
+    required this.par,
+    this.sex,
+    this.sortPriority = 100,
+  });
+
+  factory CourseTeeSummary.fromJson(Map<String, dynamic> j) => CourseTeeSummary(
+        id:           j['id'] as int,
+        teeName:      j['tee_name'] as String,
+        slope:        j['slope'] as int,
+        courseRating: double.parse(j['course_rating'].toString()),
+        par:          j['par'] as int,
+        sex:          j['sex'] as String?,
+        sortPriority: j['sort_priority'] as int? ?? 100,
+      );
 }
 
 class TeeInfo {

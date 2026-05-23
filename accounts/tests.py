@@ -753,3 +753,151 @@ class PlayerDeleteTests(TestCase):
         self.assertTrue(
             Player.objects.filter(pk=self.player_a.pk).exists(),
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DELETE /api/courses/{id}/  and  /api/tees/{id}/
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class CourseAndTeeDeleteTests(TestCase):
+    """
+    Admins delete courses (CASCADE drops their tees) and individual
+    tee sets within their own account.  Cross-account → 404.
+    Non-admins → 403.  Courses / tees used in any round → 400 PROTECT.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from core.models import Course, Tee
+
+        cls.acct_a, cls.admin_a = _make_account('Acct A',
+                                                admin_username='alice')
+        cls.acct_b, cls.admin_b = _make_account('Acct B',
+                                                admin_username='bob')
+
+        cls.member_a = User.objects.create_user(
+            username='m_a', password='memberapw', account=cls.acct_a,
+        )
+
+        cls.course_a = Course.objects.create(account=cls.acct_a,
+                                             name='Acct A Course')
+        cls.course_b = Course.objects.create(account=cls.acct_b,
+                                             name='Acct B Course')
+        cls.tee_a = Tee.objects.create(
+            course=cls.course_a, tee_name='White',
+            slope=120, course_rating=Decimal('70.0'),
+            par=72,
+            holes=[
+                {'number': i, 'par': 4, 'stroke_index': i, 'yards': 380}
+                for i in range(1, 19)
+            ],
+        )
+
+        cls.tok_admin_a  = Token.objects.create(user=cls.admin_a).key
+        cls.tok_member_a = Token.objects.create(user=cls.member_a).key
+        cls.tok_admin_b  = Token.objects.create(user=cls.admin_b).key
+
+    def _client(self, token):
+        c = APIClient()
+        c.credentials(HTTP_AUTHORIZATION=f'Token {token}')
+        return c
+
+    # ── Course ──────────────────────────────────────────────────────────────
+
+    def test_admin_deletes_unused_course_and_cascades_tees(self):
+        from core.models import Course, Tee
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/courses/{self.course_a.id}/')
+        self.assertEqual(r.status_code, 204)
+        self.assertFalse(
+            Course.objects.filter(pk=self.course_a.pk).exists(),
+        )
+        # Tee should have CASCADE'd away with the course.
+        self.assertFalse(
+            Tee.objects.filter(pk=self.tee_a.pk).exists(),
+        )
+
+    def test_non_admin_cannot_delete_course(self):
+        c = self._client(self.tok_member_a)
+        r = c.delete(f'/api/courses/{self.course_a.id}/')
+        self.assertEqual(r.status_code, 403)
+
+    def test_cross_account_course_delete_404s(self):
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/courses/{self.course_b.id}/')
+        self.assertEqual(r.status_code, 404)
+
+    def test_course_used_in_round_protected(self):
+        round_obj = Round.objects.create(
+            account=self.acct_a, course=self.course_a, round_number=1,
+        )
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/courses/{self.course_a.id}/')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('rounds', r.json().get('detail', '').lower())
+        # Course + tee both intact.
+        from core.models import Course, Tee
+        self.assertTrue(
+            Course.objects.filter(pk=self.course_a.pk).exists(),
+        )
+        self.assertTrue(
+            Tee.objects.filter(pk=self.tee_a.pk).exists(),
+        )
+        # Tidy up the round we created so other tests aren't affected
+        # (TestCase rolls back, but be explicit anyway).
+        round_obj.delete()
+
+    # ── Tee ─────────────────────────────────────────────────────────────────
+
+    def test_admin_deletes_individual_tee(self):
+        from core.models import Tee
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/tees/{self.tee_a.id}/')
+        self.assertEqual(r.status_code, 204)
+        self.assertFalse(
+            Tee.objects.filter(pk=self.tee_a.pk).exists(),
+        )
+
+    def test_cross_account_tee_delete_404s(self):
+        from core.models import Tee
+        tee_b = Tee.objects.create(
+            course=self.course_b, tee_name='Blue',
+            slope=125, course_rating=Decimal('71.5'),
+            par=72,
+            holes=[
+                {'number': i, 'par': 4, 'stroke_index': i, 'yards': 400}
+                for i in range(1, 19)
+            ],
+        )
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/tees/{tee_b.id}/')
+        self.assertEqual(r.status_code, 404)
+        self.assertTrue(
+            Tee.objects.filter(pk=tee_b.pk).exists(),
+        )
+
+    def test_tee_used_in_round_protected(self):
+        round_obj = Round.objects.create(
+            account=self.acct_a, course=self.course_a, round_number=1,
+        )
+        from tournament.models import Foursome, FoursomeMembership
+        fs = Foursome.objects.create(round=round_obj, group_number=1)
+        # Need a Player to attach to a membership — borrow alice's
+        # user via a quick Player row.
+        player = Player.objects.create(
+            account=self.acct_a, name='Alice P',
+            handicap_index=Decimal('10.0'),
+        )
+        FoursomeMembership.objects.create(
+            foursome=fs, player=player, tee=self.tee_a,
+            course_handicap=10, playing_handicap=10,
+        )
+
+        c = self._client(self.tok_admin_a)
+        r = c.delete(f'/api/tees/{self.tee_a.id}/')
+        self.assertEqual(r.status_code, 400)
+        from core.models import Tee
+        self.assertTrue(
+            Tee.objects.filter(pk=self.tee_a.pk).exists(),
+        )
