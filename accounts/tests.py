@@ -1316,3 +1316,226 @@ class TeePasteTests(TestCase):
         }, format='json')
         self.assertEqual(r.status_code, 400)
         self.assertIn('slope', r.json())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cup: change game type mid-tournament
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class CupChangeGameTests(TestCase):
+    """
+    POST /api/rounds/<pk>/ryder-cup/change-game/ swaps the cup game
+    for every foursome in the round while preserving FoursomeMembership
+    rows and TournamentTeam assignments.  Validates the user's real-
+    world flow: Day 2 of a cup tournament flipping from Singles
+    Nassau to Four Ball without rebuilding the player roster.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from core.models import Course, Tee
+        from tournament.models import (
+            Foursome, FoursomeMembership,
+            TeamTournament, TournamentTeam,
+            RyderCupRoundConfig, RyderCupFoursomeConfig,
+        )
+        from games.models import MatchPlayBracket
+
+        cls.acct_a, cls.admin_a = _make_account('Acct A',
+                                                admin_username='alice')
+        cls.member_a = User.objects.create_user(
+            username='m_a', password='memberapw', account=cls.acct_a,
+        )
+        cls.tok_admin_a  = Token.objects.create(user=cls.admin_a).key
+        cls.tok_member_a = Token.objects.create(user=cls.member_a).key
+
+        # ── Minimal tournament setup: 4 players, 2 teams (2v2), 1 foursome ──
+        course = Course.objects.create(account=cls.acct_a,
+                                       name='Cup Test Course')
+        tee = Tee.objects.create(
+            course=course, tee_name='White',
+            slope=120, course_rating=Decimal('70.0'), par=72,
+            holes=[
+                {'number': i, 'par': 4, 'stroke_index': i, 'yards': 380}
+                for i in range(1, 19)
+            ],
+        )
+        cls.tournament = Tournament.objects.create(
+            account=cls.acct_a, name='Cup Test',
+            start_date='2026-01-01',
+            active_games=['team_cup', 'nassau', 'singles_nassau'],
+        )
+        tt = TeamTournament.objects.create(
+            tournament=cls.tournament, cup_name='Test Cup',
+        )
+        team_a = TournamentTeam.objects.create(
+            tournament=tt, name='Team A', team_number=1,
+        )
+        team_b = TournamentTeam.objects.create(
+            tournament=tt, name='Team B', team_number=2,
+        )
+
+        # Players: 2 for each team.
+        players_a = []
+        players_b = []
+        for i in range(2):
+            p = Player.objects.create(
+                account=cls.acct_a, name=f'A{i+1}',
+                handicap_index=Decimal('10.0'),
+            )
+            players_a.append(p)
+        for i in range(2):
+            p = Player.objects.create(
+                account=cls.acct_a, name=f'B{i+1}',
+                handicap_index=Decimal('15.0'),
+            )
+            players_b.append(p)
+        team_a.players.set(players_a)
+        team_b.players.set(players_b)
+
+        # Round + foursome with all 4 players.
+        cls.round = Round.objects.create(
+            account=cls.acct_a, tournament=cls.tournament,
+            course=course, round_number=1,
+            active_games=['nassau'],
+        )
+        fs = Foursome.objects.create(round=cls.round, group_number=1)
+        for p in players_a + players_b:
+            FoursomeMembership.objects.create(
+                foursome=fs, player=p, tee=tee,
+                course_handicap=10, playing_handicap=10,
+            )
+        cls.foursome = fs
+
+        rc = RyderCupRoundConfig.objects.create(
+            round=cls.round, tournament=tt,
+        )
+        # Start with Singles Nassau on Day 1.
+        RyderCupFoursomeConfig.objects.create(
+            foursome=fs, round_config=rc,
+            game_type='singles_nassau',
+            team1=team_a, team2=team_b,
+            point_value=Decimal('1.00'),
+        )
+        # The bracket from initial singles setup.
+        from services.cup_singles import setup_cup_singles
+        setup_cup_singles(fs, team_a, team_b)
+
+        cls.tt      = tt
+        cls.team_a  = team_a
+        cls.team_b  = team_b
+
+    def _client(self, token):
+        c = APIClient()
+        c.credentials(HTTP_AUTHORIZATION=f'Token {token}')
+        return c
+
+    def test_swap_singles_to_nassau(self):
+        """The user's actual use case: Singles → Four Ball."""
+        from games.models import MatchPlayBracket, NassauGame
+        from tournament.models import RyderCupFoursomeConfig
+
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/rounds/{self.round.id}/ryder-cup/change-game/', {
+            'game_type': 'nassau',
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        body = r.json()
+        self.assertEqual(body['changed'], 1)
+
+        # The per-foursome config now points at nassau and a NassauGame
+        # exists for the foursome.
+        fc = RyderCupFoursomeConfig.objects.get(foursome=self.foursome)
+        self.assertEqual(fc.game_type, 'nassau')
+        self.assertTrue(NassauGame.objects.filter(
+            foursome=self.foursome).exists())
+        # The old cup_singles bracket was removed.
+        self.assertFalse(MatchPlayBracket.objects.filter(
+            foursome=self.foursome, bracket_type='cup_singles').exists())
+
+    def test_swap_singles_to_singles_18_preserves_team_assignments(self):
+        """Same-cardinality swap — matchups derived from teams."""
+        from games.models import MatchPlayBracket
+
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/rounds/{self.round.id}/ryder-cup/change-game/', {
+            'game_type': 'singles_18',
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        # Singles_18 also uses cup_singles bracket — still there with
+        # the same player pairings.
+        self.assertTrue(MatchPlayBracket.objects.filter(
+            foursome=self.foursome, bracket_type='cup_singles').exists())
+
+    def test_swap_nassau_to_singles_round_trip(self):
+        """Swap to nassau, then back to singles — verifies the
+        delete-then-recreate path is idempotent."""
+        from games.models import MatchPlayBracket, NassauGame
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/rounds/{self.round.id}/ryder-cup/change-game/', {
+            'game_type': 'nassau',
+        }, format='json')
+        self.assertEqual(r.status_code, 200)
+        r = c.post(f'/api/rounds/{self.round.id}/ryder-cup/change-game/', {
+            'game_type': 'singles_nassau',
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        # NassauGame gone, bracket back.
+        self.assertFalse(NassauGame.objects.filter(
+            foursome=self.foursome).exists())
+        self.assertTrue(MatchPlayBracket.objects.filter(
+            foursome=self.foursome, bracket_type='cup_singles').exists())
+
+    def test_swap_updates_point_value(self):
+        from tournament.models import RyderCupFoursomeConfig
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/rounds/{self.round.id}/ryder-cup/change-game/', {
+            'game_type':   'nassau',
+            'point_value': '3.00',
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        fc = RyderCupFoursomeConfig.objects.get(foursome=self.foursome)
+        self.assertEqual(str(fc.point_value), '3.00')
+
+    def test_unsupported_game_returns_501(self):
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/rounds/{self.round.id}/ryder-cup/change-game/', {
+            'game_type': 'irish_rumble',
+        }, format='json')
+        self.assertEqual(r.status_code, 501)
+
+    def test_missing_round_config_returns_400(self):
+        # New round with no cup config.
+        from core.models import Course
+        course = Course.objects.first()
+        round2 = Round.objects.create(
+            account=self.acct_a, tournament=self.tournament,
+            course=course, round_number=2,
+        )
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/rounds/{round2.id}/ryder-cup/change-game/', {
+            'game_type': 'nassau',
+        }, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_non_admin_rejected(self):
+        c = self._client(self.tok_member_a)
+        r = c.post(f'/api/rounds/{self.round.id}/ryder-cup/change-game/', {
+            'game_type': 'nassau',
+        }, format='json')
+        self.assertEqual(r.status_code, 403)
+
+    def test_cross_account_round_returns_404(self):
+        # Make a foreign tenant + round
+        from core.models import Course
+        acct_b, _ = _make_account('Acct B', admin_username='bob')
+        course_b = Course.objects.create(account=acct_b, name='B Course')
+        round_b = Round.objects.create(
+            account=acct_b, course=course_b, round_number=1,
+        )
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/rounds/{round_b.id}/ryder-cup/change-game/', {
+            'game_type': 'nassau',
+        }, format='json')
+        self.assertEqual(r.status_code, 404)

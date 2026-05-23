@@ -102,7 +102,8 @@ urlpatterns = [
     # ---- Ryder Cup round config ----
     path('rounds/<int:pk>/ryder-cup/setup/',      views.RyderCupRoundSetupView.as_view(),      name='api-ryder-cup-round-setup'),
     path('rounds/<int:pk>/ryder-cup/',            views.RyderCupRoundResultView.as_view(),     name='api-ryder-cup-round-result'),
-    path('rounds/<int:pk>/ryder-cup/calculate/',  views.RyderCupRoundCalculateView.as_view(),  name='api-ryder-cup-round-calculate'),
+    path('rounds/<int:pk>/ryder-cup/calculate/',    views.RyderCupRoundCalculateView.as_view(),  name='api-ryder-cup-round-calculate'),
+    path('rounds/<int:pk>/ryder-cup/change-game/',  views.RyderCupChangeGameView.as_view(),      name='api-ryder-cup-change-game'),
     path('rounds/<int:pk>/cup-live/',             views.CupRoundLiveView.as_view(),             name='api-cup-round-live'),
     path('rounds/<int:pk>/tee-times/',            views.TeeTimeBulkView.as_view(),             name='api-tee-times-bulk'),
 

@@ -1084,6 +1084,31 @@ class ApiClient {
   /// POST /api/rounds/<id>/ryder-cup/setup/
   /// [foursomes] = [{foursome_id, game_type, team1_id?, team2_id?}, ...]
   /// [irishRumblePairings] = [{foursome_a_id, foursome_b_id, team_a_id, team_b_id}, ...]
+  /// POST /api/rounds/{id}/ryder-cup/change-game/.  Admin-only.
+  ///
+  /// Swaps the cup game for every foursome in this round without
+  /// rebuilding the player roster.  Supported targets: nassau,
+  /// quota_nassau, singles_nassau, singles_18.  Other games (irish_rumble,
+  /// match_play) return 501; use the full Cup Round Setup wizard.
+  ///
+  /// Returns `{changed: int, skipped: List<int>}`.  `skipped` lists
+  /// group numbers whose foursomes couldn't be auto-teamed (e.g. all
+  /// players belong to one team).
+  Future<Map<String, dynamic>> postRyderCupChangeGame(
+    int roundId, {
+    required String gameType,
+    String? pointValue,
+  }) async {
+    final body = <String, dynamic>{
+      'game_type': gameType,
+      if (pointValue != null) 'point_value': pointValue,
+    };
+    final data = await _post(
+      '/rounds/$roundId/ryder-cup/change-game/', body,
+    );
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<Map<String, dynamic>> postRyderCupRoundSetup(
     int roundId, {
     required double nassauPointValue,

@@ -4309,6 +4309,88 @@ class CupRoundLiveView(APIView):
         return Response(summary)
 
 
+class RyderCupChangeGameView(APIView):
+    """
+    POST /api/rounds/<pk>/ryder-cup/change-game/
+
+    Swap the cup game for every foursome in this round without
+    rebuilding from scratch.  Real-world need: cup tournaments
+    routinely shift formats day-to-day — Day 2 might flip from
+    Singles Nassau to Four Ball without changing the player roster
+    or team draft.
+
+    Body:
+      {
+        "game_type":   "nassau"|"quota_nassau"|"singles_nassau"|"singles_18",
+        "point_value": "1.00"   # optional; defaults to keeping each
+                                # foursome's existing point_value
+      }
+
+    What it preserves
+      * FoursomeMembership rows (players + tees stay put)
+      * TournamentTeam membership (drives team1/team2 derivation)
+      * The RyderCupRoundConfig row itself (multiplier, notes, etc.)
+
+    What it replaces
+      * Each foursome's per-game model (NassauGame / QuotaNassauGame /
+        cup_singles MatchPlayBracket) — old scoring data for the
+        previous game is wiped.  This matches the existing setup
+        wizard's behaviour for the same swap.
+
+    What it rejects (400 / 501)
+      * Irish Rumble and match_play targets need extra structural
+        info (cross-foursome pairings, brackets) — use the full
+        wizard.
+
+    Admin-only.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response(
+                {'detail': 'Only admins can change the cup game.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+
+        body = request.data or {}
+        game_type = (body.get('game_type') or '').strip()
+        if not game_type:
+            return Response(
+                {'game_type': 'game_type is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        pv_raw = body.get('point_value')
+        point_value = None
+        if pv_raw not in (None, ''):
+            try:
+                from decimal import Decimal
+                point_value = Decimal(str(pv_raw))
+            except Exception:
+                return Response(
+                    {'point_value': 'point_value must be a number.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        from services.cup_change_game import change_round_game
+        try:
+            summary = change_round_game(
+                round_obj,
+                game_type=game_type,
+                point_value=point_value,
+            )
+        except NotImplementedError as exc:
+            return Response(
+                {'detail': str(exc)},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
+        return Response(summary)
+
+
 class RyderCupRoundCalculateView(APIView):
     """
     POST /api/rounds/<pk>/ryder-cup/calculate/

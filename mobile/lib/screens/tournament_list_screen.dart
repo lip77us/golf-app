@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/app_drawer.dart';
@@ -103,6 +104,118 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         'initialTabKey': '__bandon_cup__',
       },
     );
+  }
+
+  /// Bottom-sheet picker for swapping a round's cup game without
+  /// rebuilding its foursomes.  Used when Day 2 of a cup tournament
+  /// switches formats but keeps the same player roster and team
+  /// draft.  Backend rejects irish_rumble / match_play targets — for
+  /// those the user has to go through the full Set Up Cup Round.
+  Future<void> _showChangeCupGameSheet(
+      RoundSummary round, Tournament t) async {
+    final options = <(String value, String label)>[
+      ('nassau',         'Four Ball (Nassau)'),
+      ('quota_nassau',   'Four Ball Quota'),
+      ('singles_nassau', 'Singles Nassau (1v1)'),
+      ('singles_18',     'Singles 18 (1v1 overall)'),
+    ];
+
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Change Round ${round.roundNumber} cup game',
+                        style: Theme.of(ctx).textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Foursomes and team assignments are kept.  The '
+                      'existing per-foursome game data for this round '
+                      'will be replaced.',
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              for (final opt in options)
+                ListTile(
+                  title: Text(opt.$2),
+                  onTap: () => Navigator.of(ctx).pop(opt.$1),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null) return;
+
+    final client = context.read<AuthProvider>().client;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(children: [
+          CircularProgressIndicator(),
+          SizedBox(width: 16),
+          Text('Changing game…'),
+        ]),
+      ),
+    );
+    try {
+      final result = await client.postRyderCupChangeGame(
+        round.id, gameType: picked,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      final changed = result['changed'] as int? ?? 0;
+      final skipped = (result['skipped'] as List? ?? []).cast<int>();
+      final msg = StringBuffer(
+        'R${round.roundNumber} → ${_gameLabelFor(picked)}'
+        ' · $changed foursome${changed == 1 ? '' : 's'} updated',
+      );
+      if (skipped.isNotEmpty) {
+        msg.write('.  Skipped groups: ${skipped.join(", ")}');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg.toString()),
+        backgroundColor: Colors.green.shade700,
+      ));
+      _load();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        duration: const Duration(seconds: 6),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed: $e'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    }
+  }
+
+  String _gameLabelFor(String code) {
+    switch (code) {
+      case 'nassau':         return 'Four Ball';
+      case 'quota_nassau':   return 'Four Ball Quota';
+      case 'singles_nassau': return 'Singles Nassau';
+      case 'singles_18':     return 'Singles 18';
+      default:               return code;
+    }
   }
 
   Future<void> _deleteTournament(Tournament t) async {
@@ -341,6 +454,7 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                       gamePointValues : round.gamePointValues,
                     )))
                 .then((_) { if (mounted) _load(); }),
+            onChangeCupGame: (round) => _showChangeCupGameSheet(round, t),
             onRecalculateCupPoints: (round) async {
               final client = context.read<AuthProvider>().client;
               showDialog(
@@ -395,6 +509,7 @@ class _TournamentCard extends StatelessWidget {
   final VoidCallback onOpenCupScoreboard;
   final void Function(RoundSummary round) onSetupCupRound;
   final void Function(RoundSummary round) onRecalculateCupPoints;
+  final void Function(RoundSummary round) onChangeCupGame;
   final VoidCallback onDelete;
 
   const _TournamentCard({
@@ -409,6 +524,7 @@ class _TournamentCard extends StatelessWidget {
     required this.onOpenCupScoreboard,
     required this.onSetupCupRound,
     required this.onRecalculateCupPoints,
+    required this.onChangeCupGame,
     required this.onDelete,
   });
 
@@ -528,6 +644,16 @@ class _TournamentCard extends StatelessWidget {
                   icon : Icons.tune_outlined,
                   label: 'R${r.roundNumber} · Set Up Cup Round',
                   onTap: () => onSetupCupRound(r),
+                ),
+                // Quick-swap: change the cup game on an already-
+                // configured round without rebuilding foursomes.
+                // Useful when Day 2's format changes (e.g. Singles
+                // Nassau → Four Ball) but the player roster +
+                // team draft stays the same.
+                _ActionButton(
+                  icon : Icons.swap_horiz_outlined,
+                  label: 'R${r.roundNumber} · Change Cup Game',
+                  onTap: () => onChangeCupGame(r),
                 ),
                 if (r.status != 'pending')
                   _ActionButton(
