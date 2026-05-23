@@ -124,4 +124,5 @@ urlpatterns = [
     path('courses/golf-api/search/',                   views.GolfApiSearchView.as_view(),        name='api-golf-api-search'),
     path('courses/golf-api/courses/<int:course_id>/',  views.GolfApiCourseDetailView.as_view(),  name='api-golf-api-course-detail'),
     path('courses/import/',                            views.CourseImportView.as_view(),          name='api-course-import'),
+    path('courses/paste/',                             views.CoursePasteView.as_view(),           name='api-course-paste'),
 ]

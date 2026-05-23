@@ -2986,6 +2986,106 @@ def _course_display_name(api_course: dict) -> str:
     return club
 
 
+class CoursePasteView(APIView):
+    """
+    POST /api/courses/paste/
+
+    Hand-import a course (or re-rate an existing one's tees) from a
+    pasted scorecard.  See services.course_paste for the input
+    format.
+
+    Body:
+        {
+          "name":              "Pebble Beach",   # required when not replacing
+          "replace_course_id": null|int,         # update tees in-place on this course
+          "paste":             "<multi-line blob>",
+          "dry_run":           false             # true → just parse + return preview
+        }
+
+    Returns the same shape CourseDetailView does (CourseSerializer
+    with nested tees), so the client can render the updated state.
+    On dry_run=true returns the parsed structure WITHOUT a Course
+    being persisted, so the mobile preview can show what would be
+    saved before the user commits.
+    """
+    def post(self, request):
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response(
+                {'detail': 'Only admins can paste-import courses.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        body          = request.data or {}
+        paste_text    = (body.get('paste') or '').strip()
+        if not paste_text:
+            return Response(
+                {'detail': 'Provide a "paste" string with tee specs '
+                           'and 18 hole rows.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from services.course_paste import (
+            parse_paste, apply_parse, CoursePasteError,
+        )
+
+        try:
+            parsed = parse_paste(paste_text)
+        except CoursePasteError as exc:
+            # parse_paste raises a DRF ValidationError so we can let
+            # it bubble to a 400 directly — but we want the message
+            # to land on a `paste` key the mobile can highlight.
+            detail = exc.detail if isinstance(exc.detail, list) \
+                else [exc.detail]
+            return Response(
+                {'paste': detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if body.get('dry_run'):
+            return Response({
+                'preview': True,
+                'tees':    [
+                    {
+                        'name':          t['name'],
+                        'slope':         t['slope'],
+                        'course_rating': str(t['course_rating']),
+                        'par':           t['par'],
+                        'sex':           t['sex'],
+                    }
+                    for t in parsed['tees']
+                ],
+                'holes':   parsed['holes'],
+            })
+
+        replace_id = body.get('replace_course_id')
+        if replace_id:
+            course = account_get_or_404(
+                Course, request.user.account, pk=replace_id,
+            )
+            updated = apply_parse(
+                request.user.account, parsed, replace_course=course,
+            )
+        else:
+            name = (body.get('name') or '').strip()
+            if not name:
+                return Response(
+                    {'name': 'Course name is required when creating '
+                             'a new course.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            updated = apply_parse(
+                request.user.account, parsed, course_name=name,
+            )
+
+        # Re-fetch to load the freshly-attached tees.
+        updated.refresh_from_db()
+        return Response(
+            CourseSerializer(updated).data,
+            status=status.HTTP_201_CREATED if not replace_id
+                   else status.HTTP_200_OK,
+        )
+
+
 class CourseImportView(APIView):
     """
     POST /api/courses/import/

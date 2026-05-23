@@ -450,6 +450,33 @@ class ApiClient {
     await _delete('/tees/$id/');
   }
 
+  /// POST /api/courses/paste/.  Admin-only.
+  ///
+  /// Either creates a new course (pass `name`) or re-rates an
+  /// existing one (pass `replaceCourseId`) from a pasted scorecard
+  /// blob.  Set `dryRun: true` to get back the parsed structure
+  /// without persisting — used to populate a preview step.
+  ///
+  /// On parse errors the API returns 400 with `{paste: [...]}`;
+  /// surface those as inline field errors.
+  Future<Map<String, dynamic>> pasteCourse({
+    String? name,
+    int?    replaceCourseId,
+    required String paste,
+    bool    dryRun = false,
+  }) async {
+    assert(name != null || replaceCourseId != null,
+        'pasteCourse needs either name (create) or replaceCourseId (update).');
+    final body = <String, dynamic>{
+      'paste':   paste,
+      'dry_run': dryRun,
+      if (name != null) 'name': name,
+      if (replaceCourseId != null) 'replace_course_id': replaceCourseId,
+    };
+    final data = await _post('/courses/paste/', body);
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<Round> createRound({
     int? tournamentId,
     required int courseId,

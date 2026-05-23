@@ -15,6 +15,7 @@ import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import 'course_paste_screen.dart';
 
 class ManageCourseTeesScreen extends StatefulWidget {
   final int courseId;
@@ -112,6 +113,31 @@ class _ManageCourseTeesScreenState extends State<ManageCourseTeesScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(_course?.name ?? 'Course'),
+          actions: [
+            // Re-rate tees: paste fresh ratings/yardages.  Updates
+            // matching tees in place so existing rounds aren't
+            // broken by PROTECT FKs.
+            if (_course != null)
+              IconButton(
+                icon: const Icon(Icons.update_outlined),
+                tooltip: 'Re-rate tees from a scorecard',
+                onPressed: () async {
+                  final changed =
+                      await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => CoursePasteScreen(
+                        replaceCourseId:   _course!.id,
+                        replaceCourseName: _course!.name,
+                      ),
+                    ),
+                  );
+                  if (changed == true) {
+                    _anyDeleted = true;   // signal upstream to reload
+                    await _load();
+                  }
+                },
+              ),
+          ],
         ),
         body: _buildBody(),
       ),

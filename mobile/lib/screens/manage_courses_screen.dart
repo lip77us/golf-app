@@ -19,6 +19,7 @@ import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import 'course_paste_screen.dart';
 import 'manage_course_tees_screen.dart';
 
 class ManageCoursesScreen extends StatefulWidget {
@@ -130,6 +131,21 @@ class _ManageCoursesScreenState extends State<ManageCoursesScreen> {
       appBar: AppBar(
         title: const Text('Courses'),
         actions: [
+          // Paste-a-scorecard alt-entry alongside the GolfCourseAPI
+          // import.  Lives in the toolbar so it's distinct from the
+          // primary FAB, which still points at the catalogue search.
+          IconButton(
+            icon: const Icon(Icons.content_paste_go_outlined),
+            tooltip: 'Paste a scorecard',
+            onPressed: () async {
+              final created = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) => const CoursePasteScreen(),
+                ),
+              );
+              if (created == true && mounted) _load();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _load,
