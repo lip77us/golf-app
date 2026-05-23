@@ -1020,7 +1020,14 @@ class TeeListView(APIView):
 
 
 class TeeDetailView(APIView):
-    """DELETE /api/tees/{id}/."""
+    """GET / DELETE /api/tees/{id}/."""
+
+    def get(self, request, pk):
+        tee = account_get_or_404(
+            Tee, request.user.account, pk=pk,
+            base=Tee.objects.select_related('course'),
+        )
+        return Response(TeeSerializer(tee).data)
 
     def delete(self, request, pk):
         """
@@ -3083,6 +3090,134 @@ class CoursePasteView(APIView):
             CourseSerializer(updated).data,
             status=status.HTTP_201_CREATED if not replace_id
                    else status.HTTP_200_OK,
+        )
+
+
+class TeePasteView(APIView):
+    """
+    POST /api/courses/{pk}/tees/paste/
+
+    Add (or re-rate) a single tee on an existing course using its
+    own per-hole par + stroke index + yards.  Use this when:
+      * combo tees aren't in the GolfCourseAPI catalogue,
+      * men's and women's stroke indexes differ on the same hole,
+      * one specific tee got re-rated by USGA and the others stayed
+        the same.
+
+    Body:
+        {
+          "name":          "White",      # required
+          "slope":         130,
+          "course_rating": "70.1",
+          "sex":           "M" | "W" | null,
+          "paste":         "<18 hole rows>",
+          "dry_run":       false
+        }
+
+    Hole rows: 18 lines of "<hole> <par> <si> <yards>".  An
+    optional first row of column headers ("Hole Par SI Yards") is
+    accepted and ignored.
+
+    Returns the parent course's full payload (CourseSerializer)
+    so the client refreshes the per-course tees list in one shot.
+    Matching tees update IN PLACE — the Tee pk is preserved, so
+    rounds played on that tee aren't disturbed.
+    """
+    def post(self, request, pk):
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response(
+                {'detail': 'Only admins can paste tees.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        course = account_get_or_404(
+            Course, request.user.account, pk=pk,
+        )
+
+        body = request.data or {}
+        name   = (body.get('name') or '').strip()
+        if not name:
+            return Response(
+                {'name': 'Tee name is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            slope  = int(body.get('slope'))
+            from decimal import Decimal
+            rating = Decimal(str(body.get('course_rating')))
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'slope must be an int and course_rating a '
+                           'number.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sex_raw = body.get('sex')
+        if sex_raw in ('M', 'W', None, ''):
+            sex = sex_raw or None
+        elif sex_raw in ('U', 'unisex'):
+            sex = None
+        else:
+            return Response(
+                {'sex': 'sex must be "M", "W", or null.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        paste = (body.get('paste') or '').strip()
+        if not paste:
+            return Response(
+                {'paste': 'Provide 18 hole rows in the paste.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from services.course_paste import (
+            parse_single_tee_holes, apply_single_tee, CoursePasteError,
+        )
+
+        try:
+            holes = parse_single_tee_holes(paste)
+        except CoursePasteError as exc:
+            detail = exc.detail if isinstance(exc.detail, list) \
+                else [exc.detail]
+            return Response(
+                {'paste': detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not (55 <= slope <= 155):
+            return Response(
+                {'slope': f'Slope {slope} must be 55-155.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from decimal import Decimal as _D
+        if not (_D('60') <= rating <= _D('80')):
+            return Response(
+                {'course_rating': f'Rating {rating} must be 60-80.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if body.get('dry_run'):
+            return Response({
+                'preview': True,
+                'tee': {
+                    'name':          name,
+                    'slope':         slope,
+                    'course_rating': str(rating),
+                    'sex':           sex,
+                    'par':           sum(h['par'] for h in holes),
+                },
+                'holes': holes,
+            })
+
+        apply_single_tee(
+            course,
+            tee_name=name, slope=slope, course_rating=rating,
+            sex=sex, holes=holes,
+        )
+        course.refresh_from_db()
+        return Response(
+            CourseSerializer(course).data,
+            status=status.HTTP_200_OK,
         )
 
 

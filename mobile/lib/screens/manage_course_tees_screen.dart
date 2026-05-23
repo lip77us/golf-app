@@ -16,6 +16,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import 'course_paste_screen.dart';
+import 'tee_paste_screen.dart';
 
 class ManageCourseTeesScreen extends StatefulWidget {
   final int courseId;
@@ -51,6 +52,50 @@ class _ManageCourseTeesScreenState extends State<ManageCourseTeesScreen> {
         _error   = friendlyError(e);
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _editTee(CourseTeeSummary summary) async {
+    // The summary on the course detail payload skips the per-hole
+    // blob to keep the list cheap; fetch the full tee so the paste
+    // textarea can be pre-filled.
+    try {
+      final full = await context.read<AuthProvider>().client.getTee(summary.id);
+      if (!mounted) return;
+      final changed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => TeePasteScreen(
+            courseId:    widget.courseId,
+            courseName:  _course?.name ?? 'Course',
+            existingTee: full,
+          ),
+        ),
+      );
+      if (changed == true) {
+        _anyDeleted = true;   // signal the list above to reload
+        await _load();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(friendlyError(e)),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    }
+  }
+
+  Future<void> _addTee() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => TeePasteScreen(
+          courseId:   widget.courseId,
+          courseName: _course?.name ?? 'Course',
+        ),
+      ),
+    );
+    if (changed == true) {
+      _anyDeleted = true;
+      await _load();
     }
   }
 
@@ -139,6 +184,12 @@ class _ManageCourseTeesScreenState extends State<ManageCourseTeesScreen> {
               ),
           ],
         ),
+        floatingActionButton: _course == null ? null :
+          FloatingActionButton.extended(
+            onPressed: _addTee,
+            icon: const Icon(Icons.add),
+            label: const Text('Add tee'),
+          ),
         body: _buildBody(),
       ),
     );
@@ -195,6 +246,7 @@ class _ManageCourseTeesScreenState extends State<ManageCourseTeesScreen> {
             tooltip: 'Delete tee set',
             onPressed: () => _delete(t),
           ),
+          onTap: () => _editTee(t),
         );
       },
     );

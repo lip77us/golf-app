@@ -291,6 +291,11 @@ class TeeInfo {
   /// unisex tees), the one with the lowest sort_priority is the
   /// pre-selected default.  Defaults to 100 for backward compatibility.
   final int sortPriority;
+  /// Per-hole data: 18 dicts with {number, par, stroke_index, yards}.
+  /// Populated by GET /api/tees/{id}/; empty when this TeeInfo was
+  /// inflated from a list payload (which omits the blob to keep the
+  /// list response small).
+  final List<Map<String, dynamic>> holes;
 
   const TeeInfo({
     required this.id,
@@ -301,6 +306,7 @@ class TeeInfo {
     required this.par,
     this.sex,
     this.sortPriority = 100,
+    this.holes = const [],
   });
 
   factory TeeInfo.fromJson(Map<String, dynamic> j) => TeeInfo(
@@ -312,6 +318,9 @@ class TeeInfo {
         par: j['par'] as int,
         sex: j['sex'] as String?,
         sortPriority: j['sort_priority'] as int? ?? 100,
+        holes: (j['holes'] as List? ?? const [])
+            .map((h) => Map<String, dynamic>.from(h as Map))
+            .toList(),
       );
 
   String get display => '${course.name} — $teeName';

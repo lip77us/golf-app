@@ -1118,3 +1118,201 @@ class CoursePasteTests(TestCase):
         }, format='json')
         self.assertEqual(r.status_code, 400)
         self.assertIn('paste', r.json())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Single-tee paste — combo tees, M/W stroke index differences, one-off
+# re-rates on a single tee colour.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+_SINGLE_TEE_PASTE = """\
+Hole Par SI Yards
+1    4   7  365
+2    5   3  490
+3    3   17 165
+4    4   11 370
+5    4   1  380
+6    5   13 510
+7    3   15 175
+8    4   5  340
+9    4   9  355
+10   4   8  370
+11   3   16 150
+12   5   2  485
+13   4   12 365
+14   4   6  355
+15   4   10 380
+16   3   18 175
+17   5   14 510
+18   4   4  405
+"""
+
+
+class TeePasteTests(TestCase):
+    """
+    /api/courses/{id}/tees/paste/ — add or update a single tee with
+    its own per-hole par / SI / yards.  Updates match by tee_name
+    (CI) and preserve the Tee pk so PROTECT-protected rounds aren't
+    disrupted.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from core.models import Course
+
+        cls.acct_a, cls.admin_a = _make_account('Acct A',
+                                                admin_username='alice')
+        cls.acct_b, cls.admin_b = _make_account('Acct B',
+                                                admin_username='bob')
+        cls.member_a = User.objects.create_user(
+            username='m_a', password='memberapw', account=cls.acct_a,
+        )
+
+        cls.course_a = Course.objects.create(account=cls.acct_a,
+                                             name='Test Course')
+        cls.course_b = Course.objects.create(account=cls.acct_b,
+                                             name='B Course')
+
+        cls.tok_admin_a  = Token.objects.create(user=cls.admin_a).key
+        cls.tok_member_a = Token.objects.create(user=cls.member_a).key
+
+    def _client(self, token):
+        c = APIClient()
+        c.credentials(HTTP_AUTHORIZATION=f'Token {token}')
+        return c
+
+    # ── Parser ──────────────────────────────────────────────────────────────
+
+    def test_parser_accepts_optional_header(self):
+        from services.course_paste import parse_single_tee_holes
+        holes = parse_single_tee_holes(_SINGLE_TEE_PASTE)
+        self.assertEqual(len(holes), 18)
+        self.assertEqual(holes[0],
+            {'number': 1, 'par': 4, 'stroke_index': 7, 'yards': 365})
+
+    def test_parser_accepts_no_header(self):
+        from services.course_paste import parse_single_tee_holes
+        # Drop the header line.
+        body = '\n'.join(_SINGLE_TEE_PASTE.splitlines()[1:])
+        holes = parse_single_tee_holes(body)
+        self.assertEqual(len(holes), 18)
+
+    def test_parser_rejects_duplicate_si(self):
+        from services.course_paste import parse_single_tee_holes, CoursePasteError
+        broken = _SINGLE_TEE_PASTE.replace(
+            '18   4   4  405', '18   4   7  405',
+        )
+        with self.assertRaises(CoursePasteError):
+            parse_single_tee_holes(broken)
+
+    # ── Endpoint create / update ────────────────────────────────────────────
+
+    def test_admin_adds_new_tee_to_course(self):
+        from core.models import Tee
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/courses/{self.course_a.id}/tees/paste/', {
+            'name':          'Combo',
+            'slope':         128,
+            'course_rating': '69.5',
+            'sex':           'M',
+            'paste':         _SINGLE_TEE_PASTE,
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        tee = Tee.objects.get(course=self.course_a, tee_name='Combo')
+        self.assertEqual(tee.slope, 128)
+        self.assertEqual(len(tee.holes), 18)
+        # Tee.par auto-computed from sum of hole pars (72 for this card).
+        self.assertEqual(tee.par, 72)
+
+    def test_update_existing_tee_preserves_pk(self):
+        from core.models import Tee
+        from decimal import Decimal
+        existing = Tee.objects.create(
+            course=self.course_a, tee_name='White',
+            slope=125, course_rating=Decimal('69.0'),
+            par=72,
+            holes=[
+                {'number': i, 'par': 4, 'stroke_index': i, 'yards': 350}
+                for i in range(1, 19)
+            ],
+        )
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/courses/{self.course_a.id}/tees/paste/', {
+            'name':          'white',     # case-insensitive match
+            'slope':         130,
+            'course_rating': '70.1',
+            'sex':           'M',
+            'paste':         _SINGLE_TEE_PASTE,
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        existing.refresh_from_db()
+        self.assertEqual(existing.slope, 130)
+        self.assertEqual(str(existing.course_rating), '70.1')
+        # Pk preserved → existing FoursomeMembership FKs are safe.
+        self.assertEqual(
+            Tee.objects.filter(course=self.course_a,
+                               tee_name__iexact='white').count(),
+            1,
+        )
+
+    def test_dry_run_returns_preview_without_persisting(self):
+        from core.models import Tee
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/courses/{self.course_a.id}/tees/paste/', {
+            'name':          'Preview',
+            'slope':         130,
+            'course_rating': '70.1',
+            'sex':           'M',
+            'paste':         _SINGLE_TEE_PASTE,
+            'dry_run':       True,
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['preview'], True)
+        self.assertEqual(r.json()['tee']['par'], 72)
+        # Nothing persisted.
+        self.assertFalse(
+            Tee.objects.filter(course=self.course_a,
+                               tee_name='Preview').exists(),
+        )
+
+    def test_cross_account_course_404s(self):
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/courses/{self.course_b.id}/tees/paste/', {
+            'name':          'White',
+            'slope':         130,
+            'course_rating': '70.1',
+            'paste':         _SINGLE_TEE_PASTE,
+        }, format='json')
+        self.assertEqual(r.status_code, 404)
+
+    def test_non_admin_rejected(self):
+        c = self._client(self.tok_member_a)
+        r = c.post(f'/api/courses/{self.course_a.id}/tees/paste/', {
+            'name':          'White',
+            'slope':         130,
+            'course_rating': '70.1',
+            'paste':         _SINGLE_TEE_PASTE,
+        }, format='json')
+        self.assertEqual(r.status_code, 403)
+
+    def test_missing_paste_returns_400(self):
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/courses/{self.course_a.id}/tees/paste/', {
+            'name':          'White',
+            'slope':         130,
+            'course_rating': '70.1',
+        }, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('paste', r.json())
+
+    def test_invalid_slope_returns_400(self):
+        c = self._client(self.tok_admin_a)
+        r = c.post(f'/api/courses/{self.course_a.id}/tees/paste/', {
+            'name':          'White',
+            'slope':         300,     # out of range
+            'course_rating': '70.1',
+            'paste':         _SINGLE_TEE_PASTE,
+        }, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('slope', r.json())

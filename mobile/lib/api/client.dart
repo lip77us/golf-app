@@ -450,6 +450,36 @@ class ApiClient {
     await _delete('/tees/$id/');
   }
 
+  /// GET /api/tees/{id}/.  Returns full tee data including the
+  /// 18-hole JSON blob — used by the per-tee edit screen.
+  Future<TeeInfo> getTee(int id) async {
+    final data = await _get('/tees/$id/');
+    return TeeInfo.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/courses/{courseId}/tees/paste/.  Admin-only.  Adds
+  /// a new tee or updates one in place (matched by name, CI).  Use
+  /// [dryRun] to fetch a preview without persisting.
+  Future<Map<String, dynamic>> pasteTee({
+    required int    courseId,
+    required String name,
+    required int    slope,
+    required double courseRating,
+    String? sex,
+    required String paste,
+    bool    dryRun = false,
+  }) async {
+    final data = await _post('/courses/$courseId/tees/paste/', {
+      'name':          name,
+      'slope':         slope,
+      'course_rating': courseRating,
+      'sex':           sex,
+      'paste':         paste,
+      'dry_run':       dryRun,
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   /// POST /api/courses/paste/.  Admin-only.
   ///
   /// Either creates a new course (pass `name`) or re-rates an

@@ -49,6 +49,7 @@ import re
 from decimal import Decimal
 from typing import Any
 
+from django.db import models
 from rest_framework import serializers
 
 
@@ -314,6 +315,145 @@ def _parse_hole_rows(lines: list[str],
 # ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Single-tee paste — for combo tees, men's vs women's stroke indexes,
+# or adding one extra tee that the catalogue doesn't have yet.
+# ---------------------------------------------------------------------------
+
+def parse_single_tee_holes(text: str) -> list[dict]:
+    """
+    Parse 18 lines of "<hole> <par> <si> <yards>" into the same
+    per-hole dict shape that parse_paste produces (minus the
+    multi-tee yards_by_tee map — a single-tee paste only has one
+    yards value per hole).
+
+    Returns:
+        [
+          {'number': 1, 'par': 4, 'stroke_index': 7, 'yards': 412},
+          ...18 items in order...
+        ]
+    """
+    lines = [ln for ln in (raw.rstrip() for raw in text.splitlines())
+             if ln.strip()]
+
+    # Skip an optional header row whose first token is "Hole".
+    if lines and _split_tokens(lines[0])[:1] == ['Hole'] \
+            or (lines and _split_tokens(lines[0])
+                and _split_tokens(lines[0])[0].casefold() == 'hole'):
+        lines = lines[1:]
+
+    if len(lines) != 18:
+        raise CoursePasteError(
+            f'Expected 18 hole rows (one per line), got {len(lines)}.'
+        )
+
+    holes = []
+    for idx, raw in enumerate(lines, start=1):
+        toks = _split_tokens(raw)
+        if len(toks) != 4:
+            raise CoursePasteError(
+                f'Hole {idx} row "{raw}" — need 4 numbers '
+                '(hole, par, stroke index, yards).'
+            )
+        try:
+            hole_num = int(toks[0])
+            par      = int(toks[1])
+            si       = int(toks[2])
+            yards    = int(toks[3])
+        except ValueError:
+            raise CoursePasteError(
+                f'Hole {idx} row "{raw}" — every value must be a '
+                'whole number.'
+            )
+        if hole_num != idx:
+            raise CoursePasteError(
+                f'Hole rows must be ordered 1..18.  Row {idx} starts '
+                f'with hole number {hole_num}.'
+            )
+        if not (3 <= par <= 6):
+            raise CoursePasteError(
+                f'Hole {idx}: par {par} must be 3-6.'
+            )
+        if not (1 <= si <= 18):
+            raise CoursePasteError(
+                f'Hole {idx}: stroke index {si} must be 1-18.'
+            )
+        if not (50 <= yards <= 800):
+            raise CoursePasteError(
+                f'Hole {idx}: yards {yards} must be 50-800.'
+            )
+        holes.append({
+            'number':       hole_num,
+            'par':          par,
+            'stroke_index': si,
+            'yards':        yards,
+        })
+
+    si_seen = sorted(h['stroke_index'] for h in holes)
+    if si_seen != list(range(1, 19)):
+        raise CoursePasteError(
+            'Stroke indexes must be 1..18 with each value appearing '
+            f'exactly once.  Got: {si_seen}.'
+        )
+    return holes
+
+
+def apply_single_tee(course, *, tee_name: str, slope: int,
+                     course_rating, sex: str | None,
+                     holes: list[dict]):
+    """
+    Persist a single-tee paste against an existing course.  Matches
+    an existing tee by tee_name (CI); UPDATE if found, CREATE if
+    not.  Preserves the tee pk on update so FoursomeMembership FKs
+    (PROTECT) keep pointing at the same row across re-rates.
+
+    Returns the Tee instance.
+    """
+    from django.db import transaction
+    from core.models import Tee
+
+    tee_name = tee_name.strip()
+    if not tee_name:
+        raise serializers.ValidationError(
+            {'name': 'Tee name is required.'},
+        )
+
+    par_total = sum(h['par'] for h in holes)
+
+    with transaction.atomic():
+        existing = next(
+            (t for t in course.tees.all()
+             if t.tee_name.casefold() == tee_name.casefold()),
+            None,
+        )
+        attrs = dict(
+            tee_name      = tee_name,
+            slope         = slope,
+            course_rating = course_rating,
+            par           = par_total,
+            sex           = sex,
+            holes         = holes,
+        )
+        if existing is None:
+            # New tee — assign a sort_priority just past the highest
+            # existing one so it lands at the bottom of the list.
+            max_priority = course.tees.aggregate(
+                m=models.Max('sort_priority'),
+            )['m'] or 0
+            tee = Tee.objects.create(
+                course=course,
+                sort_priority=max_priority + 10,
+                **attrs,
+            )
+        else:
+            for field, value in attrs.items():
+                setattr(existing, field, value)
+            existing.save()
+            tee = existing
+
+    return tee
+
 
 def apply_parse(account, parsed: dict[str, Any], *,
                 course_name: str | None = None,
