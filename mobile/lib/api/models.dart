@@ -83,6 +83,9 @@ class Member {
 
 class AuthResult {
   final String token;
+  /// Login id (Django User.username).  Surfaced so the drawer can
+  /// render "Paul Lipkin (paul)" without an extra /auth/me/ round-trip.
+  final String username;
 
   /// Full player profile for this user, included directly in the login
   /// response so we don't have to follow up with a /auth/me/ call.  Null
@@ -103,6 +106,7 @@ class AuthResult {
 
   const AuthResult({
     required this.token,
+    required this.username,
     required this.account,
     this.player,
     this.isStaff        = false,
@@ -110,7 +114,8 @@ class AuthResult {
   });
 
   factory AuthResult.fromJson(Map<String, dynamic> j) => AuthResult(
-        token:          j['token'] as String,
+        token:          j['token']    as String,
+        username:       j['username'] as String? ?? '',
         isStaff:        j['is_staff']         as bool? ?? false,
         isAccountAdmin: j['is_account_admin'] as bool? ?? false,
         account:        AccountInfo.fromJson(
@@ -123,12 +128,14 @@ class AuthResult {
 
 /// Result of GET /api/auth/me/.
 class MeResult {
+  final String username;
   final bool isStaff;
   final bool isAccountAdmin;
   final AccountInfo account;
   final PlayerProfile? player;
 
   const MeResult({
+    required this.username,
     required this.account,
     this.isStaff        = false,
     this.isAccountAdmin = false,
@@ -136,6 +143,7 @@ class MeResult {
   });
 
   factory MeResult.fromJson(Map<String, dynamic> j) => MeResult(
+        username:       j['username'] as String? ?? '',
         isStaff:        j['is_staff']         as bool? ?? false,
         isAccountAdmin: j['is_account_admin'] as bool? ?? false,
         account:        AccountInfo.fromJson(

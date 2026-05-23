@@ -41,56 +41,81 @@ class AppDrawer extends StatelessWidget {
                 // we need for the logo + signed-in-as block, which
                 // produced an 18px overflow.  We pick our own padding
                 // and draw the divider ourselves so the height grows
-                // with the content.
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  decoration: const BoxDecoration(
-                    border: Border(bottom: BorderSide(
-                      color: Color(0x1F000000),
-                      width: 1,
-                    )),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset(
-                        'assets/images/bandon_cup_logo.png',
-                        height: 96,
-                      ),
-                      const SizedBox(height: 6),
-                      // Who's logged in — username @ account.  Reads
-                      // AuthProvider directly so the host screens
-                      // don't have to thread the data through.
-                      Builder(builder: (ctx) {
-                        final auth = ctx.watch<AuthProvider>();
-                        final player  = auth.player?.name;
-                        final account = auth.account?.name;
-                        if (account == null) {
-                          return const SizedBox.shrink();
-                        }
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (player != null && player.isNotEmpty)
+                // with the content.  Top padding adds MediaQuery's
+                // safe-area inset so the logo doesn't ride into the
+                // iPhone notch / Dynamic Island.
+                Builder(builder: (ctx) {
+                  final topInset = MediaQuery.of(ctx).padding.top;
+                  return Container(
+                    padding: EdgeInsets.fromLTRB(
+                      16, topInset + 12, 16, 12,
+                    ),
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(
+                        color: Color(0x1F000000),
+                        width: 1,
+                      )),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          'assets/images/bandon_cup_logo.png',
+                          height: 96,
+                        ),
+                        const SizedBox(height: 6),
+                        // Who's logged in.  Player name plus the
+                        // login username in parens — "Paul Lipkin
+                        // (paul)" — so the user can tell which
+                        // tenant/login this drawer is showing.
+                        // Account name on a second line.
+                        Builder(builder: (ctx) {
+                          final auth     = ctx.watch<AuthProvider>();
+                          final player   = auth.player?.name;
+                          final username = auth.username;
+                          final account  = auth.account?.name;
+                          if (account == null) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final hasPlayer =
+                              player != null && player.isNotEmpty;
+                          final hasUser =
+                              username != null && username.isNotEmpty;
+
+                          // Show "Player (username)" when both exist;
+                          // fall back to just the username when there's
+                          // no linked player profile (admins, etc.).
+                          final identityLine = hasPlayer
+                              ? (hasUser ? '$player ($username)' : player)
+                              : (hasUser ? username : null);
+
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (identityLine != null)
+                                Text(
+                                  identityLine,
+                                  style: Theme.of(ctx).textTheme.titleSmall
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               Text(
-                                player,
-                                style: Theme.of(ctx).textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w600),
+                                account,
+                                style: Theme.of(ctx).textTheme.bodySmall
+                                    ?.copyWith(
+                                        color: Theme.of(ctx)
+                                            .colorScheme.onSurfaceVariant),
                                 overflow: TextOverflow.ellipsis,
                               ),
-                            Text(
-                              account,
-                              style: Theme.of(ctx).textTheme.bodySmall
-                                  ?.copyWith(color: Theme.of(ctx)
-                                      .colorScheme.onSurfaceVariant),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        );
-                      }),
-                    ],
-                  ),
-                ),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
+                  );
+                }),
                 ListTile(
                   leading: const Icon(Icons.emoji_events_outlined),
                   title: const Text('Tournaments'),

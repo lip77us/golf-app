@@ -14,6 +14,7 @@ class AuthProvider extends ChangeNotifier {
   static const _accountNameKey = 'last_account_name';
 
   String?        _token;
+  String?        _username;
   PlayerProfile? _player;
   AccountInfo?   _account;
   bool           _isStaff        = false;
@@ -23,6 +24,7 @@ class AuthProvider extends ChangeNotifier {
   String?        _lastAccountName;
 
   String?        get token            => _token;
+  String?        get username         => _username;
   PlayerProfile? get player           => _player;
   AccountInfo?   get account          => _account;
   bool           get isStaff          => _isStaff;
@@ -57,6 +59,7 @@ class AuthProvider extends ChangeNotifier {
     _token = saved;
     try {
       final result = await ApiClient(token: saved).me();
+      _username       = result.username;
       _player         = result.player;
       _account        = result.account;
       _isStaff        = result.isStaff;
@@ -88,6 +91,7 @@ class AuthProvider extends ChangeNotifier {
       await prefs.setString(_tokenKey,       result.token);
       await prefs.setString(_accountNameKey, accountName);
       _token            = result.token;
+      _username         = result.username;
       _player           = result.player;
       _account          = result.account;
       _isStaff          = result.isStaff;
@@ -116,6 +120,7 @@ class AuthProvider extends ChangeNotifier {
       } catch (_) {}
     }
     _token          = null;
+    _username       = null;
     _player         = null;
     _account        = null;
     _isStaff        = false;

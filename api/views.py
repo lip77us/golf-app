@@ -842,6 +842,7 @@ class LoginView(APIView):
 
         body = {
             'token':            token.key,
+            'username':         user.username,
             'is_staff':         user.is_staff,
             'is_account_admin': user.is_account_admin,
             'account': {
@@ -874,6 +875,7 @@ class MeView(APIView):
 
     def get(self, request):
         body = {
+            'username':         request.user.username,
             'is_staff':         request.user.is_staff,
             'is_account_admin': request.user.is_account_admin,
             'account': {
