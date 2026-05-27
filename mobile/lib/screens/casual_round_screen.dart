@@ -289,6 +289,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           case GameIds.skins:
             directRoute = '/skins-setup';
             directArgs  = firstFs.id;
+          case GameIds.tripleCup:
+            directRoute = '/triple-cup-setup';
+            directArgs  = firstFs.id;
           case GameIds.multiSkins:
             directRoute = '/multi-skins-setup';
             directArgs  = fullRound.id;
@@ -350,6 +353,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           const SizedBox(height: 12),
           DropdownButtonFormField<CourseInfo>(
             value: _selectedCourse,
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Course',
               border: OutlineInputBorder(),

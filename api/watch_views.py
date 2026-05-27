@@ -128,6 +128,42 @@ def _is_resolved(margin: int, holes: int, result, seg_len: int) -> bool:
     return abs(margin) > (seg_len - holes)
 
 
+_TEAM_PALETTE = {
+    # name → (fg/strong hex, bg/tint hex).  Matches the mobile app's
+    # resolveTripleCupTeamColor() so the watch page reads the same as
+    # what foursome members see in-app.  The tint is hand-picked at
+    # roughly Material 50 weight for readable chip backgrounds.
+    'red':    ('#B71C1C', '#FFEBEE'),
+    'blue':   ('#0D47A1', '#E3F2FD'),
+    'green':  ('#1B5E20', '#E8F5E9'),
+    'gold':   ('#F57F17', '#FFF8E1'),
+    'yellow': ('#F57F17', '#FFF8E1'),
+    'orange': ('#E65100', '#FFF3E0'),
+    'purple': ('#4A148C', '#F3E5F5'),
+    'black':  ('#212121', '#F5F5F5'),
+    'white':  ('#424242', '#FAFAFA'),
+}
+
+def _team_palette(colour_name, fallback_fg: str, fallback_bg: str) -> dict:
+    """Resolve a cup TournamentTeam.colour string ("Green", "Purple",
+    …) to {fg, bg} hex codes for CSS.  Returns the fallback when the
+    name is empty or unknown — keeps casual rounds (no cup team) on
+    the page's default orange/blue scheme."""
+    name = (colour_name or '').strip().lower()
+    fg, bg = _TEAM_PALETTE.get(name, (fallback_fg, fallback_bg))
+    return {'fg': fg, 'bg': bg}
+
+
+def _attach_team_palettes(summary: dict) -> None:
+    """Populate summary['team1_palette'] / ['team2_palette'] from the
+    summary's colour-name strings.  Called by every cup view that
+    renders chips so the template can pull hex codes via CSS vars."""
+    summary['team1_palette'] = _team_palette(
+        summary.get('team1_colour'), '#b25400', '#fff1e1')
+    summary['team2_palette'] = _team_palette(
+        summary.get('team2_colour'), '#1a3a8e', '#e7ecf6')
+
+
 def _seg_pts_from_result(result, pv: float) -> tuple[float, float]:
     """Per-segment points from a cup result code."""
     if result == 'team1': return pv, 0.0
@@ -239,6 +275,18 @@ def _enrich_summary(summary: dict) -> None:
                 im['short_display'] = _short_chip(margin, holes, result, 18)
             im['resolved']   = _is_resolved(margin, holes, result, 18)
             im['thru_label'] = f'thru {holes}' if holes > 0 else 'not started'
+            # Compact live status for the Triple Cup expansion: "1 UP
+            # thru 3" / "AS thru 2" — was just "thru 3", which left
+            # spectators unable to tell who was winning without doing
+            # the math.  Resolved matches use the chip elsewhere; this
+            # only fires for in-progress (holes > 0 and result null).
+            if holes > 0 and result is None:
+                if abs(margin) == 0:
+                    im['live_status_label'] = f'AS thru {holes}'
+                else:
+                    im['live_status_label'] = f'{abs(margin)} UP thru {holes}'
+            else:
+                im['live_status_label'] = im['thru_label']
             if holes > max_holes_in_match: max_holes_in_match = holes
 
             # Singles Nassau awards points per F9/B9/All segment.  Expand
@@ -252,6 +300,30 @@ def _enrich_summary(summary: dict) -> None:
                 im['resolved'] = all(
                     s['resolved'] for s in im['sub_segments']
                 )
+
+        # Triple Cup foursome-level live status: combine the
+        # in-progress sub-matches' "1 UP thru 3" / "AS thru 2" labels
+        # so the watch page's foursome summary shows the same one-liner
+        # the mobile leaderboard does — no need to expand to see who's
+        # winning.  Each entry carries its leader team ('team1' /
+        # 'team2' / '') so the template can colour each piece in the
+        # right hue.  Skips resolved (already in the rollup score) and
+        # pending matches (nothing meaningful to show).
+        if gtype == 'triple_cup':
+            live_bits = []
+            for im in match.get('individual_matches', []) or []:
+                played = im.get('holes_played') or 0
+                if played == 0 or im.get('result') is not None:
+                    continue
+                margin = im.get('overall_holes_up') or 0
+                if abs(margin) == 0:
+                    text = f'AS thru {played}'
+                    leader = ''
+                else:
+                    text = f'{abs(margin)} UP thru {played}'
+                    leader = 'team1' if margin > 0 else 'team2'
+                live_bits.append({'text': text, 'leader': leader})
+            match['tc_live_bits'] = live_bits
 
     # Per-match aggregate "thru" label (max across segments/matchups).
         match['thru_label'] = (
@@ -368,6 +440,32 @@ def _filter_pending_matches(matches: list) -> list:
             new_m['individual_matches'] = ims
             pending.append(new_m)
     return pending
+
+
+def _filter_completed_matches(matches: list) -> list:
+    """For the Cup tab: keep only matches where every segment AND every
+    individual match (or its sub_segments) is fully resolved.  Used to
+    expose the final state of finished foursomes on the standings page,
+    since the per-group detail otherwise has nowhere else to live."""
+    completed = []
+    for m in matches:
+        segs = m.get('segments') or []
+        ims  = m.get('individual_matches') or []
+        if not segs and not ims:
+            continue
+        all_segs_done = all(s.get('resolved') for s in segs)
+        all_ims_done = True
+        for im in ims:
+            if im.get('sub_segments'):
+                if not all(s.get('resolved') for s in im['sub_segments']):
+                    all_ims_done = False
+                    break
+            elif not im.get('resolved'):
+                all_ims_done = False
+                break
+        if all_segs_done and all_ims_done:
+            completed.append(m)
+    return completed
 
 
 # ---------------------------------------------------------------------------
@@ -550,7 +648,7 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
         })
     if _has_casual_sixes(round_obj):
         tabs.append({
-            'key': 'sixes', 'label': "Six's",
+            'key': 'sixes', 'label': 'Sixes',
             'url': f'{base}?view=sixes',
             'active': current == 'sixes',
         })
@@ -719,6 +817,7 @@ def _render_matches(request, round_obj, token: str, tabs: list):
             'round': round_obj, 'tabs': tabs,
         })
     _enrich_summary(summary)
+    _attach_team_palettes(summary)
     # to_win for the round: same formula as cup_standings_summary
     total_possible = float(summary.get('total_possible') or 0)
     summary['to_win'] = round(total_possible / 2 + 0.5, 2) if total_possible > 0 else None
@@ -812,22 +911,29 @@ def _render_cup_standings(request, round_obj, token: str, tabs: list):
     # alongside the cumulative scoreboard, with already-decided sides
     # filtered out so the user sees only what hasn't yet landed in the
     # big score.
-    pending_matches = []
-    live_summary    = cup_round_live_summary(round_obj)
+    pending_matches   = []
+    completed_matches = []
+    live_summary      = cup_round_live_summary(round_obj)
     if live_summary is not None:
         _enrich_summary(live_summary)
-        pending_matches = _filter_pending_matches(live_summary.get('matches', []))
+        _attach_team_palettes(live_summary)
+        all_matches       = live_summary.get('matches', [])
+        pending_matches   = _filter_pending_matches(all_matches)
+        completed_matches = _filter_completed_matches(all_matches)
+    if summary is not None:
+        _attach_team_palettes(summary)
 
     return render(request, 'watch/cup_standings.html', {
-        'round':           round_obj,
-        'course_name':     round_obj.course.name,
-        'tournament':      tourney,
-        'cup_name':        _cup_name(round_obj),
-        'summary':         summary,
-        'live_summary':    live_summary,
-        'pending_matches': pending_matches,
-        'refresh_secs':    30,
-        'tabs':            tabs,
+        'round':             round_obj,
+        'course_name':       round_obj.course.name,
+        'tournament':        tourney,
+        'cup_name':          _cup_name(round_obj),
+        'summary':           summary,
+        'live_summary':      live_summary,
+        'pending_matches':   pending_matches,
+        'completed_matches': completed_matches,
+        'refresh_secs':      30,
+        'tabs':              tabs,
     })
 
 
@@ -945,7 +1051,7 @@ def _render_casual_multi_skins(request, round_obj, token: str, tabs: list):
 
 
 def _sixes_segment_score(seg: dict) -> str:
-    """Plain-English score for one Six's segment — mirrors the
+    """Plain-English score for one Sixes segment — mirrors the
     in-app _SixesGroupCard._segmentScore so the same language shows
     up in the spectator view.
 
@@ -1041,7 +1147,7 @@ def _sixes_segment_subtitle(seg: dict) -> dict:
 
 
 def _render_casual_sixes(request, round_obj, token: str, tabs: list):
-    """Per-foursome Six's leaderboards — per-match score line ("4 and 2"
+    """Per-foursome Sixes leaderboards — per-match score line ("4 and 2"
     / "AS thru 3" / etc.) with the team composition underneath, plus
     the running per-player money totals.  Mirrors _SixesGroupCard."""
     from services.sixes import sixes_summary
@@ -1228,6 +1334,7 @@ def _render_cup_four_ball(request, round_obj, token: str, tabs: list):
             'round': round_obj, 'tabs': tabs,
         })
     _enrich_summary(summary)
+    _attach_team_palettes(summary)
 
     # Map foursome_id → groups for nassau matches, so we can pair each
     # cup-summary match card with its progress grid.

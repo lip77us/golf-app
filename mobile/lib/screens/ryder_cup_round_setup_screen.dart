@@ -334,6 +334,7 @@ class _FoursomeConfigCard extends StatelessWidget {
           // Game type picker
           DropdownButtonFormField<String>(
             value: gameType,
+            isExpanded: true,
             hint: const Text('Select game type'),
             decoration: const InputDecoration(
               labelText: 'Game type',
@@ -353,6 +354,7 @@ class _FoursomeConfigCard extends StatelessWidget {
               Expanded(
                 child: DropdownButtonFormField<int>(
                   value: team1Id,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Team 1',
                     border   : OutlineInputBorder(),
@@ -369,6 +371,7 @@ class _FoursomeConfigCard extends StatelessWidget {
               Expanded(
                 child: DropdownButtonFormField<int>(
                   value: team2Id,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Team 2',
                     border   : OutlineInputBorder(),

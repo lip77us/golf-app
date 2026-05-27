@@ -97,14 +97,21 @@ def _pink_ball_order(real_player_ids: list, num_holes: int = 18) -> list:
     return [real_player_ids[i % n] for i in range(num_holes)]
 
 
-def _get_or_create_phantom() -> Player:
+def _get_or_create_phantom(account) -> Player:
     """
-    Return the single shared phantom player, creating it if necessary.
+    Return the shared phantom player for *account*, creating it if needed.
+
+    Phantom is a per-account singleton — see the design note on Player in
+    core/models.py.  We scope the lookup by account so the NOT NULL
+    constraint on Player.account (added in core.0004_account_fk) is
+    satisfied and tenants don't share a single global phantom row.
+
     Phantom players get a high handicap index so they receive strokes on
     every hole — their scores are filler (par+1) and don't affect payouts.
     """
     phantom, _ = Player.objects.get_or_create(
         is_phantom=True,
+        account=account,
         defaults={
             'name'           : 'Phantom',
             'handicap_index' : 36.0,
@@ -236,7 +243,7 @@ def setup_round(
         )
 
         if needs_phantom and phantom is None:
-            phantom = _get_or_create_phantom()
+            phantom = _get_or_create_phantom(round_obj.account)
 
         real_ids   = [p.pk for p in group]
         pink_order = _pink_ball_order(real_ids)

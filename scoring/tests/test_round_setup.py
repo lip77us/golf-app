@@ -113,7 +113,9 @@ class ExplicitGroupSetupTests(TestCase):
         the team for games that require exactly 4 (Sixes, Pink Ball)."""
         from tournament.models import Tournament
         from datetime import date
+        from ._helpers import _test_account
         tournament = Tournament.objects.create(
+            account=_test_account(),
             name='T1', start_date=date.today(),
         )
         t_round = make_round(self.tee.course)

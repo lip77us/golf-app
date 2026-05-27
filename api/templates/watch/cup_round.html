@@ -5,24 +5,20 @@
 {% endblock %}
 
 {% block body %}
-  {# Per-page colour helpers — tint chips / names with the team colour. #}
+  {% comment %}
+    Per-page colour helpers — override the base CSS vars so every
+    `.chip-t1` / `.chip-t2` / `.t1-name` / `.pts.t1` inherits the
+    correct hex shade.  Backend resolves cup TournamentTeam.colour
+    names → hex via _team_palette() so the watch page matches the app
+    exactly.
+  {% endcomment %}
   <style>
-    {% if summary.team1_colour %}
-      .t1-name, .pts.t1 { color: {{ summary.team1_colour }}; }
-      .chip-t1 {
-        background: {{ summary.team1_colour }}22;
-        color: {{ summary.team1_colour }};
-        border-color: {{ summary.team1_colour }}55;
-      }
-    {% endif %}
-    {% if summary.team2_colour %}
-      .t2-name, .pts.t2 { color: {{ summary.team2_colour }}; }
-      .chip-t2 {
-        background: {{ summary.team2_colour }}22;
-        color: {{ summary.team2_colour }};
-        border-color: {{ summary.team2_colour }}55;
-      }
-    {% endif %}
+    :root {
+      --t1-fg: {{ summary.team1_palette.fg }};
+      --t1-bg: {{ summary.team1_palette.bg }};
+      --t2-fg: {{ summary.team2_palette.fg }};
+      --t2-bg: {{ summary.team2_palette.bg }};
+    }
   </style>
 
   <h1>

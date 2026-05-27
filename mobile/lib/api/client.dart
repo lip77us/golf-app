@@ -551,7 +551,11 @@ class ApiClient {
 
   Future<Round> setupRound(
     int roundId, {
-    required List<Map<String, int>> players, // [{"player_id": 1, "tee_id": 2}]
+    /// Each entry: {"player_id": int, "tee_id": int}.  Add an optional
+    /// "group_number": int per entry to force explicit foursome
+    /// composition (backend takes the explicit-groups path when ANY
+    /// entry carries the field — must be present on ALL of them then).
+    required List<Map<String, int>> players,
     double handicapAllowance = 1.0,
     bool randomise = true,
     bool autoSetupGames = false,
@@ -575,6 +579,58 @@ class ApiClient {
 
   Future<void> reopenRound(int roundId) async {
     await _post('/rounds/$roundId/reopen/', {});
+  }
+
+  /// TD-only "no-show" tool — remove a real player from a foursome
+  /// before scoring begins.  The backend reconfigures any Triple Cup
+  /// game on the foursome (4→3 brings in the cross-foursome phantom;
+  /// 3→2 swaps to F9/B9/Overall Nassau) and revalidates the donor
+  /// pool for the rest of the round.  Throws on 4xx — the error body
+  /// carries human-readable detail/errors for the UI to surface.
+  Future<Map<String, dynamic>> removeFoursomePlayer(
+    int foursomeId,
+    int playerId,
+  ) async {
+    final data = await _post(
+      '/foursomes/$foursomeId/remove-player/',
+      {'player_id': playerId},
+    );
+    return data as Map<String, dynamic>;
+  }
+
+  /// TD-only "rebalance at the tee box" tool — move a player from
+  /// one foursome to another.  Both sides' TC games reconfigure
+  /// automatically (4↔3 phantom add/strip, 3↔2 Nassau swap).  Same
+  /// pre-play-only constraint as removeFoursomePlayer.
+  Future<Map<String, dynamic>> moveRoundPlayer(
+    int roundId, {
+    required int playerId,
+    required int fromFoursomeId,
+    required int toFoursomeId,
+  }) async {
+    final data = await _post(
+      '/rounds/$roundId/move-player/',
+      {
+        'player_id'       : playerId,
+        'from_foursome_id': fromFoursomeId,
+        'to_foursome_id'  : toFoursomeId,
+      },
+    );
+    return data as Map<String, dynamic>;
+  }
+
+  /// TD-only "shift the schedule" tool — swap this foursome's tee
+  /// position (group_number + tee_time) with the foursome at the
+  /// target position.  Donor-pool revalidated post-swap.
+  Future<Map<String, dynamic>> swapFoursomePosition(
+    int foursomeId, {
+    required int targetGroupNumber,
+  }) async {
+    final data = await _post(
+      '/foursomes/$foursomeId/swap-position/',
+      {'target_group_number': targetGroupNumber},
+    );
+    return data as Map<String, dynamic>;
   }
 
   // ---- Foursomes ----
@@ -662,7 +718,7 @@ class ApiClient {
     return NassauSummary.fromJson(data as Map<String, dynamic>);
   }
 
-  // ---- Six's ----
+  // ---- Sixes ----
 
   Future<Map<String, dynamic>> getSixes(int foursomeId) async {
     final data = await _get('/foursomes/$foursomeId/sixes/');
@@ -745,6 +801,65 @@ class ApiClient {
       'net_percent'  : netPercent,
     });
     return Points531Summary.fromJson(data as Map<String, dynamic>);
+  }
+
+  // ---- Triple Cup (One Round Ryder Cup) ----
+
+  /// GET /api/foursomes/{id}/triple-cup/
+  Future<TripleCupSummary> getTripleCupSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/triple-cup/');
+    return TripleCupSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/triple-cup/setup/
+  ///
+  /// Creates (or replaces) the Triple Cup game.  team1/team2 player
+  /// IDs must total 2, 3, or 4 — the backend derives the match plan
+  /// (4 matches for 2v2/2v1, 3 for 1v1) from the resulting shape.
+  Future<TripleCupSummary> postTripleCupSetup(
+    int foursomeId, {
+    required List<int> team1Ids,
+    required List<int> team2Ids,
+    String handicapMode             = 'net',
+    int    netPercent               = 100,
+    int    altShotLowPct            = 50,
+    int    altShotHighPct           = 50,
+    int?   foursomesTeam1FirstTee,
+    int?   foursomesTeam2FirstTee,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/triple-cup/setup/', {
+      'team1_player_ids'           : team1Ids,
+      'team2_player_ids'           : team2Ids,
+      'handicap_mode'              : handicapMode,
+      'net_percent'                : netPercent,
+      'alt_shot_low_pct'           : altShotLowPct,
+      'alt_shot_high_pct'          : altShotHighPct,
+      if (foursomesTeam1FirstTee != null)
+        'foursomes_team1_first_tee': foursomesTeam1FirstTee,
+      if (foursomesTeam2FirstTee != null)
+        'foursomes_team2_first_tee': foursomesTeam2FirstTee,
+    });
+    return TripleCupSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/triple-cup/foursomes-tee-off/
+  ///
+  /// Sets (or clears) the alt-shot first-tee-off player on each side
+  /// of the Triple Cup foursomes match.  Either field may be null to
+  /// clear that team's choice.  Returns the refreshed TC summary.
+  Future<TripleCupSummary> postTripleCupFoursomesTeeOff(
+    int foursomeId, {
+    int? team1FirstTee,
+    int? team2FirstTee,
+  }) async {
+    final data = await _post(
+      '/foursomes/$foursomeId/triple-cup/foursomes-tee-off/',
+      {
+        'team1_first_tee': team1FirstTee,
+        'team2_first_tee': team2FirstTee,
+      },
+    );
+    return TripleCupSummary.fromJson(data as Map<String, dynamic>);
   }
 
   // ---- Skins ----
@@ -1114,6 +1229,10 @@ class ApiClient {
     required double nassauPointValue,
     required double pointMultiplier,
     String notes = '',
+    /// 'custom' (default — admin picks game_type per foursome) or
+    /// 'triple_cup' ("One Day Ryder Cup" preset that locks every
+    /// foursome to Triple Cup; the backend auto-fills game_type).
+    String roundFormat = 'custom',
     required List<Map<String, dynamic>> foursomes,
     List<Map<String, dynamic>> irishRumblePairings = const [],
   }) async {
@@ -1121,6 +1240,7 @@ class ApiClient {
       'nassau_point_value'  : nassauPointValue,
       'point_multiplier'    : pointMultiplier,
       'notes'               : notes,
+      'round_format'        : roundFormat,
       'foursomes'           : foursomes,
       'irish_rumble_pairings': irishRumblePairings,
     });

@@ -180,9 +180,15 @@ class CrossFoursomeRotation(PhantomAlgorithm):
 
     def compute_playing_handicap(self, config: dict,
                                  real_hcaps: list) -> int:
-        if not real_hcaps:
-            return 0
-        return round(sum(real_hcaps) / len(real_hcaps))
+        # Phantom is a scratch (0-index) clone of the donor.  In
+        # strokes-off mode this makes the phantom the foursome low
+        # by definition, so every real player in the receiving
+        # foursome ends up getting their FULL handicap on the segment.
+        # The phantom's per-hole contribution is the donor's full
+        # NET score (computed elsewhere) — so net-of-the-phantom
+        # equals donor's net regardless of phantom's playing_handicap
+        # being 0.
+        return 0
 
     def get_source_player_id(self, hole: int,
                              config: dict) -> 'int | None':
@@ -287,11 +293,24 @@ class PhantomScoreProvider:
             return {}
 
         if self.is_cross_foursome:
-            # Donor players are in OTHER foursomes of the same round
+            # Donor players are in OTHER foursomes of the same round.
+            # We translate donor gross → donor FULL net (gross −
+            # donor_membership.handicap_strokes_on_hole(SI_at_donor's_tee))
+            # so the phantom contribution matches what propagate writes.
             donor_ids = self._config.get('rotation', [])
             if not donor_ids:
                 return {}
-            qs = (
+            # Pre-load each donor's membership (tee + playing_handicap)
+            # so we can compute their full net per hole.
+            from tournament.models import FoursomeMembership
+            donor_ms = {
+                m.player_id: m
+                for m in FoursomeMembership.objects
+                    .filter(foursome__round_id=self._foursome.round_id,
+                            player_id__in=donor_ids)
+                    .select_related('tee')
+            }
+            rows = (
                 HoleScore.objects
                 .filter(
                     foursome__round_id=self._foursome.round_id,
@@ -300,6 +319,18 @@ class PhantomScoreProvider:
                 .exclude(gross_score=None)
                 .values('player_id', 'hole_number', 'gross_score')
             )
+            qs = []
+            for r in rows:
+                dm = donor_ms.get(r['player_id'])
+                if dm is None or dm.tee_id is None:
+                    continue
+                si = dm.tee.hole(r['hole_number']).get('stroke_index', 18)
+                donor_net = r['gross_score'] - dm.handicap_strokes_on_hole(si)
+                qs.append({
+                    'player_id'  : r['player_id'],
+                    'hole_number': r['hole_number'],
+                    'gross_score': donor_net,   # donor's full net stored as "gross"
+                })
         else:
             # Intra-foursome rotation
             real_ids = [m.player_id for m in self._real_memberships]
@@ -409,6 +440,22 @@ def propagate_phantom_score(round_obj, hole_number: int,
         .select_related('player', 'tee', 'foursome')
     )
 
+    # Donor's own membership — we need their playing_handicap and
+    # their tee's SI for this hole to compute the donor's full NET
+    # score, which is what the phantom contributes.  Phantom no
+    # longer carries donor's gross.
+    donor_m = (
+        FoursomeMembership.objects
+        .filter(foursome__round=round_obj, player_id=donor_player_id)
+        .select_related('tee')
+        .first()
+    )
+    if donor_m is None or donor_m.tee_id is None:
+        return
+    donor_si = donor_m.tee.hole(hole_number).get('stroke_index', 18)
+    donor_strokes = donor_m.handicap_strokes_on_hole(donor_si)
+    donor_net     = gross_score - donor_strokes
+
     for pm in phantom_memberships:
         config = pm.phantom_config or {}
         rotation = config.get('rotation', [])
@@ -422,23 +469,195 @@ def propagate_phantom_score(round_obj, hole_number: int,
         if assigned_donor != donor_player_id:
             continue  # another donor handles this hole
 
-        # Compute phantom's handicap strokes on this hole
-        if pm.tee_id is None:
-            continue
-        hole_info = pm.tee.hole(hole_number)
-        stroke_index = hole_info.get('stroke_index', 18)
-        hcp_strokes = pm.handicap_strokes_on_hole(stroke_index)
-
-        # Upsert the phantom's HoleScore
+        # Phantom is scratch (playing_handicap = 0), and its stored
+        # "gross" carries the donor's full NET so phantom's net comes
+        # out equal to donor's net naturally (gross − 0 strokes).
         hs, _ = HoleScore.objects.get_or_create(
             foursome    = pm.foursome,
             player      = pm.player,
             hole_number = hole_number,
-            defaults    = {'handicap_strokes': hcp_strokes},
+            defaults    = {'handicap_strokes': 0},
         )
-        hs.gross_score      = gross_score
-        hs.handicap_strokes = hcp_strokes
+        hs.gross_score      = donor_net
+        hs.handicap_strokes = 0
         hs.save()
+
+
+def build_phantom_info(foursome) -> 'dict | None':
+    """
+    Return cross-foursome phantom donor status for *foursome*, or None
+    if there isn't one.  Shared by nassau / triple_cup summaries so
+    the mobile + watch surfaces all see the same {by_hole} shape.
+
+    Shape:
+    {
+        'phantom_player_id'   : int,
+        'phantom_playing_hcp' : int,        # avg course_handicap of donor players
+                                            # (displayed only; phantom's own HC is 0)
+        'algorithm'           : 'cross_foursome_rotation',
+        'by_hole'             : {
+            '1':  {'player_id': int, 'player_name': str, 'has_score': bool},
+            ...
+            '18': {...},
+        },
+    }
+    """
+    try:
+        if not foursome.has_phantom:
+            return None
+        provider = PhantomScoreProvider(foursome)
+        if not provider.has_phantom or not provider.is_cross_foursome:
+            return None
+        phantom_m = foursome.memberships.filter(
+            player__is_phantom=True
+        ).first()
+
+        # Idempotent re-sync of phantom's stored playing_handicap +
+        # course_handicap to whatever the algorithm currently dictates.
+        # Necessary because the algorithm's rule changed in D1 (now
+        # always 0 / scratch), but rounds set up before that still
+        # have stale values in the DB.  Running here means every
+        # summary/leaderboard load self-heals — no migration needed.
+        if phantom_m:
+            algo    = get_algorithm(phantom_m.phantom_algorithm)
+            new_hcp = algo.compute_playing_handicap(
+                phantom_m.phantom_config or {}, []
+            )
+            updates = []
+            if phantom_m.playing_handicap != new_hcp:
+                phantom_m.playing_handicap = new_hcp
+                updates.append('playing_handicap')
+            if phantom_m.course_handicap != new_hcp:
+                phantom_m.course_handicap = new_hcp
+                updates.append('course_handicap')
+            if updates:
+                phantom_m.save(update_fields=updates)
+
+        # Phantom's own playing_handicap is 0 (scratch) after D1; the
+        # displayed "handicap" pulls the donors' average course_handicap
+        # so the leaderboard's Index column reads as a sensible number.
+        avg_course_hcp = 0
+        if phantom_m:
+            donor_ids = (phantom_m.phantom_config or {}).get('rotation', [])
+            if donor_ids:
+                from tournament.models import FoursomeMembership
+                donor_hcps = list(
+                    FoursomeMembership.objects
+                    .filter(
+                        foursome__round=foursome.round,
+                        player_id__in=donor_ids,
+                        player__is_phantom=False,
+                    )
+                    .values_list('course_handicap', flat=True)
+                )
+                if donor_hcps:
+                    avg_course_hcp = round(sum(donor_hcps) / len(donor_hcps))
+        return {
+            'phantom_player_id'   : phantom_m.player_id if phantom_m else None,
+            'phantom_playing_hcp' : avg_course_hcp,
+            'algorithm'           : CROSS_FOURSOME_ALGORITHM_ID,
+            'by_hole'             : {
+                str(h): v
+                for h, v in provider.donor_status_by_hole().items()
+            },
+        }
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            'build_phantom_info failed for foursome %s', foursome.pk
+        )
+        return None
+
+
+def earliest_three_foursome_ids(round_obj) -> list:
+    """Return the IDs of the three earliest-teeing foursomes in *round_obj*,
+    ordered by tee_time (NULLs last) then group_number.  These foursomes
+    serve as the donor pool for every cross-foursome phantom in the round;
+    consequently they must themselves be full 4-player groups.  Callers
+    pre-compute this once per round-setup pass."""
+    from tournament.models import Foursome
+    from django.db.models import F
+    return list(
+        Foursome.objects
+        .filter(round=round_obj)
+        .order_by(
+            F('tee_time').asc(nulls_last=True),
+            'group_number',
+        )
+        .values_list('pk', flat=True)[:3]
+    )
+
+
+def validate_donor_foursomes(round_obj) -> list:
+    """Return a list of human-readable validation errors for *round_obj*'s
+    short-roster donor setup.  Empty list means the round is OK to start.
+
+    Rule (relaxed):
+      Every short-roster foursome (any with fewer than 4 real players)
+      must have ≥1 full 4-player foursome teeing off BEFORE it.  The
+      single prior is enough for donor scoring to function: 2 same-team
+      players × 3-hole rotation = 6 fourball-hole coverage.
+
+      A common TD recommendation is to put 3+ full groups up front for
+      better donor variety, but that's an *advisory* — strict 3-prior
+      enforcement made tee-box no-show recovery painful when groups
+      had to be reshuffled.  The TD can opt into the extra variety;
+      we don't force it.
+
+      Examples (post-relaxation):
+        • 7 players, 1 full + 1 three-some  → full @1, three-some @2 ✓
+        • 11 players, 2 full + 1 three-some → full @1+2, three-some @3 ✓
+        • 11 players, 2 full + 1 three-some → three-some @2, full @1+3 ✓
+        • 3-foursome round, three-some @2 with only 1 full @1 ✓
+        • 3-foursome round, three-some @1 (no priors at all) ✗
+    """
+    from tournament.models import Foursome
+    from django.db.models import F
+
+    errors: list = []
+
+    # Pull every foursome in the round once, sorted by tee position,
+    # with memberships prefetched so we can count real players cheaply.
+    foursomes = list(
+        Foursome.objects
+        .filter(round=round_obj)
+        .order_by(
+            F('tee_time').asc(nulls_last=True),
+            'group_number',
+        )
+        .prefetch_related('memberships__player')
+    )
+    if not foursomes:
+        return errors
+
+    def real_count(fs) -> int:
+        return sum(1 for m in fs.memberships.all() if not m.player.is_phantom)
+
+    total_full      = sum(1 for fs in foursomes if real_count(fs) >= 4)
+    # Need ≥1 prior full when ANY full exists; if total_full == 0 the
+    # rule auto-relaxes to 0 (no priors required) but the round is
+    # effectively broken — setup_cross_foursome_phantom will refuse
+    # with "no eligible donor players found" anyway, so we leave that
+    # to the setup path rather than blocking here.
+    required_priors = 1 if total_full > 0 else 0
+
+    # Count full priors in tee-time order; flag any short-roster
+    # foursome that doesn't have enough fulls ahead of it.
+    seen_full = 0
+    for fs in foursomes:
+        is_full = real_count(fs) >= 4
+        if not is_full and seen_full < required_priors:
+            errors.append(
+                f"Foursome {fs.group_number} is short-rostered "
+                f"({real_count(fs)} real players) but no full "
+                f"4-player group tees off before it.  Each "
+                f"short-roster group needs at least one full prior "
+                f"to supply donor scores — move this foursome to "
+                f"a later tee time."
+            )
+        if is_full:
+            seen_full += 1
+    return errors
 
 
 def setup_cross_foursome_phantom(foursome, phantom_team, round_obj) -> bool:
@@ -459,18 +678,41 @@ def setup_cross_foursome_phantom(foursome, phantom_team, round_obj) -> bool:
         print(f'[phantom setup] foursome {foursome.id}: no phantom membership found')
         return False
 
-    # Find donor players: same team, in OTHER foursomes of this round, real players
+    # Find donor players: same team, real (non-phantom), drawn from the
+    # 3 earliest-teeing foursomes ONLY.  This guarantees donors are well
+    # underway by the time the short-roster foursome plays a hole, so
+    # propagate_phantom_score() has scores to copy.  Tee-time ordering
+    # falls back to group_number when tee_time is unset (older rounds).
     phantom_team_pids = set(phantom_team.players.values_list('id', flat=True))
     print(f'[phantom setup] foursome {foursome.id}: team={phantom_team.name} team_pids={phantom_team_pids} round={round_obj.id}')
+
+    from tournament.models import Foursome
+    from django.db.models import F
+    # Donor pool = every OTHER foursome in the round teeing off earlier
+    # than (or at the same slot as) the receiver.  No artificial [:3]
+    # cap — donor variety scales with field size, so a 60-player
+    # tournament with a single threesome at tee position 10 gets up to
+    # 18 same-team candidates instead of just the first 3 group's 6.
+    # The validate_donor_foursomes() rule still enforces "first 3 tee
+    # times must be full" as the floor.
+    donor_foursome_ids = list(
+        Foursome.objects
+        .filter(round=round_obj)
+        .exclude(pk=foursome.pk)
+        .order_by(
+            F('tee_time').asc(nulls_last=True),
+            'group_number',
+        )
+        .values_list('pk', flat=True)
+    )
 
     donor_memberships = list(
         FoursomeMembership.objects
         .filter(
-            foursome__round=round_obj,
+            foursome_id__in=donor_foursome_ids,
             player_id__in=phantom_team_pids,
             player__is_phantom=False,
         )
-        .exclude(foursome=foursome)
         .select_related('player')
     )
 

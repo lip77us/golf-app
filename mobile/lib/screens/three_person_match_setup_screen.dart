@@ -38,7 +38,9 @@ class _ThreePersonMatchSetupScreenState
   Object? _error;
 
   // Form state
-  String _mode       = 'net';
+  // Casual default → Strokes-Off Low.  Existing games overwrite this
+  // from their persisted mode in _load().
+  String _mode       = 'strokes_off';
   int    _netPercent = 100;
 
   final _entryFeeCtrl = TextEditingController(text: '0.00');

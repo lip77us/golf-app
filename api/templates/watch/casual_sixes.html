@@ -1,12 +1,12 @@
 {% extends "watch/base.html" %}
 
 {% block title %}
-{{ tournament.name|default:"Six's" }} · Round {{ round.round_number }}
+{{ tournament.name|default:"Sixes" }} · Round {{ round.round_number }}
 {% endblock %}
 
 {% block body %}
   <h1>
-    {% if tournament %}{{ tournament.name }}{% else %}Six's{% endif %}
+    {% if tournament %}{{ tournament.name }}{% else %}Sixes{% endif %}
   </h1>
   <p class="sub">
     Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
@@ -18,7 +18,7 @@
         <div class="match-meta">
           <span class="game-pill">Group {{ g.group_number }}</span>
           <span class="meta-text">
-            Six's
+            Sixes
             {% if summary.handicap.mode %}
               · {{ summary.handicap.mode|upper }}{% if summary.handicap.mode == 'net' and summary.handicap.net_percent != 100 %} ({{ summary.handicap.net_percent }}%){% endif %}
             {% endif %}
@@ -64,6 +64,6 @@
       </div>
     {% endwith %}
   {% empty %}
-    <div class="card empty">No Six's groups in this round.</div>
+    <div class="card empty">No Sixes groups in this round.</div>
   {% endfor %}
 {% endblock %}

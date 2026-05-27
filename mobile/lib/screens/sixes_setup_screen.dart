@@ -1,6 +1,6 @@
 /// screens/sixes_setup_screen.dart
 ///
-/// "Start of Match" setup screen for the Six's game.
+/// "Start of Match" setup screen for the Sixes game.
 ///
 /// Shows only once per match — if segments with teams already exist the
 /// screen immediately redirects to the scoring screen.
@@ -53,9 +53,10 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
   bool _checkingSetup = true; // true while we're checking for an existing match
 
   // Handicap settings the user picks for this match.
-  //   _handicapMode: 'net' or 'gross'
+  //   _handicapMode: 'net' or 'gross' or 'strokes_off'
   //   _netPercent:   0–200; only used when mode == 'net'
-  String _handicapMode = 'net';
+  // Casual default → Strokes-Off Low.
+  String _handicapMode = 'strokes_off';
   int    _netPercent   = 100;
 
   // Bet unit for this round (editable inline).  Pre-filled from the

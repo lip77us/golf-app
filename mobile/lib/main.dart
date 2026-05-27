@@ -22,6 +22,8 @@ import 'screens/points_531_setup_screen.dart';
 import 'screens/points_531_screen.dart';
 import 'screens/skins_setup_screen.dart';
 import 'screens/skins_screen.dart';
+import 'screens/triple_cup_setup_screen.dart';
+import 'screens/triple_cup_screen.dart';
 import 'screens/multi_skins_setup_screen.dart';
 import 'screens/multi_skins_screen.dart';
 import 'screens/nassau_setup_screen.dart';
@@ -159,6 +161,7 @@ class _GolfAppState extends State<GolfApp> {
         navigatorKey:         navigatorKey,
         scaffoldMessengerKey: scaffoldMessengerKey,
         title: 'The Bandon Cup',
+        debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFF2E7D32),
@@ -323,6 +326,12 @@ class _GolfAppState extends State<GolfApp> {
       case '/skins':
         final foursomeId = settings.arguments as int;
         return page((_) => SkinsScreen(foursomeId: foursomeId));
+      case '/triple-cup-setup':
+        final foursomeId = settings.arguments as int;
+        return page((_) => TripleCupSetupScreen(foursomeId: foursomeId));
+      case '/triple-cup':
+        final foursomeId = settings.arguments as int;
+        return page((_) => TripleCupScreen(foursomeId: foursomeId));
       case '/multi-skins-setup':
         final roundId = settings.arguments as int;
         return page((_) => MultiSkinsSetupScreen(roundId: roundId));

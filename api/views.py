@@ -36,7 +36,7 @@ Nassau game
   POST   /api/foursomes/{id}/nassau/setup/ NassauSetupView
   GET    /api/foursomes/{id}/nassau/       NassauResultView
 
-Six's game
+Sixes game
   POST   /api/foursomes/{id}/sixes/setup/  SixesSetupView
   GET    /api/foursomes/{id}/sixes/        SixesResultView
 
@@ -190,6 +190,10 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'quota_nassau' in active_games:
         from services.quota_nassau import calculate_quota_nassau
         calculate_quota_nassau(foursome)
+
+    if 'triple_cup' in active_games:
+        from services.triple_cup import calculate_triple_cup
+        calculate_triple_cup(foursome)
 
     # ── Ryder Cup points ───────────────────────────────────────────────────────
     # Auto-recalculate cup points whenever any game result changes so the
@@ -478,11 +482,23 @@ def _build_leaderboard(round_obj: Round) -> dict:
     if 'sixes' in active_games:
         from services.sixes import sixes_summary
         games['sixes'] = {
-            'label'   : "Six's",
+            'label'   : 'Sixes',
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
                  'summary': sixes_summary(fs)}
                 for fs in foursomes
+            ],
+        }
+
+    if 'triple_cup' in active_games:
+        from services.triple_cup import triple_cup_summary
+        games['triple_cup'] = {
+            'label'   : 'One Round Ryder Cup',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': triple_cup_summary(fs)}
+                for fs in foursomes
+                if triple_cup_summary(fs) is not None
             ],
         }
 
@@ -1878,6 +1894,13 @@ class RoundCompleteView(APIView):
     POST /api/rounds/{id}/complete/
     Marks the round as complete and returns the final leaderboard.
     Safe to call multiple times (idempotent on status).
+
+    For multi-foursome cup rounds, status flips only when *every*
+    foursome has finished — i.e. each foursome has at least one
+    non-null gross score on all 18 holes.  This prevents the first
+    foursome to finish from locking sibling groups out of scoring.
+    Single-foursome rounds (casual play, one-group cup days) flip
+    on the first call, same as before.
     """
     def post(self, request, pk):
         round_obj = get_object_or_404(
@@ -1886,11 +1909,16 @@ class RoundCompleteView(APIView):
                  .prefetch_related('foursomes__memberships__player'),
             pk=pk,
         )
-        if round_obj.status != 'complete':
+
+        all_done = self._all_foursomes_done(round_obj)
+
+        if all_done and round_obj.status != 'complete':
             round_obj.status = 'complete'
             round_obj.save(update_fields=['status'])
 
-        # Finalise cup points so the scoreboard reflects the completed round.
+        # Finalise cup points whenever this is called — partial-round
+        # calls still want their group's points reflected on the live
+        # leaderboard even before the round flips to complete.
         try:
             _ = round_obj.ryder_cup_config
             from services.ryder_cup import calculate_ryder_cup_points
@@ -1906,7 +1934,32 @@ class RoundCompleteView(APIView):
             'course'      : str(round_obj.course),
             'active_games': _leaderboard_active_games(round_obj, lb_games),
             'games'       : lb_games,
+            # Surfaces "your group is done, others still playing" to the
+            # mobile client so it can show a friendly banner instead of
+            # the Final Results banner.
+            'all_foursomes_done': all_done,
         })
+
+    @staticmethod
+    def _all_foursomes_done(round_obj) -> bool:
+        """True when every foursome has at least one non-null gross
+        score on every hole 1..18.  Alt-shot holes only have one
+        partner posting, so this counts hole coverage rather than
+        per-player completeness — matches the mobile-side check that
+        already exempts the dimmed alt-shot partner."""
+        from scoring.models import HoleScore
+        foursomes = list(round_obj.foursomes.all())
+        if not foursomes:
+            return False
+        for fs in foursomes:
+            holes = set(
+                HoleScore.objects
+                .filter(foursome=fs, gross_score__isnull=False)
+                .values_list('hole_number', flat=True)
+            )
+            if holes != set(range(1, 19)):
+                return False
+        return True
 
 
 class RoundReopenView(APIView):
@@ -1931,6 +1984,611 @@ class RoundReopenView(APIView):
             'status'    : round_obj.status,
             'round_date': str(round_obj.date),
             'course'    : str(round_obj.course),
+        })
+
+
+class FoursomeRemovePlayerView(APIView):
+    """
+    POST /api/foursomes/{id}/remove-player/    body: {"player_id": int}
+
+    Tournament-director "no-show" tool — drop a player from a foursome
+    AT THE TEE BOX (before any scoring), shrinking the group from
+    4-player → 3-player or 3-player → 2-player and reconfiguring any
+    Triple Cup game on the foursome to match.
+
+    Refused when:
+      • The foursome has any HoleScore rows (scoring has begun).
+      • The removal would leave the foursome with <2 real players.
+      • The removal would push a downstream short-roster foursome
+        below its donor-pool floor — the response carries the same
+        error format setup uses so the mobile UI can render it
+        verbatim, and the tournament director knows exactly what
+        backfill move to make next.
+
+    On success the response includes the refreshed Round + foursome
+    composition so the mobile client can refresh its dashboard without
+    a second round-trip.
+    """
+    def post(self, request, pk):
+        from django.db import transaction
+        from scoring.models import HoleScore
+        from scoring.phantom import validate_donor_foursomes
+        from tournament.models import Foursome, FoursomeMembership
+        from core.models import GameType
+
+        player_id = request.data.get('player_id')
+        if not isinstance(player_id, int):
+            return Response(
+                {'detail': 'player_id (int) is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        foursome = get_object_or_404(
+            Foursome.objects.select_related('round')
+                .prefetch_related('memberships__player'),
+            pk=pk,
+        )
+
+        # Locate the membership being removed.  404 keeps the TD honest —
+        # silently no-op-ing here would hide UI bugs that send the wrong id.
+        membership = (
+            foursome.memberships
+            .select_related('player')
+            .filter(player_id=player_id, player__is_phantom=False)
+            .first()
+        )
+        if membership is None:
+            return Response(
+                {'detail': f'Player {player_id} is not in foursome '
+                           f'{foursome.id} (or is a phantom).'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Refuse once scoring has started — partial-round removals are
+        # a much harder problem (need to retire that player's posted
+        # scores from running match-play results) and not in scope.
+        if HoleScore.objects.filter(foursome=foursome).exists():
+            return Response(
+                {'detail': 'Cannot remove a player after scoring has begun. '
+                           'Reopen + reset the foursome first, or finish '
+                           'the round and adjust afterwards.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # New size after removal.
+        real_count = sum(
+            1 for m in foursome.memberships.all() if not m.player.is_phantom
+        )
+        new_size = real_count - 1
+        if new_size < 2:
+            return Response(
+                {'detail': '2-player foursomes cannot drop to 1.  The '
+                           'tournament directors options are: leave the '
+                           'foursome intact (player joins via backfill), '
+                           'or delete the foursome.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Pre-flight: if this foursome has a Triple Cup game, removing
+        # the lone member of either side would leave us with team1=N,
+        # team2=0 (or vice versa) — not a valid TC config.  Catch it
+        # here with a friendly message instead of letting
+        # _build_match_plan raise deep in the savepoint.  The team
+        # rosters come from match 1 (foursome-wide A vs B split).
+        try:
+            _tc_game = foursome.triple_cup_game
+        except Exception:
+            _tc_game = None
+        if _tc_game is not None:
+            _first = _tc_game.matches.order_by('match_number').first()
+            _t1_ids: list = []
+            _t2_ids: list = []
+            if _first is not None:
+                _t1 = _first.teams.filter(team_number=1).first()
+                _t2 = _first.teams.filter(team_number=2).first()
+                if _t1:
+                    _t1_ids = list(
+                        _t1.players.filter(is_phantom=False)
+                        .values_list('id', flat=True))
+                if _t2:
+                    _t2_ids = list(
+                        _t2.players.filter(is_phantom=False)
+                        .values_list('id', flat=True))
+            _t1_after = [pid for pid in _t1_ids if pid != player_id]
+            _t2_after = [pid for pid in _t2_ids if pid != player_id]
+            if not _t1_after or not _t2_after:
+                empty_side = (
+                    'Team 1' if not _t1_after else 'Team 2'
+                )
+                # Look up the team's TournamentTeam name if available
+                # so the message reads more naturally for cup rounds.
+                try:
+                    cfg = foursome.ryder_cup_foursome_config
+                    if not _t1_after and cfg.team1:
+                        empty_side = cfg.team1.name
+                    elif not _t2_after and cfg.team2:
+                        empty_side = cfg.team2.name
+                except Exception:
+                    pass
+                return Response(
+                    {'detail': f'Cannot remove {membership.player.name} — '
+                               f'they are the only {empty_side} player in '
+                               f'this foursome.  Each cup match needs at '
+                               f'least one player on each side.  Pick '
+                               f'someone from the other team, or remove '
+                               f'the whole foursome from the round.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Pre-flight: simulate the post-removal donor pool and reject if
+        # any downstream short-roster group would lose its required
+        # priors.  We commit the membership delete first under SAVEPOINT,
+        # validate, and rollback on failure.  Cleaner than re-implementing
+        # the donor math inline.
+        round_obj = foursome.round
+        with transaction.atomic():
+            sid = transaction.savepoint()
+            membership.delete()
+            errors = validate_donor_foursomes(round_obj)
+            if errors:
+                transaction.savepoint_rollback(sid)
+                return Response(
+                    {'detail': 'Removing this player would break the donor '
+                               'pool for another group.',
+                     'errors': errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            transaction.savepoint_commit(sid)
+
+            # Re-configure any Triple Cup game on this foursome so its
+            # match plan matches the new roster.  4→3 brings in the
+            # cross-foursome phantom; 3→2 swaps to the F9/B9/Overall
+            # Nassau shape.  Other game types (Nassau/Skins/etc.) are
+            # left untouched — their scoring is roster-driven and
+            # adapts naturally.
+            try:
+                tc_game = foursome.triple_cup_game
+            except Exception:
+                tc_game = None
+            if tc_game is not None:
+                from services.triple_cup import reconfigure_triple_cup
+                # Recover the existing team split from match 1 (the
+                # foursome-wide A-vs-B layout — fourball for 4/3-player,
+                # "Front 9" for 2-player TC), drop the removed player,
+                # and let the shared helper rebuild the TC match plan
+                # and manage the phantom lifecycle for the new size.
+                first_match = tc_game.matches.order_by('match_number').first()
+                team1_ids   = []
+                team2_ids   = []
+                if first_match is not None:
+                    t1 = first_match.teams.filter(team_number=1).first()
+                    t2 = first_match.teams.filter(team_number=2).first()
+                    if t1:
+                        team1_ids = list(
+                            t1.players.filter(is_phantom=False)
+                            .values_list('id', flat=True)
+                        )
+                    if t2:
+                        team2_ids = list(
+                            t2.players.filter(is_phantom=False)
+                            .values_list('id', flat=True)
+                        )
+                team1_ids = [pid for pid in team1_ids if pid != player_id]
+                team2_ids = [pid for pid in team2_ids if pid != player_id]
+                reconfigure_triple_cup(foursome, team1_ids, team2_ids)
+
+        # Return a compact response — mobile re-fetches the round +
+        # leaderboard separately rather than parsing a giant payload here.
+        return Response({
+            'foursome_id'      : foursome.id,
+            'removed_player_id': player_id,
+            'new_size'         : new_size,
+            'group_number'     : foursome.group_number,
+        })
+
+
+class FoursomeSwapPositionView(APIView):
+    """
+    POST /api/foursomes/{id}/swap-position/
+    body: { "target_group_number": int }   (or "other_foursome_id": int)
+
+    Tournament-director "shift the schedule" tool — swaps this
+    foursome's tee position (group_number + tee_time) with the
+    foursome currently at the target position.  Useful when:
+      • A foursome is late: bump them later so the rest of the field
+        keeps moving.
+      • A short-roster group needs more donor variety: shift it after
+        more 4-player groups have teed off.
+      • Wizard left groups in the wrong order: rearrange after the
+        fact without rebuilding the round.
+
+    Refused when:
+      • Either foursome has any HoleScore (scoring has begun).
+      • Target position doesn't exist in the round.
+      • Post-swap donor pool validation fails (the new order would
+        leave a short-roster group without enough full priors).
+    """
+    def post(self, request, pk):
+        from django.db import transaction
+        from scoring.models import HoleScore
+        from scoring.phantom import validate_donor_foursomes
+        from tournament.models import Foursome
+
+        target = request.data.get('target_group_number')
+        other_id = request.data.get('other_foursome_id')
+        if target is None and other_id is None:
+            return Response(
+                {'detail': 'Either target_group_number or '
+                           'other_foursome_id is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        this_fs = get_object_or_404(Foursome, pk=pk)
+        round_obj = this_fs.round
+
+        if other_id is not None:
+            other_fs = get_object_or_404(
+                Foursome.objects.filter(round=round_obj),
+                pk=other_id,
+            )
+        else:
+            if not isinstance(target, int):
+                return Response(
+                    {'detail': 'target_group_number must be an int.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if target == this_fs.group_number:
+                return Response(
+                    {'detail': 'Foursome is already at that position.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            other_fs = (
+                Foursome.objects
+                .filter(round=round_obj, group_number=target)
+                .first()
+            )
+            if other_fs is None:
+                return Response(
+                    {'detail': f'No foursome at group position {target} '
+                               f'in this round.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        if this_fs.pk == other_fs.pk:
+            return Response(
+                {'detail': 'Cannot swap a foursome with itself.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Pre-play only on both sides — same rule as remove/move.
+        if HoleScore.objects.filter(
+            foursome__in=[this_fs, other_fs]
+        ).exists():
+            return Response(
+                {'detail': 'Cannot swap positions after scoring has '
+                           'begun in either foursome.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Swap group_number + tee_time atomically.  group_number has a
+        # unique_together('round','group_number') constraint, so we
+        # temporarily park this_fs at a sentinel value to avoid the
+        # collision mid-swap.
+        with transaction.atomic():
+            sid = transaction.savepoint()
+            this_gn   = this_fs.group_number
+            this_tee  = this_fs.tee_time
+            other_gn  = other_fs.group_number
+            other_tee = other_fs.tee_time
+            # Park at a high sentinel — also guarded against the very
+            # unlikely case of an existing group at INT_MAX.
+            sentinel = (
+                Foursome.objects
+                .filter(round=round_obj)
+                .order_by('-group_number')
+                .values_list('group_number', flat=True)
+                .first() or 0
+            ) + 1000
+            this_fs.group_number = sentinel
+            this_fs.save(update_fields=['group_number'])
+            other_fs.group_number = this_gn
+            other_fs.tee_time     = this_tee
+            other_fs.save(update_fields=['group_number', 'tee_time'])
+            this_fs.group_number = other_gn
+            this_fs.tee_time     = other_tee
+            this_fs.save(update_fields=['group_number', 'tee_time'])
+
+            errors = validate_donor_foursomes(round_obj)
+            if errors:
+                transaction.savepoint_rollback(sid)
+                return Response(
+                    {'detail': 'Swapping positions would break the '
+                               'donor pool for another group.',
+                     'errors': errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            transaction.savepoint_commit(sid)
+
+        return Response({
+            'foursome_id'        : this_fs.id,
+            'new_group_number'   : this_fs.group_number,
+            'new_tee_time'       : str(this_fs.tee_time)
+                                   if this_fs.tee_time else None,
+            'swapped_with_id'    : other_fs.id,
+            'swapped_with_group' : other_fs.group_number,
+        })
+
+
+class RoundMovePlayerView(APIView):
+    """
+    POST /api/rounds/{id}/move-player/
+    body: {
+        "player_id"        : int,
+        "from_foursome_id" : int,
+        "to_foursome_id"   : int,
+    }
+
+    Tournament-director "rebalance at the tee box" tool — move a
+    player from one foursome to another before scoring begins.  Both
+    foursomes' TC games (if any) reconfigure to match the new
+    rosters: A shrinks (4→3 phantom add, 3→2 Nassau swap), B grows
+    (3→4 phantom strip, 2→3 phantom add).  The player keeps their
+    tee assignment and (in cup mode) their TournamentTeam.
+
+    Refused when:
+      • Either foursome has any HoleScore (scoring has begun).
+      • From-foursome would drop below 2 real players.
+      • To-foursome would exceed 4 real players.
+      • Removal would empty a team in from-foursome OR addition
+        would push a team in to-foursome above 2 — TC matches need
+        a 1–2 / 1–2 split per side.
+      • Donor-pool validator rejects the post-move composition.
+
+    On success: 200 with the refreshed group sizes.
+    """
+    def post(self, request, pk):
+        from django.db import transaction
+        from scoring.models import HoleScore
+        from scoring.phantom import validate_donor_foursomes
+        from services.triple_cup import reconfigure_triple_cup
+        from tournament.models import (
+            Foursome, FoursomeMembership, TournamentTeam,
+        )
+
+        player_id        = request.data.get('player_id')
+        from_foursome_id = request.data.get('from_foursome_id')
+        to_foursome_id   = request.data.get('to_foursome_id')
+        if not all(
+            isinstance(v, int)
+            for v in (player_id, from_foursome_id, to_foursome_id)
+        ):
+            return Response(
+                {'detail': 'player_id, from_foursome_id, '
+                           'to_foursome_id are all required (int).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if from_foursome_id == to_foursome_id:
+            return Response(
+                {'detail': 'from and to foursomes must be different.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        round_obj = get_object_or_404(Round, pk=pk)
+        from_fs = get_object_or_404(
+            Foursome.objects
+                .filter(round=round_obj)
+                .prefetch_related('memberships__player'),
+            pk=from_foursome_id,
+        )
+        to_fs = get_object_or_404(
+            Foursome.objects
+                .filter(round=round_obj)
+                .prefetch_related('memberships__player'),
+            pk=to_foursome_id,
+        )
+
+        # Player must currently be in from_fs (and be real).
+        from_membership = (
+            from_fs.memberships
+            .select_related('player', 'tee')
+            .filter(player_id=player_id, player__is_phantom=False)
+            .first()
+        )
+        if from_membership is None:
+            return Response(
+                {'detail': f'Player {player_id} is not in foursome '
+                           f'{from_fs.group_number} (or is a phantom).'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Both sides must be pre-play.  Either side having scores
+        # already would corrupt match results; refuse rather than try
+        # to invent semantics for mid-round roster swaps.
+        if HoleScore.objects.filter(
+            foursome__in=[from_fs, to_fs]
+        ).exists():
+            return Response(
+                {'detail': 'Cannot move a player after scoring has begun '
+                           'in either foursome.  Reopen the round and '
+                           'clear scores first, or finish play and '
+                           'adjust afterwards.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Size guards.
+        from_real_count = sum(
+            1 for m in from_fs.memberships.all() if not m.player.is_phantom
+        )
+        to_real_count = sum(
+            1 for m in to_fs.memberships.all() if not m.player.is_phantom
+        )
+        if from_real_count - 1 < 2:
+            return Response(
+                {'detail': f'Cannot remove from group '
+                           f'{from_fs.group_number} — it would drop below '
+                           f'2 players.  Move another player out of a '
+                           f'larger group first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if to_real_count + 1 > 4:
+            return Response(
+                {'detail': f'Cannot add to group {to_fs.group_number} — '
+                           f'it already has 4 players.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Compute post-move TC team rosters for both foursomes (only
+        # for TC games — Nassau/Skins/etc. adapt naturally to roster
+        # changes without a reconfig step).
+        def _read_tc_teams(fs):
+            try:
+                tc = fs.triple_cup_game
+            except Exception:
+                return None
+            first = tc.matches.order_by('match_number').first()
+            if first is None:
+                return [], []
+            t1 = first.teams.filter(team_number=1).first()
+            t2 = first.teams.filter(team_number=2).first()
+            t1_ids = list(t1.players.filter(is_phantom=False)
+                          .values_list('id', flat=True)) if t1 else []
+            t2_ids = list(t2.players.filter(is_phantom=False)
+                          .values_list('id', flat=True)) if t2 else []
+            return t1_ids, t2_ids
+
+        from_tc = _read_tc_teams(from_fs)
+        to_tc   = _read_tc_teams(to_fs)
+
+        # Determine which team the moving player belongs to.  In cup
+        # mode this is fixed by their TournamentTeam.  In casual mode
+        # the from-side's TC team membership is the source of truth.
+        moving_on_team = None
+        if from_tc is not None:
+            f_t1, f_t2 = from_tc
+            if player_id in f_t1:
+                moving_on_team = 1
+            elif player_id in f_t2:
+                moving_on_team = 2
+
+        # Build post-move rosters.
+        if from_tc is not None:
+            f_t1_after = [pid for pid in from_tc[0] if pid != player_id]
+            f_t2_after = [pid for pid in from_tc[1] if pid != player_id]
+            if not f_t1_after or not f_t2_after:
+                empty_side = 'Team 1' if not f_t1_after else 'Team 2'
+                try:
+                    cfg = from_fs.ryder_cup_foursome_config
+                    if not f_t1_after and cfg.team1:
+                        empty_side = cfg.team1.name
+                    elif not f_t2_after and cfg.team2:
+                        empty_side = cfg.team2.name
+                except Exception:
+                    pass
+                return Response(
+                    {'detail': f'Cannot move {from_membership.player.name} — '
+                               f'they are the only {empty_side} player in '
+                               f'group {from_fs.group_number}.  Each cup '
+                               f'match needs at least one player on each '
+                               f'side.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            f_t1_after = f_t2_after = None
+
+        if to_tc is not None:
+            t_t1_after = list(to_tc[0])
+            t_t2_after = list(to_tc[1])
+            # Place the moving player on the matching team if known;
+            # for cup mode also consult the to-foursome's TournamentTeam
+            # config so the player lands on the right side even if
+            # the to-foursome currently has no team1 or team2 members.
+            target_team = moving_on_team
+            if target_team is None:
+                # Look up the player's TournamentTeam against the
+                # to-foursome's cup config.
+                try:
+                    cfg = to_fs.ryder_cup_foursome_config
+                    if cfg.team1 and cfg.team1.players.filter(
+                        pk=player_id
+                    ).exists():
+                        target_team = 1
+                    elif cfg.team2 and cfg.team2.players.filter(
+                        pk=player_id
+                    ).exists():
+                        target_team = 2
+                except Exception:
+                    pass
+            if target_team is None:
+                # Casual mode + no signal from from-side either —
+                # default to whichever side has fewer players.
+                target_team = 1 if len(t_t1_after) <= len(t_t2_after) else 2
+            if target_team == 1:
+                t_t1_after.append(player_id)
+            else:
+                t_t2_after.append(player_id)
+            if len(t_t1_after) > 2 or len(t_t2_after) > 2:
+                full_side = (
+                    'Team 1' if len(t_t1_after) > 2 else 'Team 2'
+                )
+                try:
+                    cfg = to_fs.ryder_cup_foursome_config
+                    if len(t_t1_after) > 2 and cfg.team1:
+                        full_side = cfg.team1.name
+                    elif len(t_t2_after) > 2 and cfg.team2:
+                        full_side = cfg.team2.name
+                except Exception:
+                    pass
+                return Response(
+                    {'detail': f'Cannot add {from_membership.player.name} '
+                               f'to group {to_fs.group_number} — '
+                               f'{full_side} would have 3 players (cup '
+                               f'matches cap each side at 2).'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            t_t1_after = t_t2_after = None
+
+        # All checks passed — perform the move atomically.
+        with transaction.atomic():
+            sid = transaction.savepoint()
+            # Move the membership: same player + tee, new foursome.
+            # Preserve handicap values — the player's course/playing
+            # handicap is per-tee, and we're not changing tees.
+            from_tee              = from_membership.tee
+            course_hcp            = from_membership.course_handicap
+            playing_hcp           = from_membership.playing_handicap
+            from_membership.delete()
+            FoursomeMembership.objects.create(
+                foursome         = to_fs,
+                player_id        = player_id,
+                tee              = from_tee,
+                course_handicap  = course_hcp,
+                playing_handicap = playing_hcp,
+            )
+
+            errors = validate_donor_foursomes(round_obj)
+            if errors:
+                transaction.savepoint_rollback(sid)
+                return Response(
+                    {'detail': 'Moving this player would break the donor '
+                               'pool for another group.',
+                     'errors': errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            transaction.savepoint_commit(sid)
+
+            # Reconfigure TC on both foursomes if they had a TC game.
+            if from_tc is not None:
+                reconfigure_triple_cup(from_fs, f_t1_after, f_t2_after)
+            if to_tc is not None:
+                reconfigure_triple_cup(to_fs, t_t1_after, t_t2_after)
+
+        return Response({
+            'player_id'       : player_id,
+            'from_foursome_id': from_fs.id,
+            'to_foursome_id'  : to_fs.id,
+            'from_new_size'   : from_real_count - 1,
+            'to_new_size'     : to_real_count + 1,
         })
 
 
@@ -2048,7 +2706,7 @@ class NassauResultView(APIView):
 
 
 # ---------------------------------------------------------------------------
-# Six's
+# Sixes
 # ---------------------------------------------------------------------------
 
 class SixesSetupView(APIView):
@@ -2292,6 +2950,141 @@ class SkinsJunkView(APIView):
 
         from services.skins import skins_summary
         return Response(skins_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Triple Cup (One-Round Ryder Cup)
+# ---------------------------------------------------------------------------
+
+class TripleCupSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/triple-cup/setup/
+    Body: {
+        "team1_player_ids": [pk, ...],   # 1 or 2 entries
+        "team2_player_ids": [pk, ...],   # 1 or 2 entries
+        "handicap_mode":      "net" | "gross" | "strokes_off",
+        "net_percent":        0..200,
+        "alt_shot_low_pct":   0..100,    # default 50 (USGA)
+        "alt_shot_high_pct":  0..100,    # default 50 (USGA)
+        "phantom_score_mode": "net_par" | "net_bogey"
+    }
+
+    Creates (or replaces) the TripleCupGame for this foursome and re-runs
+    calculate_triple_cup so the first summary the UI fetches already
+    reflects any hole scores already on file.
+    """
+    def post(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        from api.serializers import TripleCupSetupSerializer
+        ser = TripleCupSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.triple_cup import (
+            setup_triple_cup, calculate_triple_cup, triple_cup_summary,
+        )
+        try:
+            setup_triple_cup(
+                foursome,
+                team1_ids                  = d['team1_player_ids'],
+                team2_ids                  = d['team2_player_ids'],
+                handicap_mode              = d.get('handicap_mode', 'net'),
+                net_percent                = d.get('net_percent', 100),
+                alt_shot_low_pct           = d.get('alt_shot_low_pct', 50),
+                alt_shot_high_pct          = d.get('alt_shot_high_pct', 50),
+                foursomes_team1_first_tee  = d.get('foursomes_team1_first_tee'),
+                foursomes_team2_first_tee  = d.get('foursomes_team2_first_tee'),
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        calculate_triple_cup(foursome)
+        return Response(triple_cup_summary(foursome),
+                        status=status.HTTP_201_CREATED)
+
+
+class TripleCupResultView(APIView):
+    """GET /api/foursomes/{id}/triple-cup/"""
+    def get(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        from services.triple_cup import triple_cup_summary
+        summary = triple_cup_summary(foursome)
+        if summary is None:
+            return Response(
+                {'detail': 'No Triple Cup game set up for this foursome.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(summary)
+
+
+class TripleCupFoursomesTeeOffView(APIView):
+    """
+    POST /api/foursomes/{id}/triple-cup/foursomes-tee-off/
+    Body: { "team1_first_tee": <player_id|null>,
+            "team2_first_tee": <player_id|null> }
+
+    Sets (or clears) the alt-shot first-tee-off player on the
+    foursomes match.  Used by the score-entry prompt that fires on
+    hole 7 when the team hasn't decided yet — which is the cup
+    convention (matches set in advance, tee-off decided on the
+    first alt-shot hole).
+    """
+    def post(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        from games.models import TripleCupGame, TripleCupMatch
+
+        try:
+            game = foursome.triple_cup_game
+        except TripleCupGame.DoesNotExist:
+            return Response(
+                {'detail': 'No Triple Cup game set up for this foursome.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            match = game.matches.get(segment='foursomes')
+        except TripleCupMatch.DoesNotExist:
+            return Response(
+                {'detail': 'This Triple Cup game has no foursomes segment.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate each requested first-tee player is actually on the
+        # matching side of the foursomes match.
+        def _validate(team_num, requested):
+            if requested is None:
+                return None
+            team = match.teams.filter(team_number=team_num).first()
+            allowed = set(team.players.values_list('id', flat=True)) if team else set()
+            if requested not in allowed:
+                raise ValueError(
+                    f'Player {requested} is not on team{team_num} of '
+                    f'the foursomes match.'
+                )
+            return requested
+
+        try:
+            t1 = _validate(1, request.data.get('team1_first_tee'))
+            t2 = _validate(2, request.data.get('team2_first_tee'))
+        except ValueError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if 'team1_first_tee' in request.data:
+            match.team1_first_tee_player_id = t1
+        if 'team2_first_tee' in request.data:
+            match.team2_first_tee_player_id = t2
+        match.save(update_fields=[
+            'team1_first_tee_player', 'team2_first_tee_player',
+        ])
+
+        # Recalculate doesn't depend on tee-off (scoring uses
+        # min-of-team-grosses regardless), but refreshing keeps the
+        # summary's hole-by-hole player view consistent if any scores
+        # already exist.
+        from services.triple_cup import calculate_triple_cup, triple_cup_summary
+        calculate_triple_cup(foursome)
+        return Response(triple_cup_summary(foursome))
 
 
 # ---------------------------------------------------------------------------
@@ -3924,12 +4717,14 @@ class RyderCupRoundSetupView(APIView):
         # Replace existing config (cascades to foursome configs + pairings)
         RyderCupRoundConfig.objects.filter(round=round_obj).delete()
 
+        round_format = d.get('round_format', 'custom')
         rc = RyderCupRoundConfig.objects.create(
             round              = round_obj,
             tournament         = tt,
             nassau_point_value = d['nassau_point_value'],
             point_multiplier   = d['point_multiplier'],
             notes              = d['notes'],
+            round_format       = round_format,
         )
 
         # Per-foursome configs
@@ -3941,6 +4736,12 @@ class RyderCupRoundSetupView(APIView):
             foursome = get_object_or_404(Foursome, pk=fs_data['foursome_id'])
             team1 = get_object_or_404(TournamentTeam, pk=fs_data['team1_id'], tournament=tt) if fs_data.get('team1_id') else None
             team2 = get_object_or_404(TournamentTeam, pk=fs_data['team2_id'], tournament=tt) if fs_data.get('team2_id') else None
+            # 'triple_cup' round format locks every foursome to TC —
+            # the wizard payload may omit per-foursome game_type
+            # (and historic payloads that include it are overridden
+            # to keep the round internally consistent).
+            if round_format == 'triple_cup':
+                fs_data['game_type'] = GameType.TRIPLE_CUP
             RyderCupFoursomeConfig.objects.create(
                 foursome     = foursome,
                 round_config = rc,
@@ -4146,12 +4947,63 @@ class RyderCupRoundSetupView(APIView):
                     foursome.active_games = existing_games
                     foursome.save(update_fields=['active_games'])
 
+            # Triple Cup: 1 fourball + 1 alt-shot + 2 singles per
+            # foursome, 4 cup-points each.  Even foursomes only for
+            # now — 2v1 cup handling (with cross-foursome donor for
+            # the fourball phantom) comes in the follow-up phase.
+            elif fs_data['game_type'] == GameType.TRIPLE_CUP:
+                from services.triple_cup import setup_triple_cup
+                real_pids_tc = set(
+                    foursome.memberships.filter(player__is_phantom=False)
+                    .values_list('player_id', flat=True)
+                )
+                t1_ids = [p.pk for p in (team1.players.all() if team1 else [])
+                          if p.pk in real_pids_tc]
+                t2_ids = [p.pk for p in (team2.players.all() if team2 else [])
+                          if p.pk in real_pids_tc]
+                try:
+                    setup_triple_cup(
+                        foursome,
+                        team1_ids     = t1_ids,
+                        team2_ids     = t2_ids,
+                        handicap_mode = round_obj.handicap_mode,
+                        net_percent   = round_obj.net_percent,
+                    )
+                except (ValueError, Exception) as _e:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        'triple_cup setup failed for foursome %s: %s',
+                        foursome.id, _e,
+                    )
+                existing_games = list(foursome.active_games or [])
+                if 'triple_cup' not in existing_games:
+                    existing_games.append('triple_cup')
+                    foursome.active_games = existing_games
+                    foursome.save(update_fields=['active_games'])
+
         # Configure cross-foursome phantom rotation for Four Ball foursomes.
         # Done after the main loop so all foursomes have memberships and the
         # donor players (from other foursomes on the same team) are in the DB.
+        # Donor pool = the 3 earliest-teeing foursomes only, so first
+        # validate that those 3 are full 4-player groups; otherwise the
+        # short-roster groups later in the round have nothing to pull
+        # from.  Surfaces clear errors instead of mysterious empty
+        # phantom scores at game time.
         phantom_setup_results = []
         if _phantom_foursomes_to_configure:
-            from scoring.phantom import setup_cross_foursome_phantom
+            from scoring.phantom import (
+                setup_cross_foursome_phantom,
+                validate_donor_foursomes,
+            )
+            donor_errors = validate_donor_foursomes(round_obj)
+            if donor_errors:
+                # Module-level Response/status imports — early-return
+                # rolls back the @transaction.atomic on this post().
+                return Response(
+                    {'detail': 'Donor foursome validation failed.',
+                     'errors': donor_errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             for _ph_fs, _ph_team in _phantom_foursomes_to_configure:
                 try:
                     ok = setup_cross_foursome_phantom(_ph_fs, _ph_team, round_obj)
@@ -4186,6 +5038,18 @@ class RyderCupRoundSetupView(APIView):
             round_games = list(round_obj.active_games or [])
             if 'quota_nassau' not in round_games:
                 round_games.append('quota_nassau')
+                round_obj.active_games = round_games
+                round_obj.save(update_fields=['active_games'])
+
+        # Same treatment for Triple Cup so leaderboard + recalc fire.
+        has_tc = any(
+            fs_d['game_type'] == GameType.TRIPLE_CUP
+            for fs_d in d.get('foursomes', [])
+        )
+        if has_tc:
+            round_games = list(round_obj.active_games or [])
+            if 'triple_cup' not in round_games:
+                round_games.append('triple_cup')
                 round_obj.active_games = round_games
                 round_obj.save(update_fields=['active_games'])
 

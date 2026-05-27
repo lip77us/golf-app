@@ -190,6 +190,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   /// team picker for.  Prevents an infinite modal loop when the user cancels.
   final Set<int> _autoOpenedExtraStart = {};
 
+  /// Triple Cup match IDs we've already shown the foursomes tee-off
+  /// prompt for — keeps the modal from re-opening every rebuild when
+  /// the user dismisses without picking.  Cleared when teams update.
+  final Set<int> _teeOffPromptShown = {};
+
   // Sync-drain watcher — detects when the pending queue empties so we can
   // reload game summaries immediately.  Uses a direct ChangeNotifier listener
   // rather than build()-time tracking because on localhost the entire
@@ -339,6 +344,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         rp.sixesSummary != null) {
       rp.loadSixes(widget.foursomeId);
     }
+    if (games.contains('triple_cup') ||
+        configured.contains('triple_cup') ||
+        rp.tripleCupSummary != null) {
+      rp.loadTripleCup(widget.foursomeId);
+    }
     if (games.contains('points_531') ||
         configured.contains('points_531') ||
         rp.points531Summary != null) {
@@ -401,6 +411,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (games.contains('sixes') && rp.sixesSummary != null) {
       return (rp.sixesSummary!.handicapMode, rp.sixesSummary!.netPercent);
     }
+    if (games.contains('triple_cup') && rp.tripleCupSummary != null) {
+      return (rp.tripleCupSummary!.handicapMode,
+              rp.tripleCupSummary!.netPercent);
+    }
     if (games.contains('points_531') && rp.points531Summary != null) {
       return (rp.points531Summary!.handicapMode, rp.points531Summary!.netPercent);
     }
@@ -451,8 +465,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   List<Membership> _orderedPlayers(
     Scorecard sc,
     Round? round,
-    NassauSummary? nas,
-  ) {
+    NassauSummary? nas, {
+    TripleCupSummary? tripleCup,
+  }) {
     final foursome = round?.foursomes
         .where((f) => f.id == widget.foursomeId)
         .firstOrNull;
@@ -481,6 +496,29 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
           .toList();
     }
 
+    // Triple Cup: Red (team_number 1) on top, Blue on the bottom.
+    if (tripleCup != null && tripleCup.matches.isNotEmpty) {
+      // Build a stable player_id → team_number map from any match
+      // (every match in the game uses the same team assignment).
+      final teamOf = <int, int>{};
+      for (final m in tripleCup.matches) {
+        for (final p in m.players) {
+          if (p.isPhantom) continue;
+          teamOf.putIfAbsent(p.playerId, () => p.teamNumber);
+        }
+      }
+      final ordered = <Membership>[];
+      for (final t in [1, 2]) {
+        for (final m in members) {
+          if (teamOf[m.player.id] == t) ordered.add(m);
+        }
+      }
+      for (final m in members) {
+        if (!ordered.any((o) => o.player.id == m.player.id)) ordered.add(m);
+      }
+      return ordered;
+    }
+
     if (nas == null) return members;
 
     final ordered = <Membership>[];
@@ -498,6 +536,145 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     return ordered;
   }
 
+  /// If the user is on a foursomes hole AND the team hasn't picked
+  /// who tees off first yet, open the picker modal.  No-op when the
+  /// pick already exists (casual flow sets it at setup) or when we've
+  /// already prompted for this match this session.
+  void _maybePromptTripleCupTeeOff(RoundProvider rp, List<String> games) {
+    if (!games.contains('triple_cup')) return;
+    final tc = rp.tripleCupSummary;
+    if (tc == null) return;
+    for (final m in tc.matches) {
+      if (m.segment != 'foursomes') continue;
+      if (_selectedHole < m.startHole || _selectedHole > m.endHole) continue;
+      // Need a pick for each side that actually has 2 real players
+      // (skip the solo side of 2v1).
+      bool needsT1 = m.players
+              .where((p) => p.teamNumber == 1 && !p.isPhantom)
+              .length >= 2 && m.team1FirstTeeId == null;
+      bool needsT2 = m.players
+              .where((p) => p.teamNumber == 2 && !p.isPhantom)
+              .length >= 2 && m.team2FirstTeeId == null;
+      if (!needsT1 && !needsT2) return;
+      if (_teeOffPromptShown.contains(m.matchNumber)) return;
+      _teeOffPromptShown.add(m.matchNumber);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showTripleCupTeeOffPicker(m);
+      });
+      return;
+    }
+  }
+
+  Future<void> _showTripleCupTeeOffPicker(TripleCupMatch match) async {
+    List<TripleCupMatchPlayer> teamPlayers(int t) => match.players
+        .where((p) => p.teamNumber == t && !p.isPhantom)
+        .toList();
+    int? pickT1 = match.team1FirstTeeId;
+    int? pickT2 = match.team2FirstTeeId;
+    // Cup team names + colours pulled from the live TC summary so
+    // the modal reads as "Tilden Green tees off?" instead of the
+    // generic "Red".  Falls back to Red/Blue for casual rounds.
+    final tcSummary = context.read<RoundProvider>().tripleCupSummary;
+    final t1Label   = tcSummary?.team1Name ?? 'Red';
+    final t2Label   = tcSummary?.team2Name ?? 'Blue';
+    final t1Color   = tcSummary?.team1Color ?? kTripleCupTeam1Color;
+    final t2Color   = tcSummary?.team2Color ?? kTripleCupTeam2Color;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setStateDlg) {
+        final theme = Theme.of(ctx);
+        final t1 = teamPlayers(1);
+        final t2 = teamPlayers(2);
+        final ready =
+            (t1.length < 2 || pickT1 != null) &&
+            (t2.length < 2 || pickT2 != null);
+
+        Widget pickerRow(String label, Color color,
+            List<TripleCupMatchPlayer> team, int? selected,
+            void Function(int) onPick) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Cup team names ("Tilden Green") can be longer than
+                // "Red" / "Blue"; put the label on its own line so
+                // wider names don't squeeze the picker.
+                Text(label,
+                    style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13)),
+                const SizedBox(height: 4),
+                SegmentedButton<int>(
+                  segments: team
+                      .map((p) => ButtonSegment<int>(
+                            value: p.playerId,
+                            label: Text(p.shortName.isEmpty
+                                ? p.name
+                                : p.shortName),
+                          ))
+                      .toList(),
+                  selected: selected == null ? <int>{} : {selected},
+                  emptySelectionAllowed: true,
+                  onSelectionChanged: (s) =>
+                      s.isEmpty ? null : onPick(s.first),
+                  style: SegmentedButton.styleFrom(
+                      visualDensity: VisualDensity.compact),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return AlertDialog(
+          title: const Text('Foursomes tee-off'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Who tees off hole ${match.startHole} for each team?  '
+                'Partners alternate through the 6 alt-shot holes.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              if (t1.length >= 2)
+                pickerRow(t1Label, t1Color, t1, pickT1,
+                    (id) => setStateDlg(() => pickT1 = id)),
+              if (t2.length >= 2)
+                pickerRow(t2Label, t2Color, t2, pickT2,
+                    (id) => setStateDlg(() => pickT2 = id)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: ready
+                  ? () async {
+                      final rp = context.read<RoundProvider>();
+                      await rp.setTripleCupFoursomesTeeOff(
+                        widget.foursomeId,
+                        team1FirstTee: pickT1,
+                        team2FirstTee: pickT2,
+                      );
+                      if (ctx.mounted) Navigator.of(ctx).pop();
+                    }
+                  : null,
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
   // ── Score helpers ────────────────────────────────────────────────────────────
 
   void _jumpToFirstUnplayed(RoundProvider rp) {
@@ -511,6 +688,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       if (hd == null) continue;
       final allScored = hd.scores
           .where((s) => realIds.contains(s.playerId))
+          .where((s) => !_isInactiveAltShotPlayerAt(s.playerId, h))
           .every((s) => s.grossScore != null);
       if (!allScored && !rp.localPendingByHole.containsKey(h)) {
         setState(() => _selectedHole = h);
@@ -518,6 +696,29 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       }
     }
     setState(() => _selectedHole = 18);
+  }
+
+  /// True iff *playerId* is the dimmed alt-shot partner on *hole*
+  /// in a Triple Cup foursomes match.  Used by both the in-flight
+  /// hot-spot check and the initial "jump to first unplayed" so the
+  /// inactive partner never blocks a hole from counting as complete.
+  bool _isInactiveAltShotPlayerAt(int playerId, int hole) {
+    final tc = context.read<RoundProvider>().tripleCupSummary;
+    if (tc == null) return false;
+    for (final m in tc.matches) {
+      if (m.segment != 'foursomes') continue;
+      if (hole < m.startHole || hole > m.endHole) continue;
+      final entry = m.players.firstWhere(
+        (p) => p.playerId == playerId && !p.isPhantom,
+        orElse: () => const TripleCupMatchPlayer(
+            playerId: -1, name: '', shortName: '', teamNumber: 0),
+      );
+      if (entry.teamNumber == 0) return false;
+      final active = m.activePlayerId(entry.teamNumber, hole);
+      if (active == null) return false;
+      return active != playerId;
+    }
+    return false;
   }
 
   Map<int, int> _effectiveScores(Scorecard sc, int hole) {
@@ -533,20 +734,50 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
 
   int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
     for (int i = 0; i < players.length; i++) {
+      if (_isInactiveAltShotPlayer(players[i].player.id)) continue;
       if (!scores.containsKey(players[i].player.id)) return i;
     }
     return -1;
   }
 
-  bool _allScored(List<Membership> players, Map<int, int> scores) =>
-      players.every((m) => scores.containsKey(m.player.id));
+  /// True iff every "real" player has a score at *hole*, treating the
+  /// dimmed alt-shot partner on that hole as not-required.  *hole* is
+  /// the hole being validated — must NOT be assumed to be _selectedHole
+  /// because _allHolesScored iterates 1–18.
+  bool _allScored(List<Membership> players, Map<int, int> scores, int hole) =>
+      players.every((m) =>
+          _isInactiveAltShotPlayerAt(m.player.id, hole) ||
+          scores.containsKey(m.player.id));
+
+  /// True iff the given player is the dimmed partner on the current
+  /// hole of a Triple Cup foursomes (alt-shot) match.  Used to skip
+  /// them in hot-spot and all-scored computations.
+  bool _isInactiveAltShotPlayer(int playerId) {
+    final tc = context.read<RoundProvider>().tripleCupSummary;
+    if (tc == null) return false;
+    final hole = _selectedHole;
+    for (final m in tc.matches) {
+      if (m.segment != 'foursomes') continue;
+      if (hole < m.startHole || hole > m.endHole) continue;
+      final onTeam = m.players.firstWhere(
+        (p) => p.playerId == playerId && !p.isPhantom,
+        orElse: () => const TripleCupMatchPlayer(
+            playerId: -1, name: '', shortName: '', teamNumber: 0),
+      );
+      if (onTeam.teamNumber == 0) return false;
+      final active = m.activePlayerId(onTeam.teamNumber, hole);
+      if (active == null) return false;
+      return active != playerId;
+    }
+    return false;
+  }
 
   /// True when every real player has a gross score on every hole 1–18,
   /// considering both saved scores and locally-pending edits.
   bool _allHolesScored(Scorecard sc, List<Membership> players) {
     for (int h = 1; h <= 18; h++) {
       final scores = _effectiveScores(sc, h);
-      if (!_allScored(players, scores)) return false;
+      if (!_allScored(players, scores, h)) return false;
     }
     return true;
   }
@@ -557,7 +788,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   int? _firstMissingHole(Scorecard sc, List<Membership> players) {
     for (int h = 1; h <= 18; h++) {
       final scores = _effectiveScores(sc, h);
-      if (!_allScored(players, scores)) return h;
+      if (!_allScored(players, scores, h)) return h;
     }
     return null;
   }
@@ -767,15 +998,26 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     final roundId = rp.round?.id;
     if (roundId == null) return;
 
+    // Multi-foursome cup rounds: a single group's "Complete Round" no
+    // longer locks the whole round — the backend only flips status
+    // when EVERY foursome has 18 holes scored.  The confirm dialog
+    // copy reflects that so the user doesn't fear locking out their
+    // playing partners.
+    final foursomeCount = rp.round?.foursomes.length ?? 1;
+    final isMultiGroup = foursomeCount > 1;
+    final dialogBody = isMultiGroup
+        ? 'This will lock your group\'s scores. The round will be '
+            'marked complete once every other group also finishes. '
+            'You can still view live results in the meantime.'
+        : 'This will mark the round as finished and lock all scores. '
+            'You can still view the final results afterwards, and the '
+            'round can be reopened from the leaderboard if needed.';
+
     final confirmed = await showDialog<bool>(
       context: ctx,
       builder: (dctx) => AlertDialog(
-        title: const Text('Complete Round?'),
-        content: const Text(
-          'This will mark the round as finished and lock all scores. '
-          'You can still view the final results afterwards, and the '
-          'round can be reopened from the leaderboard if needed.',
-        ),
+        title: Text(isMultiGroup ? 'Finish Your Group?' : 'Complete Round?'),
+        content: Text(dialogBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dctx).pop(false),
@@ -783,7 +1025,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dctx).pop(true),
-            child: const Text('Complete Round'),
+            child: Text(isMultiGroup ? 'Finish Group' : 'Complete Round'),
           ),
         ],
       ),
@@ -806,6 +1048,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         backgroundColor: Theme.of(ctx).colorScheme.error,
       ));
       return;
+    }
+
+    // Backend leaves status == 'in_progress' until every foursome has
+    // 18 holes scored.  Surface the "waiting on other groups" state
+    // so the user doesn't expect Final Results.
+    if (isMultiGroup && lb.status != 'complete') {
+      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+        duration: Duration(seconds: 4),
+        content: Text(
+          'Your group is finished. The round will close once every '
+          'other group also completes.',
+        ),
+      ));
     }
 
     Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
@@ -839,7 +1094,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     const labels = {
       'nassau'       : 'Nassau',
       'skins'        : 'Skins',
-      'sixes'        : "Six's",
+      'sixes'        : 'Sixes',
       'points_531'   : 'Points 5-3-1',
       'match_play'   : 'Match Play',
       'irish_rumble' : 'Irish Rumble',
@@ -880,10 +1135,17 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     final nas        = games.contains('nassau') ? rp.nassauSummary : null;
     final skins      = games.contains('skins')  ? rp.skinsSummary  : null;
 
-    // Jump to first unplayed hole once scorecard is loaded.
+    // Jump to first unplayed hole once scorecard is loaded.  When
+    // Triple Cup is active, also wait for the TC summary — the jump
+    // needs to know who the dimmed alt-shot partner is on each
+    // foursomes hole, and without that info every 7–12 hole looks
+    // "incomplete" and the jump misfires to hole 7.
+    final waitForTc = games.contains('triple_cup') &&
+        rp.tripleCupSummary == null;
     if (!_initialJumpDone &&
         sc != null &&
-        rp.activeFoursomeId == widget.foursomeId) {
+        rp.activeFoursomeId == widget.foursomeId &&
+        !waitForTc) {
       _initialJumpDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _jumpToFirstUnplayed(context.read<RoundProvider>());
@@ -937,7 +1199,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
           ),
         ],
       ),
-      body: _buildBody(context, rp, sync, sc, nas, skins, games, isComplete),
+      body: () {
+        // Triple Cup: when the user lands on a foursomes hole and the
+        // team hasn't decided who tees off yet (cup convention —
+        // matches set in advance, tee-off picked at hole 7), pop the
+        // prompt.  Casual rounds already pick at setup so this is a
+        // no-op there.  Guarded by [_teeOffPromptShown] to avoid
+        // reopening every rebuild after the user dismisses.
+        _maybePromptTripleCupTeeOff(rp, games);
+        return _buildBody(context, rp, sync, sc, nas, skins, games, isComplete);
+      }(),
       bottomNavigationBar:
           sc == null ? null : _buildBottomBar(context, rp, sc, nas, games),
     );
@@ -952,9 +1223,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     NassauSummary? nas,
     List<String> games,
   ) {
-    final players    = _orderedPlayers(sc, rp.round, nas);
+    final players    = _orderedPlayers(sc, rp.round, nas,
+        tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null);
     final scores     = _effectiveScores(sc, _selectedHole);
-    final allDone    = _allScored(players, scores);
+    final allDone    = _allScored(players, scores, _selectedHole);
     final isComplete = rp.round?.status == 'complete';
     final par        = sc.holeData(_selectedHole)?.par ?? 4;
     final mpData     = rp.matchPlayData;
@@ -1021,7 +1293,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _selectedHole > 1 ? _retreat : null,
                   icon: const Icon(Icons.chevron_left, size: 20),
-                  label: Text('Hole ${_selectedHole - 1}'),
+                  label: Text(
+                    _selectedHole > 1 ? 'Hole ${_selectedHole - 1}' : 'Previous',
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1117,8 +1391,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                     content: Text('Hole $missingHole still has missing scores.'),
                     action: SnackBarAction(
                       label: 'Go to hole $missingHole',
-                      onPressed: () =>
-                          setState(() => _selectedHole = missingHole),
+                      // The SnackBar outlives this screen — it's anchored
+                      // to the root ScaffoldMessenger, so a user can tap
+                      // the action after navigating away and a bare
+                      // setState() will throw "called after dispose()".
+                      onPressed: () {
+                        if (!mounted) return;
+                        setState(() => _selectedHole = missingHole);
+                      },
                     ),
                   ));
                 }
@@ -1165,7 +1445,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     }
     if (sc == null) return const SizedBox.shrink();
 
-    final players  = _orderedPlayers(sc, rp.round, nas);
+    final players  = _orderedPlayers(sc, rp.round, nas,
+        tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null);
     final merged   = _mergePending(rp.localPendingByHole, _pending);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
@@ -1223,6 +1504,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 // stale summary from a prior Sixes game must not bleed into
                 // P531 or other games and trigger the wrong SO algorithm.
                 sixesSummary:    games.contains('sixes')      ? rp.sixesSummary    : null,
+                tripleCupSummary: games.contains('triple_cup') ? rp.tripleCupSummary : null,
                 points531Summary: games.contains('points_531') ? rp.points531Summary : null,
                 matchPlayData:   rp.matchPlayData,
                 isCupSingles:    games.contains('singles_nassau') || games.contains('singles_18'),
@@ -1237,7 +1519,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 onScoreSelected: (m, score) {
                   final hole = _selectedHole;
                   final wasAllScored = _allScored(
-                    players, _effectiveScores(sc, hole));
+                    players, _effectiveScores(sc, hole), hole);
                   _selectScore(m, score, hole);
                   // Auto-save+advance the moment the last player on the hole
                   // gets a positive score.  Skip when clearing (score == -1)
@@ -1248,7 +1530,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                       context.read<SettingsProvider>().autoAdvanceHole;
                   if (autoAdvance && score > 0 && !wasAllScored) {
                     final nowAllScored = _allScored(
-                      players, _effectiveScores(sc, hole));
+                      players, _effectiveScores(sc, hole), hole);
                     if (nowAllScored) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (!mounted) return;
@@ -1286,6 +1568,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 skins:                   skins,
                 multiSkins:              games.contains('multi_skins')       ? rp.multiSkinsSummary         : null,
                 sixesSummary:            games.contains('sixes')             ? rp.sixesSummary              : null,
+                tripleCupSummary:        games.contains('triple_cup')        ? rp.tripleCupSummary          : null,
                 points531Summary:        games.contains('points_531')        ? rp.points531Summary           : null,
                 matchPlayData:           rp.matchPlayData,
                 threePersonMatchSummary: games.contains('three_person_match') ? rp.threePersonMatchSummary   : null,
@@ -1297,6 +1580,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 loadingSkins:            rp.loadingSkins,
                 loadingMultiSkins:       rp.loadingMultiSkins,
                 loadingSixes:            rp.loadingSixes,
+                loadingTripleCup:        rp.loadingTripleCup,
                 loadingPoints531:        rp.loadingPoints531,
                 loadingMatchPlay:        rp.loadingMatchPlay,
                 loadingThreePersonMatch: rp.loadingThreePersonMatch,
@@ -1431,6 +1715,7 @@ class _HoleScoreCard extends StatelessWidget {
   final NassauSummary?          nassau;
   final SkinsSummary?           skins;
   final SixesSummary?           sixesSummary;
+  final TripleCupSummary?       tripleCupSummary;
   final Points531Summary?       points531Summary;
   final String                  handicapMode;
   final int                     netPercent;
@@ -1475,6 +1760,7 @@ class _HoleScoreCard extends StatelessWidget {
     required this.nassau,
     required this.skins,
     this.sixesSummary,
+    this.tripleCupSummary,
     this.points531Summary,
     this.matchPlayData,
     this.isCupSingles = false,
@@ -1497,32 +1783,77 @@ class _HoleScoreCard extends StatelessWidget {
     return players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b);
   }
 
-  /// Returns a playerId → team color map when this is a cup singles round.
+  /// True when the phantom row should render on *hole*.
+  ///
+  ///   • Triple Cup 2v1 → only on the fourball segment, where the
+  ///     phantom partners the solo.  Foursomes (alt-shot) and singles
+  ///     don't use the phantom, so hiding the row prevents "Waiting
+  ///     for Glenn…" from misleading users on holes 7-18.
+  ///   • Non-TC phantoms (e.g. Points 5-3-1 intra-foursome rotation)
+  ///     run on every hole, so we default to true when there's no TC
+  ///     summary attached.
+  bool _phantomBelongsOnHole(int hole) {
+    final tc = tripleCupSummary;
+    if (tc == null) return true;   // non-TC phantom path
+    for (final m in tc.matches) {
+      if (m.segment != 'fourball') continue;
+      return hole >= m.startHole && hole <= m.endHole;
+    }
+    return false;   // TC has no fourball match → no phantom anywhere
+  }
+
+  /// Returns a playerId → team color map for the active games that
+  /// pin players to a side: cup singles brackets and Triple Cup.  Cup
+  /// singles wins when both are active (legacy precedence).
   Map<int, Color> get _cupSinglesColors {
-    final mp = matchPlayData;
-    if (mp == null || mp['bracket_type'] != 'cup_singles') return {};
-    Color tc(String? raw) {
-      switch ((raw ?? '').toLowerCase().trim()) {
-        case 'red':    return const Color(0xFFB71C1C);
-        case 'blue':   return const Color(0xFF0D47A1);
-        case 'green':  return const Color(0xFF1B5E20);
-        case 'gold':
-        case 'yellow': return const Color(0xFFF57F17);
-        case 'orange': return const Color(0xFFE65100);
-        case 'purple': return const Color(0xFF4A148C);
-        default:       return const Color(0xFF455A64);
+    final result = <int, Color>{};
+
+    // Triple Cup: map every player to their team's accent colour.
+    // In cup mode the summary carries the configured TournamentTeam
+    // colour; in casual mode it falls back to red/blue.  Players
+    // appear on every match they're in, but team assignment is
+    // stable across matches so we take the first occurrence.
+    if (tripleCupSummary != null) {
+      final t1 = tripleCupSummary!.team1Color;
+      final t2 = tripleCupSummary!.team2Color;
+      for (final m in tripleCupSummary!.matches) {
+        for (final p in m.players) {
+          if (p.isPhantom) continue;
+          result.putIfAbsent(
+            p.playerId,
+            () => p.teamNumber == 1 ? t1 : t2,
+          );
+        }
       }
     }
-    final t1Color = tc(mp['team1_colour'] as String?);
-    final t2Color = tc(mp['team2_colour'] as String?);
-    final result  = <int, Color>{};
-    for (final m in (mp['matches'] as List? ?? [])) {
-      final mm  = Map<String, dynamic>.from(m as Map);
-      final p1  = mm['player1_id'] as int?;
-      final p2  = mm['player2_id'] as int?;
-      if (p1 != null) result[p1] = t1Color;
-      if (p2 != null) result[p2] = t2Color;
+
+    // Cup singles brackets (existing behavior) — overrides Triple Cup
+    // when both happen to apply, which they shouldn't in practice.
+    final mp = matchPlayData;
+    if (mp != null && mp['bracket_type'] == 'cup_singles') {
+      Color tc(String? raw) {
+        switch ((raw ?? '').toLowerCase().trim()) {
+          case 'red':    return const Color(0xFFB71C1C);
+          case 'blue':   return const Color(0xFF0D47A1);
+          case 'green':  return const Color(0xFF1B5E20);
+          case 'gold':
+          case 'yellow': return const Color(0xFFF57F17);
+          case 'orange': return const Color(0xFFE65100);
+          case 'purple': return const Color(0xFF4A148C);
+          default:       return const Color(0xFF455A64);
+        }
+      }
+      final t1Color = tc(mp['team1_colour'] as String?);
+      final t2Color = tc(mp['team2_colour'] as String?);
+      for (final m in (mp['matches'] as List? ?? [])) {
+        final mm  = Map<String, dynamic>.from(m as Map);
+        final p1  = mm['player1_id'] as int?;
+        final p2  = mm['player2_id'] as int?;
+        if (p1 != null) result[p1] = t1Color;
+        if (p2 != null) result[p2] = t2Color;
+      }
     }
+
     return result;
   }
 
@@ -1575,6 +1906,17 @@ class _HoleScoreCard extends StatelessWidget {
     if (h == null || handicapMode == 'gross') return 0;
     final entry = h.scoreFor(m.player.id);
     final mySi  = entry?.strokeIndex ?? h.strokeIndex;
+
+    // Triple Cup: pull the exact segment-specific stroke count from
+    // the summary the backend already computed (team-vs-team SO on
+    // foursomes, per-pair SO on certain singles, Sixes-spread on
+    // fourball, etc.).  Falls through to the legacy paths when the
+    // current hole isn't in any TC match — keeps things safe before
+    // the summary loads.
+    if (tripleCupSummary != null) {
+      final tcStrokes = _tripleCupExpectedStrokes(m.player.id, h.holeNumber);
+      if (tcStrokes != null) return tcStrokes;
+    }
 
     // Cup singles: match-play handicap (lower of the pair = 0, higher = diff).
     // isCupSingles is set from the games list so this fires even before
@@ -1644,7 +1986,119 @@ class _HoleScoreCard extends StatelessWidget {
     return _RunningTotal(grossVsPar: gross - parSum, netVsPar: net - parSum);
   }
 
+  /// Expected handicap strokes for *playerId* on *hole* per the
+  /// Triple Cup match that contains that hole.  Returns null when
+  /// the hole is outside every match (caller falls back to the
+  /// generic NET/SO calculation), or when the player isn't on a
+  /// team for that match.  Bypasses local recomputation by reading
+  /// the value the backend already produced in `match.players[*]
+  /// .strokes_by_hole` — so the entry-screen dots agree with the
+  /// leaderboard detail grid hole-for-hole.
+  int? _tripleCupExpectedStrokes(int playerId, int hole) {
+    final tc = tripleCupSummary;
+    if (tc == null) return null;
+    for (final m in tc.matches) {
+      if (hole < m.startHole || hole > m.endHole) continue;
+      final entry = m.players.firstWhere(
+        (p) => p.playerId == playerId,
+        orElse: () => const TripleCupMatchPlayer(
+            playerId: -1, name: '', shortName: '', teamNumber: 0),
+      );
+      if (entry.playerId == -1) continue;
+      return entry.strokesByHole[hole] ?? 0;
+    }
+    return null;
+  }
+
+  /// SO ("strokes off") value the BACKEND computed for *playerId* in
+  /// the Triple Cup match containing *hole*.  Mirrors the per-match
+  /// SO badge on the leaderboard — which already honors the 2v1
+  /// fourball "phantom is scratch" rule (baseline 0) and the per-pair
+  /// singles reset.  Returns null when the hole isn't inside any TC
+  /// match (e.g. before the summary loads).  Callers use this to drive
+  /// the player-row hcap badge so it matches the dots and the
+  /// leaderboard hole-for-hole.
+  int? _tripleCupSoForHole(int playerId, int hole) {
+    final tc = tripleCupSummary;
+    if (tc == null) return null;
+    for (final m in tc.matches) {
+      if (hole < m.startHole || hole > m.endHole) continue;
+      final entry = m.players.firstWhere(
+        (p) => p.playerId == playerId,
+        orElse: () => const TripleCupMatchPlayer(
+            playerId: -1, name: '', shortName: '', teamNumber: 0),
+      );
+      if (entry.playerId == -1) continue;
+      return entry.strokesOff;   // null in NET/GROSS mode, int in SO
+    }
+    return null;
+  }
+
+  /// Every TC match a player has on *hole* (one per match they're in).
+  /// The 2v1 singles solo appears in TWO matches simultaneously — one
+  /// vs each opponent on the team-of-2 — and his per-pair SO + per-
+  /// hole strokes can differ between them.  The player-row hcap
+  /// badge calls this so a solo who's -5 vs Glenn but -0 vs BobS
+  /// shows BOTH badges side-by-side, not just whichever match the
+  /// summary listed first.
+  ///
+  /// Returns an empty list when *playerId* isn't on any TC match at
+  /// *hole*; falls back to the single-entry path naturally.
+  List<({int? strokesOff, int strokesOnHole})>
+      _tripleCupEntriesForHole(int playerId, int hole) {
+    final tc = tripleCupSummary;
+    if (tc == null) return const [];
+    final out = <({int? strokesOff, int strokesOnHole})>[];
+    for (final m in tc.matches) {
+      if (hole < m.startHole || hole > m.endHole) continue;
+      final entry = m.players.firstWhere(
+        (p) => p.playerId == playerId,
+        orElse: () => const TripleCupMatchPlayer(
+            playerId: -1, name: '', shortName: '', teamNumber: 0),
+      );
+      if (entry.playerId == -1) continue;
+      out.add((
+        strokesOff:    entry.strokesOff,
+        strokesOnHole: entry.strokesByHole[hole] ?? 0,
+      ));
+    }
+    return out;
+  }
+
+  /// True when this player is on a Triple Cup foursomes (alt-shot)
+  /// team for the current hole but it's the PARTNER's turn to play.
+  /// False for the active player, for non-foursomes holes, for non-TC
+  /// games, and when no first-tee player is set yet.
+  bool _isInactiveAltShot(int playerId) {
+    if (tripleCupSummary == null) return false;
+    final hole = holeNumber;
+    for (final m in tripleCupSummary!.matches) {
+      if (m.segment != 'foursomes') continue;
+      if (hole < m.startHole || hole > m.endHole) continue;
+      final onTeam = m.players.firstWhere(
+        (p) => p.playerId == playerId && !p.isPhantom,
+        orElse: () => const TripleCupMatchPlayer(
+            playerId: -1, name: '', shortName: '', teamNumber: 0),
+      );
+      if (onTeam.teamNumber == 0) return false;
+      final active = m.activePlayerId(onTeam.teamNumber, hole);
+      if (active == null) return false;
+      return active != playerId;
+    }
+    return false;
+  }
+
   String? _teamLabelFor(int playerId) {
+    // Triple Cup: team_number 1 → Red (T1), 2 → Blue (T2).
+    if (tripleCupSummary != null) {
+      for (final m in tripleCupSummary!.matches) {
+        for (final p in m.players) {
+          if (p.playerId == playerId && !p.isPhantom) {
+            return p.teamNumber == 1 ? 'T1' : 'T2';
+          }
+        }
+      }
+    }
     if (nassau == null) return null;
     // Red team (team2) = T1, Blue team (team1) = T2
     if (nassau!.team2.any((p) => p.playerId == playerId)) return 'T1';
@@ -1805,8 +2259,45 @@ class _HoleScoreCard extends StatelessWidget {
               final dots = matchStrok > 0 ? ' ${'•' * matchStrok}' : '';
               hcapLabel = '-$so$dots';
             } else if (handicapMode == 'net' || handicapMode == 'strokes_off') {
-              final dots = matchStrok > 0 ? ' ${'•' * matchStrok}' : '';
-              hcapLabel = '-${_effectiveHcap(m)}$dots';
+              // Triple Cup: each match the player is on at this hole
+              // gets its own "-N •" badge.  The 2v1 singles solo
+              // appears in TWO matches at once (one per opponent on
+              // the team-of-2) with different per-pair SO + per-hole
+              // strokes; the first badge drives the score-box net
+              // calc via matchStrok.  Other players only have one
+              // entry — formats the same as the legacy single-badge
+              // display.  Falls through to the generic mobile calc
+              // when no TC summary is attached.
+              final tcEntries = handicapMode == 'strokes_off'
+                  ? _tripleCupEntriesForHole(m.player.id, holeNumber)
+                  : const <({int? strokesOff, int strokesOnHole})>[];
+              if (tcEntries.isNotEmpty) {
+                String fmt(({int? strokesOff, int strokesOnHole}) e) {
+                  final so   = e.strokesOff ?? 0;
+                  final dots = e.strokesOnHole > 0
+                      ? ' ${'•' * e.strokesOnHole}'
+                      : '';
+                  return '-$so$dots';
+                }
+                // Dedupe identical entries.  In 2-player TC a single
+                // hole shows up in two simultaneous matches (e.g. hole
+                // 4 is in both F9 and Overall) — same pairing, same
+                // per-pair SO, same dots — so rendering it twice ("-6
+                // / -6") is noise.  Only the genuine ghost-singles
+                // case in 3-player TC (solo vs two opponents with
+                // different SOs) produces distinct values worth
+                // showing side-by-side.
+                final unique = <String>{};
+                final labels = <String>[];
+                for (final e in tcEntries) {
+                  final lbl = fmt(e);
+                  if (unique.add(lbl)) labels.add(lbl);
+                }
+                hcapLabel = labels.join(' / ');
+              } else {
+                final dots = matchStrok > 0 ? ' ${'•' * matchStrok}' : '';
+                hcapLabel = '-${_effectiveHcap(m)}$dots';
+              }
             }
 
             final junkCount = allowJunk ? junkForPlayer(m.player.id) : 0;
@@ -1819,6 +2310,10 @@ class _HoleScoreCard extends StatelessWidget {
                 ? _p531CumulativeFor(m.player.id)
                 : null;
 
+            // Foursomes alt-shot: dim the partner whose turn it isn't.
+            // Active is determined by hole parity from the team's
+            // first-tee-off pick (server-supplied).
+            final dimmed = _isInactiveAltShot(m.player.id);
             return [
               _PlayerRow(
                 member:              m,
@@ -1833,6 +2328,7 @@ class _HoleScoreCard extends StatelessWidget {
                 nameColor:           _cupSinglesColors[m.player.id],
                 allowJunk:           allowJunk,
                 junkCount:           junkCount,
+                dimmed:              dimmed,
                 p531HolePoints:      p531Hole,
                 p531CumulativePoints: p531Cumulative,
                 // Block taps while extra-match teams are unassigned.
@@ -1858,16 +2354,47 @@ class _HoleScoreCard extends StatelessWidget {
             ];
           }).toList(),
 
-          // Phantom player row — read-only, shown at the bottom when the
-          // foursome has a phantom player.
-          if (phantomMembership != null)
-            _PhantomPlayerRow(
-              phantom:     phantomMembership!,
-              holeNumber:  holeNumber,
-              scores:      scores,
-              phantomInit: phantomInit,
-              players:     players,
-            ),
+          // Phantom player row — read-only, shown at the bottom when
+          // the foursome has a phantom player.  In 2v1 TC the phantom
+          // is the solo's FOURBALL partner only; the foursomes (alt-
+          // shot) and singles (ghost-singles) segments don't use it,
+          // so hide the row on those holes — otherwise the user sees
+          // "Waiting for Glenn…" on holes 7-18 where Glenn isn't
+          // actually contributing.  For non-TC phantoms (Points 5-3-1
+          // intra-foursome rotation), always show the row.
+          if (phantomMembership != null
+              && _phantomBelongsOnHole(holeNumber))
+            Builder(builder: (_) {
+              Color? phantomTeamColor;
+              if (tripleCupSummary != null) {
+                final phantomPid = phantomMembership!.player.id;
+                for (final m in tripleCupSummary!.matches) {
+                  final onT1 = m.players.any(
+                    (p) => p.playerId == phantomPid && p.teamNumber == 1,
+                  );
+                  final onT2 = m.players.any(
+                    (p) => p.playerId == phantomPid && p.teamNumber == 2,
+                  );
+                  if (onT1) {
+                    phantomTeamColor = tripleCupSummary!.team1Color;
+                    break;
+                  }
+                  if (onT2) {
+                    phantomTeamColor = tripleCupSummary!.team2Color;
+                    break;
+                  }
+                }
+              }
+              return _PhantomPlayerRow(
+                phantom:           phantomMembership!,
+                holeNumber:        holeNumber,
+                scores:            scores,
+                phantomInit:       phantomInit,
+                players:           players,
+                tcPhantom:         tripleCupSummary?.phantom,
+                phantomTeamColor:  phantomTeamColor,
+              );
+            }),
         ],
       ),
     );
@@ -1884,6 +2411,14 @@ class _PhantomPlayerRow extends StatelessWidget {
   final Map<int, int>     scores;        // real-player gross scores this hole
   final PhantomInitResult? phantomInit;
   final List<Membership>  players;       // real players (for name lookup)
+  /// Cross-foursome phantom donor info from the TC summary.  Non-null
+  /// in 2v1 TC fourball; null in 4-player TC and intra-foursome phantom
+  /// modes (e.g. Points 5-3-1).
+  final NassauPhantomInfo? tcPhantom;
+  /// Solo's team color when the phantom is in a 2v1 TC foursome.  Used
+  /// dimmed so the phantom reads as part of its team but still clearly
+  /// "auto-scored, don't touch."  Null falls back to neutral ghost.
+  final Color?            phantomTeamColor;
 
   const _PhantomPlayerRow({
     required this.phantom,
@@ -1891,14 +2426,106 @@ class _PhantomPlayerRow extends StatelessWidget {
     required this.scores,
     required this.players,
     this.phantomInit,
+    this.tcPhantom,
+    this.phantomTeamColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ghost = theme.colorScheme.onSurface.withOpacity(0.38);
+    // Dimmed team color when available (2v1 TC) — falls back to the
+    // neutral ghost grey for intra-foursome phantoms / pre-config states.
+    final neutralGhost = theme.colorScheme.onSurface.withValues(alpha: 0.38);
+    final tint         = phantomTeamColor != null
+        ? Color.alphaBlend(
+            phantomTeamColor!.withValues(alpha: 0.65),
+            theme.colorScheme.surface,
+          )
+        : neutralGhost;
 
-    // Which real player is the source for this hole?
+    // ── Cross-foursome (TC 2v1) phantom path ──────────────────────
+    // Use donor info from the TC summary: the donor's name appears in
+    // parens on the row title, and the per-hole score chip shows the
+    // donor's NET (= phantom's stored gross after D1) or a "Waiting…"
+    // placeholder when the donor hasn't yet posted that hole.
+    if (tcPhantom != null) {
+      final donor       = tcPhantom!.donorForHole(holeNumber);
+      final donorName   = donor?.playerName ?? 'donor';
+      final hasScore    = donor?.hasScore ?? false;
+      // Phantom's HoleScore.gross_score is donor's full net (per D1 in
+      // scoring/phantom.py).  Reading from `scores` gives us the value
+      // already net of donor's full handicap — display as-is.
+      final phantomNet  = scores[phantom.player.id];
+      final title       = 'Phantom ($donorName)';
+      final subtitle    = hasScore
+          ? 'Net from $donorName'
+          : 'Waiting for $donorName…';
+
+      return Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.person_outline, size: 18, color: tint),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: tint,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(color: tint),
+                  ),
+                ],
+              ),
+            ),
+            if (phantomNet != null && hasScore)
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tint.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: tint.withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  '$phantomNet',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: tint,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
+            else
+              SizedBox(
+                width: 40,
+                height: 32,
+                child: Center(
+                  child: Text(
+                    '…',
+                    style: theme.textTheme.bodySmall?.copyWith(color: tint),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    // ── Intra-foursome (Points 5-3-1 etc.) phantom path — unchanged ──
     final sourcePid   = phantomInit?.sourceByHole[holeNumber];
     final sourceScore = sourcePid != null ? scores[sourcePid] : null;
     final sourceName  = sourcePid != null
@@ -1927,10 +2554,8 @@ class _PhantomPlayerRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          // Ghost icon
-          Icon(Icons.person_outline, size: 18, color: ghost),
+          Icon(Icons.person_outline, size: 18, color: neutralGhost),
           const SizedBox(width: 8),
-          // Name + source label
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1938,32 +2563,31 @@ class _PhantomPlayerRow extends StatelessWidget {
                 Text(
                   phantom.player.displayShort,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: ghost,
+                    color: neutralGhost,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
                 Text(
                   subtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(color: ghost),
+                  style: theme.textTheme.bodySmall?.copyWith(color: neutralGhost),
                 ),
               ],
             ),
           ),
-          // Score chip — shows source player's gross if available
           if (sourceScore != null)
             Container(
               width: 32,
               height: 32,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: ghost.withOpacity(0.1),
+                color: neutralGhost.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: ghost.withOpacity(0.3)),
+                border: Border.all(color: neutralGhost.withValues(alpha: 0.3)),
               ),
               child: Text(
                 '$sourceScore',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: ghost,
+                  color: neutralGhost,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -1973,7 +2597,7 @@ class _PhantomPlayerRow extends StatelessWidget {
               width: 32,
               height: 32,
               child: Center(
-                child: Text('—', style: theme.textTheme.bodySmall?.copyWith(color: ghost)),
+                child: Text('—', style: theme.textTheme.bodySmall?.copyWith(color: neutralGhost)),
               ),
             ),
         ],
@@ -2111,6 +2735,11 @@ class _PlayerRow extends StatelessWidget {
   final VoidCallback? onJunkAdd;
   final VoidCallback? onJunkRemove;
 
+  /// True for the dimmed partner in a Triple Cup foursomes (alt-shot)
+  /// hole — only the active player tees off this hole, so their
+  /// partner shouldn't be the score target.  Score selection disabled.
+  final bool          dimmed;
+
   /// Points 5-3-1: points this player earned on the active hole (null = not yet scored).
   final double?       p531HolePoints;
 
@@ -2133,6 +2762,7 @@ class _PlayerRow extends StatelessWidget {
     this.junkCount = 0,
     this.onJunkAdd,
     this.onJunkRemove,
+    this.dimmed = false,
     this.p531HolePoints,
     this.p531CumulativePoints,
   });
@@ -2141,7 +2771,7 @@ class _PlayerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
+    final body = Container(
       decoration: BoxDecoration(
         color: isHot
             ? theme.colorScheme.primaryContainer.withOpacity(0.08)
@@ -2152,28 +2782,35 @@ class _PlayerRow extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
-        // Team badge (T1 = red, T2 = blue)
+        // Team badge.  Uses [nameColor] (set from the active cup
+        // colour map) when available so cup teams display in their
+        // configured colour; falls back to the historic red/blue when
+        // the row has no cup colour (casual games, etc.).
         if (teamLabel != null) ...[
-          Container(
-            width: 28,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            decoration: BoxDecoration(
-              color: teamLabel == 'T1'
-                  ? Colors.red.shade100
-                  : Colors.blue.shade100,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              teamLabel!,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: teamLabel == 'T1'
+          Builder(builder: (_) {
+            final badgeFg = nameColor ??
+                (teamLabel == 'T1'
                     ? Colors.red.shade700
-                    : Colors.blue.shade700,
+                    : Colors.blue.shade700);
+            // Pale version of the same colour for the chip background.
+            final badgeBg = badgeFg.withValues(alpha: 0.15);
+            return Container(
+              width: 28,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: badgeBg,
+                borderRadius: BorderRadius.circular(4),
               ),
-            ),
-          ),
+              child: Text(
+                teamLabel!,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: badgeFg,
+                ),
+              ),
+            );
+          }),
           const SizedBox(width: 6),
         ],
 
@@ -2374,6 +3011,13 @@ class _PlayerRow extends StatelessWidget {
                 ),
         ),
       ]),
+    );
+    // Dim + disable interaction for the alt-shot partner whose turn
+    // it isn't.  The active player keeps full color and is scorable.
+    if (!dimmed) return body;
+    return Opacity(
+      opacity: 0.40,
+      child: IgnorePointer(ignoring: true, child: body),
     );
   }
 }
@@ -2650,6 +3294,7 @@ class _GameStatusSection extends StatelessWidget {
   final SkinsSummary?         skins;
   final MultiSkinsSummary?    multiSkins;
   final SixesSummary?         sixesSummary;
+  final TripleCupSummary?     tripleCupSummary;
   final Points531Summary?     points531Summary;
   final Map<String, dynamic>?       matchPlayData;
   final ThreePersonMatchSummary?    threePersonMatchSummary;
@@ -2661,6 +3306,7 @@ class _GameStatusSection extends StatelessWidget {
   final bool                        loadingSkins;
   final bool                        loadingMultiSkins;
   final bool                        loadingSixes;
+  final bool                        loadingTripleCup;
   final bool                        loadingPoints531;
   final bool                        loadingMatchPlay;
   final bool                        loadingThreePersonMatch;
@@ -2679,6 +3325,7 @@ class _GameStatusSection extends StatelessWidget {
     required this.skins,
     this.multiSkins,
     required this.sixesSummary,
+    this.tripleCupSummary,
     this.points531Summary,
     required this.matchPlayData,
     this.threePersonMatchSummary,
@@ -2690,6 +3337,7 @@ class _GameStatusSection extends StatelessWidget {
     required this.loadingSkins,
     this.loadingMultiSkins = false,
     this.loadingSixes      = false,
+    this.loadingTripleCup  = false,
     required this.loadingPoints531,
     required this.loadingMatchPlay,
     this.loadingThreePersonMatch = false,
@@ -2762,6 +3410,23 @@ class _GameStatusSection extends StatelessWidget {
               currentHole: currentHole,
             )
           else if (loadingSixes)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          const SizedBox(height: 12),
+        ],
+
+        // Triple Cup (One Round Ryder Cup) match grid
+        if (games.contains('triple_cup')) ...[
+          if (tripleCupSummary != null)
+            _TripleCupMatchGrid(
+              summary:     tripleCupSummary!,
+              currentHole: currentHole,
+            )
+          else if (loadingTripleCup)
             const Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
@@ -4929,6 +5594,250 @@ class _SixesSegmentCard extends StatelessWidget {
                 'Holes ${segment.startHole}–$displayEnd',
                 style: theme.textTheme.labelSmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Triple Cup (One Round Ryder Cup) match grid — mirrors _SixesMatchGrid
+// ---------------------------------------------------------------------------
+
+class _TripleCupMatchGrid extends StatelessWidget {
+  final TripleCupSummary summary;
+  final int              currentHole;
+
+  const _TripleCupMatchGrid({
+    required this.summary,
+    required this.currentHole,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = summary.matches;
+    if (matches.isEmpty) return const SizedBox.shrink();
+    final t1Color = summary.team1Color;
+    final t2Color = summary.team2Color;
+
+    // Progressive reveal — same pattern as Sixes: the next match shows
+    // only once the previous one is done.  Singles 1 and Singles 2
+    // share holes 13–18 so they reveal together.
+    //
+    // 2-player TC is a Nassau (F9 + B9 + Overall) where Overall spans
+    // 1-18 and is genuinely "live" from hole 1.  Skip the reveal
+    // gating in that case — show all three cards from the start so
+    // the user can track Overall progress alongside F9 / B9.
+    final List<TripleCupMatch> visible;
+    if (summary.groupSize == 2) {
+      visible = List<TripleCupMatch>.from(matches);
+    } else {
+      visible = <TripleCupMatch>[];
+      for (var i = 0; i < matches.length; i++) {
+        final m = matches[i];
+        visible.add(m);
+        final done = m.status == 'complete' || m.status == 'halved';
+        // If this match isn't done AND the next match doesn't share
+        // the same hole range, stop revealing — wait for the current
+        // one to finish.
+        if (!done) {
+          final shareNext = i + 1 < matches.length &&
+              matches[i + 1].startHole == m.startHole &&
+              matches[i + 1].endHole   == m.endHole;
+          if (!shareNext) break;
+        }
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+          child: Row(children: [
+            Text('Cup ',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary)),
+            Text(_fmt(summary.team1Points),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: t1Color)),
+            Text(' – ',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            Text(_fmt(summary.team2Points),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: t2Color)),
+            Text(' of ${summary.pointsAvailable}',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ]),
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: visible.map((m) {
+              final isCurrent = currentHole >= m.startHole &&
+                  currentHole <= m.endHole;
+              return _TripleCupMatchCard(
+                match:     m,
+                isCurrent: isCurrent,
+                t1Color:   t1Color,
+                t2Color:   t2Color,
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _fmt(double p) =>
+      p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
+}
+
+class _TripleCupMatchCard extends StatelessWidget {
+  final TripleCupMatch match;
+  final bool   isCurrent;
+  final Color  t1Color;
+  final Color  t2Color;
+
+  const _TripleCupMatchCard({
+    required this.match,
+    required this.isCurrent,
+    required this.t1Color,
+    required this.t2Color,
+  });
+
+  Color _statusColor(BuildContext ctx) {
+    switch (match.result) {
+      case 'team1':  return t1Color;
+      case 'team2':  return t2Color;
+      case 'halved': return Colors.grey.shade700;
+    }
+    // In progress: tint by current leader so "1 UP thru 3" reads in
+    // the leading team's color.  AS thru N stays neutral.
+    if (match.status == 'in_progress') {
+      final margin = match.holes.isNotEmpty ? match.holes.last.margin : 0;
+      if (margin > 0) return t1Color;
+      if (margin < 0) return t2Color;
+      return Theme.of(ctx).colorScheme.onSurfaceVariant;
+    }
+    return Theme.of(ctx).colorScheme.onSurfaceVariant;
+  }
+
+  String _statusLabel() {
+    final raw = match.statusDisplay;
+    return raw == '—' ? 'Pending' : raw;
+  }
+
+  String _segmentTag() {
+    switch (match.segment) {
+      case 'fourball':  return 'Four Ball';
+      case 'foursomes': return 'Alt-Shot';
+      default:
+        // Singles: differentiate at-a-glance using the backend's match
+        // label.  4-player TC has "Singles 1"/"Singles 2"; 2-player TC
+        // Nassau has "Front 9"/"Back 9"/"Overall".  Empty/legacy labels
+        // fall back to plain "Singles" so older rounds still read OK.
+        final lbl = match.label.trim();
+        return lbl.isEmpty ? 'Singles' : lbl;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme      = Theme.of(context);
+    final lastPlayed = match.holes.isNotEmpty ? match.holes.last.hole : null;
+    final decided    = match.status == 'complete' || match.status == 'halved';
+    final displayEnd = (decided && lastPlayed != null && lastPlayed < match.endHole)
+        ? lastPlayed
+        : match.endHole;
+
+    return Card(
+      margin: const EdgeInsets.only(right: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: isCurrent
+              ? theme.colorScheme.primary
+              : theme.colorScheme.outlineVariant,
+          width: isCurrent ? 2 : 1,
+        ),
+      ),
+      child: Container(
+        width: 120,
+        padding: const EdgeInsets.all(10),
+        // Compact 3-row layout: segment / match score (focal) / hole range.
+        // Team identity comes through via the status color — red/blue (or
+        // cup-team colors) tints the score line.  Player-level detail
+        // (team rosters, SO) lives on the player rows above and on the
+        // leaderboard.
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _segmentTag(),
+              style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.tertiary),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _statusLabel(),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: _statusColor(context)),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Holes ${match.startHole}–$displayEnd',
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+            // Singles segment has two simultaneous 1v1 matches — show
+            // the pairing so the user can tell which match this card
+            // belongs to.  Fourball / Foursomes share the same 2v2
+            // partnership across the foursome, so the pairing is
+            // already obvious from the colored player rows above.
+            if (match.segment == 'singles') ...[
+              const SizedBox(height: 4),
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: theme.textTheme.bodySmall,
+                  children: [
+                    TextSpan(
+                      text: match.team1.hasPlayers
+                          ? match.team1.shorts.join('/')
+                          : '??',
+                      style: TextStyle(
+                          color: t1Color, fontWeight: FontWeight.w600),
+                    ),
+                    TextSpan(
+                      text: '  v.  ',
+                      style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    TextSpan(
+                      text: match.team2.hasPlayers
+                          ? match.team2.shorts.join('/')
+                          : '??',
+                      style: TextStyle(
+                          color: t2Color, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
               ),
             ],
           ],

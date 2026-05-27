@@ -1,6 +1,6 @@
 /// screens/sixes_screen.dart
 ///
-/// Score-entry and live-standings screen for the Six's game.
+/// Score-entry and live-standings screen for the Sixes game.
 ///
 /// Layout (matches wireframes):
 ///   • AppBar:      "Golf Gaming" centred title.
@@ -657,7 +657,7 @@ class _SixesScreenState extends State<SixesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Golf Gaming'),
+        title: const Text('Sixes'),
         centerTitle: true,
         actions: [
           if (sync.hasPending)
@@ -733,7 +733,9 @@ class _SixesScreenState extends State<SixesScreen> {
             child: OutlinedButton.icon(
               onPressed: _selectedHole > 1 ? _retreat : null,
               icon: const Icon(Icons.chevron_left, size: 20),
-              label: Text('Hole ${_selectedHole - 1}'),
+              label: Text(
+                _selectedHole > 1 ? 'Hole ${_selectedHole - 1}' : 'Previous',
+              ),
             ),
           ),
           const SizedBox(width: 8),

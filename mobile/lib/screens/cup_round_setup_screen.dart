@@ -143,6 +143,15 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
   // ── Build state ────────────────────────────────────────────────────────────
   _BuildStep _buildStep = _BuildStep.gameType;
 
+  /// Round-level preset.  'custom' lets the admin pick a game type per
+  /// foursome (legacy behaviour).  'triple_cup' locks every foursome
+  /// to the Triple Cup format ("One Day Ryder Cup") — the wizard
+  /// skips the per-foursome game-type picker and the backend
+  /// auto-fills game_type='triple_cup' from the round_format field.
+  /// Locked once the first foursome is committed so we can't end up
+  /// with mixed formats in the payload.
+  String _roundFormat = 'custom';
+
   // Current-foursome draft
   String?        _gameType;
   final Set<int> _selectedIds = {};
@@ -261,13 +270,18 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         if (n == 3) return (a == 1 && b == 2) || (a == 2 && b == 1);
         return a == 2 && b == 2;
       default:
-        // nassau / quota_nassau: 4 players (2+2) or 3 players (1+2 / 2+1 — phantom fills the gap)
-        if (n != 4 && n != 3) return false;
+        // nassau / quota_nassau / triple_cup:
+        //   4 players (2+2) — full group, all formats
+        //   3 players (1+2 or 2+1) — solo side gets a phantom partner (cup-only)
+        //   2 players (1+1) — triple_cup falls back to an 18-hole
+        //     Nassau (F9 + B9 + Overall, 4 cup pts).  Nassau / Quota
+        //     also accept 1+1 for casual heads-up matches.
+        if (n != 4 && n != 3 && n != 2) return false;
         final a = _selectedForTeam(0).length;
         final b = _selectedForTeam(1).length;
         if (n == 4) return a == 2 && b == 2;
-        // 3 players: one team has 1 real player, other has 2 — phantom fills solo side
-        return (a == 1 && b == 2) || (a == 2 && b == 1);
+        if (n == 3) return (a == 1 && b == 2) || (a == 2 && b == 1);
+        return a == 1 && b == 1;   // 2-player: 1 vs 1
     }
   }
 
@@ -320,10 +334,19 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         setState(() {
           _cup        = cup;
           _courseTees = tees;
-          // Auto-select game type if only one option for this round
+          // Auto-select game type if only one option for this round.
           if (widget.availableGames.length == 1) {
             _gameType  = widget.availableGames.first;
             _buildStep = _BuildStep.players;
+          }
+          // Auto-arm the Triple Cup preset when the tournament wizard
+          // already chose it as the round's only game.  Same effect as
+          // ticking "One Day Ryder Cup" on the format toggle — every
+          // foursome auto-locks to triple_cup and the format toggle
+          // hides the per-foursome game picker.
+          if (widget.availableGames.contains('triple_cup')) {
+            _roundFormat = 'triple_cup';
+            _gameType    = 'triple_cup';
           }
         });
       }
@@ -595,6 +618,7 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         widget.roundId,
         nassauPointValue : 1.0,
         pointMultiplier  : 1.0,
+        roundFormat      : _roundFormat,
         foursomes        : foursomesPayload,
       );
 
@@ -656,13 +680,38 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
 
   Widget _buildBody() {
     switch (_buildStep) {
-      case _BuildStep.gameType:  return _GameTypePicker(
-        selected        : _gameType,
-        games           : _filteredGames,
-        onPick          : (g) => setState(() => _gameType = g),
-        foursomeNumber  : _foursomes.length + 1,
-        gamePointValues : widget.gamePointValues,
-      );
+      case _BuildStep.gameType:
+        // "Round Format" preset row above the per-foursome game
+        // picker.  Picking "One Day Ryder Cup" locks the wizard to
+        // triple_cup for every foursome.  Locked once a foursome is
+        // committed so we can't produce a mixed-format payload.
+        return Column(children: [
+          _RoundFormatToggle(
+            value: _roundFormat,
+            locked: _foursomes.isNotEmpty,
+            onChanged: (v) => setState(() {
+              _roundFormat = v;
+              if (v == 'triple_cup') {
+                _gameType = 'triple_cup';
+              } else if (_gameType == 'triple_cup') {
+                _gameType = null;
+              }
+            }),
+          ),
+          if (_roundFormat == 'triple_cup')
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _TripleCupFormatNote(),
+            )
+          else
+            Expanded(child: _GameTypePicker(
+              selected        : _gameType,
+              games           : _filteredGames,
+              onPick          : (g) => setState(() => _gameType = g),
+              foursomeNumber  : _foursomes.length + 1,
+              gamePointValues : widget.gamePointValues,
+            )),
+        ]);
       case _BuildStep.players:   return _PlayerPicker(
         gameType           : _gameType!,
         teams              : _teams,
@@ -895,6 +944,9 @@ class _PlayerPicker extends StatelessWidget {
       case 'singles_nassau':
       case 'singles_18':
         return 'Pick 1–2 per team. Uneven (1 vs 2) — the solo player plays two matches.';
+      case 'triple_cup':
+        return 'Pick 2 per team (4 total), 1 vs 2 (phantom fills the solo '
+               'side), or 1 vs 1 (plays an 18-hole Nassau — F9 / B9 / Overall).';
       default:
         return 'Pick 2 per team (4 total), or 1 vs 2 — the solo side gets a phantom partner.';
     }
@@ -1515,6 +1567,108 @@ class _ReviewPage extends StatelessWidget {
               style: TextStyle(color: theme.colorScheme.error)),
         ],
       ],
+    );
+  }
+}
+
+/// "Round Format" preset toggle shown above the per-foursome game
+/// picker.  Two choices: Custom (admin picks a game type per
+/// foursome, the historic behaviour) or One Day Ryder Cup (locks
+/// every foursome to Triple Cup — fourball + foursomes + 2 singles).
+/// Becomes read-only once any foursome has been committed so a
+/// half-configured round can't mix formats.
+class _RoundFormatToggle extends StatelessWidget {
+  final String value;
+  final bool   locked;
+  final ValueChanged<String> onChanged;
+  const _RoundFormatToggle({
+    required this.value,
+    required this.locked,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Round format',
+              style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary)),
+          if (locked)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Locked after the first foursome is committed.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 4, children: [
+            ChoiceChip(
+              label: const Text('Custom'),
+              selected: value == 'custom',
+              onSelected: locked ? null : (_) => onChanged('custom'),
+            ),
+            ChoiceChip(
+              label: const Text('One Day Ryder Cup'),
+              selected: value == 'triple_cup',
+              onSelected: locked ? null : (_) => onChanged('triple_cup'),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+}
+
+/// Inline note that replaces the per-foursome game picker when the
+/// One Day Ryder Cup preset is active.  Clarifies that every
+/// foursome will play Triple Cup automatically.
+class _TripleCupFormatNote extends StatelessWidget {
+  const _TripleCupFormatNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.primary),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Every foursome plays Triple Cup',
+              style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary)),
+          const SizedBox(height: 8),
+          Text(
+            'One Day Ryder Cup locks every foursome to the same 4-match '
+            'format:\n'
+            '  •  Holes 1–6 — Fourball (best-ball match play)\n'
+            '  •  Holes 7–12 — Foursomes (alt-shot)\n'
+            '  •  Holes 13–18 — two simultaneous singles matches\n'
+            'Each foursome contributes 4 cup points.  Skip ahead to '
+            'pick players for each group.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
     );
   }
 }

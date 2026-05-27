@@ -40,12 +40,18 @@ urlpatterns = [
     path('rounds/<int:pk>/setup/',       views.RoundSetupView.as_view(),    name='api-round-setup'),
     path('rounds/<int:pk>/complete/',    views.RoundCompleteView.as_view(), name='api-round-complete'),
     path('rounds/<int:pk>/reopen/',      views.RoundReopenView.as_view(),   name='api-round-reopen'),
+    path('rounds/<int:pk>/move-player/', views.RoundMovePlayerView.as_view(),
+         name='api-round-move-player'),
     path('rounds/<int:pk>/leaderboard/', views.LeaderboardView.as_view(),   name='api-leaderboard'),
 
     # ---- Foursomes ----
     path('foursomes/<int:pk>/',              views.FoursomeDetailView.as_view(),      name='api-foursome-detail'),
     path('foursomes/<int:pk>/active-games/', views.FoursomeActiveGamesView.as_view(), name='api-foursome-active-games'),
     path('foursomes/<int:pk>/tees/',         views.FoursomeTeesView.as_view(),        name='api-foursome-tees'),
+    path('foursomes/<int:pk>/remove-player/', views.FoursomeRemovePlayerView.as_view(),
+         name='api-foursome-remove-player'),
+    path('foursomes/<int:pk>/swap-position/', views.FoursomeSwapPositionView.as_view(),
+         name='api-foursome-swap-position'),
     path('foursomes/<int:pk>/phantom/init/', views.PhantomInitView.as_view(),         name='phantom-init'),
     path('foursomes/<int:pk>/scorecard/',    views.ScorecardView.as_view(),           name='api-scorecard'),
     path('foursomes/<int:pk>/scores/',       views.ScoreSubmitView.as_view(),         name='api-score-submit'),
@@ -55,7 +61,7 @@ urlpatterns = [
     path('foursomes/<int:pk>/nassau/setup/',  views.NassauSetupView.as_view(),  name='api-nassau-setup'),
     path('foursomes/<int:pk>/nassau/press/',  views.NassauPressView.as_view(),  name='api-nassau-press'),
 
-    # ---- Six's ----
+    # ---- Sixes ----
     path('foursomes/<int:pk>/sixes/',              views.SixesResultView.as_view(),     name='api-sixes-result'),
     path('foursomes/<int:pk>/sixes/setup/',        views.SixesSetupView.as_view(),      name='api-sixes-setup'),
     path('foursomes/<int:pk>/sixes/extra-teams/',  views.SixesExtraTeamsView.as_view(), name='api-sixes-extra-teams'),
@@ -68,6 +74,11 @@ urlpatterns = [
     path('foursomes/<int:pk>/skins/',        views.SkinsResultView.as_view(), name='api-skins-result'),
     path('foursomes/<int:pk>/skins/setup/',  views.SkinsSetupView.as_view(),  name='api-skins-setup'),
     path('foursomes/<int:pk>/skins/junk/',   views.SkinsJunkView.as_view(),   name='api-skins-junk'),
+
+    # ---- Triple Cup (One-Round Ryder Cup) ----
+    path('foursomes/<int:pk>/triple-cup/',                  views.TripleCupResultView.as_view(),         name='api-triple-cup-result'),
+    path('foursomes/<int:pk>/triple-cup/setup/',            views.TripleCupSetupView.as_view(),          name='api-triple-cup-setup'),
+    path('foursomes/<int:pk>/triple-cup/foursomes-tee-off/', views.TripleCupFoursomesTeeOffView.as_view(), name='api-triple-cup-foursomes-tee-off'),
 
     # ---- Multi-Foursome Skins (round-level) ----
     path('rounds/<int:pk>/multi-skins/',       views.MultiSkinsResultView.as_view(), name='api-multi-skins-result'),

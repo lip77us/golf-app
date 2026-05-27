@@ -17,6 +17,7 @@ class GameIds {
   static const String nassau     = 'nassau';
   static const String skins      = 'skins';
   static const String multiSkins = 'multi_skins';
+  static const String tripleCup  = 'triple_cup';
 
   // Casual + Tournament (can accumulate across days)
   static const String strokePlay  = 'low_net_round'; // display: "Stroke Play"
@@ -102,7 +103,7 @@ const List<GameMeta> kGameCatalog = [
 
   GameMeta(
     id           : GameIds.sixes,
-    displayName  : "Six's",
+    displayName  : 'Sixes',
     casual       : true,
     exactPlayers : 4,
     // Sixes owns its own handicap allocation (per-segment SO spreading) and
@@ -126,7 +127,7 @@ const List<GameMeta> kGameCatalog = [
     casual      : true,
     minPlayers  : 2,
     maxPlayers  : 4,
-    // Nassau and Six's are mutually exclusive (both are team-bet games that
+    // Nassau and Sixes are mutually exclusive (both are team-bet games that
     // own the front-9 / back-9 structure).  Skins can run alongside Nassau.
     excludes    : {GameIds.sixes, GameIds.points531},
   ),
@@ -136,9 +137,23 @@ const List<GameMeta> kGameCatalog = [
     casual      : true,
     minPlayers  : 2,
     maxPlayers  : 4,
-    // Skins CAN combine with Nassau or Six's.  Only Points 5-3-1 is excluded
+    // Skins CAN combine with Nassau or Sixes.  Only Points 5-3-1 is excluded
     // because it completely owns the three-player entry model.
     excludes    : {GameIds.points531},
+  ),
+  GameMeta(
+    id           : GameIds.tripleCup,
+    displayName  : 'One Round Ryder Cup',
+    casual       : true,
+    // Casual requires exactly 4 — 2v1 needs cross-foursome donors (cup
+    // only) and 1v1 lacks the fourball/foursomes-match structure that
+    // makes Triple Cup interesting.  Cup-mode 3-player foursomes go
+    // through the cup wizard, which doesn't consult this rule.
+    exactPlayers : 4,
+    // Triple Cup owns the foursome's match structure (3 segments × match
+    // play), so it can't combine with Nassau / Sixes / Points / Skins.
+    excludes     : {GameIds.nassau, GameIds.sixes, GameIds.points531,
+                    GameIds.skins,  GameIds.strokePlay, GameIds.stableford},
   ),
   GameMeta(
     id          : GameIds.multiSkins,

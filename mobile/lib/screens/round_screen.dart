@@ -12,7 +12,7 @@ const _kGameLabels = {
   'stableford'   : 'Stableford',
   'pink_ball'    : 'Pink Ball',
   'nassau'       : 'Nassau',
-  'sixes'        : "Six's",
+  'sixes'        : 'Sixes',
   'match_play'   : 'Match Play',
   'irish_rumble' : 'Irish Rumble',
   'scramble'     : 'Scramble',
@@ -171,6 +171,8 @@ class _RoundScreenState extends State<RoundScreen> {
                   sixesActive:     fsGames.contains('sixes'),
                   sixesStarted:    rp.sixesIsStarted(fs.id),
                   roundActiveGames: round.activeGames,
+                  allFoursomes:    round.foursomes,
+                  roundId:         widget.roundId,
                   onGamesChanged:  () => rp.loadRound(widget.roundId),
                   onEnterScores:   () {
                     context.read<RoundProvider>().loadScorecard(fs.id);
@@ -211,7 +213,7 @@ class _RoundScreenState extends State<RoundScreen> {
                       route = '/pink-ball';
                     } else if (fsGames.contains('sixes') &&
                         !rp.sixesIsStarted(fs.id)) {
-                      // Six's needs team / segment setup first.
+                      // Sixes needs team / segment setup first.
                       route = '/sixes-setup';
                     } else if (fsGames.contains('points_531') &&
                         !fs.configuredGames.contains('points_531')) {
@@ -225,6 +227,10 @@ class _RoundScreenState extends State<RoundScreen> {
                         !fs.configuredGames.contains('skins')) {
                       // Skins needs handicap + carryover config.
                       route = '/skins-setup';
+                    } else if (fsGames.contains('triple_cup') &&
+                        !fs.configuredGames.contains('triple_cup')) {
+                      // Triple Cup needs team assignment + handicap config.
+                      route = '/triple-cup-setup';
                     } else {
                       // Everything configured (or no setup required) →
                       // universal score entry.
@@ -323,7 +329,7 @@ class _RoundInfoCard extends StatelessWidget {
       'pink_ball':    'Pink Ball',
       'nassau':        'Nassau',
       'quota_nassau':  'Four Ball Quota',
-      'sixes':         "Six's",
+      'sixes':         'Sixes',
       'match_play':    'Match Play',
       'irish_rumble':  'Irish Rumble',
       'scramble':      'Scramble',
@@ -554,6 +560,11 @@ class _FoursomeCard extends StatelessWidget {
   final bool         sixesActive;
   final bool         sixesStarted;
   final List<String> roundActiveGames;
+  /// Round-wide foursome list so the TD move/swap actions can list
+  /// other groups as targets.  Includes the current foursome — the
+  /// menu filters it out at render time.
+  final List<Foursome> allFoursomes;
+  final int            roundId;
   final VoidCallback onEnterScores;
   final VoidCallback onGamesChanged;
 
@@ -566,6 +577,8 @@ class _FoursomeCard extends StatelessWidget {
     required this.sixesActive,
     required this.sixesStarted,
     required this.roundActiveGames,
+    required this.allFoursomes,
+    required this.roundId,
     required this.onEnterScores,
     required this.onGamesChanged,
   });
@@ -575,6 +588,384 @@ class _FoursomeCard extends StatelessWidget {
     'skins', 'sixes', 'nassau', 'match_play', 'points_531',
     'irish_rumble', 'pink_ball',
   };
+
+  /// TD-only "no-show" tool — pick a player from this foursome to
+  /// remove.  Backend reconfigures any TC game on the foursome and
+  /// rebalances the donor pool; the round is refreshed afterwards via
+  /// the parent's onGamesChanged callback (it's a "refresh round"
+  /// hook in practice).
+  Future<void> _showRemovePlayerSheet(BuildContext context) async {
+    final realPlayers = foursome.realPlayers;
+    if (realPlayers.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Cannot remove — foursome already at 1 player.'),
+      ));
+      return;
+    }
+
+    final picked = await showModalBottomSheet<Membership>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Remove from ${foursome.label}',
+                        style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tap a player to remove them from this foursome. '
+                      'After removal the group plays as a '
+                      '${realPlayers.length - 1}-player group; any Triple '
+                      'Cup game adjusts automatically (phantom partner '
+                      'for 2v1, F9 / B9 / Overall Nassau for 1v1).',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              ...realPlayers.map((m) => ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                      child: Text(
+                        m.player.name.isNotEmpty
+                            ? m.player.name[0].toUpperCase()
+                            : '?',
+                      ),
+                    ),
+                    title: Text(m.player.name),
+                    subtitle: Text('Hcp ${m.playingHandicap}'),
+                    onTap: () => Navigator.of(ctx).pop(m),
+                  )),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (picked == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: Text('Remove ${picked.player.name}?'),
+        content: Text(
+          '${picked.player.name} will be removed from ${foursome.label} '
+          '(no-show). The group continues with '
+          '${realPlayers.length - 1} players. Already-entered scores '
+          'are not affected; this is intended for the tee box, before '
+          'play starts.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final client = context.read<AuthProvider>().client;
+    try {
+      await client.removeFoursomePlayer(foursome.id, picked.player.id);
+      // Refresh round — reuses the same callback game-config changes use.
+      onGamesChanged();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '${picked.player.name} removed from ${foursome.label}.'),
+        ));
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      // Backend sends {detail, errors[]} for the donor-pool violation
+      // case.  Surface either the structured errors or the raw message.
+      final raw = e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text('Could not remove: $raw'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    }
+  }
+
+  /// TD-only "rebalance" tool — pick a player from this foursome,
+  /// then pick a target foursome to move them to.  Backend reconfigs
+  /// both sides' TC games and revalidates the donor pool; pre-play
+  /// only.  Surfaces the backend's error detail verbatim on failure.
+  Future<void> _showMovePlayerSheet(BuildContext context) async {
+    final realPlayers = foursome.realPlayers;
+    if (realPlayers.isEmpty) return;
+
+    final picked = await showModalBottomSheet<Membership>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Move player from ${foursome.label}',
+                        style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Pick the player to move.  You\'ll choose the '
+                      'destination group next.  Both groups\' Triple '
+                      'Cup games (if any) will adjust automatically.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              ...realPlayers.map((m) => ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                      child: Text(
+                        m.player.name.isNotEmpty
+                            ? m.player.name[0].toUpperCase()
+                            : '?',
+                      ),
+                    ),
+                    title: Text(m.player.name),
+                    subtitle: Text('Hcp ${m.playingHandicap}'),
+                    onTap: () => Navigator.of(ctx).pop(m),
+                  )),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (picked == null || !context.mounted) return;
+
+    // Step 2: pick a target foursome (excluding the current one).
+    final targets = allFoursomes
+        .where((f) => f.id != foursome.id)
+        .toList();
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No other groups to move to.'),
+      ));
+      return;
+    }
+
+    final targetFs = await showModalBottomSheet<Foursome>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  'Move ${picked.player.name} to which group?',
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+              const Divider(height: 1),
+              ...targets.map((f) {
+                final size = f.realPlayers.length;
+                final full = size >= 4;
+                return ListTile(
+                  leading: const Icon(Icons.groups_outlined),
+                  title: Text(f.label),
+                  subtitle: Text(
+                    full
+                        ? '$size players · full'
+                        : '$size player${size == 1 ? "" : "s"}',
+                  ),
+                  enabled: !full,
+                  onTap: full ? null : () => Navigator.of(ctx).pop(f),
+                );
+              }),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (targetFs == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: Text('Move ${picked.player.name}?'),
+        content: Text(
+          '${picked.player.name} will move from ${foursome.label} to '
+          '${targetFs.label}. ${foursome.label} will play with '
+          '${foursome.realPlayers.length - 1} players; ${targetFs.label} '
+          'with ${targetFs.realPlayers.length + 1}. Any Triple Cup '
+          'games on either group adjust automatically.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dctx).pop(true),
+            child: const Text('Move'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final client = context.read<AuthProvider>().client;
+    try {
+      await client.moveRoundPlayer(
+        roundId,
+        playerId       : picked.player.id,
+        fromFoursomeId : foursome.id,
+        toFoursomeId   : targetFs.id,
+      );
+      onGamesChanged();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '${picked.player.name} moved to ${targetFs.label}.'),
+        ));
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text('Could not move: ${e.toString()}'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    }
+  }
+
+  /// TD-only "shift the schedule" tool — swap this foursome's tee
+  /// position (group_number + tee_time) with another's.  Useful when
+  /// a group is late or a 3-some wants more donor variety.
+  Future<void> _showSwapPositionSheet(BuildContext context) async {
+    final others = allFoursomes
+        .where((f) => f.id != foursome.id)
+        .toList();
+    if (others.isEmpty) return;
+
+    final targetFs = await showModalBottomSheet<Foursome>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Swap ${foursome.label} with…',
+                        style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Pick the group to swap tee positions with.  '
+                      'Useful when one group is running late or when '
+                      'a short-rostered group needs more donor variety.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              ...others.map((f) => ListTile(
+                    leading: const Icon(Icons.schedule_outlined),
+                    title: Text(f.label),
+                    subtitle: Text(
+                      f.teeTime != null
+                          ? 'Tee time: ${f.teeTime}'
+                          : 'No tee time set',
+                    ),
+                    onTap: () => Navigator.of(ctx).pop(f),
+                  )),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (targetFs == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: Text('Swap with ${targetFs.label}?'),
+        content: Text(
+          '${foursome.label} and ${targetFs.label} will trade tee '
+          'positions (and tee times if assigned).  Rosters stay the '
+          'same in each group.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dctx).pop(true),
+            child: const Text('Swap'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final client = context.read<AuthProvider>().client;
+    try {
+      await client.swapFoursomePosition(
+        foursome.id,
+        targetGroupNumber: targetFs.groupNumber,
+      );
+      onGamesChanged();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Swapped tee positions with ${targetFs.label}.'),
+        ));
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text('Could not swap: ${e.toString()}'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    }
+  }
 
   Future<void> _showGameSheet(BuildContext context) async {
     // Only offer games that are active at the round level and can be per-foursome
@@ -686,22 +1077,83 @@ class _FoursomeCard extends StatelessWidget {
               Text(foursome.teeTime!,
                   style: theme.textTheme.bodySmall),
             ],
-            // Game toggle icon — hidden for cup rounds (games are fixed per
-            // foursome and can't be changed mid-tournament).
-            if (isAdmin && !isComplete && !isCupRound) ...[
+            // TD action menu — consolidates the per-foursome admin
+            // tools (configure games, remove player) behind a single
+            // overflow icon so the card header stays uncluttered.
+            // Visible only to admins on in-progress rounds.  Cup rounds
+            // hide the "configure games" entry (games are fixed at
+            // tournament setup) but keep "remove player" so the TD
+            // can still handle no-shows at the tee box.
+            if (isAdmin && !isComplete) ...[
               const Spacer(),
-              IconButton(
+              PopupMenuButton<String>(
                 icon: Icon(
-                  Icons.sports_golf,
-                  size: 18,
-                  color: hasOverride
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
+                  Icons.more_vert,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-                tooltip: 'Configure group games',
-                visualDensity: VisualDensity.compact,
+                tooltip: 'Tournament director actions',
                 padding: EdgeInsets.zero,
-                onPressed: () => _showGameSheet(context),
+                onSelected: (action) {
+                  switch (action) {
+                    case 'configure_games':
+                      _showGameSheet(context);
+                      break;
+                    case 'remove_player':
+                      _showRemovePlayerSheet(context);
+                      break;
+                    case 'move_player':
+                      _showMovePlayerSheet(context);
+                      break;
+                    case 'swap_position':
+                      _showSwapPositionSheet(context);
+                      break;
+                  }
+                },
+                itemBuilder: (_) => [
+                  if (!isCupRound)
+                    PopupMenuItem(
+                      value: 'configure_games',
+                      child: Row(children: [
+                        Icon(Icons.sports_golf, size: 18,
+                            color: hasOverride
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 12),
+                        const Flexible(child: Text('Configure group games')),
+                      ]),
+                    ),
+                  // Short, scannable labels — verbose phrasings
+                  // overflowed the popup width on iPhone-mini.
+                  PopupMenuItem(
+                    value: 'move_player',
+                    child: Row(children: [
+                      Icon(Icons.swap_horiz, size: 18,
+                          color: theme.colorScheme.primary),
+                      const SizedBox(width: 12),
+                      const Flexible(child: Text('Move player to group…')),
+                    ]),
+                  ),
+                  if (allFoursomes.length > 1)
+                    PopupMenuItem(
+                      value: 'swap_position',
+                      child: Row(children: [
+                        Icon(Icons.schedule, size: 18,
+                            color: theme.colorScheme.primary),
+                        const SizedBox(width: 12),
+                        const Flexible(child: Text('Swap tee position…')),
+                      ]),
+                    ),
+                  PopupMenuItem(
+                    value: 'remove_player',
+                    child: Row(children: [
+                      Icon(Icons.person_remove_outlined, size: 18,
+                          color: theme.colorScheme.error),
+                      const SizedBox(width: 12),
+                      const Flexible(child: Text('Remove no-show')),
+                    ]),
+                  ),
+                ],
               ),
             ],
           ]),
@@ -723,23 +1175,42 @@ class _FoursomeCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 8),
-          ...foursome.realPlayers.map((m) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  const Icon(Icons.person_outline, size: 16),
-                  const SizedBox(width: 6),
-                  Expanded(child: Text(m.player.name,
-                      overflow: TextOverflow.ellipsis)),
-                  if (m.tee != null) ...[
-                    Text(m.tee!.teeName,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant)),
-                    const SizedBox(width: 8),
-                  ],
-                  Text('Hcp ${m.playingHandicap}',
-                      style: theme.textTheme.bodySmall),
-                ]),
-              )),
+          ...foursome.realPlayers.map((m) {
+            // In cup rounds, tint the player name + person icon with
+            // the cup team colour so the TD can spot the team split
+            // (and which player would be "the solo" in a 3-some) at
+            // a glance.  Falls back to the default on-surface colour
+            // for casual rounds.
+            final teamColor = m.cupTeamColour != null
+                ? resolveTripleCupTeamColor(
+                    m.cupTeamColour, theme.colorScheme.onSurface)
+                : null;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(children: [
+                Icon(Icons.person_outline, size: 16, color: teamColor),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    m.player.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: teamColor != null
+                        ? TextStyle(
+                            color: teamColor, fontWeight: FontWeight.w600)
+                        : null,
+                  ),
+                ),
+                if (m.tee != null) ...[
+                  Text(m.tee!.teeName,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                  const SizedBox(width: 8),
+                ],
+                Text('Hcp ${m.playingHandicap}',
+                    style: theme.textTheme.bodySmall),
+              ]),
+            );
+          }),
           // Players who are not in this group and the round is still in
           // progress see no button at all — they have nothing to do here.
           if (canEdit || isComplete) ...[

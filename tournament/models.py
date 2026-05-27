@@ -474,6 +474,26 @@ class RyderCupRoundConfig(models.Model):
                                   "are configured. See model docstring for format."
                               )
                           )
+    # Round-level format preset.  'custom' is the historic behaviour
+    # (cup admin picks the game type per foursome in the setup
+    # wizard).  'triple_cup' is the "One Day Ryder Cup" preset that
+    # locks every foursome to the Triple Cup format (fourball +
+    # alt-shot foursomes + 2 singles per foursome) so the admin
+    # doesn't have to repeat the same pick 12 times.
+    ROUND_FORMAT_CHOICES = [
+        ('custom',     'Custom (per-foursome pick)'),
+        ('triple_cup', 'One Day Ryder Cup (Triple Cup)'),
+    ]
+    round_format       = models.CharField(
+                              max_length=20,
+                              choices=ROUND_FORMAT_CHOICES,
+                              default='custom',
+                              help_text=(
+                                  "Preset that drives the per-foursome game "
+                                  "type at setup time.  'triple_cup' forces "
+                                  "every foursome to Triple Cup."
+                              ),
+                          )
 
     def __str__(self):
         return f"Ryder Cup config — {self.round}"

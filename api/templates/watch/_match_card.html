@@ -42,6 +42,72 @@
     </div>
   {% endfor %}
 
+  {% comment %}
+    Triple Cup: one foursome = 4 sub-matches.  Collapsed shows the
+    foursome's running team-points; details/summary expands to the
+    per-match detail.  Native browser disclosure — no JS.
+  {% endcomment %}
+  {% if match.game_type == 'triple_cup' %}
+    <details class="tc-foursome">
+      <summary class="tc-foursome-summary">
+        <span class="tc-rollup">
+          <span class="pts t1">{{ match.team1_points|floatformat:"-1" }}</span>
+          <span class="muted">–</span>
+          <span class="pts t2">{{ match.team2_points|floatformat:"-1" }}</span>
+        </span>
+        {% comment %}
+          When matches are in progress, prioritise the live-status one-
+          liner ("1 UP thru 3, AS thru 3") with each piece coloured by
+          its leader.  Mirrors the mobile leaderboard so spectators
+          don't have to expand to see how the matches are going.  When
+          nothing is live (all pending or all resolved), fall back to
+          the original "N matches · tap to expand" hint.
+        {% endcomment %}
+        <span class="tc-live-summary" style="flex: 1; text-align: right;">
+          {% if match.tc_live_bits %}
+            {% for bit in match.tc_live_bits %}{% if not forloop.first %}<span class="muted">, </span>{% endif %}<span class="tc-live-status {% if bit.leader == 'team1' %}t1-name{% elif bit.leader == 'team2' %}t2-name{% else %}muted{% endif %}">{{ bit.text }}</span>{% endfor %}
+          {% else %}
+            <span class="meta-text">
+              {{ individuals|length }} match{{ individuals|length|pluralize:"es" }}
+              · tap to expand
+            </span>
+          {% endif %}
+        </span>
+      </summary>
+      <div class="tc-submatches">
+        {% for im in individuals %}
+          <div class="tc-sub-row">
+            <span class="game-pill tc-seg-pill">{{ im.label }}</span>
+            <span class="tc-pair t1-name">{{ im.player1 }}</span>
+            <span class="tc-vs muted">vs</span>
+            <span class="tc-pair t2-name">{{ im.player2 }}</span>
+            <span class="tc-status">
+              {% if im.result == 'team1' %}
+                <span class="chip chip-t1">{{ im.t1_pts|floatformat:"-1" }}</span>
+              {% elif im.result == 'team2' %}
+                <span class="chip chip-t2">{{ im.t2_pts|floatformat:"-1" }}</span>
+              {% elif im.result == 'halved' %}
+                <span class="chip chip-halved">½</span>
+              {% elif im.holes_played %}
+                {% comment %}
+                  Live match status — was just "thru N", now shows the
+                  running match-play score too ("1 UP thru 3" / "AS
+                  thru 2").  The leader's team colour tints the text
+                  via display_team ('team1' / 'team2'); AS stays muted.
+                  Both class names already exist in base.html — same
+                  hue used for player names and resolved-chip text.
+                {% endcomment %}
+                <span class="tc-live-status {% if im.display_team == 'team1' %}t1-name{% elif im.display_team == 'team2' %}t2-name{% else %}muted{% endif %}">{{ im.live_status_label }}</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    </details>
+  {% else %}
+
   {# ── Individual matchups (Singles Nassau / 18-Hole Singles) ─────── #}
   {% for im in individuals %}
     {% if im.sub_segments %}
@@ -108,6 +174,7 @@
       </div>
     {% endif %}
   {% endfor %}
+  {% endif %}{# /triple_cup vs nassau/singles fork #}
 
   {% if not segments and not individuals %}
     <div class="empty" style="padding: 12px 4px;">All sides resolved.</div>

@@ -14,9 +14,18 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from accounts.models import Account
 from core.models import Course, Player, PlayerSex, Tee
 from scoring.models import HoleScore
 from tournament.models import Foursome, FoursomeMembership, Round
+
+
+def _test_account() -> Account:
+    """Shared per-test-database tenant — every model with an account FK
+    points here.  Tests don't care which account they live in; they
+    just need *some* account so the FK is satisfied."""
+    acct, _ = Account.objects.get_or_create(name='Test Account')
+    return acct
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +58,7 @@ DEFAULT_HOLES = [
 
 
 def make_course(name: str = 'Test Links') -> Course:
-    return Course.objects.create(name=name)
+    return Course.objects.create(name=name, account=_test_account())
 
 
 def make_tee(
@@ -87,6 +96,7 @@ def make_player(
     is_phantom: bool = False,
 ) -> Player:
     return Player.objects.create(
+        account        = _test_account(),
         name           = name,
         handicap_index = Decimal(str(handicap_index)),
         sex            = sex,
@@ -110,6 +120,7 @@ def make_round(
 ) -> Round:
     course = course or make_course()
     return Round.objects.create(
+        account              = _test_account(),
         course               = course,
         status               = status,
         active_games         = active_games or [],

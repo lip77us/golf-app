@@ -12,6 +12,14 @@ Cup point multipliers per game type
     irish_rumble    pv × 1   1 overall winner per pairing (2 foursomes)
     singles_nassau  pv × 6   2 matches/foursome × F9/B9/Overall each
     singles_18      pv × 2   2 matches/foursome × 1 overall point each
+    triple_cup      pv × 4   Every group contributes 4 cup pts, regardless of size:
+                             • 4-player (2v2): Fourball + Foursomes + Singles A + Singles B
+                                               = 4 matches × 1 pt each
+                             • 3-player (2v1): same shape with phantom-partnered
+                               fourball + alt-shot + 2 singles ghost-pairings
+                                               = 4 matches × 1 pt each
+                             • 2-player (1v1): 18-hole Nassau — F9 (1) + B9 (1) +
+                               Overall (2)     = 3 matches summing to 4 pt
 
 Public API
 ~~~~~~~~~~
@@ -31,6 +39,7 @@ GAME_MULTIPLIERS = {
     GameType.IRISH_RUMBLE:   1,
     GameType.SINGLES_NASSAU: 6,
     GameType.SINGLES_18:     2,
+    GameType.TRIPLE_CUP:     4,
 }
 
 
@@ -536,6 +545,57 @@ def cup_round_live_summary(round_obj) -> dict | None:
             matches_out.append({
                 'game_type'         : 'quota_nassau',
                 'game_label'        : 'Quota Nassau',
+                'groups'            : [fs.group_number],
+                'team1_players'     : t1_names,
+                'team2_players'     : t2_names,
+                'point_value'       : pv,
+                'team1_points'      : round(t1_match, 2),
+                'team2_points'      : round(t2_match, 2),
+                'total_possible'    : possible,
+                'segments'          : [],
+                'individual_matches': individual,
+            })
+
+        elif gtype == GameType.TRIPLE_CUP:
+            from services.triple_cup import triple_cup_summary as _tcs
+            try:
+                tcs = _tcs(fs) or {}
+            except Exception:
+                tcs = {}
+
+            t1_match = 0.0
+            t2_match = 0.0
+            individual = []
+            for tcm in tcs.get('matches', []):
+                result = tcm.get('result')
+                t1p, t2p = _seg_result_pts(result, pv)
+                t1_match += t1p
+                t2_match += t2p
+                individual.append({
+                    'player1'         : ' / '.join(tcm['team1']['shorts']),
+                    'player2'         : ' / '.join(tcm['team2']['shorts']),
+                    'segment'         : tcm['segment'],
+                    'label'           : tcm['label'],
+                    'result'          : result,
+                    't1_pts'          : t1p,
+                    't2_pts'          : t2p,
+                    'status'          : tcm['status'],
+                    'holes_played'    : len(tcm.get('holes', [])),
+                    'overall_holes_up': tcm.get('holes_up_final', 0),
+                    'finished_on_hole': tcm.get('finished_on_hole'),
+                    'is_resolved'     : result is not None,
+                })
+
+            # points_available scales with the actual match plan (3 for 1v1,
+            # 4 otherwise) so the cup display matches what's playable.
+            n_matches    = len(tcs.get('matches', []))
+            possible     = pv * n_matches
+            total_all   += possible
+            team1_total += t1_match
+            team2_total += t2_match
+            matches_out.append({
+                'game_type'         : 'triple_cup',
+                'game_label'        : 'One Round Ryder Cup',
                 'groups'            : [fs.group_number],
                 'team1_players'     : t1_names,
                 'team2_players'     : t2_names,

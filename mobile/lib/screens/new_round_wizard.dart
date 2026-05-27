@@ -6,6 +6,9 @@ import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
+// Aliased so the top-level groupSizes(n) helper is reachable inside
+// _Step3GroupsAndTees, whose `groupSizes` field would otherwise shadow it.
+import '../utils/grouping.dart' as gr;
 import '../widgets/error_view.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../widgets/payout_config_field.dart';
@@ -108,7 +111,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<CourseInfo>  _courses        = [];
   int?              _selectedCourseId;
   DateTime          _date           = DateTime.now();
-  String            _handicapMode   = 'net';
+  // Tournament round-level default → Strokes-Off Low (matches the
+  // per-game casual defaults).  Users can switch back to Net or Gross
+  // before saving — Irish Rumble / Low Net rounds typically want Net.
+  String            _handicapMode   = 'strokes_off';
   int               _netPercent     = 100;
   bool              _netMaxDoubleBogey = true;
 
@@ -137,6 +143,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // ---- Step 3: Drag-and-drop group assignment + per-player tee ----
   List<int>           _orderedPlayerIds = [];
   Map<int, TeeInfo?>  _playerTees       = {};
+  /// Optional TD-set override for how players bucket into groups.
+  /// When non-null, this list of sizes is used verbatim instead of
+  /// the `groupSizes(n)` auto-balance.  Sum must equal selected player
+  /// count and each size must be in {2,3,4}.  Reset to null whenever
+  /// the player count changes so we don't keep a stale shape.
+  List<int>?          _groupSizesOverride;
 
   // ---- Step 5: Review / create ----
   bool    _creating    = false;
@@ -168,6 +180,20 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<PlayerProfile> get _orderedPlayers => _orderedPlayerIds
       .map((id) => _allPlayers.firstWhere((p) => p.id == id))
       .toList();
+
+  /// Returns the group sizes the wizard should use right now.  Falls
+  /// back to the auto-balance when no override is set, or when an
+  /// override is set but no longer matches the player count (stale
+  /// shape).  Defensive: never returns null.
+  List<int> get _effectiveGroupSizes {
+    final n  = _selectedIds.length;
+    final ov = _groupSizesOverride;
+    if (ov != null && ov.fold<int>(0, (s, x) => s + x) == n
+        && ov.every((s) => s >= 2 && s <= 4)) {
+      return List<int>.from(ov);
+    }
+    return groupSizes(n);
+  }
 
   // ---------------------------------------------------------------------------
 
@@ -519,11 +545,31 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       netMaxDoubleBogey: _netMaxDoubleBogey,
     );
 
-    final playersList = _orderedPlayerIds.map((id) {
+    // Compute per-player group_number when the TD overrode the
+    // auto-balance.  The backend's setup endpoint takes the explicit-
+    // groups path when ANY player carries a `group_number`, slicing
+    // exactly per the sizes we send.  Without an override, omit the
+    // field and let the backend auto-balance (legacy behaviour).
+    final List<int>? overrideSizes = _groupSizesOverride;
+    final playersList = <Map<String, int>>[];
+    var groupIdx        = 0;
+    var placedInGroup   = 0;
+    for (final id in _orderedPlayerIds) {
       final tee = _playerTees[id];
       if (tee == null) throw Exception('Player $id has no tee selected.');
-      return {'player_id': id, 'tee_id': tee.id};
-    }).toList();
+      final entry = <String, int>{'player_id': id, 'tee_id': tee.id};
+      if (overrideSizes != null) {
+        // Advance to the next group when the current one is full.
+        while (groupIdx < overrideSizes.length &&
+               placedInGroup >= overrideSizes[groupIdx]) {
+          groupIdx += 1;
+          placedInGroup = 0;
+        }
+        entry['group_number'] = groupIdx + 1;
+        placedInGroup += 1;
+      }
+      playersList.add(entry);
+    }
 
     final fullRound = await client.setupRound(
       round.id,
@@ -666,7 +712,19 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         courses             : _courses,
         date                : _date,
         onChanged           : (roundIdx, games) =>
-            setState(() => _roundCupGames[roundIdx] = games),
+            setState(() {
+              _roundCupGames[roundIdx] = games;
+              // Triple Cup foursomes spend 6 holes in alt-shot — the
+              // individual-net scoring that drives championship Low
+              // Net doesn't apply on those holes.  Auto-drop the
+              // Low Net championship whenever any round uses Triple
+              // Cup so we don't surface a half-meaningful aggregate.
+              final anyTC = _roundCupGames.values
+                  .any((g) => g.contains('triple_cup'));
+              if (anyTC) {
+                _tournamentActiveGames.remove(GameIds.championshipStrokePlay);
+              }
+            }),
         onPointsChanged     : (roundIdx, points) =>
             setState(() => _roundCupPoints[roundIdx] = points),
         onGroupCountsChanged: (roundIdx, counts) =>
@@ -760,17 +818,26 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _selectedIds.contains(id)
                 ? _selectedIds.remove(id)
                 : _selectedIds.add(id);
+            // Player count changed — any TD-set group override is now
+            // stale; drop it so Step 3 reverts to the fresh auto-balance.
+            _groupSizesOverride = null;
           }),
           onSearch   : (s) => setState(() => _search = s),
-          onSelectAll: () => setState(() =>
-              _selectedIds.addAll(_allPlayers.map((p) => p.id))),
-          onClearAll : () => setState(() => _selectedIds.clear()),
+          onSelectAll: () => setState(() {
+            _selectedIds.addAll(_allPlayers.map((p) => p.id));
+            _groupSizesOverride = null;
+          }),
+          onClearAll : () => setState(() {
+            _selectedIds.clear();
+            _groupSizesOverride = null;
+          }),
         );
       case 3:
         return _Step3GroupsAndTees(
           orderedPlayers: _orderedPlayers,
           playerTees    : _playerTees,
           courseTees    : _courseTees,
+          groupSizes    : _effectiveGroupSizes,
           onReorder     : (oldIdx, newIdx) => setState(() {
             if (newIdx > oldIdx) newIdx--;
             final id = _orderedPlayerIds.removeAt(oldIdx);
@@ -778,11 +845,15 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           }),
           onPickTee     : (playerId, tee) =>
               setState(() => _playerTees[playerId] = tee),
+          onChangeGroupSizes: (sizes) => setState(() {
+            // null = revert to auto-balance.
+            _groupSizesOverride = sizes;
+          }),
         );
       case 4:
         return _Step4Games(
           activeGames               : _activeGames,
-          groupSizeList             : groupSizes(_selectedIds.length),
+          groupSizeList             : _effectiveGroupSizes,
           onToggleGame              : (g, on) => setState(() {
             on ? _activeGames.add(g) : _activeGames.remove(g);
           }),
@@ -821,6 +892,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           courses              : _courses,
           orderedPlayers       : _orderedPlayers,
           playerTees           : _playerTees,
+          groupSizes           : _effectiveGroupSizes,
           createError          : _createError,
         );
       case 6:  // post-creation (logical 6 = step 6 non-cup or step 7 cup)
@@ -1072,6 +1144,7 @@ class _Step0Tournament extends StatelessWidget {
             else
               DropdownButtonFormField<Tournament>(
                 value: existingTournament,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Select tournament',
                   border: OutlineInputBorder(),
@@ -1154,6 +1227,7 @@ class _Step1Details extends StatelessWidget {
           // Course picker (Round 1)
           DropdownButtonFormField<int>(
             value: selectedCourseId,
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Course',
               border: OutlineInputBorder(),
@@ -1199,6 +1273,7 @@ class _Step1Details extends StatelessWidget {
             const SizedBox(height: 10),
             DropdownButtonFormField<int>(
               value: additionalRounds[i].courseId,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Course',
                 border: OutlineInputBorder(),
@@ -1444,26 +1519,43 @@ class _Step2Players extends StatelessWidget {
 // ===========================================================================
 
 class _Step3GroupsAndTees extends StatelessWidget {
-  /// Players in drag order — position ÷ 4 determines group (1-based).
+  /// Players in drag order — sizes (below) slice them into groups.
   final List<PlayerProfile>     orderedPlayers;
   final Map<int, TeeInfo?>      playerTees;
   final List<TeeInfo>           courseTees;
+  /// Group sizes the wizard is currently using (auto-balance or TD
+  /// override).  Sum equals orderedPlayers.length; each entry in {2,3,4}.
+  final List<int>               groupSizes;
   final void Function(int, int) onReorder;
   final void Function(int playerId, TeeInfo tee) onPickTee;
+  /// Apply a TD-supplied group-size override.  null reverts to the
+  /// auto-balance.  Wizard handles validation before calling.
+  final void Function(List<int>? sizes) onChangeGroupSizes;
 
   const _Step3GroupsAndTees({
     required this.orderedPlayers,
     required this.playerTees,
     required this.courseTees,
+    required this.groupSizes,
     required this.onReorder,
     required this.onPickTee,
+    required this.onChangeGroupSizes,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme      = Theme.of(context);
-    final sizes      = groupSizes(orderedPlayers.length);
-    final groupCount = sizes.length;
+    final theme       = Theme.of(context);
+    final sizes       = groupSizes;
+    final groupCount  = sizes.length;
+    final autoBalance = gr.groupSizes(orderedPlayers.length);
+    bool _sameAsAuto() {
+      if (sizes.length != autoBalance.length) return false;
+      for (var i = 0; i < sizes.length; i++) {
+        if (sizes[i] != autoBalance[i]) return false;
+      }
+      return true;
+    }
+    final isOverridden = !_sameAsAuto();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -1474,29 +1566,51 @@ class _Step3GroupsAndTees extends StatelessWidget {
               style: theme.textTheme.headlineSmall),
           const SizedBox(height: 4),
           Text(
-            'Drag  ≡  to reorder. Foursomes fill first; remaining players '
-            'form threesomes. Pick each player\'s tee on the right.',
+            'Drag  ≡  to reorder. Tap "Edit sizes" to override the '
+            'default group breakdown. Pick each player\'s tee on the right.',
             style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
           ),
-          const SizedBox(height: 4),
-          // Group legend chips
-          Wrap(
-            spacing: 6,
-            children: List.generate(groupCount, (i) {
-              final color = _groupColors[i % _groupColors.length];
-              return Chip(
-                label: Text(
-                  'Group ${i + 1}',
-                  style: TextStyle(
-                      color: color, fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-                backgroundColor: color.withOpacity(0.1),
-                side: BorderSide(color: color.withOpacity(0.4)),
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-              );
-            }),
-          ),
+          const SizedBox(height: 8),
+          // Group legend chips + Edit Sizes affordance
+          Row(children: [
+            Expanded(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: List.generate(groupCount, (i) {
+                  final color = _groupColors[i % _groupColors.length];
+                  return Chip(
+                    label: Text(
+                      'Group ${i + 1} · ${sizes[i]}',
+                      style: TextStyle(
+                          color: color, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    backgroundColor: color.withOpacity(0.1),
+                    side: BorderSide(color: color.withOpacity(0.4)),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  );
+                }),
+              ),
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.tune, size: 16),
+              label: Text(isOverridden ? 'Edit sizes *' : 'Edit sizes'),
+              onPressed: () async {
+                final result = await showDialog<List<int>?>(
+                  context: context,
+                  builder: (_) => _GroupSizeEditor(
+                    initialSizes: List<int>.from(sizes),
+                    totalPlayers: orderedPlayers.length,
+                    autoBalance: autoBalance,
+                  ),
+                );
+                if (result == null) return;   // dialog dismissed
+                // Empty list sentinel = "revert to auto-balance".
+                onChangeGroupSizes(result.isEmpty ? null : result);
+              },
+            ),
+          ]),
           const SizedBox(height: 12),
 
           Card(
@@ -1883,6 +1997,11 @@ const _kCupGameChoices = [
   ('irish_rumble',    'Irish Rumble'),
   ('singles_nassau',  'Singles Nassau (F9/B9/All)'),
   ('singles_18',      '18-Hole Singles'),
+  // One Day Ryder Cup: every foursome plays Triple Cup (fourball +
+  // alt-shot foursomes + 2 singles).  When picked here, the per-round
+  // cup setup wizard auto-locks every foursome to triple_cup so the
+  // admin doesn't have to repeat the pick.
+  ('triple_cup',      'One Day Ryder Cup (Triple Cup)'),
 ];
 
 class _Step3CupRoundGames extends StatelessWidget {
@@ -2063,6 +2182,15 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
       ),
     ).then((picked) {
       if (picked == null) return;
+      // Triple Cup is exclusive — it owns the entire foursome (4
+      // matches × 18 holes).  Replace any other formats on this
+      // round rather than stacking them.
+      if (picked == 'triple_cup') {
+        widget.onChanged(const ['triple_cup']);
+        widget.onPointsChanged(const {'triple_cup': 1.0});
+        widget.onGroupCountsChanged(const {'triple_cup': 1});
+        return;
+      }
       // Add to games list and default to 1 group
       widget.onChanged([...widget.currentGames, picked]);
       final updatedCounts = Map<String, int>.from(widget.currentGroupCounts);
@@ -2231,19 +2359,219 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
           ],
 
           const SizedBox(height: 6),
-          TextButton.icon(
-            onPressed: gameList.length < _kCupGameChoices.length
-                ? () => _addGame(context)
-                : null,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add a game'),
-          ),
+          if (gameList.contains('triple_cup'))
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Triple Cup is exclusive — no other games on this round.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontStyle: FontStyle.italic),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: gameList.length < _kCupGameChoices.length
+                  ? () => _addGame(context)
+                  : null,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add a game'),
+            ),
         ]),
       ),
     );
   }
 }
 
+
+// ===========================================================================
+// Step 3 — Group-size editor dialog
+// ===========================================================================
+//
+// Lets the TD override the auto-balance with any valid breakdown:
+//   • Each group in {2, 3, 4}
+//   • Sum equals total player count
+//   • At least one group
+//
+// Returns:
+//   • List<int> of sizes when the user taps Apply with a valid layout
+//   • Empty list when the user taps "Reset to default" (signals revert)
+//   • null when the dialog is dismissed (no change)
+
+class _GroupSizeEditor extends StatefulWidget {
+  final List<int> initialSizes;
+  final List<int> autoBalance;
+  final int       totalPlayers;
+  const _GroupSizeEditor({
+    required this.initialSizes,
+    required this.autoBalance,
+    required this.totalPlayers,
+  });
+
+  @override
+  State<_GroupSizeEditor> createState() => _GroupSizeEditorState();
+}
+
+class _GroupSizeEditorState extends State<_GroupSizeEditor> {
+  late List<int> _sizes;
+
+  @override
+  void initState() {
+    super.initState();
+    _sizes = List<int>.from(widget.initialSizes);
+  }
+
+  int  get _total     => _sizes.fold(0, (s, x) => s + x);
+  int  get _remaining => widget.totalPlayers - _total;
+  bool get _isValid   => _total == widget.totalPlayers &&
+                         _sizes.every((s) => s >= 2 && s <= 4) &&
+                         _sizes.isNotEmpty;
+
+  void _inc(int idx) {
+    if (_sizes[idx] >= 4) return;
+    setState(() => _sizes[idx] = _sizes[idx] + 1);
+  }
+  void _dec(int idx) {
+    if (_sizes[idx] <= 2) return;
+    setState(() => _sizes[idx] = _sizes[idx] - 1);
+  }
+  void _remove(int idx) {
+    if (_sizes.length <= 1) return;
+    setState(() => _sizes.removeAt(idx));
+  }
+  void _addGroup() {
+    // Default new group to 4 when possible; otherwise whatever fits
+    // up to 4 (and at least 2, else don't add).
+    final spaceLeft = widget.totalPlayers - _total;
+    final initial   = spaceLeft >= 4 ? 4 : (spaceLeft >= 2 ? spaceLeft : 4);
+    setState(() => _sizes.add(initial));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Edit Group Sizes'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Each group must have 2, 3, or 4 players. Total must '
+              'equal ${widget.totalPlayers}.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Auto-balance: ${widget.autoBalance.join(" + ")} '
+              '= ${widget.totalPlayers}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 12),
+            // Group rows with steppers
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount : _sizes.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                itemBuilder: (_, i) {
+                  final color = _groupColors[i % _groupColors.length];
+                  return Row(children: [
+                    SizedBox(
+                      width: 72,
+                      child: Text('Group ${i + 1}',
+                          style: TextStyle(
+                              color: color, fontWeight: FontWeight.bold)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      iconSize: 22,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _sizes[i] > 2 ? () => _dec(i) : null,
+                    ),
+                    SizedBox(
+                      width: 28,
+                      child: Center(
+                        child: Text('${_sizes[i]}',
+                            style: theme.textTheme.titleMedium),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      iconSize: 22,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _sizes[i] < 4 ? () => _inc(i) : null,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      iconSize: 20,
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Remove group',
+                      onPressed: _sizes.length > 1 ? () => _remove(i) : null,
+                    ),
+                  ]);
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(children: [
+              TextButton.icon(
+                icon : const Icon(Icons.add, size: 18),
+                label: const Text('Add group'),
+                onPressed: _addGroup,
+              ),
+              const Spacer(),
+              Text(
+                'Total: $_total / ${widget.totalPlayers}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _isValid
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.error,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ]),
+            if (!_isValid && _remaining != 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                _remaining > 0
+                    ? '$_remaining more player${_remaining == 1 ? "" : "s"} '
+                      'to place — add a group or +1 to an existing one.'
+                    : '${(-_remaining)} too many — -1 from a group or '
+                      'remove one.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(<int>[]),
+          child: const Text('Reset to default'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isValid
+              ? () => Navigator.of(context).pop(_sizes)
+              : null,
+          child: const Text('Apply'),
+        ),
+      ],
+    );
+  }
+}
 
 // ===========================================================================
 // Step 4 — Game Selection
@@ -2567,6 +2895,10 @@ class _Step5Review extends StatelessWidget {
   final List<PlayerProfile> orderedPlayers;
   final Map<int, TeeInfo?> playerTees;
   final String?            createError;
+  /// Group sizes the TD selected (may be the auto-balance or an
+  /// override).  Passed in from the wizard parent so the Review step
+  /// shows the same shape the TD actually saw + accepted in Step 3.
+  final List<int>          groupSizes;
 
   const _Step5Review({
     required this.createNew,
@@ -2580,13 +2912,14 @@ class _Step5Review extends StatelessWidget {
     required this.courses,
     required this.orderedPlayers,
     required this.playerTees,
+    required this.groupSizes,
     this.createError,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme       = Theme.of(context);
-    final sizes       = groupSizes(orderedPlayers.length);
+    final sizes       = groupSizes;
     final groupCount  = sizes.length;
     final gameLabels  = {
       for (final g in kGameCatalog) g.id: g.displayName,

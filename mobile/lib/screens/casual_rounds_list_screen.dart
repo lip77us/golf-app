@@ -442,7 +442,7 @@ class _CasualRoundCard extends StatelessWidget {
     const labels = {
       'skins':      'Skins',
       'points_531': 'Points 5-3-1',
-      'sixes':      "Six's",
+      'sixes':      'Sixes',
       'nassau':     'Nassau',
     };
     return labels[g] ?? g;

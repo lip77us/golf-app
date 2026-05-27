@@ -271,11 +271,57 @@ class MembershipSerializer(serializers.ModelSerializer):
         source='player', queryset=Player.objects.all(), write_only=True
     )
     tee          = TeeSerializer(read_only=True)
+    # The player's TournamentTeam.colour within the round's tournament,
+    # if any.  Null on casual rounds (no tournament) or for players who
+    # haven't been assigned to a cup team yet.  Mobile resolves the
+    # colour name (e.g. "Red", "Tilden Blue") to a Color via the
+    # existing palette helper; the round dashboard uses this to color
+    # each player row so the TD can see team distribution at a glance.
+    cup_team_colour = serializers.SerializerMethodField()
+    cup_team_name   = serializers.SerializerMethodField()
 
     class Meta:
         model  = FoursomeMembership
-        fields = ['id', 'player', 'player_id', 'tee', 'course_handicap', 'playing_handicap']
-        read_only_fields = ['id', 'tee', 'course_handicap', 'playing_handicap']
+        fields = [
+            'id', 'player', 'player_id', 'tee',
+            'course_handicap', 'playing_handicap',
+            'cup_team_colour', 'cup_team_name',
+        ]
+        read_only_fields = [
+            'id', 'tee', 'course_handicap', 'playing_handicap',
+            'cup_team_colour', 'cup_team_name',
+        ]
+
+    def _team_for(self, obj):
+        # Skip phantoms entirely.
+        if obj.player.is_phantom:
+            return None
+        tourney = getattr(obj.foursome.round, 'tournament', None)
+        if tourney is None:
+            return None
+        # TournamentTeam hangs off TeamTournament, not the plain
+        # Tournament — so we have to traverse the reverse-OneToOne.
+        # Casual tournaments / non-Ryder-Cup tournaments won't have
+        # one, in which case the player has no cup team and we return
+        # None.
+        try:
+            team_tourney = tourney.team_tournament
+        except Exception:
+            return None
+        from tournament.models import TournamentTeam
+        return (
+            TournamentTeam.objects
+            .filter(tournament=team_tourney, players=obj.player)
+            .first()
+        )
+
+    def get_cup_team_colour(self, obj):
+        team = self._team_for(obj)
+        return team.colour if team else None
+
+    def get_cup_team_name(self, obj):
+        team = self._team_for(obj)
+        return team.name if team else None
 
 
 class FoursomeSerializer(serializers.ModelSerializer):
@@ -548,7 +594,12 @@ class RoundSetupSerializer(serializers.Serializer):
     active_games:       list of game keys to activate for this round — if
                         provided, overwrites Round.active_games before setup
     """
-    players            = PlayerTeeSelectionSerializer(many=True, min_length=2, max_length=20)
+    # Tournament rounds can host 60+ players (15+ foursomes).  The old
+    # 20-player cap was a leftover from a 4-foursome-max assumption;
+    # the rest of the pipeline (setup_round + _group_players) handles
+    # arbitrary sizes already.  Keep a generous upper bound to catch
+    # obvious typos / abuse without surprising real tournaments.
+    players            = PlayerTeeSelectionSerializer(many=True, min_length=2, max_length=200)
     handicap_allowance = serializers.FloatField(default=1.0, min_value=0.0, max_value=1.0)
     randomise          = serializers.BooleanField(default=True)
     auto_setup_games   = serializers.BooleanField(default=False)
@@ -608,7 +659,7 @@ class NassauPressSerializer(serializers.Serializer):
 
 class SixesSetupSerializer(serializers.Serializer):
     """
-    Set up (or update) the Six's segments and teams for a foursome.
+    Set up (or update) the Sixes segments and teams for a foursome.
     segments is a list matching the services/sixes.py team_data format.
 
     handicap_mode and net_percent are optional and default to full net
@@ -670,6 +721,48 @@ class ThreePersonMatchSetupSerializer(serializers.Serializer):
                         default=dict,
                         help_text="{'1st': 48.00, '2nd': 24.00, '3rd': 0.00}",
                     )
+
+
+class TripleCupSetupSerializer(serializers.Serializer):
+    """
+    Set up (or replace) the One-Round Ryder Cup game for a foursome.
+
+    team1_player_ids / team2_player_ids: 1 or 2 real player PKs each.
+    Total players (across both sides) must be 2, 3, or 4 — the scorer
+    auto-derives the match plan from the resulting group shape:
+      4 (2v2): 1 fourball + 1 foursomes + 2 singles = 4 matches
+      3 (2v1): same 4-match shape; solo carries every segment, phantom
+               fills in for the fourball best-ball.
+      2 (1v1): 3 singles matches (one per 6-hole segment) = 3 matches
+
+    alt_shot_low_pct / alt_shot_high_pct: combined-team handicap formula
+        for foursomes (alt-shot).  USGA default is 50/50.
+    phantom_score_mode: 'net_par' (default) or 'net_bogey' — only used
+        in 2v1 fourball.
+    """
+    team1_player_ids   = serializers.ListField(
+                            child=serializers.IntegerField(),
+                            min_length=1, max_length=2,
+                        )
+    team2_player_ids   = serializers.ListField(
+                            child=serializers.IntegerField(),
+                            min_length=1, max_length=2,
+                        )
+    handicap_mode      = serializers.ChoiceField(
+                            choices=['net', 'gross', 'strokes_off'],
+                            default='net',
+                        )
+    net_percent        = serializers.IntegerField(
+                            min_value=0, max_value=200, default=100,
+                        )
+    alt_shot_low_pct   = serializers.IntegerField(
+                            min_value=0, max_value=100, default=50,
+                        )
+    alt_shot_high_pct  = serializers.IntegerField(
+                            min_value=0, max_value=100, default=50,
+                        )
+    foursomes_team1_first_tee = serializers.IntegerField(required=False, allow_null=True)
+    foursomes_team2_first_tee = serializers.IntegerField(required=False, allow_null=True)
 
 
 class SkinsSetupSerializer(serializers.Serializer):
@@ -963,9 +1056,14 @@ class TeamPlayerSerializer(serializers.Serializer):
 class FoursomeRyderConfigSerializer(serializers.Serializer):
     """
     One foursome's Ryder Cup game config inside RyderCupRoundSetupSerializer.
+
+    game_type is optional when the round's `round_format` preset
+    (e.g. 'triple_cup') already determines the game — the wizard
+    auto-fills it before persisting.
     """
     foursome_id      = serializers.IntegerField()
-    game_type        = serializers.CharField(max_length=30)
+    game_type        = serializers.CharField(max_length=30,
+                                              required=False, allow_blank=True)
     team1_id         = serializers.IntegerField(required=False, allow_null=True)
     team2_id         = serializers.IntegerField(required=False, allow_null=True)
     point_value      = serializers.DecimalField(
@@ -1031,6 +1129,13 @@ class RyderCupRoundSetupSerializer(serializers.Serializer):
                                required=False, default='1.00'
                            )
     notes                = serializers.CharField(required=False, allow_blank=True, default='')
+    # 'custom' (historic — per-foursome game_type) or 'triple_cup'
+    # ("One Day Ryder Cup" preset; backend auto-fills every foursome
+    # to game_type='triple_cup' so the wizard payload can omit it).
+    round_format         = serializers.ChoiceField(
+                               choices=['custom', 'triple_cup'],
+                               required=False, default='custom',
+                           )
     foursomes            = FoursomeRyderConfigSerializer(many=True, required=False, default=list)
     irish_rumble_pairings = IrishRumblePairingSerializer(many=True, required=False, default=list)
 

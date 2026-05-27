@@ -714,70 +714,10 @@ def _team_colour(foursome, team_num: int) -> str:
 
 
 def _build_phantom_info(foursome) -> 'dict | None':
-    """
-    Return phantom donor status for a Four Ball phantom (cross_foursome_rotation),
-    or None if this foursome has no cross-foursome phantom.
-
-    Wrapped in try/except so a failure here never breaks nassau_summary.
-
-    Shape:
-    {
-        'phantom_player_id': int,
-        'phantom_playing_hcp': int,   # avg course_handicap of donor players
-        'algorithm': 'cross_foursome_rotation',
-        'by_hole': {
-            1:  {'player_id': int, 'player_name': str, 'has_score': bool},
-            2:  {...},
-            ...
-            18: {...},
-        }
-    }
-    """
-    try:
-        if not foursome.has_phantom:
-            return None
-        from scoring.phantom import PhantomScoreProvider, CROSS_FOURSOME_ALGORITHM_ID
-        provider = PhantomScoreProvider(foursome)
-        if not provider.has_phantom or not provider.is_cross_foursome:
-            return None
-        phantom_m = foursome.memberships.filter(player__is_phantom=True).first()
-
-        # Derive avg course_handicap from donor players stored in phantom_config.
-        # The phantom's own playing_handicap is 0 for cross-foursome phantoms
-        # because there are no real players in their own foursome, so we look
-        # up the actual donor course handicaps instead.
-        avg_course_hcp = 0
-        if phantom_m:
-            donor_ids = (phantom_m.phantom_config or {}).get('rotation', [])
-            if donor_ids:
-                from tournament.models import FoursomeMembership
-                donor_hcps = list(
-                    FoursomeMembership.objects
-                    .filter(
-                        foursome__round=foursome.round,
-                        player_id__in=donor_ids,
-                        player__is_phantom=False,
-                    )
-                    .values_list('course_handicap', flat=True)
-                )
-                if donor_hcps:
-                    avg_course_hcp = round(sum(donor_hcps) / len(donor_hcps))
-
-        return {
-            'phantom_player_id'    : phantom_m.player_id if phantom_m else None,
-            'phantom_playing_hcp'  : avg_course_hcp,
-            'algorithm'            : CROSS_FOURSOME_ALGORITHM_ID,
-            'by_hole'              : {
-                str(h): v
-                for h, v in provider.donor_status_by_hole().items()
-            },
-        }
-    except Exception:
-        import logging
-        logging.getLogger(__name__).exception(
-            'nassau._build_phantom_info failed for foursome %s', foursome.pk
-        )
-        return None
+    """Thin wrapper around the shared helper — kept so existing
+    in-module callers don't need to change.  Identical output."""
+    from scoring.phantom import build_phantom_info
+    return build_phantom_info(foursome)
 
 
 # ---------------------------------------------------------------------------

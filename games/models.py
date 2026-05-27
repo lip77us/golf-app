@@ -11,7 +11,7 @@ from tournament.models import Round, Foursome
 
 class SixesSegment(models.Model):
     """
-    One 6-hole block of the Six's game. Standard play has 3 segments
+    One 6-hole block of the Sixes game. Standard play has 3 segments
     (holes 1-6, 7-12, 13-18), but a segment can end early if a team wins
     before the 6th hole — the leftover holes form a 4th (extra) match.
 
@@ -1468,6 +1468,283 @@ class QuotaNassauHoleResult(models.Model):
                                  null=True, blank=True,
                                  help_text="Overall (18-hole) running margin after this hole."
                              )
+
+    class Meta:
+        unique_together = ('match', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        return f"Hole {self.hole_number} — {self.match}"
+
+
+# ---------------------------------------------------------------------------
+# TRIPLE CUP  (One-Round Ryder Cup: 3 × 6-hole segments per foursome)
+# ---------------------------------------------------------------------------
+#
+# A foursome plays a single 18-hole match split into three segments:
+#   Holes 1–6   Fourball     — best-ball match play
+#   Holes 7–12  Foursomes    — alternate-shot match play
+#   Holes 13–18 Singles      — head-to-head match play (2 matches in 2v2)
+#
+# Number of matches scales by group size (per-match scoring model):
+#   2v2: 4 matches (1 fourball + 1 foursomes + 2 singles) → 4 pv
+#   2v1: 4 matches (solo carries every segment; phantom in fourball) → 4 pv
+#   1v1: 3 matches (one per segment, all played as singles) → 3 pv
+#
+# Each match is recorded as a TripleCupMatch with its own two TripleCupTeams.
+# Per-hole results live on TripleCupHoleResult.  Teams are fixed once the
+# game is set up — no rotating-team logic like Sixes.
+# ---------------------------------------------------------------------------
+
+TRIPLE_CUP_SEGMENT_CHOICES = [
+    ('fourball',  'Fourball'),
+    ('foursomes', 'Foursomes (Alt-Shot)'),
+    ('singles',   'Singles'),
+]
+
+TRIPLE_CUP_RESULT_CHOICES = [
+    ('team1',  'Team 1'),
+    ('team2',  'Team 2'),
+    ('halved', 'Halved'),
+]
+
+
+class TripleCupGame(models.Model):
+    """
+    The One-Round Ryder Cup game for one Foursome.  Holds the shared
+    config knobs; the actual matches and hole-by-hole results live on
+    TripleCupMatch / TripleCupHoleResult rows.
+
+    alt_shot_low_pct / alt_shot_high_pct
+        Combined-team handicap formula for the foursomes (alt-shot)
+        segment.  USGA default is 50% low + 50% high; we expose both
+        knobs so a group can override to e.g. 0.6 × low + 0 × high
+        without code changes.
+
+    phantom_score_mode
+        Only used in 2v1 (one player vs two) during the fourball
+        segment.  The solo player's "team" needs a second ball, so we
+        synthesise a phantom score per hole — net par by default.
+
+    group_size
+        Denormalised player count at setup time (2, 3, or 4).  The
+        scorer reads this once instead of repeatedly counting real
+        memberships, and it travels with the game across roster edits.
+    """
+    foursome            = models.OneToOneField(
+                            Foursome, on_delete=models.CASCADE,
+                            related_name='triple_cup_game',
+                        )
+    status              = models.CharField(
+                            max_length=20,
+                            choices=MatchStatus.choices,
+                            default=MatchStatus.PENDING,
+                        )
+    handicap_mode       = models.CharField(
+                            max_length=20,
+                            choices=HandicapMode.choices,
+                            default=HandicapMode.NET,
+                            help_text="How per-hole scores are adjusted for ranking.",
+                        )
+    net_percent         = models.PositiveSmallIntegerField(
+                            default=100,
+                            validators=[MinValueValidator(0), MaxValueValidator(200)],
+                            help_text="Percentage of playing handicap applied when handicap_mode='net'.",
+                        )
+    alt_shot_low_pct    = models.PositiveSmallIntegerField(
+                            default=50,
+                            validators=[MinValueValidator(0), MaxValueValidator(100)],
+                            help_text="% of the lower partner's handicap used in foursomes (alt-shot).",
+                        )
+    alt_shot_high_pct   = models.PositiveSmallIntegerField(
+                            default=50,
+                            validators=[MinValueValidator(0), MaxValueValidator(100)],
+                            help_text="% of the higher partner's handicap used in foursomes (alt-shot).",
+                        )
+    group_size          = models.PositiveSmallIntegerField(
+                            default=4,
+                            validators=[MinValueValidator(2), MaxValueValidator(4)],
+                            help_text="Real-player count at setup: 2, 3, or 4.",
+                        )
+    created_at          = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Triple Cup — Group {self.foursome.group_number}"
+
+
+class TripleCupMatch(models.Model):
+    """
+    One match within a TripleCupGame.
+
+    For 2v2: match_number 1..4 → fourball / foursomes / singles A / singles B.
+    For 2v1: match_number 1..4 → fourball (with phantom for the solo) /
+                                 foursomes / solo-vs-p1 / solo-vs-p2.
+    For 1v1: match_number 1..3 → segment 1 (1-6) / segment 2 (7-12) /
+                                 segment 3 (13-18), all 'singles'.
+
+    holes_up_after_final / finished_on_hole are written by the scorer
+    when the match reaches a decided state (one side leads by more
+    holes than remain).  result is null while the match is in progress
+    or pending.
+    """
+    game                = models.ForeignKey(
+                            TripleCupGame, on_delete=models.CASCADE,
+                            related_name='matches',
+                        )
+    match_number        = models.PositiveSmallIntegerField(
+                            validators=[MinValueValidator(1), MaxValueValidator(4)],
+                            help_text="1..4 within the game.",
+                        )
+    segment             = models.CharField(
+                            max_length=20,
+                            choices=TRIPLE_CUP_SEGMENT_CHOICES,
+                        )
+    label               = models.CharField(
+                            max_length=40,
+                            blank=True,
+                            help_text="Display label e.g. 'Singles 1' or 'Match 2'.",
+                        )
+    start_hole          = models.PositiveSmallIntegerField()
+    end_hole            = models.PositiveSmallIntegerField()
+    status              = models.CharField(
+                            max_length=20,
+                            choices=MatchStatus.choices,
+                            default=MatchStatus.PENDING,
+                        )
+    result              = models.CharField(
+                            max_length=10,
+                            choices=TRIPLE_CUP_RESULT_CHOICES,
+                            null=True, blank=True,
+                            help_text="Set when match is decided.",
+                        )
+    holes_up_after_final = models.SmallIntegerField(
+                            default=0,
+                            help_text="Final margin: +ve = team1 won, -ve = team2.",
+                        )
+    finished_on_hole    = models.PositiveSmallIntegerField(
+                            null=True, blank=True,
+                            help_text="Hole where the match was mathematically clinched.",
+                        )
+    # Alt-shot only: which player on each team tees off the first
+    # hole of the foursomes segment.  The partner tees off the next
+    # hole and they alternate from there.  Null for non-foursomes
+    # segments and for the solo side of 2v1 (no alternation needed).
+    team1_first_tee_player = models.ForeignKey(
+                                Player, on_delete=models.SET_NULL,
+                                null=True, blank=True,
+                                related_name='+',
+                                help_text="Foursomes only: team1 player who tees off the first segment hole.",
+                            )
+    team2_first_tee_player = models.ForeignKey(
+                                Player, on_delete=models.SET_NULL,
+                                null=True, blank=True,
+                                related_name='+',
+                                help_text="Foursomes only: team2 player who tees off the first segment hole.",
+                            )
+
+    class Meta:
+        unique_together = ('game', 'match_number')
+        ordering        = ['match_number']
+
+    def __str__(self):
+        return f"Match {self.match_number} ({self.segment}) — {self.game}"
+
+    def active_player_id(self, team_number: int, hole_number: int) -> int | None:
+        """For a foursomes match, return the player ID on *team_number*
+        whose turn it is to play on *hole_number*.  Returns None when
+        not a foursomes match or the first-tee-off player isn't set.
+        Alternation: position = hole - start_hole; active = first-tee
+        if position even, else the partner."""
+        if self.segment != 'foursomes':
+            return None
+        first = (self.team1_first_tee_player_id if team_number == 1
+                 else self.team2_first_tee_player_id)
+        if first is None:
+            return None
+        team = next((t for t in self.teams.all()
+                     if t.team_number == team_number), None)
+        if team is None:
+            return None
+        pids = list(team.players.values_list('id', flat=True))
+        if first not in pids:
+            return None
+        position = hole_number - self.start_hole
+        if position < 0:
+            return None
+        if position % 2 == 0:
+            return first
+        # Solo side (1 real player) has no alternation — always the same.
+        if len(pids) == 1:
+            return pids[0]
+        partner = next((p for p in pids if p != first), None)
+        return partner
+
+
+class TripleCupTeam(models.Model):
+    """
+    One side of a TripleCupMatch.  team_number is 1 or 2; players is the
+    M2M of real players competing for that side in this match.
+
+    Phantoms are never stored here — the phantom for 2v1 fourball is
+    synthesised in the scorer from TripleCupGame.phantom_score_mode and
+    doesn't need a Player row.
+    """
+    match               = models.ForeignKey(
+                            TripleCupMatch, on_delete=models.CASCADE,
+                            related_name='teams',
+                        )
+    team_number         = models.PositiveSmallIntegerField()  # 1 or 2
+    players             = models.ManyToManyField(
+                            Player,
+                            related_name='triple_cup_teams',
+                        )
+    is_winner           = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('match', 'team_number')
+        ordering        = ['team_number']
+
+    def __str__(self):
+        return f"Team {self.team_number} — {self.match}"
+
+
+class TripleCupHoleResult(models.Model):
+    """
+    Per-hole result for a TripleCupMatch.
+
+    team1_net / team2_net are the scores compared on this hole:
+      - Fourball:   best (lowest) net of the team's real players.
+                    In 2v1 fourball the solo side's net is
+                    min(solo_net, phantom_score) per TripleCupGame
+                    .phantom_score_mode.
+      - Foursomes:  the team's single alt-shot net.  The gross comes
+                    from whichever player on the team recorded a score
+                    that hole (in true alt-shot only one does); the
+                    handicap allotment uses the configured combined
+                    formula (default 50%L + 50%H).
+      - Singles:    the lone player's net.
+
+    winning_team_number is 1, 2, or null on a halve.
+    holes_up_after tracks the running match margin
+    (positive = team1 leading).
+    """
+    match               = models.ForeignKey(
+                            TripleCupMatch, on_delete=models.CASCADE,
+                            related_name='hole_results',
+                        )
+    hole_number         = models.PositiveSmallIntegerField(
+                            validators=[MinValueValidator(1), MaxValueValidator(18)]
+                        )
+    team1_net           = models.SmallIntegerField(null=True, blank=True)
+    team2_net           = models.SmallIntegerField(null=True, blank=True)
+    winning_team_number = models.PositiveSmallIntegerField(
+                            null=True, blank=True,
+                            help_text="1, 2, or null on halve.",
+                        )
+    holes_up_after      = models.SmallIntegerField(
+                            default=0,
+                            help_text="Running margin after this hole: +ve = team1 leading.",
+                        )
 
     class Meta:
         unique_together = ('match', 'hole_number')

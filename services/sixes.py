@@ -1,7 +1,7 @@
 """
 services/sixes.py
 -----------------
-Six's calculator — 3 × 6-hole rotating-team best ball match play
+Sixes calculator — 3 × 6-hole rotating-team best ball match play
 within a foursome.
 
 Rules
@@ -602,7 +602,7 @@ def sixes_summary(foursome) -> dict:
                 entry = money_totals.setdefault(p.id, {'name': p.name, 'amount': 0.0})
                 entry['amount'] -= bet_unit
 
-        extra_label = ' (extra)' if seg.is_extra else ''
+        extra_label = ', extra' if seg.is_extra else ''
 
         # For completed matches that ended early, show the actually-played
         # range rather than the potential range.  seg.end_hole is still the

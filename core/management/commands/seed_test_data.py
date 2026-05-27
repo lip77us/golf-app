@@ -404,7 +404,7 @@ class Command(BaseCommand):
                 for seg_num, (t1_ids, t2_ids) in enumerate(segment_teams)
             ]
             setup_sixes(foursome, team_data)
-            self.stdout.write(f"    Six's: Group {foursome.group_number} — 3 segments set up.")
+            self.stdout.write(f"    Sixes: Group {foursome.group_number} — 3 segments set up.")
 
         if 'match_play' in games:
             from services.match_play import setup_match_play

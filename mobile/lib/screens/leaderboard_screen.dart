@@ -43,9 +43,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     // For cup rounds, suppress the raw per-foursome game keys that would appear
     // as duplicate tabs — the processed 'cup_singles' tab covers them.
     final _rawSinglesKeys = {'singles_18', 'singles_nassau'};
+    // Triple Cup plays 6 holes alt-shot per foursome, so low net is
+    // meaningless on these rounds — suppress the Stroke Play tab.
+    final isTripleCupRound = lb.activeGames.contains('triple_cup');
     final games = [
       ...lb.activeGames.where((g) =>
-          !(lb.isCupRound && _rawSinglesKeys.contains(g))),
+          !(lb.isCupRound && _rawSinglesKeys.contains(g)) &&
+          !(isTripleCupRound && g == 'low_net_round')),
       if (lb.tournamentId != null && lb.tournamentActiveGames.isNotEmpty)
         '__championship__',
     ];
@@ -59,6 +63,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             .any((g) => (g as Map<String, dynamic>)['is_cup_match'] == true);
     if (lb.isCupRound || hasCupNassau) {
       games.add('__bandon_cup__');
+    }
+
+    // "My Foursome" tab — shown when the round has any per-foursome game
+    // data the viewer's player_id appears in.  Lets the user jump
+    // straight to their group without scrolling through 12+ other
+    // foursomes' cards.  The body builds at render time based on the
+    // currently-logged-in PlayerProfile.
+    final myPid = context.read<AuthProvider>().player?.id;
+    if (myPid != null && _viewerIsInAnyFoursome(lb, myPid)) {
+      games.add('__my_foursome__');
     }
     if (_gameTabs.join(',') == games.join(',')) return;
     _gameTabs = games;
@@ -269,6 +283,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                   tournamentName: lb.cupName ?? lb.tournamentName ?? 'Bandon Cup',
                 );
               }
+              if (gameKey == '__my_foursome__') {
+                final myPid = context.read<AuthProvider>().player?.id;
+                return RefreshIndicator(
+                  onRefresh: () => rp.loadLeaderboard(widget.roundId),
+                  child: _MyFoursomeTabView(leaderboard: lb, playerId: myPid),
+                );
+              }
               // Irish Rumble in cup context: show live card + per-foursome
               // scorecards.  Tournament alone isn't enough — a casual side
               // game running inside a non-cup tournament (e.g. low-net
@@ -305,6 +326,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     if (g == '__bandon_cup__') {
       return cupName ?? 'Bandon Cup';
     }
+    if (g == '__my_foursome__') return 'My Foursome';
     const labels = {
       'skins':             'Skins',
       'multi_skins':       'Multi-Group Skins',
@@ -312,7 +334,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       'pink_ball':         'Pink Ball',
       'nassau':            'Nassau',
       'quota_nassau':      'Quota Nassau',
-      'sixes':             "Six's",
+      'sixes':             'Sixes',
       'singles_nassau':    'Singles Nassau',
       'singles_18':        '18-Hole Singles',
       'cup_singles':       'Singles-Nassau',
@@ -325,6 +347,47 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     };
     return labels[g] ?? g;
   }
+
+  /// True iff *playerId* shows up on any foursome in any active
+  /// per-foursome game on this leaderboard.  Drives whether the
+  /// "My Foursome" tab is shown.  Currently scans `triple_cup`,
+  /// `nassau`, `quota_nassau`, `skins`, `sixes` — every per-group
+  /// game uses a `by_group` shape with player IDs accessible
+  /// somewhere on each group entry.
+  bool _viewerIsInAnyFoursome(Leaderboard lb, int playerId) {
+    for (final key in const ['triple_cup', 'nassau', 'quota_nassau',
+                              'skins', 'sixes']) {
+      final g = lb.games[key];
+      if (g == null) continue;
+      final groups = ((g.data as Map?)?['by_group'] as List? ?? []);
+      for (final grp in groups) {
+        if (_groupContainsPlayer(grp as Map, playerId)) return true;
+      }
+    }
+    return false;
+  }
+}
+
+/// Recursive-ish helper: returns true when [group] (a `by_group`
+/// entry from any per-foursome game summary) contains [playerId]
+/// somewhere reachable (top-level players list, nested matches'
+/// players, etc.).
+bool _groupContainsPlayer(Map group, int playerId) {
+  final summary = (group['summary'] as Map?) ?? group;
+  // Most TC / Nassau / Quota summaries expose either a flat
+  // `players` list or per-match `players`.
+  final flat = (summary['players'] as List? ?? []);
+  for (final p in flat) {
+    if (p is Map && p['player_id'] == playerId) return true;
+  }
+  final matches = (summary['matches'] as List? ?? []);
+  for (final m in matches) {
+    if (m is! Map) continue;
+    for (final p in (m['players'] as List? ?? [])) {
+      if (p is Map && p['player_id'] == playerId) return true;
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -350,6 +413,8 @@ class _GameView extends StatelessWidget {
         return _LowNetView(data: data);
       case 'skins':
         return _ByGroupView(data: data, builder: _SkinsGroupCard.new);
+      case 'triple_cup':
+        return _ByGroupView(data: data, builder: _TripleCupGroupCard.new);
       case 'multi_skins':
         return _MultiSkinsView(data: data);
       case 'nassau':
@@ -2558,7 +2623,7 @@ class _NassauGroupCard extends StatelessWidget {
   }
 }
 
-// ---- Six's group card ----
+// ---- Sixes group card ----
 
 class _SixesGroupCard extends StatelessWidget {
   final Map<String, dynamic> group;
@@ -4070,20 +4135,36 @@ class _BandonCupTabViewState extends State<_BandonCupTabView> {
     final liveMatches = (_live?['matches'] as List? ?? [])
         .cast<Map<String, dynamic>>();
 
-    // Only show matches that have at least one unresolved segment/match.
-    // Irish Rumble is always shown first.
-    final activeMatches = liveMatches.where((m) {
+    bool _hasUnresolved(Map<String, dynamic> m) {
       final segs = (m['segments'] as List? ?? []).cast<Map<String, dynamic>>();
       final inds = (m['individual_matches'] as List? ?? []).cast<Map<String, dynamic>>();
       return segs.any((s) => s['is_resolved'] != true) ||
              inds.any((i) => i['is_resolved'] != true);
-    }).toList()
-      ..sort((a, b) {
-        const order = {'irish_rumble': 0, 'nassau': 1, 'singles_nassau': 2, 'singles_18': 3};
-        final ai = order[a['game_type'] as String? ?? ''] ?? 99;
-        final bi = order[b['game_type'] as String? ?? ''] ?? 99;
-        return ai.compareTo(bi);
-      });
+    }
+    int _gameOrder(Map<String, dynamic> m) {
+      const order = {'irish_rumble': 0, 'nassau': 1, 'singles_nassau': 2,
+                     'singles_18': 3, 'triple_cup': 4};
+      return order[m['game_type'] as String? ?? ''] ?? 99;
+    }
+    int _groupOrder(Map<String, dynamic> m) {
+      final groups = (m['groups'] as List? ?? []).cast<int>();
+      return groups.isEmpty ? 9999 : groups.first;
+    }
+    int _matchSort(Map<String, dynamic> a, Map<String, dynamic> b) {
+      final byGame = _gameOrder(a).compareTo(_gameOrder(b));
+      if (byGame != 0) return byGame;
+      return _groupOrder(a).compareTo(_groupOrder(b));
+    }
+
+    // Live = at least one unresolved side.  Completed = every side
+    // resolved.  Completed cards aren't surfaced anywhere else in the
+    // app, so we keep them visible (collapsed) on the Cup tab.
+    final activeMatches = liveMatches.where(_hasUnresolved).toList()
+      ..sort(_matchSort);
+    final completedMatches = liveMatches
+        .where((m) => !_hasUnresolved(m))
+        .toList()
+      ..sort(_matchSort);
 
     final theme = Theme.of(context);
 
@@ -4131,7 +4212,7 @@ class _BandonCupTabViewState extends State<_BandonCupTabView> {
                   t2Name   : t2Name,
                   fmtPts   : _fmtPts,
                 )),
-          ] else if (_live != null) ...[
+          ] else if (_live != null && completedMatches.isEmpty) ...[
             const SizedBox(height: 24),
             Center(
               child: Text(
@@ -4140,6 +4221,37 @@ class _BandonCupTabViewState extends State<_BandonCupTabView> {
                     color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
+          ],
+
+          // ── Completed Matches ───────────────────────────────────────────
+          // Final state of foursomes whose every side has resolved — the
+          // only place in the app to inspect what happened on a finished
+          // group.  Same _BandonCupLiveCard layout as Live Now; the
+          // game-specific sub-widgets render the resolved chips/totals.
+          if (completedMatches.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Row(children: [
+              Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  'COMPLETED',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      letterSpacing: 1.2,
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+              Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
+            ]),
+            const SizedBox(height: 12),
+            ...completedMatches.map((m) => _BandonCupLiveCard(
+                  match    : m,
+                  t1Colour : t1Colour,
+                  t2Colour : t2Colour,
+                  t1Name   : t1Name,
+                  t2Name   : t2Name,
+                  fmtPts   : _fmtPts,
+                )),
           ],
         ],
       ),
@@ -4234,7 +4346,7 @@ class _BandonCupScoreboard extends StatelessWidget {
           // Detect which team is "red" by comparing the red channel, same
           // logic used in the Irish Rumble section of _BandonCupLiveCard.
           Builder(builder: (ctx) {
-            final leftIsT1  = t1Colour.red >= t2Colour.red;
+            final leftIsT1  = true /* team 1 always on the left, matching score entry order */;
             final leftName  = leftIsT1 ? t1Name   : t2Name;
             final leftPts   = leftIsT1 ? t1Pts    : t2Pts;
             final leftCol   = leftIsT1 ? t1Colour : t2Colour;
@@ -4438,7 +4550,7 @@ class _BandonCupLiveCard extends StatelessWidget {
             // Singles Nassau shows individual matchups only — no team header needed.
             if (gameType == 'irish_rumble') ...[
               Builder(builder: (ctx) {
-                final leftIsT1 = t1Colour.red >= t2Colour.red;
+                final leftIsT1 = true /* team 1 always on the left, matching score entry order */;
                 final leftName   = leftIsT1 ? t1Name   : t2Name;
                 final leftColor  = leftIsT1 ? t1Colour : t2Colour;
                 final rightName  = leftIsT1 ? t2Name   : t1Name;
@@ -4470,7 +4582,7 @@ class _BandonCupLiveCard extends StatelessWidget {
             ] else if (gameType == 'nassau')
               Builder(builder: (ctx) {
                 // Red team always on left — detect by comparing red channel.
-                final leftIsT1   = t1Colour.red >= t2Colour.red;
+                final leftIsT1   = true /* team 1 always on the left, matching score entry order */;
                 final leftPly    = leftIsT1 ? t1Players : t2Players;
                 final leftColor  = leftIsT1 ? t1Colour  : t2Colour;
                 final rightPly   = leftIsT1 ? t2Players : t1Players;
@@ -4499,9 +4611,9 @@ class _BandonCupLiveCard extends StatelessWidget {
                   )),
                 ]);
               })
-            else if (gameType == 'quota_nassau')
+            else if (gameType == 'quota_nassau' || gameType == 'triple_cup')
               Builder(builder: (ctx) {
-                final leftIsT1   = t1Colour.red >= t2Colour.red;
+                final leftIsT1   = true /* team 1 always on the left, matching score entry order */;
                 final leftPly    = leftIsT1 ? t1Players : t2Players;
                 final leftColor  = leftIsT1 ? t1Colour  : t2Colour;
                 final rightPly   = leftIsT1 ? t2Players : t1Players;
@@ -4564,6 +4676,14 @@ class _BandonCupLiveCard extends StatelessWidget {
             else if (gameType == 'quota_nassau')
               _QuotaNassauLiveRows(
                   matches: indivs, t1Colour: t1Colour, t2Colour: t2Colour)
+            else if (gameType == 'triple_cup')
+              _TripleCupLiveRows(
+                  matches:    indivs,
+                  t1Colour:   t1Colour, t2Colour: t2Colour,
+                  t1Name:     t1Name,   t2Name:   t2Name,
+                  pv:         pv,
+                  fmtPts:     fmtPts,
+                  totalPossible: totalPossible)
             else if (gameType == 'singles_nassau')
               _CupSinglesLiveRows(
                   matches: indivs, t1Colour: t1Colour, t2Colour: t2Colour)
@@ -4920,7 +5040,7 @@ class _IRLiveRows extends StatelessWidget {
     // Detect which of t1/t2 is the "red" team (higher red channel = left side),
     // matching the same convention used in the card header.
     // a = t1 data, b = t2 data (from the backend segment keys).
-    final leftIsT1  = t1Colour.red >= t2Colour.red;
+    final leftIsT1  = true /* team 1 always on the left, matching score entry order */;
     final leftVsPar  = leftIsT1 ? aVsPar  : bVsPar;
     final rightVsPar = leftIsT1 ? bVsPar  : aVsPar;
     final leftHoles  = leftIsT1 ? aHoles  : bHoles;
@@ -4980,6 +5100,262 @@ class _IRLiveRows extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Triple Cup: one expandable row per foursome ──────────────────────────────
+//
+// Each Triple Cup foursome contributes 4 matches (fourball, foursomes,
+// 2 singles).  In the Bandon Cup-style live feed we render that as a
+// single collapsed row showing the running cup score for the foursome;
+// tapping the chevron expands into the 4 sub-matches.  Keeps the feed
+// scrollable when there are 12–15 foursomes × 4 matches = 48–60 matches.
+
+class _TripleCupLiveRows extends StatelessWidget {
+  final List<Map<String, dynamic>> matches;
+  final Color  t1Colour, t2Colour;
+  final String t1Name,   t2Name;
+  final double pv;
+  final double totalPossible;
+  final String Function(double) fmtPts;
+
+  const _TripleCupLiveRows({
+    required this.matches,
+    required this.t1Colour, required this.t2Colour,
+    required this.t1Name,   required this.t2Name,
+    required this.pv,
+    required this.totalPossible,
+    required this.fmtPts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (matches.isEmpty) {
+      return Text('Not started.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic));
+    }
+
+    // Foursome-level rollup: sum t1_pts / t2_pts across all 4 sub-matches.
+    double t1Total = 0, t2Total = 0;
+    for (final m in matches) {
+      t1Total += (m['t1_pts'] as num?)?.toDouble() ?? 0;
+      t2Total += (m['t2_pts'] as num?)?.toDouble() ?? 0;
+    }
+    // "Remaining" = total possible minus what's already been awarded.
+    // For 4-player / 3-player TC every match is worth 1 point, so the
+    // old `pv * resolved_count` math worked.  2-player TC weights the
+    // Overall match 2× (1+1+2 = 4) so a constant pv per match would
+    // under-report by 1 the moment Overall resolves.  t1_pts + t2_pts
+    // sums to the match's actual contribution (full for a win, split
+    // for a halve), so totalling across resolved matches is correct
+    // for any per-match weighting.
+    final remaining = totalPossible - (t1Total + t2Total);
+    final leftIsT1 = true /* team 1 always on the left, matching score entry order */;
+    final leftScore  = leftIsT1 ? t1Total : t2Total;
+    final rightScore = leftIsT1 ? t2Total : t1Total;
+    final leftColor  = leftIsT1 ? t1Colour : t2Colour;
+    final rightColor = leftIsT1 ? t2Colour : t1Colour;
+
+    // Surface in-progress match status next to the cup-points header
+    // so the TD / spectator can see how the live matches are going
+    // without expanding.  Resolved matches don't appear here — their
+    // contribution is baked into the t1/t2 totals already.  Pending
+    // matches (played == 0) are also skipped: nothing meaningful to
+    // show yet.  Each bit carries its leader's team colour so multiple
+    // simultaneous singles render in distinct colours ("1 UP thru 3"
+    // in red, "2 UP thru 3" in blue, etc.) and AS stays neutral.
+    final liveBits = <({String text, Color color})>[];
+    for (final m in matches) {
+      final played    = (m['holes_played']      as num?)?.toInt() ?? 0;
+      final marginRaw = (m['overall_holes_up'] as num?)?.toInt() ?? 0;
+      final marginAbs = marginRaw.abs();
+      final resolved  = m['is_resolved'] as bool? ?? false;
+      if (resolved || played == 0) continue;
+      final text = marginAbs == 0
+          ? 'AS thru $played'
+          : '$marginAbs UP thru $played';
+      final color = marginRaw > 0
+          ? t1Colour
+          : marginRaw < 0
+              ? t2Colour
+              : theme.colorScheme.onSurfaceVariant;
+      liveBits.add((text: text, color: color));
+    }
+
+    final header = Row(children: [
+      Text(fmtPts(leftScore),
+          style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: leftColor)),
+      const SizedBox(width: 6),
+      Text('–', style: TextStyle(
+          fontSize: 14,
+          color: theme.colorScheme.onSurfaceVariant)),
+      const SizedBox(width: 6),
+      Text(fmtPts(rightScore),
+          style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: rightColor)),
+      const SizedBox(width: 10),
+      Expanded(
+        // When something is live, prioritise its status — the "X pts
+        // left" is implicit context.  Show that hint only when nothing
+        // is in flight (all pending or all resolved).  Each live bit
+        // is its own TextSpan so multi-match strings render with each
+        // match in its leader's colour (e.g. red "1 UP thru 3", grey
+        // "AS thru 3" separated by a neutral comma).
+        child: liveBits.isNotEmpty
+            ? Text.rich(
+                TextSpan(
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600),
+                  children: [
+                    for (var i = 0; i < liveBits.length; i++) ...[
+                      if (i > 0) const TextSpan(text: ', '),
+                      TextSpan(
+                        text: liveBits[i].text,
+                        style: TextStyle(color: liveBits[i].color),
+                      ),
+                    ],
+                  ],
+                ),
+                overflow: TextOverflow.ellipsis,
+              )
+            : Text(
+                remaining > 0
+                    ? '${fmtPts(remaining)} pt${remaining == 1 ? '' : 's'} left'
+                    : 'All matches resolved',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant),
+                overflow: TextOverflow.ellipsis,
+              ),
+      ),
+    ]);
+
+    return Theme(
+      // Strip ExpansionTile's default vertical padding so the row
+      // sits flush with the rest of the card's content.
+      data: theme.copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(top: 8),
+        title: header,
+        children: matches.map((m) => _TripleCupSubMatchRow(
+              match:     m,
+              t1Colour:  t1Colour,
+              t2Colour:  t2Colour,
+              t1Name:    t1Name,
+              t2Name:    t2Name,
+              fmtPts:    fmtPts,
+            )).toList(),
+      ),
+    );
+  }
+}
+
+class _TripleCupSubMatchRow extends StatelessWidget {
+  final Map<String, dynamic> match;
+  final Color  t1Colour, t2Colour;
+  final String t1Name,   t2Name;
+  final String Function(double) fmtPts;
+  const _TripleCupSubMatchRow({
+    required this.match,
+    required this.t1Colour, required this.t2Colour,
+    required this.t1Name,   required this.t2Name,
+    required this.fmtPts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme  = Theme.of(context);
+    final label  = match['label']?.toString() ?? match['segment']?.toString() ?? '';
+    final p1     = match['player1']?.toString() ?? '';
+    final p2     = match['player2']?.toString() ?? '';
+    final result = match['result']?.toString();
+    final played = (match['holes_played']    as num?)?.toInt() ?? 0;
+    final marginAbs = ((match['overall_holes_up'] as num?)?.toInt() ?? 0).abs();
+    final isResolved = match['is_resolved'] as bool? ?? false;
+
+    String status;
+    Color statusColor;
+    if (isResolved) {
+      // Resolved matches show the winning team's name (in team color)
+      // rather than a "1–0" score — the points are already aggregated
+      // in the foursome rollup header above and on the big scoreboard.
+      // "Halved" stays as text for ties.
+      if (result == 'team1') {
+        status = t1Name;
+        statusColor = t1Colour;
+      } else if (result == 'team2') {
+        status = t2Name;
+        statusColor = t2Colour;
+      } else {
+        status = 'Halved';
+        statusColor = theme.colorScheme.onSurfaceVariant;
+      }
+    } else if (played == 0) {
+      status = '—';
+      statusColor = theme.colorScheme.onSurfaceVariant;
+    } else if (marginAbs == 0) {
+      status = 'AS thru $played';
+      statusColor = theme.colorScheme.onSurfaceVariant;
+    } else {
+      // Positive overall_holes_up = team1 ahead.
+      final overallUp = (match['overall_holes_up'] as num?)?.toInt() ?? 0;
+      status = '$marginAbs UP thru $played';
+      statusColor = overallUp > 0 ? t1Colour : t2Colour;
+    }
+
+    final dim = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(children: [
+        // Segment label ("Fourball", "Foursomes", "Singles 1") — dim grey
+        // so the focal point is the colored golfer names + status.
+        SizedBox(
+          width: 72,
+          child: Text(label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: dim)),
+        ),
+        // Golfer names in their team colors, "vs" in grey.
+        Expanded(
+          child: RichText(
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              style: theme.textTheme.bodySmall,
+              children: [
+                TextSpan(
+                  text: p1,
+                  style: TextStyle(
+                      color: t1Colour, fontWeight: FontWeight.w600),
+                ),
+                TextSpan(
+                  text: '  vs  ',
+                  style: TextStyle(color: dim),
+                ),
+                TextSpan(
+                  text: p2,
+                  style: TextStyle(
+                      color: t2Colour, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Text(status,
+            style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: statusColor)),
+      ]),
     );
   }
 }
@@ -5218,7 +5594,7 @@ class _CupSinglesLiveRows extends StatelessWidget {
     }
 
     // Detect which team is "red" — red always goes on the left.
-    final leftIsT1   = t1Colour.red >= t2Colour.red;
+    final leftIsT1   = true /* team 1 always on the left, matching score entry order */;
     final leftColour  = leftIsT1 ? t1Colour : t2Colour;
     final rightColour = leftIsT1 ? t2Colour : t1Colour;
 
@@ -5690,7 +6066,7 @@ class _CupSinglesGroupCard extends StatelessWidget {
         .toList();
 
     // Red always on the left.
-    final p1OnLeft    = t1Color.red >= t2Color.red;
+    final p1OnLeft    = true /* team 1 always on the left */;
     final leftColor   = p1OnLeft ? t1Color : t2Color;
     final rightColor  = p1OnLeft ? t2Color : t1Color;
 
@@ -5903,7 +6279,7 @@ class _CupSingles18GroupCard extends StatelessWidget {
         .toList();
 
     // Red always on the left.
-    final p1OnLeft   = t1Color.red >= t2Color.red;
+    final p1OnLeft   = true /* team 1 always on the left */;
     final leftColor  = p1OnLeft ? t1Color : t2Color;
     final rightColor = p1OnLeft ? t2Color : t1Color;
 
@@ -6261,6 +6637,643 @@ class _QuotaNassauGroupCard extends StatelessWidget {
               centerBadge: _segBadges(allResultAgg, 1.0)),
         ]),
       ),
+    );
+  }
+}
+
+// ---- Triple Cup (One Round Ryder Cup) group card ----
+
+/// Compact strokes-off display for a side of a Triple Cup match
+/// — same shape as the score-entry match card:
+///   • Foursomes → "Team −4"
+///   • Singles   → "−2"
+///   • Fourball  → "−0 / −8"
+/// Returns null in NET/gross mode (no SO concept) or when no player
+/// on this team has strokes_off populated.
+String? _tcMatchSoLine(Map<String, dynamic> match, int teamNumber) {
+  final players = (match['players'] as List? ?? [])
+      .cast<Map<String, dynamic>>()
+      .where((p) => (p['team_number'] as int? ?? 0) == teamNumber &&
+                    (p['is_phantom'] as bool? ?? false) == false)
+      .toList();
+  if (players.isEmpty) return null;
+  final segment = match['segment']?.toString() ?? 'singles';
+  final hasAnySo = players.any((p) => p['strokes_off'] != null);
+  if (!hasAnySo) return null;
+  String fmt(dynamic so) => so == null ? '?' : '−${so as int}';
+  if (segment == 'foursomes') {
+    return 'Team ${fmt(players.first['strokes_off'])}';
+  }
+  return players.map((p) => fmt(p['strokes_off'])).join(' / ');
+}
+
+class _TripleCupGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _TripleCupGroupCard({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final summary = group['summary'] as Map<String, dynamic>? ?? {};
+    final overall = summary['overall'] as Map<String, dynamic>? ?? {};
+    final matches = (summary['matches'] as List? ?? [])
+        .cast<Map<String, dynamic>>();
+
+    final t1Pts = (overall['team1_points'] as num? ?? 0).toDouble();
+    final t2Pts = (overall['team2_points'] as num? ?? 0).toDouble();
+    // Parse via num so a double-valued points_available (legacy or
+    // future fractional match) doesn't crash the widget build.
+    final possible = ((overall['points_available'] as num?) ?? 0).toInt();
+
+    // Cup team colours come down on the summary as colour-name
+    // strings (e.g. "Green", "Gold").  Resolve once and use for
+    // every team-tinted element on the card.  Casual rounds fall
+    // back to the historical red/blue.
+    final t1Color = resolveTripleCupTeamColor(
+        summary['team1_colour'] as String?, kTripleCupTeam1Color);
+    final t2Color = resolveTripleCupTeamColor(
+        summary['team2_colour'] as String?, kTripleCupTeam2Color);
+    // One-letter team marker for the hole-by-hole won-by row.  Falls
+    // back to 'R'/'B' for casual rounds (no team names assigned).
+    String initialFrom(String? name, String fallback) {
+      final n = (name ?? '').trim();
+      if (n.isEmpty) return fallback;
+      return n.substring(0, 1).toUpperCase();
+    }
+    final t1Initial = initialFrom(summary['team1_name'] as String?, 'R');
+    final t2Initial = initialFrom(summary['team2_name'] as String?, 'B');
+
+    String fmt(double p) =>
+        p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            // Live cup score in team colors.
+            Text(fmt(t1Pts),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: t1Color)),
+            Text(' – ',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant)),
+            Text(fmt(t2Pts),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: t2Color)),
+            Text(' of $possible',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant)),
+          ]),
+          const SizedBox(height: 4),
+          Text('Triple Cup',
+              style: TextStyle(
+                  fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+          const Divider(height: 14),
+          ...matches.map((m) {
+            final label   = m['label']?.toString() ?? '';
+            final segment = m['segment']?.toString() ?? 'singles';
+            final t1Names = ((m['team1'] as Map?)?['shorts'] as List?)
+                    ?.cast<String>().join(' & ') ?? '';
+            final t2Names = ((m['team2'] as Map?)?['shorts'] as List?)
+                    ?.cast<String>().join(' & ') ?? '';
+            final result  = m['result']?.toString();
+            final winLabel = m['winner_label']?.toString() ?? '—';
+            final color = result == 'team1'
+                ? t1Color
+                : result == 'team2'
+                    ? t2Color
+                    : theme.colorScheme.onSurfaceVariant;
+
+            // Compact SO line per team — same shape as the
+            // score-entry match card: "Team −N" for foursomes,
+            // "−N" for singles, "−A / −B" for fourball.  Null
+            // in NET/gross modes.
+            final t1So = _tcMatchSoLine(m, 1);
+            final t2So = _tcMatchSoLine(m, 2);
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(children: [
+                    Container(
+                      width: 70,
+                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        label.isEmpty ? segment : label,
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onPrimaryContainer),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Team 1 side — names on top, SO under.
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t1Names,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: t1Color,
+                                      fontWeight: FontWeight.w600)),
+                              if (t1So != null)
+                                Text(t1So,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: t1Color)),
+                            ],
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Text('vs',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant)),
+                          ),
+                          // Team 2 side — names on top, SO under.
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t2Names,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: t2Color,
+                                      fontWeight: FontWeight.w600)),
+                              if (t2So != null)
+                                Text(t2So,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: t2Color)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(winLabel,
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: color)),
+                  ]),
+                ),
+                _TripleCupHoleDetail(
+                  match:     m,
+                  t1Color:   t1Color,
+                  t2Color:   t2Color,
+                  t1Initial: t1Initial,
+                  t2Initial: t2Initial,
+                ),
+              ],
+            );
+          }),
+          // No per-group money section: Triple Cup is team-vs-team, not
+          // per-foursome payouts.  Cup-level settlement (if any) lives
+          // on the tournament-level Bandon Cup card.
+        ]),
+      ),
+    );
+  }
+}
+
+/// Compact per-segment hole-by-hole grid shown under each Triple Cup
+/// match on the leaderboard.  Rows:
+///   • Hole / Par / SI
+///   • One row per player (fourball + singles) OR one row per team
+///     (foursomes — alt-shot is one ball, so per-player isn't meaningful)
+///   • "Won by" row
+///
+/// Player cells highlight in pale team color when the player's score
+/// contributed to their team winning the hole (best-ball or singles).
+/// Team rows highlight similarly for the winning team in foursomes.
+class _TripleCupHoleDetail extends StatelessWidget {
+  final Map<String, dynamic> match;
+  final Color t1Color;
+  final Color t2Color;
+  final String t1Initial;
+  final String t2Initial;
+  const _TripleCupHoleDetail({
+    required this.match,
+    required this.t1Color,
+    required this.t2Color,
+    this.t1Initial = 'R',
+    this.t2Initial = 'B',
+  });
+
+  static const double _labelColW = 60.0;
+  static const double _cellW     = 30.0;
+  static const double _rowH      = 24.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final players = (match['players'] as List? ?? [])
+        .cast<Map<String, dynamic>>();
+    final holes   = (match['holes']   as List? ?? [])
+        .cast<Map<String, dynamic>>();
+    final segment   = match['segment']?.toString() ?? 'singles';
+    final startHole = match['start_hole'] as int? ?? 1;
+    final endHole   = match['end_hole']   as int? ?? startHole + 5;
+    if (players.isEmpty) return const SizedBox.shrink();
+
+    final holeRange = List.generate(
+        endHole - startHole + 1, (i) => startHole + i);
+    final byHole = {for (final h in holes) (h['hole'] as int): h};
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 8, top: 2),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Hole numbers
+            Row(children: [
+              _labelCell('Hole', bold: true),
+              for (final h in holeRange)
+                _cell(Text('$h',
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold))),
+            ]),
+            // Par
+            Row(children: [
+              _labelCell('Par', italic: true),
+              for (final h in holeRange)
+                _cell(Text('${byHole[h]?['par'] ?? '-'}',
+                    style: theme.textTheme.bodySmall)),
+            ]),
+            // Stroke Index — lets the user verify which holes get strokes.
+            Row(children: [
+              _labelCell('SI', italic: true),
+              for (final h in holeRange)
+                _cell(Text('${byHole[h]?['stroke_index'] ?? '-'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant))),
+            ]),
+            Container(
+              height: 1,
+              width: _labelColW + _cellW * holeRange.length,
+              color: theme.colorScheme.outlineVariant,
+              margin: const EdgeInsets.symmetric(vertical: 2),
+            ),
+            if (segment == 'foursomes')
+              ..._teamRows(theme, holeRange, byHole, players)
+            else
+              ..._playerRows(theme, holeRange, byHole, players),
+            Container(
+              height: 1,
+              width: _labelColW + _cellW * holeRange.length,
+              color: theme.colorScheme.outlineVariant,
+              margin: const EdgeInsets.symmetric(vertical: 2),
+            ),
+            // Won-by row
+            Row(children: [
+              _labelCell('Won by', italic: true, dim: true),
+              for (final h in holeRange) Builder(builder: (_) {
+                final w = byHole[h]?['winner']?.toString();
+                if (w == 'T1') {
+                  return _cell(
+                    Text(t1Initial,
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: t1Color)),
+                    bg: t1Color.withValues(alpha: 0.18),
+                  );
+                }
+                if (w == 'T2') {
+                  return _cell(
+                    Text(t2Initial,
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: t2Color)),
+                    bg: t2Color.withValues(alpha: 0.18),
+                  );
+                }
+                if (w == 'Halved') {
+                  return _cell(
+                    Text('=',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade600)),
+                    bg: Colors.grey.shade100,
+                  );
+                }
+                return _cell(Text('·',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)));
+              }),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _labelCell(String s, {bool bold = false, bool italic = false,
+                                bool dim = false}) {
+    return SizedBox(
+      width: _labelColW, height: _rowH,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Builder(builder: (ctx) => Text(s,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+              fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+              color: dim
+                  ? Theme.of(ctx).colorScheme.onSurfaceVariant
+                  : null,
+            )),
+        ),
+      ),
+    );
+  }
+
+  Widget _cell(Widget child, {Color? bg}) => Container(
+        width: _cellW, height: _rowH,
+        alignment: Alignment.center,
+        decoration: bg == null ? null : BoxDecoration(color: bg),
+        child: child,
+      );
+
+  Widget _scoreCell({
+    required int? gross,
+    required int strokes,
+    required Color teamColor,
+    required Color highlight,
+    required bool isWin,
+  }) {
+    if (gross == null) {
+      return _cell(const Text('·',
+          style: TextStyle(fontSize: 11, color: Colors.grey)));
+    }
+    return _cell(
+      Stack(alignment: Alignment.topCenter, children: [
+        // Strokes ribbon along the top of the cell — one solid dot
+        // per stroke in the team color so it's visible without
+        // hunting (Sixes-style corner dots were too easy to miss).
+        if (strokes > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(
+                strokes.clamp(0, 3),
+                (_) => Container(
+                  width: 4, height: 4,
+                  margin: const EdgeInsets.symmetric(horizontal: 1),
+                  decoration: BoxDecoration(
+                    color: teamColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        Align(
+          alignment: Alignment.center,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('$gross',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isWin ? FontWeight.bold : FontWeight.w600,
+                  color: isWin ? teamColor : null,
+                )),
+          ),
+        ),
+      ]),
+      bg: isWin ? highlight : null,
+    );
+  }
+
+  /// Per-player rows for fourball / singles segments.  A player's cell
+  /// is highlighted when their net equals the team's net AND their
+  /// team won the hole (i.e. they contributed to the win).
+  List<Widget> _playerRows(ThemeData theme, List<int> holeRange,
+      Map<int, Map<String, dynamic>> byHole,
+      List<Map<String, dynamic>> players) {
+    return [
+      for (final p in players) Builder(builder: (_) {
+        final teamNum   = p['team_number'] as int? ?? 1;
+        final teamColor = teamNum == 1 ? t1Color : t2Color;
+        final highlight = teamColor.withValues(alpha: 0.12);
+        final pid = p['player_id'] as int;
+        final hcap   = p['playing_handicap'] as int?;
+        final soVal  = p['strokes_off']      as int?;
+        // SO mode → "SO 5", else "(5)" when handicap known.
+        final badge = soVal != null
+            ? 'SO $soVal'
+            : (hcap != null ? '($hcap)' : null);
+        return Row(children: [
+          SizedBox(
+            width: _labelColW, height: _rowH,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: RichText(
+                overflow: TextOverflow.ellipsis,
+                text: TextSpan(
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: teamColor),
+                  children: [
+                    TextSpan(text: p['short_name']?.toString() ?? '?'),
+                    if (badge != null)
+                      TextSpan(
+                        text: ' $badge',
+                        style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w500,
+                            color: teamColor.withOpacity(0.7)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          for (final h in holeRange) Builder(builder: (_) {
+            final hData = byHole[h];
+            final scores = (hData?['scores'] as List? ?? [])
+                .cast<Map<String, dynamic>>();
+            final my = scores.where(
+                    (s) => (s['player_id'] as int?) == pid)
+                .firstOrNull;
+            final gross   = my?['gross']   as int?;
+            final net     = my?['net']     as int?;
+            final strokes = my?['strokes'] as int? ?? 0;
+            final winner  = hData?['winner']?.toString();
+            final teamNet = teamNum == 1
+                ? (hData?['t1_net'] as int?)
+                : (hData?['t2_net'] as int?);
+            final isMyTeamWinner = (winner == 'T1' && teamNum == 1) ||
+                                   (winner == 'T2' && teamNum == 2);
+            final contributed = isMyTeamWinner &&
+                teamNet != null && net != null && net == teamNet;
+            return _scoreCell(
+              gross: gross,
+              strokes: strokes,
+              teamColor: teamColor,
+              highlight: highlight,
+              isWin: contributed,
+            );
+          }),
+        ]);
+      }),
+    ];
+  }
+
+  /// Two team rows for foursomes (alt-shot).  Per-player detail isn't
+  /// meaningful — one ball per team — so the row shows the team net
+  /// plus stroke dots for the alt-shot team allocation.
+  List<Widget> _teamRows(ThemeData theme, List<int> holeRange,
+      Map<int, Map<String, dynamic>> byHole,
+      List<Map<String, dynamic>> players) {
+    String teamLabel(int teamNum) {
+      final shorts = players
+          .where((p) => (p['team_number'] as int?) == teamNum &&
+                        (p['is_phantom'] as bool? ?? false) == false)
+          .map((p) => p['short_name']?.toString() ?? '?')
+          .toList();
+      return shorts.isEmpty ? '—' : shorts.join('/');
+    }
+
+    Widget teamRow(int teamNum) {
+      final teamColor = teamNum == 1 ? t1Color : t2Color;
+      final highlight = teamColor.withValues(alpha: 0.12);
+      return Row(children: [
+        SizedBox(
+          width: _labelColW, height: _rowH,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              teamLabel(teamNum),
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: teamColor),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        for (final h in holeRange) Builder(builder: (_) {
+          final hData = byHole[h];
+          final gross = teamNum == 1
+              ? (hData?['t1_team_gross'] as int?)
+              : (hData?['t2_team_gross'] as int?);
+          final strokes = (teamNum == 1
+              ? (hData?['t1_team_strokes'] as int?)
+              : (hData?['t2_team_strokes'] as int?)) ?? 0;
+          final winner = hData?['winner']?.toString();
+          final isWin = (winner == 'T1' && teamNum == 1) ||
+                        (winner == 'T2' && teamNum == 2);
+          return _scoreCell(
+            gross: gross,
+            strokes: strokes,
+            teamColor: teamColor,
+            highlight: highlight,
+            isWin: isWin,
+          );
+        }),
+      ]);
+    }
+
+    return [teamRow(1), teamRow(2)];
+  }
+}
+
+/// "My Foursome" tab — filters every per-foursome game on the
+/// leaderboard down to the one foursome the viewer is playing in.
+/// Reuses each game type's existing _*GroupCard widget so the
+/// per-segment detail (Triple Cup hole grid, Nassau bet rows,
+/// etc.) is identical to what shows on the regular game tab.
+class _MyFoursomeTabView extends StatelessWidget {
+  final Leaderboard leaderboard;
+  final int?        playerId;
+  const _MyFoursomeTabView({
+    required this.leaderboard,
+    required this.playerId,
+  });
+
+  static const Map<String, GroupCardBuilder> _cardBuilders = {
+    'triple_cup' : _TripleCupGroupCard.new,
+    'nassau'     : _NassauGroupCard.new,
+    'quota_nassau': _QuotaNassauGroupCard.new,
+    'skins'      : _SkinsGroupCard.new,
+    'sixes'      : _SixesGroupCard.new,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (playerId == null) {
+      return const Center(child: Text('Sign in to see your foursome.'));
+    }
+
+    // For every game key we know how to render, find the by_group
+    // entry containing the viewer's player_id and pull it out.
+    final cards = <Widget>[];
+    for (final entry in _cardBuilders.entries) {
+      final g = leaderboard.games[entry.key];
+      if (g == null) continue;
+      final groups = ((g.data as Map?)?['by_group'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+      final my = groups.firstWhere(
+        (grp) => _groupContainsPlayer(grp, playerId!),
+        orElse: () => const {},
+      );
+      if (my.isEmpty) continue;
+      // Inject the same _single_group flag _ByGroupView uses so cards
+      // can hide their "Group N" header when there's only one card
+      // showing in this tab.
+      final withFlag = {...my, '_single_group': true};
+      cards.add(Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: entry.value(group: withFlag),
+      ));
+    }
+
+    if (cards.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            "You're not in any foursome on this round.",
+            style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: cards,
     );
   }
 }

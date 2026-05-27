@@ -3,6 +3,7 @@
 /// All fromJson constructors handle null-safety explicitly.
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show Color;
 
 // ---------------------------------------------------------------------------
 // Shared formatting helpers
@@ -524,6 +525,13 @@ class Membership {
   final TeeInfo? tee;
   final int courseHandicap;
   final int playingHandicap;
+  /// Cup TournamentTeam colour name (e.g. "Red", "Tilden Blue", "Green")
+  /// when the player is assigned to a team in the round's tournament.
+  /// Null on casual rounds or for unaffiliated players.  Mobile resolves
+  /// to a Color via resolveTripleCupTeamColor().
+  final String? cupTeamColour;
+  /// Cup TournamentTeam display name — same null-rules as cupTeamColour.
+  final String? cupTeamName;
 
   const Membership({
     required this.id,
@@ -531,6 +539,8 @@ class Membership {
     this.tee,
     required this.courseHandicap,
     required this.playingHandicap,
+    this.cupTeamColour,
+    this.cupTeamName,
   });
 
   factory Membership.fromJson(Map<String, dynamic> j) => Membership(
@@ -539,6 +549,8 @@ class Membership {
         tee: j['tee'] != null ? TeeInfo.fromJson(j['tee'] as Map<String, dynamic>) : null,
         courseHandicap: j['course_handicap'] as int? ?? 0,
         playingHandicap: j['playing_handicap'] as int? ?? 0,
+        cupTeamColour: j['cup_team_colour'] as String?,
+        cupTeamName:   j['cup_team_name']   as String?,
       );
 }
 
@@ -826,7 +838,7 @@ class Scorecard {
 }
 
 // ---------------------------------------------------------------------------
-// Six's
+// Sixes
 // ---------------------------------------------------------------------------
 
 class SixesHoleResult {
@@ -971,6 +983,423 @@ class SixesSummary {
       halves:       overall['halves']     as int? ?? 0,
       handicapMode: hcap['mode']          as String? ?? 'net',
       netPercent:   hcap['net_percent']   as int?    ?? 100,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Triple Cup (One Round Ryder Cup)
+// ---------------------------------------------------------------------------
+
+/// Default team accent colours used by *casual* Triple Cup (the
+/// admin / player never picks colours for casual games).  Cup rounds
+/// carry the real TournamentTeam.colour string on the summary and
+/// resolve to whatever the cup admin chose; see
+/// [resolveTripleCupTeamColor].
+const Color kTripleCupTeam1Color = Color(0xFFB71C1C); // Red 900
+const Color kTripleCupTeam2Color = Color(0xFF0D47A1); // Blue 900
+
+/// Map a cup colour name (case-insensitive — "Red", "blue", "Gold",
+/// "Tilden Green", etc.) to a flat Material colour.  Falls back to
+/// [fallback] when the string is null, empty, or unrecognised — use
+/// the appropriate casual default so the casual UI keeps its
+/// existing red/blue identity.
+Color resolveTripleCupTeamColor(String? colourName, Color fallback) {
+  if (colourName == null) return fallback;
+  switch (colourName.toLowerCase().trim()) {
+    case 'red':    return const Color(0xFFB71C1C);
+    case 'blue':   return const Color(0xFF0D47A1);
+    case 'green':  return const Color(0xFF1B5E20);
+    case 'gold':
+    case 'yellow': return const Color(0xFFF57F17);
+    case 'orange': return const Color(0xFFE65100);
+    case 'purple': return const Color(0xFF4A148C);
+    case 'black':  return const Color(0xFF212121);
+    case 'white':  return const Color(0xFF424242); // dark grey for readability
+    default:       return fallback;
+  }
+}
+
+
+class TripleCupPlayerHoleScore {
+  final int  playerId;
+  final int? gross;
+  final int  strokes;
+  final int? net;
+
+  const TripleCupPlayerHoleScore({
+    required this.playerId,
+    this.gross,
+    required this.strokes,
+    this.net,
+  });
+
+  factory TripleCupPlayerHoleScore.fromJson(Map<String, dynamic> j) =>
+      TripleCupPlayerHoleScore(
+        playerId: j['player_id'] as int,
+        gross:    j['gross']     as int?,
+        strokes:  j['strokes']   as int? ?? 0,
+        net:      j['net']       as int?,
+      );
+}
+
+class TripleCupHole {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int? t1Net;
+  final int? t2Net;
+  final int? t1TeamGross;   // foursomes only — recorded team gross
+  final int? t2TeamGross;
+  final int? t1TeamStrokes; // foursomes only — alt-shot team allocation
+  final int? t2TeamStrokes;
+  final String winner;  // 'T1' | 'T2' | 'Halved'
+  final int margin;
+  final List<TripleCupPlayerHoleScore> scores;
+
+  const TripleCupHole({
+    required this.hole,
+    this.par,
+    this.strokeIndex,
+    this.t1Net,
+    this.t2Net,
+    this.t1TeamGross,
+    this.t2TeamGross,
+    this.t1TeamStrokes,
+    this.t2TeamStrokes,
+    required this.winner,
+    required this.margin,
+    this.scores = const [],
+  });
+
+  factory TripleCupHole.fromJson(Map<String, dynamic> j) => TripleCupHole(
+        hole:          j['hole']            as int,
+        par:           j['par']             as int?,
+        strokeIndex:   j['stroke_index']    as int?,
+        t1Net:         j['t1_net']          as int?,
+        t2Net:         j['t2_net']          as int?,
+        t1TeamGross:   j['t1_team_gross']   as int?,
+        t2TeamGross:   j['t2_team_gross']   as int?,
+        t1TeamStrokes: j['t1_team_strokes'] as int?,
+        t2TeamStrokes: j['t2_team_strokes'] as int?,
+        winner:        j['winner']          as String? ?? 'Halved',
+        margin:        j['margin']          as int? ?? 0,
+        scores: (j['scores'] as List? ?? [])
+            .map((s) => TripleCupPlayerHoleScore.fromJson(
+                s as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+class TripleCupMatchPlayer {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final int    teamNumber;  // 1 or 2
+  final bool   isPhantom;
+  /// Playing handicap (full-net allowance).  Null when unknown.
+  final int?   playingHandicap;
+  /// Strokes-off baseline differential for THIS match in SO mode.
+  /// Null in non-SO modes.  For most matches this is hcp − foursome
+  /// low; for the singles-without-foursome-low override it's hcp −
+  /// pair low.  Mobile uses it for the "(SO N)" badge.
+  final int?   strokesOff;
+  /// {hole: strokes} — expected strokes this player gets on each
+  /// hole of THIS match's range, per the segment's rule.  Foursomes
+  /// shares the same team allocation between both partners; fourball
+  /// and singles use the per-player path.  Read by both the
+  /// score-entry top-card dots and the leaderboard detail grid.
+  final Map<int, int> strokesByHole;
+
+  const TripleCupMatchPlayer({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.teamNumber,
+    this.isPhantom = false,
+    this.playingHandicap,
+    this.strokesOff,
+    this.strokesByHole = const {},
+  });
+
+  factory TripleCupMatchPlayer.fromJson(Map<String, dynamic> j) {
+    final raw = j['strokes_by_hole'] as Map?;
+    final byHole = <int, int>{};
+    if (raw != null) {
+      raw.forEach((k, v) {
+        final hole = int.tryParse(k.toString());
+        final strokes = v is int
+            ? v
+            : int.tryParse(v.toString()) ?? 0;
+        if (hole != null) byHole[hole] = strokes;
+      });
+    }
+    return TripleCupMatchPlayer(
+      playerId:        j['player_id']        as int,
+      name:            j['name']             as String? ?? '',
+      shortName:       j['short_name']       as String? ?? '',
+      teamNumber:      j['team_number']      as int? ?? 1,
+      isPhantom:       j['is_phantom']       as bool? ?? false,
+      playingHandicap: j['playing_handicap'] as int?,
+      strokesOff:      j['strokes_off']      as int?,
+      strokesByHole:   byHole,
+    );
+  }
+}
+
+class TripleCupTeamInfo {
+  final List<String> players;  // display names
+  final List<String> shorts;   // short labels for chips
+
+  const TripleCupTeamInfo({required this.players, required this.shorts});
+
+  factory TripleCupTeamInfo.fromJson(Map<String, dynamic> j) =>
+      TripleCupTeamInfo(
+        players: List<String>.from(j['players'] as List? ?? []),
+        shorts:  List<String>.from(j['shorts']  as List? ?? []),
+      );
+
+  bool get hasPlayers => players.isNotEmpty;
+}
+
+class TripleCupMatch {
+  final int matchNumber;
+  final String segment;        // 'fourball' | 'foursomes' | 'singles'
+  final String label;
+  final int startHole;
+  final int endHole;
+  final int displayEndHole;
+  final String status;         // 'pending' | 'in_progress' | 'complete' | 'halved'
+  final String? result;        // 'team1' | 'team2' | 'halved' | null
+  final int? finishedOnHole;
+  final int holesUpFinal;      // signed, +ve = team1
+  final String winnerLabel;    // 'Team 1' | 'Team 2' | 'Halved' | '—'
+  final TripleCupTeamInfo team1;
+  final TripleCupTeamInfo team2;
+  /// Foursomes-only: which player on each team tees off the first
+  /// segment hole.  The partner takes the next; they alternate by
+  /// hole parity.  Null on non-foursomes matches and on the solo
+  /// side of 2v1 (no alternation).
+  final int? team1FirstTeeId;
+  final int? team2FirstTeeId;
+  final List<TripleCupMatchPlayer> players;
+  final List<TripleCupHole> holes;
+
+  const TripleCupMatch({
+    required this.matchNumber,
+    required this.segment,
+    required this.label,
+    required this.startHole,
+    required this.endHole,
+    required this.displayEndHole,
+    required this.status,
+    this.result,
+    this.finishedOnHole,
+    required this.holesUpFinal,
+    required this.winnerLabel,
+    required this.team1,
+    required this.team2,
+    this.team1FirstTeeId,
+    this.team2FirstTeeId,
+    this.players = const [],
+    required this.holes,
+  });
+
+  factory TripleCupMatch.fromJson(Map<String, dynamic> j) => TripleCupMatch(
+        matchNumber:     j['match_number']      as int? ?? 0,
+        segment:         j['segment']           as String? ?? 'singles',
+        label:           j['label']             as String? ?? '',
+        startHole:       j['start_hole']        as int? ?? 1,
+        endHole:         j['end_hole']          as int? ?? 6,
+        displayEndHole:  j['display_end_hole']  as int? ?? (j['end_hole'] as int? ?? 6),
+        status:          j['status']            as String? ?? 'pending',
+        result:          j['result']            as String?,
+        finishedOnHole:  j['finished_on_hole']  as int?,
+        holesUpFinal:    j['holes_up_final']    as int? ?? 0,
+        winnerLabel:     j['winner_label']      as String? ?? '—',
+        team1FirstTeeId: j['team1_first_tee_id'] as int?,
+        team2FirstTeeId: j['team2_first_tee_id'] as int?,
+        team1: TripleCupTeamInfo.fromJson(
+            j['team1'] as Map<String, dynamic>? ?? {}),
+        team2: TripleCupTeamInfo.fromJson(
+            j['team2'] as Map<String, dynamic>? ?? {}),
+        players: (j['players'] as List? ?? [])
+            .map((p) => TripleCupMatchPlayer.fromJson(
+                p as Map<String, dynamic>))
+            .toList(),
+        holes: (j['holes'] as List? ?? [])
+            .map((h) => TripleCupHole.fromJson(h as Map<String, dynamic>))
+            .toList(),
+      );
+
+  /// For the current hole inside this foursomes match, return the
+  /// player ID whose turn it is to play on *team*.  Mirrors the
+  /// backend's TripleCupMatch.active_player_id.  Returns null when
+  /// not a foursomes match, when no first-tee player is set, or
+  /// when the hole is outside the match's range.
+  int? activePlayerId(int teamNumber, int holeNumber) {
+    if (segment != 'foursomes') return null;
+    final first = teamNumber == 1 ? team1FirstTeeId : team2FirstTeeId;
+    if (first == null) return null;
+    if (holeNumber < startHole || holeNumber > endHole) return null;
+    final teamPlayers = players
+        .where((p) => p.teamNumber == teamNumber && !p.isPhantom)
+        .map((p) => p.playerId)
+        .toList();
+    if (teamPlayers.length < 2) {
+      // Solo side has no alternation — the lone real player is always active.
+      return teamPlayers.isEmpty ? null : teamPlayers.first;
+    }
+    if (!teamPlayers.contains(first)) return null;
+    final position = holeNumber - startHole;
+    if (position % 2 == 0) return first;
+    return teamPlayers.firstWhere((p) => p != first);
+  }
+
+  int get totalHoles => endHole - startHole + 1;
+
+  /// Human-friendly match status: "1 UP thru 3", "4 and 2", "AS", etc.
+  String get statusDisplay {
+    if (!team1.hasPlayers || !team2.hasPlayers) return 'Pending';
+    if (holes.isEmpty) return '—';
+    final played    = holes.length;
+    final margin    = holes.last.margin;
+    final absMargin = margin.abs();
+    final left      = totalHoles - played;
+    if (status == 'complete' || status == 'halved' || result != null) {
+      if (result == 'halved') return 'Halved';
+      if (left > 0) return '$absMargin and $left';
+      return absMargin > 0 ? '$absMargin UP' : 'Halved';
+    }
+    if (status == 'in_progress') {
+      if (margin == 0) return 'AS thru $played';
+      return '$absMargin UP thru $played';
+    }
+    return '—';
+  }
+}
+
+class TripleCupPlayerMoney {
+  final String name;
+  final double amount;
+
+  const TripleCupPlayerMoney({required this.name, required this.amount});
+
+  factory TripleCupPlayerMoney.fromJson(Map<String, dynamic> j) =>
+      TripleCupPlayerMoney(
+        name:   j['name']   as String? ?? '',
+        amount: (j['amount'] as num? ?? 0).toDouble(),
+      );
+}
+
+class TripleCupSummary {
+  final String status;       // 'pending' | 'in_progress' | 'complete'
+  final int groupSize;       // 2 | 3 | 4
+  final String handicapMode; // 'net' | 'gross' | 'strokes_off'
+  final int netPercent;
+  final int altShotLowPct;
+  final int altShotHighPct;
+  /// Cup TournamentTeam colour names (e.g. "Red", "Blue", "Green").
+  /// Null on casual rounds (no cup teams).  Use [team1Color] /
+  /// [team2Color] to resolve to actual Color values with a sensible
+  /// casual-mode fallback.
+  final String? team1ColourName;
+  final String? team2ColourName;
+  /// Cup TournamentTeam names — handy for headers in cup mode.
+  final String? team1Name;
+  final String? team2Name;
+  final List<TripleCupMatch> matches;
+  final int team1Wins;
+  final int team2Wins;
+  final int halves;
+  final double team1Points;
+  final double team2Points;
+  final int pointsAvailable;
+  final double betUnit;
+  final List<TripleCupPlayerMoney> money;
+  /// Cross-foursome phantom info for 2v1 fourball — null when not 2v1.
+  /// Same shape Nassau exposes; reused so the score-entry UI can label
+  /// the phantom row with the current hole's donor and show a
+  /// "Waiting for Glenn..." placeholder when the donor hasn't posted.
+  final NassauPhantomInfo? phantom;
+
+  const TripleCupSummary({
+    required this.status,
+    required this.groupSize,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.altShotLowPct,
+    required this.altShotHighPct,
+    this.team1ColourName,
+    this.team2ColourName,
+    this.team1Name,
+    this.team2Name,
+    required this.matches,
+    required this.team1Wins,
+    required this.team2Wins,
+    required this.halves,
+    required this.team1Points,
+    required this.team2Points,
+    required this.pointsAvailable,
+    required this.betUnit,
+    required this.money,
+    this.phantom,
+  });
+
+  bool get isPending  => status == 'pending';
+  bool get isStarted  => matches.any((m) => m.holes.isNotEmpty);
+
+  /// Team 1 accent colour for this summary.  In cup mode this resolves
+  /// to the configured cup TournamentTeam.colour; in casual mode it
+  /// falls back to the historical red.
+  Color get team1Color =>
+      resolveTripleCupTeamColor(team1ColourName, kTripleCupTeam1Color);
+  /// Team 2 accent colour — cup colour in cup mode, blue in casual.
+  Color get team2Color =>
+      resolveTripleCupTeamColor(team2ColourName, kTripleCupTeam2Color);
+
+  factory TripleCupSummary.fromJson(Map<String, dynamic> j) {
+    final hcap    = j['handicap'] as Map<String, dynamic>? ?? {};
+    final overall = j['overall']  as Map<String, dynamic>? ?? {};
+    final money   = j['money']    as Map<String, dynamic>? ?? {};
+    return TripleCupSummary(
+      status:           j['status']     as String? ?? 'pending',
+      groupSize:        j['group_size'] as int? ?? 4,
+      handicapMode:     hcap['mode']                as String? ?? 'net',
+      netPercent:       hcap['net_percent']         as int?    ?? 100,
+      altShotLowPct:    hcap['alt_shot_low_pct']    as int?    ?? 50,
+      altShotHighPct:   hcap['alt_shot_high_pct']   as int?    ?? 50,
+      team1ColourName: j['team1_colour'] as String?,
+      team2ColourName: j['team2_colour'] as String?,
+      team1Name:       j['team1_name']   as String?,
+      team2Name:       j['team2_name']   as String?,
+      matches: (j['matches'] as List? ?? [])
+          .map((m) => TripleCupMatch.fromJson(m as Map<String, dynamic>))
+          .toList(),
+      team1Wins:       overall['team1_wins']       as int?    ?? 0,
+      team2Wins:       overall['team2_wins']       as int?    ?? 0,
+      halves:          overall['halves']           as int?    ?? 0,
+      team1Points:    (overall['team1_points']    as num? ?? 0).toDouble(),
+      team2Points:    (overall['team2_points']    as num? ?? 0).toDouble(),
+      // `num?` then truncate — defensive in case future formats
+      // introduce a fractional match value (e.g. tie-break play-in).
+      // Today the backend always sums to a whole number, but a `as
+      // int` cast on a double would crash the whole summary parse.
+      pointsAvailable: ((overall['points_available'] as num?) ?? 0).toInt(),
+      betUnit:        (money['bet_unit']           as num? ?? 0).toDouble(),
+      money: (money['by_player'] as List? ?? [])
+          .map((m) => TripleCupPlayerMoney.fromJson(m as Map<String, dynamic>))
+          .toList(),
+      phantom: () {
+        // Defensive parse: a malformed phantom block must never block
+        // the rest of the TC summary from rendering.
+        final raw = j['phantom'];
+        if (raw is Map<String, dynamic>) {
+          try { return NassauPhantomInfo.fromJson(raw); }
+          catch (_) { return null; }
+        }
+        return null;
+      }(),
     );
   }
 }

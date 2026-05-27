@@ -11,25 +11,19 @@
   <p class="sub">{{ cup_name }} · cumulative standings</p>
 
   {% if summary %}
+    {% comment %}
+      Override the base CSS variables with the cup teams' palette so
+      every team-tinted element on the page (chips, names, score
+      blocks) reads in the right shade — same lookup the mobile app
+      uses, no named-color drift.
+    {% endcomment %}
     <style>
-      {% if summary.team1_colour %}
-        .t1-name, .pts.t1 { color: {{ summary.team1_colour }}; }
-        .chip-t1 {
-          background: {{ summary.team1_colour }}22;
-          color: {{ summary.team1_colour }};
-          border-color: {{ summary.team1_colour }}55;
-        }
-        .cup-team-1 { background: {{ summary.team1_colour }}; }
-      {% endif %}
-      {% if summary.team2_colour %}
-        .t2-name, .pts.t2 { color: {{ summary.team2_colour }}; }
-        .chip-t2 {
-          background: {{ summary.team2_colour }}22;
-          color: {{ summary.team2_colour }};
-          border-color: {{ summary.team2_colour }}55;
-        }
-        .cup-team-2 { background: {{ summary.team2_colour }}; }
-      {% endif %}
+      :root {
+        --t1-fg: {{ summary.team1_palette.fg }};
+        --t1-bg: {{ summary.team1_palette.bg }};
+        --t2-fg: {{ summary.team2_palette.fg }};
+        --t2-bg: {{ summary.team2_palette.bg }};
+      }
     </style>
 
     {# ── Cup-name pill ───────────────────────────────────────────── #}
@@ -69,6 +63,20 @@
     {% if pending_matches %}
       <div class="section-divider"><span>LIVE NOW</span></div>
       {% for match in pending_matches %}
+        {% include "watch/_match_card.html" with match=match summary=live_summary segments=match.segments individuals=match.individual_matches %}
+      {% endfor %}
+    {% endif %}
+
+    {% comment %}
+      Completed match cards — final state of finished foursomes.
+      Nowhere else in the app to inspect what happened on a finished
+      group, so we surface them here below the live section.  Same
+      card template as Live Now, with full (un-filtered) segments /
+      individuals so the resolved chips and totals render.
+    {% endcomment %}
+    {% if completed_matches %}
+      <div class="section-divider"><span>COMPLETED</span></div>
+      {% for match in completed_matches %}
         {% include "watch/_match_card.html" with match=match summary=live_summary segments=match.segments individuals=match.individual_matches %}
       {% endfor %}
     {% endif %}

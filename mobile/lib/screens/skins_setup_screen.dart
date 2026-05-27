@@ -34,7 +34,9 @@ class SkinsSetupScreen extends StatefulWidget {
 }
 
 class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
-  String _mode       = 'net';
+  // Casual default → Strokes-Off Low.  Existing games overwrite this
+  // from their persisted mode in _load().
+  String _mode       = 'strokes_off';
   int    _netPercent = 100;
   bool   _carryover  = true;
   bool   _allowJunk  = false;

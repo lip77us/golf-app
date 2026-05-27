@@ -3,7 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <noscript><meta http-equiv="refresh" content="{{ refresh_secs|default:30 }}"></noscript>
+  {% comment %}
+    Auto-refresh defaults to paused — spectators can opt in via the
+    footer button.  The noscript fallback also stays off so a no-JS
+    browser doesn't surprise users with an aggressive reload.
+  {% endcomment %}
   <title>{% block title %}Live Leaderboard{% endblock %}</title>
   <style>
     :root {
@@ -275,6 +279,79 @@
       color: var(--muted); font-size: 14px; padding: 0 8px;
     }
 
+    /* Triple Cup foursome — collapsed row + expandable per-match
+       detail.  Uses the browser's native <details>/<summary> so the
+       page works without JavaScript. */
+    .tc-foursome {
+      margin-top: 6px;
+      border-top: 1px solid var(--border);
+      padding-top: 6px;
+    }
+    .tc-foursome > summary {
+      cursor: pointer;
+      list-style: none;        /* hide default chevron in WebKit */
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0;
+    }
+    .tc-foursome > summary::-webkit-details-marker { display: none; }
+    .tc-foursome > summary::before {
+      /* Was 12px — too easy to miss as the "expand for detail"
+         affordance.  20px is comfortably tappable and visible at a
+         glance, but doesn't overwhelm the cup-score badges next to it. */
+      content: '▸'; color: var(--muted); font-size: 20px;
+      transition: transform 0.15s;
+      line-height: 1;
+    }
+    .tc-foursome[open] > summary::before { transform: rotate(90deg); }
+    .tc-foursome .tc-rollup {
+      display: flex; gap: 6px; align-items: baseline;
+      font-size: 18px; font-weight: 700;
+    }
+    .tc-foursome .tc-rollup .muted { font-size: 14px; font-weight: 400; }
+    .tc-foursome .tc-submatches {
+      margin-top: 4px;
+      padding-left: 12px;
+      border-left: 2px solid var(--border);
+    }
+    /* Per-match row inside an expanded Triple Cup foursome.
+       Horizontal: segment-pill | p1 | vs | p2 | status, where p1/p2
+       cells flex to share remaining width so partner pairs like
+       "Bill / Gil" don't wrap into a vertical wall.  */
+    .tc-foursome .tc-sub-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto 1fr auto;
+      gap: 8px; align-items: center;
+      padding: 6px 0;
+      border-top: 1px solid var(--border);
+    }
+    .tc-foursome .tc-sub-row:first-child { border-top: none; }
+    .tc-foursome .tc-seg-pill {
+      background: #eef; color: #225;
+      font-size: 11px;
+    }
+    .tc-foursome .tc-pair {
+      font-size: 13px; font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .tc-foursome .tc-pair.t1-name { text-align: right; }
+    .tc-foursome .tc-pair.t2-name { text-align: left; }
+    .tc-foursome .tc-vs {
+      font-size: 12px;
+    }
+    .tc-foursome .tc-status {
+      text-align: right;
+      font-size: 12px;
+      min-width: 60px;
+    }
+    /* Live in-progress status ("1 UP thru 3" / "AS thru 2") — picks
+       up the t1-name / t2-name colour class to read in the leader's
+       hue.  Slightly bolder than plain muted so it carries weight as
+       a score read.  AS still gets muted via the .muted class. */
+    .tc-foursome .tc-live-status {
+      font-weight: 600;
+    }
+
     .chip {
       display: inline-block; padding: 4px 10px;
       border-radius: 14px;
@@ -471,7 +548,7 @@
       }
     }
 
-    /* Six's — one row per segment (Match 1 / 2 / 3) with the score
+    /* Sixes — one row per segment (Match 1 / 2 / 3) with the score
        text on the right and the team composition as a subtitle. */
     .sixes-seg {
       padding: 8px 0;
@@ -495,7 +572,7 @@
       color: var(--muted); font-size: 12px;
       margin-top: 2px;
     }
-    /* Leader of an in-progress / completed Six's segment — bold and
+    /* Leader of an in-progress / completed Sixes segment — bold and
        tinted with the primary colour so the eye can scan the segment
        list and see who's winning each match. */
     .sixes-seg-sub .sixes-leader  {
@@ -671,7 +748,7 @@
       var status = document.getElementById('refresh-status');
       var btn    = document.getElementById('refresh-toggle');
       var timer  = null;
-      var paused = false;
+      var paused = true;   // default OFF — spectator opts in via footer button
 
       function start() {
         if (timer) return;

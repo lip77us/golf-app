@@ -12,7 +12,7 @@ from accounts.scoping import AccountScopedManager
 class GameType(models.TextChoices):
     IRISH_RUMBLE    = 'irish_rumble',    'Irish Rumble'
     NASSAU          = 'nassau',          'Nassau'
-    SIXES           = 'sixes',           "Six's"
+    SIXES           = 'sixes',           'Sixes'
     PINK_BALL       = 'pink_ball',       'Pink Ball'
     SCRAMBLE        = 'scramble',        'Scramble'
     STABLEFORD      = 'stableford',      'Stableford'
@@ -34,7 +34,7 @@ class GameType(models.TextChoices):
     # points on every hole is 3 × 3 = 9, the money sums to zero across
     # the three players.  The casual-round UI restricts this game to
     # foursomes with exactly three real players and is mutually
-    # exclusive with Six's.
+    # exclusive with Sixes.
     POINTS_531      = 'points_531',      'Points 5-3-1'
     # Three-Person Match: tournament game for a 3-player group.  Phase 1
     # (holes 1–9) uses Points 5-3-1 to seed the players; phase 2 (holes
@@ -54,6 +54,14 @@ class GameType(models.TextChoices):
     # 18-hole overall result only — no F9/B9 breakdown.
     # Cup multiplier: pv × 2 per foursome (2 matches × 1 point each).
     SINGLES_18      = 'singles_18',      '18-Hole Singles'
+    # One-Round Ryder Cup ("Triple Cup"): a foursome plays one 18-hole
+    # match split into three 6-hole segments — Fourball (best-ball),
+    # Foursomes (alt-shot), and Singles.  In the canonical 2v2 the
+    # singles segment is two simultaneous 1v1 matches, yielding 4
+    # matches per foursome.  Works as both a cup game (slots into
+    # RyderCupFoursomeConfig) and a casual game for 2-4 players.
+    # Cup multiplier: pv × 4 per foursome (2v2 case).
+    TRIPLE_CUP      = 'triple_cup',      'One Round Ryder Cup'
 
 
 class RoundStatus(models.TextChoices):

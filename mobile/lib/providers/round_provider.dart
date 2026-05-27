@@ -86,6 +86,7 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?    _sixesSummary;
   Points531Summary? _points531Summary;
   SkinsSummary?    _skinsSummary;
+  TripleCupSummary? _tripleCupSummary;
   MultiSkinsSummary? _multiSkinsSummary;
   NassauSummary?         _nassauSummary;
   QuotaNassauSummary?    _quotaNassauSummary;
@@ -106,6 +107,7 @@ class RoundProvider extends ChangeNotifier {
   bool    _loadingSixes       = false;
   bool    _loadingPoints531   = false;
   bool    _loadingSkins       = false;
+  bool    _loadingTripleCup   = false;
   bool    _loadingMultiSkins  = false;
   bool    _loadingNassau      = false;
   bool    _loadingQuotaNassau = false;
@@ -128,6 +130,7 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?     get sixesSummary       => _sixesSummary;
   Points531Summary? get points531Summary   => _points531Summary;
   SkinsSummary?     get skinsSummary       => _skinsSummary;
+  TripleCupSummary? get tripleCupSummary   => _tripleCupSummary;
   MultiSkinsSummary? get multiSkinsSummary  => _multiSkinsSummary;
   NassauSummary?        get nassauSummary      => _nassauSummary;
   QuotaNassauSummary?   get quotaNassauSummary => _quotaNassauSummary;
@@ -147,6 +150,7 @@ class RoundProvider extends ChangeNotifier {
   bool              get loadingSixes       => _loadingSixes;
   bool              get loadingPoints531   => _loadingPoints531;
   bool              get loadingSkins       => _loadingSkins;
+  bool              get loadingTripleCup   => _loadingTripleCup;
   bool              get loadingMultiSkins  => _loadingMultiSkins;
   bool              get loadingNassau      => _loadingNassau;
   bool              get loadingMatchPlay          => _loadingMatchPlay;
@@ -250,6 +254,7 @@ class RoundProvider extends ChangeNotifier {
       _scorecard        = null;
       _nassauSummary    = null;
       _skinsSummary     = null;
+      _tripleCupSummary = null;
       _sixesSummary     = null;
       _points531Summary = null;
     }
@@ -510,7 +515,7 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
-  /// Load the Six's segment summary for the active foursome.
+  /// Load the Sixes segment summary for the active foursome.
   /// Non-fatal — a failure just leaves [sixesSummary] null; the screen
   /// still works for score entry using the cached scorecard.
   Future<void> loadSixes(int foursomeId) async {
@@ -604,6 +609,99 @@ class RoundProvider extends ChangeNotifier {
       debugPrint('loadSkins error: $e');
     } finally {
       _loadingSkins = false;
+      notifyListeners();
+    }
+  }
+
+  /// Load the Triple Cup summary for the active foursome.  Non-fatal
+  /// on network or 404 errors so the entry screen keeps working
+  /// offline / before the game has been set up.
+  Future<void> loadTripleCup(int foursomeId) async {
+    _loadingTripleCup = true;
+    notifyListeners();
+    try {
+      _tripleCupSummary = await _client.getTripleCupSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep last known summary.
+    } catch (e) {
+      // 404 (no game set up yet) is normal during setup; log others.
+      debugPrint('loadTripleCup error: $e');
+      _tripleCupSummary = null;
+    } finally {
+      _loadingTripleCup = false;
+      notifyListeners();
+    }
+  }
+
+  /// Set (or clear) the foursomes alt-shot first-tee-off player on
+  /// each side.  Pass null to clear that team's pick.  Returns true
+  /// on success and refreshes [tripleCupSummary].  Surfaces server
+  /// errors via [error].
+  Future<bool> setTripleCupFoursomesTeeOff(
+    int foursomeId, {
+    int? team1FirstTee,
+    int? team2FirstTee,
+  }) async {
+    _submitting = true;
+    _clearError();
+    notifyListeners();
+    try {
+      _tripleCupSummary = await _client.postTripleCupFoursomesTeeOff(
+        foursomeId,
+        team1FirstTee: team1FirstTee,
+        team2FirstTee: team2FirstTee,
+      );
+      return true;
+    } on NetworkException {
+      _error = 'No connection — cannot save tee-off while offline.';
+      return false;
+    } catch (e) {
+      _error = friendlyError(e);
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
+  /// Create (or replace) the Triple Cup game for a foursome.  Returns
+  /// true on success and stashes the resulting summary; on failure
+  /// [error] is set and false returned.
+  Future<bool> setupTripleCup(
+    int foursomeId, {
+    required List<int> team1Ids,
+    required List<int> team2Ids,
+    String handicapMode             = 'net',
+    int    netPercent               = 100,
+    int    altShotLowPct            = 50,
+    int    altShotHighPct           = 50,
+    int?   foursomesTeam1FirstTee,
+    int?   foursomesTeam2FirstTee,
+  }) async {
+    _submitting = true;
+    _clearError();
+    notifyListeners();
+    try {
+      _tripleCupSummary = await _client.postTripleCupSetup(
+        foursomeId,
+        team1Ids:                  team1Ids,
+        team2Ids:                  team2Ids,
+        handicapMode:              handicapMode,
+        netPercent:                netPercent,
+        altShotLowPct:             altShotLowPct,
+        altShotHighPct:            altShotHighPct,
+        foursomesTeam1FirstTee:    foursomesTeam1FirstTee,
+        foursomesTeam2FirstTee:    foursomesTeam2FirstTee,
+      );
+      return true;
+    } on NetworkException {
+      _error = 'No connection — cannot save Triple Cup setup while offline.';
+      return false;
+    } catch (e) {
+      _error = friendlyError(e);
+      return false;
+    } finally {
+      _submitting = false;
       notifyListeners();
     }
   }

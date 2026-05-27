@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (
-    # Six's (rotating-team best ball)
+    # Sixes (rotating-team best ball)
     SixesSegment, SixesTeam, SixesHoleResult,
     # Nassau 9-9-18 (fixed teams + auto-press)
     NassauGame, NassauTeam, NassauHoleScore, NassauPress,
@@ -19,7 +19,7 @@ from .models import (
 
 
 # ---------------------------------------------------------------------------
-# Six's inlines
+# Sixes inlines
 # ---------------------------------------------------------------------------
 
 class SixesTeamInline(admin.TabularInline):
@@ -90,7 +90,7 @@ class ScrambleHoleScoreInline(admin.TabularInline):
 
 
 # ---------------------------------------------------------------------------
-# Six's admins
+# Sixes admins
 # ---------------------------------------------------------------------------
 
 @admin.register(SixesSegment)

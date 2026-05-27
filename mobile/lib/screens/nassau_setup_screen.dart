@@ -33,7 +33,9 @@ class NassauSetupScreen extends StatefulWidget {
 
 class _NassauSetupScreenState extends State<NassauSetupScreen> {
   // ── UI state ────────────────────────────────────────────────────────────────
-  String _mode       = 'net';
+  // Casual default → Strokes-Off Low (most-asked-for setting at the
+  // course).  Existing games overwrite this from their persisted mode.
+  String _mode       = 'strokes_off';
   int    _netPercent = 100;
   String _pressMode  = 'none';
   /// 'none' | 'tiebreak_2nd' | 'claremont'
