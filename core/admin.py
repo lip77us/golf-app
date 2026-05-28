@@ -105,13 +105,17 @@ class TeeAdminForm(forms.ModelForm):
 
 @admin.register(Player)
 class PlayerAdmin(admin.ModelAdmin):
-    list_display  = ('name', 'short_name', 'handicap_index', 'sex',
+    list_display  = ('name', 'account', 'short_name', 'handicap_index', 'sex',
                      'is_phantom', 'email', 'created_at')
-    list_filter   = ('is_phantom', 'sex')
+    list_filter   = ('account', 'is_phantom', 'sex')
     search_fields = ('name', 'short_name', 'email')
     ordering      = ('name',)
-    fields        = ('name', 'short_name', 'email', 'phone', 'handicap_index',
-                     'sex', 'is_phantom', 'user')
+    # `account` is required (non-null FK to the tenant) — listing it here
+    # so the admin form exposes the picker.  Omitting it caused the
+    # IntegrityError "null value in column account_id" on add.
+    fields        = ('account', 'name', 'short_name', 'email', 'phone',
+                     'handicap_index', 'sex', 'is_phantom', 'user')
+    autocomplete_fields = ('account', 'user')
 
 
 @admin.register(Course)
