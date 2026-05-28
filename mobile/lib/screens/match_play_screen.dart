@@ -28,8 +28,12 @@ import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 
 // Colours used for Player-1 and Player-2 holes across all match cards.
-const _kP1Color = Color(0xFF2E7D32); // deep green
-const _kP2Color = Color(0xFF1565C0); // deep blue
+// Calmer burgundy / slate (matches GolfTokens.teamRed / teamBlue and the
+// score-entry name colours).  Per the May 2026 design audit (D-04), team
+// identity uses the calmer palette so loud reds stay reserved for errors
+// and destructive actions.
+const _kP1Color = Color(0xFF8E2E2E); // calm burgundy
+const _kP2Color = Color(0xFF1B4F8E); // slate navy
 
 class MatchPlayScreen extends StatefulWidget {
   final int foursomeId;
@@ -111,46 +115,47 @@ class _MatchPlayScreenState extends State<MatchPlayScreen> {
     );
   }
 
-  Widget _buildContent() {
-    final theme   = Theme.of(context);
-    final status  = _data?['status'] as String? ?? 'pending';
-    final winner  = _data?['winner'] as String?;
-    final r1      = _matchesForRound(1);
-    final r2      = _matchesForRound(2);
+  Widget _buildContent() => MatchPlayDetailView(data: _data!);
+}
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: [
-        // ── Status banner ─────────────────────────────────────────────────
-        _StatusBanner(status: status, winner: winner),
-        const SizedBox(height: 20),
+// ── Shared detail view ───────────────────────────────────────────────────────
+//
+// Renders the full rich bracket layout (status banner + semis + final/3rd +
+// money) for a single foursome's match-play summary.  Used by both
+// [MatchPlayScreen] (the dedicated screen launched from score entry) and
+// the leaderboard's per-group card so the user sees the same depth of
+// detail in both places.
+//
+// Pass [scrollable: false] when embedding inside another scroll view (the
+// leaderboard already wraps tabs in a scroll); leave the default true when
+// using the view as a top-level screen body.
 
-        // ── Front 9 — Semis ───────────────────────────────────────────────
-        _sectionHeader(theme, 'Front 9 — Semis',
-            subtitle: 'Holes 1–9 · Seed 1 vs 4  ·  Seed 2 vs 3'),
-        const SizedBox(height: 8),
-        for (final m in r1) ...[
-          _MatchCard(match: m),
-          const SizedBox(height: 12),
-        ],
-        const SizedBox(height: 12),
+class MatchPlayDetailView extends StatelessWidget {
+  final Map<String, dynamic> data;
+  /// When true, wraps content in a ListView with padding; when false,
+  /// returns a non-scrolling Column suitable for embedding.
+  final bool scrollable;
 
-        // ── Back 9 — Final & 3rd Place ────────────────────────────────────
-        _sectionHeader(theme, 'Back 9 — Final & 3rd Place',
-            subtitle: 'Holes 10–18 · begins after both semis resolve'),
-        const SizedBox(height: 8),
-        for (final m in r2) ...[
-          _MatchCard(match: m, pendingNote: _r2PendingNote(m)),
-          const SizedBox(height: 12),
-        ],
-        const SizedBox(height: 12),
+  const MatchPlayDetailView({
+    super.key,
+    required this.data,
+    this.scrollable = true,
+  });
 
-        // ── Money ─────────────────────────────────────────────────────────
-        if (_data?['money'] != null) ...[
-          _MoneyCard(money: _data!['money'] as Map<String, dynamic>),
-        ],
-      ],
-    );
+  List<Map<String, dynamic>> _matchesForRound(int round) =>
+      (data['matches'] as List? ?? [])
+          .map((m) => Map<String, dynamic>.from(m as Map))
+          .where((m) => (m['round'] as int) == round)
+          .toList();
+
+  String? _r2PendingNote(Map<String, dynamic> match) {
+    if (match['players_tbd'] == true) {
+      return 'Players set once both semis finish';
+    }
+    if (match['players_tentative'] == true) {
+      return 'Tracking live — matchup confirmed when SD resolves';
+    }
+    return null;
   }
 
   Widget _sectionHeader(ThemeData theme, String title, {String? subtitle}) =>
@@ -166,6 +171,56 @@ class _MatchPlayScreenState extends State<MatchPlayScreen> {
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         ],
       );
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final status  = data['status'] as String? ?? 'pending';
+    final winner  = data['winner'] as String?;
+    final r1      = _matchesForRound(1);
+    final r2      = _matchesForRound(2);
+
+    final children = <Widget>[
+      // ── Status banner ─────────────────────────────────────────────────
+      _StatusBanner(status: status, winner: winner),
+      const SizedBox(height: 20),
+
+      // ── Front 9 — Semis ───────────────────────────────────────────────
+      _sectionHeader(theme, 'Front 9 — Semis',
+          subtitle: 'Holes 1–9 · Seed 1 vs 4  ·  Seed 2 vs 3'),
+      const SizedBox(height: 8),
+      for (final m in r1) ...[
+        _MatchCard(match: m),
+        const SizedBox(height: 12),
+      ],
+      const SizedBox(height: 12),
+
+      // ── Back 9 — Final & 3rd Place ────────────────────────────────────
+      _sectionHeader(theme, 'Back 9 — Final & 3rd Place',
+          subtitle: 'Holes 10–18 · begins after both semis resolve'),
+      const SizedBox(height: 8),
+      for (final m in r2) ...[
+        _MatchCard(match: m, pendingNote: _r2PendingNote(m)),
+        const SizedBox(height: 12),
+      ],
+      const SizedBox(height: 12),
+
+      // ── Money ─────────────────────────────────────────────────────────
+      if (data['money'] != null)
+        _MoneyCard(money: data['money'] as Map<String, dynamic>),
+    ];
+
+    if (scrollable) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: children,
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
+  }
 }
 
 // ── Status banner ─────────────────────────────────────────────────────────────

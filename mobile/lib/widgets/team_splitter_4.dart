@@ -37,8 +37,12 @@ class TeamSplitter4 extends StatefulWidget {
     required this.onChanged,
     this.teamALabel = 'Red',
     this.teamBLabel = 'Blue',
-    this.teamAColor = const Color(0xFFB71C1C),
-    this.teamBColor = const Color(0xFF0D47A1),
+    // Calmer burgundy / slate (matches GolfTokens.teamRed / teamBlue and
+    // kTripleCupTeam1Color / kTripleCupTeam2Color).  Per the May 2026
+    // design audit (D-04), team identity colors stay distinct from the
+    // loud Material reds reserved for errors and destructive actions.
+    this.teamAColor = const Color(0xFF8E2E2E),
+    this.teamBColor = const Color(0xFF1B4F8E),
     this.reorderable = true,
   });
 

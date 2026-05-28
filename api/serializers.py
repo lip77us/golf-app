@@ -332,13 +332,19 @@ class FoursomeSerializer(serializers.ModelSerializer):
     has_any_score    = serializers.SerializerMethodField()
 
     def get_has_any_score(self, obj):
-        """True iff at least one HoleScore with a gross_score exists for
-        this foursome.  Used by the mobile client to gate the
-        'Confirm Tee Boxes' button — once scoring begins the tees are
-        locked in (server-side validation refuses the change too)."""
+        """True iff at least one REAL player has a HoleScore with a
+        gross_score on this foursome.  Used by the mobile client to
+        gate the 'Confirm Tee Boxes' button — once real scoring begins
+        the tees are locked in (server-side validation refuses the
+        change too).  Excludes phantom-player scores so setup flows
+        that pre-populate phantom rows (Sixes phantoms, Pink Ball
+        rotation, etc.) don't lock out tee editing for 3-somes before
+        any real round has begun."""
         from scoring.models import HoleScore
         return HoleScore.objects.filter(
-            foursome=obj, gross_score__isnull=False
+            foursome=obj,
+            gross_score__isnull=False,
+            player__is_phantom=False,
         ).exists()
 
     # Map RyderCupFoursomeConfig.game_type → active_games key.
@@ -666,6 +672,14 @@ class SixesSetupSerializer(serializers.Serializer):
     (mode='net', net_percent=100) to preserve existing behavior for
     clients that haven't been updated yet.  'gross' ignores handicaps;
     'net' applies playing_handicap × (net_percent / 100) allocated by SI.
+
+    scoring_format selects between 'classic' (1 pt/hole, with extras) and
+    'high_low' (low+high best balls, 2 pts/hole, no extras).
+
+    handicap_allocation picks how STROKES_OFF strokes get spread across
+    the round — 'per_segment' (legacy default, splits SO across the 3
+    matches) or 'full_round' (allocates by round-wide stroke index, same
+    as a normal NET round).  Has no effect on NET / GROSS modes.
     """
     segments      = serializers.ListField(
                         child=serializers.DictField(),
@@ -678,6 +692,14 @@ class SixesSetupSerializer(serializers.Serializer):
     net_percent   = serializers.IntegerField(
                         min_value=0, max_value=200, default=100,
                     )
+    scoring_format      = serializers.ChoiceField(
+                              choices=['classic', 'high_low'],
+                              default='classic',
+                          )
+    handicap_allocation = serializers.ChoiceField(
+                              choices=['per_segment', 'full_round'],
+                              default='per_segment',
+                          )
 
 
 class Points531SetupSerializer(serializers.Serializer):
@@ -831,6 +853,28 @@ class IrishRumbleSetupSerializer(serializers.Serializer):
                             "{'place': 2, 'amount': '30.00'}]"
                         ),
                     )
+    variant       = serializers.ChoiceField(
+                        choices=['classic', 'arizona_shuffle',
+                                 'shuffle', 'custom'],
+                        default='classic',
+                    )
+    custom_balls  = serializers.ListField(
+                        child=serializers.IntegerField(min_value=1, max_value=4),
+                        required=False, allow_null=True,
+                        help_text=(
+                            "Required when variant='custom': 18 ints "
+                            "(1-4 each) giving the balls-to-count per hole."
+                        ),
+                    )
+
+    def validate(self, attrs):
+        if attrs.get('variant') == 'custom':
+            cb = attrs.get('custom_balls') or []
+            if len(cb) != 18:
+                raise serializers.ValidationError({
+                    'custom_balls': 'Must be 18 integers for the custom variant.',
+                })
+        return attrs
 
 
 class LowNetSetupSerializer(serializers.Serializer):

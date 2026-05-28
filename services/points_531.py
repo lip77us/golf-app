@@ -356,9 +356,11 @@ def points_531_summary(foursome) -> dict:
     try:
         game = foursome.points_531_game
     except Points531Game.DoesNotExist:
+        # Empty/pending state: mirror the mobile casual default so the
+        # setup screen lands on Strokes-Off Low like every other game.
         return {
             'status'  : 'pending',
-            'handicap': {'mode': HandicapMode.NET, 'net_percent': 100},
+            'handicap': {'mode': HandicapMode.STROKES_OFF, 'net_percent': 100},
             'players' : [],
             'holes'   : [],
             'money'   : {'bet_unit': float(foursome.round.bet_unit),

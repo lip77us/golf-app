@@ -5,11 +5,16 @@ import 'package:intl/intl.dart';
 import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
+import '../providers/round_provider.dart';
 import '../utils/grouping.dart';
 // Aliased so the top-level groupSizes(n) helper is reachable inside
 // _Step3GroupsAndTees, whose `groupSizes` field would otherwise shadow it.
 import '../utils/grouping.dart' as gr;
 import '../widgets/error_view.dart';
+import '../widgets/game_chip.dart';
+import '../widgets/golf_text_field.dart';
+import '../widgets/handicap_mode_selector.dart';
+import '../widgets/inline_message.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../widgets/payout_config_field.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
@@ -111,10 +116,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<CourseInfo>  _courses        = [];
   int?              _selectedCourseId;
   DateTime          _date           = DateTime.now();
-  // Tournament round-level default → Strokes-Off Low (matches the
-  // per-game casual defaults).  Users can switch back to Net or Gross
-  // before saving — Irish Rumble / Low Net rounds typically want Net.
-  String            _handicapMode   = 'strokes_off';
+  // Tournament round-level default → Net.  Tournament games are
+  // multi-foursome (Stroke Play, Irish Rumble, Low Net), and Strokes-
+  // Off-Low has no single "best golfer" reference point across foursomes
+  // — Net scales cleanly.  Users can switch to Gross or SO Low before
+  // saving for the rare per-round case.
+  String            _handicapMode   = 'net';
   int               _netPercent     = 100;
   bool              _netMaxDoubleBogey = true;
 
@@ -300,9 +307,22 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         return _orderedPlayerIds.isNotEmpty &&
             _orderedPlayerIds.every((id) => _playerTees[id] != null);
       case 4:
-        // Cup: Review step (always OK).  Non-cup: side games (always OK).
-        return true;
-      case 5: return true; // Review (non-cup) / post-create (cup)
+        // Cup: Review step (always OK — the cup itself is the game and
+        // step 3 validated each round has at least one).
+        if (cup) return true;
+        // Non-cup: side games step.  Require at least ONE game to exist
+        // somewhere — either a championship (step 0) or a side game
+        // (this step).  Without this gate a single-round tournament can
+        // be created with zero games configured, which is meaningless.
+        return _tournamentActiveGames.isNotEmpty ||
+            _activeGames.isNotEmpty;
+      case 5:
+        // Review/Create (non-cup) / post-create (cup).  Re-check the
+        // game-required rule as a belt-and-suspenders before Create
+        // fires — _canAdvance() drives the Create button too.
+        if (cup) return true;
+        return _tournamentActiveGames.isNotEmpty ||
+            _activeGames.isNotEmpty;
       default: return false;
     }
   }
@@ -606,6 +626,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         _activeGames.contains(GameIds.irishRumble) ||
         _activeGames.contains(GameIds.strokePlay)  ||
         _activeGames.contains(GameIds.pinkBall)    ||
+        // Match Play needs per-foursome bracket setup (or Three-Person
+        // Match setup for 3-player groups) before scoring can start.
+        _activeGames.contains(GameIds.matchPlay)   ||
         (_tournamentActiveGames.contains(GameIds.singlesNassau) && !matchPlayAutoConfigured);
     if (needsConfig) {
       setState(() {
@@ -876,6 +899,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _matchPlayNumPayouts  = nPays;
             _matchPlayPayouts     = pays;
           }),
+          hasAnyTournamentGame      : _tournamentActiveGames.isNotEmpty,
         );
       case 5:
         return _Step5Review(
@@ -1044,13 +1068,10 @@ class _Step0Tournament extends StatelessWidget {
           const SizedBox(height: 24),
 
           if (createNew) ...[
-            TextFormField(
+            GolfTextField(
               controller: nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Tournament name',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.emoji_events),
-              ),
+              label: 'Tournament name',
+              prefixIcon: Icons.emoji_events,
               textCapitalization: TextCapitalization.words,
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Enter a tournament name' : null,
@@ -1112,9 +1133,9 @@ class _Step0Tournament extends StatelessWidget {
               runSpacing: 4,
               children: [
                 for (final (gameValue, gameLabel) in kChampionshipGames)
-                  FilterChip(
-                    label: Text(gameLabel),
-                    selected: tournamentActiveGames.contains(gameValue),
+                  GameSelectableChip(
+                    label:      gameLabel,
+                    selected:   tournamentActiveGames.contains(gameValue),
                     onSelected: (v) => onToggleTournamentGame(gameValue, v),
                   ),
               ],
@@ -1127,10 +1148,9 @@ class _Step0Tournament extends StatelessWidget {
                     tournamentActiveGames.contains(GameIds.championshipStableford) ||
                     tournamentActiveGames.contains(GameIds.teamCup);
                 if (hasPrimary) return const SizedBox.shrink();
-                return Text(
-                  'Select Stroke Play, Stableford, or Cup Play to continue.',
-                  style: Theme.of(ctx).textTheme.bodySmall
-                      ?.copyWith(color: Theme.of(ctx).colorScheme.error),
+                return const InlineMessage(
+                  kind: InlineMessageKind.warn,
+                  text: 'Select Stroke Play, Stableford, or Cup Play to continue.',
                 );
               }),
             ],
@@ -1315,75 +1335,23 @@ class _Step1Details extends StatelessWidget {
           ],
 
           // ── Handicap Mode ───────────────────────────────────────────────
-          Text('Handicap Mode',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
+          // Use the same selector every casual setup screen uses so the
+          // wizard isn't a stylistic outlier.  The "Applies to all games
+          // in this tournament round." subtitle is preserved above since
+          // it's wizard-specific context the shared selector doesn't carry.
           Text('Applies to all games in this tournament round.',
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: Colors.grey)),
-          const SizedBox(height: 10),
-          LayoutBuilder(builder: (context, constraints) {
-            // 3 buttons → 4 borders at 1px each → subtract 4px before dividing
-            final segW = (constraints.maxWidth - 4) / 3;
-            return ToggleButtons(
-              borderRadius: BorderRadius.circular(8),
-              constraints: BoxConstraints.tightFor(width: segW, height: 44),
-              isSelected: [
-                handicapMode == 'gross',
-                handicapMode == 'net',
-                handicapMode == 'strokes_off',
-              ],
-              onPressed: (i) {
-                const modes = ['gross', 'net', 'strokes_off'];
-                onChangeHandicap(modes[i], netPercent);
-              },
-              children: [
-                const Text('Gross'),
-                const Text('Net'),
-                // FittedBox auto-shrinks text on narrow screens to avoid
-                // the 4px overflow that "Strokes Off" causes at default size.
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Text('Strokes Off'),
-                  ),
-                ),
-              ],
-            );
-          }),
-
-          // Handicap allowance — shown for net and strokes-off (not gross).
-          if (handicapMode != 'gross') ...[
-            const SizedBox(height: 12),
-            Row(children: [
-              const Text('Handicap %:'),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 80,
-                child: TextFormField(
-                  initialValue: '$netPercent',
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    suffixText: '%',
-                  ),
-                  onChanged: (v) {
-                    final pct = int.tryParse(v);
-                    if (pct != null && pct >= 0 && pct <= 200) {
-                      onChangeHandicap(handicapMode, pct);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('(100 = full handicap)',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: Colors.grey)),
-            ]),
-          ],
+          const SizedBox(height: 8),
+          HandicapModeSelector(
+            mode:             handicapMode,
+            netPercent:       netPercent,
+            onModeChanged:    (m) => onChangeHandicap(m, netPercent),
+            onPercentChanged: (p) => onChangeHandicap(handicapMode, p),
+            soNote: 'The lowest-handicap player in each foursome plays '
+                'to 0.  Other players get strokes proportional to '
+                '(their HCP − foursome low HCP), scaled by Net %.',
+          ),
 
           const SizedBox(height: 16),
 
@@ -1451,13 +1419,9 @@ class _Step2Players extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(children: [
           Expanded(
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: 'Search players…',
-                prefixIcon: Icon(Icons.search),
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
+            child: GolfTextField(
+              hint: 'Search players…',
+              prefixIcon: Icons.search,
               onChanged: onSearch,
             ),
           ),
@@ -1800,14 +1764,11 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
         const SizedBox(height: 24),
 
         // Cup name
-        TextField(
+        GolfTextField(
           controller: widget.cupNameCtrl,
-          decoration: const InputDecoration(
-            labelText : 'Cup name',
-            hintText  : 'e.g. Bandon Cup 2026',
-            border    : OutlineInputBorder(),
-            prefixIcon: Icon(Icons.emoji_events_outlined),
-          ),
+          label: 'Cup name',
+          hint: 'e.g. Bandon Cup 2026',
+          prefixIcon: Icons.emoji_events_outlined,
           textCapitalization: TextCapitalization.words,
           onChanged: (_) => setState(() {}),
         ),
@@ -2451,9 +2412,17 @@ class _GroupSizeEditorState extends State<_GroupSizeEditor> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
+      // `scrollable: true` wraps the dialog body in a SingleChildScrollView
+      // so a long group list (many players → many rows) scrolls inside the
+      // dialog rather than overflowing the screen.  Combined with the
+      // bounded-width SizedBox below, this also avoids the
+      // "RenderShrinkWrappingViewport does not support returning intrinsic
+      // dimensions" crash a bare ListView produces inside AlertDialog's
+      // IntrinsicWidth wrapper.
+      scrollable: true,
       title: const Text('Edit Group Sizes'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
+      content: SizedBox(
+        width: 320,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2473,53 +2442,49 @@ class _GroupSizeEditorState extends State<_GroupSizeEditor> {
                   fontStyle: FontStyle.italic),
             ),
             const SizedBox(height: 12),
-            // Group rows with steppers
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount : _sizes.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 4),
-                itemBuilder: (_, i) {
-                  final color = _groupColors[i % _groupColors.length];
-                  return Row(children: [
-                    SizedBox(
-                      width: 72,
-                      child: Text('Group ${i + 1}',
-                          style: TextStyle(
-                              color: color, fontWeight: FontWeight.bold)),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      iconSize: 22,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: _sizes[i] > 2 ? () => _dec(i) : null,
-                    ),
-                    SizedBox(
-                      width: 28,
-                      child: Center(
-                        child: Text('${_sizes[i]}',
-                            style: theme.textTheme.titleMedium),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      iconSize: 22,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: _sizes[i] < 4 ? () => _inc(i) : null,
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      iconSize: 20,
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Remove group',
-                      onPressed: _sizes.length > 1 ? () => _remove(i) : null,
-                    ),
-                  ]);
-                },
-              ),
-            ),
+            // Group rows with steppers — built inline so the row height
+            // grows with the group count rather than reserving a fixed
+            // ListView height (which left a 280-px hole when only two
+            // groups were configured and pushed the footer off-screen).
+            for (int i = 0; i < _sizes.length; i++) ...[
+              if (i > 0) const SizedBox(height: 4),
+              Row(children: [
+                SizedBox(
+                  width: 72,
+                  child: Text('Group ${i + 1}',
+                      style: TextStyle(
+                          color: _groupColors[i % _groupColors.length],
+                          fontWeight: FontWeight.bold)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline),
+                  iconSize: 22,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _sizes[i] > 2 ? () => _dec(i) : null,
+                ),
+                SizedBox(
+                  width: 28,
+                  child: Center(
+                    child: Text('${_sizes[i]}',
+                        style: theme.textTheme.titleMedium),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  iconSize: 22,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _sizes[i] < 4 ? () => _inc(i) : null,
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Remove group',
+                  onPressed: _sizes.length > 1 ? () => _remove(i) : null,
+                ),
+              ]),
+            ],
             const SizedBox(height: 8),
             Row(children: [
               TextButton.icon(
@@ -2599,6 +2564,11 @@ class _Step4Games extends StatefulWidget {
   final List<int>     initialMatchPlayPayouts;
   final void Function(int fee, int numPayouts, List<int> payouts)
       onMatchPlayConfigChanged;
+  /// True when ANY championship game (stroke play, stableford, singles
+  /// nassau, …) was picked back at step 0.  When false AND no side
+  /// games are selected, this step shows a warning explaining that the
+  /// tournament needs at least one game to proceed.
+  final bool          hasAnyTournamentGame;
 
   const _Step4Games({
     required this.activeGames,
@@ -2615,6 +2585,7 @@ class _Step4Games extends StatefulWidget {
     this.initialMatchPlayNumPayouts = 3,
     this.initialMatchPlayPayouts    = const [0, 0, 0, 0],
     required this.onMatchPlayConfigChanged,
+    this.hasAnyTournamentGame       = false,
   });
 
   @override
@@ -2733,9 +2704,26 @@ class _Step4GamesState extends State<_Step4Games> {
     final lowNetFee      = int.tryParse(_lowNetFeeCtrl.text.trim()) ?? 0;
     final lowNetPool     = lowNetFee * widget.numPlayers;
 
+    // Single source of truth for "no game configured anywhere".  Both
+    // championships (step 0) and side games (this step) count.  The
+    // wizard footer disables Next/Create under the same condition.
+    final hasAnyGame = widget.hasAnyTournamentGame ||
+        widget.activeGames.isNotEmpty;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+        if (!hasAnyGame) ...[
+          const InlineMessage(
+            kind: InlineMessageKind.warn,
+            text: 'Pick at least one side game below, or go back to '
+                'step 1 and pick a championship game (Stroke Play, '
+                'Stableford, Match Play).  A tournament needs at '
+                'least one game.',
+          ),
+          const SizedBox(height: 16),
+        ],
 
         // ── Stroke Play Championship Buy-In (shown first) ──────────────────────
         if (widget.hasTournamentLowNet) ...[
@@ -2752,14 +2740,10 @@ class _Step4GamesState extends State<_Step4Games> {
           const SizedBox(height: 12),
 
           // Entry fee
-          TextFormField(
-            controller:   _lowNetFeeCtrl,
-            decoration:   const InputDecoration(
-              labelText:  'Entry fee per player (\$)',
-              border:     OutlineInputBorder(),
-              prefixIcon: Icon(Icons.attach_money),
-              isDense:    true,
-            ),
+          GolfTextField(
+            controller: _lowNetFeeCtrl,
+            label: 'Entry fee per player (\$)',
+            prefixIcon: Icons.attach_money,
             keyboardType: TextInputType.number,
           ),
           if (lowNetFee > 0 && widget.numPlayers > 0) ...[
@@ -2803,14 +2787,10 @@ class _Step4GamesState extends State<_Step4Games> {
           const SizedBox(height: 12),
 
           // Entry fee
-          TextFormField(
-            controller:   _feeCtrl,
-            decoration:   const InputDecoration(
-              labelText:  'Entry fee per player (\$)',
-              border:     OutlineInputBorder(),
-              prefixIcon: Icon(Icons.attach_money),
-              isDense:    true,
-            ),
+          GolfTextField(
+            controller: _feeCtrl,
+            label: 'Entry fee per player (\$)',
+            prefixIcon: Icons.attach_money,
             keyboardType: TextInputType.number,
           ),
           if (fee > 0) ...[
@@ -2863,8 +2843,8 @@ class _Step4GamesState extends State<_Step4Games> {
           runSpacing: 6,
           children: [
             for (final meta in tournamentRoundGames)
-              FilterChip(
-                label:      Text(meta.displayName),
+              GameSelectableChip(
+                gameId:     meta.id,
                 selected:   widget.activeGames.contains(meta.id),
                 onSelected: (v) => widget.onToggleGame(meta.id, v),
               ),
@@ -2965,12 +2945,9 @@ class _Step5Review extends StatelessWidget {
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 4,
-            children: tournamentActiveGames.map((g) => Chip(
-              label: Text(gameLabels[g] ?? g,
-                  style: const TextStyle(fontSize: 12)),
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-            )).toList(),
+            children: tournamentActiveGames
+                .map((g) => GameChip(label: gameLabels[g] ?? g))
+                .toList(),
           ),
         ],
 
@@ -2982,12 +2959,9 @@ class _Step5Review extends StatelessWidget {
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 4,
-            children: activeGames.map((g) => Chip(
-              label: Text(gameLabels[g] ?? g,
-                  style: const TextStyle(fontSize: 12)),
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-            )).toList(),
+            children: activeGames
+                .map((g) => GameChip(label: gameLabels[g] ?? g))
+                .toList(),
           ),
         ],
 
@@ -3128,7 +3102,7 @@ class _ReviewRow extends StatelessWidget {
 // Step 6 — Game Setup (shown after round is created)
 // ===========================================================================
 
-class _Step6GameSetup extends StatelessWidget {
+class _Step6GameSetup extends StatefulWidget {
   final Round       round;
   final int?        tournamentId;
   final String      tournamentName;
@@ -3149,12 +3123,129 @@ class _Step6GameSetup extends StatelessWidget {
   });
 
   @override
+  State<_Step6GameSetup> createState() => _Step6GameSetupState();
+}
+
+class _Step6GameSetupState extends State<_Step6GameSetup> {
+  /// Game IDs whose setup screen returned a save signal this session.  The
+  /// _SetupButton flips from an empty circle to a filled flag once an ID
+  /// lands in here so the user can see which configs they've already
+  /// touched without re-tapping each card.
+  final Set<String> _savedConfigs = <String>{};
+
+  /// Foursome IDs whose Match Play / Three-Person Match setup returned a
+  /// save signal this session.  Same idea as [_savedConfigs] but indexed
+  /// by foursome (Match Play config is per-group, not per-game).
+  final Set<int> _savedFoursomes = <int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    // Push the just-created round into the shared RoundProvider so
+    // downstream setup screens that read from it (notably Three-Person
+    // Match, which derives its 3-player roster from
+    // RoundProvider.round.foursomes) see real data instead of an empty
+    // list.  Without this the 3-some setup screen showed "needs exactly
+    // 3 players" even when the foursome was correctly built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final rp = context.read<RoundProvider>();
+      if (rp.round?.id != widget.round.id) {
+        rp.loadRound(widget.round.id);
+      }
+    });
+  }
+
+  /// Push [page] and, if the user saved (the setup screen pops with `true`),
+  /// mark [gameId] as configured so the icon updates.
+  Future<void> _openSetup(String gameId, Widget page) async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => page),
+    );
+    if (!mounted) return;
+    if (result == true) {
+      setState(() => _savedConfigs.add(gameId));
+    }
+  }
+
+  /// Per-foursome variant of [_openSetup] for Match Play / Three-Person
+  /// Match.  Pushes the right route based on foursome size.
+  ///
+  /// Note: both setup screens use `pushReplacementNamed` to jump straight
+  /// to score entry after save (a casual-round convenience), so an
+  /// await-for-pop signal never resolves here.  Instead we re-fetch the
+  /// round when the user navigates back and inspect the foursome's
+  /// `configuredGames` list to decide whether to flip the icon.
+  Future<void> _openMatchPlaySetup(Foursome fs, List<Foursome> allFs) async {
+    final isThreesome = fs.realPlayers.length == 3;
+    final allIds  = allFs.map((f) => f.id).toList();
+    final peerIds = allFs
+        .where((f) =>
+            f.id != fs.id && f.realPlayers.length == fs.realPlayers.length)
+        .map((f) => f.id)
+        .toList();
+    // Ensure the RoundProvider has *this* round loaded before pushing.
+    // The setup screen reads its roster from RoundProvider.round; without
+    // this await the screen could mount before the post-frame load in
+    // initState completes, see an empty foursome list, and leave the
+    // Start Match button disabled with a "needs exactly 3 players"
+    // warning even when the group is correctly built.
+    final rp = context.read<RoundProvider>();
+    if (rp.round?.id != widget.round.id) {
+      await rp.loadRound(widget.round.id);
+      if (!mounted) return;
+    }
+    // Note: pushNamed without a generic type because the wizard's
+    // route generator builds MaterialPageRoute<dynamic>; declaring
+    // <bool> here trips a runtime type cast.  We don't read the
+    // result anyway — configuredGames is re-read from the round after
+    // navigation.
+    await Navigator.of(context).pushNamed(
+      isThreesome ? '/three-person-match-setup' : '/match-play-setup',
+      arguments: isThreesome
+          ? fs.id
+          : {
+              'foursomeId'     : fs.id,
+              'allMatchPlayIds': allIds,
+              'peerIds'        : peerIds,
+            },
+    );
+    if (!mounted) return;
+    // Reload the round so configuredGames reflects whatever the user
+    // saved (or didn't).  If the foursome now has match_play or
+    // three_person_match in configured_games, flip the icon.
+    await rp.loadRound(widget.round.id);
+    if (!mounted) return;
+    final refreshed = rp.round?.foursomes
+        .where((f) => f.id == fs.id)
+        .firstOrNull;
+    final isConfigured = refreshed != null &&
+        (refreshed.configuredGames.contains('match_play') ||
+         refreshed.configuredGames.contains('three_person_match'));
+    if (isConfigured) {
+      setState(() => _savedFoursomes.add(fs.id));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final round          = widget.round;
+    final activeGames    = widget.activeGames;
+    final tournamentId   = widget.tournamentId;
+    final tournamentName = widget.tournamentName;
+    final isCupTournament     = widget.isCupTournament;
+    final matchPlayConfigured = widget.matchPlayConfigured;
     final roundId        = round.id;
     final hasIrishRumble = activeGames.contains(GameIds.irishRumble);
     final hasStrokePlay  = activeGames.contains(GameIds.strokePlay);
     final hasPinkBall    = activeGames.contains(GameIds.pinkBall);
-    final hasMatchPlay   = activeGames.contains(GameIds.singlesNassau);
+    // hasMatchPlay covers both the cup-style singles game and the new
+    // single-pick match-play tournament game.  When match_play is the
+    // active slug, each foursome's "Set Up" button below routes to
+    // /three-person-match-setup for 3-player groups and /match-play-setup
+    // for 4-player groups.
+    final hasMatchPlay   = activeGames.contains(GameIds.singlesNassau) ||
+                           activeGames.contains(GameIds.matchPlay);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -3200,10 +3291,10 @@ class _Step6GameSetup extends StatelessWidget {
             _SetupButton(
               icon : Icons.flag_circle_outlined,
               label: 'Configure Irish Rumble',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => IrishRumbleSetupScreen(roundId: roundId),
-                ),
+              configured: _savedConfigs.contains(GameIds.irishRumble),
+              onTap: () => _openSetup(
+                GameIds.irishRumble,
+                IrishRumbleSetupScreen(roundId: roundId),
               ),
             ),
             const SizedBox(height: 12),
@@ -3213,10 +3304,10 @@ class _Step6GameSetup extends StatelessWidget {
             _SetupButton(
               icon : Icons.leaderboard_outlined,
               label: 'Configure Stroke Play',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => LowNetSetupScreen(roundId: roundId),
-                ),
+              configured: _savedConfigs.contains(GameIds.strokePlay),
+              onTap: () => _openSetup(
+                GameIds.strokePlay,
+                LowNetSetupScreen(roundId: roundId),
               ),
             ),
             const SizedBox(height: 12),
@@ -3226,10 +3317,10 @@ class _Step6GameSetup extends StatelessWidget {
             _SetupButton(
               icon : Icons.circle_outlined,
               label: 'Configure Pink Ball',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => PinkBallSetupScreen(roundId: roundId),
-                ),
+              configured: _savedConfigs.contains(GameIds.pinkBall),
+              onTap: () => _openSetup(
+                GameIds.pinkBall,
+                PinkBallSetupScreen(roundId: roundId),
               ),
             ),
             const SizedBox(height: 12),
@@ -3269,23 +3360,12 @@ class _Step6GameSetup extends StatelessWidget {
                 _SetupButton(
                   icon : Icons.sports_golf,
                   label: 'Set Up ${fs.label}',
-                  onTap: () {
-                    final allIds = round.foursomes.map((f) => f.id).toList();
-                    final peerIds = round.foursomes
-                        .where((f) =>
-                            f.id != fs.id &&
-                            f.realPlayers.length == fs.realPlayers.length)
-                        .map((f) => f.id)
-                        .toList();
-                    Navigator.of(context).pushNamed(
-                      '/match-play-setup',
-                      arguments: {
-                        'foursomeId'     : fs.id,
-                        'allMatchPlayIds': allIds,
-                        'peerIds'        : peerIds,
-                      },
-                    );
-                  },
+                  // Empty circle before this group's bracket / 3-some
+                  // config is saved, filled flag after.  Per-foursome
+                  // state since Match Play config is per-group.
+                  configured: _savedFoursomes.contains(fs.id),
+                  onTap: () =>
+                      _openMatchPlaySetup(fs, round.foursomes),
                 ),
                 const SizedBox(height: 8),
               ],        // closes for [...]
@@ -3305,17 +3385,45 @@ class _Step6GameSetup extends StatelessWidget {
 }
 
 class _SetupButton extends StatelessWidget {
+  /// Icon shown when [configured] is null (the side-rail icon, e.g. for
+  /// Cup Teams or Stroke Play that don't yet have configured-state plumbed
+  /// through).  When [configured] is non-null, an empty-circle /
+  /// filled-flag icon takes precedence so the user can see at a glance
+  /// whether each game has been set up.
   final IconData icon;
   final String   label;
   final VoidCallback onTap;
 
-  const _SetupButton({required this.icon, required this.label, required this.onTap});
+  /// null → use [icon] (legacy behavior).
+  /// false → show an empty circle (this game hasn't been configured yet).
+  /// true  → show a filled flag (this game's setup has been saved).
+  final bool? configured;
+
+  const _SetupButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.configured,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final IconData leading;
+    final Color    leadingColor;
+    if (configured == null) {
+      leading      = icon;
+      leadingColor = scheme.primary;
+    } else if (configured!) {
+      leading      = Icons.flag_circle;
+      leadingColor = scheme.primary;
+    } else {
+      leading      = Icons.circle_outlined;
+      leadingColor = scheme.onSurfaceVariant;
+    }
     return Card(
       child: ListTile(
-        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        leading: Icon(leading, color: leadingColor),
         title: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,

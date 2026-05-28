@@ -48,6 +48,133 @@ from tournament.models import Foursome
 
 
 # ---------------------------------------------------------------------------
+# Variant → per-hole balls-to-count
+# ---------------------------------------------------------------------------
+#
+# Irish Rumble ships with four named variants.  Each variant maps every
+# hole to a "balls to count" integer; the existing scoring code already
+# walks the `segments` JSON, so we derive an equivalent list of
+# {start_hole, end_hole, balls_to_count} segments from the variant's
+# per-hole values, collapsing contiguous runs that share the same value.
+#
+#   * classic         — Holes 1–6 → 1, 7–12 → 2, 13–17 → 3, 18 → 4
+#                       (the original/default variant — slow build-up to
+#                        "everyone counts" on the closing hole).
+#   * arizona_shuffle — Rotate 1/2/3 every 3 holes:
+#                       H1-3:1, H4-6:2, H7-9:3, H10-12:1, H13-15:2, H16-18:3
+#   * shuffle         — Par-driven: par 3 → 3 balls, par 4 → 2 balls,
+#                       par 5 → 1 ball.  Rewards collective short-iron play
+#                       and individual heroics on the long holes.
+#   * custom          — TD picks the per-hole balls-to-count themselves
+#                       (1-4 per hole, capped to group size at scoring time).
+#
+
+# Variant slugs — keep in sync with IrishRumbleConfig.VARIANT_CHOICES.
+VARIANT_CLASSIC         = 'classic'
+VARIANT_ARIZONA_SHUFFLE = 'arizona_shuffle'
+VARIANT_SHUFFLE         = 'shuffle'
+VARIANT_CUSTOM          = 'custom'
+
+VARIANT_CHOICES = (
+    (VARIANT_CLASSIC,         'Classic'),
+    (VARIANT_ARIZONA_SHUFFLE, 'Arizona Shuffle'),
+    (VARIANT_SHUFFLE,         'Shuffle (par-based)'),
+    (VARIANT_CUSTOM,          'Custom (per-hole)'),
+)
+
+
+def _shuffle_balls_for_par(par):
+    """Par-based variant: P3→3 balls, P4→2 balls, P5→1 ball, fallback 2."""
+    if par == 3:
+        return 3
+    if par == 4:
+        return 2
+    if par == 5:
+        return 1
+    return 2  # par 6 or anything weird — treat like P4
+
+
+def _balls_per_hole(variant, par_by_hole, custom_balls=None):
+    """
+    Return a dict {hole_number: balls_to_count} for all 18 holes given
+    a variant + the course's par-by-hole map.  `custom_balls` is a list
+    of 18 ints required when variant == 'custom'.
+    """
+    if variant == VARIANT_ARIZONA_SHUFFLE:
+        # H1-3:1, H4-6:2, H7-9:3, H10-12:1, H13-15:2, H16-18:3
+        pattern = [1, 2, 3, 1, 2, 3]
+        return {h: pattern[(h - 1) // 3] for h in range(1, 19)}
+
+    if variant == VARIANT_SHUFFLE:
+        return {
+            h: _shuffle_balls_for_par(par_by_hole.get(h, 4))
+            for h in range(1, 19)
+        }
+
+    if variant == VARIANT_CUSTOM:
+        if not custom_balls or len(custom_balls) != 18:
+            raise ValueError(
+                "custom variant requires custom_balls list of length 18"
+            )
+        return {h: int(custom_balls[h - 1]) for h in range(1, 19)}
+
+    # classic (and fallback for unknown values)
+    classic = {}
+    for h in range(1, 19):
+        if h <= 6:
+            classic[h] = 1
+        elif h <= 12:
+            classic[h] = 2
+        elif h <= 17:
+            classic[h] = 3
+        else:
+            classic[h] = 4
+    return classic
+
+
+def compute_segments(variant, par_by_hole, custom_balls=None):
+    """
+    Return the segments list for a given variant.  Contiguous holes
+    that share the same balls_to_count are collapsed into a single
+    segment so the existing UI breakdown stays readable (e.g. Shuffle on
+    a course with three consecutive par-4s yields one "Holes N-(N+2)
+    (best 2)" segment instead of three separate single-hole rows).
+
+    Output matches IrishRumbleConfig.segments JSON shape:
+        [{'start_hole': int, 'end_hole': int, 'balls_to_count': int}, ...]
+    """
+    per_hole = _balls_per_hole(variant, par_by_hole, custom_balls)
+    segments = []
+    seg_start = 1
+    cur_balls = per_hole[1]
+    for h in range(2, 19):
+        if per_hole[h] != cur_balls:
+            segments.append({
+                'start_hole': seg_start,
+                'end_hole': h - 1,
+                'balls_to_count': cur_balls,
+            })
+            seg_start = h
+            cur_balls = per_hole[h]
+    # Final segment (always runs through hole 18)
+    segments.append({
+        'start_hole': seg_start,
+        'end_hole': 18,
+        'balls_to_count': cur_balls,
+    })
+    return segments
+
+
+def par_by_hole_for_round(round_obj):
+    """
+    Public helper: returns {hole_number: par} for the round, using the
+    first available tee.  Setup code uses this to compute segments at
+    save time for variants that depend on course par.
+    """
+    return _par_index_for_round(round_obj)
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
@@ -527,6 +654,7 @@ def irish_rumble_summary(round_obj) -> dict:
         'payouts'      : payouts_list,
         'pool'         : pool,
         'balls_to_count': balls_to_count,
+        'variant'      : config.variant,
         'segments'     : segments_out,
         'overall'      : overall_out,
     }

@@ -15,6 +15,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_app_bar.dart';
 
 class MultiSkinsScreen extends StatefulWidget {
   final int roundId;
@@ -39,8 +40,8 @@ class _MultiSkinsScreenState extends State<MultiSkinsScreen> {
     final summary = rp.multiSkinsSummary;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Multi-Group Skins'),
+      appBar: GolfAppBar(
+        title: 'Multi-Group Skins',
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

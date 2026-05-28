@@ -23,6 +23,7 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/golf_text_field.dart';
 import '../widgets/error_view.dart';
 
 class TeePasteScreen extends StatefulWidget {
@@ -166,14 +167,10 @@ Then 18 hole rows (whitespace, tabs, or commas):
               const SizedBox(height: 12),
 
               // Tee metadata row 1: name (full width).
-              TextField(
+              GolfTextField(
                 controller: _nameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Tee name',
-                  border: OutlineInputBorder(),
-                  helperText:
-                      'e.g. "White", "Black/White Combo", "Gold M".',
-                ),
+                label: 'Tee name',
+                helper: 'e.g. "White", "Black/White Combo", "Gold M".',
                 textCapitalization: TextCapitalization.words,
                 onChanged: (_) {
                   if (_preview != null) setState(() { _preview = null; });
@@ -183,28 +180,22 @@ Then 18 hole rows (whitespace, tabs, or commas):
 
               // Metadata row 2: slope + rating side by side.
               Row(children: [
-                Expanded(child: TextField(
+                Expanded(child: GolfTextField(
                   controller: _slopeCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Slope',
-                    border: OutlineInputBorder(),
-                    helperText: '55–155',
-                  ),
+                  label: 'Slope',
+                  helper: '55–155',
                   onChanged: (_) {
                     if (_preview != null) setState(() { _preview = null; });
                   },
                 )),
                 const SizedBox(width: 12),
-                Expanded(child: TextField(
+                Expanded(child: GolfTextField(
                   controller: _ratingCtrl,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Course rating',
-                    border: OutlineInputBorder(),
-                    helperText: '60.0–80.0',
-                  ),
+                  label: 'Course rating',
+                  helper: '60.0–80.0',
                   onChanged: (_) {
                     if (_preview != null) setState(() { _preview = null; });
                   },

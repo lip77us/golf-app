@@ -141,7 +141,22 @@ class ApiClient {
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       message = (body['detail'] ?? body.values.first).toString();
     } catch (_) {
-      message = res.body.isNotEmpty ? res.body : 'HTTP ${res.statusCode}';
+      // Non-JSON body — most commonly Django's HTML debug page in dev mode
+      // (DEBUG=True returns a several-thousand-line stacktrace).  Dumping
+      // that into the user-facing error overflowed the screen by 15k
+      // pixels.  Treat anything that smells like HTML as opaque; for short
+      // plain-text bodies, keep them since they're often useful.
+      final body = res.body.trim();
+      final looksLikeHtml = body.startsWith('<') ||
+          body.toLowerCase().contains('<!doctype html');
+      if (body.isEmpty || looksLikeHtml) {
+        message = 'Server error (HTTP ${res.statusCode}). '
+            'Check the server log for details.';
+      } else if (body.length > 240) {
+        message = '${body.substring(0, 240)}…';
+      } else {
+        message = body;
+      }
     }
     if (res.statusCode == 401) {
       onSessionExpired?.call();
@@ -742,13 +757,17 @@ class ApiClient {
   Future<void> postSixesSetup(
     int foursomeId,
     List<Map<String, dynamic>> segments, {
-    String handicapMode = 'net',
-    int    netPercent   = 100,
+    String handicapMode       = 'net',
+    int    netPercent         = 100,
+    String scoringFormat      = 'classic',
+    String handicapAllocation = 'per_segment',
   }) async {
     await _post('/foursomes/$foursomeId/sixes/setup/', {
-      'segments'     : segments,
-      'handicap_mode': handicapMode,
-      'net_percent'  : netPercent,
+      'segments'            : segments,
+      'handicap_mode'       : handicapMode,
+      'net_percent'         : netPercent,
+      'scoring_format'      : scoringFormat,
+      'handicap_allocation' : handicapAllocation,
     });
   }
 
@@ -948,12 +967,19 @@ class ApiClient {
     double               entryFee     = 0,
     Map<String, double>  payoutConfig = const {},
     List<int>?           seedOrder,
+    /// Per-bracket handicap mode override.  When null the backend keeps
+    /// whatever the bracket already has (or falls back to round mode for
+    /// a fresh bracket).  Use 'net' / 'gross' / 'strokes_off'.
+    String?              handicapMode,
+    int?                 netPercent,
   }) async {
     final body = <String, dynamic>{
       'entry_fee'    : entryFee,
       'payout_config': {for (final e in payoutConfig.entries) e.key: e.value},
     };
-    if (seedOrder != null) body['seed_order'] = seedOrder;
+    if (seedOrder    != null) body['seed_order']    = seedOrder;
+    if (handicapMode != null) body['handicap_mode'] = handicapMode;
+    if (netPercent   != null) body['net_percent']   = netPercent;
     final data = await _post('/foursomes/$foursomeId/match-play/setup/', body);
     return data as Map<String, dynamic>;
   }
@@ -996,13 +1022,20 @@ class ApiClient {
     required int                         netPercent,
     required double                      entryFee,
     required List<Map<String, dynamic>>  payouts,
+    String                               variant     = 'classic',
+    List<int>?                           customBalls,
   }) async {
-    final data = await _post('/rounds/$roundId/irish-rumble/setup/', {
+    final body = <String, dynamic>{
       'handicap_mode': handicapMode,
       'net_percent'  : netPercent,
       'entry_fee'    : entryFee.toStringAsFixed(2),
       'payouts'      : payouts,
-    });
+      'variant'      : variant,
+    };
+    if (variant == 'custom' && customBalls != null) {
+      body['custom_balls'] = customBalls;
+    }
+    final data = await _post('/rounds/$roundId/irish-rumble/setup/', body);
     return data as Map<String, dynamic>;
   }
 

@@ -17,6 +17,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_app_bar.dart';
 
 class TripleCupScreen extends StatefulWidget {
   final int foursomeId;
@@ -46,8 +47,8 @@ class _TripleCupScreenState extends State<TripleCupScreen> {
     final loading = rp.loadingTripleCup;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('One Round Ryder Cup'),
+      appBar: GolfAppBar(
+        title: 'One Round Ryder Cup',
         actions: [
           if (summary != null) _HandicapBadge(summary: summary),
           const SizedBox(width: 8),

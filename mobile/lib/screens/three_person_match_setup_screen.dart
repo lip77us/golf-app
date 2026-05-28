@@ -20,6 +20,10 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
+import '../widgets/handicap_mode_selector.dart';
+import '../widgets/inline_message.dart';
+import '../widgets/section_card.dart';
 
 class ThreePersonMatchSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -43,12 +47,25 @@ class _ThreePersonMatchSetupScreenState
   String _mode       = 'strokes_off';
   int    _netPercent = 100;
 
-  final _entryFeeCtrl = TextEditingController(text: '0.00');
-  final _payoutCtrls  = <String, TextEditingController>{
-    '1st': TextEditingController(text: '0.00'),
-    '2nd': TextEditingController(text: '0.00'),
-    '3rd': TextEditingController(text: '0.00'),
-  };
+  final _entryFeeCtrl = TextEditingController(text: '0');
+  // Payout controllers indexed 0..2 → places "1st" / "2nd" / "3rd".  Number
+  // of *active* places is driven by [_payoutPlaces] (0–3), matching the
+  // Pink Ball / Low Net "Places paid" toggle UX.  Inactive places aren't
+  // sent on save.
+  static const _placeLabels = ['1st', '2nd', '3rd'];
+  final List<TextEditingController> _payoutCtrls = List.generate(
+      3, (_) => TextEditingController(text: '0'));
+  int _payoutPlaces = 0;
+
+  /// Format a monetary amount without unnecessary decimal places — "5"
+  /// instead of "5.00", "5.50" stays "5.50".  Matches the convention
+  /// used by Pink Ball / Low Net setup.
+  static String _fmtAmount(num value) {
+    final d = value.toDouble();
+    return d == d.truncateToDouble()
+        ? d.toInt().toString()
+        : d.toStringAsFixed(2);
+  }
 
   @override
   void initState() {
@@ -60,7 +77,7 @@ class _ThreePersonMatchSetupScreenState
   @override
   void dispose() {
     _entryFeeCtrl.dispose();
-    for (final c in _payoutCtrls.values) c.dispose();
+    for (final c in _payoutCtrls) c.dispose();
     super.dispose();
   }
 
@@ -82,7 +99,8 @@ class _ThreePersonMatchSetupScreenState
 
   double get _pool => _entryFee * (_rosterValid ? 3 : 3);
 
-  double get _payoutTotal => _payoutCtrls.values
+  double get _payoutTotal => _payoutCtrls
+      .take(_payoutPlaces)
       .map((c) => double.tryParse(c.text.trim()) ?? 0.0)
       .fold(0.0, (a, b) => a + b);
 
@@ -109,12 +127,18 @@ class _ThreePersonMatchSetupScreenState
         final money = _summary!.money;
         final fee   = (money['entry_fee'] as num?)?.toDouble() ?? 0.0;
         if (fee > 0) {
-          _entryFeeCtrl.text = fee.toStringAsFixed(2);
+          _entryFeeCtrl.text = _fmtAmount(fee);
           final cfg = (money['payout_config'] as Map<String, dynamic>?) ?? {};
-          for (final place in ['1st', '2nd', '3rd']) {
-            final amt = (cfg[place] as num?)?.toDouble() ?? 0.0;
-            _payoutCtrls[place]!.text = amt.toStringAsFixed(2);
+          // Derive the previously-saved place count: count from the top
+          // until we hit a missing or zero entry.  This keeps the toggle
+          // and the rendered rows consistent with what the backend stored.
+          int places = 0;
+          for (int i = 0; i < _placeLabels.length; i++) {
+            final amt = (cfg[_placeLabels[i]] as num?)?.toDouble() ?? 0.0;
+            _payoutCtrls[i].text = _fmtAmount(amt);
+            if (amt > 0) places = i + 1;
           }
+          _payoutPlaces = places;
         }
         _loading = false;
       });
@@ -132,21 +156,34 @@ class _ThreePersonMatchSetupScreenState
   }
 
   void _suggestPayouts() {
-    if (_pool <= 0) return;
-    // 60 / 30 / 10 split (3-player)
-    _payoutCtrls['1st']!.text = (_pool * 0.60).toStringAsFixed(2);
-    _payoutCtrls['2nd']!.text = (_pool * 0.30).toStringAsFixed(2);
-    _payoutCtrls['3rd']!.text = (_pool * 0.10).toStringAsFixed(2);
-    setState(() {});
+    if (_pool <= 0 || _payoutPlaces == 0) return;
+    setState(() {
+      // Distribute by the number of active places.  Final place absorbs
+      // rounding remainder so the split always totals the pool exactly.
+      final ratios = switch (_payoutPlaces) {
+        1 => const [1.0],
+        2 => const [0.7, 0.3],
+        _ => const [0.6, 0.3, 0.1],
+      };
+      double remaining = _pool;
+      for (int i = 0; i < _payoutPlaces; i++) {
+        final amt = i < _payoutPlaces - 1 ? (_pool * ratios[i]) : remaining;
+        remaining -= amt;
+        _payoutCtrls[i].text = _fmtAmount(amt);
+      }
+    });
   }
 
   Future<void> _save() async {
     if (!_rosterValid) return;
     setState(() { _saving = true; _error = null; });
     try {
+      // Only send the active places' amounts.  Inactive places aren't
+      // worth a zero entry — the backend treats absent keys as 0 anyway.
       final payouts = <String, double>{};
-      for (final e in _payoutCtrls.entries) {
-        payouts[e.key] = double.tryParse(e.value.text.trim()) ?? 0.0;
+      for (int i = 0; i < _payoutPlaces; i++) {
+        payouts[_placeLabels[i]] =
+            double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0;
       }
 
       final rp = context.read<RoundProvider>();
@@ -160,16 +197,16 @@ class _ThreePersonMatchSetupScreenState
 
       if (!mounted) return;
       if (ok) {
-        // Reload round so configuredGames is up to date, then navigate.
+        // Reload round so configuredGames is up to date for the caller.
         await rp.loadRound(rp.round!.id);
         if (!mounted) return;
-        // If this is a Pink Ball round, go to the pink ball screen.
-        final round = rp.round;
-        final dest  = (round?.activeGames.contains('pink_ball') == true)
-            ? '/pink-ball'
-            : '/score-entry';
-        Navigator.of(context).pushReplacementNamed(dest,
-            arguments: widget.foursomeId);
+        // Pop back to whoever pushed us (round screen, wizard Step 6,
+        // tournament list) rather than jumping straight into score
+        // entry — matches the Match Play setup behaviour and saves
+        // the user from backing through several screens to return
+        // to the main menu.  Pop with `true` so wizard Step 6 can
+        // flip the per-foursome "configured" icon to a flag.
+        Navigator.of(context).pop(true);
       } else {
         setState(() { _saving = false; _error = rp.error; });
       }
@@ -203,12 +240,9 @@ class _ThreePersonMatchSetupScreenState
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    friendlyError(_error!),
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: 13),
-                    textAlign: TextAlign.center,
+                  child: InlineMessage(
+                    kind: InlineMessageKind.error,
+                    text: friendlyError(_error!),
                   ),
                 ),
               SizedBox(
@@ -241,11 +275,17 @@ class _ThreePersonMatchSetupScreenState
         children: [
           _RosterCard(members: _realMembers),
           const SizedBox(height: 16),
-          _HandicapCard(
+          // Shared handicap selector — same widget the other casual /
+          // tournament setup screens use, so the picker reads identically
+          // across the app.  Defaults to SO Low like the other games.
+          HandicapModeSelector(
             mode:             _mode,
             netPercent:       _netPercent,
             onModeChanged:    (m) => setState(() => _mode = m),
             onPercentChanged: (p) => setState(() => _netPercent = p),
+            soNote: 'The lowest-handicap player in this threesome plays '
+                'to 0.  Other players receive (own HCP − low HCP) '
+                'strokes by stroke index, scaled by Net %.',
           ),
           const SizedBox(height: 16),
           _entryFeeCard(theme),
@@ -261,23 +301,19 @@ class _ThreePersonMatchSetupScreenState
 
   // ── Section widgets ───────────────────────────────────────────────────────
 
-  Widget _entryFeeCard(ThemeData theme) => _section(
-    theme, 'Entry Fee',
-    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      TextFormField(
+  Widget _entryFeeCard(ThemeData theme) => SectionCard(
+    title: 'Entry Fee',
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      GolfTextField(
         controller: _entryFeeCtrl,
-        decoration: const InputDecoration(
-          labelText:   'Per player (\$)',
-          border:      OutlineInputBorder(),
-          prefixIcon:  Icon(Icons.attach_money),
-          isDense:     true,
-        ),
+        label: 'Per player (\$)',
+        prefixIcon: Icons.attach_money,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
       ),
       if (_pool > 0) ...[
         const SizedBox(height: 6),
         Text(
-          'Prize pool: \$${_pool.toStringAsFixed(2)} (3 players)',
+          'Prize pool: \$${_fmtAmount(_pool)} (3 players)',
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
@@ -288,42 +324,57 @@ class _ThreePersonMatchSetupScreenState
   Widget _payoutsCard(ThemeData theme) {
     final remaining = _pool - _payoutTotal;
     final balanced  = remaining.abs() < 0.01 || _pool == 0;
-    return _section(
-      theme, 'Payouts',
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        for (final place in ['1st', '2nd', '3rd']) ...[
-          Row(children: [
-            SizedBox(
-              width: 32,
-              child: Text(place,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextFormField(
-                controller: _payoutCtrls[place],
-                decoration: const InputDecoration(
-                  prefixText: '\$ ',
-                  border:     OutlineInputBorder(),
-                  isDense:    true,
-                ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) => setState(() {}),
+    return SectionCard(
+      title: 'Payouts',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Places paid',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 6),
+        // 0–3 places — max is 3 since this is a 3-player game.  Same
+        // ToggleButtons pattern as Pink Ball / Low Net for consistency.
+        LayoutBuilder(builder: (context, constraints) {
+          final segW = ((constraints.maxWidth - 5) / 4).floorToDouble();
+          return ToggleButtons(
+            borderRadius: BorderRadius.circular(8),
+            constraints: BoxConstraints.tightFor(width: segW, height: 40),
+            isSelected: List.generate(4, (i) => i == _payoutPlaces),
+            onPressed: (n) => setState(() => _payoutPlaces = n),
+            children: const [Text('0'), Text('1'), Text('2'), Text('3')],
+          );
+        }),
+        if (_payoutPlaces > 0) ...[
+          const SizedBox(height: 14),
+          for (int i = 0; i < _payoutPlaces; i++) ...[
+            Row(children: [
+              SizedBox(
+                width: 32,
+                child: Text(_placeLabels[i],
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
               ),
-            ),
-          ]),
-          const SizedBox(height: 8),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GolfTextField(
+                  controller: _payoutCtrls[i],
+                  prefixText: '\$ ',
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 8),
+          ],
         ],
-        if (_pool > 0) ...[
+        if (_pool > 0 && _payoutPlaces > 0) ...[
           const Divider(height: 12),
           Row(children: [
             Expanded(
               child: Text(
                 balanced
                     ? 'Payouts balance ✓'
-                    : 'Remaining: \$${remaining.toStringAsFixed(2)}',
+                    : 'Remaining: \$${_fmtAmount(remaining)}',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: balanced
                         ? theme.colorScheme.primary
@@ -332,7 +383,11 @@ class _ThreePersonMatchSetupScreenState
             ),
             TextButton(
               onPressed: _suggestPayouts,
-              child: const Text('Auto-suggest (60/30/10)'),
+              child: Text(switch (_payoutPlaces) {
+                1 => 'Auto-suggest (winner takes all)',
+                2 => 'Auto-suggest (70/30)',
+                _ => 'Auto-suggest (60/30/10)',
+              }),
             ),
           ]),
         ],
@@ -340,9 +395,9 @@ class _ThreePersonMatchSetupScreenState
     );
   }
 
-  Widget _rulesCard(ThemeData theme) => _section(
-    theme, 'How it works',
-    Text(
+  Widget _rulesCard(ThemeData theme) => SectionCard(
+    title: 'How it works',
+    child: Text(
       'Holes 1–9: Points 5-3-1 per hole (5 pts to best net score, '
       '3 to 2nd, 1 to 3rd; ties split evenly so every hole pays 9 pts total).\n\n'
       'After hole 9, the player with the most cumulative points finishes 1st, '
@@ -351,30 +406,6 @@ class _ThreePersonMatchSetupScreenState
       'their tied positions.',
       style: theme.textTheme.bodySmall
           ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-    ),
-  );
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  Widget _section(ThemeData theme, String title, Widget child) => Card(
-    elevation: 0,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
-      side: BorderSide(color: theme.colorScheme.outline),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary)),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
     ),
   );
 }
@@ -448,87 +479,5 @@ class _RosterCard extends StatelessWidget {
   }
 }
 
-// ===========================================================================
-// _HandicapCard
-// ===========================================================================
-
-class _HandicapCard extends StatelessWidget {
-  final String mode;
-  final int    netPercent;
-  final ValueChanged<String> onModeChanged;
-  final ValueChanged<int>    onPercentChanged;
-
-  const _HandicapCard({
-    required this.mode,
-    required this.netPercent,
-    required this.onModeChanged,
-    required this.onPercentChanged,
-  });
-
-  static const _presets = <int>[100, 90, 80, 75];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Handicap',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary)),
-          const SizedBox(height: 8),
-          Text(
-            'Applies to all 9 holes of 5-3-1 scoring.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 10),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'net',         label: Text('Net')),
-              ButtonSegment(value: 'gross',       label: Text('Gross')),
-              ButtonSegment(value: 'strokes_off', label: Text('SO')),
-            ],
-            selected: {mode},
-            onSelectionChanged: (s) => onModeChanged(s.first),
-          ),
-          if (mode == 'net') ...[
-            const SizedBox(height: 12),
-            Text('Handicap allowance',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8, runSpacing: 4,
-              children: _presets.map((p) => ChoiceChip(
-                label:    Text('$p%'),
-                selected: p == netPercent,
-                onSelected: (_) => onPercentChanged(p),
-              )).toList(),
-            ),
-          ] else if (mode == 'gross') ...[
-            const SizedBox(height: 8),
-            Text('No strokes given — raw gross scores compared.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          ] else ...[
-            const SizedBox(height: 8),
-            Text(
-              'Lowest-handicap player plays to 0.  Each other player receives '
-              '(own HCP − low HCP) strokes, allocated by stroke index.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ]),
-      ),
-    );
-  }
-}
+// (Removed) _HandicapCard — replaced by the shared HandicapModeSelector
+// widget so the picker reads identically across every game setup screen.

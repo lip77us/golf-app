@@ -6,6 +6,9 @@ import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/game_chip.dart';
+import '../widgets/golf_app_bar.dart';
+import '../widgets/inline_message.dart';
 
 class CasualRoundScreen extends StatefulWidget {
   const CasualRoundScreen({super.key});
@@ -48,6 +51,23 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     // a new group.  Hard cap at the number of participating players —
     // there's no point offering more groups than there are players.
     return (highest + 1).clamp(1, _playerTees.length.clamp(1, 99));
+  }
+
+  /// The group a newly-added player should land in by default — the lowest
+  /// existing group that still has room (< 4 players), or a brand-new
+  /// group when every current group is full.  Keeps the user from having
+  /// to manually reassign every fifth player to group 2.
+  int _nextAvailableGroup() {
+    final counts = <int, int>{};
+    for (final g in _playerGroups.values) {
+      counts[g] = (counts[g] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return 1;
+    final sortedGroups = counts.keys.toList()..sort();
+    for (final g in sortedGroups) {
+      if (counts[g]! < 4) return g;
+    }
+    return sortedGroups.last + 1;
   }
 
   @override
@@ -125,11 +145,14 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     return tees.isEmpty ? 0 : tees.first.id;
   }
 
-  /// Render one game FilterChip, applying catalog combination rules on toggle.
+  /// Render one game chip, applying catalog combination rules on toggle.
+  /// Visual styling lives in [GameSelectableChip] (single source of
+  /// truth for the D-10 polished look — green fill, white bold text,
+  /// no checkmark icon).
   Widget _buildGameChip(GameMeta meta) {
     final selected = _activeGames.contains(meta.id);
-    return FilterChip(
-      label: Text(meta.displayName),
+    return GameSelectableChip(
+      gameId:   meta.id,
       selected: selected,
       onSelected: (picked) {
         setState(() {
@@ -156,8 +179,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         // men get their lowest-priority men's tee.
         final player = _players.firstWhere((p) => p.id == playerId);
         _playerTees[playerId] = _defaultTeeIdForPlayer(player);
-        // Default to group 1 — user can move them with the Group dropdown.
-        _playerGroups[playerId] = 1;
+        // Auto-spillover: land in the lowest group with room (< 4
+        // players).  Without this the 5th player joined group 1 and
+        // the round-setup API rejected the 5-player group.
+        _playerGroups[playerId] = _nextAvailableGroup();
       } else {
         _playerTees.remove(playerId);
         _playerGroups.remove(playerId);
@@ -183,6 +208,28 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         const SnackBar(content: Text('Please select at least 2 players.')),
       );
       return;
+    }
+    // Group capacity check — the server caps each group at 4 players.
+    // Auto-spillover handles this for new additions, but a user could
+    // overstuff a group by manually reassigning, so catch it before the
+    // round-setup POST and surface a friendly message.
+    if (_multiGroup) {
+      final counts = <int, int>{};
+      for (final g in _playerGroups.values) {
+        counts[g] = (counts[g] ?? 0) + 1;
+      }
+      final overstuffed = counts.entries
+          .where((e) => e.value > 4)
+          .map((e) => 'group ${e.key} has ${e.value}')
+          .toList();
+      if (overstuffed.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Each group can have at most 4 players — ${overstuffed.join(", ")}.',
+          ),
+        ));
+        return;
+      }
     }
     // Validate each active game's player-count requirement from the catalog.
     for (final gameId in _activeGames) {
@@ -301,6 +348,18 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           case GameIds.strokePlay:
             directRoute = '/low-net-setup';
             directArgs  = fullRound.id;
+          case GameIds.matchPlay:
+            // Match Play auto-dispatches by foursome size:
+            //   3 players → Three-Person Match (Points 5-3-1 + 1v1 final)
+            //   4 players → single-elimination bracket (semis 1–9,
+            //               Final + 3rd-place 10–18)
+            final realCount = firstFs.realPlayers.length;
+            if (realCount == 3) {
+              directRoute = '/three-person-match-setup';
+            } else {
+              directRoute = '/match-play-setup';
+            }
+            directArgs = firstFs.id;
         }
       }
 
@@ -324,7 +383,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Start Casual Round')),
+      appBar: const GolfAppBar(title: 'Start Casual Round'),
       body: _buildBody(),
       floatingActionButton: _loading || _error != null ? null : FloatingActionButton.extended(
         onPressed: _creating ? null : _createRound,
@@ -425,10 +484,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               if (warning == null) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  warning,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.error),
+                child: InlineMessage(
+                  text: warning,
+                  kind: InlineMessageKind.error,
                 ),
               );
             }),
@@ -439,7 +497,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           const SizedBox(height: 16),
 
           if (_selectedCourse == null)
-            const Text('Please select a course first to assign tees.', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic))
+            const InlineMessage(
+              text: 'Please select a course first to assign tees.',
+              kind: InlineMessageKind.info,
+            )
           else
             ListView.builder(
               shrinkWrap: true,
@@ -453,17 +514,28 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 final authPlayer = context.read<AuthProvider>().player;
                 final isLockedIn = authPlayer != null && player.id == authPlayer.id;
 
+                final scheme = Theme.of(context).colorScheme;
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       children: [
+                        // Per D-06: the logged-in user's checkbox is
+                        // *locked*, not disabled.  Use the active brand-
+                        // green fill (not the default disabled gray) so
+                        // the row reads "you're in" — and tag the You
+                        // chip with a lock icon to show why it can't be
+                        // toggled off.
                         Checkbox(
-                          value: isSelected,
+                          value:    isSelected,
                           onChanged: isLockedIn
-                              ? null  // locked — creator cannot remove themselves
+                              ? null
                               : (v) => _onPlayerToggle(player.id, v ?? false),
+                          fillColor: isLockedIn
+                              ? WidgetStateProperty.all(scheme.primary)
+                              : null,
+                          checkColor: isLockedIn ? Colors.white : null,
                         ),
                         Expanded(
                           child: Column(
@@ -481,10 +553,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                                 ),
                                 if (isLockedIn) ...[
                                   const SizedBox(width: 6),
-                                  const Chip(
-                                    label: Text('You', style: TextStyle(fontSize: 11)),
+                                  Chip(
+                                    avatar: Icon(Icons.lock_outline,
+                                        size: 12,
+                                        color: scheme.onSecondaryContainer),
+                                    label: const Text('You',
+                                        style: TextStyle(fontSize: 11)),
                                     padding: EdgeInsets.zero,
                                     visualDensity: VisualDensity.compact,
+                                    backgroundColor: scheme.secondaryContainer,
                                   ),
                                 ],
                               ]),

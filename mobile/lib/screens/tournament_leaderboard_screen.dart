@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/inline_message.dart';
 import 'tournament_low_net_setup_screen.dart';
 
 class TournamentLeaderboardScreen extends StatefulWidget {
@@ -978,8 +979,7 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
     if (_error != null) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(_error!, style: const TextStyle(color: Colors.red),
-              textAlign: TextAlign.center),
+          InlineMessage(kind: InlineMessageKind.error, text: _error!),
           const SizedBox(height: 12),
           FilledButton(onPressed: _load, child: const Text('Retry')),
         ]),

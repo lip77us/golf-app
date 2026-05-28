@@ -845,23 +845,44 @@ class SixesHoleResult {
   final int hole;
   final int? t1Net;
   final int? t2Net;
+  /// High-Low only: the higher of team 1's two nets on this hole.  Null
+  /// for classic scoring, where only best-net matters.
+  final int? t1Worst;
+  /// High-Low only: the higher of team 2's two nets on this hole.
+  final int? t2Worst;
+  /// Points awarded this hole: 0 or 1 in classic, 0-2 in high_low.
+  final int t1Points;
+  final int t2Points;
   final String? winner; // 'T1', 'T2', or 'Halved'
   final int margin;     // positive = team1 leading after this hole
+  /// High-Low only: false for holes played after the segment closed out.
+  /// True for every hole in classic.
+  final bool counts;
 
   const SixesHoleResult({
     required this.hole,
     this.t1Net,
     this.t2Net,
+    this.t1Worst,
+    this.t2Worst,
+    this.t1Points = 0,
+    this.t2Points = 0,
     this.winner,
     required this.margin,
+    this.counts = true,
   });
 
   factory SixesHoleResult.fromJson(Map<String, dynamic> j) => SixesHoleResult(
-        hole:   j['hole'] as int,
-        t1Net:  j['t1_net'] as int?,
-        t2Net:  j['t2_net'] as int?,
-        winner: j['winner'] as String?,
-        margin: j['margin'] as int? ?? 0,
+        hole:     j['hole']    as int,
+        t1Net:    j['t1_net']  as int?,
+        t2Net:    j['t2_net']  as int?,
+        t1Worst:  j['t1_worst'] as int?,
+        t2Worst:  j['t2_worst'] as int?,
+        t1Points: j['t1_pts']  as int? ?? 0,
+        t2Points: j['t2_pts']  as int? ?? 0,
+        winner:   j['winner']  as String?,
+        margin:   j['margin']  as int? ?? 0,
+        counts:   j['counts']  as bool? ?? true,
       );
 }
 
@@ -889,6 +910,11 @@ class SixesSegment {
   final SixesTeamInfo team1;
   final SixesTeamInfo team2;
   final List<SixesHoleResult> holes; // holes played so far in this segment
+  /// Running point totals for this segment.  In classic these match the
+  /// "holes won" count; in high_low they reflect the 2-pt-per-hole split
+  /// and skip any holes played after the segment closed out.
+  final int t1Points;
+  final int t2Points;
 
   const SixesSegment({
     required this.label,
@@ -900,6 +926,8 @@ class SixesSegment {
     required this.team1,
     required this.team2,
     required this.holes,
+    this.t1Points = 0,
+    this.t2Points = 0,
   });
 
   factory SixesSegment.fromJson(Map<String, dynamic> j) => SixesSegment(
@@ -914,6 +942,8 @@ class SixesSegment {
         holes: (j['holes'] as List? ?? [])
             .map((h) => SixesHoleResult.fromJson(h as Map<String, dynamic>))
             .toList(),
+        t1Points: j['t1_points'] as int? ?? 0,
+        t2Points: j['t2_points'] as int? ?? 0,
       );
 
   int get totalHoles => endHole - startHole + 1;
@@ -958,6 +988,15 @@ class SixesSummary {
   /// Percent of playing handicap to apply in net mode (100 = full).
   final int netPercent;
 
+  /// 'per_segment' (legacy default — spread SO across 3 matches) or
+  /// 'full_round' (allocate strokes by round-wide stroke index).  Only
+  /// meaningful when handicapMode == 'strokes_off'.
+  final String handicapAllocation;
+
+  /// 'classic' (best-ball, 1 pt/hole, with extras) or 'high_low'
+  /// (best+worst, 2 pts/hole, 3 segments only, strict closeout).
+  final String scoringFormat;
+
   const SixesSummary({
     required this.segments,
     required this.team1Wins,
@@ -965,11 +1004,15 @@ class SixesSummary {
     required this.halves,
     required this.handicapMode,
     required this.netPercent,
+    this.handicapAllocation = 'per_segment',
+    this.scoringFormat      = 'classic',
   });
 
   bool get isNet        => handicapMode == 'net';
   bool get isGross      => handicapMode == 'gross';
   bool get isStrokesOff => handicapMode == 'strokes_off';
+  bool get isHighLow    => scoringFormat == 'high_low';
+  bool get isClassic    => scoringFormat == 'classic';
 
   factory SixesSummary.fromJson(Map<String, dynamic> j) {
     final overall = j['overall']  as Map<String, dynamic>? ?? {};
@@ -978,11 +1021,13 @@ class SixesSummary {
       segments: (j['segments'] as List? ?? [])
           .map((s) => SixesSegment.fromJson(s as Map<String, dynamic>))
           .toList(),
-      team1Wins:    overall['team1_wins'] as int? ?? 0,
-      team2Wins:    overall['team2_wins'] as int? ?? 0,
-      halves:       overall['halves']     as int? ?? 0,
-      handicapMode: hcap['mode']          as String? ?? 'net',
-      netPercent:   hcap['net_percent']   as int?    ?? 100,
+      team1Wins:          overall['team1_wins']  as int? ?? 0,
+      team2Wins:          overall['team2_wins']  as int? ?? 0,
+      halves:             overall['halves']      as int? ?? 0,
+      handicapMode:       hcap['mode']           as String? ?? 'net',
+      netPercent:         hcap['net_percent']    as int?    ?? 100,
+      handicapAllocation: hcap['allocation']     as String? ?? 'per_segment',
+      scoringFormat:      j['scoring_format']    as String? ?? 'classic',
     );
   }
 }
@@ -996,8 +1041,13 @@ class SixesSummary {
 /// carry the real TournamentTeam.colour string on the summary and
 /// resolve to whatever the cup admin chose; see
 /// [resolveTripleCupTeamColor].
-const Color kTripleCupTeam1Color = Color(0xFFB71C1C); // Red 900
-const Color kTripleCupTeam2Color = Color(0xFF0D47A1); // Blue 900
+// Calmer burgundy / slate (matches GolfTokens.teamRed / teamBlue in
+// lib/theme/tokens.dart).  Defined as literals here to keep models.dart
+// free of theme imports; keep the two files in sync.  Per the May 2026
+// design audit (D-04), team identity colors stay distinct from the
+// loud Material reds reserved for errors and destructive actions.
+const Color kTripleCupTeam1Color = Color(0xFF8E2E2E); // calm burgundy
+const Color kTripleCupTeam2Color = Color(0xFF1B4F8E); // slate navy
 
 /// Map a cup colour name (case-insensitive — "Red", "blue", "Gold",
 /// "Tilden Green", etc.) to a flat Material colour.  Falls back to

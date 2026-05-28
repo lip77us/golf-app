@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../widgets/golf_text_field.dart';
 
 /// Staff-only screen for Pink Ball round-level configuration:
 ///   • Ball colour label (e.g. "Pink", "Red", "Yellow")
@@ -28,10 +29,16 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
   final _colorCtrl = TextEditingController(text: 'Pink');
   final _entryCtrl = TextEditingController(text: '0');
 
-  // Payout rows: one controller per paid place
+  // Payout rows: one controller per paid place.  Values are GROUP TOTALS —
+  // the prize for finishing in that place, before splitting among the
+  // winning group's members.  Per-player amounts are shown as derived
+  // helper text under each field so users see what each group size pays.
   final List<TextEditingController> _payoutCtrls = [];
   int _payoutPlaces = 0;
   int _numPlayers = 0;
+  /// Player count per foursome (e.g. [4, 3]) — drives the per-group-size
+  /// per-player breakdown shown under each payout field.
+  List<int> _groupSizes = const [];
 
   @override
   void initState() {
@@ -58,14 +65,46 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
   double get _allocated =>
       _payoutCtrls.fold(0.0, (s, c) => s + (double.tryParse(c.text.trim()) ?? 0.0));
 
-  // Payouts are entered as per-player amounts; the actual group total is ×4.
-  double get _poolPerPerson => _pool / 4.0;
-
   bool get _poolBalanced {
     if (_numPlayers == 0) return true;
     if (_pool <= 0) return true;
     if (_payoutPlaces == 0) return _pool == 0;
-    return (_poolPerPerson - _allocated).abs() < 0.01;
+    return (_pool - _allocated).abs() < 0.01;
+  }
+
+  /// Distinct foursome sizes in this round, sorted descending (foursome,
+  /// threesome, …).  Used to compute the per-player payout breakdown.
+  List<int> get _distinctGroupSizes {
+    final set = _groupSizes.where((n) => n > 0).toSet().toList()..sort((a, b) => b.compareTo(a));
+    return set;
+  }
+
+  /// Friendly noun for a group of [n] players ("foursome", "threesome", etc.).
+  static String _groupSizeLabel(int n) {
+    switch (n) {
+      case 1: return 'solo';
+      case 2: return 'twosome';
+      case 3: return 'threesome';
+      case 4: return 'foursome';
+      default: return '$n-some';
+    }
+  }
+
+  /// Helper-text line under a payout field showing the per-player split for
+  /// each distinct group size, e.g. "Splits to $8.75/player (foursome) or
+  /// $11.67/player (threesome)."  Returns null when the round has no
+  /// configured groups yet, when the amount is zero, or when every group is
+  /// the same size and the per-player number is just amount/N (still useful
+  /// — we show that too).
+  String? _perPlayerHelperFor(double amount) {
+    if (amount <= 0) return null;
+    final sizes = _distinctGroupSizes;
+    if (sizes.isEmpty) return null;
+    final parts = sizes
+        .map((s) => '\$${(amount / s).toStringAsFixed(2)}/player '
+            '(${_groupSizeLabel(s)})')
+        .join(' • ');
+    return 'Splits to $parts.';
   }
 
   TextEditingController _makePayoutCtrl(String text) {
@@ -85,16 +124,28 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
       final payouts = (data['payouts'] as List? ?? []);
       final ctrls   = <TextEditingController>[];
       for (final p in payouts) {
-        // Stored as group total; display as per-player (÷4).
+        // Stored and displayed as the GROUP TOTAL prize for that place.
+        // The per-player split is shown as helper text in the UI.
         final amt = double.tryParse(p['amount']?.toString() ?? '') ?? 0.0;
-        ctrls.add(_makePayoutCtrl(_fmtAmount(amt / 4.0)));
+        ctrls.add(_makePayoutCtrl(_fmtAmount(amt)));
       }
 
       final fee = (data['entry_fee'] as num?) ?? 0.0;
+      // Derive group sizes from the foursomes array so the per-player
+      // breakdown helper text knows how to split each prize.
+      final foursomes = (data['foursomes'] as List? ?? []);
+      final groupSizes = foursomes
+          .map((fs) {
+            final players = (fs as Map<String, dynamic>)['players'] as List? ?? [];
+            return players.length;
+          })
+          .cast<int>()
+          .toList();
       setState(() {
         _colorCtrl.text = data['ball_color'] as String? ?? 'Pink';
         _entryCtrl.text = _fmtAmount(fee);
         _numPlayers     = data['num_players'] as int? ?? 0;
+        _groupSizes     = groupSizes;
         _payoutPlaces   = ctrls.length;
         _configured     = ctrls.isNotEmpty || fee > 0;
         for (final c in _payoutCtrls) c.dispose();
@@ -121,8 +172,9 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
   }
 
   /// Apply a quick-fill preset.  [ratios] must sum to 1.0.
-  /// Amounts are calculated from the current per-player pool; the last place
-  /// gets the remainder so rounding never leaves the pool unbalanced.
+  /// Amounts are calculated from the total pool as group-total prizes; the
+  /// last place gets the remainder so rounding never leaves the pool
+  /// unbalanced.
   void _applyPreset(List<double> ratios) {
     final fee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
     if (fee <= 0) {
@@ -141,7 +193,7 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
       );
       return;
     }
-    final pool = _poolPerPerson;
+    final pool = _pool;
     setState(() {
       final n = ratios.length;
       while (_payoutCtrls.length < n) _payoutCtrls.add(_makePayoutCtrl('0'));
@@ -159,8 +211,8 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
   Future<void> _save() async {
     if (!_poolBalanced) {
       setState(() {
-        _error = 'Per-player payouts (\$${_allocated.toStringAsFixed(2)}/player) must equal '
-            '\$${_poolPerPerson.toStringAsFixed(2)}/player.';
+        _error = 'Payouts total \$${_allocated.toStringAsFixed(2)}, '
+            'pool is \$${_pool.toStringAsFixed(2)}.';
       });
       return;
     }
@@ -168,9 +220,10 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
     final color    = _colorCtrl.text.trim().isEmpty ? 'Pink' : _colorCtrl.text.trim();
     final payouts  = <Map<String, dynamic>>[];
     for (int i = 0; i < _payoutCtrls.length; i++) {
-      // Display is per-player; store as group total (×4).
-      final perPerson = double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0;
-      payouts.add({'place': i + 1, 'amount': perPerson * 4.0});
+      // Stored as the group total prize for that place — split among the
+      // winning group's members at payout time.
+      final groupTotal = double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0;
+      payouts.add({'place': i + 1, 'amount': groupTotal});
     }
 
     setState(() { _saving = true; _error = null; });
@@ -184,7 +237,9 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
       );
       if (!mounted) return;
       context.read<RoundProvider>().loadRound(widget.roundId);
-      Navigator.of(context).pop();
+      // Pop with `true` so the wizard's _Step6GameSetup knows to flip
+      // the Configure Pink Ball icon from empty-circle to filled-flag.
+      Navigator.of(context).pop(true);
     } catch (e) {
       setState(() { _saving = false; _error = e.toString(); });
     }
@@ -238,25 +293,19 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
                                 ?.copyWith(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 16),
 
-                        TextFormField(
+                        GolfTextField(
                           controller: _colorCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Ball Colour',
-                            hintText: 'e.g. Pink, Red, Yellow',
-                            border: OutlineInputBorder(),
-                          ),
+                          label: 'Ball Colour',
+                          hint: 'e.g. Pink, Red, Yellow',
                           textCapitalization: TextCapitalization.words,
                         ),
                         const SizedBox(height: 12),
 
-                        TextFormField(
+                        GolfTextField(
                           controller: _entryCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Entry fee per player (\$)',
-                            hintText: '0',
-                            prefixText: '\$ ',
-                            border: OutlineInputBorder(),
-                          ),
+                          label: 'Entry fee per player (\$)',
+                          hint: '0',
+                          prefixText: '\$ ',
                           keyboardType:
                               const TextInputType.numberWithOptions(decimal: true),
                         ),
@@ -315,19 +364,36 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
                           ...List.generate(_payoutPlaces, (i) {
                             final ordinal =
                                 ['1st', '2nd', '3rd', '4th', '5th'][i];
+                            final amount = double.tryParse(
+                                _payoutCtrls[i].text.trim()) ?? 0.0;
+                            final helper = _perPlayerHelperFor(amount);
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 10),
-                              child: TextFormField(
-                                controller: _payoutCtrls[i],
-                                decoration: InputDecoration(
-                                  labelText: '$ordinal place payout (\$/player)',
-                                  border: const OutlineInputBorder(),
-                                  prefixIcon:
-                                      const Icon(Icons.emoji_events_outlined),
-                                  isDense: true,
-                                ),
-                                keyboardType: const TextInputType
-                                    .numberWithOptions(decimal: true),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  GolfTextField(
+                                    controller: _payoutCtrls[i],
+                                    label: '$ordinal place payout',
+                                    prefixIcon: Icons.emoji_events_outlined,
+                                    keyboardType: const TextInputType
+                                        .numberWithOptions(decimal: true),
+                                  ),
+                                  if (helper != null) ...[
+                                    const SizedBox(height: 4),
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 12),
+                                      child: Text(
+                                        helper,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             );
                           }),
@@ -352,10 +418,9 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
                         ] else if (_numPlayers > 0 && _pool > 0) ...[
                           const SizedBox(height: 8),
                           _PoolBalanceRow(
-                            pool:      _poolPerPerson,
+                            pool:      _pool,
                             allocated: _allocated,
                             balanced:  _poolBalanced,
-                            perPlayer: true,
                           ),
                         ],
                       ],

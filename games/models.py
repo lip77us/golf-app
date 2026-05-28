@@ -24,7 +24,35 @@ class SixesSegment(models.Model):
       - Segment 2: random draw
       - Segment 3: remaining combination
       - Extra match: loser of previous match chooses partner (loser_choice)
+
+    Scoring format (see `scoring_format` below):
+      - classic:  1 point per hole.  Best ball: lowest net per team wins
+                  the hole.  Match-play closeout (lead > holes remaining).
+                  Extra matches collect leftover holes after early finishes.
+      - high_low: 2 points per hole.  1 pt for best-net vs best-net (low),
+                  1 pt for worst-net vs worst-net (high).  Closeout when
+                  point lead exceeds 2 * holes remaining in the segment.
+                  No extra matches — all 18 holes are played, post-closeout
+                  scores are entered but don't add to that segment's points.
+                  Overall round winner = count of segments won.
     """
+    SCORING_FORMAT_CHOICES = (
+        ('classic',  'Classic (best ball, 1 pt/hole)'),
+        ('high_low', 'High-Low (best+worst, 2 pts/hole)'),
+    )
+    # Handicap allocation modes — orthogonal to handicap_mode below.
+    # 'per_segment' is the historical Sixes behavior for STROKES_OFF mode
+    # (player's SO is split across the 3 segments: floor(SO/3) plus 1 for
+    # the first SO%3 matches).  'full_round' allocates all strokes on the
+    # round-wide stroke index (a player with N strokes gets one on every
+    # hole where SI <= N) — same as a normal NET round, just applied to
+    # SO mode.  Has no effect when handicap_mode is 'net' or 'gross'
+    # (those already allocate round-wide / not at all, respectively).
+    HCAP_ALLOCATION_CHOICES = (
+        ('per_segment', 'Spread across 3 segments'),
+        ('full_round',  'Round-wide (strokes on hardest holes)'),
+    )
+
     foursome            = models.ForeignKey(Foursome, on_delete=models.CASCADE, related_name='sixes_segments')
     segment_number      = models.PositiveSmallIntegerField()
     start_hole          = models.PositiveSmallIntegerField()
@@ -48,6 +76,27 @@ class SixesSegment(models.Model):
                             default=100,
                             validators=[MinValueValidator(0), MaxValueValidator(200)],
                             help_text="Percentage of playing handicap applied when handicap_mode='net'.",
+                        )
+    scoring_format      = models.CharField(
+                            max_length=20,
+                            choices=SCORING_FORMAT_CHOICES,
+                            default='classic',
+                            help_text=(
+                                "Scoring rules.  'classic' = best-ball 1 pt/hole "
+                                "with extras; 'high_low' = low+high 2 pts/hole, "
+                                "3 segments only, strict point-based closeout."
+                            ),
+                        )
+    handicap_allocation = models.CharField(
+                            max_length=20,
+                            choices=HCAP_ALLOCATION_CHOICES,
+                            default='per_segment',
+                            help_text=(
+                                "Only meaningful for handicap_mode='strokes_off'. "
+                                "'per_segment' splits SO across the 3 matches "
+                                "(legacy default); 'full_round' allocates strokes "
+                                "by round-wide stroke index instead."
+                            ),
                         )
     created_at          = models.DateTimeField(auto_now_add=True)
 
@@ -77,22 +126,50 @@ class SixesTeam(models.Model):
 
 class SixesHoleResult(models.Model):
     """
-    Best ball result for one hole within a SixesSegment.
-    winning_team is null on a halve.
-    holes_up_after: running match play margin after this hole
-        (positive = team1 leading, negative = team2 leading).
+    Per-hole result for one hole within a SixesSegment.
+
+    For classic format, this stores best-ball results (1 pt/hole).
+    For high_low format, it also stores worst-net values + per-team points.
+
+    winning_team is null on a halve (1-1 in high_low or tied in classic).
+    holes_up_after: running point differential after this hole
+        (positive = team1 leading, negative = team2 leading).  For classic
+        this matches "holes up"; for high_low it's the points-up margin.
+    team1_points / team2_points: points awarded this hole.
+        classic:  exactly one of (1,0) / (0,0 halve) / (0,1).
+        high_low: any combination of (0-2, 0-2) summing to 0 or 2.
     """
     segment             = models.ForeignKey(SixesSegment, on_delete=models.CASCADE, related_name='hole_results')
     hole_number         = models.PositiveSmallIntegerField()
     team1_best_net      = models.SmallIntegerField(null=True, blank=True)
     team2_best_net      = models.SmallIntegerField(null=True, blank=True)
+    team1_worst_net     = models.SmallIntegerField(null=True, blank=True,
+                            help_text="High-Low only: the higher of team 1's two nets.")
+    team2_worst_net     = models.SmallIntegerField(null=True, blank=True,
+                            help_text="High-Low only: the higher of team 2's two nets.")
+    team1_points        = models.PositiveSmallIntegerField(
+                            default=0,
+                            help_text="Points awarded to team 1 on this hole (0/1 classic, 0-2 high_low)."
+                        )
+    team2_points        = models.PositiveSmallIntegerField(
+                            default=0,
+                            help_text="Points awarded to team 2 on this hole (0/1 classic, 0-2 high_low)."
+                        )
     winning_team        = models.ForeignKey(
                             SixesTeam, on_delete=models.SET_NULL,
                             null=True, blank=True, related_name='holes_won'
                         )
     holes_up_after      = models.SmallIntegerField(
                             default=0,
-                            help_text="Running margin after this hole: +ve = team1 leading."
+                            help_text="Running point margin after this hole: +ve = team1 leading."
+                        )
+    counts_for_segment  = models.BooleanField(
+                            default=True,
+                            help_text=(
+                                "High-Low only: False for holes played after "
+                                "the segment closed out — the score is "
+                                "recorded but doesn't add to segment points."
+                            ),
                         )
 
     class Meta:
@@ -634,13 +711,21 @@ class NassauPress(models.Model):
 class IrishRumbleConfig(models.Model):
     """
     Defines the Irish Rumble structure for a round.
-    segments is a JSON list defining each segment:
-        [
-          {"start_hole": 1,  "end_hole": 6,  "balls_to_count": 1},
-          {"start_hole": 7,  "end_hole": 12, "balls_to_count": 2},
-          {"start_hole": 13, "end_hole": 17, "balls_to_count": 3},
-          {"start_hole": 18, "end_hole": 18, "balls_to_count": 4},
-        ]
+
+    The `variant` field selects one of four named scoring patterns; the
+    `segments` JSON is derived from the variant + course pars at setup
+    time and stored verbatim so the scoring code stays variant-agnostic.
+
+    Variants:
+      * classic         — H1-6:1, H7-12:2, H13-17:3, H18:4 (original)
+      * arizona_shuffle — H1-3:1, H4-6:2, H7-9:3, H10-12:1, H13-15:2, H16-18:3
+      * shuffle         — Par-driven: P3→3 balls, P4→2 balls, P5→1 ball
+      * custom          — TD picks per-hole balls-to-count (1-4)
+
+    `custom_balls` stores the TD's 18-element list for the custom variant;
+    it's null/empty for the named variants (segments are computed from
+    variant + par at save time).
+
     For a 3-some foursome, balls_to_count is automatically capped at
     the number of real players in that group (phantom excluded from count).
 
@@ -651,7 +736,30 @@ class IrishRumbleConfig(models.Model):
     playing_handicap across ALL foursomes in the round (not just within
     each group), so every player competes from the same baseline.
     """
+    VARIANT_CHOICES = (
+        ('classic',         'Classic'),
+        ('arizona_shuffle', 'Arizona Shuffle'),
+        ('shuffle',         'Shuffle (par-based)'),
+        ('custom',          'Custom (per-hole)'),
+    )
+
     round               = models.OneToOneField(Round, on_delete=models.CASCADE, related_name='irish_rumble_config')
+    variant             = models.CharField(
+                            max_length=20,
+                            choices=VARIANT_CHOICES,
+                            default='classic',
+                            help_text=(
+                                "Scoring pattern.  The segments JSON below is "
+                                "derived from variant + course par at setup."
+                            ),
+                        )
+    custom_balls        = models.JSONField(
+                            null=True, blank=True,
+                            help_text=(
+                                "Custom variant: 18-element list of per-hole "
+                                "balls-to-count (1-4 each).  Null for named variants."
+                            ),
+                        )
     handicap_mode       = models.CharField(
                             max_length=20,
                             choices=HandicapMode.choices,
@@ -999,6 +1107,23 @@ class MatchPlayBracket(models.Model):
                             null=True, blank=True, related_name='match_play_wins'
                         )
     status              = models.CharField(max_length=20, choices=MatchStatus.choices, default=MatchStatus.PENDING)
+    # Per-bracket handicap configuration so a match-play side game can use
+    # Strokes-Off-Low (best golfer plays to 0) within the foursome even when
+    # the round-wide handicap mode is set differently for other games like
+    # Stroke Play.  Defaults to NET / 100 so existing brackets — which were
+    # implicitly inheriting round.handicap_mode — keep their previous
+    # behaviour after migration; new brackets explicitly carry the chosen
+    # mode.  See services/tournament_match_play.py for the resolution rule.
+    handicap_mode       = models.CharField(
+                            max_length=20,
+                            choices=HandicapMode.choices,
+                            default=HandicapMode.NET,
+                            help_text="Per-bracket handicap mode (net/gross/strokes_off).",
+                        )
+    net_percent         = models.PositiveSmallIntegerField(
+                            default=100,
+                            help_text="Percentage of handicap applied when mode=net (0–200).",
+                        )
     entry_fee           = models.DecimalField(
                             max_digits=7, decimal_places=2, default=0.00,
                             help_text="Per-player entry fee for the match play prize pool."

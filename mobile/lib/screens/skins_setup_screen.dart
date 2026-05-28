@@ -21,6 +21,9 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_app_bar.dart';
+import '../widgets/golf_primary_button.dart';
+import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/net_double_bogey_card.dart';
 
@@ -79,10 +82,18 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       }
 
       setState(() {
-        _mode       = _summary!.handicapMode;
-        _netPercent = _summary!.netPercent;
-        _carryover  = _summary!.carryover;
-        _allowJunk  = _summary!.allowJunk;
+        // For 'pending' state (no game yet) the backend returns its own
+        // empty defaults (mode=net, carryover=true, junk=false).  Keep the
+        // frontend's casual defaults (Strokes-Off Low, carryover on, no
+        // junk) instead so the user lands on the same starting state as
+        // every other casual-game setup screen.  Only adopt the backend
+        // values once a game actually exists (status != pending).
+        if (_summary!.status != 'pending') {
+          _mode       = _summary!.handicapMode;
+          _netPercent = _summary!.netPercent;
+          _carryover  = _summary!.carryover;
+          _allowJunk  = _summary!.allowJunk;
+        }
         _loading    = false;
       });
     } catch (e) {
@@ -151,7 +162,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Skins — Setup')),
+      appBar: const GolfAppBar(title: 'Skins Setup'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -170,21 +181,10 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                     top: false,
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: FilledButton(
-                          onPressed: (_starting || !_rosterValid) ? null : _start,
-                          child: _starting
-                              ? const SizedBox(
-                                  width: 20, height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white))
-                              : const Text('Start Game',
-                                  style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold)),
-                        ),
+                      child: GolfPrimaryButton(
+                        label: 'Start Game',
+                        loading: _starting,
+                        onPressed: _rosterValid ? _start : null,
                       ),
                     ),
                   ),
@@ -419,14 +419,10 @@ class _BetUnitCard extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary)),
           const SizedBox(height: 8),
-          TextFormField(
+          GolfTextField(
             controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'Bet unit (\$)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.attach_money),
-              isDense: true,
-            ),
+            label: 'Bet unit (\$)',
+            prefixIcon: Icons.attach_money,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 6),

@@ -4,6 +4,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../utils/sixes_handicap.dart';
 import '../widgets/net_score_button.dart';
 
 // ---------------------------------------------------------------------------
@@ -323,6 +324,14 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
   /// to score.  The server's persisted HoleScore.handicap_strokes is
   /// mode-blind (always full playing-handicap), so we deliberately don't
   /// trust it here.
+  ///
+  /// Special case: Sixes in Strokes-Off with the per_segment handicap
+  /// allocation (the legacy default) spreads strokes across the 3
+  /// matches.  The naive round-wide formula in [_strokesOnHole] would
+  /// hand the player extra dots on holes that the segment-aware
+  /// allocator skips — making the scorecard disagree with the entry
+  /// screen and the backend.  Route through the shared sixes helper to
+  /// keep all three in lock-step.
   int _strokesForHole(Membership m, ScorecardHole? h) {
     if (h == null) return 0;
     final rp = context.read<RoundProvider>();
@@ -331,6 +340,27 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     // Per-player SI is preferred — falls back to the shared hole SI.
     final entry = h.scoreFor(m.player.id);
     final si    = entry?.strokeIndex ?? h.strokeIndex;
+
+    // Sixes per-segment SO allocation — only fires when we're actually
+    // playing Sixes in SO mode with the (default) per_segment knob.
+    // For 'full_round' allocation the scorecard's round-wide formula is
+    // already correct, so we fall through to the default branch below.
+    final (hcapMode, _) = _handicapParams(rp);
+    final games = rp.round?.activeGames ?? const <String>[];
+    if (hcapMode == 'strokes_off' &&
+        games.contains('sixes') &&
+        rp.sixesSummary != null &&
+        rp.sixesSummary!.handicapAllocation == 'per_segment' &&
+        rp.scorecard != null) {
+      return sixesSoStrokesOnHole(
+        playerSo:    effective,
+        holeNumber:  h.holeNumber,
+        strokeIndex: si,
+        summary:     rp.sixesSummary!,
+        scorecard:   rp.scorecard!,
+      );
+    }
+
     return _strokesOnHole(effective, si);
   }
 

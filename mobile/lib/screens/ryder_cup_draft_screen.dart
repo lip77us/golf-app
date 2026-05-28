@@ -16,6 +16,7 @@ import '../api/models.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
 import 'ryder_cup_scoreboard_screen.dart';
 
 class RyderCupDraftScreen extends StatefulWidget {
@@ -140,7 +141,7 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
 
   // ── Roster management ──────────────────────────────────────────────────────
 
-  Future<void> _addPlayer(CupTeam team) async {
+  Future<void> _addPlayers(CupTeam team) async {
     await _loadPlayers();
     if (!mounted) return;
 
@@ -157,19 +158,37 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
       return;
     }
 
-    final chosen = await showDialog<PlayerProfile>(
+    final chosen = await showDialog<List<PlayerProfile>>(
       context: context,
       builder: (_) => _PlayerPickerDialog(players: available),
     );
-    if (chosen == null || !mounted) return;
+    if (chosen == null || chosen.isEmpty || !mounted) return;
 
-    try {
-      await _client.postAddTeamPlayer(
-        widget.tournamentId, team.teamId, chosen.id,
-      );
-      _load();
-    } catch (e) {
-      if (mounted) _showSnack(friendlyError(e));
+    // Post players one-by-one.  Backend has no batch endpoint and most
+    // adds are <10 players, so sequential is fine.  Stop on first error
+    // and surface it — successful adds remain in place because the
+    // backend commits per-request, and _load() at the end shows the
+    // current state regardless.
+    int added = 0;
+    String? errorMsg;
+    for (final p in chosen) {
+      try {
+        await _client.postAddTeamPlayer(
+          widget.tournamentId, team.teamId, p.id,
+        );
+        added++;
+      } catch (e) {
+        errorMsg = friendlyError(e);
+        break;
+      }
+    }
+    _load();
+    if (mounted) {
+      if (errorMsg != null) {
+        _showSnack('Added $added of ${chosen.length} — $errorMsg');
+      } else if (added > 1) {
+        _showSnack('Added $added players to ${team.name}.');
+      }
     }
   }
 
@@ -296,7 +315,7 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
     return _DraftBoard(
       summary       : _summary!,
       isLocked      : _summary!.draftComplete,
-      onAddPlayer   : _addPlayer,
+      onAddPlayer   : _addPlayers,
       onRemovePlayer: _removePlayer,
       onLockDraft   : _lockDraft,
       onRenameTeam  : _renameTeam,
@@ -334,22 +353,16 @@ class _SetupForm extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge
                 ?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 20),
-        TextField(
+        GolfTextField(
           controller: cupNameCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Cup name',
-            hintText : 'e.g. Bandon Cup 2026',
-            border   : OutlineInputBorder(),
-          ),
+          label: 'Cup name',
+          hint: 'e.g. Bandon Cup 2026',
         ),
         const SizedBox(height: 16),
-        TextField(
+        GolfTextField(
           controller: ppTeamCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Players per team (target)',
-            border   : OutlineInputBorder(),
-          ),
+          label: 'Players per team (target)',
         ),
         const SizedBox(height: 20),
         Text('Number of teams', style: Theme.of(context).textTheme.titleMedium),
@@ -367,12 +380,9 @@ class _SetupForm extends StatelessWidget {
         const SizedBox(height: 16),
         ...List.generate(teamCount, (i) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: TextField(
+          child: GolfTextField(
             controller: teamNameCtrls[i],
-            decoration: InputDecoration(
-              labelText: 'Team ${i + 1} name',
-              border: const OutlineInputBorder(),
-            ),
+            label: 'Team ${i + 1} name',
           ),
         )),
         const SizedBox(height: 8),
@@ -588,32 +598,63 @@ class _PlayerPickerDialog extends StatefulWidget {
 
 class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
   String _search = '';
+  /// IDs of players currently checked.  Selection persists across
+  /// search-term changes so users can search "Sm", check Smith, clear
+  /// the search, then check Jones — and submit both together.
+  final Set<int> _selectedIds = <int>{};
 
   List<PlayerProfile> get _filtered => widget.players
       .where((p) => p.name.toLowerCase().contains(_search.toLowerCase()))
       .toList();
 
-  void _commitFirst() {
-    final f = _filtered;
-    if (f.isNotEmpty) Navigator.pop(context, f.first);
+  void _toggle(PlayerProfile p) {
+    setState(() {
+      if (!_selectedIds.add(p.id)) _selectedIds.remove(p.id);
+    });
+  }
+
+  void _commit() {
+    final chosen = widget.players
+        .where((p) => _selectedIds.contains(p.id))
+        .toList();
+    Navigator.pop(context, chosen);
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final filtered = _filtered;
-    // Shrink the result area when the on-screen keyboard is up so a
-    // single match isn't tucked behind the keyboard / prediction bar
-    // (the original 400px fixed height made the lone ListTile
-    // unreachable for tap on iOS — Tuesday-tournament bug).
+    final count = _selectedIds.length;
+
+    // Shrink the result area when the on-screen keyboard is up so the
+    // bottom rows aren't tucked behind the keyboard / prediction bar
+    // (the original 400px fixed height left rows unreachable on iOS).
     final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
     final maxH = MediaQuery.sizeOf(context).height;
-    final dialogH = (maxH - viewInsets - 200).clamp(220.0, 400.0);
+    final dialogH = (maxH - viewInsets - 200).clamp(220.0, 480.0);
 
     return AlertDialog(
-      title: const Text('Add player'),
+      // Title shows live selection count so the user can verify before
+      // hitting Add — important for multi-select where it's easy to lose
+      // track of checked rows after scrolling.
+      title: Row(children: [
+        const Expanded(child: Text('Add players')),
+        if (count > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text('$count',
+                style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.bold)),
+          ),
+      ]),
       contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       content: SizedBox(
-        width: 300,
+        width: 320,
         height: dialogH,
         child: Column(children: [
           TextField(
@@ -629,23 +670,38 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
               contentPadding : EdgeInsets.symmetric(vertical: 8),
             ),
             onChanged:   (v) => setState(() => _search = v),
-            onSubmitted: (_) => _commitFirst(),
+            // Enter just dismisses the keyboard — multi-select shouldn't
+            // auto-commit since users typically tap several boxes after
+            // each search.
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: ListView.builder(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              itemCount: filtered.length,
-              itemBuilder: (_, i) {
-                final p = filtered[i];
-                return ListTile(
-                  dense: true,
-                  title: Text(p.name),
-                  subtitle: Text('Hcp ${p.handicapIndex}'),
-                  onTap: () => Navigator.pop(context, p),
-                );
-              },
-            ),
+            child: filtered.isEmpty
+                ? Center(
+                    child: Text(
+                      'No matches.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  )
+                : ListView.builder(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) {
+                      final p = filtered[i];
+                      final selected = _selectedIds.contains(p.id);
+                      return CheckboxListTile(
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: selected,
+                        onChanged: (_) => _toggle(p),
+                        title: Text(p.name),
+                        subtitle: Text('Hcp ${p.handicapIndex}'),
+                      );
+                    },
+                  ),
           ),
         ]),
       ),
@@ -654,11 +710,14 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        if (filtered.length == 1)
-          FilledButton(
-            onPressed: _commitFirst,
-            child: Text('Add ${filtered.first.name}'),
-          ),
+        FilledButton(
+          onPressed: count == 0 ? null : _commit,
+          child: Text(count == 0
+              ? 'Add'
+              : count == 1
+                  ? 'Add 1 player'
+                  : 'Add $count players'),
+        ),
       ],
     );
   }
@@ -701,14 +760,11 @@ class _RenameTeamDialogState extends State<_RenameTeamDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Rename team'),
-      content: TextField(
+      content: GolfTextField(
         controller: _ctrl,
         autofocus: true,
-        decoration: const InputDecoration(
-          labelText: 'Team name',
-          border: OutlineInputBorder(),
-        ),
-        onSubmitted: (_) => _submit(),
+        label: 'Team name',
+        onFieldSubmitted: (_) => _submit(),
       ),
       actions: [
         TextButton(

@@ -93,6 +93,8 @@ def setup_sixes(
     team_data: list,
     handicap_mode: str = HandicapMode.NET,
     net_percent: int = 100,
+    scoring_format: str = 'classic',
+    handicap_allocation: str = 'per_segment',
 ) -> list:
     """
     Create SixesSegment and SixesTeam rows for the given foursome.
@@ -107,6 +109,16 @@ def setup_sixes(
     compatibility with existing callers; a caller may pass 'gross' for a
     no-handicap match, or 'net' with net_percent=90 for 90% allowance, etc.
 
+    scoring_format selects between 'classic' (best ball, 1 pt/hole, with
+    extras after early finishes) and 'high_low' (low+high best balls,
+    2 pts/hole, 3 segments only, strict point-based closeout, all 18 holes
+    played but post-closeout holes don't count toward segment points).
+
+    handicap_allocation selects between 'per_segment' (Sixes-style
+    SO spreading across the 3 matches — only meaningful in STROKES_OFF
+    mode) and 'full_round' (allocate strokes by round-wide stroke index,
+    same as a normal NET round).  Both modes are no-ops in NET / GROSS.
+
     Returns a list of SixesSegment instances.
     """
     SixesSegment.objects.filter(foursome=foursome).delete()
@@ -114,16 +126,26 @@ def setup_sixes(
     # Clamp percent to the validated range so a bad caller can't poison the DB.
     net_percent = max(0, min(200, int(net_percent)))
 
+    # Normalise variant params — unknown values fall back to safe defaults
+    # so a bad client can't put the DB into a state the calculator can't
+    # recognise.
+    if scoring_format not in ('classic', 'high_low'):
+        scoring_format = 'classic'
+    if handicap_allocation not in ('per_segment', 'full_round'):
+        handicap_allocation = 'per_segment'
+
     segments = []
     for i, td in enumerate(team_data, start=1):
         seg = SixesSegment.objects.create(
-            foursome       = foursome,
-            segment_number = i,
-            start_hole     = td['start_hole'],
-            end_hole       = td['end_hole'],
-            is_extra       = td.get('is_extra', False),
-            handicap_mode  = handicap_mode,
-            net_percent    = net_percent,
+            foursome            = foursome,
+            segment_number      = i,
+            start_hole          = td['start_hole'],
+            end_hole            = td['end_hole'],
+            is_extra            = td.get('is_extra', False),
+            handicap_mode       = handicap_mode,
+            net_percent         = net_percent,
+            scoring_format      = scoring_format,
+            handicap_allocation = handicap_allocation,
         )
 
         # Team 1
@@ -167,6 +189,28 @@ def _best_net_for_team(team: SixesTeam, hole_number: int, score_index: dict) -> 
     return min(nets) if nets else None
 
 
+def _high_low_nets_for_team(team: SixesTeam, hole_number: int, score_index: dict):
+    """
+    Return (best_net, worst_net) for this team on hole_number.
+
+    High-Low uses both ends of each team's score distribution: low-vs-low
+    decides the "low" point, high-vs-high decides the "high" point.  Both
+    nets must be present (i.e. both team-members scored) for the hole to
+    be evaluated — partial entries return (None, None) so the calculator
+    can mark the hole as incomplete.
+    """
+    nets = [
+        score_index[p_id][hole_number]
+        for p_id in team.players.values_list('id', flat=True)
+        if p_id in score_index and hole_number in score_index[p_id]
+    ]
+    if len(nets) < 2:
+        # 3-player groups don't play High-Low (it's a 2v2 game), and a
+        # missing score means the hole isn't ready to evaluate yet.
+        return (None, None)
+    return (min(nets), max(nets))
+
+
 def _score_segment(seg: SixesSegment, score_index: dict) -> tuple:
     """
     Score all playable holes in *seg*, persist SixesHoleResult rows, and
@@ -191,42 +235,94 @@ def _score_segment(seg: SixesSegment, score_index: dict) -> tuple:
 
     SixesHoleResult.objects.filter(segment=seg).delete()
 
-    holes_up    = 0
-    finished_on = None
-    results     = []
+    is_high_low      = seg.scoring_format == 'high_low'
+    points_per_hole  = 2 if is_high_low else 1
+    points_up        = 0
+    finished_on      = None
+    results          = []
 
     for hole_num in range(seg.start_hole, seg.end_hole + 1):
-        t1_net = _best_net_for_team(t1, hole_num, score_index)
-        t2_net = _best_net_for_team(t2, hole_num, score_index)
+        if is_high_low:
+            t1_best, t1_worst = _high_low_nets_for_team(t1, hole_num, score_index)
+            t2_best, t2_worst = _high_low_nets_for_team(t2, hole_num, score_index)
+            if (t1_best is None or t2_best is None
+                    or t1_worst is None or t2_worst is None):
+                break  # incomplete — stop here
+        else:
+            t1_best = _best_net_for_team(t1, hole_num, score_index)
+            t2_best = _best_net_for_team(t2, hole_num, score_index)
+            if t1_best is None or t2_best is None:
+                break
+            t1_worst = t2_worst = None
 
-        if t1_net is None or t2_net is None:
-            break  # incomplete — stop here
+        # Has this hole been "closed out"?  Once the segment closeout fires
+        # we keep iterating so high_low can still record scores on the
+        # remaining holes (the user picked "play but don't count"), but
+        # those holes get counts_for_segment=False and 0 points.
+        counts = finished_on is None
 
-        # Determine hole winner
-        if t1_net < t2_net:
-            holes_up += 1
+        # ── Point distribution per format ────────────────────────────────
+        t1_pts = t2_pts = 0
+        if counts:
+            if is_high_low:
+                # Low half (best-net vs best-net)
+                if t1_best < t2_best:
+                    t1_pts += 1
+                elif t2_best < t1_best:
+                    t2_pts += 1
+                # High half (worst-net vs worst-net)
+                if t1_worst < t2_worst:
+                    t1_pts += 1
+                elif t2_worst < t1_worst:
+                    t2_pts += 1
+            else:
+                # Classic best ball: 1 pt to the lower team, 0 on a halve.
+                if t1_best < t2_best:
+                    t1_pts = 1
+                elif t2_best < t1_best:
+                    t2_pts = 1
+
+        points_up += (t1_pts - t2_pts)
+
+        # Winner of this hole (for the existing UI's hole-winner pill).
+        # In high_low we mark whichever team came out ahead on the hole,
+        # null on a 1-1 split.
+        if t1_pts > t2_pts:
             winner = t1
-        elif t2_net < t1_net:
-            holes_up -= 1
+        elif t2_pts > t1_pts:
             winner = t2
         else:
-            winner = None  # halved
+            winner = None
 
-        # Check if match is mathematically over
-        holes_remaining = seg.end_hole - hole_num
-        if abs(holes_up) > holes_remaining:
-            finished_on = hole_num
+        # ── Strict closeout: lead > max points remaining ────────────────
+        # max remaining = points_per_hole * (holes left after this one).
+        # When the closeout fires we record this hole as the last counted
+        # one (finished_on = hole_num) but keep looping in high_low so the
+        # leftover holes still get score entry rows.
+        if counts and finished_on is None:
+            holes_left      = seg.end_hole - hole_num
+            max_pts_remain  = points_per_hole * holes_left
+            if abs(points_up) > max_pts_remain:
+                finished_on = hole_num
 
         results.append(SixesHoleResult(
-            segment        = seg,
-            hole_number    = hole_num,
-            team1_best_net = t1_net,
-            team2_best_net = t2_net,
-            winning_team   = winner,
-            holes_up_after = holes_up,
+            segment             = seg,
+            hole_number         = hole_num,
+            team1_best_net      = t1_best,
+            team2_best_net      = t2_best,
+            team1_worst_net     = t1_worst,
+            team2_worst_net     = t2_worst,
+            team1_points        = t1_pts,
+            team2_points        = t2_pts,
+            winning_team        = winner,
+            holes_up_after      = points_up,
+            counts_for_segment  = counts,
         ))
 
-        if finished_on:
+        # Classic format ends the loop immediately on closeout (the unused
+        # holes form an "extra" match).  High-Low keeps going through the
+        # rest of the segment so the user can still enter scores.
+        if finished_on and not is_high_low:
             break
 
     SixesHoleResult.objects.bulk_create(results)
@@ -237,15 +333,19 @@ def _score_segment(seg: SixesSegment, score_index: dict) -> tuple:
 
     if holes_played == 0:
         seg.status = 'pending'
-    elif holes_played < holes_in_seg and finished_on is None:
+    elif (holes_played < holes_in_seg and finished_on is None
+            and not is_high_low):
+        seg.status = 'in_progress'
+    elif (is_high_low and finished_on is None
+            and holes_played < holes_in_seg):
         seg.status = 'in_progress'
     else:
         # Complete (all holes played OR early finish)
-        if holes_up > 0:
+        if points_up > 0:
             seg.status   = 'complete'
             t1.is_winner = True
             t2.is_winner = False
-        elif holes_up < 0:
+        elif points_up < 0:
             seg.status   = 'complete'
             t1.is_winner = False
             t2.is_winner = True
@@ -356,25 +456,42 @@ def calculate_sixes(foursome) -> list:
     # All segments of the same foursome share the same handicap settings —
     # setup_sixes writes the same values to each one — so reading them off
     # the first segment is sufficient.
-    first_seg     = segments[0]
-    handicap_mode = first_seg.handicap_mode or HandicapMode.NET
-    net_percent   = first_seg.net_percent or 100
+    first_seg           = segments[0]
+    handicap_mode       = first_seg.handicap_mode or HandicapMode.NET
+    net_percent         = first_seg.net_percent or 100
+    scoring_format      = first_seg.scoring_format or 'classic'
+    handicap_allocation = first_seg.handicap_allocation or 'per_segment'
+    is_high_low         = scoring_format == 'high_low'
 
     standard_segs = [s for s in segments if not s.is_extra]
     extra_segs    = [s for s in segments if s.is_extra]
+
+    # High-Low explicitly forbids extras (the TD picked 3 segments, full
+    # stop).  Drop any stray extra rows from a previous Classic config in
+    # case the user toggled the format mid-round.
+    if is_high_low and extra_segs:
+        SixesSegment.objects.filter(
+            id__in=[s.id for s in extra_segs]
+        ).delete()
+        extra_segs = []
 
     # score_index: player_id → hole_number → score_to_compare
     #
     # Non-SO modes: build the whole index once up front — strokes don't
     # depend on segment positions so pre-computing is fine.
     #
-    # SO mode: segment stroke allocation depends on each match's actual
-    # range, which depends on where the previous match ended.  That's a
-    # chicken-and-egg with a pre-built index, so instead we start from a
-    # gross index and overlay each standard segment's strokes *just in
-    # time*, right after we've repositioned that segment.  When a match
-    # ends early, we also undo the strokes on unplayed holes so the next
-    # segment doesn't inherit a double discount on its first hole.
+    # SO mode with per_segment allocation: segment stroke allocation depends
+    # on each match's actual range, which depends on where the previous
+    # match ended.  That's a chicken-and-egg with a pre-built index, so we
+    # start from a gross index and overlay each standard segment's strokes
+    # *just in time*, right after we've repositioned that segment.  When a
+    # match ends early, we also undo the strokes on unplayed holes so the
+    # next segment doesn't inherit a double discount on its first hole.
+    #
+    # SO mode with full_round allocation: strokes are allocated by round-
+    # wide stroke index (one stroke per hole where SI <= player_so), exactly
+    # how a normal NET round handles it.  No segment-aware bookkeeping is
+    # needed — overlay the strokes once up front and call it done.
     so_mode = handicap_mode == HandicapMode.STROKES_OFF
     if so_mode:
         score_index = build_score_index(
@@ -394,6 +511,20 @@ def calculate_sixes(foursome) -> list:
             for m in memberships
         }
         member_by_pid = {m.player_id: m for m in memberships}
+
+        if handicap_allocation == 'full_round':
+            # Apply strokes to every hole (1-18) where SI <= player_so.
+            # Same shape as the extras overlay — re-using its logic here
+            # gives full_round mode a single source of truth.
+            _overlay_so_strokes_for_extras(
+                1, player_so, member_by_pid, score_index
+            )
+            # Now that strokes are baked into the index we can skip the
+            # per-segment overlay/undo dance below — flip player_so to
+            # empty so the loop is a no-op.
+            player_so     = {}
+            member_by_pid = {}
+            so_mode       = False  # treat downstream loop like a non-SO build
     else:
         score_index = build_score_index(
             foursome,
@@ -408,18 +539,32 @@ def calculate_sixes(foursome) -> list:
     current_hole = 1  # tracks the first hole of the next match
 
     # ── Score standard segments ────────────────────────────────────────────
+    # High-Low locks the three segments to fixed 1-6 / 7-12 / 13-18 ranges
+    # (no shifting after a closeout — the TD told us "always 3 matches").
+    # Classic dynamically repositions each segment so that an early finish
+    # collapses into immediately-following matches + extras.
+    high_low_ranges = [(1, 6), (7, 12), (13, 18)]
+
     for idx, seg in enumerate(standard_segs):
-        # Reposition this segment so it starts right after the previous one.
-        expected_end = min(current_hole + 5, 18)
-        if seg.start_hole != current_hole or seg.end_hole != expected_end:
-            seg.start_hole = current_hole
-            seg.end_hole   = expected_end
-            seg.save(update_fields=['start_hole', 'end_hole'])
+        if is_high_low:
+            start, end = high_low_ranges[idx] if idx < 3 else (1, 18)
+            if seg.start_hole != start or seg.end_hole != end:
+                seg.start_hole = start
+                seg.end_hole   = end
+                seg.save(update_fields=['start_hole', 'end_hole'])
+        else:
+            # Reposition this segment so it starts right after the previous one.
+            expected_end = min(current_hole + 5, 18)
+            if seg.start_hole != current_hole or seg.end_hole != expected_end:
+                seg.start_hole = current_hole
+                seg.end_hole   = expected_end
+                seg.save(update_fields=['start_hole', 'end_hole'])
 
         # SO mode: overlay this segment's strokes on the gross score_index
         # *after* repositioning, so we allocate strokes against the range
         # the match is actually playing (not the canonical/pre-reposition
-        # range).
+        # range).  Skipped in full_round handicap_allocation since strokes
+        # are already baked into the index (so_mode flipped False above).
         so_applied: dict = {}
         if so_mode:
             so_applied = _overlay_so_strokes_for_segment(
@@ -429,8 +574,13 @@ def calculate_sixes(foursome) -> list:
         results, finished_on = _score_segment(seg, score_index)
         all_results.extend(results)
 
-        # Advance pointer: next match starts right after this one ends.
-        if finished_on:
+        # Classic format advances the pointer: next match starts right
+        # after this one ends.  High-Low always uses fixed ranges, so the
+        # pointer is irrelevant — but we still update it for the
+        # post-loop "extras chain" check (which is a no-op in high_low).
+        if is_high_low:
+            current_hole = seg.end_hole + 1
+        elif finished_on:
             # Undo SO strokes on holes that were never played.  Without this,
             # the next segment would inherit those strokes in the shared
             # score_index and then add its own — producing a double discount
@@ -451,7 +601,10 @@ def calculate_sixes(foursome) -> list:
     # Any holes freed by early finishes are collected into one or more extra
     # segments.  If an extra match itself ends early another one starts
     # immediately after, just as standard matches do.
-    if current_hole <= 18:
+    #
+    # High-Low has no extras by spec (3 segments only, locked ranges), so
+    # we skip this entire block in that variant.
+    if not is_high_low and current_hole <= 18:
         # SO mode: apply the extras SI-threshold rule to every remaining
         # hole before we score any extra segment.  A player with SO=N gets
         # one stroke on any hole whose stroke_index <= N.
@@ -551,8 +704,10 @@ def sixes_summary(foursome) -> dict:
 
     # All segments share the same handicap config; read it off the first.
     first = segments.first() if hasattr(segments, 'first') else (list(segments)[0] if segments else None)
-    handicap_mode = getattr(first, 'handicap_mode', HandicapMode.NET) if first else HandicapMode.NET
-    net_percent   = getattr(first, 'net_percent', 100) if first else 100
+    handicap_mode       = getattr(first, 'handicap_mode', HandicapMode.NET) if first else HandicapMode.NET
+    net_percent         = getattr(first, 'net_percent', 100) if first else 100
+    scoring_format      = getattr(first, 'scoring_format', 'classic') if first else 'classic'
+    handicap_allocation = getattr(first, 'handicap_allocation', 'per_segment') if first else 'per_segment'
 
     # Per-player running money total for this foursome.  One unit per
     # decided match — winners +bet_unit, losers -bet_unit, halved = 0.
@@ -618,6 +773,8 @@ def sixes_summary(foursome) -> dict:
         label = f"Holes {seg.start_hole}–{display_end} (Match {i}{extra_label})"
 
         holes_out = []
+        seg_t1_pts = 0
+        seg_t2_pts = 0
         for hr in hole_results_list:
             if hr.winning_team is None:
                 hole_winner = 'Halved'
@@ -625,12 +782,22 @@ def sixes_summary(foursome) -> dict:
                 hole_winner = 'T1'
             else:
                 hole_winner = 'T2'
+            if hr.counts_for_segment:
+                seg_t1_pts += hr.team1_points
+                seg_t2_pts += hr.team2_points
             holes_out.append({
-                'hole'    : hr.hole_number,
-                't1_net'  : hr.team1_best_net,
-                't2_net'  : hr.team2_best_net,
-                'winner'  : hole_winner,
-                'margin'  : hr.holes_up_after,
+                'hole'      : hr.hole_number,
+                't1_net'    : hr.team1_best_net,
+                't2_net'    : hr.team2_best_net,
+                # High-Low only — None for classic so the UI can choose
+                # not to render the high-net row.
+                't1_worst'  : hr.team1_worst_net,
+                't2_worst'  : hr.team2_worst_net,
+                't1_pts'    : hr.team1_points,
+                't2_pts'    : hr.team2_points,
+                'winner'    : hole_winner,
+                'margin'    : hr.holes_up_after,
+                'counts'    : hr.counts_for_segment,
             })
 
         seg_out.append({
@@ -639,7 +806,12 @@ def sixes_summary(foursome) -> dict:
             'end_hole'   : seg.end_hole,
             'is_extra'   : seg.is_extra,
             'status'     : seg.status,
-            'winner'   : winner_label,
+            'winner'     : winner_label,
+            # Running point totals for this segment — for classic these
+            # match holes_won; for high_low they reflect the 2-pt-per-hole
+            # split (and exclude closed-out holes via counts_for_segment).
+            't1_points'  : seg_t1_pts,
+            't2_points'  : seg_t2_pts,
             'team1'    : {
                 'players' : [p.name for p in t1.players.all()] if t1 else [],
                 'method'  : t1.team_select_method if t1 else '',
@@ -672,9 +844,14 @@ def sixes_summary(foursome) -> dict:
             'halves'     : halves,
         },
         'handicap' : {
-            'mode'        : handicap_mode,
-            'net_percent' : net_percent,
+            'mode'                : handicap_mode,
+            'net_percent'         : net_percent,
+            'allocation'          : handicap_allocation,
         },
+        # Format hints for the UI: scoring_format drives which fields
+        # are meaningful (per-hole point columns, worst-net rows, etc.),
+        # and helps the leaderboard pill render "High-Low" vs "Classic".
+        'scoring_format' : scoring_format,
         'money' : {
             'bet_unit'  : bet_unit,
             'by_player' : money_out,

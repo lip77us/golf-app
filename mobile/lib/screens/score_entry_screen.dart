@@ -22,10 +22,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -227,16 +229,28 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
           games.contains('singles_nassau') ||
           configured.contains('singles_18') ||
           configured.contains('singles_nassau');
-      if (games.contains('match_play') ||
-          configured.contains('match_play') ||
-          hasData ||
-          hasCupSinglesGames) {
+      // Match Play auto-dispatches by foursome size — 3-player groups
+      // run Three-Person Match instead of a bracket, so /match-play/
+      // would 404 in a loop here.  Skip the match-play poll when this
+      // foursome has 3 real players; the TPM poll below handles them.
+      final fs = rp.round?.foursomes
+          .where((f) => f.id == widget.foursomeId)
+          .firstOrNull;
+      final isThreesome = fs?.realPlayers.length == 3;
+      if (!isThreesome &&
+          (games.contains('match_play') ||
+              configured.contains('match_play') ||
+              hasData ||
+              hasCupSinglesGames)) {
         rp.loadMatchPlay(widget.foursomeId);
       }
       // Three-person match also needs live updates during tiebreak / phase 2.
+      // Match Play on a 3-player foursome means this group is a TPM, so
+      // poll TPM for them too.
       if (games.contains('three_person_match') ||
           configured.contains('three_person_match') ||
-          rp.threePersonMatchSummary != null) {
+          rp.threePersonMatchSummary != null ||
+          (isThreesome && games.contains('match_play'))) {
         rp.loadThreePersonMatch(widget.foursomeId);
       }
     });
@@ -369,12 +383,22 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         games.contains('singles_nassau') ||
         configured.contains('singles_18') ||
         configured.contains('singles_nassau');
-    if (games.contains('match_play') ||
-        configured.contains('match_play') ||
-        rp.matchPlayData != null ||
-        _hasCupSingles)
+    // Same auto-dispatch as the polling timer above: 3-player groups
+    // play Three-Person Match, not a bracket, so /match-play/ 404s for
+    // them.  Skip the load and route to TPM instead.
+    final _fsHere = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    final _isThreesome = _fsHere?.realPlayers.length == 3;
+    if (!_isThreesome &&
+        (games.contains('match_play') ||
+            configured.contains('match_play') ||
+            rp.matchPlayData != null ||
+            _hasCupSingles))
       rp.loadMatchPlay(widget.foursomeId);
-    if (games.contains('three_person_match') || configured.contains('three_person_match'))
+    if (games.contains('three_person_match') ||
+        configured.contains('three_person_match') ||
+        (_isThreesome && games.contains('match_play')))
       rp.loadThreePersonMatch(widget.foursomeId);
     // Initialise phantom player if this foursome has one.  Idempotent —
     // the provider skips the network call if already done.
@@ -417,6 +441,32 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     }
     if (games.contains('points_531') && rp.points531Summary != null) {
       return (rp.points531Summary!.handicapMode, rp.points531Summary!.netPercent);
+    }
+    // Three-Person Match has its own per-game handicap mode (the user
+    // picks it on the TPM setup screen).  Take precedence over Match
+    // Play's read below: a 3-some with match_play in active_games auto-
+    // dispatches to TPM, and the TPM summary is the authoritative mode
+    // for that foursome.
+    if (rp.threePersonMatchSummary != null) {
+      return (
+        rp.threePersonMatchSummary!.handicapMode,
+        rp.threePersonMatchSummary!.netPercent,
+      );
+    }
+    // Match Play stores its handicap mode on the bracket (per-foursome),
+    // not on the round.  Read it off the loaded matchPlayData so the
+    // score-entry display reflects the bracket's mode — e.g. a casual
+    // round defaults to round-level Net but a Match-Play bracket set to
+    // Strokes-Off Low should drive the per-player bubble + stroke calc
+    // for that foursome.
+    if (games.contains('match_play') && rp.matchPlayData != null) {
+      final h = rp.matchPlayData!['handicap'] as Map?;
+      if (h != null) {
+        return (
+          h['mode']        as String? ?? 'net',
+          h['net_percent'] as int?    ?? 100,
+        );
+      }
     }
     return (rp.round?.handicapMode ?? 'net', rp.round?.netPercent ?? 100);
   }
@@ -1091,24 +1141,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
 
   String _appBarTitle(List<String> games, NassauSummary? nas, SkinsSummary? sk) {
     final parts = <String>[];
-    const labels = {
-      'nassau'       : 'Nassau',
-      'skins'        : 'Skins',
-      'sixes'        : 'Sixes',
-      'points_531'   : 'Points 5-3-1',
-      'match_play'   : 'Match Play',
-      'irish_rumble' : 'Irish Rumble',
-      'low_net_round': 'Stroke Play',
-      'stableford'   : 'Stableford',
-    };
     for (final g in games) {
-      String label = labels[g] ?? g;
+      String label = gameDisplayName(g);
       if (g == 'nassau' && nas != null) {
         final modeStr = _modeLabel(nas.handicapMode, nas.netPercent);
-        label = 'Nassau ($modeStr)';
+        label = '$label ($modeStr)';
       } else if (g == 'skins' && sk != null) {
         final modeStr = _modeLabel(sk.handicapMode, sk.netPercent);
-        label = 'Skins ($modeStr)';
+        label = '$label ($modeStr)';
       }
       parts.add(label);
     }
@@ -1231,6 +1271,21 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     final par        = sc.holeData(_selectedHole)?.par ?? 4;
     final mpData     = rp.matchPlayData;
 
+    // Don't show the Match Play status bar for THIS foursome when:
+    //   • the current foursome has 3 real players (they play TPM, not a
+    //     bracket — rendering the strip would show some other foursome's
+    //     players from the round-shared rp.matchPlayData), OR
+    //   • the loaded mpData is for a different foursome (foursome_id
+    //     mismatch — also leftover state from a previous tap-through).
+    final fsHere = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    final isThreesome = fsHere?.realPlayers.length == 3;
+    final mpFoursomeId = (mpData?['foursome_id'] as int?);
+    final mpForThisFoursome = mpData != null &&
+        !isThreesome &&
+        (mpFoursomeId == null || mpFoursomeId == widget.foursomeId);
+
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1244,15 +1299,17 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                   : null,
               submitting: rp.submitting,
             ),
-          // Match Play running totals bar (bracket) OR cup singles status
-          // Show match play / cup singles status bar.
-          // Cup singles rounds use 'singles_18'/'singles_nassau' rather than
-          // 'match_play', so check for all three.
-          if (mpData != null &&
+          // Match Play running totals bar (bracket) OR cup singles status.
+          // Skipped for 3-player foursomes (they play TPM via the auto-
+          // dispatch, not a bracket) and for foursomes whose loaded mpData
+          // belongs to another group — otherwise the bar shows another
+          // foursome's players, which is what produced the "3-some bottom
+          // shows the 4-some's players" bug.
+          if (mpForThisFoursome &&
               (games.contains('match_play') ||
                games.contains('singles_18') ||
                games.contains('singles_nassau')))
-            mpData['bracket_type'] == 'cup_singles'
+            mpData!['bracket_type'] == 'cup_singles'
                 ? _CupSinglesStatusBar(data: mpData)
                 : _MatchPlayStatusBar(data: mpData),
           // Irish Rumble: show "Best N of M" for the current hole
@@ -1378,11 +1435,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     final allHolesDone = _allHolesScored(sc, players);
     final missingHole  = _firstMissingHole(sc, players);
 
+    // Complete Round is a primary terminal action — use the default
+    // brand-green FilledButton style, not the tertiary teal override that
+    // made this button look one-off (D-01 in the May 2026 design audit).
     return FilledButton.icon(
-      style: FilledButton.styleFrom(
-        backgroundColor: Theme.of(ctx).colorScheme.tertiary,
-        foregroundColor: Theme.of(ctx).colorScheme.onTertiary,
-      ),
       onPressed: (allHolesDone && !rp.submitting)
           ? () => _completeRound(ctx, players, par)
           : (missingHole != null && !rp.submitting)
@@ -1431,7 +1487,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (rp.error != null && sc == null) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(rp.error!, style: const TextStyle(color: Colors.red)),
+          InlineMessage(kind: InlineMessageKind.error, text: rp.error!),
           const SizedBox(height: 8),
           FilledButton(
             onPressed: () {
@@ -1573,6 +1629,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 matchPlayData:           rp.matchPlayData,
                 threePersonMatchSummary: games.contains('three_person_match') ? rp.threePersonMatchSummary   : null,
                 foursomeId:              widget.foursomeId,
+                roundId:                 rp.round?.id,
                 players:                 players,
                 scorecard:               sc,
                 currentHole:             _selectedHole,
@@ -1794,12 +1851,52 @@ class _HoleScoreCard extends StatelessWidget {
   ///     summary attached.
   bool _phantomBelongsOnHole(int hole) {
     final tc = tripleCupSummary;
-    if (tc == null) return true;   // non-TC phantom path
-    for (final m in tc.matches) {
-      if (m.segment != 'fourball') continue;
-      return hole >= m.startHole && hole <= m.endHole;
+    if (tc != null) {
+      // Triple Cup 2v1: the phantom is the solo's fourball partner only;
+      // hide the row on foursomes / singles segments.
+      for (final m in tc.matches) {
+        if (m.segment != 'fourball') continue;
+        return hole >= m.startHole && hole <= m.endHole;
+      }
+      return false; // TC has no fourball match → no phantom anywhere
     }
-    return false;   // TC has no fourball match → no phantom anywhere
+    // Non-TC: the phantom membership exists structurally (every foursome
+    // has 4 memberships) but only Points 5-3-1 actually rotates/displays
+    // a phantom row.  For other active games (Match Play, Stroke Play,
+    // Nassau, Skins, Sixes, etc.) the phantom is dead weight and the
+    // "Copies X this hole" row just confuses the score entry.
+    return points531Summary != null;
+  }
+
+  /// Per-hole name colour for [m] when a match-play single-elim bracket
+  /// is active — returns the same green/blue convention the
+  /// MatchPlayDetailView uses for player1 / player2 of the relevant
+  /// match (semi on holes 1–9, final / 3rd on holes 10–18).  Falls back
+  /// to the cup-singles / Triple Cup map (or null) so the legacy paths
+  /// keep working untouched.
+  // Calmed team red / slate (matches GolfTokens.teamRed / teamBlue and the
+  // MatchPlayDetailView swatches).  Per the May 2026 design audit (D-04),
+  // team identity uses the calmer palette so loud reds stay reserved for
+  // errors and destructive actions.
+  static const _kMatchPlayP1Color = Color(0xFF8E2E2E); // calm burgundy
+  static const _kMatchPlayP2Color = Color(0xFF1B4F8E); // slate navy
+
+  Color? _nameColorFor(Membership m, int hole) {
+    // Match Play single-elim: per-match green/blue based on player1
+    // vs player2 slot in the match covering [hole].
+    final mp = matchPlayData;
+    if (mp != null && mp['bracket_type'] == 'single_elim') {
+      final matches = (mp['matches'] as List?) ?? [];
+      final targetRound = hole <= 9 ? 1 : 2;
+      for (final raw in matches) {
+        final match = Map<String, dynamic>.from(raw as Map);
+        if ((match['round'] as int? ?? 0) != targetRound) continue;
+        if (targetRound == 2 && match['players_tbd'] == true) continue;
+        if (match['player1_id'] == m.player.id) return _kMatchPlayP1Color;
+        if (match['player2_id'] == m.player.id) return _kMatchPlayP2Color;
+      }
+    }
+    return _cupSinglesColors[m.player.id];
   }
 
   /// Returns a playerId → team color map for the active games that
@@ -1939,6 +2036,15 @@ class _HoleScoreCard extends StatelessWidget {
       return _strokesOnHole(effective, mySi);
     }
     if (handicapMode == 'strokes_off') {
+      // Match Play single-elim brackets compute SO vs the per-match
+      // opponent rather than the foursome-wide low.  Returns null when
+      // no opponent is known (back-9 tentative, etc.) — fall through to
+      // the foursome-low fallback in that case.
+      if (matchPlayData?['bracket_type'] == 'single_elim') {
+        final mpStrokes =
+            _matchPlayStrokesOnHole(m.player.id, h.holeNumber, mySi);
+        if (mpStrokes != null) return mpStrokes;
+      }
       final low = _lowPlayingHandicap;
       if (low == null) return 0;
       final rawSo = m.playingHandicap - low;
@@ -1969,6 +2075,58 @@ class _HoleScoreCard extends StatelessWidget {
         playingHandicap:       m.playingHandicap,
         lowestPlayingHandicap: _lowPlayingHandicap,
       );
+
+  // ── Match Play (single_elim) per-opponent SO helpers ────────────────────
+  // For regular match-play brackets in Strokes-Off-Low mode we show each
+  // player's strokes relative to their actual head-to-head opponent — not
+  // the foursome-wide low.  Round 1 (holes 1–9) uses the semi opponent;
+  // round 2 (holes 10–18) uses the final / 3rd-place opponent once it's
+  // confirmed.  Returns null when no opponent is known yet (back-9 still
+  // tentative, no bracket, etc.) so callers can fall back to the previous
+  // behaviour.
+
+  int? _matchPlayOpponentHcap(int playerId, int hole) {
+    final mpData = matchPlayData;
+    if (mpData == null) return null;
+    if (mpData['bracket_type'] != 'single_elim') return null;
+    final matches     = (mpData['matches'] as List?) ?? [];
+    final targetRound = hole <= 9 ? 1 : 2;
+    for (final raw in matches) {
+      final match = Map<String, dynamic>.from(raw as Map);
+      if ((match['round'] as int? ?? 0) != targetRound) continue;
+      // Skip back-9 matches whose players aren't confirmed yet — the
+      // bubble would otherwise jump around as the semis play out.
+      if (targetRound == 2 && match['players_tbd'] == true) continue;
+      final p1Id = match['player1_id'] as int?;
+      final p2Id = match['player2_id'] as int?;
+      int? oppId;
+      if (p1Id == playerId)      oppId = p2Id;
+      else if (p2Id == playerId) oppId = p1Id;
+      else continue;
+      if (oppId == null) return null;
+      final opp = players.where((x) => x.player.id == oppId).firstOrNull;
+      return opp?.playingHandicap;
+    }
+    return null;
+  }
+
+  int? _matchPlaySo(int playerId, int hole) {
+    final p = players.where((x) => x.player.id == playerId).firstOrNull;
+    if (p == null) return null;
+    final oppHcap = _matchPlayOpponentHcap(playerId, hole);
+    if (oppHcap == null) return null;
+    final diff = p.playingHandicap - oppHcap;
+    return diff > 0 ? diff : 0;
+  }
+
+  int? _matchPlayStrokesOnHole(int playerId, int hole, int si) {
+    final so = _matchPlaySo(playerId, hole);
+    if (so == null) return null;
+    if (so == 0) return 0;
+    final scaled = (so * netPercent / 100.0).round();
+    if (scaled <= 0) return 0;
+    return _strokesOnHole(scaled, si);
+  }
 
   _RunningTotal _running(int playerId) {
     final m = players.where((x) => x.player.id == playerId).firstOrNull;
@@ -2207,27 +2365,66 @@ class _HoleScoreCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Hole header
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+          // Hole header — Stack so the "?" legend button can sit top-right
+          // without disturbing the centred Hole-N + Par/SI line.
+          Stack(children: [
+            Container(
+              // width: infinity so the grey header fills the full card —
+              // Stack doesn't propagate the parent Column's stretch.
+              // Horizontal padding gives the centred Hole-N + meta line
+              // breathing room so the "?" doesn't overlap the text.
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+              ),
+              child: Column(children: [
+                Text('Hole $holeNumber',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                if (holeData != null)
+                  Text(
+                    _buildHoleHeader(holeData!, players),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall,
+                  ),
+              ]),
             ),
-            child: Column(children: [
-              Text('Hole $holeNumber',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
-              if (holeData != null)
-                Text(
-                  _buildHoleHeader(holeData!, players),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
+            // "?" legend — explains the row meta (handicap chip, dots,
+            // tee, totals, game-specific badges).  Adaptive to the active
+            // game(s) so we don't show irrelevant rows.
+            Positioned(
+              top: 2,
+              right: 2,
+              child: IconButton(
+                tooltip: 'What do these mean?',
+                icon: Icon(
+                  Icons.help_outline,
+                  size: 22,
+                  color: theme.colorScheme.primary,
                 ),
-            ]),
-          ),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  showDragHandle: true,
+                  builder: (_) => _ScoreEntryLegendSheet(
+                    hasSkins:        skins != null,
+                    hasNassau:       nassau != null,
+                    hasSixes:        sixesSummary != null,
+                    hasTripleCup:    tripleCupSummary != null,
+                    hasPoints531:    points531Summary != null,
+                    isCupSingles:    isCupSingles,
+                    handicapMode:    handicapMode,
+                  ),
+                ),
+              ),
+            ),
+          ]),
 
           // Nassau hole outcome banner
           if (nassauHole != null && nassauHole.winner != null)
@@ -2295,8 +2492,18 @@ class _HoleScoreCard extends StatelessWidget {
                 }
                 hcapLabel = labels.join(' / ');
               } else {
+                // Match Play single-elim brackets in SO mode: bubble shows
+                // strokes vs the per-match opponent (semi opponent on
+                // holes 1–9, final/3rd opponent on holes 10–18).  When
+                // no opponent is known (back-9 still tentative) falls
+                // back to _effectiveHcap which uses the foursome low.
+                final mpSo = (handicapMode == 'strokes_off' &&
+                              matchPlayData?['bracket_type'] == 'single_elim')
+                    ? _matchPlaySo(m.player.id, holeNumber)
+                    : null;
+                final displayHcap = mpSo ?? _effectiveHcap(m);
                 final dots = matchStrok > 0 ? ' ${'•' * matchStrok}' : '';
-                hcapLabel = '-${_effectiveHcap(m)}$dots';
+                hcapLabel = '-$displayHcap$dots';
               }
             }
 
@@ -2325,7 +2532,7 @@ class _HoleScoreCard extends StatelessWidget {
                 strokesOnThisHole:   matchStrok,
                 showNetRunningTotal: handicapMode == 'net',
                 teamLabel:           _teamLabelFor(m.player.id),
-                nameColor:           _cupSinglesColors[m.player.id],
+                nameColor:           _nameColorFor(m, holeNumber),
                 allowJunk:           allowJunk,
                 junkCount:           junkCount,
                 dimmed:              dimmed,
@@ -2396,6 +2603,188 @@ class _HoleScoreCard extends StatelessWidget {
               );
             }),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Legend bottom sheet — opened by the "?" on the hole-card header.
+// Adapts to the active games on this foursome so we only show rows that
+// match what the user actually sees on screen.
+// ---------------------------------------------------------------------------
+
+class _ScoreEntryLegendSheet extends StatelessWidget {
+  final bool   hasSkins;
+  final bool   hasNassau;
+  final bool   hasSixes;
+  final bool   hasTripleCup;
+  final bool   hasPoints531;
+  final bool   isCupSingles;
+  final String handicapMode; // 'net' | 'gross' | 'strokes_off'
+
+  const _ScoreEntryLegendSheet({
+    required this.hasSkins,
+    required this.hasNassau,
+    required this.hasSixes,
+    required this.hasTripleCup,
+    required this.hasPoints531,
+    required this.isCupSingles,
+    required this.handicapMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    Widget row(Widget badge, String title, String body) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 56, child: Center(child: badge)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: theme.textTheme.titleSmall),
+            const SizedBox(height: 2),
+            Text(body, style: theme.textTheme.bodySmall),
+          ]),
+        ),
+      ]),
+    );
+
+    Widget pill(String text, {Color? bg, Color? fg}) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg ?? scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(text,
+          style: theme.textTheme.labelSmall
+              ?.copyWith(color: fg, fontWeight: FontWeight.w600)),
+    );
+
+    final showHcapChip = handicapMode != 'gross' || isCupSingles;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Score row guide', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+
+            if (showHcapChip)
+              row(
+                pill('-16'),
+                'Match handicap',
+                isCupSingles
+                  ? 'Strokes-off-low differential for this match (lower handicap plays scratch).'
+                  : 'Handicap this player is using in the current game (after Net % / Strokes-Off adjustments).',
+              ),
+
+            if (showHcapChip)
+              row(
+                const Text('• •', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                'Stroke dots',
+                'Strokes received on THIS hole (one dot per stroke).',
+              ),
+
+            if (hasTripleCup)
+              row(
+                pill('White'),
+                'Tee box',
+                'Tee the player is using — drives par and stroke index.',
+              ),
+
+            row(
+              pill('(+1)G'),
+              'Running total',
+              'Cumulative score vs. par.  G = gross, N = net.  Negative is under par.',
+            ),
+
+            row(
+              Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(
+                  color: Colors.green.shade100,
+                  border: Border.all(color: Colors.green.shade700),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                alignment: Alignment.center,
+                child: const Text('3', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              'Score box colour',
+              'Green = under net par, grey = net par, red = over net par.  Circle / square shapes follow standard scorecard convention (birdie / bogey, etc.).',
+            ),
+
+            if (hasSkins) ...[
+              const SizedBox(height: 4),
+              const Divider(height: 1),
+              const SizedBox(height: 4),
+              Text('Skins', style: theme.textTheme.labelLarge),
+              row(
+                Icon(Icons.emoji_events, size: 22, color: scheme.primary),
+                'Hole winner',
+                'Trophy marks the player who took the skin.  Ties → carry over (when carryover is on).',
+              ),
+              row(
+                pill('3', bg: scheme.primaryContainer, fg: scheme.onPrimaryContainer),
+                'Skin total',
+                'Cumulative skins won (regular + junk).  Drives the payout share.',
+              ),
+            ],
+
+            if (hasNassau) ...[
+              const SizedBox(height: 4),
+              const Divider(height: 1),
+              const SizedBox(height: 4),
+              Text('Nassau', style: theme.textTheme.labelLarge),
+              row(
+                Icon(Icons.flag, size: 22, color: scheme.primary),
+                'Hole outcome banner',
+                'Shows team that won the hole — front 9 / back 9 / total are tracked separately.',
+              ),
+            ],
+
+            if (hasSixes) ...[
+              const SizedBox(height: 4),
+              const Divider(height: 1),
+              const SizedBox(height: 4),
+              Text('Sixes', style: theme.textTheme.labelLarge),
+              row(
+                pill('M1', bg: scheme.primaryContainer, fg: scheme.onPrimaryContainer),
+                'Match segment',
+                'Six holes per segment.  Teams switch each segment (1-6, 7-12, 13-18).',
+              ),
+            ],
+
+            if (hasPoints531) ...[
+              const SizedBox(height: 4),
+              const Divider(height: 1),
+              const SizedBox(height: 4),
+              Text('Points 5-3-1', style: theme.textTheme.labelLarge),
+              row(
+                pill('+5', bg: Colors.green.shade100, fg: Colors.green.shade900),
+                'Hole points',
+                'Best net = 5, second = 3, third = 1.  Ties split evenly.',
+              ),
+            ],
+
+            if (hasTripleCup) ...[
+              const SizedBox(height: 4),
+              const Divider(height: 1),
+              const SizedBox(height: 4),
+              Text('Triple Cup', style: theme.textTheme.labelLarge),
+              row(
+                Icon(Icons.swap_horiz, size: 22, color: scheme.primary),
+                'Match rotation',
+                'Three matches running in parallel — partners rotate each segment so every pair plays together.',
+              ),
+            ],
+          ]),
+        ),
       ),
     );
   }
@@ -3299,6 +3688,10 @@ class _GameStatusSection extends StatelessWidget {
   final Map<String, dynamic>?       matchPlayData;
   final ThreePersonMatchSummary?    threePersonMatchSummary;
   final int                         foursomeId;
+  /// Needed for the per-game card chevrons that navigate to the
+  /// leaderboard once the match is in progress.  Nullable so the section
+  /// can render even before the round is loaded into RoundProvider.
+  final int?                        roundId;
   final List<Membership>            players;
   final Scorecard                   scorecard;
   final int                         currentHole;
@@ -3330,6 +3723,7 @@ class _GameStatusSection extends StatelessWidget {
     required this.matchPlayData,
     this.threePersonMatchSummary,
     required this.foursomeId,
+    this.roundId,
     required this.players,
     required this.scorecard,
     required this.currentHole,
@@ -3471,10 +3865,19 @@ class _GameStatusSection extends StatelessWidget {
 
         // Match Play bracket status — only show when match_play or cup singles
         // is an active game for this foursome to prevent stale data bleeding
-        // into other game types (e.g. Nassau / Four Ball foursomes).
+        // into other game types (e.g. Nassau / Four Ball foursomes).  Also
+        // gated against:
+        //   • 3-real-player foursomes (they play TPM, not a bracket — the
+        //     card would show the bracket from a sibling 4-some via the
+        //     round-shared matchPlayData).
+        //   • cross-foursome payload (matchPlayData.foursome_id mismatch —
+        //     leftover state from a previous tap-through).
         if ((games.contains('match_play') ||
              games.contains('singles_18') ||
              games.contains('singles_nassau')) &&
+            players.where((m) => !m.player.isPhantom).length != 3 &&
+            ((matchPlayData?['foursome_id'] == null) ||
+             (matchPlayData?['foursome_id'] == foursomeId)) &&
             (matchPlayData != null || loadingMatchPlay)) ...[
           if (matchPlayData != null)
             matchPlayData!['bracket_type'] == 'cup_singles'
@@ -3487,6 +3890,7 @@ class _GameStatusSection extends StatelessWidget {
                 : _MatchPlayStatusCard(
                     data:       matchPlayData!,
                     foursomeId: foursomeId,
+                    roundId:    roundId,
                   )
           else if (loadingMatchPlay)
             const Center(
@@ -3506,6 +3910,7 @@ class _GameStatusSection extends StatelessWidget {
             _ThreePersonMatchStatusCard(
               summary:    threePersonMatchSummary!,
               foursomeId: foursomeId,
+              roundId:    roundId,
             )
           else if (loadingThreePersonMatch)
             const Center(
@@ -5189,14 +5594,15 @@ class _MatchPlayStatusBar extends StatelessWidget {
   }
 
   /// Running score line for one match — mirrors _matchSummary in the body card,
-  /// but truncated to fit inside a narrow chip.
+  /// but truncated to fit inside a narrow chip.  Uses short names so each chip
+  /// stays compact even when player names are long.
   String _chipBody(Map<String, dynamic> match) {
     final status      = match['status']      as String;
     final result      = match['result']      as String?;
     final holes       = match['holes']       as List? ?? [];
-    final p1          = match['player1']     as String? ?? '?';
-    final p2          = match['player2']     as String? ?? '?';
-    final winnerName  = match['winner_name'] as String?;
+    final p1          = (match['player1_short'] ?? match['player1']) as String? ?? '?';
+    final p2          = (match['player2_short'] ?? match['player2']) as String? ?? '?';
+    final winnerShort = (match['winner_short'] ?? match['winner_name']) as String?;
     final finishedOn  = match['finished_hole'] as int?;
     final tieBreak    = match['tie_break']   as String?;
     final round       = match['round']       as int;
@@ -5206,8 +5612,8 @@ class _MatchPlayStatusBar extends StatelessWidget {
 
     if (status == 'complete') {
       if (result == 'halved') return 'AS';
-      if (winnerName == null) return 'done';
-      if (tieBreak == 'sudden_death')  return '$winnerName (SD)';
+      if (winnerShort == null) return 'done';
+      if (tieBreak == 'sudden_death')  return '$winnerShort (SD)';
       if (finishedOn != null) {
         final scheduledEnd = round == 1 ? 9 : 18;
         final remaining    = scheduledEnd - finishedOn;
@@ -5215,10 +5621,10 @@ class _MatchPlayStatusBar extends StatelessWidget {
           final h    = holes.cast<Map<String, dynamic>>().firstWhere(
             (h) => h['hole'] == finishedOn, orElse: () => <String, dynamic>{});
           final margin = ((h['margin'] as int?) ?? 0).abs();
-          return '$winnerName ${margin}&$remaining';
+          return '$winnerShort ${margin}&$remaining';
         }
       }
-      return '$winnerName';
+      return winnerShort;
     }
 
     if (holes.isEmpty) return status == 'pending' ? '—' : '…';
@@ -5239,6 +5645,12 @@ class _MatchPlayStatusBar extends StatelessWidget {
     return '$leader ${margin.abs()}Up';
   }
 
+  // Light tints of the player1 (burgundy) / player2 (slate) name colours.
+  // Used for chip backgrounds so a "Paul 1Up" chip reads in the same
+  // colour as Paul's name in the score-entry row above.
+  static const _kChipP1Tint = Color(0xFFF1DCDC); // pale burgundy
+  static const _kChipP2Tint = Color(0xFFD9E2F0); // pale slate
+
   Color _chipBg(Map<String, dynamic> match, ThemeData theme) {
     final status   = match['status'] as String;
     final result   = match['result'] as String?;
@@ -5247,7 +5659,12 @@ class _MatchPlayStatusBar extends StatelessWidget {
 
     if (status == 'complete') {
       if (result == 'halved') return Colors.grey.shade200;
-      return Colors.green.shade100;   // someone won
+      // Winner-tinted: match player1's burgundy when player1 won,
+      // player2's slate when player2 won.  Stays consistent with the
+      // name colour in the score-entry row.
+      if (result == 'player1') return _kChipP1Tint;
+      if (result == 'player2') return _kChipP2Tint;
+      return Colors.grey.shade200;
     }
     if (holes.isEmpty) return theme.colorScheme.surfaceContainer;
 
@@ -5257,7 +5674,7 @@ class _MatchPlayStatusBar extends StatelessWidget {
 
     if (round == 1 && holeNum > 9) return Colors.amber.shade100; // sudden death
     if (margin == 0)  return theme.colorScheme.surfaceContainer;
-    return margin > 0 ? Colors.green.shade50 : Colors.blue.shade50;
+    return margin > 0 ? _kChipP1Tint : _kChipP2Tint;
   }
 
   @override
@@ -5854,10 +6271,12 @@ class _TripleCupMatchCard extends StatelessWidget {
 class _MatchPlayStatusCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final int                  foursomeId;
+  final int?                 roundId;
 
   const _MatchPlayStatusCard({
     required this.data,
     required this.foursomeId,
+    this.roundId,
   });
 
   List<Map<String, dynamic>> _matchesForRound(int round) =>
@@ -5867,12 +6286,16 @@ class _MatchPlayStatusCard extends StatelessWidget {
           .toList();
 
   /// Human-readable one-liner for a single match (mirrors match_play_screen.dart).
+  /// Uses short names so the status column fits inside the compact bottom
+  /// cards on the score-entry screen ("Paul L wins 3&2" vs "Paul Lipkin
+  /// wins 3&2" — the latter truncates).
   String _matchSummary(Map<String, dynamic> match) {
     final status           = match['status']           as String;
     final result           = match['result']           as String?;
     final holes            = (match['holes']           as List? ?? []);
-    final p1               = match['player1']          as String;
-    final winnerName       = match['winner_name']      as String?;
+    final p1Short          = (match['player1_short'] ?? match['player1']) as String;
+    final p2Short          = (match['player2_short'] ?? match['player2']) as String;
+    final winnerShort      = (match['winner_short'] ?? match['winner_name']) as String?;
     final finishedOn       = match['finished_hole']    as int?;
     final tieBreak         = match['tie_break']        as String?;
     final round            = match['round']            as int;
@@ -5888,9 +6311,9 @@ class _MatchPlayStatusCard extends StatelessWidget {
 
     if (status == 'complete') {
       if (result == 'halved') return 'Halved';
-      if (winnerName == null) return 'Complete';
-      if (tieBreak == 'sudden_death')  return '$winnerName wins (SD)';
-      if (tieBreak == 'last_hole_won') return '$winnerName wins (last hole)';
+      if (winnerShort == null) return 'Complete';
+      if (tieBreak == 'sudden_death')  return '$winnerShort wins (SD)';
+      if (tieBreak == 'last_hole_won') return '$winnerShort wins (last hole)';
       if (finishedOn != null) {
         final scheduledEnd = round == 1 ? 9 : 18;
         final remaining    = scheduledEnd - finishedOn;
@@ -5898,10 +6321,10 @@ class _MatchPlayStatusCard extends StatelessWidget {
               (h) => h['hole'] == finishedOn,
               orElse: () => <String, dynamic>{});
         final margin = ((h['margin'] as int?) ?? 0).abs();
-        if (remaining > 0) return '$winnerName ${margin}&$remaining';
-        if (margin > 0)    return '$winnerName wins $margin Up';
+        if (remaining > 0) return '$winnerShort ${margin}&$remaining';
+        if (margin > 0)    return '$winnerShort wins $margin Up';
       }
-      return '$winnerName wins';
+      return '$winnerShort wins';
     }
 
     // in_progress
@@ -5912,11 +6335,11 @@ class _MatchPlayStatusCard extends StatelessWidget {
     // SD in progress for a round-1 semi
     if (round == 1 && lastHoleNum > 9) {
       if (margin == 0) return 'All Square — SD thru $lastHoleNum';
-      final leader = margin > 0 ? p1 : match['player2'] as String;
+      final leader = margin > 0 ? p1Short : p2Short;
       return '$leader leads — SD thru $lastHoleNum';
     }
     if (margin == 0) return 'All Square thru $lastHoleNum';
-    final leader = margin > 0 ? p1 : match['player2'] as String;
+    final leader = margin > 0 ? p1Short : p2Short;
     return '$leader ${margin.abs()} Up thru $lastHoleNum';
   }
 
@@ -5928,15 +6351,32 @@ class _MatchPlayStatusCard extends StatelessWidget {
     final r1     = _matchesForRound(1);
     final r2     = _matchesForRound(2);
 
+    // Pending → bracket setup; in-progress or complete → leaderboard so
+    // the user lands on the rich bracket view (MatchPlayDetailView).
+    // Same routing convention as the Three-Person Match card below for
+    // consistency.
+    final isPending = status == 'pending';
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.of(context).pushNamed(
-          '/match-play-setup',
-          arguments: foursomeId,
-        ),
+        onTap: () {
+          if (isPending) {
+            Navigator.of(context).pushNamed(
+              '/match-play-setup',
+              arguments: foursomeId,
+            );
+          } else if (roundId != null) {
+            Navigator.of(context).pushNamed(
+              '/leaderboard',
+              arguments: {
+                'roundId':       roundId,
+                'initialTabKey': 'match_play',
+              },
+            );
+          }
+        },
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Column(
@@ -5999,8 +6439,11 @@ class _MatchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p1     = match['player1'] as String? ?? '?';
-    final p2     = match['player2'] as String? ?? '?';
+    // Use short names so "p1 vs p2" fits beside the status summary in the
+    // bottom card without truncation.  Falls back to full names on the
+    // off chance _short is missing (older payload, etc.).
+    final p1     = (match['player1_short'] ?? match['player1']) as String? ?? '?';
+    final p2     = (match['player2_short'] ?? match['player2']) as String? ?? '?';
     final label  = match['label']   as String? ?? 'Match';
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -6042,10 +6485,12 @@ class _MatchRow extends StatelessWidget {
 class _ThreePersonMatchStatusCard extends StatelessWidget {
   final ThreePersonMatchSummary summary;
   final int                     foursomeId;
+  final int?                    roundId;
 
   const _ThreePersonMatchStatusCard({
     required this.summary,
     required this.foursomeId,
+    this.roundId,
   });
 
   /// Builds the hole-by-hole SD results for display during a tiebreak.
@@ -6202,15 +6647,33 @@ class _ThreePersonMatchStatusCard extends StatelessWidget {
     final status   = summary.status;
     final complete = status == 'complete';
 
+    // Routing convention matches the Match Play card directly above:
+    //   pending  → TPM setup screen
+    //   running  → leaderboard (Three-Person Match tab) so the user
+    //              lands on the rich detail view rather than the
+    //              setup-screen-redirect dance.
+    final isPending = status == 'pending';
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.of(context).pushNamed(
-          '/three-person-match-setup',
-          arguments: foursomeId,
-        ),
+        onTap: () {
+          if (isPending) {
+            Navigator.of(context).pushNamed(
+              '/three-person-match-setup',
+              arguments: foursomeId,
+            );
+          } else if (roundId != null) {
+            Navigator.of(context).pushNamed(
+              '/leaderboard',
+              arguments: {
+                'roundId':       roundId,
+                'initialTabKey': 'three_person_match',
+              },
+            );
+          }
+        },
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Column(
@@ -6231,7 +6694,8 @@ class _ThreePersonMatchStatusCard extends StatelessWidget {
                     theme:  theme),
                 const SizedBox(width: 4),
                 Icon(Icons.chevron_right,
-                    size: 18, color: theme.colorScheme.onSurfaceVariant),
+                    size: 18,
+                    color: theme.colorScheme.onSurfaceVariant),
               ]),
 
               const SizedBox(height: 8),

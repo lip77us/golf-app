@@ -316,9 +316,12 @@ def skins_summary(foursome) -> dict:
         game = foursome.skins_game
     except SkinsGame.DoesNotExist:
         bet_unit = float(foursome.round.bet_unit)
+        # Empty/pending state: mirror the mobile casual defaults so the
+        # setup screen lands on the same starting picks every game uses
+        # (Strokes-Off Low, full handicap percent, carryover on, no junk).
         return {
             'status'    : MatchStatus.PENDING,
-            'handicap'  : {'mode': HandicapMode.NET, 'net_percent': 100},
+            'handicap'  : {'mode': HandicapMode.STROKES_OFF, 'net_percent': 100},
             'carryover' : True,
             'allow_junk': False,
             'players'   : [],

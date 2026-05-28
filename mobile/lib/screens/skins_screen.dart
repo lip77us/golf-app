@@ -19,6 +19,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
 
 // ---------------------------------------------------------------------------
@@ -407,9 +408,8 @@ class _SkinsScreenState extends State<SkinsScreen> {
     _prevHadPending = nowHasPending;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Skins'),
-        centerTitle: true,
+      appBar: GolfAppBar(
+        title: 'Skins',
         actions: [
           if (sync.hasPending)
             Padding(
@@ -742,29 +742,60 @@ class _SkinsHoleScoreCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Hole header (gray bar) ──
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(8)),
+          // Stack so the "?" legend button can sit top-right without
+          // disturbing the centred Hole-N + meta column.
+          Stack(children: [
+            Container(
+              // width: infinity so the grey header fills the full card —
+              // Stack doesn't propagate the parent Column's stretch.
+              // Horizontal padding gives the centred Hole-N + meta line
+              // breathing room so the "?" doesn't overlap the text.
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(8)),
+              ),
+              child: Column(children: [
+                Text('Hole $holeNumber',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Builder(builder: (_) {
+                  if (holeData == null) return const SizedBox.shrink();
+                  return Text(
+                    _buildHoleHeaderText(holeData!, players),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall,
+                  );
+                }),
+              ]),
             ),
-            child: Column(children: [
-              Text('Hole $holeNumber',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
-              Builder(builder: (_) {
-                if (holeData == null) return const SizedBox.shrink();
-                return Text(
-                  _buildHoleHeaderText(holeData!, players),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                );
-              }),
-            ]),
-          ),
+            // Legend button — explains the player-row meta (handicap chip,
+            // stroke dots, totals, junk, hole-winner marker).
+            Positioned(
+              top: 2,
+              right: 2,
+              child: IconButton(
+                tooltip: 'What do these mean?',
+                icon: Icon(
+                  Icons.help_outline,
+                  size: 22,
+                  color: theme.colorScheme.primary,
+                ),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  showDragHandle: true,
+                  builder: (_) => const _SkinsLegendSheet(),
+                ),
+              ),
+            ),
+          ]),
 
           // ── Player rows + inline picker ──
           ...players.asMap().entries.expand((entry) {
@@ -846,6 +877,90 @@ class _SkinsHoleScoreCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// Legend bottom sheet — opened by the "?" on the hole-card header so new
+// users can decode the dense player-row meta (handicap chip, stroke dots,
+// totals, junk, hole-winner highlight).
+// ===========================================================================
+
+class _SkinsLegendSheet extends StatelessWidget {
+  const _SkinsLegendSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    Widget row(Widget badge, String title, String body) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 56, child: Center(child: badge)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: theme.textTheme.titleSmall),
+            const SizedBox(height: 2),
+            Text(body, style: theme.textTheme.bodySmall),
+          ]),
+        ),
+      ]),
+    );
+
+    Widget pill(String text, {Color? bg, Color? fg}) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg ?? scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(text,
+          style: theme.textTheme.labelSmall
+              ?.copyWith(color: fg, fontWeight: FontWeight.w600)),
+    );
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Score row guide', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+          row(
+            pill('-12'),
+            'Match handicap',
+            'Strokes this player gets across the round (after Net % / Strokes-Off Low adjustments).',
+          ),
+          row(
+            const Text('• •', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            'Stroke dots',
+            'Strokes this player receives on THIS hole (one dot per stroke).',
+          ),
+          row(
+            Icon(Icons.emoji_events, size: 22, color: scheme.primary),
+            'Hole winner',
+            'Trophy / highlight marks the player who won the skin this hole. Ties → carry over (when carryover is on).',
+          ),
+          row(
+            pill('3', bg: scheme.primaryContainer, fg: scheme.onPrimaryContainer),
+            'Skin total',
+            'Cumulative skins won (regular + junk).  Drives the payout share.',
+          ),
+          row(
+            Row(mainAxisSize: MainAxisSize.min, children: const [
+              Icon(Icons.remove_circle_outline, size: 18),
+              SizedBox(width: 2),
+              Text('0'),
+              SizedBox(width: 2),
+              Icon(Icons.add_circle_outline, size: 18),
+            ]),
+            'Junk stepper',
+            'Optional bonus skins (sandies, greenies, etc.).  Tap +/- to log them per player per hole.  Only visible when junk is enabled in setup.',
+          ),
+        ]),
       ),
     );
   }

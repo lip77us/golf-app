@@ -19,7 +19,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import '../widgets/golf_app_bar.dart';
+import '../widgets/golf_primary_button.dart';
+import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/section_card.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -58,6 +62,18 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
   // Casual default → Strokes-Off Low.
   String _handicapMode = 'strokes_off';
   int    _netPercent   = 100;
+
+  // Scoring format: 'classic' (1 pt/hole, best ball, with extras) or
+  // 'high_low' (2 pts/hole — best vs best + worst vs worst, 3 segments
+  // only, strict closeout, all 18 holes played).  Default to classic.
+  String _scoringFormat = 'classic';
+
+  // Handicap allocation: 'per_segment' splits Strokes-Off across the 3
+  // matches (legacy Sixes behavior).  'full_round' allocates strokes by
+  // round-wide stroke index (a player with N strokes gets one on every
+  // hole where SI <= N).  Only meaningful when handicap_mode is
+  // 'strokes_off'.  Default to per_segment for backward compatibility.
+  String _handicapAllocation = 'per_segment';
 
   // Bet unit for this round (editable inline).  Pre-filled from the
   // round's current bet_unit after the round loads.  On Start Match we
@@ -222,8 +238,10 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     final ok = await rp.setupSixes(
       widget.foursomeId,
       segmentData,
-      handicapMode: _handicapMode,
-      netPercent:   _netPercent,
+      handicapMode:        _handicapMode,
+      netPercent:          _netPercent,
+      scoringFormat:       _scoringFormat,
+      handicapAllocation:  _handicapAllocation,
     );
 
     if (!ctx.mounted) return;
@@ -259,7 +277,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     // Show spinner while we check for an existing match.
     if (_checkingSetup || rp.loadingSixes) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Golf Gaming'), centerTitle: true),
+        appBar: const GolfAppBar(title: 'Sixes Setup'),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -286,10 +304,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     final holeData = rp.scorecard?.holeData(widget.startHole);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Golf Gaming'),
-        centerTitle: true,
-      ),
+      appBar: const GolfAppBar(title: 'Sixes Setup'),
       body: rp.loadingScorecard && rp.scorecard == null
           ? const Center(child: CircularProgressIndicator())
           : Column(children: [
@@ -310,6 +325,13 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       ),
                       const SizedBox(height: 20),
 
+                      // ── Scoring format picker (Classic vs High-Low) ──
+                      _ScoringFormatPicker(
+                        format: _scoringFormat,
+                        onChanged: (v) => setState(() => _scoringFormat = v),
+                      ),
+                      const SizedBox(height: 20),
+
                       // ── Handicap mode picker ──
                       HandicapModeSelector(
                         mode:        _handicapMode,
@@ -317,6 +339,20 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                         onModeChanged: (m) => setState(() => _handicapMode = m),
                         onPercentChanged: (p) => setState(() => _netPercent = p),
                       ),
+
+                      // ── Handicap allocation picker ──
+                      // Only meaningful in Strokes-Off mode (NET and GROSS
+                      // already allocate by round-wide SI / not at all,
+                      // respectively).  Hidden otherwise to avoid offering
+                      // a knob that doesn't do anything.
+                      if (_handicapMode == 'strokes_off') ...[
+                        const SizedBox(height: 20),
+                        _HandicapAllocationPicker(
+                          allocation: _handicapAllocation,
+                          onChanged: (v) =>
+                              setState(() => _handicapAllocation = v),
+                        ),
+                      ],
                       const SizedBox(height: 20),
 
                       // ── Net double-bogey cap (round-level) ──
@@ -354,31 +390,146 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                 top: false,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton(
-                      onPressed:
-                          (rp.submitting || _orderedPlayers.length < 4)
-                              ? null
-                              : () => _startMatch(context),
-                      child: rp.submitting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Text(
-                              'Start Match',
-                              style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                    ),
+                  child: GolfPrimaryButton(
+                    label: 'Start Match',
+                    loading: rp.submitting,
+                    onPressed: _orderedPlayers.length < 4
+                        ? null
+                        : () => _startMatch(context),
                   ),
                 ),
               ),
             ]),
+    );
+  }
+}
+
+// ===========================================================================
+// Scoring format + handicap allocation pickers
+// ===========================================================================
+
+/// Two-radio picker: Classic vs High-Low.  Each option shows a one-liner
+/// describing the scoring shape so the TD can pick at a glance.
+class _ScoringFormatPicker extends StatelessWidget {
+  final String format;
+  final ValueChanged<String> onChanged;
+  const _ScoringFormatPicker({required this.format, required this.onChanged});
+
+  static const _options = [
+    ('classic',  'Classic',
+     '1 point per hole — best ball vs best ball.  Early finishes roll over into extras at the end.'),
+    ('high_low', 'High-Low',
+     '2 points per hole — low net vs low net + high net vs high net.  Always 3 matches, closeout if a team can\'t be caught.'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SectionCard(
+      title: 'Scoring format',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final opt in _options)
+            InkWell(
+              onTap: () => onChanged(opt.$1),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Radio<String>(
+                      value: opt.$1,
+                      groupValue: format,
+                      onChanged: (v) { if (v != null) onChanged(v); },
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(opt.$2,
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 2),
+                          Text(opt.$3,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Picker for how STROKES_OFF strokes get spread across the round.
+/// Hidden in the parent build when handicap_mode != 'strokes_off' since
+/// it's a no-op for NET / GROSS modes.
+class _HandicapAllocationPicker extends StatelessWidget {
+  final String allocation;
+  final ValueChanged<String> onChanged;
+  const _HandicapAllocationPicker({
+    required this.allocation,
+    required this.onChanged,
+  });
+
+  static const _options = [
+    ('per_segment', 'Spread across 3 matches',
+     'A player with 6 SO strokes gets 2 per match.  Each match\'s strokes are allocated to the hardest holes in THAT match\'s range.'),
+    ('full_round',  'Straight up (round-wide)',
+     'Allocate every stroke by overall course stroke index.  A player with 6 SO strokes gets one on SI 1-6, wherever those happen to be.'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SectionCard(
+      title: 'Handicap allocation',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final opt in _options)
+            InkWell(
+              onTap: () => onChanged(opt.$1),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Radio<String>(
+                      value: opt.$1,
+                      groupValue: allocation,
+                      onChanged: (v) { if (v != null) onChanged(v); },
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(opt.$2,
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 2),
+                          Text(opt.$3,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -563,14 +714,10 @@ class _BetUnitCard extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary)),
           const SizedBox(height: 8),
-          TextFormField(
+          GolfTextField(
             controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'Bet unit (\$)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.attach_money),
-              isDense: true,
-            ),
+            label: 'Bet unit (\$)',
+            prefixIcon: Icons.attach_money,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
           const SizedBox(height: 6),

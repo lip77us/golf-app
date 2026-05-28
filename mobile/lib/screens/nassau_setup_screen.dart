@@ -19,7 +19,9 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/section_card.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -253,8 +255,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         children: [
 
           // ── Team assignment card ──────────────────────────────────────────
-          _sectionCard(
-            theme: theme,
+          SectionCard(
             title: 'Teams',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,8 +366,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           const SizedBox(height: 16),
 
           // ── Press configuration ───────────────────────────────────────────
-          _sectionCard(
-            theme: theme,
+          SectionCard(
             title: 'Press bets',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,14 +388,10 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                 _pressDescription(theme),
                 if (_pressMode != 'none') ...[
                   const SizedBox(height: 14),
-                  TextFormField(
+                  GolfTextField(
                     controller: _pressUnitCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Press unit (\$)',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.attach_money),
-                      isDense: true,
-                    ),
+                    label: 'Press unit (\$)',
+                    prefixIcon: Icons.attach_money,
                     keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
@@ -414,20 +410,15 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           const SizedBox(height: 16),
 
           // ── Bet unit ──────────────────────────────────────────────────────
-          _sectionCard(
-            theme: theme,
+          SectionCard(
             title: 'Bet unit (main bets)',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextFormField(
+                GolfTextField(
                   controller: _betCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Bet unit (\$)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.attach_money),
-                    isDense: true,
-                  ),
+                  label: 'Bet unit (\$)',
+                  prefixIcon: Icons.attach_money,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   textInputAction: TextInputAction.done,
@@ -456,8 +447,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           const SizedBox(height: 16),
 
           // ── Rules reminder ────────────────────────────────────────────────
-          _sectionCard(
-            theme: theme,
+          SectionCard(
             title: 'How Nassau works',
             child: Text(
               'Three simultaneous bets — Front 9, Back 9, and Overall. '
@@ -537,33 +527,6 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             color: theme.colorScheme.onSurfaceVariant));
   }
 
-  Widget _sectionCard({
-    required ThemeData theme,
-    required String    title,
-    required Widget    child,
-  }) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
-            const SizedBox(height: 10),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 // ===========================================================================

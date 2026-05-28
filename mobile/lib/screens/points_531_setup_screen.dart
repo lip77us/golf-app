@@ -23,6 +23,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_app_bar.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/net_double_bogey_card.dart';
 
@@ -38,8 +39,9 @@ class Points531SetupScreen extends StatefulWidget {
 class _Points531SetupScreenState extends State<Points531SetupScreen> {
   // Local form state — pre-populated from the current server summary when
   // available so re-entering the screen after a setup doesn't reset
-  // everyone's picks.
-  String _mode       = 'net';
+  // everyone's picks.  Casual default → Strokes-Off Low, matching the
+  // other casual-game setup screens (Sixes, Nassau, Skins).
+  String _mode       = 'strokes_off';
   int    _netPercent = 100;
 
   final TextEditingController _betCtrl = TextEditingController();
@@ -80,8 +82,15 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
       }
 
       setState(() {
-        _mode       = _summary!.handicapMode;
-        _netPercent = _summary!.netPercent;
+        // For 'pending' state (no game yet) the backend returns its own
+        // empty defaults; keep the frontend's casual default (Strokes-Off
+        // Low) instead so the user lands on the same starting state as
+        // every other casual-game setup screen.  Only adopt the backend
+        // values once a game actually exists.
+        if (_summary!.status != 'pending') {
+          _mode       = _summary!.handicapMode;
+          _netPercent = _summary!.netPercent;
+        }
         _loading    = false;
       });
     } catch (e) {
@@ -150,7 +159,7 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Points 5-3-1 — Setup')),
+      appBar: const GolfAppBar(title: 'Points 5-3-1 Setup'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null

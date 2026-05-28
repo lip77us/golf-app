@@ -42,6 +42,15 @@ class GameType(models.TextChoices):
     # rules handle 3-way ties (continue 5-3-1) and 2nd/3rd-place ties
     # (concurrent sub-match + 1st plays best ball simultaneously).
     THREE_PERSON_MATCH = 'three_person_match', 'Three-Person Match'
+    # Match Play: single-elimination bracket for a 4-player foursome.
+    # Holes 1–9 host two semi-finals (player1 vs player2, player3 vs
+    # player4).  Holes 10–18 host the Final (winners) plus a 3rd-place
+    # consolation match (losers).  Bracket structure + per-hole match-up
+    # net comparison live in services/match_play.py and
+    # games/models.py MatchPlayBracket/Match/HoleResult.  Used as a
+    # casual single-foursome game and as a tournament per-foursome side
+    # game alongside Stroke Play.
+    MATCH_PLAY      = 'match_play',      'Match Play'
     # Quota Nassau: two-player Stableford-vs-quota comparison, Nassau style.
     # Quota = 36 − course_handicap_index. Compare score-vs-quota at F9/B9/18.
     # Used as the per-foursome game type in Ryder Cup rounds.

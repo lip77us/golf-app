@@ -28,6 +28,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -656,9 +657,8 @@ class _SixesScreenState extends State<SixesScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sixes'),
-        centerTitle: true,
+      appBar: GolfAppBar(
+        title: 'Sixes',
         actions: [
           if (sync.hasPending)
             Padding(
@@ -1079,29 +1079,63 @@ class _HoleScoreCard extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // ── Hole header ──
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-          ),
-          child: Column(children: [
-            Text(
-              'Hole $holeNumber',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
+        // Stack so the ? legend button can sit top-right of the header
+        // bar without disturbing the centred Hole-N + meta column.
+        Stack(children: [
+          Container(
+            // width: infinity so the grey header fills the full card —
+            // Stack doesn't propagate the parent Column's stretch.
+            // Horizontal padding gives the centred Hole-N + meta line
+            // breathing room on both sides so the "?" legend button on
+            // the right doesn't overlap the text.
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(8)),
             ),
-            const SizedBox(height: 2),
-            Text(
-              holeData != null
-                  ? _buildHoleHeaderText(holeData!, players)
-                  : '',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall,
+            child: Column(children: [
+              Text(
+                'Hole $holeNumber',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                holeData != null
+                    ? _buildHoleHeaderText(holeData!, players)
+                    : '',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
             ),
           ]),
         ),
+        // "?" legend button — explains the score-row meta (chip / dots /
+        // tee name / running totals / box colours).  Sits on top of the
+        // header without disturbing the centred Hole-N column.
+        Positioned(
+          top: 2,
+          right: 2,
+          child: IconButton(
+            tooltip: 'What do these mean?',
+            icon: Icon(
+              Icons.help_outline,
+              size: 22,
+              color: theme.colorScheme.primary,
+            ),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              showDragHandle: true,
+              builder: (_) => const _ScoreRowLegendSheet(),
+            ),
+          ),
+        ),
+      ]),
 
         // ── Player rows + inline picker ──
         ...players.asMap().entries.expand((entry) {
@@ -1186,6 +1220,92 @@ class _HoleScoreCard extends StatelessWidget {
           ),
         ],
       ]),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Legend bottom sheet — shown by the "?" button on the hole-card header.
+// Explains the dense player-row meta so new users can decode at a glance.
+// ---------------------------------------------------------------------------
+
+class _ScoreRowLegendSheet extends StatelessWidget {
+  const _ScoreRowLegendSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    Widget row(Widget badge, String title, String body) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 56, child: Center(child: badge)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: theme.textTheme.titleSmall),
+            const SizedBox(height: 2),
+            Text(body, style: theme.textTheme.bodySmall),
+          ]),
+        ),
+      ]),
+    );
+
+    Widget pill(String text, {Color? bg, Color? fg}) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg ?? scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(text,
+          style: theme.textTheme.labelSmall
+              ?.copyWith(color: fg, fontWeight: FontWeight.w600)),
+    );
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Score row guide', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+          row(
+            pill('-16'),
+            'Match handicap',
+            'Strokes this player gets for the current 6-hole match (after Net % / Strokes-Off adjustments).',
+          ),
+          row(
+            const Text('• •', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            'Stroke dots',
+            'How many strokes this player receives on THIS hole (one dot per stroke).',
+          ),
+          row(
+            pill('White'),
+            'Tee box',
+            'Tee the player is using — drives par and stroke index for the round.',
+          ),
+          row(
+            pill('(+1)G'),
+            'Running total',
+            'Cumulative score vs. par.  G = gross, N = net.  Negative is under par.',
+          ),
+          row(
+            Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(
+                color: Colors.green.shade100,
+                border: Border.all(color: Colors.green.shade700),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              alignment: Alignment.center,
+              child: const Text('3', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            'Score box colour',
+            'Green = under net par, grey = net par, red = over net par.  Shape decorations (circle, square) follow normal scorecard convention.',
+          ),
+        ]),
+      ),
     );
   }
 }

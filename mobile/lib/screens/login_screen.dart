@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/golf_primary_button.dart';
+import '../widgets/golf_text_field.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -71,14 +73,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 40),
 
                   // Account name
-                  TextFormField(
+                  GolfTextField(
                     controller: _accountCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Account',
-                      helperText: 'Your club / group / family name',
-                      prefixIcon: Icon(Icons.groups_outlined),
-                      border: OutlineInputBorder(),
-                    ),
+                    label: 'Account',
+                    helper: 'Your club / group / family name',
+                    prefixIcon: Icons.groups_outlined,
                     textInputAction: TextInputAction.next,
                     autocorrect: false,
                     validator: (v) =>
@@ -87,13 +86,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
 
                   // Username
-                  TextFormField(
+                  GolfTextField(
                     controller: _userCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Username',
-                      prefixIcon: Icon(Icons.person_outline),
-                      border: OutlineInputBorder(),
-                    ),
+                    label: 'Username',
+                    prefixIcon: Icons.person_outline,
                     textInputAction: TextInputAction.next,
                     autocorrect: false,
                     validator: (v) =>
@@ -102,20 +98,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
 
                   // Password
-                  TextFormField(
+                  GolfTextField(
                     controller: _passCtrl,
                     obscureText: _obscure,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscure
-                            ? Icons.visibility_off
-                            : Icons.visibility),
-                        onPressed: () =>
-                            setState(() => _obscure = !_obscure),
-                      ),
+                    label: 'Password',
+                    prefixIcon: Icons.lock_outline,
+                    suffix: IconButton(
+                      icon: Icon(_obscure
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () =>
+                          setState(() => _obscure = !_obscure),
                     ),
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _submit(),
@@ -138,20 +131,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 24),
 
                   // Login button
-                  SizedBox(
-                    width: double.infinity,
+                  GolfPrimaryButton(
+                    label: 'Sign In',
+                    loading: auth.loading,
+                    onPressed: _submit,
                     height: 48,
-                    child: FilledButton(
-                      onPressed: auth.loading ? null : _submit,
-                      child: auth.loading
-                          ? const SizedBox(
-                              width: 20, height: 20,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white),
-                            )
-                          : const Text('Sign In'),
-                    ),
                   ),
                 ],
               ),

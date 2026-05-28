@@ -21,6 +21,7 @@ import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
 
 // ---------------------------------------------------------------------------
@@ -506,11 +507,10 @@ class _NassauScreenState extends State<NassauScreen> {
     _prevHadPending = nowHasPending;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(nas != null
+      appBar: GolfAppBar(
+        title: nas != null
             ? 'Nassau — ${_modeLabel(nas.handicapMode, nas.netPercent)}'
-            : 'Nassau'),
-        centerTitle: true,
+            : 'Nassau',
         actions: [
           if (sync.hasPending)
             Padding(

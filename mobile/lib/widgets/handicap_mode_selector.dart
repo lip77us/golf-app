@@ -74,7 +74,11 @@ class HandicapModeSelector extends StatelessWidget {
           // USGA recommended for 2v2 best-ball, etc.).
           const SizedBox(height: 12),
           Row(children: [
-            Text(mode == 'net' ? 'Net %  ' : 'SO %  '),
+            // The same Net % is used in both modes — in SO Low it scales
+            // each player's handicap before subtracting the low handicap.
+            // Calling it "Net %" in both modes avoids confusing "SO %"
+            // with the "50%" lower bound of the slider value.
+            const Text('Net %  '),
             Expanded(
               child: Slider(
                 min: 50, max: 130, divisions: 16,
@@ -91,7 +95,7 @@ class HandicapModeSelector extends StatelessWidget {
               soNote ??
                   'The lowest-handicap player plays to 0.  Every other '
                   'player gets one stroke on each hole whose stroke '
-                  'index is ≤ their (own HCP − low HCP), scaled by SO %.',
+                  'index is ≤ their (own HCP − low HCP), scaled by Net %.',
               style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant),
             ),

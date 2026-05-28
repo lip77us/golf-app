@@ -55,7 +55,7 @@ Public API
 from django.db import transaction
 
 from games.models import MatchPlayBracket, MatchPlayMatch, MatchPlayHoleResult
-from scoring.handicap import build_score_index
+from scoring.handicap import build_score_index, build_match_play_score_index
 from tournament.models import FoursomeMembership
 
 
@@ -80,6 +80,8 @@ def setup_tournament_match_play(
     entry_fee: float = 0.00,
     payout_config: dict | None = None,
     seed_order: list | None = None,
+    handicap_mode: str | None = None,
+    net_percent: int | None = None,
 ) -> MatchPlayBracket:
     """
     Create a MatchPlayBracket and MatchPlayMatch stubs for this foursome.
@@ -128,12 +130,24 @@ def setup_tournament_match_play(
             f"Match play requires at least 2 real players; found {real_count}."
         )
 
+    # Per-bracket handicap mode — defaults to Strokes-Off Low because
+    # per-pair SO (lower plays scratch, higher gets the differential) is
+    # the standard match-play convention and matches what the score-entry
+    # bubble shows.  Casual and tournament both follow this default;
+    # callers can pass an explicit handicap_mode to override.  Net percent
+    # falls back to the round's value since it's a round-level allowance.
+    round_obj = foursome.round
+    bracket_handicap_mode = handicap_mode or 'strokes_off'
+    bracket_net_percent   = net_percent if net_percent is not None else round_obj.net_percent
+
     bracket = MatchPlayBracket.objects.create(
         foursome      = foursome,
         bracket_type  = 'single_elim',
         status        = 'pending',
         entry_fee     = entry_fee,
         payout_config = payout_config or {},
+        handicap_mode = bracket_handicap_mode,
+        net_percent   = bracket_net_percent,
     )
 
     p = [m.player for m in memberships]
@@ -371,10 +385,39 @@ def calculate_tournament_match_play(foursome) -> MatchPlayBracket | None:
     except MatchPlayBracket.DoesNotExist:
         return None
 
+    # Prefer the per-bracket handicap_mode/net_percent so a match-play side
+    # game can use Strokes-Off-Low inside the foursome while the round-wide
+    # mode (used by Stroke Play, etc.) stays Net.  Brackets created before
+    # this field existed default to round.handicap_mode in setup, so the
+    # fallback below is just belt-and-suspenders for legacy rows.
     round_obj     = foursome.round
-    handicap_mode = round_obj.handicap_mode
-    net_percent   = round_obj.net_percent
-    score_index   = build_score_index(foursome, handicap_mode, net_percent)
+    handicap_mode = bracket.handicap_mode or round_obj.handicap_mode
+    net_percent   = bracket.net_percent   if bracket.net_percent is not None else round_obj.net_percent
+
+    # In Strokes-Off-Low mode each match uses PER-PAIR SO: the lower-handicap
+    # player in the match plays scratch and the higher gets (their HCP −
+    # opponent HCP) strokes allocated by stroke index.  This matches what
+    # the score-entry screen shows in the per-player bubble.  The global
+    # build_score_index('strokes_off') call without segments degrades to
+    # round-level NET (full handicap), which gave the higher player more
+    # strokes than the per-opponent SO display promised — leading to net
+    # mismatches like "Bill 5 / Gary 6-1=5" being scored as Bill wins.
+    so_mode = (handicap_mode == 'strokes_off')
+
+    def _index_for(match):
+        if so_mode:
+            return build_match_play_score_index(
+                foursome, match.player1_id, match.player2_id,
+            )
+        return build_score_index(foursome, handicap_mode, net_percent)
+
+    # NET / GROSS modes share one global score index across all matches.
+    # SO mode builds one per match below (the per-pair calc reads HCPs of
+    # only the two players involved).
+    score_index = (
+        build_score_index(foursome, handicap_mode, net_percent)
+        if not so_mode else {}
+    )
 
     MatchPlayHoleResult.objects.filter(match__bracket=bracket).delete()
 
@@ -394,7 +437,8 @@ def calculate_tournament_match_play(foursome) -> MatchPlayBracket | None:
 
     # ── Round 1: score semis ─────────────────────────────────────────────
     for match in r1_matches:
-        results, holes_up = _play_semi(match, score_index)
+        idx = _index_for(match)
+        results, holes_up = _play_semi(match, idx)
         semi_holes_up[match.id] = holes_up
         semi_results[match.id]  = results
         all_hole_results.extend(results)
@@ -462,9 +506,12 @@ def calculate_tournament_match_play(foursome) -> MatchPlayBracket | None:
             third.save(update_fields=['player1', 'player2'])
 
     # ── Round 2: score back-9 matches ────────────────────────────────────
+    # For SO mode each round-2 match needs a freshly-built pair index —
+    # the player1/player2 just got assigned above.
     for match in r2_matches:
         if r1_ready:
-            results = _play_back9_match(match, score_index)
+            idx = _index_for(match)
+            results = _play_back9_match(match, idx)
             all_hole_results.extend(results)
             match.save(update_fields=['status', 'result', 'finished_on_hole'])
 
@@ -617,6 +664,12 @@ def tournament_match_play_summary(foursome) -> dict | None:
         if match.result == 'halved':  return 'Halved'
         return None
 
+    def _winner_short(match):
+        if match.result == 'player1': return match.player1.short_name
+        if match.result == 'player2': return match.player2.short_name
+        if match.result == 'halved':  return 'Halved'
+        return None
+
     def _loser_name(match):
         if match.result == 'player1': return match.player2.name
         if match.result == 'player2': return match.player1.name
@@ -684,28 +737,37 @@ def tournament_match_play_summary(foursome) -> dict | None:
             if idx == 0:   # Final
                 p1_display = 'Semi 1 Winner'
                 p2_display = 'Semi 2 Winner'
+                p1_short   = 'S1 W'
+                p2_short   = 'S2 W'
             else:          # 3rd Place
                 p1_display = 'Semi 1 Loser'
                 p2_display = 'Semi 2 Loser'
+                p1_short   = 'S1 L'
+                p2_short   = 'S2 L'
         else:
             players_tbd       = False
             players_tentative = r == 2 and not r1_complete
             p1_display        = match.player1.name
             p2_display        = match.player2.name
+            p1_short          = match.player1.short_name
+            p2_short          = match.player2.short_name
 
         matches_out.append({
             'id'               : match.id,
             'round'            : r,
             'label'            : label,
             'player1'          : p1_display,
+            'player1_short'    : p1_short,
             'player1_id'       : match.player1.id,
             'player2'          : p2_display,
+            'player2_short'    : p2_short,
             'player2_id'       : match.player2.id,
             'players_tbd'      : players_tbd,
             'players_tentative': players_tentative,
             'status'           : match.status,
             'result'           : match.result,
             'winner_name'      : _winner_name(match),
+            'winner_short'     : _winner_short(match),
             'tie_break'        : tie_break,
             'finished_hole'    : match.finished_on_hole,
             'holes'            : holes_out,
@@ -745,8 +807,23 @@ def tournament_match_play_summary(foursome) -> dict | None:
     }
 
     return {
-        'status'    : bracket.status,
-        'winner'    : bracket.winner.name if bracket.winner else None,
+        'status'      : bracket.status,
+        'winner'      : bracket.winner.name if bracket.winner else None,
+        # foursome_id lets the mobile client tell which group this
+        # payload belongs to — guards against stale rp.matchPlayData
+        # leaking into another foursome's score-entry bottom bar.
+        'foursome_id' : foursome.id,
+        # bracket_type drives mobile branching (single_elim vs cup_singles
+        # vs legacy three_player_points) so e.g. the score-entry per-
+        # opponent SO display knows which calculator to use.
+        'bracket_type': bracket.bracket_type,
+        # Expose the bracket's handicap config so the setup screen can
+        # pre-populate the picker on re-entry and the leaderboard can
+        # display the active mode alongside the bracket.
+        'handicap'    : {
+            'mode'       : bracket.handicap_mode,
+            'net_percent': bracket.net_percent,
+        },
         'players'   : players_out,
         'seed_order': seed_order_out,
         'money'     : money,

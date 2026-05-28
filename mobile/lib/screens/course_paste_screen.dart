@@ -18,6 +18,7 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
 
 class CoursePasteScreen extends StatefulWidget {
   /// When set, the screen updates this course's tees rather than
@@ -161,13 +162,10 @@ Tabs, commas, or whitespace all work as separators.''';
                   ),
                 )
               else
-                TextField(
+                GolfTextField(
                   controller: _nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Course name',
-                    border: OutlineInputBorder(),
-                    helperText: 'Must be unique within this account.',
-                  ),
+                  label: 'Course name',
+                  helper: 'Must be unique within this account.',
                   onChanged: (_) {
                     setState(() { _preview = null; });
                   },

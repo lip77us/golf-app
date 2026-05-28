@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_app_bar.dart';
 import 'casual_round_screen.dart';
 import 'player_list_screen.dart';
 
@@ -102,8 +104,8 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
     final myId = auth.player?.id;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Casual Rounds'),
+      appBar: GolfAppBar(
+        title: 'Casual Rounds',
         actions: [
           if (auth.isAdmin)
             IconButton(
@@ -438,13 +440,5 @@ class _CasualRoundCard extends StatelessWidget {
     );
   }
 
-  String _gameLabel(String g) {
-    const labels = {
-      'skins':      'Skins',
-      'points_531': 'Points 5-3-1',
-      'sixes':      'Sixes',
-      'nassau':     'Nassau',
-    };
-    return labels[g] ?? g;
-  }
+  String _gameLabel(String g) => gameDisplayName(g);
 }

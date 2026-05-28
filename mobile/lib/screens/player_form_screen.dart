@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
+import '../widgets/inline_message.dart';
 
 class PlayerFormScreen extends StatefulWidget {
   /// Pass null to create a new player, or a PlayerProfile to edit.
@@ -220,14 +222,11 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // ---- Name ----
-              TextFormField(
+              GolfTextField(
                 controller: _nameCtrl,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Full Name',
-                  prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
-                ),
+                label: 'Full Name',
+                prefixIcon: Icons.person_outline,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Name is required';
                   if (v.trim().length < 2) return 'Name too short';
@@ -244,19 +243,16 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
               // Case-preserving: mixed-case values like "PaulL" are kept
               // verbatim; the auto-fill path still produces uppercase
               // initials ("PL") by default, matching the legacy look.
-              TextFormField(
+              GolfTextField(
                 controller: _shortCtrl,
                 maxLength: 5,
                 onChanged: (_) => _shortNameUserEdited = true,
-                decoration: const InputDecoration(
-                  labelText: 'Short Name',
-                  hintText: 'e.g. PL or PaulL',
-                  prefixIcon: Icon(Icons.badge_outlined),
-                  border: OutlineInputBorder(),
-                  helperText: 'Up to 5 chars. Shown on compact screens '
-                              '(Sixes teams, leaderboards). Leave blank '
-                              'to auto-fill from initials.',
-                ),
+                label: 'Short Name',
+                hint: 'e.g. PL or PaulL',
+                prefixIcon: Icons.badge_outlined,
+                helper: 'Up to 5 chars. Shown on compact screens '
+                        '(Sixes teams, leaderboards). Leave blank '
+                        'to auto-fill from initials.',
                 validator: (v) {
                   // Optional — empty is fine (server re-derives).
                   if (v == null) return null;
@@ -268,16 +264,13 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
               const SizedBox(height: 16),
 
               // ---- Handicap Index ----
-              TextFormField(
+              GolfTextField(
                 controller: _hcpCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                decoration: const InputDecoration(
-                  labelText: 'Handicap Index',
-                  hintText: 'e.g. 14.2',
-                  prefixIcon: Icon(Icons.golf_course),
-                  border: OutlineInputBorder(),
-                  helperText: 'WHS index between -10.0 and 54.0',
-                ),
+                label: 'Handicap Index',
+                hint: 'e.g. 14.2',
+                prefixIcon: Icons.golf_course,
+                helper: 'WHS index between -10.0 and 54.0',
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Handicap is required';
                   final d = double.tryParse(v.trim());
@@ -310,14 +303,11 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
               const SizedBox(height: 16),
 
               // ---- Email ----
-              TextFormField(
+              GolfTextField(
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email (optional)',
-                  prefixIcon: Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(),
-                ),
+                label: 'Email (optional)',
+                prefixIcon: Icons.email_outlined,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return null; // optional
                   final ok = RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v.trim());
@@ -328,14 +318,11 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
               const SizedBox(height: 16),
 
               // ---- Phone ----
-              TextFormField(
+              GolfTextField(
                 controller: _phoneCtrl,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone (optional)',
-                  prefixIcon: Icon(Icons.phone_outlined),
-                  border: OutlineInputBorder(),
-                ),
+                label: 'Phone (optional)',
+                prefixIcon: Icons.phone_outlined,
               ),
 
               // ---- App-login section ----
@@ -368,8 +355,9 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
                 else if (_membersError != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(_membersError!,
-                        style: const TextStyle(color: Colors.red)),
+                    child: InlineMessage(
+                        kind: InlineMessageKind.error,
+                        text: _membersError!),
                   )
                 else if (_isEdit)
                   // Single dropdown for edit mode: "no link" plus every
@@ -427,16 +415,13 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
                     ),
                   if (_newLoginMode == 'new') ...[
                     // Username
-                    TextFormField(
+                    GolfTextField(
                       controller: _usernameCtrl,
                       autocorrect: false,
                       enableSuggestions: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Username',
-                        hintText: 'e.g. jsmith',
-                        prefixIcon: Icon(Icons.account_circle_outlined),
-                        border: OutlineInputBorder(),
-                      ),
+                      label: 'Username',
+                      hint: 'e.g. jsmith',
+                      prefixIcon: Icons.account_circle_outlined,
                       validator: (v) {
                         if (_newLoginMode != 'new') return null;
                         final u = v?.trim() ?? '';
@@ -447,22 +432,19 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
                     ),
                     const SizedBox(height: 16),
                     // Password
-                    TextFormField(
+                    GolfTextField(
                       controller: _passwordCtrl,
                       obscureText: _obscurePassword,
                       enableSuggestions: false,
                       autocorrect: false,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined),
-                          onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
-                        ),
+                      label: 'Password',
+                      prefixIcon: Icons.lock_outline,
+                      suffix: IconButton(
+                        icon: Icon(_obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                       validator: (v) {
                         if (_newLoginMode != 'new') return null;
@@ -474,22 +456,19 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
                     ),
                     const SizedBox(height: 16),
                     // Confirm password
-                    TextFormField(
+                    GolfTextField(
                       controller: _confirmCtrl,
                       obscureText: _obscureConfirm,
                       enableSuggestions: false,
                       autocorrect: false,
-                      decoration: InputDecoration(
-                        labelText: 'Confirm Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscureConfirm
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined),
-                          onPressed: () => setState(
-                              () => _obscureConfirm = !_obscureConfirm),
-                        ),
+                      label: 'Confirm Password',
+                      prefixIcon: Icons.lock_outline,
+                      suffix: IconButton(
+                        icon: Icon(_obscureConfirm
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined),
+                        onPressed: () => setState(
+                            () => _obscureConfirm = !_obscureConfirm),
                       ),
                       validator: (v) {
                         if (_newLoginMode != 'new') return null;

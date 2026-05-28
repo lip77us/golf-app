@@ -25,6 +25,8 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/golf_app_bar.dart';
+import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
 
 // ---------------------------------------------------------------------------
@@ -414,9 +416,8 @@ class _Points531ScreenState extends State<Points531Screen> {
     _prevHadPending = nowHasPending;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Points 5-3-1'),
-        centerTitle: true,
+      appBar: GolfAppBar(
+        title: 'Points 5-3-1',
         actions: [
           if (sync.hasPending)
             Padding(
@@ -530,7 +531,7 @@ class _Points531ScreenState extends State<Points531Screen> {
     }
     if (rp.error != null && rp.scorecard == null) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(rp.error!, style: const TextStyle(color: Colors.red)),
+        InlineMessage(kind: InlineMessageKind.error, text: rp.error!),
         const SizedBox(height: 8),
         FilledButton(
           onPressed: () {

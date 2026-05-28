@@ -3,8 +3,12 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../config.dart';
+import '../game_catalog.dart';
+import '../widgets/golf_app_bar.dart';
+import '../widgets/inline_message.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 
 class LeaderboardScreen extends StatefulWidget {
@@ -169,8 +173,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     final watchToken = rp.round?.watchToken;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Leaderboard'),
+      appBar: GolfAppBar(
+        title: 'Leaderboard',
         actions: [
           // Share the public spectator URL — supported for cup rounds
           // and casual Skins / Multi-Skins / Low-Net rounds.
@@ -228,7 +232,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     if (rp.error != null && rp.leaderboard == null) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(rp.error!, style: const TextStyle(color: Colors.red)),
+          InlineMessage(kind: InlineMessageKind.error, text: rp.error!),
+          const SizedBox(height: 8),
           FilledButton(
             onPressed: () => rp.loadLeaderboard(widget.roundId),
             child: const Text('Retry'),
@@ -327,25 +332,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       return cupName ?? 'Bandon Cup';
     }
     if (g == '__my_foursome__') return 'My Foursome';
-    const labels = {
-      'skins':             'Skins',
-      'multi_skins':       'Multi-Group Skins',
-      'stableford':        'Stableford',
-      'pink_ball':         'Pink Ball',
-      'nassau':            'Nassau',
-      'quota_nassau':      'Quota Nassau',
-      'sixes':             'Sixes',
-      'singles_nassau':    'Singles Nassau',
-      'singles_18':        '18-Hole Singles',
-      'cup_singles':       'Singles-Nassau',
-      'cup_singles_18':    'Singles-18',
-      'three_person_match': 'Three-Person Match',
-      'irish_rumble':      'Irish Rumble',
-      'scramble':          'Scramble',
-      'low_net_round':     'Stroke Play',
-      '__championship__':  'Low Net',
-    };
-    return labels[g] ?? g;
+    if (g == '__championship__') return 'Low Net';
+    return gameDisplayName(g);
   }
 
   /// True iff *playerId* shows up on any foursome in any active
@@ -435,6 +423,11 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _CupSingles18GroupCard.new);
       case 'three_person_match':
         return _ByGroupView(data: data, builder: _ThreePersonMatchGroupCard.new);
+      case 'match_play':
+        // Single-elimination bracket per foursome (4-player groups).
+        // Without this case the tab fell through to _RawJsonView and
+        // dumped the API payload as plain text.
+        return _ByGroupView(data: data, builder: _MatchPlayGroupCard.new);
       case 'irish_rumble':
         // Cup mode: show head-to-head pairing results.
         // Standard mode: show segment ranking table.
@@ -996,7 +989,7 @@ class _IrishRumbleView extends StatelessWidget {
     final hmode     = data['handicap_mode']?.toString() ?? 'net';
     final npct      = data['net_percent'] as int? ?? 100;
     final pool      = (data['pool'] as num?)?.toDouble() ?? 0.0;
-    final ballsToCount = data['balls_to_count'] as int?;
+    final variant      = data['variant']?.toString() ?? 'classic';
 
     if (!configured) {
       return const Center(
@@ -1030,15 +1023,25 @@ class _IrishRumbleView extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
           ),
-          if (ballsToCount != null) ...[
-            const SizedBox(width: 8),
-            Chip(
-              label: Text('Best $ballsToCount count',
-                  style: const TextStyle(fontSize: 11)),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
+          // Variant label — the per-hole balls-to-count varies under
+          // every variant other than Classic (and even Classic varies
+          // by segment), so a single "Best N count" pill would lie.
+          // Show the variant name instead; the score-entry screen
+          // already surfaces "Best N count this hole" per hole.
+          const SizedBox(width: 8),
+          Chip(
+            label: Text(
+              switch (variant) {
+                'arizona_shuffle' => 'Arizona Shuffle',
+                'shuffle'         => 'Shuffle (par-based)',
+                'custom'          => 'Custom',
+                _                 => 'Classic',
+              },
+              style: const TextStyle(fontSize: 11),
             ),
-          ],
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+          ),
           if (entryFee > 0) ...[
             const SizedBox(width: 8),
             Chip(
@@ -3740,53 +3743,6 @@ class _MatchPlayGroupCard extends StatelessWidget {
   final Map<String, dynamic> group;
   const _MatchPlayGroupCard({required this.group});
 
-  /// One-line score/status summary for a single match — mirrors
-  /// _MatchPlayStatusCard._matchSummary() in score_entry_screen.dart.
-  static String _matchSummary(Map<String, dynamic> match) {
-    final status           = match['status']           as String? ?? 'pending';
-    final result           = match['result']           as String?;
-    final holes            = (match['holes']           as List?  ?? []);
-    final p1               = match['player1']          as String? ?? '?';
-    final winnerName       = match['winner_name']      as String?;
-    final finishedOn       = match['finished_hole']    as int?;
-    final tieBreak         = match['tie_break']        as String?;
-    final round            = match['round']            as int? ?? 1;
-    final playersTbd       = match['players_tbd']       as bool? ?? false;
-    final playersTentative = match['players_tentative'] as bool? ?? false;
-
-    // Back-9 match: no semi winner confirmed yet (e.g. both tied after F9)
-    if (playersTbd) return 'Awaiting semi results';
-    // Back-9 match: one semi confirmed, other still in sudden death
-    if (playersTentative && status != 'complete') return 'Tracking live — SD in progress';
-    if (status == 'pending' && holes.isEmpty) return 'Not started';
-
-    if (status == 'complete') {
-      if (result == 'halved') return 'Halved';
-      if (winnerName == null) return 'Complete';
-      if (tieBreak == 'sudden_death')  return '$winnerName wins (SD)';
-      if (tieBreak == 'last_hole_won') return '$winnerName wins (last hole)';
-      if (finishedOn != null) {
-        final scheduledEnd = round == 1 ? 9 : 18;
-        final remaining    = scheduledEnd - finishedOn;
-        final h = holes.cast<Map<String, dynamic>>().firstWhere(
-              (h) => h['hole'] == finishedOn, orElse: () => <String, dynamic>{});
-        final margin = ((h['margin'] as int?) ?? 0).abs();
-        if (remaining > 0) return '$winnerName ${margin}&$remaining';
-        if (margin > 0)    return '$winnerName wins $margin Up';
-      }
-      return '$winnerName wins';
-    }
-
-    // in_progress
-    if (holes.isEmpty) return 'In progress';
-    final last        = holes.last as Map<String, dynamic>;
-    final lastHoleNum = last['hole']   as int? ?? 0;
-    final margin      = last['margin'] as int? ?? 0;
-    if (margin == 0) return 'All Square thru $lastHoleNum';
-    final leader = margin > 0 ? p1 : (match['player2'] as String? ?? '?');
-    return '$leader ${margin.abs()} Up thru $lastHoleNum';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme    = Theme.of(context);
@@ -3811,194 +3767,33 @@ class _MatchPlayGroupCard extends StatelessWidget {
       );
     }
 
-    final summary  = rawSummary as Map<String, dynamic>? ?? {};
-    final allMatches = (summary['matches'] as List? ?? [])
-        .map((m) => Map<String, dynamic>.from(m as Map))
-        .toList();
-    final r1 = allMatches.where((m) => (m['round'] as int? ?? 1) == 1).toList();
-    final r2 = allMatches.where((m) => (m['round'] as int? ?? 1) == 2).toList();
-    final winner = summary['winner']?.toString();
-    final status = summary['status']?.toString() ?? 'pending';
+    final summary     = rawSummary as Map<String, dynamic>? ?? {};
     final singleGroup = group['_single_group'] == true;
 
-    // Money info
-    final money      = summary['money'] as Map<String, dynamic>? ?? {};
-    final entryFee   = (money['entry_fee']  as num?)?.toDouble() ?? 0.0;
-    final prizePool  = (money['prize_pool'] as num?)?.toDouble() ?? 0.0;
-    final payouts    = (money['payouts']    as List? ?? []);
-    final hasPayouts = payouts.any((p) =>
-        ((p as Map)['amount'] as num? ?? 0) > 0);
-
+    // Use the shared MatchPlayDetailView (the same rich layout that the
+    // dedicated score-entry → Match Play screen uses) so the leaderboard
+    // reads at the same depth: status banner, hole-by-hole strips, money
+    // card.  Only the per-group header is leaderboard-specific.
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header
-          if (!singleGroup || winner != null) ...[
-            Row(children: [
-              if (!singleGroup)
-                Text('Group ${group['group_number']}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-              if (winner != null) ...[
-                if (!singleGroup) const Spacer(),
-                const Icon(Icons.emoji_events, size: 16, color: Colors.amber),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(winner,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis),
-                ),
-              ],
-            ]),
+          if (!singleGroup) ...[
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             const Divider(height: 12),
           ],
-
-          // Status chip
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: status == 'complete'
-                  ? Colors.green.shade100
-                  : status == 'in_progress'
-                      ? theme.colorScheme.primaryContainer
-                      : theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              status == 'complete'
-                  ? 'Final'
-                  : status == 'in_progress'
-                      ? 'In progress'
-                      : 'Pending',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: status == 'complete'
-                    ? Colors.green.shade800
-                    : status == 'in_progress'
-                        ? theme.colorScheme.onPrimaryContainer
-                        : theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-
-          // Semis section
-          if (r1.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text('Semis (F9)',
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 4),
-            for (final m in r1) _MatchRow(match: m, theme: theme),
-          ],
-
-          // Final & 3rd section
-          if (r2.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text('Final & 3rd (B9)',
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 4),
-            for (final m in r2) _MatchRow(match: m, theme: theme),
-          ],
-
-          // Money block — only when there's an entry fee
-          if (entryFee > 0 && (hasPayouts || prizePool > 0)) ...[
-            const Divider(height: 16),
-            Row(children: [
-              Text('Pool: \$${prizePool.toStringAsFixed(0)}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600)),
-            ]),
-            if (hasPayouts) ...[
-              const SizedBox(height: 4),
-              ...payouts.where((p) =>
-                  ((p as Map)['amount'] as num? ?? 0) > 0)
-                  .map((p) {
-                final row    = p as Map<String, dynamic>;
-                final place  = row['place']  as String? ?? '';
-                final player = row['player'] as String?;
-                final amount = (row['amount'] as num?)?.toDouble() ?? 0.0;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 1),
-                  child: Row(children: [
-                    SizedBox(
-                      width: 32,
-                      child: Text(place,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w600)),
-                    ),
-                    Expanded(
-                      child: Text(player ?? '—',
-                          style: theme.textTheme.bodySmall),
-                    ),
-                    Text('\$${amount.toStringAsFixed(0)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.green.shade700,
-                            fontWeight: FontWeight.w600)),
-                  ]),
-                );
-              }),
-            ],
-          ],
+          MatchPlayDetailView(data: summary, scrollable: false),
         ]),
       ),
     );
   }
 }
 
-class _MatchRow extends StatelessWidget {
-  final Map<String, dynamic> match;
-  final ThemeData            theme;
-  const _MatchRow({required this.match, required this.theme});
-
-  @override
-  Widget build(BuildContext context) {
-    final p1     = match['player1'] as String? ?? '?';
-    final p2     = match['player2'] as String? ?? '?';
-    final label  = match['label']   as String? ?? '';
-    final status = match['status']  as String? ?? 'pending';
-    final summary = _MatchPlayGroupCard._matchSummary(match);
-
-    final Color summaryColor;
-    if (status == 'complete') {
-      summaryColor = Colors.green.shade700;
-    } else if (status == 'in_progress') {
-      summaryColor = theme.colorScheme.primary;
-    } else {
-      summaryColor = theme.colorScheme.onSurfaceVariant;
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(label,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSecondaryContainer)),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text('$p1 vs $p2',
-                  style: const TextStyle(fontSize: 13),
-                  overflow: TextOverflow.ellipsis),
-            ),
-          ]),
-          const SizedBox(height: 2),
-          Text(summary,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: summaryColor, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-}
+// (Removed) _MatchRow / _MatchPlayGroupCard._matchSummary used to render a
+// condensed one-line match summary in the leaderboard.  Replaced by
+// MatchPlayDetailView (imported from match_play_screen) so the leaderboard
+// matches the depth of the dedicated Match Play screen.
 
 // ---- Fallback raw JSON view ----
 
@@ -4115,8 +3910,7 @@ class _BandonCupTabViewState extends State<_BandonCupTabView> {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(_error!, style: const TextStyle(color: Colors.red),
-            textAlign: TextAlign.center),
+        InlineMessage(kind: InlineMessageKind.error, text: _error!),
         const SizedBox(height: 12),
         FilledButton(onPressed: _load, child: const Text('Retry')),
       ]));

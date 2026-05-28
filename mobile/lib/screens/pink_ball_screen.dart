@@ -22,6 +22,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
 
 
@@ -491,7 +492,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
 
     if (rp.loadingScorecard || sc == null || !_configLoaded) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Pink Ball')),
+        appBar: const GolfAppBar(title: 'Pink Ball'),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -522,8 +523,8 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
     final groupNum = foursome?.groupNumber ?? 0;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Group $groupNum'),
+      appBar: GolfAppBar(
+        title: 'Group $groupNum',
         actions: [
           IconButton(
             icon: const Icon(Icons.bar_chart),

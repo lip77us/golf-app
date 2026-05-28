@@ -460,8 +460,10 @@ class RoundProvider extends ChangeNotifier {
   Future<bool> setupSixes(
     int foursomeId,
     List<Map<String, dynamic>> segments, {
-    String handicapMode = 'net',
-    int    netPercent   = 100,
+    String handicapMode       = 'net',
+    int    netPercent         = 100,
+    String scoringFormat      = 'classic',
+    String handicapAllocation = 'per_segment',
   }) async {
     _submitting = true;
     _clearError();
@@ -470,8 +472,10 @@ class RoundProvider extends ChangeNotifier {
       await _client.postSixesSetup(
         foursomeId,
         segments,
-        handicapMode: handicapMode,
-        netPercent:   netPercent,
+        handicapMode:        handicapMode,
+        netPercent:          netPercent,
+        scoringFormat:       scoringFormat,
+        handicapAllocation:  handicapAllocation,
       );
       _sixesStartedFoursomes.add(foursomeId); // mark as started
       return true;
@@ -796,6 +800,13 @@ class RoundProvider extends ChangeNotifier {
       _threePersonMatchSummary = await _client.getThreePersonMatch(foursomeId);
     } on NetworkException {
       // Offline — keep the previous summary around.
+    } on ApiException catch (e) {
+      // 404 = no TPM bracket yet for this foursome.  Expected for new
+      // rounds before setup completes; don't spam the console.
+      if (e.statusCode != 404) {
+        debugPrint('loadThreePersonMatch error: $e');
+      }
+      _threePersonMatchSummary = null;
     } catch (e) {
       debugPrint('loadThreePersonMatch error: $e');
     } finally {

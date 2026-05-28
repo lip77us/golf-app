@@ -14,6 +14,9 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
+import '../widgets/handicap_mode_selector.dart';
+import '../widgets/section_card.dart';
 
 class TournamentLowNetSetupScreen extends StatefulWidget {
   final int tournamentId;
@@ -195,7 +198,7 @@ class _TournamentLowNetSetupScreenState
         children: [
 
           // ── About ─────────────────────────────────────────────────────────
-          _SectionCard(
+          SectionCard(
             title: 'Low Net Championship',
             child: Text(
               'Cumulative net strokes across all rounds determine the winner. '
@@ -209,7 +212,10 @@ class _TournamentLowNetSetupScreenState
           const SizedBox(height: 16),
 
           // ── Handicap mode ─────────────────────────────────────────────────
-          _HandicapCard(
+          // Shared selector — matches the casual setup screens and avoids
+          // the "Handicap %" Row overflow the inline _HandicapCard had at
+          // narrow widths.
+          HandicapModeSelector(
             mode            : _mode,
             netPercent      : _netPercent,
             onModeChanged   : (m) => setState(() => _mode = m),
@@ -219,7 +225,7 @@ class _TournamentLowNetSetupScreenState
           const SizedBox(height: 16),
 
           // ── Entry fee ─────────────────────────────────────────────────────
-          _SectionCard(
+          SectionCard(
             title: 'Entry Fee',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,14 +233,10 @@ class _TournamentLowNetSetupScreenState
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(
                     flex: 3,
-                    child: TextFormField(
-                      controller : _entryCtrl,
-                      decoration : const InputDecoration(
-                        labelText  : 'Per player (\$)',
-                        border     : OutlineInputBorder(),
-                        prefixIcon : Icon(Icons.attach_money),
-                        isDense    : true,
-                      ),
+                    child: GolfTextField(
+                      controller: _entryCtrl,
+                      label: 'Per player (\$)',
+                      prefixIcon: Icons.attach_money,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                     ),
@@ -242,14 +244,10 @@ class _TournamentLowNetSetupScreenState
                   const SizedBox(width: 12),
                   Expanded(
                     flex: 2,
-                    child: TextFormField(
-                      controller : _numPlayersCtrl,
-                      decoration : const InputDecoration(
-                        labelText  : '# Players',
-                        border     : OutlineInputBorder(),
-                        prefixIcon : Icon(Icons.people_outline),
-                        isDense    : true,
-                      ),
+                    child: GolfTextField(
+                      controller: _numPlayersCtrl,
+                      label: '# Players',
+                      prefixIcon: Icons.people_outline,
                       keyboardType: TextInputType.number,
                     ),
                   ),
@@ -297,7 +295,7 @@ class _TournamentLowNetSetupScreenState
           const SizedBox(height: 16),
 
           // ── Payout structure ──────────────────────────────────────────────
-          _SectionCard(
+          SectionCard(
             title: 'Payouts',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,127 +408,10 @@ class _TournamentLowNetSetupScreenState
 // Shared sub-widgets
 // ===========================================================================
 
-/// Generic section card with title + child content.
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final Widget child;
-  const _SectionCard({required this.title, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Handicap mode card (Net / Gross / Strokes-Off-Low + net %).
-class _HandicapCard extends StatelessWidget {
-  final String mode;
-  final int    netPercent;
-  final ValueChanged<String> onModeChanged;
-  final ValueChanged<int>    onPercentChanged;
-
-  const _HandicapCard({
-    required this.mode,
-    required this.netPercent,
-    required this.onModeChanged,
-    required this.onPercentChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return _SectionCard(
-      title: 'Handicap Mode',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          LayoutBuilder(builder: (context, constraints) {
-            // 3 buttons → 4 borders at 1px each → subtract 4px before dividing
-            final segW = (constraints.maxWidth - 4) / 3;
-            return ToggleButtons(
-              borderRadius: BorderRadius.circular(8),
-              constraints : BoxConstraints.tightFor(width: segW, height: 44),
-              isSelected  : [
-                mode == 'gross',
-                mode == 'net',
-                mode == 'strokes_off',
-              ],
-              onPressed: (i) {
-                const modes = ['gross', 'net', 'strokes_off'];
-                onModeChanged(modes[i]);
-              },
-              children: const [
-                Text('Gross'),
-                Text('Net'),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Text('Strokes Off'),
-                  ),
-                ),
-              ],
-            );
-          }),
-
-          if (mode != 'gross') ...[
-            const SizedBox(height: 12),
-            Row(children: [
-              const Text('Handicap %:'),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 80,
-                child: TextFormField(
-                  initialValue : '$netPercent',
-                  keyboardType : TextInputType.number,
-                  decoration   : const InputDecoration(
-                    border    : OutlineInputBorder(),
-                    isDense   : true,
-                    suffixText: '%',
-                  ),
-                  onChanged: (v) {
-                    final pct = int.tryParse(v);
-                    if (pct != null && pct >= 0 && pct <= 200) {
-                      onPercentChanged(pct);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('(100 = full handicap)',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: Colors.grey)),
-            ]),
-          ],
-
-          if (mode == 'strokes_off') ...[
-            const SizedBox(height: 8),
-            Text(
-              'Strokes are given relative to the lowest handicap player '
-              'in the tournament across all rounds.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
+// _HandicapCard replaced by the shared HandicapModeSelector — see the
+// import above and the call site in build().  The inline ToggleButtons +
+// "Handicap %" Row overflowed by ~8 px on narrow widths and didn't match
+// the casual-side handicap UI.
 
 /// Single payout row (place + dollar input).
 class _PayoutRow extends StatelessWidget {
@@ -571,15 +452,11 @@ class _PayoutRow extends StatelessWidget {
       ),
       const SizedBox(width: 8),
       Expanded(
-        child: TextField(
-          controller  : controller,
+        child: GolfTextField(
+          controller: controller,
           keyboardType:
               const TextInputType.numberWithOptions(decimal: true),
-          decoration  : const InputDecoration(
-            border    : OutlineInputBorder(),
-            isDense   : true,
-            prefixText: '\$ ',
-          ),
+          prefixText: '\$ ',
           textAlign: TextAlign.right,
         ),
       ),

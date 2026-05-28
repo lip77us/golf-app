@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/inline_message.dart';
 
 class ManageMembersScreen extends StatefulWidget {
   const ManageMembersScreen({super.key});
@@ -94,8 +95,7 @@ class _ManageMembersScreenState extends State<ManageMembersScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(_error!, textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red)),
+            InlineMessage(kind: InlineMessageKind.error, text: _error!),
             const SizedBox(height: 12),
             FilledButton(onPressed: _load, child: const Text('Retry')),
           ]),
@@ -293,8 +293,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center),
+                InlineMessage(kind: InlineMessageKind.error, text: _error!),
               ],
             ],
           ),

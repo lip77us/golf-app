@@ -15,6 +15,7 @@ import '../api/models.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
 
 class RyderCupRoundSetupScreen extends StatefulWidget {
   final int roundId;
@@ -221,38 +222,29 @@ class _RyderCupRoundSetupScreenState
         const SizedBox(height: 12),
         Row(children: [
           Expanded(
-            child: TextField(
+            child: GolfTextField(
               controller: _pointValueCtrl,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Points per segment',
-                hintText : '1.0',
-                border   : OutlineInputBorder(),
-              ),
+              label: 'Points per segment',
+              hint: '1.0',
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: TextField(
+            child: GolfTextField(
               controller: _multiplierCtrl,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Multiplier',
-                hintText : '1.0',
-                border   : OutlineInputBorder(),
-              ),
+              label: 'Multiplier',
+              hint: '1.0',
             ),
           ),
         ]),
         const SizedBox(height: 12),
-        TextField(
+        GolfTextField(
           controller: _notesCtrl,
-          decoration: const InputDecoration(
-            labelText : 'Notes (optional)',
-            border    : OutlineInputBorder(),
-          ),
+          label: 'Notes (optional)',
         ),
         const SizedBox(height: 24),
 

@@ -20,7 +20,10 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/inline_message.dart';
+import '../widgets/section_card.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -303,8 +306,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Teams ────────────────────────────────────────────────
-            _sectionCard(
-              theme: theme,
+            SectionCard(
               title: 'Teams',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,8 +405,9 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
                   if (!_rosterValid) ...[
                     const SizedBox(height: 8),
-                    Text(
-                      members.length < 2
+                    InlineMessage(
+                      kind: InlineMessageKind.warn,
+                      text: members.length < 2
                           ? 'Need at least 2 real players.'
                           : (members.length == 3 && !_isCupRound)
                               ? '2v1 Triple Cup is only available in '
@@ -412,8 +415,6 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                                 'teammates as phantom donors). Pick 2 '
                                 'or 4 players for a casual round.'
                               : 'Each team must have at least 1 player.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error),
                     ),
                   ],
                 ],
@@ -433,8 +434,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
             const SizedBox(height: 16),
 
             // ── Alt-shot allowance ───────────────────────────────────
-            _sectionCard(
-              theme: theme,
+            SectionCard(
               title: 'Foursomes (alt-shot) handicap',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -461,8 +461,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
             // ── Foursomes tee-off (2v2 only) ─────────────────────────
             if (members.length == 4) ...[
-              _sectionCard(
-                theme: theme,
+              SectionCard(
                 title: 'Foursomes (alt-shot) tee-off',
                 child: _ForsomesTeeOffPicker(
                   members:      members,
@@ -480,8 +479,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
             // ── Phantom donor note (only for 2v1) ────────────────────
             if (_is2v1)
-              _sectionCard(
-                theme: theme,
+              SectionCard(
                 title: '2v1 phantom partner (fourball only)',
                 child: Text(
                   'The solo player gets a phantom partner for the 6 '
@@ -498,20 +496,15 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
             if (_is2v1) const SizedBox(height: 16),
 
             // ── Round bet unit ───────────────────────────────────────
-            _sectionCard(
-              theme: theme,
+            SectionCard(
               title: 'Bet unit (cup payout)',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextFormField(
+                  GolfTextField(
                     controller: _betCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Bet unit (\$)',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.attach_money),
-                      isDense: true,
-                    ),
+                    label: 'Bet unit (\$)',
+                    prefixIcon: Icons.attach_money,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
                     textInputAction: TextInputAction.done,
@@ -542,8 +535,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
             const SizedBox(height: 16),
 
             // ── Rules reminder ───────────────────────────────────────
-            _sectionCard(
-              theme: theme,
+            SectionCard(
               title: 'How it works',
               child: Text(
                 'Three 6-hole segments: Fourball (best ball) on 1–6, '
@@ -601,14 +593,10 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
   }
 
   Widget _pctField(String label, int value, ValueChanged<int> onChanged) {
-    return TextFormField(
+    return GolfTextField(
       initialValue: value.toString(),
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        isDense: true,
-        suffixText: '%',
-      ),
+      label: label,
+      suffixText: '%',
       keyboardType: TextInputType.number,
       onChanged: (s) {
         final v = int.tryParse(s.trim());
@@ -617,33 +605,6 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
     );
   }
 
-  Widget _sectionCard({
-    required ThemeData theme,
-    required String    title,
-    required Widget    child,
-  }) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
-            const SizedBox(height: 10),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// Small pill rendering the team's color + label.  Used by the

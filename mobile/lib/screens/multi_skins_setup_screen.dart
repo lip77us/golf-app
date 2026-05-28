@@ -16,7 +16,9 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_app_bar.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/inline_message.dart';
 
 class MultiSkinsSetupScreen extends StatefulWidget {
   final int roundId;
@@ -27,6 +29,9 @@ class MultiSkinsSetupScreen extends StatefulWidget {
 }
 
 class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
+  // Multi-Group Skins defaults to Net — Strokes-Off Low doesn't translate
+  // across foursomes since there's no single "best golfer" in a multi-
+  // group pool.  Per-foursome games default to SO Low instead.
   String _mode       = 'net';
   int    _netPercent = 100;
 
@@ -158,7 +163,7 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
     }
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Multi-Group Skins')),
+        appBar: const GolfAppBar(title: 'Multi-Group Skins Setup'),
         body: ErrorView(message: friendlyError(_error!), onRetry: _load),
       );
     }
@@ -167,7 +172,7 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                           ?? const <Foursome>[];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Multi-Group Skins')),
+      appBar: const GolfAppBar(title: 'Multi-Group Skins Setup'),
       body: Column(children: [
         Expanded(
           child: ListView(
@@ -266,14 +271,11 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
               if (!_canStart)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    _participantCount < 2
+                  child: InlineMessage(
+                    kind: InlineMessageKind.warn,
+                    text: _participantCount < 2
                         ? 'Pick at least 2 participants.'
                         : 'Enter a positive entry fee.',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 12,
-                    ),
                   ),
                 ),
             ]),

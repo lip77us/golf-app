@@ -5,6 +5,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
 import 'new_round_wizard.dart';
 import 'player_list_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
@@ -838,21 +839,17 @@ class _ChangeCupGameDialogState extends State<_ChangeCupGameDialog> {
                 visualDensity: VisualDensity.compact,
               ),
             const SizedBox(height: 8),
-            TextField(
+            GolfTextField(
               controller: _pvCtrl,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Points per segment',
-                border: const OutlineInputBorder(),
-                errorText: _err,
-                helperText: foursomeTotal > 0
-                    ? '$segs × ${pv.toStringAsFixed(2)} = '
-                      '${foursomeTotal.toStringAsFixed(2)} cup pts per '
-                      'foursome'
-                    : null,
-                helperMaxLines: 2,
-              ),
+              label: 'Points per segment',
+              errorText: _err,
+              helper: foursomeTotal > 0
+                  ? '$segs × ${pv.toStringAsFixed(2)} = '
+                    '${foursomeTotal.toStringAsFixed(2)} cup pts per '
+                    'foursome'
+                  : null,
               onChanged: (_) => setState(() { _err = null; }),
             ),
             const SizedBox(height: 12),

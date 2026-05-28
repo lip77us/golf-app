@@ -145,7 +145,7 @@ def _allocate_hole_points(player_ids: list, scores_by_id: dict) -> dict:
 @transaction.atomic
 def setup_three_person_match(
     foursome: Foursome,
-    handicap_mode: str = HandicapMode.NET,
+    handicap_mode: str = HandicapMode.STROKES_OFF,
     net_percent: int = 100,
     entry_fee: float = 0.00,
     payout_config: dict | None = None,
@@ -153,6 +153,10 @@ def setup_three_person_match(
     """
     Create (or replace) the Three-Person Match for a foursome.
     Safe to call repeatedly — existing state is wiped and rebuilt.
+
+    Defaults to Strokes-Off Low so the same convention applies to
+    both casual and tournament setups (matches the mobile picker
+    default + the Match Play bracket default).
     """
     ThreePersonMatch.objects.filter(foursome=foursome).delete()
 

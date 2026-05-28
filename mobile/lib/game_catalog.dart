@@ -18,6 +18,14 @@ class GameIds {
   static const String skins      = 'skins';
   static const String multiSkins = 'multi_skins';
   static const String tripleCup  = 'triple_cup';
+  /// Match Play single-elimination bracket — 4-person foursome plays
+  /// two 9-hole semi-finals on holes 1–9, then Final + 3rd-place
+  /// consolation on holes 10–18.  Casual + tournament side game.
+  static const String matchPlay  = 'match_play';
+  /// 3-player tournament foursome.  Phase 1 (holes 1–9) = Points 5-3-1
+  /// to seed.  Phase 2 (holes 10–18) = 1v1 match play between the top
+  /// two finishers, with documented tie-break rules.
+  static const String threePersonMatch = 'three_person_match';
 
   // Casual + Tournament (can accumulate across days)
   static const String strokePlay  = 'low_net_round'; // display: "Stroke Play"
@@ -153,7 +161,43 @@ const List<GameMeta> kGameCatalog = [
     // Triple Cup owns the foursome's match structure (3 segments × match
     // play), so it can't combine with Nassau / Sixes / Points / Skins.
     excludes     : {GameIds.nassau, GameIds.sixes, GameIds.points531,
-                    GameIds.skins,  GameIds.strokePlay, GameIds.stableford},
+                    GameIds.skins,  GameIds.strokePlay, GameIds.stableford,
+                    GameIds.matchPlay, GameIds.threePersonMatch},
+  ),
+  GameMeta(
+    id           : GameIds.matchPlay,
+    displayName  : 'Match Play',
+    // Single user-facing pick that auto-dispatches per foursome:
+    //   4-player groups → single-elimination bracket (two semis on
+    //                     holes 1–9, Final + 3rd-place on holes 10–18).
+    //   3-player groups → Three-Person Match (Points 5-3-1 phase 1 on
+    //                     holes 1–9, 1v1 match play between top two on
+    //                     holes 10–18, tie-break rules per service).
+    // Available as both a casual single-foursome game (3 or 4 players)
+    // and a per-foursome tournament side game alongside Stroke Play.
+    casual       : true,
+    tournament   : true,
+    minPlayers   : 3,
+    maxPlayers   : 4,
+    // Match Play owns the foursome's 9-hole match structure so it can't
+    // combine with games that own the same hole ranges.  Skins and
+    // Nassau read the same per-hole gross scores independently and so
+    // can coexist; gross/stroke-play accumulators do too.
+    excludes     : {GameIds.sixes, GameIds.points531, GameIds.tripleCup},
+  ),
+  GameMeta(
+    id           : GameIds.threePersonMatch,
+    displayName  : 'Three-Person Match',
+    // Not directly selectable — the system reaches the 3-person variant
+    // via Match Play when a foursome has 3 real players.  Kept in the
+    // catalog so gameDisplayName() resolves the slug (for leaderboards,
+    // breadcrumbs, etc.) and so excludes references resolve.
+    enabled      : false,
+    tournament   : true,
+    exactPlayers : 3,
+    excludes     : {GameIds.sixes, GameIds.points531, GameIds.nassau,
+                    GameIds.skins, GameIds.tripleCup, GameIds.matchPlay,
+                    GameIds.strokePlay, GameIds.stableford},
   ),
   GameMeta(
     id          : GameIds.multiSkins,
@@ -242,9 +286,23 @@ final Map<String, GameMeta> _kGameById = {
   for (final g in kGameCatalog) g.id: g,
 };
 
+/// Display labels for slugs that aren't in [kGameCatalog] (catalog is for
+/// picker-eligible games only).  Sourced from the Django GameType enum where
+/// available; cup-specific aliases (cup_singles, cup_singles_18) live here.
+const Map<String, String> _kExtraGameLabels = {
+  'quota_nassau'      : 'Quota Nassau',
+  'cup_singles'       : 'Singles-Nassau',
+  'cup_singles_18'    : 'Singles-18',
+};
+
 /// Display name for [gameId], falling back to the raw ID if unknown.
+/// Single source of truth for every chip, badge, page title, and leaderboard
+/// tab — picker games come from [kGameCatalog], other slugs from
+/// [_kExtraGameLabels].
 String gameDisplayName(String gameId) =>
-    _kGameById[gameId]?.displayName ?? gameId;
+    _kGameById[gameId]?.displayName
+    ?? _kExtraGameLabels[gameId]
+    ?? gameId;
 
 /// Games shown in the casual-round picker (enabled only).
 List<GameMeta> get casualGames =>

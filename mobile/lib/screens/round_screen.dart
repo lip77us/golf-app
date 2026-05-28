@@ -1,24 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
-
-// ── Human-readable labels for game keys ──────────────────────────────────────
-const _kGameLabels = {
-  'skins'        : 'Skins',
-  'multi_skins'  : 'Multi-Group Skins',
-  'stableford'   : 'Stableford',
-  'pink_ball'    : 'Pink Ball',
-  'nassau'       : 'Nassau',
-  'sixes'        : 'Sixes',
-  'match_play'   : 'Match Play',
-  'irish_rumble' : 'Irish Rumble',
-  'scramble'     : 'Scramble',
-  'low_net_round': 'Stroke Play',
-  'points_531'   : 'Points 5-3-1',
-};
+import '../widgets/game_chip.dart';
 
 class RoundScreen extends StatefulWidget {
   final int roundId;
@@ -195,17 +182,22 @@ class _RoundScreenState extends State<RoundScreen> {
                       route = '/score-entry';
                     } else if (fsGames.contains('three_person_match') &&
                         !fs.configuredGames.contains('three_person_match')) {
-                      // Three-Person Match not yet configured — go to setup.
+                      // Legacy: rounds created with the old standalone
+                      // three_person_match slug.  New rounds use match_play
+                      // and auto-dispatch via the branch below.
                       route = '/three-person-match-setup';
                     } else if (fsGames.contains('match_play') &&
                         !fs.configuredGames.contains('match_play') &&
                         !fs.configuredGames.contains('three_person_match')) {
-                      // Match play bracket not yet configured — go to setup.
-                      // Skip this gate for 3-player foursomes: they play
-                      // Three-Person Match (5-3-1) instead of a bracket, so
-                      // their three_person_match config satisfies the setup
-                      // requirement even though match_play is round-wide.
-                      route = '/match-play-setup';
+                      // Match Play is a single tournament-wide pick that
+                      // auto-dispatches by foursome size: 3-player groups
+                      // play Three-Person Match (Points 5-3-1 → 1v1 final);
+                      // 4-player groups play the single-elimination bracket
+                      // (semis 1–9, Final + 3rd-place 10–18).
+                      final realCount = fs.realPlayers.length;
+                      route = realCount == 3
+                          ? '/three-person-match-setup'
+                          : '/match-play-setup';
                     } else if (fsGames.contains('pink_ball')) {
                       // Pink ball always gets its own dedicated screen.
                       // The pink ball screen loads and displays match play
@@ -308,12 +300,7 @@ class _RoundInfoCard extends StatelessWidget {
               spacing: 6,
               runSpacing: 4,
               children: round.activeGames
-                  .map((g) => Chip(
-                        label: Text(_gameLabel(g),
-                            style: const TextStyle(fontSize: 11)),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                      ))
+                  .map((g) => GameChip(gameId: g))
                   .toList(),
             ),
           ],
@@ -322,21 +309,7 @@ class _RoundInfoCard extends StatelessWidget {
     );
   }
 
-  String _gameLabel(String g) {
-    const labels = {
-      'skins':        'Skins',
-      'stableford':   'Stableford',
-      'pink_ball':    'Pink Ball',
-      'nassau':        'Nassau',
-      'quota_nassau':  'Four Ball Quota',
-      'sixes':         'Sixes',
-      'match_play':    'Match Play',
-      'irish_rumble':  'Irish Rumble',
-      'scramble':      'Scramble',
-      'low_net_round': 'Stroke Play',
-    };
-    return labels[g] ?? g;
-  }
+  String _gameLabel(String g) => gameDisplayName(g);
 }
 
 // ---------------------------------------------------------------------------
@@ -442,6 +415,13 @@ class _GameSetupCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 // One button per unconfigured foursome
                 ...pendingMatchPlay.map((fs) {
+                  // Match Play auto-dispatches by group size: 3-player
+                  // foursomes get Three-Person Match (Points 5-3-1 →
+                  // 1v1 final); 4-player foursomes get the single-elim
+                  // bracket.  Route the Set Up button to whichever setup
+                  // screen owns this group's variant.
+                  final realCount = fs.realPlayers.length;
+                  final isThreesome = realCount == 3;
                   final allIds = foursomes.map((f) => f.id).toList();
                   final peerIds = foursomes
                       .where((f) =>
@@ -453,12 +433,16 @@ class _GameSetupCard extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 6),
                     child: OutlinedButton.icon(
                       onPressed: () => Navigator.of(context).pushNamed(
-                        '/match-play-setup',
-                        arguments: {
-                          'foursomeId'     : fs.id,
-                          'allMatchPlayIds': allIds,
-                          'peerIds'        : peerIds,
-                        },
+                        isThreesome
+                            ? '/three-person-match-setup'
+                            : '/match-play-setup',
+                        arguments: isThreesome
+                            ? fs.id
+                            : {
+                                'foursomeId'     : fs.id,
+                                'allMatchPlayIds': allIds,
+                                'peerIds'        : peerIds,
+                              },
                       ),
                       icon:  const Icon(Icons.tune, size: 18),
                       label: Text('Set Up ${fs.label}'),
@@ -1032,10 +1016,16 @@ class _FoursomeCard extends StatelessWidget {
     // True when this foursome needs a bracket/setup step before score entry.
     // Cup rounds are fully configured via CupRoundSetupScreen — skip all
     // bracket-setup gates for cup foursomes.
+    //
+    // Match Play auto-dispatches: 3-player groups satisfy the match_play
+    // requirement by configuring three_person_match instead, so treat
+    // either model as "set up" when match_play is the round-wide pick.
     final fsGames = {...roundActiveGames, ...foursome.activeGames};
+    final hasMatchPlayConfig =
+        foursome.configuredGames.contains('match_play') ||
+        foursome.configuredGames.contains('three_person_match');
     final needsBracketSetup = !isCupRound && (
-        (fsGames.contains('match_play') &&
-            !foursome.configuredGames.contains('match_play')) ||
+        (fsGames.contains('match_play') && !hasMatchPlayConfig) ||
         (fsGames.contains('three_person_match') &&
             !foursome.configuredGames.contains('three_person_match')));
 
@@ -1078,13 +1068,19 @@ class _FoursomeCard extends StatelessWidget {
                   style: theme.textTheme.bodySmall),
             ],
             // TD action menu — consolidates the per-foursome admin
-            // tools (configure games, remove player) behind a single
-            // overflow icon so the card header stays uncluttered.
-            // Visible only to admins on in-progress rounds.  Cup rounds
-            // hide the "configure games" entry (games are fixed at
-            // tournament setup) but keep "remove player" so the TD
-            // can still handle no-shows at the tee box.
-            if (isAdmin && !isComplete) ...[
+            // TD action menu — only "Configure group games" is exposed
+            // today.  Roster-change actions (remove no-show, move player,
+            // swap tee position) all leave stale state behind — game
+            // chips, payouts, brackets, and phantom-membership
+            // accounting don't recompute, and the corruption isn't
+            // recoverable in place.  Until those flows re-derive every
+            // dependent piece (round.active_games per foursome, payout
+            // configs, bracket re-seedings) the TD's only path on a
+            // roster change is to delete the round and create a fresh
+            // one.  Cup rounds also hide "configure games" since games
+            // are fixed at tournament setup — for them the menu is
+            // empty and we hide the more-vert icon entirely.
+            if (isAdmin && !isComplete && !isCupRound) ...[
               const Spacer(),
               PopupMenuButton<String>(
                 icon: Icon(
@@ -1099,58 +1095,18 @@ class _FoursomeCard extends StatelessWidget {
                     case 'configure_games':
                       _showGameSheet(context);
                       break;
-                    case 'remove_player':
-                      _showRemovePlayerSheet(context);
-                      break;
-                    case 'move_player':
-                      _showMovePlayerSheet(context);
-                      break;
-                    case 'swap_position':
-                      _showSwapPositionSheet(context);
-                      break;
                   }
                 },
                 itemBuilder: (_) => [
-                  if (!isCupRound)
-                    PopupMenuItem(
-                      value: 'configure_games',
-                      child: Row(children: [
-                        Icon(Icons.sports_golf, size: 18,
-                            color: hasOverride
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurfaceVariant),
-                        const SizedBox(width: 12),
-                        const Flexible(child: Text('Configure group games')),
-                      ]),
-                    ),
-                  // Short, scannable labels — verbose phrasings
-                  // overflowed the popup width on iPhone-mini.
                   PopupMenuItem(
-                    value: 'move_player',
+                    value: 'configure_games',
                     child: Row(children: [
-                      Icon(Icons.swap_horiz, size: 18,
-                          color: theme.colorScheme.primary),
+                      Icon(Icons.sports_golf, size: 18,
+                          color: hasOverride
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      const Flexible(child: Text('Move player to group…')),
-                    ]),
-                  ),
-                  if (allFoursomes.length > 1)
-                    PopupMenuItem(
-                      value: 'swap_position',
-                      child: Row(children: [
-                        Icon(Icons.schedule, size: 18,
-                            color: theme.colorScheme.primary),
-                        const SizedBox(width: 12),
-                        const Flexible(child: Text('Swap tee position…')),
-                      ]),
-                    ),
-                  PopupMenuItem(
-                    value: 'remove_player',
-                    child: Row(children: [
-                      Icon(Icons.person_remove_outlined, size: 18,
-                          color: theme.colorScheme.error),
-                      const SizedBox(width: 12),
-                      const Flexible(child: Text('Remove no-show')),
+                      const Flexible(child: Text('Configure group games')),
                     ]),
                   ),
                 ],
@@ -1158,21 +1114,26 @@ class _FoursomeCard extends StatelessWidget {
             ],
           ]),
           // Game chips: always shown for cup rounds; only when override active
-          // for regular rounds.
+          // for regular rounds.  Match Play auto-dispatches to Three-Person
+          // Match for 3-player foursomes; drop the redundant 'match_play'
+          // chip when 'three_person_match' is already present so the
+          // 3-some card shows just "Three-Person Match".
           if (showGameChips) ...[
             const SizedBox(height: 6),
-            Wrap(
-              spacing: 4,
-              runSpacing: 2,
-              children: effectiveGames.map((g) => Chip(
-                label: Text(_kGameLabels[g] ?? g,
-                    style: const TextStyle(fontSize: 10)),
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-                backgroundColor:
-                    theme.colorScheme.primaryContainer.withOpacity(0.5),
-              )).toList(),
-            ),
+            Builder(builder: (_) {
+              final chips = effectiveGames.toList();
+              if (chips.contains('three_person_match') &&
+                  chips.contains('match_play')) {
+                chips.remove('match_play');
+              }
+              return Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                children: chips
+                    .map((g) => GameChip(gameId: g, dense: true, filled: true))
+                    .toList(),
+              );
+            }),
           ],
           const SizedBox(height: 8),
           ...foursome.realPlayers.map((m) {
@@ -1318,7 +1279,7 @@ class _GameSelectionSheetState extends State<_GameSelectionSheet> {
           ),
           const SizedBox(height: 12),
           ...widget.eligibleGames.map((g) => CheckboxListTile(
-                title: Text(_kGameLabels[g] ?? g),
+                title: Text(gameDisplayName(g)),
                 value: _selected.contains(g),
                 dense: true,
                 contentPadding: EdgeInsets.zero,

@@ -787,10 +787,13 @@ def _auto_setup_games(round_obj: Round, foursomes: list) -> None:
                 setup_tournament_match_play(fs)
             elif real_count == 3:
                 # 3-player foursomes play 5-3-1 points — not a bracket.
+                # Don't pass handicap_mode so the service default (SO Low)
+                # applies — match-play side games run independently from
+                # the round-level handicap (which is typically Net for
+                # multi-foursome tournament rounds).
                 from services.three_person_match import setup_three_person_match
                 setup_three_person_match(
                     fs,
-                    handicap_mode=round_obj.handicap_mode,
                     net_percent=round_obj.net_percent,
                 )
                 # Stamp three_person_match in the foursome's own active_games so
@@ -1619,8 +1622,13 @@ class FoursomeTeesView(APIView):
             pk=pk,
         )
 
+        # Phantom-player scores (Sixes phantom, Pink Ball rotation, etc.)
+        # don't represent real scoring — exclude them so the lock only
+        # kicks in once a real player has played a hole.
         scored = HoleScore.objects.filter(
-            foursome=foursome, gross_score__isnull=False,
+            foursome=foursome,
+            gross_score__isnull=False,
+            player__is_phantom=False,
         ).exists()
         if scored:
             return Response(
@@ -2725,8 +2733,10 @@ class SixesSetupView(APIView):
         segments = setup_sixes(
             foursome,
             data['segments'],
-            handicap_mode = data.get('handicap_mode', 'net'),
-            net_percent   = data.get('net_percent', 100),
+            handicap_mode       = data.get('handicap_mode', 'net'),
+            net_percent         = data.get('net_percent', 100),
+            scoring_format      = data.get('scoring_format', 'classic'),
+            handicap_allocation = data.get('handicap_allocation', 'per_segment'),
         )
         return Response({'segments_created': len(segments)}, status=status.HTTP_201_CREATED)
 
@@ -3276,12 +3286,19 @@ class MatchPlaySetupView(APIView):
         entry_fee     = request.data.get('entry_fee', 0.00)
         payout_config = request.data.get('payout_config', {})
         seed_order    = request.data.get('seed_order', None)   # optional list of player PKs
+        # Optional per-bracket handicap override.  When omitted the service
+        # falls back to the round's handicap_mode / net_percent so a setup
+        # POST that doesn't carry these fields keeps the previous behaviour.
+        handicap_mode = request.data.get('handicap_mode', None)
+        net_percent   = request.data.get('net_percent', None)
         try:
             setup_tournament_match_play(
                 foursome,
                 entry_fee=entry_fee,
                 payout_config=payout_config,
                 seed_order=seed_order,
+                handicap_mode=handicap_mode,
+                net_percent=net_percent,
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -3311,8 +3328,38 @@ class ThreePersonMatchResultView(APIView):
     """GET /api/foursomes/{id}/three-person-match/"""
     def get(self, request, pk):
         foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
-        from services.three_person_match import three_person_match_summary
+        from services.three_person_match import (
+            three_person_match_summary,
+            setup_three_person_match,
+        )
         summary = three_person_match_summary(foursome)
+
+        # Lazy auto-create: rounds with match_play active and a 3-real-player
+        # foursome are auto-dispatched to TPM in setup_round, but rounds
+        # created BEFORE that wiring (or where match_play was added later)
+        # may not have a TPM record yet.  Create one on first GET so the
+        # score-entry screen stops 404'ing.  Uses the service default
+        # (SO Low) — admin can change via the setup screen.
+        if summary is None:
+            round_obj  = foursome.round
+            active     = list(round_obj.active_games or [])
+            real_count = sum(
+                1 for m in foursome.memberships.all()
+                if not m.player.is_phantom
+            )
+            if 'match_play' in active and real_count == 3:
+                setup_three_person_match(
+                    foursome, net_percent=round_obj.net_percent,
+                )
+                # Stamp three_person_match in fs active_games so the
+                # _recalculate hook fires calculate_three_person_match.
+                fs_games = list(foursome.active_games or [])
+                if 'three_person_match' not in fs_games:
+                    fs_games.append('three_person_match')
+                    foursome.active_games = fs_games
+                    foursome.save(update_fields=['active_games'])
+                summary = three_person_match_summary(foursome)
+
         if summary is None:
             return Response(
                 {'detail': 'No Three-Person Match set up for this foursome.'},
@@ -3396,6 +3443,8 @@ class IrishRumbleSetupView(APIView):
             'entry_fee'    : float(config.entry_fee),
             'payouts'      : config.payouts or [],
             'segments'     : config.segments,
+            'variant'      : config.variant,
+            'custom_balls' : config.custom_balls,
         }
 
     @staticmethod
@@ -3426,11 +3475,27 @@ class IrishRumbleSetupView(APIView):
                 'entry_fee'    : 0.00,
                 'payouts'      : [],
                 'segments'     : _IR_DEFAULT_SEGMENTS,
+                'variant'      : 'classic',
+                'custom_balls' : None,
             }
         data['num_players']          = num_players
         data['is_tournament_round']  = is_tournament
         data['round_handicap_mode']  = round_obj.handicap_mode
         data['round_net_percent']    = round_obj.net_percent
+        # Per-foursome real-player counts so the mobile setup screen can
+        # show "splits to $X (foursome) / $Y (threesome)" helper text
+        # under each payout field.  Drives Irish Rumble's group-total
+        # payout UI.
+        data['group_sizes']          = [
+            sum(1 for m in fs.memberships.all() if not m.player.is_phantom)
+            for fs in round_obj.foursomes.all()
+        ]
+        # Course pars per hole — drives the Shuffle variant preview and
+        # the Custom variant's per-hole editor.  Ordered list of 18 ints
+        # so the mobile client can address by 0-indexed hole.
+        from services.irish_rumble import par_by_hole_for_round
+        par_map = par_by_hole_for_round(round_obj)
+        data['hole_pars'] = [par_map.get(h, 4) for h in range(1, 19)]
         return Response(data)
 
     def post(self, request, pk):
@@ -3448,6 +3513,17 @@ class IrishRumbleSetupView(APIView):
             hcap_mode   = d['handicap_mode']
             net_pct     = d['net_percent']
 
+        # Derive the segments list from the chosen variant + course pars.
+        # The scoring code reads segments verbatim, so each variant just
+        # produces a different segments JSON at save time.
+        from services.irish_rumble import (
+            compute_segments, par_by_hole_for_round,
+        )
+        variant      = d.get('variant', 'classic')
+        custom_balls = d.get('custom_balls') if variant == 'custom' else None
+        par_by_hole  = par_by_hole_for_round(round_obj)
+        segments     = compute_segments(variant, par_by_hole, custom_balls)
+
         from games.models import IrishRumbleConfig
         config, _ = IrishRumbleConfig.objects.update_or_create(
             round    = round_obj,
@@ -3456,7 +3532,9 @@ class IrishRumbleSetupView(APIView):
                 'net_percent'  : net_pct,
                 'entry_fee'    : d['entry_fee'],
                 'payouts'      : d['payouts'],
-                'segments'     : _IR_DEFAULT_SEGMENTS,
+                'segments'     : segments,
+                'variant'      : variant,
+                'custom_balls' : custom_balls,
             },
         )
         # Recalculate if there are already hole scores on file

@@ -18,6 +18,7 @@ import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
 
 // Group badge colours — mirrors new_round_wizard.dart
 const _groupColors = [
@@ -329,13 +330,9 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(children: [
           Expanded(
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText  : 'Search players…',
-                prefixIcon: Icon(Icons.search),
-                isDense   : true,
-                border    : OutlineInputBorder(),
-              ),
+            child: GolfTextField(
+              hint: 'Search players…',
+              prefixIcon: Icons.search,
               onChanged: (s) => setState(() => _search = s),
             ),
           ),

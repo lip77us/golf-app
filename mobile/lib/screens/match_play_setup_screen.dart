@@ -18,6 +18,9 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
+import '../widgets/handicap_mode_selector.dart';
+import '../widgets/section_card.dart';
 import '../widgets/payout_config_field.dart';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +70,12 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
   bool    _copyingPayouts= false;
   Object? _error;
 
+  // Per-bracket handicap mode — defaults to Strokes-Off Low (matches the
+  // other casual game setup screens).  Existing brackets overwrite this
+  // from their persisted handicap.mode in _load().
+  String _mode       = 'strokes_off';
+  int    _netPercent = 100;
+
   // Entry fee
   final _entryFeeCtrl = TextEditingController(text: '0');
 
@@ -114,7 +123,19 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       final client = context.read<AuthProvider>().client;
-      final data   = await client.getMatchPlay(widget.foursomeId);
+      final Map<String, dynamic> data;
+      try {
+        data = await client.getMatchPlay(widget.foursomeId);
+      } on ApiException catch (e) {
+        if (e.statusCode == 404) {
+          // No bracket yet for this foursome — that's the expected state
+          // when a user lands here from a fresh casual round.  Render the
+          // empty setup form with defaults rather than an error view.
+          if (mounted) setState(() { _loading = false; });
+          return;
+        }
+        rethrow;
+      }
       if (!mounted) return;
 
       final st = data['status'] as String? ?? 'pending';
@@ -138,6 +159,16 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
         }
         if (nPlaces > 0) _numPayouts = nPlaces;
       }
+
+      // Per-bracket handicap mode + net percent.  The summary returns
+      // these under `handicap` once the bracket is created; for a brand-
+      // new bracket the keys may be missing, in which case we keep the
+      // local Strokes-Off-Low default.
+      final hcap = data['handicap'] as Map? ?? const {};
+      final hcapMode = hcap['mode'] as String?;
+      if (hcapMode != null) _mode = hcapMode;
+      final hcapPct  = hcap['net_percent'] as int?;
+      if (hcapPct  != null) _netPercent = hcapPct;
 
       // Store actual player count (3 for threesome, 4 for foursome)
       _playerCount = (data['players'] as List? ?? []).length;
@@ -289,6 +320,8 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
         entryFee:     entryFee,
         payoutConfig: payouts,
         seedOrder:    seedOrder.isNotEmpty ? seedOrder : null,
+        handicapMode: _mode,
+        netPercent:   _netPercent,
       );
 
       if (!mounted) return;
@@ -344,13 +377,27 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _section(theme, 'Bracket Seedings', _buildSeedings(theme)),
+          SectionCard(title: 'Bracket Seedings', child: _buildSeedings(theme)),
           const SizedBox(height: 16),
-          _section(theme, 'Entry Fee',        _buildEntryFee(theme)),
+          // Per-bracket handicap mode — Strokes-Off Low is the casual
+          // default since the side game lives entirely within the
+          // foursome.  The selector is the same widget the other game
+          // setup screens use so the picker reads identically everywhere.
+          HandicapModeSelector(
+            mode:             _mode,
+            netPercent:       _netPercent,
+            onModeChanged:    (m) => setState(() => _mode = m),
+            onPercentChanged: (p) => setState(() => _netPercent = p),
+            soNote: 'The lowest-handicap player in this foursome plays '
+                'to 0.  Other players receive (own HCP − foursome low '
+                'HCP) strokes, allocated by stroke index, scaled by Net %.',
+          ),
           const SizedBox(height: 16),
-          _section(theme, 'Payouts',          _buildPayouts(theme)),
+          SectionCard(title: 'Entry Fee',    child: _buildEntryFee(theme)),
           const SizedBox(height: 16),
-          _section(theme, 'How it works',     _buildRules(theme)),
+          SectionCard(title: 'Payouts',      child: _buildPayouts(theme)),
+          const SizedBox(height: 16),
+          SectionCard(title: 'How it works', child: _buildRules(theme)),
           const SizedBox(height: 80),
         ],
       ),
@@ -489,14 +536,10 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextFormField(
-          controller:  _entryFeeCtrl,
-          decoration:  const InputDecoration(
-            labelText:  'Per player (\$)',
-            border:     OutlineInputBorder(),
-            prefixIcon: Icon(Icons.attach_money),
-            isDense:    true,
-          ),
+        GolfTextField(
+          controller: _entryFeeCtrl,
+          label: 'Per player (\$)',
+          prefixIcon: Icons.attach_money,
           keyboardType: TextInputType.number,
         ),
         if (_pool > 0) ...[
@@ -585,25 +628,4 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  Widget _section(ThemeData theme, String title, Widget child) => Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: theme.colorScheme.outline),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary)),
-              const SizedBox(height: 10),
-              child,
-            ],
-          ),
-        ),
-      );
 }
