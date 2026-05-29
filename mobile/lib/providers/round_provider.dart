@@ -398,7 +398,7 @@ class RoundProvider extends ChangeNotifier {
   /// returned (and [round] is left unchanged).
   Future<bool> updateRoundBetUnit(double betUnit) async {
     if (_round == null) {
-      _error = 'No round loaded — cannot update bet unit.';
+      _error = 'No round loaded — cannot update stake.';
       notifyListeners();
       return false;
     }
@@ -409,7 +409,7 @@ class RoundProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } on NetworkException {
-      _error = 'No connection — cannot update bet unit while offline.';
+      _error = 'No connection — cannot update stake while offline.';
       notifyListeners();
       return false;
     } catch (e) {

@@ -909,6 +909,76 @@ class MeView(APIView):
         return Response(body)
 
 
+class DeleteAccountView(APIView):
+    """
+    DELETE /api/auth/delete-account/
+
+    Self-service account deletion required by App Store Guideline 5.1.1(v):
+    a logged-in user must be able to delete the account they created from
+    inside the app.
+
+    Behaviour (see CLAUDE.md "in-app account deletion" decision):
+      * Deletes the caller's User + auth token (login is gone, can't sign in).
+      * The linked Player is UNLINKED and anonymized — personal data
+        (email / phone / name) is scrubbed but the row and its golf history
+        are kept, because HoleScore / FoursomeMembership reference Player
+        with on_delete=PROTECT and that history is shared with other golfers
+        in the account.  Other players' scorecards keep rendering with a
+        neutral "Former Player" label.
+      * The Account (tenant) is left intact even if it becomes memberless —
+        deleting it would cascade into PROTECT-locked scores.
+
+    Guard: a sole admin of an account that still has other members may not
+    delete themselves (it would orphan those members in an admin-less
+    account).  They must promote another admin first.  A solo user — the
+    only member of their account — can always delete.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user    = request.user
+        account = user.account
+
+        other_members = (
+            type(user).objects
+            .filter(account=account, is_active=True)
+            .exclude(pk=user.pk)
+        )
+        if (
+            user.is_account_admin
+            and other_members.exists()
+            and not other_members.filter(is_account_admin=True).exists()
+        ):
+            return Response(
+                {'detail': 'You are the only admin in this account.  '
+                           'Promote another member to admin before '
+                           'deleting your account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Unlink + anonymize the linked Player (keep protected history).
+        try:
+            player = user.player_profile
+        except Exception:
+            player = None
+        if player is not None:
+            player.user       = None
+            player.name       = 'Former Player'
+            player.short_name = 'FP'
+            player.email      = ''
+            player.phone      = ''
+            player.save()
+
+        # Drop the auth token, then the user.
+        try:
+            user.auth_token.delete()
+        except Exception:
+            pass
+        user.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 # ---------------------------------------------------------------------------
 # Reference data
 # ---------------------------------------------------------------------------
@@ -924,6 +994,14 @@ class PlayerListView(APIView):
         return Response(PlayerSerializer(players, many=True).data)
 
     def post(self, request):
+        # Roster management (create) is admin-only, matching delete and
+        # the member-management endpoints.  Non-admins get a read-only
+        # roster in the app.
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response(
+                {'detail': 'Only admins can add players.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         ser = PlayerCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         # account is injected via save() so the client can never
@@ -940,6 +1018,12 @@ class PlayerDetailView(APIView):
         return Response(PlayerSerializer(player).data)
 
     def patch(self, request, pk):
+        # Editing a player is admin-only, matching create/delete.
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response(
+                {'detail': 'Only admins can edit players.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         player = account_get_or_404(
             Player, request.user.account, pk=pk, is_phantom=False,
         )

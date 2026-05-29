@@ -1622,7 +1622,7 @@ class _RoundFormatToggle extends StatelessWidget {
               onSelected: locked ? null : (_) => onChanged('custom'),
             ),
             ChoiceChip(
-              label: const Text('One Day Ryder Cup'),
+              label: const Text('One-Day Triple Cup'),
               selected: value == 'triple_cup',
               onSelected: locked ? null : (_) => onChanged('triple_cup'),
             ),
@@ -1658,7 +1658,7 @@ class _TripleCupFormatNote extends StatelessWidget {
                   color: theme.colorScheme.primary)),
           const SizedBox(height: 8),
           Text(
-            'One Day Ryder Cup locks every foursome to the same 4-match '
+            'One-Day Triple Cup locks every foursome to the same 4-match '
             'format:\n'
             '  •  Holes 1–6 — Fourball (best-ball match play)\n'
             '  •  Holes 7–12 — Foursomes (alt-shot)\n'

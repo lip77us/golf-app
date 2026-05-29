@@ -301,7 +301,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                           color: theme.colorScheme.primary)),
                   const SizedBox(height: 8),
                   Text(
-                    'Each player chips in the bet unit.  On every hole, '
+                    'Each player chips in the stake.  On every hole, '
                     'the player with the best score wins a skin outright.  '
                     'A tie ${_carryover ? 'carries the pot to the next hole' : 'kills the skin'}.  '
                     'At the end, the pool is split proportionally among '
@@ -414,14 +414,14 @@ class _BetUnitCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Bet Unit',
+          Text('Stake',
               style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary)),
           const SizedBox(height: 8),
           GolfTextField(
             controller: controller,
-            label: 'Bet unit (\$)',
+            label: 'Stake (\$)',
             prefixIcon: Icons.attach_money,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),

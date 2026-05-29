@@ -285,7 +285,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 return _BandonCupTabView(
                   roundId       : widget.roundId,
                   tournamentId  : lb.tournamentId,
-                  tournamentName: lb.cupName ?? lb.tournamentName ?? 'Bandon Cup',
+                  tournamentName: lb.cupName ?? lb.tournamentName ?? 'Cup',
                 );
               }
               if (gameKey == '__my_foursome__') {
@@ -326,10 +326,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
 
   String _label(String g, [String? cupName]) {
     // Cup tab title tracks the cup competition's display name — falls
-    // back to "Bandon Cup" only when no cup name is set on the
+    // back to a generic "Cup" only when no cup name is set on the
     // TeamTournament row (e.g. older data or non-cup contexts).
     if (g == '__bandon_cup__') {
-      return cupName ?? 'Bandon Cup';
+      return cupName ?? 'Cup';
     }
     if (g == '__my_foursome__') return 'My Foursome';
     if (g == '__championship__') return 'Low Net';

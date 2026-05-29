@@ -88,5 +88,135 @@ I have decided to put in three modes to operate on single foursome games.  You c
 
 ---
 
-## Nassau — not yet implemented
-Reserved chip in the casual-round picker but disabled. When implementing, follow the Skins/Points 5-3-1 pattern.
+## App Store readiness
+
+### In-app account deletion (Guideline 5.1.1(v)) — implemented
+Logged-in users can delete their own account from **Settings → Delete Account**.
+
+Decision (chosen over full Player delete / Account-tenant delete): delete the
+`User` + auth token, then **unlink and anonymize** the linked `Player`
+(name → "Former Player", short_name → "FP", email/phone cleared) while keeping
+the Player row and its golf history. Rationale: `HoleScore` and
+`FoursomeMembership` reference `Player` with `on_delete=PROTECT`, and that
+history is shared with other golfers in the account — a hard delete would
+either fail or corrupt other players' scorecards. The `Account` (tenant) is
+left intact even if it becomes memberless (deleting it cascades into
+PROTECT-locked scores).
+
+Guard: a sole admin of an account that still has other members is blocked
+("promote another admin first"); a solo user can always delete.
+
+- Backend: `DeleteAccountView` (`DELETE /api/auth/delete-account/`) in `api/views.py`, route in `api/urls.py`.
+- Mobile: `ApiClient.deleteMyAccount()`, `AuthProvider.deleteAccount()`, Delete Account tile in `settings_screen.dart`. The auth gate in `main.dart` redirects to `/login` when the token clears.
+
+Privacy policy should state: deleting your account removes your login and
+personal info; anonymized game records may be retained.
+
+### App name (working) — "Halved"
+Working name as of this round of App Store prep, chosen after vetting several
+candidates for trademark / App Store / domain conflicts:
+- Rejected: **AllSquare** (registered "All Square®" golf social app),
+  **GolfAction** (direct competitor golfactionapp.com), **Dormie** (existing
+  Dormie golf app + multiple golf trademarks). **AutoPress** and **Honors**
+  were "yellow lights" (proximity to Press Golf / existing "Honors" golf
+  apparel brand). **Halved** came back clean (match-play term for a tied hole;
+  no golf app or brand collision).
+- Rename DONE across the app: in-app title + About dialog → "Halved"
+  ([main.dart], [app_drawer.dart]); iOS `CFBundleDisplayName`/`CFBundleName`
+  → "Halved"; drawer + splash logo replaced with a temporary **text wordmark**;
+  app icon regenerated via `flutter_launcher_icons` from
+  `mobile/assets/icon/halved_icon.png` (a green "Halved" text placeholder).
+  Cup-name hint examples and the leaderboard cup fallback ("Bandon Cup" → "Cup")
+  were neutralized. Internal-only `__bandon_cup__` key + `_BandonCup*` class
+  names were intentionally left (not user-visible).
+- TODO before launch: USPTO search in the software/golf class; pick a domain
+  (`halved.app` / `halvedgolf.com`); decide support email.
+- Trademark cleanup #2 — **"Ryder Cup"** (PGA-owned mark) scrubbed from all
+  user-visible strings: catalog displayName + Triple Cup screens → "One-Round
+  Triple Cup"; championship label "Cup Play (Ryder Cup style)" → "Cup Play";
+  cup-format labels → "One-Day Triple Cup"; default cup-name field → "Team Cup";
+  scoreboard hint → "Cup Play config"; backend `GameType.TRIPLE_CUP` label →
+  "One-Round Triple Cup". Internal slugs (`triple_cup`, `team_cup`), the
+  `/ryder-cup/` API routes, `RyderCup*` class/file names, and code
+  comments/docstrings were intentionally left (not user-visible).
+- App Store listing copy drafted in `docs/app-store-listing.md` (name, subtitle,
+  keywords, promo text, description, what's-new). Support page in
+  `docs/support.html` → host as `support.html` in the `halved-legal` repo
+  (→ https://lip77us.github.io/halved-legal/support.html) for the App Store
+  Connect Support URL field.
+- LOGO UPGRADE (delivery 2): replace `assets/icon/halved_icon.png` with the
+  final cut-golf-ball mark and re-run `dart run flutter_launcher_icons`; swap
+  the temporary `Text('Halved')` wordmarks in app_drawer + splash_screen for an
+  `Image.asset` of the real lockup.
+
+### Privacy policy (Guideline 5.1.1 / App Privacy) — PUBLISHED
+Live at **https://lip77us.github.io/halved-legal/privacy.html** (GitHub Pages,
+repo `lip77us/halved-legal`, file `privacy.html`). Publisher = Paul Lipkin,
+contact `paul@lipkin.us`, effective date May 31, 2026. Source of truth for the
+text is `docs/privacy-policy.html` in this repo — edit there, then copy into the
+`halved-legal` repo to update. Goes in App Store Connect → App Information →
+Privacy Policy URL.
+
+(original draft notes:)
+### Privacy policy (Guideline 5.1.1 / App Privacy) — drafted
+`docs/privacy-policy.html` — self-contained HTML page ready for GitHub Pages,
+publisher = Paul Lipkin (individual). Reflects the real data inventory (no
+location/camera/tracking/ads; data stored on the Railway backend; course
+lookups to GolfCourseAPI send no PII) and an account-deletion section matching
+the implemented feature. Remaining placeholders before publishing:
+`[EFFECTIVE DATE]` and `[CONTACT EMAIL]`. Once hosted, the URL goes in App
+Store Connect → App Privacy, and ideally an in-app "Privacy Policy" link.
+
+### Demo account for App Store review — `seed_demo`
+`core/management/commands/seed_demo.py` builds a deterministic **DemoClub**
+tenant for reviewer login + screenshots, and doubles as an end-to-end
+smoke/regression test (drives the real model + service layer; exercises round
+setup and the Skins / Points 5-3-1 / Nassau / Sixes calculators).
+
+- `python manage.py seed_demo` — build (errors if DemoClub exists).
+- `python manage.py seed_demo --reset` — tear down + rebuild deterministically.
+- Creates: 12-player roster (4 logins: `reviewer` admin, `reviewer_delete`
+  non-admin for deletion testing, `dmiller`, `slopez`), 1 course/tee, 5 casual
+  rounds (completed Skins/Points/Nassau + in-progress Sixes/Skins) and 2
+  tournaments (1 completed w/ 2 foursomes, 1 in-progress). Default password
+  `HalvedDemo2026` (override with `--password`).
+- **Run it against the Railway prod backend** before submitting — the
+  reviewer's app talks to prod, not local.
+- NOTE: the older `seed_test_data` command is **stale** (predates a schema
+  refactor: it treats `Round.course` as a Tee and uses a non-existent
+  `Tee.course_name`). `seed_demo` follows the current schema — use it as the
+  reference for programmatic data creation.
+
+## Stableford — hidden until built out
+Stableford is **hidden from the tournament menu** (App Store completeness: it
+was only partially working — no per-hole points under score entry or on the
+leaderboard).
+- The per-round `stableford` catalog entry is `enabled: false` (already hidden
+  from `tournamentRoundGames`).
+- The **Stableford Championship** option is commented out of
+  `kChampionshipGames` in `game_catalog.dart`; its display label is preserved
+  in `_kExtraGameLabels` so any existing tournament still renders the name.
+  Helper text in `new_round_wizard.dart` that listed "Stableford" as a
+  selectable championship was updated to drop it.
+- Re-enable by uncommenting the `kChampionshipGames` line and restoring the
+  helper-text wording.
+
+**TODO before re-enabling (user requirements):**
+1. Track and display Stableford points per hole below score entry.
+2. Show Stableford points/totals on the leaderboard.
+3. Add a Stableford setup screen with an **editable points-per-score table**
+   (e.g. eagle/birdie/par/bogey/double values) so the user can modify the
+   points awarded per score.
+4. Build **both a casual version and a tournament version**:
+   - Casual: re-enable the per-round `stableford` catalog entry (`casual: true`,
+     `enabled: true`) with its own setup + scoring, like the other casual games.
+   - Tournament: the `stableford_championship` accumulator (uncomment in
+     `kChampionshipGames`) that totals points across rounds.
+
+## Nassau — implemented
+Enabled in `game_catalog.dart` (casual, 2–4 players; excludes Sixes/Points).
+Full stack present: `nassau_setup_screen.dart` + `nassau_screen.dart`,
+`/nassau-setup` + `/nassau` routes in `main.dart`, and backend
+`NassauResultView` / `NassauSetupView` / `NassauPressView`. (This supersedes
+the earlier "not yet implemented" note; the "Implemented casual games" list
+above predates Nassau and Triple Cup / Match Play / Multi-Skins.)

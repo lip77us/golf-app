@@ -46,3 +46,6 @@ htmlcov/
 
 # Claude Code worktrees / scratch state
 .claude/
+
+# Temp venv for running backend tests locally
+.venv-test/

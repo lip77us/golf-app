@@ -37,7 +37,7 @@
 ///
 /// ```dart
 /// SectionCard(
-///   title: 'Bet unit',
+///   title: 'Stake',
 ///   child: GolfTextField(...),
 /// )
 /// ```

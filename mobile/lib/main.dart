@@ -160,7 +160,7 @@ class _GolfAppState extends State<GolfApp> {
       child: MaterialApp(
         navigatorKey:         navigatorKey,
         scaffoldMessengerKey: scaffoldMessengerKey,
-        title: 'The Bandon Cup',
+        title: 'Halved',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(

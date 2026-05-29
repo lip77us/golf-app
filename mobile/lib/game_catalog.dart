@@ -151,7 +151,7 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id           : GameIds.tripleCup,
-    displayName  : 'One Round Ryder Cup',
+    displayName  : 'One-Round Triple Cup',
     casual       : true,
     // Casual requires exactly 4 — 2v1 needs cross-foursome donors (cup
     // only) and 1v1 lacks the fourball/foursomes-match structure that
@@ -290,9 +290,12 @@ final Map<String, GameMeta> _kGameById = {
 /// picker-eligible games only).  Sourced from the Django GameType enum where
 /// available; cup-specific aliases (cup_singles, cup_singles_18) live here.
 const Map<String, String> _kExtraGameLabels = {
-  'quota_nassau'      : 'Quota Nassau',
-  'cup_singles'       : 'Singles-Nassau',
-  'cup_singles_18'    : 'Singles-18',
+  'quota_nassau'           : 'Quota Nassau',
+  'cup_singles'            : 'Singles-Nassau',
+  'cup_singles_18'         : 'Singles-18',
+  // Hidden from the picker (see kChampionshipGames) but kept here so existing
+  // tournaments using it still display a friendly name rather than the slug.
+  'stableford_championship': 'Stableford Championship',
 };
 
 /// Display name for [gameId], falling back to the raw ID if unknown.
@@ -323,8 +326,13 @@ List<GameMeta> get primaryGames =>
 /// (like Irish Rumble) rather than a cross-day accumulator.
 const List<(String, String)> kChampionshipGames = [
   (GameIds.championshipStrokePlay, 'Stroke Play Championship'),
-  (GameIds.championshipStableford, 'Stableford Championship'),
-  (GameIds.teamCup,                'Cup Play (Ryder Cup style)'),
+  // Stableford Championship is hidden from the tournament picker until the
+  // Stableford feature is built out (per-hole points display in score entry
+  // + leaderboard, and a setup screen with an editable points-per-score
+  // table).  Re-enable by uncommenting this line.  The display label is kept
+  // in _kExtraGameLabels so any existing tournament still renders its name.
+  // (GameIds.championshipStableford, 'Stableford Championship'),
+  (GameIds.teamCup,                'Cup Play'),
 ];
 
 // ── Combination logic ─────────────────────────────────────────────────────────

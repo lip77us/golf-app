@@ -48,7 +48,7 @@ class _TripleCupScreenState extends State<TripleCupScreen> {
 
     return Scaffold(
       appBar: GolfAppBar(
-        title: 'One Round Ryder Cup',
+        title: 'One-Round Triple Cup',
         actions: [
           if (summary != null) _HandicapBadge(summary: summary),
           const SizedBox(width: 8),

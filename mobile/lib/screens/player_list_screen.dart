@@ -56,9 +56,13 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
   }
 
   Future<void> _openForm({PlayerProfile? player}) async {
+    // Non-admins get a read-only view; only admins can add/edit.  The
+    // backend enforces this too, so this is just to avoid showing an
+    // editable form that would fail to save with a 403.
+    final readOnly = !context.read<AuthProvider>().isAdmin;
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => PlayerFormScreen(player: player),
+        builder: (_) => PlayerFormScreen(player: player, readOnly: readOnly),
       ),
     );
     if (saved == true) _load();
@@ -124,6 +128,7 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Players'),
@@ -134,11 +139,14 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openForm(),
-        icon: const Icon(Icons.person_add),
-        label: const Text('Add Player'),
-      ),
+      // Only admins can add players; non-admins get a read-only roster.
+      floatingActionButton: isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () => _openForm(),
+              icon: const Icon(Icons.person_add),
+              label: const Text('Add Player'),
+            )
+          : null,
       body: Column(
         children: [
           Padding(
@@ -163,17 +171,19 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
       return ErrorView(message: _error!, isNetwork: _networkError, onRetry: _load);
     }
 
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
+
     final players = _filtered;
     if (players.isEmpty) {
       return Center(
         child: Text(
-          _search.isEmpty ? 'No players yet. Tap + Add Player.' : 'No matches.',
+          _search.isEmpty
+              ? (isAdmin ? 'No players yet. Tap + Add Player.' : 'No players yet.')
+              : 'No matches.',
           style: Theme.of(context).textTheme.bodyLarge,
         ),
       );
     }
-
-    final isAdmin = context.watch<AuthProvider>().isAdmin;
 
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 100),

@@ -367,7 +367,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
           // ── Press configuration ───────────────────────────────────────────
           SectionCard(
-            title: 'Press bets',
+            title: 'Press stakes',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -398,7 +398,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Dollar amount per press bet (separate from the main bet).',
+                    'Dollar amount per press stake (separate from the main stake).',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
@@ -411,13 +411,13 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
           // ── Bet unit ──────────────────────────────────────────────────────
           SectionCard(
-            title: 'Bet unit (main bets)',
+            title: 'Stake (main games)',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 GolfTextField(
                   controller: _betCtrl,
-                  label: 'Bet unit (\$)',
+                  label: 'Stake (\$)',
                   prefixIcon: Icons.attach_money,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
@@ -426,7 +426,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Each of the three standard Nassau bets '
+                  'Each of the three standard Nassau games '
                   '(Front 9, Back 9, Overall) is worth this amount.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
@@ -450,7 +450,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           SectionCard(
             title: 'How Nassau works',
             child: Text(
-              'Three simultaneous bets — Front 9, Back 9, and Overall. '
+              'Three simultaneous games — Front 9, Back 9, and Overall. '
               'Each hole is won by the team with the lower best-ball score. '
               'Tied holes are halved (no point changes). '
               'A tied nine is a push (no money changes hands). '
@@ -513,7 +513,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
   Widget _pressDescription(ThemeData theme) {
     final text = switch (_pressMode) {
-      'none'   => 'No press bets.',
+      'none'   => 'No press stakes.',
       'manual' => 'The losing team may call a press at any time. '
                   'The winning team always accepts.',
       'auto'   => 'An automatic press fires whenever a team goes 2-down '
@@ -550,9 +550,9 @@ class _VariantCard extends StatelessWidget {
         '2nd-Ball Tie-Break — when best balls are equal, the 2nd best ball '
         'decides the hole winner. Eliminates most ties. Foursomes only.',
     'claremont':
-        'Claremont — adds a simultaneous 2-point bottom bet alongside the '
+        'Claremont — adds a simultaneous 2-point bottom game alongside the '
         'standard Nassau (top). Each hole: 1 pt for best ball, 1 pt for 2nd '
-        'best ball. Bottom tracks its own F9/B9/Overall bets with independent '
+        'best ball. Bottom tracks its own F9/B9/Overall games with independent '
         'auto-presses at ±4 points down. Foursomes only.',
   };
 

@@ -1,6 +1,6 @@
 name: golf_mobile
 description: Golf group scorecard and games app.
-version: 1.6.0+1
+version: 1.0.0+1
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -36,8 +36,18 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  # Generates the iOS app-icon set from a single 1024×1024 source.
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/bandon_cup_logo.png
+    - assets/icon/halved_icon.png
+
+# App-icon generation. Swap image_path to the final cut-ball logo later,
+# then re-run:  dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/icon/halved_icon.png"
+  ios: true
+  android: false          # iPhone-only for v1
+  remove_alpha_ios: true  # iOS icons must be opaque (no alpha channel)

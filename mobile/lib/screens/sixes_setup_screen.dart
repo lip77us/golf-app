@@ -228,7 +228,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
       if (!ctx.mounted) return;
       if (!betOk) {
         ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-          content: Text(rp.error ?? 'Failed to update bet unit.'),
+          content: Text(rp.error ?? 'Failed to update stake.'),
           backgroundColor: Theme.of(ctx).colorScheme.error,
         ));
         return;
@@ -709,14 +709,14 @@ class _BetUnitCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Bet Unit',
+          Text('Stake',
               style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary)),
           const SizedBox(height: 8),
           GolfTextField(
             controller: controller,
-            label: 'Bet unit (\$)',
+            label: 'Stake (\$)',
             prefixIcon: Icons.attach_money,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),

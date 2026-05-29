@@ -270,7 +270,7 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
                   Text(
                     'Settlement: a player who finishes 18 holes with 54 '
                     'points breaks even.  Every point above 54 is worth one '
-                    'bet unit; every point below 54 is owed.  Because each '
+                    'stake; every point below 54 is owed.  Because each '
                     'hole pays exactly 9 points total, the three players '
                     'net to zero at the end.',
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -366,7 +366,7 @@ class _BetUnitCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Bet Unit',
+          Text('Stake',
               style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary)),
@@ -374,7 +374,7 @@ class _BetUnitCard extends StatelessWidget {
           TextFormField(
             controller: controller,
             decoration: const InputDecoration(
-              labelText: 'Bet unit (\$)',
+              labelText: 'Stake (\$)',
               border: OutlineInputBorder(),
               prefixIcon: Icon(Icons.attach_money),
               isDense: true,
@@ -383,8 +383,8 @@ class _BetUnitCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'One point = one bet unit of money.  Par is 3 points / hole, '
-            'so a 55-point finish (over 18 holes) wins 1 bet unit.',
+            'One point = one stake.  Par is 3 points / hole, '
+            'so a 55-point finish (over 18 holes) wins 1 stake.',
             style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant),
           ),

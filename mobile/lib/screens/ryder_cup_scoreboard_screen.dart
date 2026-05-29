@@ -95,7 +95,7 @@ class _RyderCupScoreboardScreenState
               child: Center(
                 child: Text(
                   'No rounds configured yet.\n'
-                  'Set up a round\'s Ryder Cup config to see points here.',
+                  'Set up a round\'s Cup Play config to see points here.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontStyle: FontStyle.italic),
                 ),

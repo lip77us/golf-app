@@ -193,6 +193,14 @@ class ApiClient {
     await _post('/auth/logout/', {});
   }
 
+  /// Self-service account deletion (App Store Guideline 5.1.1(v)).
+  /// Deletes the caller's login and anonymizes their player profile,
+  /// keeping shared golf history.  Throws [ApiException] if the caller
+  /// is the only admin of an account that still has other members.
+  Future<void> deleteMyAccount() async {
+    await _delete('/auth/delete-account/');
+  }
+
   // ---- Account-member management ----
 
   Future<List<Member>> getAccountMembers() async {

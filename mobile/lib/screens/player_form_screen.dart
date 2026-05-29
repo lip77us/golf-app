@@ -15,7 +15,13 @@ class PlayerFormScreen extends StatefulWidget {
   /// Pass null to create a new player, or a PlayerProfile to edit.
   final PlayerProfile? player;
 
-  const PlayerFormScreen({super.key, this.player});
+  /// Read-only mode for non-admins: fields are shown but not editable
+  /// and the Save button is hidden.  Creating/editing players is
+  /// admin-only (the backend enforces this too), so non-admins reach
+  /// this screen only to view a player's details.
+  final bool readOnly;
+
+  const PlayerFormScreen({super.key, this.player, this.readOnly = false});
 
   @override
   State<PlayerFormScreen> createState() => _PlayerFormScreenState();
@@ -212,11 +218,17 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEdit ? 'Edit Player' : 'Add Player'),
+        title: Text(widget.readOnly
+            ? 'Player Details'
+            : _isEdit ? 'Edit Player' : 'Add Player'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Form(
+        child: Opacity(
+          opacity: widget.readOnly ? 0.7 : 1.0,
+          child: AbsorbPointer(
+            absorbing: widget.readOnly,
+            child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -491,19 +503,22 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
               ],
 
               // ---- Save ----
-              FilledButton.icon(
-                onPressed: _saving ? null : _save,
-                icon: _saving
-                    ? const SizedBox(
-                        width: 16, height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.check),
-                label: Text(_saving
-                    ? 'Saving…'
-                    : _isEdit ? 'Save Changes' : 'Add Player'),
-              ),
+              if (!widget.readOnly)
+                FilledButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check),
+                  label: Text(_saving
+                      ? 'Saving…'
+                      : _isEdit ? 'Save Changes' : 'Add Player'),
+                ),
             ],
+          ),
+            ),
           ),
         ),
       ),

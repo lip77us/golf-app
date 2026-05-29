@@ -22,7 +22,7 @@
 /// ```dart
 /// GolfTextField(
 ///   controller: ctrl,
-///   label: 'Bet unit',
+///   label: 'Stake',
 ///   prefixIcon: Icons.attach_money,
 ///   keyboardType: const TextInputType.numberWithOptions(decimal: true),
 /// )

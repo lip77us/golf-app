@@ -10,9 +10,10 @@ from . import views
 
 urlpatterns = [
     # ---- Auth ----
-    path('auth/login/',   views.LoginView.as_view(),  name='api-login'),
-    path('auth/logout/',  views.LogoutView.as_view(), name='api-logout'),
-    path('auth/me/',      views.MeView.as_view(),     name='api-me'),
+    path('auth/login/',          views.LoginView.as_view(),         name='api-login'),
+    path('auth/logout/',         views.LogoutView.as_view(),        name='api-logout'),
+    path('auth/me/',             views.MeView.as_view(),            name='api-me'),
+    path('auth/delete-account/', views.DeleteAccountView.as_view(), name='api-delete-account'),
 
     # ---- Account-member management ----
     path('account/', include('accounts.urls')),

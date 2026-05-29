@@ -70,7 +70,7 @@ class GameType(models.TextChoices):
     # matches per foursome.  Works as both a cup game (slots into
     # RyderCupFoursomeConfig) and a casual game for 2-4 players.
     # Cup multiplier: pv × 4 per foursome (2v2 case).
-    TRIPLE_CUP      = 'triple_cup',      'One Round Ryder Cup'
+    TRIPLE_CUP      = 'triple_cup',      'One-Round Triple Cup'
 
 
 class RoundStatus(models.TextChoices):

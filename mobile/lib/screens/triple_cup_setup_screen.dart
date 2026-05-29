@@ -257,7 +257,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('One Round Ryder Cup — Setup')),
+      appBar: AppBar(title: const Text('One-Round Triple Cup — Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -497,13 +497,13 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
             // ── Round bet unit ───────────────────────────────────────
             SectionCard(
-              title: 'Bet unit (cup payout)',
+              title: 'Stake (cup payout)',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   GolfTextField(
                     controller: _betCtrl,
-                    label: 'Bet unit (\$)',
+                    label: 'Stake (\$)',
                     prefixIcon: Icons.attach_money,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),

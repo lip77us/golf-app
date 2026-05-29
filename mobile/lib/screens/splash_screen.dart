@@ -65,9 +65,18 @@ class _SplashScreenState extends State<SplashScreen>
               child: SizedBox(
                 width: 260,
                 height: 260,
-                child: Image.asset(
-                  'assets/images/bandon_cup_logo.png',
-                  fit: BoxFit.contain,
+                // Temporary text wordmark until the final "Halved" logo
+                // asset is added (replace with Image.asset then).
+                child: Center(
+                  child: Text(
+                    'Halved',
+                    style: TextStyle(
+                      fontSize: 44,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 3,
+                      color: const Color(0xFF2E7D32),
+                    ),
+                  ),
                 ),
               ),
             ),

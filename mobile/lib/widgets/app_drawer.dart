@@ -59,9 +59,16 @@ class AppDrawer extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Image.asset(
-                          'assets/images/bandon_cup_logo.png',
-                          height: 96,
+                        // Temporary text wordmark until the final "Halved"
+                        // logo asset is added (replace with Image.asset then).
+                        Text(
+                          'Halved',
+                          style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         // Who's logged in.  Player name plus the
@@ -215,7 +222,7 @@ class _AboutDialogState extends State<_AboutDialog> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     return AlertDialog(
-      title: const Text('The Bandon Cup'),
+      title: const Text('Halved'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

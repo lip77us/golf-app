@@ -42,7 +42,7 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
   bool    _notSetUp     = false;   // 404 → show setup form
 
   // ── Setup-form controllers ─────────────────────────────────────────────────
-  final _cupNameCtrl      = TextEditingController(text: 'Ryder Cup');
+  final _cupNameCtrl      = TextEditingController(text: 'Team Cup');
   final _ppTeamCtrl       = TextEditingController(text: '6');
   int   _teamCount        = 2;
   final List<TextEditingController> _teamNameCtrls = [
@@ -356,7 +356,7 @@ class _SetupForm extends StatelessWidget {
         GolfTextField(
           controller: cupNameCtrl,
           label: 'Cup name',
-          hint: 'e.g. Bandon Cup 2026',
+          hint: 'e.g. Club Cup 2026',
         ),
         const SizedBox(height: 16),
         GolfTextField(

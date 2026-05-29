@@ -81,7 +81,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // The wizard only captures the cup name, team count, and team colours
   // here.  Default palette avoids the red/blue political read by going
   // SF-Giants-style on the second team for 2-team setups.
-  final _cupNameCtrl = TextEditingController(text: 'Ryder Cup');
+  final _cupNameCtrl = TextEditingController(text: 'Team Cup');
   int   _cupTeamCount = 2;
   /// Colour name per team index (0-based).  Length always matches
   /// _cupTeamCount; trimmed / extended whenever the team count changes.
@@ -1121,7 +1121,7 @@ class _Step0Tournament extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               numRounds > 1
-                  ? 'Multi-day tournaments require Stroke Play, Stableford, '
+                  ? 'Multi-day tournaments require Stroke Play '
                     'or Cup Play as the primary format.'
                   : 'Format tracked across all rounds (configured separately).',
               style: Theme.of(context).textTheme.bodySmall
@@ -1150,7 +1150,7 @@ class _Step0Tournament extends StatelessWidget {
                 if (hasPrimary) return const SizedBox.shrink();
                 return const InlineMessage(
                   kind: InlineMessageKind.warn,
-                  text: 'Select Stroke Play, Stableford, or Cup Play to continue.',
+                  text: 'Select Stroke Play or Cup Play to continue.',
                 );
               }),
             ],
@@ -1767,7 +1767,7 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
         GolfTextField(
           controller: widget.cupNameCtrl,
           label: 'Cup name',
-          hint: 'e.g. Bandon Cup 2026',
+          hint: 'e.g. Club Cup 2026',
           prefixIcon: Icons.emoji_events_outlined,
           textCapitalization: TextCapitalization.words,
           onChanged: (_) => setState(() {}),
@@ -1962,7 +1962,7 @@ const _kCupGameChoices = [
   // alt-shot foursomes + 2 singles).  When picked here, the per-round
   // cup setup wizard auto-locks every foursome to triple_cup so the
   // admin doesn't have to repeat the pick.
-  ('triple_cup',      'One Day Ryder Cup (Triple Cup)'),
+  ('triple_cup',      'One-Day Triple Cup'),
 ];
 
 class _Step3CupRoundGames extends StatelessWidget {
@@ -2718,8 +2718,8 @@ class _Step4GamesState extends State<_Step4Games> {
           const InlineMessage(
             kind: InlineMessageKind.warn,
             text: 'Pick at least one side game below, or go back to '
-                'step 1 and pick a championship game (Stroke Play, '
-                'Stableford, Match Play).  A tournament needs at '
+                'step 1 and pick a championship game (Stroke Play '
+                'or Cup Play).  A tournament needs at '
                 'least one game.',
           ),
           const SizedBox(height: 16),

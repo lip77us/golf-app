@@ -113,6 +113,30 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Permanently delete the signed-in user's account, then clear the
+  /// local session (which trips the auth gate in main.dart and routes
+  /// back to the login screen).  Rethrows [ApiException] so the caller
+  /// can surface the server message (e.g. the last-admin guard) without
+  /// the session being torn down.
+  Future<void> deleteAccount() async {
+    // Let errors propagate BEFORE we clear any local state, so a blocked
+    // deletion (e.g. last admin) leaves the user logged in.
+    await client.deleteMyAccount();
+
+    _token          = null;
+    _username       = null;
+    _player         = null;
+    _account        = null;
+    _isStaff        = false;
+    _isAccountAdmin = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
+    // The login is gone, so don't pre-fill the old account name either.
+    await prefs.remove(_accountNameKey);
+    _lastAccountName = null;
+    notifyListeners();
+  }
+
   Future<void> logout({bool silent = false}) async {
     if (!silent) {
       try {
