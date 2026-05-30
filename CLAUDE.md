@@ -152,7 +152,9 @@ candidates for trademark / App Store / domain conflicts:
 ### Privacy policy (Guideline 5.1.1 / App Privacy) — PUBLISHED
 Live at **https://lip77us.github.io/halved-legal/privacy.html** (GitHub Pages,
 repo `lip77us/halved-legal`, file `privacy.html`). Publisher = Paul Lipkin,
-contact `paul@lipkin.us`, effective date May 31, 2026. Source of truth for the
+contact `paul@lipkin.us`, effective date June 1, 2026. App Store listing name
+is **"Halved Golf"** (standalone "Halved" was taken; in-app/home-screen name
+stays "Halved"). Source of truth for the
 text is `docs/privacy-policy.html` in this repo — edit there, then copy into the
 `halved-legal` repo to update. Goes in App Store Connect → App Information →
 Privacy Policy URL.

@@ -5,7 +5,9 @@ Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 List only shipping v1 features (no Stableford/Scramble — those are hidden).
 
 ## Name
-Halved
+Halved Golf
+(The standalone "Halved" was already taken on the App Store — names must be
+globally unique. In-app name / home-screen CFBundleDisplayName stays "Halved".)
 
 ## Subtitle (30 max)
 Skins, Nassau & golf games
