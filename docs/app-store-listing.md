@@ -23,12 +23,12 @@ handicap,foursome,matchplay,golftrip,sixes,settle,stakes,director,cup,competitio
 
 ## Promotional text (170 max, editable without review)
 Score Skins, Nassau, Sixes and more for your foursome or a full tournament —
-live results, handicaps, and an easy settle-up at the end.
+live results, flexible handicap calcs, live Watcher Website and an easy settle-up at the end.
 
 ## Description (4000 max)
 Halved keeps score for the games golfers really play. Set up a round, pick your
 games, enter scores hole by hole, and Halved does the rest — live results,
-handicaps, and an easy settle-up at the end.
+handicaps, observer web page and easy settle-up at the end.
 
 GAMES YOU CAN PLAY
 • Skins, with optional carryover
