@@ -181,4 +181,57 @@ data purged (after warning emails)
 4. **Anti-abuse** (DeviceCheck + email verification).
 5. **Lifecycle automation** (read-only gating, grace-period warning emails,
    purge job).
-```
+
+## 12. Phase 2 revision — phone-first identity & viral invites (advisor input)
+
+Revises email-as-ID (§6 / open Q2), the trial-based free tier (§2/§8), and the
+anti-abuse plan (§11.4). Goal: viral, phone-native growth.
+
+### Identity
+- **Phone number is the primary login**, verified via SMS one-time passcode
+  (OTP). Email optional/secondary (recovery).
+- Players added **without** a phone stay **login-less** (as today).
+- Phone verification doubles as **anti-abuse** (one verified number = one
+  account) — replaces the DeviceCheck/email anti-re-trial plan.
+
+### Onboarding / viral loop
+- TD adds a player with a phone → a **pending, claimable** account (NOT a live,
+  silently-created account).
+- Recipient downloads, verifies via OTP, and **claims** the pending player —
+  their existing login-less history (rounds, scores, memberships) merges in.
+- On round start, participants can get a **follow code + app-download link**
+  (the public spectator page already exists via `watch_token`).
+
+### ⚠️ SMS delivery — the critical compliance decision
+Auto-texting numbers a third party entered is a legal + App Store landmine:
+- **TCPA (US):** automated texts without the *recipient's* consent = $500–$1,500
+  per message; a TD consenting for a friend does NOT count.
+- **Apple anti-spam (5.x / 4.x):** server-sent SMS on a user's behalf without
+  consent gets apps rejected.
+- **Carrier 10DLC:** US app-to-person SMS must be brand/campaign-registered or
+  it gets filtered.
+
+**Required approach: user-initiated invites.** Open the native iOS Messages
+composer (`MFMessageComposeViewController`) pre-filled with the follow code +
+link, so the text is sent **from the TD's own phone** as a personal message —
+compliant by construction, same viral outcome. Server-sent SMS is a later option
+ONLY with opt-in capture, STOP/opt-out handling, 10DLC registration, and a
+provider (Twilio) — real recurring cost + overhead.
+
+### Free tier (reframed)
+- Replace the 14-day trial with a **perpetual metered free tier**, e.g.
+  **2 casual rounds + 1 tournament / month** free; upgrade via IAP for more.
+- Better for virality (free users stay and keep inviting); metering is
+  per-account per-month, and phone verification makes multi-account gaming hard.
+
+### Costs / risks to model
+- **SMS OTP cost** scales with viral volume (~$0.008/msg + verification fees).
+- **Number recycling:** reassigned numbers must not inherit prior history; needs
+  a recovery / re-verify path.
+- International phone formats / deliverability.
+- Sign in with Apple still NOT required (phone/OTP ≠ third-party social login).
+
+### Revised open questions
+- Exact free-tier limits (2 casual + 1 tournament/month?).
+- Phone-only, or phone + optional email for recovery?
+- Device-initiated invites for v2.0; evaluate server SMS (Twilio + 10DLC) later.
