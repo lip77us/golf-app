@@ -24,6 +24,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
@@ -238,6 +239,27 @@ class _Points531ScreenState extends State<Points531Screen> {
       } else {
         _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
       }
+    });
+  }
+
+  /// Record a score and, if the user's Auto-advance setting is on, save +
+  /// move to the next hole once the last player's score completes it.
+  /// Skips clears (score == -1) and edits to an already-complete hole.
+  void _handleScore(BuildContext ctx, Membership m, int score,
+      List<Membership> players, int par) {
+    final sc = context.read<RoundProvider>().scorecard;
+    final hole = _selectedHole;
+    final wasAllScored =
+        sc != null && _allScored(players, _effectiveScores(sc, hole));
+    _selectScore(m, score, hole);
+    if (sc == null || score <= 0 || wasAllScored) return;
+    if (!context.read<SettingsProvider>().autoAdvanceHole) return;
+    if (!_allScored(players, _effectiveScores(sc, hole))) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _selectedHole != hole) return;
+      final rp = context.read<RoundProvider>();
+      if (rp.submitting) return;
+      _saveAndAdvance(ctx, players, par);   // on hole 18 this saves + stays
     });
   }
 
@@ -572,7 +594,7 @@ class _Points531ScreenState extends State<Points531Screen> {
                 par:         par,
                 summary:     rp.points531Summary,
                 onScoreSelected: (m, score) =>
-                    _selectScore(m, score, _selectedHole),
+                    _handleScore(ctx, m, score, players, par),
                 onEditTap: (m) =>
                     _editScore(ctx, m, par, _selectedHole, players),
               ),

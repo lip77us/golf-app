@@ -20,10 +20,16 @@ because we can't simply mark `username` non-unique while keeping the
 inherited AbstractUser behavior.
 """
 
+import hashlib
+import secrets
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
 from django.db.models.functions import Lower
+from django.utils import timezone
 
 
 class Account(models.Model):
@@ -127,6 +133,26 @@ class User(AbstractUser):
                   "set roles, configure games, etc.  Multiple admins per "
                   "account allowed.",
     )
+    # Phone-first identity (freemium design §12): the verified cell number is
+    # the primary login credential.  Stored normalized to E.164 (e.g.
+    # "+14155551234").  GLOBALLY unique so a number maps to exactly one user →
+    # one account.  `null=True` (not just blank) so the many legacy
+    # password-only users coexist — Postgres permits multiple NULLs under a
+    # unique column, while the constraint still blocks two users sharing a
+    # number.  Empty string is NOT used here (it would collide on the unique
+    # index); use NULL for "no phone".
+    phone = models.CharField(
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="Verified login phone in E.164 form.  NULL for "
+                  "password-only (legacy) users.",
+    )
+    phone_verified_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the phone number was last verified via SMS OTP.",
+    )
 
     objects = AccountUserManager()
 
@@ -144,3 +170,88 @@ class User(AbstractUser):
 
     def __str__(self) -> str:
         return f"{self.username}@{self.account.name}"
+
+
+# How long an issued OTP stays valid, and how many wrong guesses a single
+# code tolerates before it's burned.  Tuned for SMS-delivery latency vs.
+# brute-force resistance (a 6-digit space + 5 attempts + 10-min window).
+OTP_TTL          = timedelta(minutes=10)
+OTP_MAX_ATTEMPTS = 5
+
+
+class PhoneOTP(models.Model):
+    """
+    A one-time SMS passcode for phone-based login (freemium design §12).
+
+    The plaintext code is NEVER stored — only a salted hash — so a DB leak
+    doesn't expose live codes.  `issue()` returns the plaintext exactly once,
+    for the SMS layer to deliver; everything afterward works off the hash.
+
+    A code is "live" while `consumed_at` is NULL and it hasn't expired.
+    Issuing a new code for a phone consumes any prior live codes, so only the
+    newest matters.
+    """
+    phone       = models.CharField(max_length=20, db_index=True)
+    code_hash   = models.CharField(max_length=64)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    expires_at  = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    attempts    = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        indexes = [models.Index(fields=['phone', '-created_at'])]
+
+    def __str__(self) -> str:
+        return f"OTP({self.phone}, consumed={self.consumed_at is not None})"
+
+    @staticmethod
+    def _hash(code: str) -> str:
+        # SECRET_KEY acts as a server-side pepper so the hash isn't a plain
+        # rainbow-table lookup over the tiny 6-digit space.
+        return hashlib.sha256(f"{code}{settings.SECRET_KEY}".encode()).hexdigest()
+
+    @classmethod
+    def issue(cls, phone: str) -> str:
+        """Burn prior live codes, mint a fresh 6-digit code, return plaintext."""
+        now = timezone.now()
+        cls.objects.filter(phone=phone, consumed_at__isnull=True).update(consumed_at=now)
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        cls.objects.create(
+            phone=phone,
+            code_hash=cls._hash(code),
+            expires_at=now + OTP_TTL,
+        )
+        return code
+
+    @classmethod
+    def check_code(cls, phone: str, code: str) -> bool:
+        """
+        Validate `code` against the newest live OTP for `phone`.
+
+        Increments the attempt counter; burns the code on success or once the
+        attempt cap is exceeded.  Returns True only on an exact, in-window,
+        under-cap match.  All failure modes return False (the caller surfaces a
+        single non-enumerating "invalid or expired" message).
+        """
+        otp = (
+            cls.objects
+            .filter(phone=phone, consumed_at__isnull=True)
+            .order_by('-created_at')
+            .first()
+        )
+        if otp is None:
+            return False
+        now = timezone.now()
+        if now >= otp.expires_at:
+            return False
+        otp.attempts += 1
+        if otp.attempts > OTP_MAX_ATTEMPTS:
+            otp.consumed_at = now
+            otp.save(update_fields=['attempts', 'consumed_at'])
+            return False
+        if otp.code_hash != cls._hash(code):
+            otp.save(update_fields=['attempts'])
+            return False
+        otp.consumed_at = now
+        otp.save(update_fields=['attempts', 'consumed_at'])
+        return True

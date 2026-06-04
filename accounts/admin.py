@@ -10,7 +10,7 @@ fields and extend the columns / filters / fieldsets.
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .admin_forms import AccountAdminAuthenticationForm
+from .admin_forms import AccountAdminAuthenticationForm, AccountUserCreationForm
 from .models import Account, User
 
 
@@ -41,6 +41,11 @@ class UserAdmin(BaseUserAdmin):
     Same as Django's UserAdmin, plus columns/filters for Account and
     is_account_admin, and an extra fieldset to edit them.
     """
+    # Stock UserCreationForm enforces GLOBAL username uniqueness, which
+    # breaks per-account usernames (two accounts may each have a "paul").
+    # Use the per-account-aware add form instead.
+    add_form = AccountUserCreationForm
+
     list_display = (
         'username', 'account', 'is_account_admin',
         'email', 'first_name', 'last_name', 'is_staff',

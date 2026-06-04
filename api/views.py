@@ -44,6 +44,7 @@ Match Play
   GET    /api/foursomes/{id}/match-play/   MatchPlayResultView
 """
 
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.http import JsonResponse
 from django.db import transaction
@@ -56,6 +57,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
+from accounts import otp as otp_service
 from accounts.scoping import (
     account_get_or_404,
     account_qs,
@@ -158,6 +160,14 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'points_531' in active_games:
         from services.points_531 import calculate_points_531
         calculate_points_531(foursome)
+
+    if 'wolf' in active_games:
+        from services.wolf import calculate_wolf
+        calculate_wolf(foursome)
+
+    if 'rabbit' in active_games:
+        from services.rabbit import calculate_rabbit
+        calculate_rabbit(foursome)
 
     from games.models import ThreePersonMatch as _TPM
     _tpm_in_games = 'three_person_match' in active_games
@@ -715,6 +725,28 @@ def _build_leaderboard(round_obj: Round) -> dict:
             ],
         }
 
+    if 'wolf' in active_games:
+        from services.wolf import wolf_summary
+        games['wolf'] = {
+            'label'   : 'Wolf',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': wolf_summary(fs)}
+                for fs in foursomes
+            ],
+        }
+
+    if 'rabbit' in active_games:
+        from services.rabbit import rabbit_summary
+        games['rabbit'] = {
+            'label'   : 'Rabbit',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': rabbit_summary(fs)}
+                for fs in foursomes
+            ],
+        }
+
     return games
 
 
@@ -876,6 +908,80 @@ class LoginView(APIView):
         return Response(body)
 
 
+class OtpRequestView(APIView):
+    """
+    POST /api/auth/otp/request/
+    Body: { "phone": "415-555-0123" }
+
+    Sends a one-time login passcode by SMS.  Phone-first identity from the
+    freemium design §12: the verified cell number is the primary credential.
+
+    Returns:
+        { "sent": true,
+          "debug_code": "123456" }   # only present when settings.DEBUG
+
+    `debug_code` lets dev / automated tests complete the flow without a real
+    SMS provider; it is never included in production responses.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            _phone, code = otp_service.request_code(request.data.get('phone', ''))
+        except otp_service.OtpError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        body = {'sent': True}
+        if settings.DEBUG:
+            body['debug_code'] = code
+        return Response(body)
+
+
+class OtpVerifyView(APIView):
+    """
+    POST /api/auth/otp/verify/
+    Body: { "phone": "415-555-0123", "code": "123456", "name": "Paul" }
+
+    Verifies the passcode and logs the user in.  An unknown phone SELF-CREATES
+    an Account + admin User + linked Player (`name` seeds the new account /
+    player; optional).
+
+    Returns the same shape as LoginView plus `is_new_account`:
+        { "token", "username", "is_staff", "is_account_admin",
+          "account": {...}, "player": {...}, "is_new_account": bool }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            user, is_new = otp_service.verify_code(
+                request.data.get('phone', ''),
+                request.data.get('code', ''),
+                name=request.data.get('name', ''),
+            )
+        except otp_service.OtpError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        token, _ = Token.objects.get_or_create(user=user)
+        body = {
+            'token':            token.key,
+            'username':         user.username,
+            'is_staff':         user.is_staff,
+            'is_account_admin': user.is_account_admin,
+            'is_new_account':   is_new,
+            'account': {
+                'id':   user.account_id,
+                'name': user.account.name,
+            },
+        }
+        try:
+            body['player'] = PlayerSerializer(user.player_profile).data
+        except Exception:
+            pass  # user has no linked Player profile
+        return Response(body)
+
+
 class LogoutView(APIView):
     """POST /api/auth/logout/ — invalidates the current token."""
     permission_classes = [IsAuthenticated]
@@ -968,6 +1074,14 @@ class DeleteAccountView(APIView):
             player.email      = ''
             player.phone      = ''
             player.save()
+
+        # Clear the login phone before deleting so the number is freed for
+        # re-registration immediately (deleting the row releases the unique
+        # index too, but this is explicit and defensive).
+        if user.phone is not None:
+            user.phone = None
+            user.phone_verified_at = None
+            user.save(update_fields=['phone', 'phone_verified_at'])
 
         # Drop the auth token, then the user.
         try:
@@ -3047,6 +3161,196 @@ class SkinsJunkView(APIView):
 
 
 # ---------------------------------------------------------------------------
+# Wolf
+# ---------------------------------------------------------------------------
+
+class WolfSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/wolf/setup/
+    Body: {
+        "handicap_mode": "net"|"gross"|"strokes_off", "net_percent": 0..200,
+        "wolf_order": [player_id, ...],
+        "lone_wolf_points": 3, "blind_wolf_points": 6, "team_win_points": 1,
+        "wolf_loses_ties": false, "non_wolf_bonus": false,
+        "last_place_wolf_1718": true
+    }
+
+    Creates (or replaces) the Wolf game, then runs calculate_wolf so any
+    scores/decisions already on file are reflected in the first summary.
+    Idempotent.
+    """
+    def post(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        from api.serializers import WolfSetupSerializer
+        ser = WolfSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.wolf import setup_wolf, calculate_wolf, wolf_summary
+        setup_wolf(
+            foursome,
+            handicap_mode        = d.get('handicap_mode', 'net'),
+            net_percent          = d.get('net_percent', 100),
+            wolf_order           = d.get('wolf_order') or [],
+            lone_wolf_points     = d.get('lone_wolf_points', 3),
+            blind_wolf_points    = d.get('blind_wolf_points', 6),
+            team_win_points      = d.get('team_win_points', 1),
+            wolf_loses_ties       = d.get('wolf_loses_ties', False),
+            non_wolf_bonus        = d.get('non_wolf_bonus', False),
+            last_place_wolf_1718  = d.get('last_place_wolf_1718', True),
+            require_lone_or_blind = d.get('require_lone_or_blind', False),
+        )
+        calculate_wolf(foursome)
+        return Response(wolf_summary(foursome), status=status.HTTP_201_CREATED)
+
+
+class WolfResultView(APIView):
+    """GET /api/foursomes/{id}/wolf/"""
+    def get(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        from services.wolf import wolf_summary
+        return Response(wolf_summary(foursome))
+
+
+class WolfOrderView(APIView):
+    """
+    POST /api/foursomes/{id}/wolf/order/
+    Body: { "wolf_order": [player_id, ...] }
+
+    Updates only the rotation order (decisions/results survive).  Returns
+    the refreshed summary.
+    """
+    def post(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        from api.serializers import WolfOrderSerializer
+        ser = WolfOrderSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        from games.models import WolfGame
+        try:
+            foursome.wolf_game
+        except WolfGame.DoesNotExist:
+            return Response(
+                {'detail': 'Wolf game not set up for this foursome.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from services.wolf import set_wolf_order, wolf_summary
+        set_wolf_order(foursome, ser.validated_data['wolf_order'])
+        return Response(wolf_summary(foursome))
+
+
+class WolfDecisionView(APIView):
+    """
+    POST /api/foursomes/{id}/wolf/decision/
+    Body: { "hole_number": 1..18, "decision": "partner"|"lone"|"blind"|"pending",
+            "partner_id": <player_id, only for 'partner'> }
+
+    Upserts the Wolf's decision for a hole, re-runs calculate_wolf, and
+    returns the refreshed summary.  'pending' clears a previously-set
+    decision.  A partner pick is validated against the resolved Wolf for
+    that hole (must be a different real player; 4-player games only).
+    """
+    def post(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        from api.serializers import WolfDecisionSerializer
+        ser = WolfDecisionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from games.models import WolfGame, WolfHoleDecision
+        try:
+            game = foursome.wolf_game
+        except WolfGame.DoesNotExist:
+            return Response(
+                {'detail': 'Wolf game not set up for this foursome.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        hole      = d['hole_number']
+        decision  = d['decision']
+        partner_id = d.get('partner_id')
+
+        from services.wolf import (
+            resolve_wolf_for_hole, partner_locked_for_hole,
+            calculate_wolf, wolf_summary, _real_members,
+        )
+        real_ids = [m.player_id for m in _real_members(foursome)]
+
+        if decision == 'partner':
+            if len(real_ids) != 4:
+                return Response(
+                    {'detail': 'Partner picks are only allowed in 4-player Wolf.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            wolf = resolve_wolf_for_hole(foursome, hole)
+            if partner_id not in real_ids or partner_id == wolf:
+                return Response(
+                    {'detail': 'Partner must be a real player other than the Wolf.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if partner_locked_for_hole(foursome, hole):
+                return Response(
+                    {'detail': 'This is the Wolf’s last turn in the first 16 holes '
+                               'and they must go Lone or Blind.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        if decision == 'pending':
+            WolfHoleDecision.objects.filter(game=game, hole_number=hole).delete()
+        else:
+            WolfHoleDecision.objects.update_or_create(
+                game=game, hole_number=hole,
+                defaults={
+                    'decision'  : decision,
+                    'partner_id': partner_id if decision == 'partner' else None,
+                },
+            )
+
+        calculate_wolf(foursome)
+        return Response(wolf_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Rabbit
+# ---------------------------------------------------------------------------
+
+class RabbitSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/rabbit/setup/
+    Body: { "handicap_mode": "net"|"gross"|"strokes_off", "net_percent": 0..200,
+            "accumulate": true|false, "num_segments": 1|2|3 }
+
+    Creates (or replaces) the Rabbit game, then runs calculate_rabbit so any
+    scores already on file are reflected in the first summary.  Idempotent.
+    """
+    def post(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        from api.serializers import RabbitSetupSerializer
+        ser = RabbitSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.rabbit import setup_rabbit, calculate_rabbit, rabbit_summary
+        setup_rabbit(
+            foursome,
+            handicap_mode = d.get('handicap_mode', 'net'),
+            net_percent   = d.get('net_percent', 100),
+            accumulate    = d.get('accumulate', True),
+            num_segments  = d.get('num_segments', 1),
+        )
+        calculate_rabbit(foursome)
+        return Response(rabbit_summary(foursome), status=status.HTTP_201_CREATED)
+
+
+class RabbitResultView(APIView):
+    """GET /api/foursomes/{id}/rabbit/"""
+    def get(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        from services.rabbit import rabbit_summary
+        return Response(rabbit_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
 # Triple Cup (One-Round Ryder Cup)
 # ---------------------------------------------------------------------------
 
@@ -4257,11 +4561,16 @@ class CourseImportView(APIView):
         # ── Create or reuse the Course row ────────────────────────────────────
         if existing:
             course_obj = existing
+            # Backfill provenance on courses imported before golf_api_id existed.
+            if not course_obj.golf_api_id:
+                course_obj.golf_api_id = str(course_id)
+                course_obj.save(update_fields=['golf_api_id'])
             TeeModel.objects.filter(course=course_obj).delete()
         else:
             course_obj = CourseModel.objects.create(
                 account=request.user.account,
                 name=course_name,
+                golf_api_id=str(course_id),
             )
 
         # ── Create Tee rows ───────────────────────────────────────────────────

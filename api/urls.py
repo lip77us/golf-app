@@ -11,6 +11,8 @@ from . import views
 urlpatterns = [
     # ---- Auth ----
     path('auth/login/',          views.LoginView.as_view(),         name='api-login'),
+    path('auth/otp/request/',    views.OtpRequestView.as_view(),    name='api-otp-request'),
+    path('auth/otp/verify/',     views.OtpVerifyView.as_view(),     name='api-otp-verify'),
     path('auth/logout/',         views.LogoutView.as_view(),        name='api-logout'),
     path('auth/me/',             views.MeView.as_view(),            name='api-me'),
     path('auth/delete-account/', views.DeleteAccountView.as_view(), name='api-delete-account'),
@@ -75,6 +77,16 @@ urlpatterns = [
     path('foursomes/<int:pk>/skins/',        views.SkinsResultView.as_view(), name='api-skins-result'),
     path('foursomes/<int:pk>/skins/setup/',  views.SkinsSetupView.as_view(),  name='api-skins-setup'),
     path('foursomes/<int:pk>/skins/junk/',   views.SkinsJunkView.as_view(),   name='api-skins-junk'),
+
+    # ---- Wolf ----
+    path('foursomes/<int:pk>/wolf/',          views.WolfResultView.as_view(),   name='api-wolf-result'),
+    path('foursomes/<int:pk>/wolf/setup/',    views.WolfSetupView.as_view(),    name='api-wolf-setup'),
+    path('foursomes/<int:pk>/wolf/order/',    views.WolfOrderView.as_view(),    name='api-wolf-order'),
+    path('foursomes/<int:pk>/wolf/decision/', views.WolfDecisionView.as_view(), name='api-wolf-decision'),
+
+    # ---- Rabbit ----
+    path('foursomes/<int:pk>/rabbit/',       views.RabbitResultView.as_view(), name='api-rabbit-result'),
+    path('foursomes/<int:pk>/rabbit/setup/', views.RabbitSetupView.as_view(),  name='api-rabbit-setup'),
 
     # ---- Triple Cup (One-Round Ryder Cup) ----
     path('foursomes/<int:pk>/triple-cup/',                  views.TripleCupResultView.as_view(),         name='api-triple-cup-result'),

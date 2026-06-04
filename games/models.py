@@ -396,6 +396,331 @@ class SkinsPlayerHoleResult(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# WOLF (3- or 4-player rotating-wolf game, casual-round only)
+# ---------------------------------------------------------------------------
+
+class WolfGame(models.Model):
+    """
+    The Wolf game for one Foursome.  Designed for 3 or 4 real players
+    (phantoms excluded).  On every hole one player is the Wolf — derived
+    from ``wolf_order`` (a seat rotation the group sets, like Pink Ball's
+    carrier order): wolf for hole H = wolf_order[(H-1) % n].  In a
+    4-player game, holes 17–18 instead hand the Wolf to whoever is in
+    last place (fewest points so far) when ``last_place_wolf_1718`` is on.
+
+    The Wolf either takes a partner (4-player only → 2v2), goes Lone Wolf
+    (1-vs-rest), or Blind Wolf (1-vs-rest, declared pre-tee).  Best ball
+    per side decides the hole.
+
+    Scoring is zero-based: each scored hole has a pot that the winning
+    side splits (+) and the losing side splits (−), so the table always
+    nets to zero.  Pot sizing:
+        * Lone hole  → pot = lone_wolf_points  (default 3)
+        * Blind hole → pot = blind_wolf_points (default 6)
+        * Partner    → each winner gets team_win_points (default 1), or
+                       2× that when the NON-wolf side wins and
+                       non_wolf_bonus is on ("a clean win against the
+                       team that had the pick advantage").
+    Options:
+        * wolf_loses_ties — a tied hole is awarded to the non-wolf side
+          instead of being a push (the Wolf must win outright).
+        * non_wolf_bonus  — non-wolf side's clean win pays double (above).
+
+    Settlement: money for a player = their total points × Round.bet_unit.
+    Because every hole nets to zero, the players' money sums to zero too.
+    """
+    foursome              = models.OneToOneField(
+                                Foursome, on_delete=models.CASCADE,
+                                related_name='wolf_game',
+                            )
+    status                = models.CharField(
+                                max_length=20,
+                                choices=MatchStatus.choices,
+                                default=MatchStatus.PENDING,
+                            )
+    handicap_mode         = models.CharField(
+                                max_length=20,
+                                choices=HandicapMode.choices,
+                                default=HandicapMode.NET,
+                                help_text="How per-hole scores are adjusted for ranking.",
+                            )
+    net_percent           = models.PositiveSmallIntegerField(
+                                default=100,
+                                validators=[MinValueValidator(0), MaxValueValidator(200)],
+                                help_text="Percentage of playing handicap applied when "
+                                          "handicap_mode='net'.",
+                            )
+    # Rotation order — JSON list of real player ids.  wolf for hole H =
+    # wolf_order[(H-1) % len].  Empty falls back to membership order.
+    wolf_order            = models.JSONField(
+                                default=list, blank=True,
+                                help_text="Ordered player ids; the Wolf rotates through "
+                                          "this list one hole at a time.",
+                            )
+    lone_wolf_points      = models.PositiveSmallIntegerField(
+                                default=3,
+                                help_text="Pot for a Lone Wolf hole (Wolf goes alone "
+                                          "after watching the drives).",
+                            )
+    blind_wolf_points     = models.PositiveSmallIntegerField(
+                                default=6,
+                                help_text="Pot for a Blind Wolf hole (Wolf declares "
+                                          "alone before any tee shots).",
+                            )
+    team_win_points       = models.PositiveSmallIntegerField(
+                                default=1,
+                                help_text="Points each winner nets on a partner (2v2) hole.",
+                            )
+    wolf_loses_ties       = models.BooleanField(
+                                default=False,
+                                help_text="If True a tied hole is awarded to the non-wolf "
+                                          "side instead of being a push.",
+                            )
+    non_wolf_bonus        = models.BooleanField(
+                                default=False,
+                                help_text="If True a clean win by the non-wolf side on a "
+                                          "partner hole pays double.",
+                            )
+    last_place_wolf_1718  = models.BooleanField(
+                                default=True,
+                                help_text="4-player only: on holes 17 & 18 the player in "
+                                          "last place becomes the Wolf (catch-up rule).",
+                            )
+    require_lone_or_blind = models.BooleanField(
+                                default=False,
+                                help_text="4-player only: every player must go Lone or "
+                                          "Blind at least once in holes 1-16.  Once a "
+                                          "player has been Wolf 3 times all as partner, "
+                                          "their next (last) Wolf turn locks out the "
+                                          "partner option.",
+                            )
+    created_at            = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Wolf — Group {self.foursome.group_number}"
+
+
+class WolfHoleDecision(models.Model):
+    """
+    The Wolf's choice on a single hole.  One row per hole the Wolf has
+    acted on; absent rows mean "no decision yet" (the hole is not scored
+    even if all gross scores are in).
+
+    decision:
+        * 'pending' — placeholder; treated as no decision.
+        * 'partner' — Wolf + ``partner`` vs the rest (4-player only).
+        * 'lone'    — Wolf alone vs the rest (declared after drives).
+        * 'blind'   — Wolf alone vs the rest (declared before drives).
+    partner: the chosen teammate; only meaningful for decision='partner'.
+    The Wolf's own identity is NOT stored here — it is derived from the
+    game's rotation so it always stays consistent if the order changes.
+    """
+    PENDING = 'pending'
+    PARTNER = 'partner'
+    LONE    = 'lone'
+    BLIND   = 'blind'
+    DECISION_CHOICES = [
+        (PENDING, 'Pending'),
+        (PARTNER, 'Partner'),
+        (LONE,    'Lone Wolf'),
+        (BLIND,   'Blind Wolf'),
+    ]
+
+    game        = models.ForeignKey(
+                    WolfGame, on_delete=models.CASCADE,
+                    related_name='decisions',
+                )
+    hole_number = models.PositiveSmallIntegerField(
+                    validators=[MinValueValidator(1), MaxValueValidator(18)]
+                )
+    decision    = models.CharField(
+                    max_length=10, choices=DECISION_CHOICES, default=PENDING,
+                )
+    partner     = models.ForeignKey(
+                    Player, on_delete=models.SET_NULL,
+                    null=True, blank=True,
+                    related_name='wolf_partner_holes',
+                )
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        return f"Hole {self.hole_number} — {self.decision} ({self.game})"
+
+
+class WolfPlayerHoleResult(models.Model):
+    """
+    One calculated row per (game, player, hole) once that hole has both a
+    Wolf decision and a gross score for every real player.  Records the
+    net score used for ranking, the player's role on the hole, and the
+    points awarded (Decimal — uneven sides in a 3-player Lone hole split
+    the pot into halves, e.g. ±1.5).
+    """
+    ROLE_WOLF     = 'wolf'
+    ROLE_PARTNER  = 'partner'
+    ROLE_OPPONENT = 'opponent'
+    ROLE_CHOICES  = [
+        (ROLE_WOLF,     'Wolf'),
+        (ROLE_PARTNER,  'Partner'),
+        (ROLE_OPPONENT, 'Opponent'),
+    ]
+
+    game        = models.ForeignKey(
+                    WolfGame, on_delete=models.CASCADE,
+                    related_name='hole_results',
+                )
+    player      = models.ForeignKey(
+                    Player, on_delete=models.CASCADE,
+                    related_name='wolf_hole_results',
+                )
+    hole_number = models.PositiveSmallIntegerField(
+                    validators=[MinValueValidator(1), MaxValueValidator(18)]
+                )
+    net_score   = models.SmallIntegerField(
+                    help_text="The score used for ranking (net/gross/SO-adjusted).",
+                )
+    role        = models.CharField(
+                    max_length=10, choices=ROLE_CHOICES, default=ROLE_OPPONENT,
+                )
+    points      = models.DecimalField(
+                    max_digits=5, decimal_places=2,
+                    help_text="Per-hole points; zero-based so each hole sums to 0.",
+                )
+
+    class Meta:
+        unique_together = ('game', 'player', 'hole_number')
+        ordering        = ['hole_number', '-points']
+
+    def __str__(self):
+        return (f"Hole {self.hole_number} — {self.player.name} — "
+                f"{self.points} ({self.role})")
+
+
+# ---------------------------------------------------------------------------
+# RABBIT (3-player "catch the rabbit" game, casual-round only)
+# ---------------------------------------------------------------------------
+
+class RabbitGame(models.Model):
+    """
+    The Rabbit game for one Foursome (exactly 3 real players; phantoms
+    ignored).  The first player to win a hole outright catches the rabbit
+    and runs ahead; they hold it until an opponent beats them on a hole.
+
+    accumulate:
+        * True  — the holder builds a lead: +1 for each hole they win as
+          rabbit, −1 for each hole they lose; they only lose the rabbit
+          when the lead drops to 0 (then it's up for grabs).
+        * False — "stop after one": the holder loses the rabbit on the
+          first hole they're beaten (lead is effectively capped at 1).
+
+    num_segments: 1 (one 18-hole match), 2 (two 9-hole matches) or 3
+        (three 6-hole matches).  The rabbit resets at the start of each
+        segment; whoever holds it when a segment ends wins that segment's
+        share of the pot (whole / half / third).  A segment that ends with
+        the rabbit loose is a push.
+
+    Settlement: pot = Round.bet_unit; each segment is worth
+        pot / num_segments, paid by the two non-holders equally (zero-sum).
+    """
+    foursome      = models.OneToOneField(
+                        Foursome, on_delete=models.CASCADE,
+                        related_name='rabbit_game',
+                    )
+    status        = models.CharField(
+                        max_length=20,
+                        choices=MatchStatus.choices,
+                        default=MatchStatus.PENDING,
+                    )
+    handicap_mode = models.CharField(
+                        max_length=20,
+                        choices=HandicapMode.choices,
+                        default=HandicapMode.NET,
+                        help_text="How per-hole scores are adjusted for ranking.",
+                    )
+    net_percent   = models.PositiveSmallIntegerField(
+                        default=100,
+                        validators=[MinValueValidator(0), MaxValueValidator(200)],
+                        help_text="Percentage of playing handicap applied when "
+                                  "handicap_mode='net'.",
+                    )
+    accumulate    = models.BooleanField(
+                        default=True,
+                        help_text="True: rabbit builds a lead (+1 win / −1 loss), "
+                                  "lost only when the lead hits 0.  False: lost on "
+                                  "the first hole the rabbit is beaten.",
+                    )
+    num_segments  = models.PositiveSmallIntegerField(
+                        default=1,
+                        validators=[MinValueValidator(1), MaxValueValidator(3)],
+                        help_text="1 = one 18-hole match, 2 = two 9-hole matches, "
+                                  "3 = three 6-hole matches.",
+                    )
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Rabbit — Group {self.foursome.group_number}"
+
+
+class RabbitHoleResult(models.Model):
+    """
+    Calculated per-hole state for a RabbitGame.  One row per hole that has
+    a gross score for all three real players.
+
+    winner:  the outright hole winner (strictly lowest score), or null on a
+             tie for low.
+    holder:  who holds the rabbit *after* this hole, or null if it's loose.
+    lead:    the holder's lead after this hole (0 when loose).
+    event:   what happened — 'grab' (caught a loose rabbit), 'extend'
+             (rabbit won, lead grew), 'held' (rabbit held, no lead change),
+             'beaten' (rabbit lost a hole, lead dropped but still held),
+             'freed' (rabbit's lead hit 0 → loose), 'tie' / 'none'
+             (no change).
+    """
+    GRAB   = 'grab'
+    EXTEND = 'extend'
+    HELD   = 'held'
+    BEATEN = 'beaten'
+    FREED  = 'freed'
+    TIE    = 'tie'
+    NONE   = 'none'
+    EVENT_CHOICES = [
+        (GRAB, 'Grabbed'), (EXTEND, 'Extended'), (HELD, 'Held'),
+        (BEATEN, 'Beaten'), (FREED, 'Freed'), (TIE, 'Tie'), (NONE, 'None'),
+    ]
+
+    game        = models.ForeignKey(
+                    RabbitGame, on_delete=models.CASCADE,
+                    related_name='hole_results',
+                )
+    hole_number = models.PositiveSmallIntegerField(
+                    validators=[MinValueValidator(1), MaxValueValidator(18)]
+                )
+    segment     = models.PositiveSmallIntegerField(default=1)
+    winner      = models.ForeignKey(
+                    Player, on_delete=models.SET_NULL, null=True, blank=True,
+                    related_name='rabbit_holes_won',
+                )
+    holder      = models.ForeignKey(
+                    Player, on_delete=models.SET_NULL, null=True, blank=True,
+                    related_name='rabbit_holes_held',
+                )
+    lead        = models.PositiveSmallIntegerField(default=0)
+    event       = models.CharField(
+                    max_length=10, choices=EVENT_CHOICES, default=NONE,
+                )
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        h = self.holder.short_name if self.holder else 'loose'
+        return f"Hole {self.hole_number} — rabbit: {h} (+{self.lead})"
+
+
+# ---------------------------------------------------------------------------
 # MULTI-FOURSOME SKINS (Round-scoped, pooled across every participating group)
 # ---------------------------------------------------------------------------
 

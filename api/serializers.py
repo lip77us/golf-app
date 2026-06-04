@@ -247,8 +247,8 @@ class CourseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Course
-        fields = ['id', 'name', 'created_at', 'tees']
-        read_only_fields = ['id', 'created_at', 'tees']
+        fields = ['id', 'name', 'golf_api_id', 'created_at', 'tees']
+        read_only_fields = ['id', 'golf_api_id', 'created_at', 'tees']
 
 
 class TeeSerializer(serializers.ModelSerializer):
@@ -406,6 +406,8 @@ class FoursomeSerializer(serializers.ModelSerializer):
             ('nassau_game',        'nassau'),
             ('points_531_game',    'points_531'),
             ('three_person_match', 'three_person_match'),
+            ('wolf_game',          'wolf'),
+            ('rabbit_game',        'rabbit'),
         ]:
             try:
                 getattr(obj, attr)
@@ -948,6 +950,82 @@ class SkinsJunkSerializer(serializers.Serializer):
     """
     hole_number  = serializers.IntegerField(min_value=1, max_value=18)
     junk_entries = SkinsJunkEntrySerializer(many=True, min_length=1)
+
+
+class WolfSetupSerializer(serializers.Serializer):
+    """
+    Set up (or replace) the Wolf game for a foursome.
+
+    handicap_mode / net_percent — score-comparison policy (same three
+    choices as every other casual game).
+    wolf_order — ordered list of real player ids that the Wolf rotates
+    through; optional (defaults to membership order).
+    The point values and the two option toggles default to the classic
+    configuration so the client only sends what it wants to change.
+    """
+    handicap_mode        = serializers.ChoiceField(
+                              choices=['net', 'gross', 'strokes_off'],
+                              default='net',
+                          )
+    net_percent          = serializers.IntegerField(
+                              min_value=0, max_value=200, default=100,
+                          )
+    wolf_order           = serializers.ListField(
+                              child=serializers.IntegerField(),
+                              required=False, default=list,
+                          )
+    lone_wolf_points     = serializers.IntegerField(min_value=0, max_value=50, default=3)
+    blind_wolf_points    = serializers.IntegerField(min_value=0, max_value=50, default=6)
+    team_win_points      = serializers.IntegerField(min_value=0, max_value=50, default=1)
+    wolf_loses_ties       = serializers.BooleanField(default=False)
+    non_wolf_bonus        = serializers.BooleanField(default=False)
+    last_place_wolf_1718  = serializers.BooleanField(default=True)
+    require_lone_or_blind = serializers.BooleanField(default=False)
+
+
+class RabbitSetupSerializer(serializers.Serializer):
+    """
+    Set up (or replace) the Rabbit game for a foursome (3 real players).
+
+    accumulate   — True: rabbit builds a lead (+1 win / −1 loss), lost when
+                   the lead hits 0.  False: lost on the first hole beaten.
+    num_segments — 1 (one 18-hole match), 2 (two 9-hole) or 3 (three 6-hole).
+    """
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'], default='net')
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100)
+    accumulate    = serializers.BooleanField(default=True)
+    num_segments  = serializers.ChoiceField(choices=[1, 2, 3], default=1)
+
+
+class WolfOrderSerializer(serializers.Serializer):
+    """Update just the Wolf rotation order (no wipe of decisions/results)."""
+    wolf_order = serializers.ListField(
+                    child=serializers.IntegerField(), min_length=1,
+                )
+
+
+class WolfDecisionSerializer(serializers.Serializer):
+    """
+    Record the Wolf's choice on a single hole.
+
+    decision   — 'partner' | 'lone' | 'blind' | 'pending'.
+    partner_id — required when decision='partner' (4-player only); the
+                 chosen teammate, who must be a real player other than the
+                 Wolf.  Ignored for lone/blind/pending.
+    """
+    hole_number = serializers.IntegerField(min_value=1, max_value=18)
+    decision    = serializers.ChoiceField(
+                    choices=['partner', 'lone', 'blind', 'pending'],
+                )
+    partner_id  = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate(self, data):
+        if data['decision'] == 'partner' and not data.get('partner_id'):
+            raise serializers.ValidationError(
+                {'partner_id': 'A partner is required for a partner decision.'})
+        return data
 
 
 # ===========================================================================

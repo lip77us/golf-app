@@ -77,11 +77,14 @@ DEMO_HOLES = [
 ]
 
 # Roster. login=None → score-only player (no sign-in). admin only on reviewer.
+# `phone` (E.164) is set on login users so the phone/OTP flow is exercisable in
+# the demo; production reviewers still use username/password (console SMS can't
+# reach Apple's reviewer).
 ROSTER = [
-    {'name': 'Paul Avery',  'hcp': 9.4,  'sex': 'M', 'login': 'reviewer',        'admin': True},
-    {'name': 'Sam Tester',  'hcp': 16.0, 'sex': 'M', 'login': 'reviewer_delete', 'admin': False},
-    {'name': 'Dave Miller', 'hcp': 12.8, 'sex': 'M', 'login': 'dmiller',         'admin': False},
-    {'name': 'Sara Lopez',  'hcp': 7.2,  'sex': 'W', 'login': 'slopez',          'admin': False},
+    {'name': 'Paul Avery',  'hcp': 9.4,  'sex': 'M', 'login': 'reviewer',        'admin': True,  'phone': '+13105550101'},
+    {'name': 'Sam Tester',  'hcp': 16.0, 'sex': 'M', 'login': 'reviewer_delete', 'admin': False, 'phone': '+13105550102'},
+    {'name': 'Dave Miller', 'hcp': 12.8, 'sex': 'M', 'login': 'dmiller',         'admin': False, 'phone': '+13105550103'},
+    {'name': 'Sara Lopez',  'hcp': 7.2,  'sex': 'W', 'login': 'slopez',          'admin': False, 'phone': '+13105550104'},
     {'name': 'Tom Hill',    'hcp': 18.5, 'sex': 'M'},
     {'name': 'Jen Park',    'hcp': 22.0, 'sex': 'W'},
     {'name': 'Mike Ross',   'hcp': 4.5,  'sex': 'M'},
@@ -250,6 +253,9 @@ class Command(BaseCommand):
                     username=r['login'], password=self.password, account=account,
                 )
                 user.email = f"{r['login']}@demo.golf"
+                if r.get('phone'):
+                    user.phone = r['phone']
+                    user.phone_verified_at = timezone.now()
                 if r.get('admin'):
                     user.is_account_admin = True
                 user.save()

@@ -138,6 +138,15 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
           rp.matchPlayData == null) {
         rp.loadMatchPlay(widget.foursomeId);
       }
+      // Wolf carries its own handicap mode (e.g. strokes-off) on the game,
+      // not the round — load it so the scorecard's stroke dots match the
+      // Wolf screen instead of falling back to round-level net.
+      if (games.contains('wolf') && rp.wolfSummary == null) {
+        rp.loadWolf(widget.foursomeId);
+      }
+      if (games.contains('rabbit') && rp.rabbitSummary == null) {
+        rp.loadRabbit(widget.foursomeId);
+      }
     });
   }
 
@@ -235,6 +244,12 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     if (games.contains('points_531') && rp.points531Summary != null) {
       return (rp.points531Summary!.handicapMode,
               rp.points531Summary!.netPercent);
+    }
+    if (games.contains('wolf') && rp.wolfSummary != null) {
+      return (rp.wolfSummary!.handicapMode, rp.wolfSummary!.netPercent);
+    }
+    if (games.contains('rabbit') && rp.rabbitSummary != null) {
+      return (rp.rabbitSummary!.handicapMode, rp.rabbitSummary!.netPercent);
     }
     return (rp.round?.handicapMode ?? 'net', rp.round?.netPercent ?? 100);
   }

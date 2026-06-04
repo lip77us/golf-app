@@ -248,6 +248,21 @@ GOLF_API_KEY      = os.environ.get('GOLF_API_KEY', '')
 GOLF_API_BASE_URL = os.environ.get('GOLF_API_BASE_URL', 'https://api.golfcourseapi.com')
 
 # ---------------------------------------------------------------------------
+# SMS / phone-OTP login (freemium design §12)
+# ---------------------------------------------------------------------------
+# SMS_BACKEND selects how one-time passcodes are delivered:
+#   "console" (default) — logs the code; read it from the server log (or the
+#                         debug_code field returned when DEBUG=True).  Used in
+#                         dev / tests / CI.
+#   "twilio"            — real SMS via Twilio; requires the TWILIO_* values and
+#                         (for US) 10DLC registration.  Flip this in prod when
+#                         credentials are ready — no other code changes needed.
+SMS_BACKEND        = os.environ.get('SMS_BACKEND', 'console')
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
+TWILIO_AUTH_TOKEN  = os.environ.get('TWILIO_AUTH_TOKEN', '')
+TWILIO_FROM        = os.environ.get('TWILIO_FROM', '')
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Client version compatibility
 # ---------------------------------------------------------------------------

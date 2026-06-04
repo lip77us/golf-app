@@ -86,6 +86,8 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?    _sixesSummary;
   Points531Summary? _points531Summary;
   SkinsSummary?    _skinsSummary;
+  WolfSummary?     _wolfSummary;
+  RabbitSummary?   _rabbitSummary;
   TripleCupSummary? _tripleCupSummary;
   MultiSkinsSummary? _multiSkinsSummary;
   NassauSummary?         _nassauSummary;
@@ -107,6 +109,8 @@ class RoundProvider extends ChangeNotifier {
   bool    _loadingSixes       = false;
   bool    _loadingPoints531   = false;
   bool    _loadingSkins       = false;
+  bool    _loadingWolf        = false;
+  bool    _loadingRabbit      = false;
   bool    _loadingTripleCup   = false;
   bool    _loadingMultiSkins  = false;
   bool    _loadingNassau      = false;
@@ -130,6 +134,8 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?     get sixesSummary       => _sixesSummary;
   Points531Summary? get points531Summary   => _points531Summary;
   SkinsSummary?     get skinsSummary       => _skinsSummary;
+  WolfSummary?      get wolfSummary        => _wolfSummary;
+  RabbitSummary?    get rabbitSummary      => _rabbitSummary;
   TripleCupSummary? get tripleCupSummary   => _tripleCupSummary;
   MultiSkinsSummary? get multiSkinsSummary  => _multiSkinsSummary;
   NassauSummary?        get nassauSummary      => _nassauSummary;
@@ -150,6 +156,8 @@ class RoundProvider extends ChangeNotifier {
   bool              get loadingSixes       => _loadingSixes;
   bool              get loadingPoints531   => _loadingPoints531;
   bool              get loadingSkins       => _loadingSkins;
+  bool              get loadingWolf        => _loadingWolf;
+  bool              get loadingRabbit      => _loadingRabbit;
   bool              get loadingTripleCup   => _loadingTripleCup;
   bool              get loadingMultiSkins  => _loadingMultiSkins;
   bool              get loadingNassau      => _loadingNassau;
@@ -257,6 +265,8 @@ class RoundProvider extends ChangeNotifier {
       _tripleCupSummary = null;
       _sixesSummary     = null;
       _points531Summary = null;
+      _wolfSummary      = null;
+      _rabbitSummary    = null;
     }
     _activeFoursomeId = foursomeId;
     _loadingScorecard = true;
@@ -615,6 +625,55 @@ class RoundProvider extends ChangeNotifier {
       _loadingSkins = false;
       notifyListeners();
     }
+  }
+
+  /// Load the Wolf summary for the active foursome.
+  /// Same failure semantics as [loadSkins] — non-fatal on network errors so
+  /// the entry screen keeps working offline.
+  Future<void> loadWolf(int foursomeId) async {
+    _loadingWolf = true;
+    notifyListeners();
+    try {
+      _wolfSummary = await _client.getWolfSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadWolf error: $e');
+    } finally {
+      _loadingWolf = false;
+      notifyListeners();
+    }
+  }
+
+  /// Replace the cached Wolf summary directly (e.g. after a setup/decision
+  /// POST returns a fresh one) so the screen repaints without a round-trip.
+  void setWolfSummary(WolfSummary summary) {
+    _wolfSummary = summary;
+    notifyListeners();
+  }
+
+  /// Load the Rabbit summary for the active foursome.  Non-fatal on network
+  /// errors so the entry screen keeps working offline.
+  Future<void> loadRabbit(int foursomeId) async {
+    _loadingRabbit = true;
+    notifyListeners();
+    try {
+      _rabbitSummary = await _client.getRabbitSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadRabbit error: $e');
+    } finally {
+      _loadingRabbit = false;
+      notifyListeners();
+    }
+  }
+
+  /// Replace the cached Rabbit summary directly (e.g. after a setup POST
+  /// returns a fresh one) so the screen repaints without a round-trip.
+  void setRabbitSummary(RabbitSummary summary) {
+    _rabbitSummary = summary;
+    notifyListeners();
   }
 
   /// Load the Triple Cup summary for the active foursome.  Non-fatal

@@ -336,6 +336,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           case GameIds.skins:
             directRoute = '/skins-setup';
             directArgs  = firstFs.id;
+          case GameIds.wolf:
+            directRoute = '/wolf-setup';
+            directArgs  = firstFs.id;
+          case GameIds.rabbit:
+            directRoute = '/rabbit-setup';
+            directArgs  = firstFs.id;
           case GameIds.tripleCup:
             directRoute = '/triple-cup-setup';
             directArgs  = firstFs.id;

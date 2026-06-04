@@ -219,6 +219,21 @@ class _RoundScreenState extends State<RoundScreen> {
                         !fs.configuredGames.contains('skins')) {
                       // Skins needs handicap + carryover config.
                       route = '/skins-setup';
+                    } else if (fsGames.contains('wolf') &&
+                        !fs.configuredGames.contains('wolf')) {
+                      // Wolf needs handicap + rotation + point config.
+                      route = '/wolf-setup';
+                    } else if (fsGames.contains('wolf')) {
+                      // Configured Wolf owns its own per-hole decision +
+                      // score-entry screen.
+                      route = '/wolf';
+                    } else if (fsGames.contains('rabbit') &&
+                        !fs.configuredGames.contains('rabbit')) {
+                      // Rabbit needs handicap + mode + segment config.
+                      route = '/rabbit-setup';
+                    } else if (fsGames.contains('rabbit')) {
+                      // Configured Rabbit owns its own score-entry screen.
+                      route = '/rabbit';
                     } else if (fsGames.contains('triple_cup') &&
                         !fs.configuredGames.contains('triple_cup')) {
                       // Triple Cup needs team assignment + handicap config.
@@ -569,7 +584,7 @@ class _FoursomeCard extends StatelessWidget {
 
   // Games that make sense to toggle per-foursome (excludes round-level-only games)
   static const _perFoursomeGames = {
-    'skins', 'sixes', 'nassau', 'match_play', 'points_531',
+    'skins', 'sixes', 'nassau', 'match_play', 'points_531', 'wolf', 'rabbit',
     'irish_rumble', 'pink_ball',
   };
 

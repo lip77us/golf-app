@@ -88,6 +88,59 @@ I have decided to put in three modes to operate on single foursome games.  You c
 
 ---
 
+## Phone-first login (SMS OTP) — implemented (identity layer only)
+
+Implements the phone-first identity from `docs/freemium-design.md` §12 as an
+**additive** path. Account-name + username + password login still works
+unchanged (legacy accounts + App Store reviewer rely on it).
+
+**Model:** a verified phone maps to one `User` → one `Account` (account name is
+now just a display label). Added to `accounts.User`: `phone` (E.164, globally
+`unique`, `null=True` so legacy password-only users coexist) and
+`phone_verified_at`. New `accounts.PhoneOTP` stores **hashed** codes
+(SECRET_KEY-peppered) with a 10-min TTL + 5-attempt cap; `issue()` /
+`check_code()` classmethods. (`check_code`, not `check` — `Model.check` is
+reserved by Django's system checks.) Migration
+`accounts/0005_user_phone_user_phone_verified_at_phoneotp.py`.
+
+**Services:** `accounts/phone.py` (`normalize()` → E.164, US-default, no
+dependency — swap in `phonenumbers` later for i18n), `accounts/sms.py`
+(`send_sms()` dispatching on the `SMS_BACKEND` setting), `accounts/otp.py`
+(`request_code()` w/ ≤5/hr rate-limit, `verify_code()` → existing-phone login
+or unknown-phone self-signup creating Account+admin User+linked Player).
+
+**SMS delivery is pluggable.** `SMS_BACKEND=console` (default) just logs the
+code; the request endpoint also returns it as `debug_code` when `DEBUG`. Going
+live on real SMS = set `SMS_BACKEND=twilio` + `TWILIO_ACCOUNT_SID/AUTH_TOKEN/
+FROM` env vars (and US 10DLC) — no code change. (Twilio backend in `sms.py` is a
+stub that posts via the `twilio` package if installed.)
+
+**Endpoints** (both `AllowAny`, in `api/views.py` + `api/urls.py`):
+- `POST /api/auth/otp/request/` → `{phone}` → `{sent, debug_code?}`
+- `POST /api/auth/otp/verify/`  → `{phone, code, name?}` → same body as
+  `LoginView` plus `is_new_account`. `name` seeds a new account/player.
+`DeleteAccountView` now also clears `User.phone` so the number is freed.
+
+**Mobile:** `LoginScreen` (login_screen.dart, route `/login`) is now the phone
+screen → `OtpVerifyScreen` (`/verify-otp`) → `ProfileSetupScreen`
+(`/profile-setup`, new accounts only). Legacy form moved verbatim to
+`PasswordLoginScreen` (`/login-password`), linked as "Sign in with a username
+instead". API: `ApiClient.requestOtp/verifyOtp`; `AuthProvider.requestOtp/
+verifyOtp/isNewAccount/applyPlayer`; `AuthResult.isNewAccount`.
+
+**Demo:** `seed_demo` sets verified phones on the 4 login users
+(`+1310555010{1-4}`, reviewer = ...0101) so phone login is testable locally.
+Reviewers still use password login in prod (console SMS can't reach Apple).
+
+**NOT in scope** (deferred per §12): billing/IAP, metered free tier,
+claimable-pending-player merge, device-initiated Messages invites.
+
+Tests: `accounts/test_otp.py` (normalization, request→verify happy paths,
+self-signup, wrong/expired/too-many-attempts, rate-limit, phone uniqueness, and
+legacy password login still works).
+
+---
+
 ## App Store readiness
 
 ### In-app account deletion (Guideline 5.1.1(v)) — implemented

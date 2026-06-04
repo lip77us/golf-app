@@ -1,4 +1,12 @@
+/// screens/login_screen.dart
+/// Phone-first sign-in (freemium design §12): the user enters their cell
+/// number, we send an SMS one-time passcode, and they verify it on the next
+/// screen.  A new number self-creates an account.  The legacy
+/// account/username/password form is still reachable via the link at the
+/// bottom ([PasswordLoginScreen] at /login-password).
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/golf_primary_button.dart';
@@ -12,31 +20,31 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey      = GlobalKey<FormState>();
-  final _accountCtrl  = TextEditingController();
-  final _userCtrl     = TextEditingController();
-  final _passCtrl     = TextEditingController();
-  bool  _obscure      = true;
-  bool  _prefilled    = false;
+  final _formKey   = GlobalKey<FormState>();
+  final _phoneCtrl = TextEditingController();
+  final _nameCtrl  = TextEditingController();
 
   @override
   void dispose() {
-    _accountCtrl.dispose();
-    _userCtrl.dispose();
-    _passCtrl.dispose();
+    _phoneCtrl.dispose();
+    _nameCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  Future<void> _sendCode() async {
     if (!_formKey.currentState!.validate()) return;
-    final auth = context.read<AuthProvider>();
-    await auth.login(
-      _accountCtrl.text.trim(),
-      _userCtrl.text.trim(),
-      _passCtrl.text,
-    );
-    if (auth.isLoggedIn && mounted) {
-      Navigator.of(context).pushReplacementNamed('/tournaments');
+    final auth  = context.read<AuthProvider>();
+    final phone = _phoneCtrl.text.trim();
+    final name  = _nameCtrl.text.trim();
+
+    final debugCode = await auth.requestOtp(phone);
+    if (!mounted) return;
+    if (auth.error == null) {
+      Navigator.of(context).pushNamed('/verify-otp', arguments: {
+        'phone': phone,
+        'name':  name,
+        'debugCode': debugCode,
+      });
     }
   }
 
@@ -44,14 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final auth  = context.watch<AuthProvider>();
     final theme = Theme.of(context);
-
-    // Pre-fill the account name on first build after the provider
-    // restored its session — saves the user from retyping their
-    // (typically stable) group name every launch.
-    if (!_prefilled && auth.lastAccountName != null) {
-      _accountCtrl.text = auth.lastAccountName!;
-      _prefilled = true;
-    }
 
     return Scaffold(
       body: SafeArea(
@@ -63,79 +63,81 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Logo / title
                   Icon(Icons.golf_course,
                       size: 72, color: theme.colorScheme.primary),
                   const SizedBox(height: 8),
-                  Text('Golf App',
+                  Text('Halved',
                       style: theme.textTheme.headlineMedium
                           ?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sign in with your phone number',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.outline),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 36),
 
-                  // Account name
+                  // Phone number
                   GolfTextField(
-                    controller: _accountCtrl,
-                    label: 'Account',
-                    helper: 'Your club / group / family name',
-                    prefixIcon: Icons.groups_outlined,
+                    controller: _phoneCtrl,
+                    label: 'Phone number',
+                    hint: '(555) 555-1234',
+                    prefixIcon: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.next,
                     autocorrect: false,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    inputFormatters: [
+                      // Allow digits, spaces, and common phone punctuation;
+                      // the server normalizes to E.164.
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'[0-9+()\-\s]')),
+                    ],
+                    validator: (v) {
+                      final digits =
+                          (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                      return digits.length < 10
+                          ? 'Enter a valid phone number'
+                          : null;
+                    },
                   ),
                   const SizedBox(height: 16),
 
-                  // Username
+                  // Optional name (seeds a new account on first sign-in)
                   GolfTextField(
-                    controller: _userCtrl,
-                    label: 'Username',
-                    prefixIcon: Icons.person_outline,
-                    textInputAction: TextInputAction.next,
-                    autocorrect: false,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Password
-                  GolfTextField(
-                    controller: _passCtrl,
-                    obscureText: _obscure,
-                    label: 'Password',
-                    prefixIcon: Icons.lock_outline,
-                    suffix: IconButton(
-                      icon: Icon(_obscure
-                          ? Icons.visibility_off
-                          : Icons.visibility),
-                      onPressed: () =>
-                          setState(() => _obscure = !_obscure),
-                    ),
+                    controller: _nameCtrl,
+                    label: 'Your name (new accounts)',
+                    helper: 'Used only if this number is signing up for the '
+                            'first time',
+                    prefixIcon: Icons.badge_outlined,
                     textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _submit(),
-                    validator: (v) =>
-                        (v == null || v.isEmpty) ? 'Required' : null,
+                    onFieldSubmitted: (_) => _sendCode(),
                   ),
                   const SizedBox(height: 8),
 
-                  // Error message
                   if (auth.error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         auth.error!,
-                        style: TextStyle(
-                            color: theme.colorScheme.error),
+                        style: TextStyle(color: theme.colorScheme.error),
                         textAlign: TextAlign.center,
                       ),
                     ),
                   const SizedBox(height: 24),
 
-                  // Login button
                   GolfPrimaryButton(
-                    label: 'Sign In',
+                    label: 'Send code',
                     loading: auth.loading,
-                    onPressed: _submit,
+                    onPressed: _sendCode,
                     height: 48,
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.of(context).pushNamed('/login-password'),
+                    child: const Text('Sign in with a username instead'),
                   ),
                 ],
               ),

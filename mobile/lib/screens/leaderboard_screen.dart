@@ -413,6 +413,10 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _SixesGroupCard.new);
       case 'points_531':
         return _ByGroupView(data: data, builder: _Points531GroupCard.new);
+      case 'wolf':
+        return _ByGroupView(data: data, builder: _WolfGroupCard.new);
+      case 'rabbit':
+        return _ByGroupView(data: data, builder: _RabbitGroupCard.new);
       case 'singles_nassau':
         return _ByGroupView(data: data, builder: _CupSinglesGroupCard.new);
       case 'singles_18':
@@ -2999,6 +3003,340 @@ class _Points531GroupCard extends StatelessWidget {
     if (v == 0) return '—';
     final sign = v > 0 ? '+' : '\u2212';
     return '$sign\$${v.abs().formatBet()}';
+  }
+}
+
+/// Leaderboard card for a Wolf foursome.  Shows the standings (points +
+/// money, zero-based so the table nets to zero) with each player's holes
+/// played and a compact "Wolf by hole" strip.
+class _WolfGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _WolfGroupCard({required this.group});
+
+  static String _hcapLabel(Map hcap) {
+    final mode = hcap['mode']?.toString() ?? 'net';
+    if (mode == 'gross') return 'Gross';
+    if (mode == 'strokes_off') return 'SO';
+    final pct = (hcap['net_percent'] as num?)?.toInt() ?? 100;
+    return pct == 100 ? 'Net' : 'Net ($pct%)';
+  }
+
+  static String _fmtPoints(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
+  static String _fmtMoney(double v) {
+    if (v == 0) return '—';
+    final sign = v > 0 ? '+' : '−';
+    return '$sign\$${v.abs().formatBet()}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final summary = group['summary'] as Map<String, dynamic>? ?? {};
+    final hcap    = summary['handicap'] as Map<String, dynamic>? ?? const {};
+    final status  = summary['status']?.toString() ?? 'pending';
+    final players = (summary['players'] as List? ?? const []);
+    final holes   = (summary['holes']   as List? ?? const []);
+    final money   = summary['money']    as Map<String, dynamic>? ?? const {};
+    final betUnit = (money['bet_unit']  as num?)?.toDouble() ?? 0.0;
+
+    final singleGroup = group['_single_group'] == true;
+
+    String statusLabel;
+    switch (status) {
+      case 'complete':    statusLabel = 'Final';       break;
+      case 'in_progress': statusLabel = 'In progress'; break;
+      default:            statusLabel = 'Pending';     break;
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (!singleGroup) ...[
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Divider(height: 12),
+          ],
+          Row(children: [
+            Expanded(
+              child: Text('Wolf — ${_hcapLabel(hcap)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(statusLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+
+          if (players.isEmpty)
+            Text('No players yet.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant))
+          else
+            ...players.map((p) {
+              final r    = p as Map<String, dynamic>;
+              final name = r['name']?.toString() ?? '';
+              final pts  = (r['points'] as num?)?.toDouble() ?? 0.0;
+              final hp   = (r['holes_played'] as num?)?.toInt() ?? 0;
+              final mny  = (r['money'] as num?)?.toDouble() ?? 0.0;
+              final ptsColor = pts > 0
+                  ? Colors.green.shade700
+                  : pts < 0 ? Colors.red.shade700
+                            : theme.colorScheme.onSurfaceVariant;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(children: [
+                  Expanded(
+                      child: Text(name,
+                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                  Text('${pts >= 0 ? '+' : '−'}${_fmtPoints(pts.abs())} pts',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: ptsColor, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 8),
+                  Text('($hp)',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                  if (betUnit > 0) ...[
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 72,
+                      child: Text(_fmtMoney(mny),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: mny > 0
+                                ? Colors.green.shade700
+                                : mny < 0 ? Colors.red.shade700
+                                          : theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          )),
+                    ),
+                  ],
+                ]),
+              );
+            }),
+
+          if (holes.isNotEmpty) ...[
+            const Divider(height: 20),
+            Text('Wolf by hole',
+                style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary)),
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, runSpacing: 4, children: [
+              for (final h in holes)
+                if ((h as Map)['winning_side'] != null)
+                  _wolfChip(theme, h),
+            ]),
+          ],
+
+          if (betUnit > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Bet unit \$${betUnit.formatBet()}  •  one point = one stake.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _wolfChip(ThemeData theme, Map h) {
+    final hole = (h['hole'] as num?)?.toInt() ?? 0;
+    final wolf = h['wolf_short']?.toString() ?? '';
+    final side = h['winning_side']?.toString();
+    final dec  = h['decision']?.toString() ?? '';
+    final tag  = dec == 'blind' ? 'B' : dec == 'lone' ? 'L'
+              : dec == 'partner' ? 'P' : '';
+    final c = side == 'wolf'
+        ? Colors.green.shade700
+        : side == 'opponents'
+            ? theme.colorScheme.error
+            : theme.colorScheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: c.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: c.withOpacity(0.4)),
+      ),
+      child: Text('$hole: $wolf${tag.isNotEmpty ? ' $tag' : ''}',
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: c, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+/// Leaderboard card for a Rabbit foursome.  Shows the standings (money +
+/// segments won) and a per-segment strip with each segment's holder.
+class _RabbitGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _RabbitGroupCard({required this.group});
+
+  static String _hcapLabel(Map hcap) {
+    final mode = hcap['mode']?.toString() ?? 'net';
+    if (mode == 'gross') return 'Gross';
+    if (mode == 'strokes_off') return 'SO';
+    final pct = (hcap['net_percent'] as num?)?.toInt() ?? 100;
+    return pct == 100 ? 'Net' : 'Net ($pct%)';
+  }
+
+  static String _fmtMoney(double v) {
+    if (v == 0) return '—';
+    final sign = v > 0 ? '+' : '−';
+    return '$sign\$${v.abs().formatBet()}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final summary = group['summary'] as Map<String, dynamic>? ?? {};
+    final hcap    = summary['handicap'] as Map<String, dynamic>? ?? const {};
+    final status  = summary['status']?.toString() ?? 'pending';
+    final players = (summary['players']  as List? ?? const []);
+    final segs    = (summary['segments'] as List? ?? const []);
+    final accumulate = summary['accumulate'] as bool? ?? true;
+    final money   = summary['money'] as Map<String, dynamic>? ?? const {};
+    final betUnit = (money['bet_unit'] as num?)?.toDouble() ?? 0.0;
+    final pot     = (money['pot'] as num?)?.toDouble() ?? (betUnit * 3);
+    final numSeg  = (summary['num_segments'] as num?)?.toInt() ?? 1;
+
+    final singleGroup = group['_single_group'] == true;
+    String statusLabel;
+    switch (status) {
+      case 'complete':    statusLabel = 'Final';       break;
+      case 'in_progress': statusLabel = 'In progress'; break;
+      default:            statusLabel = 'Pending';     break;
+    }
+
+    final fmt = numSeg == 1
+        ? '1×18' : numSeg == 2 ? '2×9' : '3×6';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (!singleGroup) ...[
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Divider(height: 12),
+          ],
+          Row(children: [
+            Expanded(
+              child: Text(
+                  'Rabbit — ${_hcapLabel(hcap)} · $fmt'
+                  '${accumulate ? ' · accumulate' : ''}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(statusLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+
+          if (players.isEmpty)
+            Text('No players yet.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant))
+          else
+            ...players.map((p) {
+              final r    = p as Map<String, dynamic>;
+              final name = r['name']?.toString() ?? '';
+              final mny  = (r['money'] as num?)?.toDouble() ?? 0.0;
+              final won  = (r['segments_won'] as num?)?.toInt() ?? 0;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(children: [
+                  Expanded(
+                      child: Text(name,
+                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                  Icon(Icons.directions_run, size: 14,
+                      color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 2),
+                  Text('$won',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                  if (betUnit > 0) ...[
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 72,
+                      child: Text(_fmtMoney(mny),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: mny > 0 ? Colors.green.shade700
+                                : mny < 0 ? Colors.red.shade700
+                                          : theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ]),
+              );
+            }),
+
+          if (segs.isNotEmpty) ...[
+            const Divider(height: 20),
+            Text('Segments',
+                style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+            const SizedBox(height: 4),
+            ...segs.map((s) {
+              final seg = s as Map<String, dynamic>;
+              final lo  = seg['start_hole']; final hi = seg['end_hole'];
+              final holder = seg['holder_short']?.toString();
+              final complete = seg['complete'] as bool? ?? false;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 1),
+                child: Row(children: [
+                  SizedBox(width: 92,
+                    child: Text('Holes $lo–$hi', style: theme.textTheme.bodySmall)),
+                  Expanded(
+                    child: Text(
+                      holder == null
+                          ? (complete ? 'Loose (push)' : 'Loose')
+                          : 'Rabbit: $holder',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: holder == null
+                              ? theme.colorScheme.onSurfaceVariant
+                              : theme.colorScheme.primary)),
+                  ),
+                  if (!complete)
+                    Text('in play', style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+                ]),
+              );
+            }),
+          ],
+
+          if (betUnit > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Pot \$${pot.formatBet()}  (3 × \$${betUnit.formatBet()} '
+                  'entry)  •  holder of each segment wins its share.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+        ]),
+      ),
+    );
   }
 }
 

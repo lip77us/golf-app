@@ -18,6 +18,16 @@ class GameIds {
   static const String skins      = 'skins';
   static const String multiSkins = 'multi_skins';
   static const String tripleCup  = 'triple_cup';
+  /// Wolf — 3- or 4-player rotating-wolf game.  Each hole one player is the
+  /// Wolf (a rotation the group sets), tees last, then takes a partner
+  /// (4-player only), goes Lone Wolf, or Blind Wolf.  Owns its own
+  /// per-hole decision + score-entry screen, so it's mutually exclusive
+  /// with the other casual games.
+  static const String wolf       = 'wolf';
+  /// Rabbit — 3-player "catch the rabbit" game.  First to win a hole
+  /// outright catches it and runs ahead; held until beaten.  Owns its own
+  /// per-hole score-entry screen, so mutually exclusive with other games.
+  static const String rabbit     = 'rabbit';
   /// Match Play single-elimination bracket — 4-person foursome plays
   /// two 9-hole semi-finals on holes 1–9, then Final + 3rd-place
   /// consolation on holes 10–18.  Casual + tournament side game.
@@ -148,6 +158,32 @@ const List<GameMeta> kGameCatalog = [
     // Skins CAN combine with Nassau or Sixes.  Only Points 5-3-1 is excluded
     // because it completely owns the three-player entry model.
     excludes    : {GameIds.points531},
+  ),
+  GameMeta(
+    id          : GameIds.wolf,
+    displayName : 'Wolf',
+    casual      : true,
+    minPlayers  : 3,
+    maxPlayers  : 4,
+    // Wolf owns its own per-hole decision + score-entry screen (who's the
+    // Wolf, partner/lone/blind), so — like Points 5-3-1 — it can't share a
+    // foursome's entry flow with another per-foursome game.
+    excludes    : {GameIds.sixes, GameIds.points531, GameIds.nassau,
+                   GameIds.skins, GameIds.strokePlay, GameIds.stableford,
+                   GameIds.tripleCup, GameIds.matchPlay,
+                   GameIds.threePersonMatch},
+  ),
+  GameMeta(
+    id          : GameIds.rabbit,
+    displayName : 'Rabbit',
+    casual      : true,
+    exactPlayers: 3,
+    // Rabbit owns its own per-hole score-entry screen, so — like Points
+    // 5-3-1 — it can't share a foursome's entry flow with another game.
+    excludes    : {GameIds.sixes, GameIds.points531, GameIds.nassau,
+                   GameIds.skins, GameIds.wolf, GameIds.strokePlay,
+                   GameIds.stableford, GameIds.tripleCup, GameIds.matchPlay,
+                   GameIds.threePersonMatch},
   ),
   GameMeta(
     id           : GameIds.tripleCup,

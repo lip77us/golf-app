@@ -189,6 +189,30 @@ class ApiClient {
     return AuthResult.fromJson(data as Map<String, dynamic>);
   }
 
+  /// Phone-first login step 1: request an SMS one-time passcode.
+  /// Returns the server's `debug_code` (only present in dev/DEBUG) so the
+  /// flow can be completed without a real SMS provider; null in production.
+  Future<String?> requestOtp({required String phone}) async {
+    final data = await _post('/auth/otp/request/', {'phone': phone});
+    return (data as Map<String, dynamic>)['debug_code'] as String?;
+  }
+
+  /// Phone-first login step 2: verify the passcode.  An unknown phone
+  /// self-creates an account (`AuthResult.isNewAccount == true`).  `name`
+  /// seeds the new account/player and is ignored for an existing phone.
+  Future<AuthResult> verifyOtp({
+    required String phone,
+    required String code,
+    String? name,
+  }) async {
+    final data = await _post('/auth/otp/verify/', {
+      'phone': phone,
+      'code':  code,
+      if (name != null) 'name': name,
+    });
+    return AuthResult.fromJson(data as Map<String, dynamic>);
+  }
+
   Future<void> logout() async {
     await _post('/auth/logout/', {});
   }
@@ -929,6 +953,107 @@ class ApiClient {
       'junk_entries': junkEntries,
     });
     return SkinsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  // ---- Wolf ----
+
+  /// GET /api/foursomes/{id}/wolf/
+  Future<WolfSummary> getWolfSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/wolf/');
+    return WolfSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/wolf/setup/
+  ///
+  /// Create (or replace) the Wolf game.  [wolfOrder] is the rotation of
+  /// real player ids the Wolf cycles through.  Point values + option
+  /// toggles default to the classic configuration.
+  Future<WolfSummary> postWolfSetup(
+    int foursomeId, {
+    String     handicapMode      = 'net',
+    int        netPercent        = 100,
+    List<int>  wolfOrder         = const [],
+    int        loneWolfPoints    = 3,
+    int        blindWolfPoints   = 6,
+    int        teamWinPoints     = 1,
+    bool       wolfLosesTies     = false,
+    bool       nonWolfBonus      = false,
+    bool       lastPlaceWolf1718 = true,
+    bool       requireLoneOrBlind = false,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/wolf/setup/', {
+      'handicap_mode'         : handicapMode,
+      'net_percent'           : netPercent,
+      'wolf_order'            : wolfOrder,
+      'lone_wolf_points'      : loneWolfPoints,
+      'blind_wolf_points'     : blindWolfPoints,
+      'team_win_points'       : teamWinPoints,
+      'wolf_loses_ties'       : wolfLosesTies,
+      'non_wolf_bonus'        : nonWolfBonus,
+      'last_place_wolf_1718'  : lastPlaceWolf1718,
+      'require_lone_or_blind' : requireLoneOrBlind,
+    });
+    return WolfSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/wolf/order/
+  ///
+  /// Update only the rotation order (decisions/results survive).
+  Future<WolfSummary> postWolfOrder(
+    int foursomeId, {
+    required List<int> wolfOrder,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/wolf/order/', {
+      'wolf_order': wolfOrder,
+    });
+    return WolfSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/wolf/decision/
+  ///
+  /// Record the Wolf's choice on [holeNumber].  [decision] is
+  /// 'partner' | 'lone' | 'blind' | 'pending' (pending clears it).
+  /// [partnerId] is required for 'partner' and ignored otherwise.
+  Future<WolfSummary> postWolfDecision(
+    int foursomeId, {
+    required int    holeNumber,
+    required String decision,
+    int?            partnerId,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/wolf/decision/', {
+      'hole_number': holeNumber,
+      'decision'   : decision,
+      if (partnerId != null) 'partner_id': partnerId,
+    });
+    return WolfSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  // ---- Rabbit ----
+
+  /// GET /api/foursomes/{id}/rabbit/
+  Future<RabbitSummary> getRabbitSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/rabbit/');
+    return RabbitSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/rabbit/setup/
+  ///
+  /// Create (or replace) the Rabbit game.  [accumulate] toggles the
+  /// lead-buffer vs lose-on-first-loss behavior; [numSegments] is 1, 2 or 3.
+  Future<RabbitSummary> postRabbitSetup(
+    int foursomeId, {
+    String handicapMode = 'net',
+    int    netPercent   = 100,
+    bool   accumulate   = true,
+    int    numSegments  = 1,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/rabbit/setup/', {
+      'handicap_mode': handicapMode,
+      'net_percent'  : netPercent,
+      'accumulate'   : accumulate,
+      'num_segments' : numSegments,
+    });
+    return RabbitSummary.fromJson(data as Map<String, dynamic>);
   }
 
   // ---- Multi-Foursome Skins (round-scoped) ----

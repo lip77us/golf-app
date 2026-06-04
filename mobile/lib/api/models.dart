@@ -105,6 +105,12 @@ class AuthResult {
   /// The Account this user belongs to.
   final AccountInfo account;
 
+  /// True when this verify call just SELF-CREATED a brand-new account (the
+  /// phone wasn't known before).  The phone-login flow uses it to route a new
+  /// user through profile setup instead of straight to the tournaments list.
+  /// Always false for password login.
+  final bool isNewAccount;
+
   const AuthResult({
     required this.token,
     required this.username,
@@ -112,6 +118,7 @@ class AuthResult {
     this.player,
     this.isStaff        = false,
     this.isAccountAdmin = false,
+    this.isNewAccount   = false,
   });
 
   factory AuthResult.fromJson(Map<String, dynamic> j) => AuthResult(
@@ -119,6 +126,7 @@ class AuthResult {
         username:       j['username'] as String? ?? '',
         isStaff:        j['is_staff']         as bool? ?? false,
         isAccountAdmin: j['is_account_admin'] as bool? ?? false,
+        isNewAccount:   j['is_new_account']   as bool? ?? false,
         account:        AccountInfo.fromJson(
                           j['account'] as Map<String, dynamic>),
         player:         j['player'] is Map<String, dynamic>
@@ -1713,6 +1721,452 @@ class SkinsSummary {
       betUnit:    (money['bet_unit']    as num?)?.toDouble() ?? 1.0,
       pool:       (money['pool']        as num?)?.toDouble() ?? 0.0,
       totalSkins: (money['total_skins'] as num?)?.toInt()   ?? 0,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Wolf
+// ---------------------------------------------------------------------------
+
+/// Per-player running total for a Wolf game.
+class WolfPlayerTotal {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final double points;
+  final int    holesPlayed;
+  final double money;
+  final int    phcpInPlay;
+
+  const WolfPlayerTotal({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.points,
+    required this.holesPlayed,
+    required this.money,
+    required this.phcpInPlay,
+  });
+
+  factory WolfPlayerTotal.fromJson(Map<String, dynamic> j) => WolfPlayerTotal(
+        playerId:    j['player_id']    as int,
+        name:        j['name']         as String? ?? '',
+        shortName:   j['short_name']   as String? ?? '',
+        points:      (j['points']      as num?)?.toDouble() ?? 0.0,
+        holesPlayed: j['holes_played'] as int? ?? 0,
+        money:       (j['money']       as num?)?.toDouble() ?? 0.0,
+        phcpInPlay:  j['phcp_in_play'] as int? ?? 0,
+      );
+}
+
+/// One player's slot in a hole's reverse-honors tee order.  [isWolf] marks
+/// the player pinned last (the Wolf); [orderNum] is 1-based for non-Wolf
+/// players and null for the Wolf.
+class WolfTeeSlot {
+  final int    playerId;
+  final String shortName;
+  final String name;
+  final bool   isWolf;
+  final int?   orderNum;
+
+  const WolfTeeSlot({
+    required this.playerId,
+    required this.shortName,
+    required this.name,
+    required this.isWolf,
+    required this.orderNum,
+  });
+
+  factory WolfTeeSlot.fromJson(Map<String, dynamic> j) => WolfTeeSlot(
+        playerId:  j['player_id']  as int,
+        shortName: j['short_name'] as String? ?? '',
+        name:      j['name']       as String? ?? '',
+        isWolf:    j['is_wolf']    as bool? ?? false,
+        orderNum:  j['order_num']  as int?,
+      );
+}
+
+/// One player's computed entry on a Wolf hole.
+class WolfHoleEntry {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final String role;       // 'wolf' | 'partner' | 'opponent'
+  final int    netScore;
+  final int?   gross;
+  final double points;
+
+  const WolfHoleEntry({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.role,
+    required this.netScore,
+    required this.gross,
+    required this.points,
+  });
+
+  factory WolfHoleEntry.fromJson(Map<String, dynamic> j) => WolfHoleEntry(
+        playerId:  j['player_id']  as int,
+        name:      j['name']       as String? ?? '',
+        shortName: j['short_name'] as String? ?? '',
+        role:      j['role']       as String? ?? 'opponent',
+        netScore:  j['net_score']  as int? ?? 0,
+        gross:     j['gross']      as int?,
+        points:    (j['points']    as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+/// One hole of a Wolf game — the assigned Wolf, the decision, the tee
+/// order, and (once scored) the per-player results.
+class WolfHole {
+  final int    hole;
+  final int?   par;
+  final int    wolfId;
+  final String wolfShort;
+  final String decision;        // 'pending' | 'partner' | 'lone' | 'blind'
+  final int?   partnerId;
+  final String? partnerShort;
+  final bool   partnerLocked;   // true → Wolf must go Lone/Blind (no partner)
+  final String? winningSide;    // 'wolf' | 'opponents' | 'tie' | null
+  final double pot;
+  final List<WolfTeeSlot>  teeOrder;
+  final List<WolfHoleEntry> entries;
+
+  const WolfHole({
+    required this.hole,
+    required this.par,
+    required this.wolfId,
+    required this.wolfShort,
+    required this.decision,
+    required this.partnerId,
+    required this.partnerShort,
+    required this.partnerLocked,
+    required this.winningSide,
+    required this.pot,
+    required this.teeOrder,
+    required this.entries,
+  });
+
+  bool get isDecided => decision == 'partner' || decision == 'lone' || decision == 'blind';
+  bool get isScored  => entries.isNotEmpty;
+
+  factory WolfHole.fromJson(Map<String, dynamic> j) => WolfHole(
+        hole:         j['hole'] as int? ?? 0,
+        par:          j['par']  as int?,
+        wolfId:       j['wolf_id'] as int? ?? 0,
+        wolfShort:    j['wolf_short'] as String? ?? '',
+        decision:     j['decision'] as String? ?? 'pending',
+        partnerId:    j['partner_id'] as int?,
+        partnerShort: j['partner_short'] as String?,
+        partnerLocked: j['partner_locked'] as bool? ?? false,
+        winningSide:  j['winning_side'] as String?,
+        pot:          (j['pot'] as num?)?.toDouble() ?? 0.0,
+        teeOrder: (j['tee_order'] as List? ?? [])
+            .map((t) => WolfTeeSlot.fromJson(t as Map<String, dynamic>))
+            .toList(),
+        entries: (j['entries'] as List? ?? [])
+            .map((e) => WolfHoleEntry.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// Full summary for a Wolf game — mirrors services.wolf.wolf_summary().
+class WolfSummary {
+  final String status;
+  final String handicapMode;
+  final int    netPercent;
+  // Point config / options.
+  final int    loneWolfPoints;
+  final int    blindWolfPoints;
+  final int    teamWinPoints;
+  final bool   wolfLosesTies;
+  final bool   nonWolfBonus;
+  final bool   lastPlaceWolf1718;
+  final bool   requireLoneOrBlind;
+  final List<int>             wolfOrder;
+  final List<WolfPlayerTotal> players;
+  final List<WolfHole>        holes;
+  final double betUnit;
+
+  const WolfSummary({
+    required this.status,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.loneWolfPoints,
+    required this.blindWolfPoints,
+    required this.teamWinPoints,
+    required this.wolfLosesTies,
+    required this.nonWolfBonus,
+    required this.lastPlaceWolf1718,
+    required this.requireLoneOrBlind,
+    required this.wolfOrder,
+    required this.players,
+    required this.holes,
+    required this.betUnit,
+  });
+
+  bool get isNet        => handicapMode == 'net';
+  bool get isGross      => handicapMode == 'gross';
+  bool get isStrokesOff => handicapMode == 'strokes_off';
+
+  /// The hole record for [hole] (1-based), or null if absent.
+  WolfHole? holeFor(int hole) {
+    for (final h in holes) {
+      if (h.hole == hole) return h;
+    }
+    return null;
+  }
+
+  factory WolfSummary.fromJson(Map<String, dynamic> j) {
+    final hcap   = j['handicap'] as Map<String, dynamic>? ?? {};
+    final pts    = j['points']   as Map<String, dynamic>? ?? {};
+    final money  = j['money']    as Map<String, dynamic>? ?? {};
+    return WolfSummary(
+      status:            j['status'] as String? ?? 'pending',
+      handicapMode:      hcap['mode']        as String? ?? 'net',
+      netPercent:        hcap['net_percent'] as int?    ?? 100,
+      loneWolfPoints:    pts['lone_wolf']  as int? ?? 3,
+      blindWolfPoints:   pts['blind_wolf'] as int? ?? 6,
+      teamWinPoints:     pts['team_win']   as int? ?? 1,
+      wolfLosesTies:      pts['wolf_loses_ties']       as bool? ?? false,
+      nonWolfBonus:       pts['non_wolf_bonus']        as bool? ?? false,
+      lastPlaceWolf1718:  pts['last_place_wolf_1718']  as bool? ?? true,
+      requireLoneOrBlind: pts['require_lone_or_blind'] as bool? ?? false,
+      wolfOrder: (j['wolf_order'] as List? ?? [])
+          .map((e) => e as int).toList(),
+      players: (j['players'] as List? ?? [])
+          .map((p) => WolfPlayerTotal.fromJson(p as Map<String, dynamic>))
+          .toList(),
+      holes: (j['holes'] as List? ?? [])
+          .map((h) => WolfHole.fromJson(h as Map<String, dynamic>))
+          .toList(),
+      betUnit: (money['bet_unit'] as num?)?.toDouble() ?? 1.0,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rabbit
+// ---------------------------------------------------------------------------
+
+/// Per-player running total for a Rabbit game.
+class RabbitPlayerTotal {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final double money;
+  final int    segmentsWon;
+  final int    phcpInPlay;
+
+  const RabbitPlayerTotal({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.money,
+    required this.segmentsWon,
+    required this.phcpInPlay,
+  });
+
+  factory RabbitPlayerTotal.fromJson(Map<String, dynamic> j) =>
+      RabbitPlayerTotal(
+        playerId:    j['player_id']    as int,
+        name:        j['name']         as String? ?? '',
+        shortName:   j['short_name']   as String? ?? '',
+        money:       (j['money']       as num?)?.toDouble() ?? 0.0,
+        segmentsWon: j['segments_won'] as int? ?? 0,
+        phcpInPlay:  j['phcp_in_play'] as int? ?? 0,
+      );
+}
+
+/// One segment of a Rabbit match (1×18, 2×9, or 3×6).
+class RabbitSegment {
+  final int    index;
+  final int    startHole;
+  final int    endHole;
+  final int?   holderId;
+  final String? holderShort;
+  final int    lead;
+  final bool   complete;
+  final double payout;
+
+  const RabbitSegment({
+    required this.index,
+    required this.startHole,
+    required this.endHole,
+    required this.holderId,
+    required this.holderShort,
+    required this.lead,
+    required this.complete,
+    required this.payout,
+  });
+
+  factory RabbitSegment.fromJson(Map<String, dynamic> j) => RabbitSegment(
+        index:       j['index']       as int? ?? 0,
+        startHole:   j['start_hole']  as int? ?? 0,
+        endHole:     j['end_hole']    as int? ?? 0,
+        holderId:    j['holder_id']   as int?,
+        holderShort: j['holder_short'] as String?,
+        lead:        j['lead']        as int? ?? 0,
+        complete:    j['complete']    as bool? ?? false,
+        payout:      (j['payout']     as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+/// One player's score on a Rabbit hole.
+class RabbitHoleEntry {
+  final int    playerId;
+  final String shortName;
+  final String name;
+  final int?   netScore;
+  final int?   gross;
+  final bool   isWinner;
+  final bool   isHolder;
+
+  const RabbitHoleEntry({
+    required this.playerId,
+    required this.shortName,
+    required this.name,
+    required this.netScore,
+    required this.gross,
+    required this.isWinner,
+    required this.isHolder,
+  });
+
+  factory RabbitHoleEntry.fromJson(Map<String, dynamic> j) => RabbitHoleEntry(
+        playerId:  j['player_id']  as int,
+        shortName: j['short_name'] as String? ?? '',
+        name:      j['name']       as String? ?? '',
+        netScore:  j['net_score']  as int?,
+        gross:     j['gross']      as int?,
+        isWinner:  j['is_winner']  as bool? ?? false,
+        isHolder:  j['is_holder']  as bool? ?? false,
+      );
+}
+
+/// One hole of a Rabbit game — outright winner, rabbit holder + lead.
+class RabbitHole {
+  final int    hole;
+  final int    segment;
+  final int?   par;
+  final int?   winnerId;
+  final String? winnerShort;
+  final int?   holderId;
+  final String? holderShort;
+  final int    lead;
+  final String? event;
+  final List<RabbitHoleEntry> entries;
+
+  const RabbitHole({
+    required this.hole,
+    required this.segment,
+    required this.par,
+    required this.winnerId,
+    required this.winnerShort,
+    required this.holderId,
+    required this.holderShort,
+    required this.lead,
+    required this.event,
+    required this.entries,
+  });
+
+  bool get isScored => entries.any((e) => e.netScore != null);
+
+  factory RabbitHole.fromJson(Map<String, dynamic> j) => RabbitHole(
+        hole:        j['hole']        as int? ?? 0,
+        segment:     j['segment']     as int? ?? 1,
+        par:         j['par']         as int?,
+        winnerId:    j['winner_id']   as int?,
+        winnerShort: j['winner_short'] as String?,
+        holderId:    j['holder_id']   as int?,
+        holderShort: j['holder_short'] as String?,
+        lead:        j['lead']        as int? ?? 0,
+        event:       j['event']       as String?,
+        entries: (j['entries'] as List? ?? [])
+            .map((e) => RabbitHoleEntry.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// Full summary for a Rabbit game — mirrors services.rabbit.rabbit_summary().
+class RabbitSummary {
+  final String status;
+  final String handicapMode;
+  final int    netPercent;
+  final bool   accumulate;
+  final int    numSegments;
+  final List<RabbitSegment>     segments;
+  final List<RabbitPlayerTotal> players;
+  final List<RabbitHole>        holes;
+  // Current live state.
+  final int?   currentHolderId;
+  final String? currentHolderShort;
+  final int    currentLead;
+  final int    currentSegment;
+  final double betUnit;
+  final double entry;     // per-player buy-in
+  final double pot;       // n_players × entry
+  final double segValue;
+
+  const RabbitSummary({
+    required this.status,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.accumulate,
+    required this.numSegments,
+    required this.segments,
+    required this.players,
+    required this.holes,
+    required this.currentHolderId,
+    required this.currentHolderShort,
+    required this.currentLead,
+    required this.currentSegment,
+    required this.betUnit,
+    required this.entry,
+    required this.pot,
+    required this.segValue,
+  });
+
+  bool get isNet        => handicapMode == 'net';
+  bool get isGross      => handicapMode == 'gross';
+  bool get isStrokesOff => handicapMode == 'strokes_off';
+
+  RabbitHole? holeFor(int hole) {
+    for (final h in holes) {
+      if (h.hole == hole) return h;
+    }
+    return null;
+  }
+
+  factory RabbitSummary.fromJson(Map<String, dynamic> j) {
+    final hcap    = j['handicap'] as Map<String, dynamic>? ?? {};
+    final money   = j['money']    as Map<String, dynamic>? ?? {};
+    final current = j['current']  as Map<String, dynamic>? ?? {};
+    return RabbitSummary(
+      status:       j['status'] as String? ?? 'pending',
+      handicapMode: hcap['mode']        as String? ?? 'net',
+      netPercent:   hcap['net_percent'] as int?    ?? 100,
+      accumulate:   j['accumulate']   as bool? ?? true,
+      numSegments:  j['num_segments'] as int?  ?? 1,
+      segments: (j['segments'] as List? ?? [])
+          .map((s) => RabbitSegment.fromJson(s as Map<String, dynamic>))
+          .toList(),
+      players: (j['players'] as List? ?? [])
+          .map((p) => RabbitPlayerTotal.fromJson(p as Map<String, dynamic>))
+          .toList(),
+      holes: (j['holes'] as List? ?? [])
+          .map((h) => RabbitHole.fromJson(h as Map<String, dynamic>))
+          .toList(),
+      currentHolderId:    current['holder_id']    as int?,
+      currentHolderShort: current['holder_short'] as String?,
+      currentLead:        current['lead']         as int? ?? 0,
+      currentSegment:     current['segment']      as int? ?? 1,
+      betUnit:  (money['bet_unit']  as num?)?.toDouble() ?? 1.0,
+      entry:    (money['entry']     as num?)?.toDouble()
+                ?? (money['bet_unit'] as num?)?.toDouble() ?? 1.0,
+      pot:      (money['pot']       as num?)?.toDouble() ?? 1.0,
+      segValue: (money['seg_value'] as num?)?.toDouble() ?? 1.0,
     );
   }
 }

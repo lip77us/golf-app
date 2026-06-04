@@ -1539,3 +1539,96 @@ class CupChangeGameTests(TestCase):
             'game_type': 'nassau',
         }, format='json')
         self.assertEqual(r.status_code, 404)
+
+
+# ===========================================================================
+# Per-account username uniqueness — admin add-user form + API player-create
+# ===========================================================================
+
+from django.forms.models import modelform_factory          # noqa: E402
+from accounts.admin_forms import AccountUserCreationForm    # noqa: E402
+
+
+class AdminAddUserPerAccountTests(TestCase):
+    """
+    Regression guard for the "can't add a user whose name already exists in
+    another account" bug.  Django's stock UserCreationForm.clean_username
+    enforces GLOBAL username uniqueness; AccountUserCreationForm (wired in as
+    UserAdmin.add_form) must scope it per account instead.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.acct_a = Account.objects.create(name='Add-User Acct A')
+        cls.acct_b = Account.objects.create(name='Add-User Acct B')
+        User.objects.create_user(username='gary', password='x',
+                                  account=cls.acct_a)
+        # Mirror the admin add view: the form gains account/email/etc. via
+        # the admin's add_fieldsets, so build it with those fields included.
+        cls.FormCls = modelform_factory(
+            User, form=AccountUserCreationForm,
+            fields=['username', 'account', 'email', 'is_account_admin'],
+        )
+
+    def _form(self, account, username):
+        return self.FormCls(data={
+            'username': username, 'account': str(account.pk), 'email': '',
+            'is_account_admin': False,
+            'password1': 'Testpass123!', 'password2': 'Testpass123!',
+            'usable_password': 'true',
+        })
+
+    def test_same_username_in_other_account_is_allowed(self):
+        f = self._form(self.acct_b, 'gary')   # gary already exists in A
+        self.assertTrue(f.is_valid(), f.errors)
+        u = f.save(commit=False)
+        u.account = self.acct_b
+        u.save()
+        self.assertEqual(
+            User.objects.filter(username__iexact='gary').count(), 2)
+
+    def test_duplicate_username_in_same_account_is_rejected(self):
+        f = self._form(self.acct_a, 'gary')   # already in A
+        self.assertFalse(f.is_valid())
+        self.assertIn('username', f.errors)
+
+    def test_same_account_duplicate_is_case_insensitive(self):
+        f = self._form(self.acct_a, 'GARY')
+        self.assertFalse(f.is_valid())
+        self.assertIn('username', f.errors)
+
+
+class ApiPlayerCreatePerAccountTests(TestCase):
+    """
+    The API roster-create path (PlayerCreateSerializer) creates a player +
+    login.  Its username uniqueness check must be per-account, so the same
+    login name can exist in two accounts.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.acct_a = Account.objects.create(name='API Acct A')
+        cls.acct_b = Account.objects.create(name='API Acct B')
+
+    def _create(self, account, name, username):
+        from api.serializers import PlayerCreateSerializer
+        ser = PlayerCreateSerializer(data={
+            'name': name, 'handicap_index': '10.0',
+            'username': username, 'password': 'Testpass123!',
+        })
+        ser.is_valid(raise_exception=True)
+        return ser.save(account=account)
+
+    def test_same_login_username_across_accounts(self):
+        p1 = self._create(self.acct_a, 'Sam One', 'sam')
+        p2 = self._create(self.acct_b, 'Sam Two', 'sam')   # other account → OK
+        self.assertEqual(p1.user.account, self.acct_a)
+        self.assertEqual(p2.user.account, self.acct_b)
+        self.assertEqual(
+            User.objects.filter(username__iexact='sam').count(), 2)
+
+    def test_duplicate_login_username_same_account_rejected(self):
+        from rest_framework.exceptions import ValidationError
+        self._create(self.acct_a, 'Sam One', 'sam')
+        with self.assertRaises(ValidationError):
+            self._create(self.acct_a, 'Sam Two', 'sam')   # same account → reject

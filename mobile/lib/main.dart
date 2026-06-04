@@ -13,6 +13,9 @@ import 'providers/auth_provider.dart';
 import 'providers/round_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/login_screen.dart';
+import 'screens/password_login_screen.dart';
+import 'screens/otp_verify_screen.dart';
+import 'screens/profile_setup_screen.dart';
 import 'screens/tournament_list_screen.dart';
 import 'screens/round_screen.dart';
 import 'screens/scorecard_screen.dart';
@@ -22,6 +25,10 @@ import 'screens/points_531_setup_screen.dart';
 import 'screens/points_531_screen.dart';
 import 'screens/skins_setup_screen.dart';
 import 'screens/skins_screen.dart';
+import 'screens/wolf_setup_screen.dart';
+import 'screens/wolf_screen.dart';
+import 'screens/rabbit_setup_screen.dart';
+import 'screens/rabbit_screen.dart';
 import 'screens/triple_cup_setup_screen.dart';
 import 'screens/triple_cup_screen.dart';
 import 'screens/multi_skins_setup_screen.dart';
@@ -285,6 +292,17 @@ class _GolfAppState extends State<GolfApp> {
             ));
       case '/login':
         return page((_) => const LoginScreen());
+      case '/login-password':
+        return page((_) => const PasswordLoginScreen());
+      case '/verify-otp':
+        final args = settings.arguments as Map? ?? const {};
+        return page((_) => OtpVerifyScreen(
+              phone:     args['phone'] as String? ?? '',
+              name:      args['name'] as String?,
+              debugCode: args['debugCode'] as String?,
+            ));
+      case '/profile-setup':
+        return page((_) => const ProfileSetupScreen());
       case '/tournaments':
         return page((_) => const TournamentListScreen());
       case '/casual-rounds':
@@ -326,6 +344,18 @@ class _GolfAppState extends State<GolfApp> {
       case '/skins':
         final foursomeId = settings.arguments as int;
         return page((_) => SkinsScreen(foursomeId: foursomeId));
+      case '/wolf-setup':
+        final foursomeId = settings.arguments as int;
+        return page((_) => WolfSetupScreen(foursomeId: foursomeId));
+      case '/wolf':
+        final foursomeId = settings.arguments as int;
+        return page((_) => WolfScreen(foursomeId: foursomeId));
+      case '/rabbit-setup':
+        final foursomeId = settings.arguments as int;
+        return page((_) => RabbitSetupScreen(foursomeId: foursomeId));
+      case '/rabbit':
+        final foursomeId = settings.arguments as int;
+        return page((_) => RabbitScreen(foursomeId: foursomeId));
       case '/triple-cup-setup':
         final foursomeId = settings.arguments as int;
         return page((_) => TripleCupSetupScreen(foursomeId: foursomeId));

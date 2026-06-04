@@ -71,6 +71,25 @@ class GameType(models.TextChoices):
     # RyderCupFoursomeConfig) and a casual game for 2-4 players.
     # Cup multiplier: pv × 4 per foursome (2v2 case).
     TRIPLE_CUP      = 'triple_cup',      'One-Round Triple Cup'
+    # Wolf: a 3- or 4-player casual game.  On each hole one player is the
+    # "Wolf" (a rotation the group sets, like Pink Ball's carrier order),
+    # who tees last and then either takes a partner (4-player only → 2v2),
+    # goes Lone Wolf (1-vs-rest, higher stake), or Blind Wolf (declared
+    # pre-tee, highest stake).  Best ball per side decides the hole.  Points
+    # are a zero-based system: the winning side splits a per-hole pot and
+    # the losing side splits its negative, so every scored hole nets to
+    # zero.  Point values (lone / blind / team-win) and a couple of options
+    # (wolf-loses-ties, non-wolf clean-win bonus) are configurable.  In a
+    # 4-player game, holes 17–18 hand the Wolf to whoever is in last place.
+    WOLF            = 'wolf',            'Wolf'
+    # Rabbit: a 3-player game.  The first to win a hole outright "catches"
+    # the rabbit and runs ahead; they hold it until an opponent beats them
+    # on a hole, which frees it (up for grabs again).  In accumulate mode
+    # the holder builds a lead (+1 per hole won, −1 per hole lost) and only
+    # loses the rabbit when the lead hits 0; in stop mode the first loss
+    # frees it.  Played as 1×18, 2×9, or 3×6 segments — whoever holds the
+    # rabbit at the end of a segment wins that share of the pot.
+    RABBIT          = 'rabbit',          'Rabbit'
 
 
 class RoundStatus(models.TextChoices):
@@ -236,6 +255,18 @@ class Course(models.Model):
                         help_text="Tenant this course belongs to.",
                     )
     name            = models.CharField(max_length=150)
+    # Provenance: the GolfCourseAPI course id this row was imported from, if
+    # any (NULL for manually pasted / created courses).  Courses are still
+    # OWNED per-account, so this is intentionally NOT unique — the same
+    # real-world course imported into N accounts yields N rows sharing this
+    # id.  Persisted from the first self-signup onward so we can recognize
+    # "the same course" across accounts later (e.g. to dedupe imports or
+    # migrate to a shared course catalog) without a costly backfill.
+    golf_api_id     = models.CharField(
+                        max_length=64, null=True, blank=True, db_index=True,
+                        help_text="Source GolfCourseAPI course id when imported "
+                                  "from there; NULL for manual courses.",
+                    )
     created_at      = models.DateTimeField(auto_now_add=True)
 
     objects         = AccountScopedManager()

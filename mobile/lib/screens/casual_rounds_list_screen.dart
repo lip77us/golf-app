@@ -218,6 +218,10 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
       route = '/skins-setup';          // will redirect to /score-entry if already started
     } else if (round.activeGames.contains('nassau')) {
       route = '/nassau-setup';         // will redirect to /score-entry if already started
+    } else if (round.activeGames.contains('wolf')) {
+      route = '/wolf-setup';           // will redirect to /wolf if already started
+    } else if (round.activeGames.contains('rabbit')) {
+      route = '/rabbit-setup';         // will redirect to /rabbit if already started
     } else {
       route = '/score-entry';          // stroke play, stableford, or multi-game combo
     }
