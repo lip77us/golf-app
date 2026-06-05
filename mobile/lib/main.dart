@@ -54,7 +54,6 @@ import 'screens/splash_screen.dart';
 import 'screens/quota_nassau_screen.dart';
 import 'screens/confirm_tees_screen.dart';
 import 'screens/settings_screen.dart';
-import 'screens/manage_members_screen.dart';
 import 'screens/manage_courses_screen.dart';
 
 /// Global navigator key — lets AuthProvider redirect to /login on 401
@@ -321,8 +320,6 @@ class _GolfAppState extends State<GolfApp> {
         return page((_) => const ScoringRoundsScreen());
       case '/settings':
         return page((_) => const SettingsScreen());
-      case '/manage-members':
-        return page((_) => const ManageMembersScreen());
       case '/manage-courses':
         return page((_) => const ManageCoursesScreen());
       case '/round':
