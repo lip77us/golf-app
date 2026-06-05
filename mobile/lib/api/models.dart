@@ -569,6 +569,41 @@ class CasualRoundSummary {
       );
 }
 
+/// A read-only round from ANOTHER account that a friend added you to
+/// (GET /api/rounds/shared-with-me/). Tapping it opens the leaderboard.
+class SharedRoundSummary {
+  final int    id;
+  final String date;
+  final String courseName;
+  final String status;
+  final List<String> activeGames;
+  /// Source group label — the round creator's name, or the account name.
+  final String groupLabel;
+  /// The name of the player (in that group) that matched your phone.
+  final String yourName;
+
+  const SharedRoundSummary({
+    required this.id,
+    required this.date,
+    required this.courseName,
+    required this.status,
+    required this.activeGames,
+    required this.groupLabel,
+    required this.yourName,
+  });
+
+  factory SharedRoundSummary.fromJson(Map<String, dynamic> j) =>
+      SharedRoundSummary(
+        id:          j['id'] as int,
+        date:        j['date'] as String? ?? '',
+        courseName:  j['course_name'] as String? ?? '',
+        status:      j['status'] as String? ?? '',
+        activeGames: List<String>.from(j['active_games'] as List? ?? []),
+        groupLabel:  j['group_label'] as String? ?? '',
+        yourName:    j['your_name'] as String? ?? '',
+      );
+}
+
 class CasualRoundPlayer {
   final int    id;
   final String name;

@@ -458,6 +458,16 @@ class ApiClient {
         .toList();
   }
 
+  /// Read-only cross-account history: rounds in OTHER accounts a friend added
+  /// your (phone-matched) player to. [status] optional ('' = all).
+  Future<List<SharedRoundSummary>> getSharedRounds({String status = ''}) async {
+    final q = status.isEmpty ? '' : '?status=$status';
+    final data = await _get('/rounds/shared-with-me/$q');
+    return (data as List)
+        .map((r) => SharedRoundSummary.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Permanently delete a casual round.  Only the creator may call this;
   /// the server returns 403 for anyone else.
   Future<void> deleteCasualRound(int roundId) async {

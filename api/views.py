@@ -1709,6 +1709,77 @@ class CasualRoundListView(APIView):
         return Response(ser.data)
 
 
+class SharedRoundsView(APIView):
+    """
+    GET /api/rounds/shared-with-me/?status=in_progress|complete|pending
+
+    Read-only cross-account history (Friends Phase 2a): casual rounds in OTHER
+    accounts that include a player carrying the caller's VERIFIED phone number —
+    i.e. games a friend added you to in their own group.  Matched by normalized
+    phone (TD-typed Player.phone is free-text); no permanent link yet.  Tapping a
+    result opens the existing read-only leaderboard (LeaderboardView is already
+    fetchable by round id).
+    """
+    def get(self, request):
+        from accounts.phone import normalize
+
+        my_phone = getattr(request.user, 'phone', None)  # E.164, or None (legacy)
+        if not my_phone:
+            return Response([])
+
+        # Players in OTHER accounts whose free-text phone normalizes to mine.
+        matched_name = {}
+        for c in (
+            Player.objects
+            .exclude(account=request.user.account)
+            .exclude(phone='')
+            .values('id', 'phone', 'name')
+        ):
+            if normalize(c['phone']) == my_phone:
+                matched_name[c['id']] = c['name']
+        if not matched_name:
+            return Response([])
+
+        qs = (
+            Round.objects
+            .filter(
+                tournament__isnull=True,  # casual rounds only for this slice
+                foursomes__memberships__player_id__in=list(matched_name),
+            )
+            .exclude(account=request.user.account)
+            .select_related('course', 'account', 'created_by')
+            .prefetch_related('foursomes__memberships')
+            .distinct()
+            .order_by('-date', '-created_at')
+        )
+        requested_status = request.query_params.get('status')
+        if requested_status in ('in_progress', 'complete', 'pending'):
+            qs = qs.filter(status=requested_status)
+
+        results = []
+        for r in qs:
+            your_name = next(
+                (matched_name[m.player_id]
+                 for fs in r.foursomes.all()
+                 for m in fs.memberships.all()
+                 if m.player_id in matched_name),
+                None,
+            )
+            group_label = (
+                (r.created_by.name if r.created_by_id else None) or r.account.name
+            )
+            results.append({
+                'id':           r.id,
+                'date':         r.date,
+                'course_name':  r.course.name,
+                'status':       r.status,
+                'active_games': r.active_games,
+                'group_label':  group_label,
+                'your_name':    your_name,
+            })
+        return Response(results)
+
+
 class RoundSetupView(APIView):
     """
     POST /api/rounds/{id}/setup/

@@ -52,6 +52,10 @@ from services.sixes import setup_sixes, calculate_sixes
 User = get_user_model()
 
 ACCOUNT_NAME = 'DemoClub'
+# A separate 'friend' account used to demo Friends Phase 2a "Shared with me":
+# its completed round includes the reviewer (matched by phone), so the round
+# surfaces in the reviewer's "Shared with me" list.
+FRIEND_ACCOUNT_NAME = 'Saturday Crew'
 DEFAULT_PASSWORD = 'HalvedDemo2026'
 
 # Par-72 layout; hole 1 is SI 7 so stroke order isn't trivially hole==SI.
@@ -126,6 +130,12 @@ class Command(BaseCommand):
                     f"Pass --reset to tear it down and rebuild."
                 )
             self._teardown(existing)
+
+        # Tear down the 'Shared with me' friend account too (reset only).
+        if options['reset']:
+            friend = Account.objects.filter(name__iexact=FRIEND_ACCOUNT_NAME).first()
+            if friend:
+                self._teardown(friend)
 
         account = Account.objects.create(name=ACCOUNT_NAME)
         self.stdout.write(f"Created account: {account.name}")
@@ -221,6 +231,7 @@ class Command(BaseCommand):
             setup=lambda fs, ps: setup_skins(fs, carryover=True), calc=calculate_skins,
         )
 
+        self._seed_shared_round()
         self._print_summary(account)
 
     # -----------------------------------------------------------------------
@@ -240,7 +251,7 @@ class Command(BaseCommand):
         # rebuild doesn't collide on the unique golf_api_id.
         from core.models import CatalogCourse
         CatalogCourse.objects.filter(golf_api_id__startswith='seed-').delete()
-        self.stdout.write(self.style.WARNING(f"  Tore down existing '{ACCOUNT_NAME}'."))
+        self.stdout.write(self.style.WARNING(f"  Tore down existing '{account.name}'."))
 
     # -----------------------------------------------------------------------
     # Builders
@@ -306,6 +317,37 @@ class Command(BaseCommand):
                     default_sort_priority=pri, holes=DEMO_HOLES,
                 )
         self.stdout.write(f"  Seeded {len(catalog)} shared-catalog courses.")
+
+    def _seed_shared_round(self):
+        """Demo for Friends Phase 2a "Shared with me": a SEPARATE friend account
+        ('Saturday Crew') whose completed skins round includes the reviewer as a
+        login-less guest. The guest's formatted phone '(310) 555-0101' normalizes
+        to the reviewer User.phone (+13105550101), so this cross-account round
+        surfaces under the reviewer's "Shared with me"."""
+        acct = Account.objects.create(name=FRIEND_ACCOUNT_NAME)
+        course, tee = self._create_course(acct)
+        reviewer_guest = Player.objects.create(
+            account=acct, name='Paul Avery', phone='(310) 555-0101',
+            handicap_index=Decimal('9.4'),
+        )
+        extras = [
+            Player.objects.create(account=acct, name=n,
+                                  handicap_index=Decimal(str(h)), sex=s)
+            for n, h, s in (('Chris Bay', 11.0, 'M'),
+                            ('Dana Wu', 7.5, 'W'),
+                            ('Eli Stone', 14.2, 'M'))
+        ]
+        self._round(
+            acct, course, tee, 'complete', ['skins'],
+            [reviewer_guest, *extras],
+            holes=18, bet_unit='5.00',
+            setup=lambda fs, ps: setup_skins(fs, carryover=True),
+            calc=calculate_skins,
+        )
+        self.stdout.write(
+            f"  Seeded '{FRIEND_ACCOUNT_NAME}' shared round for the reviewer "
+            f"(guest phone {reviewer_guest.phone})."
+        )
 
     def _make_round(self, account, course, status, active_games, *,
                     tournament=None, round_number=1, created_by=None,

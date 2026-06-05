@@ -40,6 +40,7 @@ urlpatterns = [
     # ---- Rounds ----
     path('rounds/',                      views.RoundCreateView.as_view(),     name='api-round-create'),
     path('rounds/casual/',               views.CasualRoundListView.as_view(), name='api-casual-rounds'),
+    path('rounds/shared-with-me/',       views.SharedRoundsView.as_view(),    name='api-shared-rounds'),
     path('rounds/<int:pk>/',             views.RoundDetailView.as_view(),     name='api-round-detail'),
     path('rounds/<int:pk>/setup/',       views.RoundSetupView.as_view(),    name='api-round-setup'),
     path('rounds/<int:pk>/complete/',    views.RoundCompleteView.as_view(), name='api-round-complete'),

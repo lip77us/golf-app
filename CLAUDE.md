@@ -196,6 +196,32 @@ wall): claim-on-signup (link a friend's new login to a login-less player you
 created — player can't move accounts, so it'd link in place) and cross-account
 shared-round visibility + live multi-phone scoring.
 
+### Friends Phase 2a — "Shared with me" (read-only cross-account history) — implemented
+First cross-account slice. After a user verifies their phone, they can see
+(read-only) casual rounds in OTHER accounts where a player carrying their phone
+number played — i.e. games a friend added them to. **Phone-matched, no permanent
+link / no schema change** (the OneToOne→FK "claim" refactor is deferred to the
+write-scoring slice where it's actually needed).
+- Backend: `SharedRoundsView` (`GET /api/rounds/shared-with-me/?status=`,
+  `api/views.py`) — finds players in other accounts whose free-text `Player.phone`
+  normalizes (`accounts.phone.normalize`) to `request.user.phone`, returns their
+  casual rounds (lightweight summary: course, date, status, games, `group_label`
+  = creator/account name, `your_name`). Detail view **reuses the existing
+  `LeaderboardView`** (already fetchable by round id). Route in `api/urls.py`.
+  Tests: `api/test_shared_rounds.py` (formatted-phone match, own-account
+  excluded, wrong/no phone → empty).
+- Mobile: `SharedRoundSummary` model; `client.getSharedRounds()`;
+  `shared_rounds_screen.dart` (list → existing `LeaderboardScreen`); "Shared with
+  me" drawer entry; `/shared-rounds` route.
+- Demo: `seed_demo` creates a separate **'Saturday Crew'** account with a
+  completed skins round whose login-less guest 'Paul Avery' carries the
+  reviewer's phone (formatted `(310) 555-0101`), so the round surfaces in the
+  reviewer's "Shared with me" out of the box (`_seed_shared_round`; cleared on
+  `--reset`).
+- Out of scope (later): permanent claim (OneToOne→FK), live multi-phone scoring,
+  tournament rounds, recycled-number safeguards, tightening LeaderboardView's
+  open-by-id read.
+
 Tests: `accounts/test_otp.py` (normalization, request→verify happy paths,
 self-signup, wrong/expired/too-many-attempts, rate-limit, phone uniqueness, and
 legacy password login still works).
