@@ -17,7 +17,7 @@ import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
-import '../widgets/app_drawer.dart';
+import '../utils/golfer_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/halved_mark.dart';
@@ -415,12 +415,7 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                               tooltip: 'Invite ${p.name}',
                               icon: const Icon(
                                   Icons.person_add_alt_1_outlined, size: 18),
-                              onPressed: () => shareInvite(
-                                btnCtx.read<AuthProvider>(),
-                                ScaffoldMessenger.of(btnCtx),
-                                origin: shareOriginFrom(btnCtx),
-                                inviteeName: p.name,
-                              ),
+                              onPressed: () => inviteGolfer(btnCtx, p),
                             ),
                           ),
                         ],

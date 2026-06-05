@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
+import '../utils/golfer_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/halved_mark.dart';
@@ -244,12 +245,7 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
                   builder: (btnCtx) => IconButton(
                     icon: const Icon(Icons.person_add_alt_1_outlined),
                     tooltip: 'Invite ${p.name}',
-                    onPressed: () => shareInvite(
-                      btnCtx.read<AuthProvider>(),
-                      ScaffoldMessenger.of(btnCtx),
-                      origin: shareOriginFrom(btnCtx),
-                      inviteeName: p.name,
-                    ),
+                    onPressed: () => inviteGolfer(btnCtx, p),
                   ),
                 ),
               // Admins get an explicit delete icon as well as swipe-to-dismiss.

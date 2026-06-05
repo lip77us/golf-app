@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
+import '../utils/golfer_invite.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/inline_message.dart';
@@ -656,6 +657,22 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                                 if (player.isOnApp) ...[
                                   const SizedBox(width: 6),
                                   const HalvedMark(size: 18),
+                                ] else if (!isLockedIn) ...[
+                                  const SizedBox(width: 6),
+                                  // Invite a golfer who isn't on the app yet.
+                                  Builder(
+                                    builder: (btnCtx) => IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      tooltip: 'Invite ${player.name}',
+                                      icon: const Icon(
+                                          Icons.person_add_alt_1_outlined,
+                                          size: 18),
+                                      onPressed: () =>
+                                          inviteGolfer(btnCtx, player),
+                                    ),
+                                  ),
                                 ],
                                 if (isLockedIn) ...[
                                   const SizedBox(width: 6),
