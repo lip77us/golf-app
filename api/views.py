@@ -1587,7 +1587,9 @@ class RoundDetailView(APIView):
         # Own-account OR a designated scorer (so a cross-account scorer can open
         # the round to enter scores). PATCH/DELETE below stay TD-only.
         round_obj = round_for_scorer(request.user, pk, base=self._ROUND_QS)
-        return Response(RoundSerializer(round_obj).data)
+        return Response(
+            RoundSerializer(round_obj, context={'request': request}).data,
+        )
 
     def patch(self, request, pk):
         """
@@ -2016,12 +2018,32 @@ class FoursomeTeesView(APIView):
     for the foursome — changing a tee changes the stroke-index
     allocation, so applying new tees to already-scored holes would
     silently corrupt every saved handicap_strokes value.
+
+    GET returns the tees AVAILABLE at this foursome's course (for the
+    tee-box editor's dropdown) — sourced from the round's course, not the
+    viewer's account, so a cross-account scorer sees the right options.
+    Both GET and PATCH allow the round's TD OR a designated scorer.
     """
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(
+            request.user, pk,
+            base=Foursome.objects.select_related('round__course'),
+        )
+        from core.models import Tee
+        from .serializers import TeeSerializer
+        tees = (
+            Tee.objects
+            .filter(course=foursome.round.course)
+            .select_related('course')
+            .order_by('sort_priority', 'tee_name')
+        )
+        return Response(TeeSerializer(tees, many=True).data)
+
     @transaction.atomic
     def patch(self, request, pk):
-        foursome = get_object_or_404(
-            Foursome.objects.prefetch_related('memberships__player'),
-            pk=pk,
+        foursome = foursome_for_scorer(
+            request.user, pk,
+            base=Foursome.objects.prefetch_related('memberships__player'),
         )
 
         # Phantom-player scores (Sixes phantom, Pink Ball rotation, etc.)

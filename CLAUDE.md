@@ -272,8 +272,14 @@ day-of, not enforced at setup).
   404, own-account preserved, participant-can-read-not-score). Full `api`+`scoring`
   suite green (85). Demo: `seed_demo` makes the reviewer the scorer of the
   in-progress 'Saturday Crew' round (appears under "scoring-for-me").
-- **Mobile (PR B) pending:** TD "Set scorer" UI + a "Scoring" list/flow on the
-  scorer's app.
+- Mobile (PR B): TD designates via a **"Set scorer"** item in the round screen's
+  per-foursome TD menu (`round_screen.dart` `_setScorer` bottom sheet;
+  `Membership.isScorer`, `client.setFoursomeScorer`). Scorer side: a **"Scoring"**
+  drawer entry → `scoring_rounds_screen.dart` (`client.getScoringForMe`,
+  `ScoringRound` model) → tap opens `/round` (RoundScreen loads via
+  `round_for_scorer`) to enter the foursome's scores + see the whole leaderboard.
+  Caveat: the per-foursome TD menu is hidden on cup rounds, so cup-round scorer
+  designation is a follow-up.
 
 Tests: `accounts/test_otp.py` (normalization, request→verify happy paths,
 self-signup, wrong/expired/too-many-attempts, rate-limit, phone uniqueness, and

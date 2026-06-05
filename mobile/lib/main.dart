@@ -38,6 +38,7 @@ import 'screens/nassau_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/casual_rounds_list_screen.dart';
 import 'screens/shared_rounds_screen.dart';
+import 'screens/scoring_rounds_screen.dart';
 import 'screens/irish_rumble_setup_screen.dart';
 import 'screens/pink_ball_setup_screen.dart';
 import 'screens/pink_ball_screen.dart';
@@ -162,7 +163,13 @@ class _GolfAppState extends State<GolfApp> {
             widget.localDb,
             ctx.read<SyncService>(),
           ),
-          update: (_, auth, __, prev) => prev!..updateClient(auth.client),
+          update: (_, auth, __, prev) {
+            prev!.updateClient(auth.client);
+            // On sign-out, drop the previous user's cached round/scorecard so a
+            // different login on this device doesn't see stale data.
+            if (!auth.isLoggedIn) prev.clearForLogout();
+            return prev;
+          },
         ),
       ],
       child: MaterialApp(
@@ -310,6 +317,8 @@ class _GolfAppState extends State<GolfApp> {
         return page((_) => const CasualRoundsListScreen());
       case '/shared-rounds':
         return page((_) => const SharedRoundsScreen());
+      case '/scoring-rounds':
+        return page((_) => const ScoringRoundsScreen());
       case '/settings':
         return page((_) => const SettingsScreen());
       case '/manage-members':

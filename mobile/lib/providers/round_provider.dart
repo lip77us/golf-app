@@ -170,6 +170,29 @@ class RoundProvider extends ChangeNotifier {
 
   void _clearError() { _error = null; }
 
+  /// Reset all cached round/scorecard/game state on sign-out, so the next user
+  /// on this device never sees the previous user's round (e.g. a TD's group).
+  /// Does NOT notifyListeners — the app navigates to /login right after.
+  void clearForLogout() {
+    _round                   = null;
+    _scorecard               = null;
+    _sixesSummary            = null;
+    _points531Summary        = null;
+    _skinsSummary            = null;
+    _wolfSummary             = null;
+    _rabbitSummary           = null;
+    _tripleCupSummary        = null;
+    _multiSkinsSummary       = null;
+    _nassauSummary           = null;
+    _quotaNassauSummary      = null;
+    _matchPlayData           = null;
+    _threePersonMatchSummary = null;
+    _activeFoursomeId        = null;
+    _sixesStartedFoursomes.clear();
+    _localPendingByHole      = {};
+    _error                   = null;
+  }
+
   // ── Round ──────────────────────────────────────────────────────────────────
 
   Future<void> loadRound(int roundId) async {

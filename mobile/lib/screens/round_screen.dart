@@ -91,7 +91,9 @@ class _RoundScreenState extends State<RoundScreen> {
     // Anyone with admin privileges in this app — Django staff OR
     // account admins — gets full edit access on the round screen,
     // regardless of whether they're a member of any foursome.
-    final isAdmin = context.read<AuthProvider>().isAdmin;
+    // "Can manage" = TD/organizer of THIS round (own account + admin). A
+    // cross-account designated scorer gets false, so TD config is hidden.
+    final canManage = round.canManage;
 
     final hasIrishRumble = round.activeGames.contains('irish_rumble');
     final hasLowNet      = round.activeGames.contains('low_net_round');
@@ -106,7 +108,7 @@ class _RoundScreenState extends State<RoundScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         children: [
           _RoundInfoCard(round: round),
-          if (hasMultiSkins) ...[
+          if (hasMultiSkins && canManage) ...[
             const SizedBox(height: 12),
             Card(
               child: ListTile(
@@ -120,7 +122,7 @@ class _RoundScreenState extends State<RoundScreen> {
               ),
             ),
           ],
-          if (hasSetupGames && !isComplete && isAdmin && !round.isCupRound) ...[
+          if (hasSetupGames && !isComplete && canManage && !round.isCupRound) ...[
             const SizedBox(height: 16),
             Text('Game Setup',
                 style: Theme.of(context).textTheme.titleMedium
@@ -152,7 +154,7 @@ class _RoundScreenState extends State<RoundScreen> {
                 return _FoursomeCard(
                   foursome:        fs,
                   myPlayerId:      myId,
-                  isAdmin:         isAdmin,
+                  canManage:       canManage,
                   isComplete:      isComplete,
                   isCupRound:      round.isCupRound,
                   sixesActive:     fsGames.contains('sixes'),
@@ -553,7 +555,7 @@ class _FoursomeCard extends StatelessWidget {
   final int?         myPlayerId;
   /// True when the logged-in user is admin/staff (no linked player).
   /// Admins can enter scores for any foursome and see game-setup controls.
-  final bool         isAdmin;
+  final bool         canManage;
   final bool         isComplete;
   final bool         isCupRound;
   final bool         sixesActive;
@@ -570,7 +572,7 @@ class _FoursomeCard extends StatelessWidget {
   const _FoursomeCard({
     required this.foursome,
     required this.myPlayerId,
-    required this.isAdmin,
+    required this.canManage,
     required this.isComplete,
     required this.isCupRound,
     required this.sixesActive,
@@ -701,6 +703,82 @@ class _FoursomeCard extends StatelessWidget {
         content: Text('Could not remove: $raw'),
         backgroundColor: Theme.of(context).colorScheme.error,
       ));
+    }
+  }
+
+  /// TD-only — designate (or clear) the golfer who scores this foursome from
+  /// their own phone (delegated cross-account scoring). Allowed day-of; the
+  /// scorer just needs the app with their number on their golfer card.
+  Future<void> _setScorer(BuildContext context) async {
+    final members = foursome.realPlayers;
+    final picked = await showModalBottomSheet<Membership>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Scorer for ${foursome.label}',
+                        style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Pick the golfer who will enter scores for this group '
+                      'from their own phone. They can be set up day-of — they '
+                      'just need the app with their number on their golfer card.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              ...members.map((m) => ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                      child: Text(m.player.name.isNotEmpty
+                          ? m.player.name[0].toUpperCase() : '?'),
+                    ),
+                    title: Text(m.player.name),
+                    trailing: m.isScorer
+                        ? const Icon(Icons.check_circle, color: Colors.green)
+                        : null,
+                    onTap: () => Navigator.of(ctx).pop(m),
+                  )),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null || !context.mounted) return;
+    final client = context.read<AuthProvider>().client;
+    try {
+      await client.setFoursomeScorer(
+        foursome.id, picked.player.id, isScorer: !picked.isScorer,
+      );
+      onGamesChanged();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(picked.isScorer
+              ? '${picked.player.name} is no longer the scorer.'
+              : '${picked.player.name} will score ${foursome.label}.'),
+        ));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Could not set scorer.'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ));
+      }
     }
   }
 
@@ -1019,7 +1097,7 @@ class _FoursomeCard extends StatelessWidget {
         foursome.containsPlayer(myPlayerId!);
     // Players can only edit scores for their own group.
     // Admins can edit any group. Everyone can view completed scorecards.
-    final canEdit = isAdmin || isMyGroup;
+    final canEdit = canManage || isMyGroup || foursome.youScore;
     final theme = Theme.of(context);
 
     // Effective games shown for this foursome
@@ -1095,7 +1173,7 @@ class _FoursomeCard extends StatelessWidget {
             // one.  Cup rounds also hide "configure games" since games
             // are fixed at tournament setup — for them the menu is
             // empty and we hide the more-vert icon entirely.
-            if (isAdmin && !isComplete && !isCupRound) ...[
+            if (canManage && !isComplete && !isCupRound) ...[
               const Spacer(),
               PopupMenuButton<String>(
                 icon: Icon(
@@ -1110,6 +1188,9 @@ class _FoursomeCard extends StatelessWidget {
                     case 'configure_games':
                       _showGameSheet(context);
                       break;
+                    case 'set_scorer':
+                      _setScorer(context);
+                      break;
                   }
                 },
                 itemBuilder: (_) => [
@@ -1122,6 +1203,15 @@ class _FoursomeCard extends StatelessWidget {
                               : theme.colorScheme.onSurfaceVariant),
                       const SizedBox(width: 12),
                       const Flexible(child: Text('Configure group games')),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'set_scorer',
+                    child: Row(children: [
+                      Icon(Icons.edit_note, size: 18,
+                          color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 12),
+                      const Flexible(child: Text('Set scorer')),
                     ]),
                   ),
                 ],

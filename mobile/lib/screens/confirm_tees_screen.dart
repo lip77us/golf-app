@@ -12,7 +12,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -56,12 +55,10 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         throw Exception('Foursome not found on the loaded round.');
       }
       _members = fs.realPlayers.toList();
-      // Course id sits on the round.  Fetch all tees and keep just the
-      // ones for that course.
-      final allTees = await client.getTees();
-      _tees = allTees
-          .where((t) => round != null && t.course.id == round.course.id)
-          .toList();
+      // Fetch the tees at THIS foursome's course (scorer-accessible — sourced
+      // from the round's course, not the viewer's account, so a cross-account
+      // scorer doesn't get an empty dropdown).
+      _tees = await client.getFoursomeCourseTees(widget.foursomeId);
 
       // Seed _picks with each player's current tee (or first available
       // tee that matches their sex if for some reason they don't have

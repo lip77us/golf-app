@@ -610,6 +610,42 @@ class SharedRoundSummary {
       );
 }
 
+/// A round in ANOTHER account that a TD designated me to score
+/// (GET /api/rounds/scoring-for-me/). Opening it goes to the round screen.
+class ScoringRound {
+  final int    id;
+  final String date;
+  final String courseName;
+  final String status;
+  final List<String> activeGames;
+  final String groupLabel;
+  final bool   isTournament;
+  /// The foursome I'm scoring.
+  final int    yourFoursomeId;
+
+  const ScoringRound({
+    required this.id,
+    required this.date,
+    required this.courseName,
+    required this.status,
+    required this.activeGames,
+    required this.groupLabel,
+    required this.isTournament,
+    required this.yourFoursomeId,
+  });
+
+  factory ScoringRound.fromJson(Map<String, dynamic> j) => ScoringRound(
+        id:             j['id'] as int,
+        date:           j['date'] as String? ?? '',
+        courseName:     j['course_name'] as String? ?? '',
+        status:         j['status'] as String? ?? '',
+        activeGames:    List<String>.from(j['active_games'] as List? ?? []),
+        groupLabel:     j['group_label'] as String? ?? '',
+        isTournament:   j['is_tournament'] as bool? ?? false,
+        yourFoursomeId: j['your_foursome_id'] as int? ?? 0,
+      );
+}
+
 class CasualRoundPlayer {
   final int    id;
   final String name;
@@ -642,6 +678,9 @@ class Membership {
   final String? cupTeamColour;
   /// Cup TournamentTeam display name — same null-rules as cupTeamColour.
   final String? cupTeamName;
+  /// True when this member is the designated scorer for the foursome
+  /// (delegated cross-account score entry, Friends Phase 2b).
+  final bool isScorer;
 
   const Membership({
     required this.id,
@@ -651,6 +690,7 @@ class Membership {
     required this.playingHandicap,
     this.cupTeamColour,
     this.cupTeamName,
+    this.isScorer = false,
   });
 
   factory Membership.fromJson(Map<String, dynamic> j) => Membership(
@@ -661,6 +701,7 @@ class Membership {
         playingHandicap: j['playing_handicap'] as int? ?? 0,
         cupTeamColour: j['cup_team_colour'] as String?,
         cupTeamName:   j['cup_team_name']   as String?,
+        isScorer:      j['is_scorer'] as bool? ?? false,
       );
 }
 
@@ -682,6 +723,9 @@ class Foursome {
   /// screen once scoring has begun — server refuses the tee change
   /// in that case anyway.
   final bool hasAnyScore;
+  /// True when the viewer is a designated (phone-matched) scorer of THIS
+  /// foursome — so a cross-account scorer can score + edit tees for their group.
+  final bool youScore;
 
   const Foursome({
     required this.id,
@@ -693,6 +737,7 @@ class Foursome {
     this.configuredGames = const [],
     this.teeTime,
     this.hasAnyScore     = false,
+    this.youScore        = false,
   });
 
   factory Foursome.fromJson(Map<String, dynamic> j) => Foursome(
@@ -704,6 +749,7 @@ class Foursome {
         configuredGames: List<String>.from(j['configured_games'] as List? ?? []),
         teeTime:         j['tee_time'] as String?,
         hasAnyScore:     j['has_any_score'] as bool? ?? false,
+        youScore:        j['you_score'] as bool? ?? false,
         memberships:     (j['memberships'] as List? ?? [])
             .map((m) => Membership.fromJson(m as Map<String, dynamic>))
             .toList(),
@@ -745,6 +791,10 @@ class Round {
   /// Short token used by the public spectator URL (/watch/<token>/).
   /// Null on legacy rounds that haven't been re-saved post-migration.
   final String? watchToken;
+  /// True only for this round's TD/organizer (round is in the viewer's account
+  /// and they're an admin). A cross-account designated scorer gets false, so
+  /// the app hides TD config and shows only score entry + tee editing.
+  final bool canManage;
 
   const Round({
     required this.id,
@@ -761,6 +811,7 @@ class Round {
     this.isCupRound    = false,
     this.irBallsConfig = const [],
     this.watchToken,
+    this.canManage     = false,
   });
 
   factory Round.fromJson(Map<String, dynamic> j) => Round(
@@ -776,6 +827,7 @@ class Round {
         netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? true,
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
         watchToken:   j['watch_token']   as String?,
+        canManage:    j['can_manage']    as bool?   ?? false,
         irBallsConfig: (j['ir_balls_config'] as List? ?? [])
             .map((s) => Map<String, dynamic>.from(s as Map))
             .toList(),

@@ -366,6 +366,17 @@ class FoursomeSerializer(serializers.ModelSerializer):
     active_games     = serializers.SerializerMethodField()
     configured_games = serializers.SerializerMethodField()
     has_any_score    = serializers.SerializerMethodField()
+    # True when the viewer is a designated (phone-matched) scorer of THIS
+    # foursome — lets the app show Enter Scores + Edit Tees for a cross-account
+    # scorer's own group while hiding TD config elsewhere.
+    you_score        = serializers.SerializerMethodField()
+
+    def get_you_score(self, obj) -> bool:
+        request = self.context.get('request')
+        if request is None:
+            return False
+        from accounts.scoring_access import user_scores_foursome
+        return user_scores_foursome(request.user, obj)
 
     def get_has_any_score(self, obj):
         """True iff at least one REAL player has a HoleScore with a
@@ -480,7 +491,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'group_number', 'has_phantom',
             'pink_ball_order', 'active_games', 'configured_games',
-            'tee_time', 'memberships', 'has_any_score',
+            'tee_time', 'memberships', 'has_any_score', 'you_score',
         ]
         read_only_fields = ['id']
 
@@ -490,6 +501,21 @@ class RoundSerializer(serializers.ModelSerializer):
     foursomes      = FoursomeSerializer(many=True, read_only=True)
     is_cup_round   = serializers.SerializerMethodField()
     ir_balls_config = serializers.SerializerMethodField()
+    # True only for the round's TD/organizer (round is in the viewer's account
+    # AND they're an admin). A cross-account designated scorer gets False, so the
+    # app hides TD config (set scorer, configure games, move players, the
+    # multi-skins pool button) and shows only score entry + tee editing.
+    can_manage     = serializers.SerializerMethodField()
+
+    def get_can_manage(self, obj) -> bool:
+        request = self.context.get('request')
+        if request is None:
+            return False
+        user = request.user
+        return bool(
+            obj.account_id == getattr(user, 'account_id', None)
+            and getattr(user, 'is_account_admin', False)
+        )
 
     def get_is_cup_round(self, obj):
         """True when this round has a Ryder Cup config (was set up via CupRoundSetupScreen)."""
@@ -513,12 +539,12 @@ class RoundSerializer(serializers.ModelSerializer):
             'active_games', 'game_point_values', 'bet_unit',
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'scramble_config', 'notes', 'foursomes',
-            'is_cup_round', 'ir_balls_config',
+            'is_cup_round', 'ir_balls_config', 'can_manage',
             # Public spectator URL token — used by mobile's "Share Watch
             # Link" button to construct /watch/<token>/.
             'watch_token',
         ]
-        read_only_fields = ['id', 'watch_token']
+        read_only_fields = ['id', 'watch_token', 'can_manage']
 
 
 class RoundListSerializer(serializers.ModelSerializer):

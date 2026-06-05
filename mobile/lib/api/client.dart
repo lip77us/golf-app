@@ -378,6 +378,16 @@ class ApiClient {
         .toList();
   }
 
+  /// Tees available at a foursome's COURSE (for the tee-box editor). Sourced
+  /// from the round's course, not the viewer's account — so a cross-account
+  /// scorer (TD or designated scorer) gets the right options.
+  Future<List<TeeInfo>> getFoursomeCourseTees(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/tees/');
+    return (data as List)
+        .map((t) => TeeInfo.fromJson(t as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---- Tournaments ----
 
   Future<List<Tournament>> getTournaments() async {
@@ -466,6 +476,21 @@ class ApiClient {
     return (data as List)
         .map((r) => SharedRoundSummary.fromJson(r as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Rounds (in other accounts) a TD designated me to score (Friends Phase 2b).
+  Future<List<ScoringRound>> getScoringForMe() async {
+    final data = await _get('/rounds/scoring-for-me/');
+    return (data as List)
+        .map((r) => ScoringRound.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// TD designates (or clears) a foursome member as its scorer.
+  Future<void> setFoursomeScorer(int foursomeId, int playerId,
+      {bool isScorer = true}) async {
+    await _post('/foursomes/$foursomeId/scorer/',
+        {'player_id': playerId, 'is_scorer': isScorer});
   }
 
   /// Permanently delete a casual round.  Only the creator may call this;

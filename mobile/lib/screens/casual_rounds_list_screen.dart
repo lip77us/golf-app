@@ -197,6 +197,14 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
       return;
     }
 
+    // Multi-group skins is a MULTI-foursome round: open the round overview so
+    // the user picks their own group to score (avoids auto-jumping to the wrong
+    // group) and the TD gets the per-foursome "Set scorer" menu there.
+    if (round.activeGames.contains('multi_skins')) {
+      await nav.pushNamed('/round', arguments: round.id);
+      return;
+    }
+
     // In-progress: jump straight to the game screen.
     // Setup screens auto-redirect to the play screen if the game is already
     // started, so routing through them is safe and handles the
