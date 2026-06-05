@@ -36,6 +36,10 @@ dependencies:
   # their own phone → TCPA / App Store safe).
   share_plus: ^10.1.4
 
+  # Renders the Halved brand mark (SVG) inline — e.g. the "On Halved"
+  # connected-golfer badge.
+  flutter_svg: ^2.0.16
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -47,6 +51,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/halved_icon.png
+    - assets/icon/halved_mark.svg
 
 # App-icon generation. Swap image_path to the final cut-ball logo later,
 # then re-run:  dart run flutter_launcher_icons

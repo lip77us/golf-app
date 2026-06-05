@@ -209,6 +209,10 @@ class PlayerProfile {
   /// the player form's "Linked App User" picker rebinds.
   final int? userId;
 
+  /// True when this golfer has signed up (a registered user's verified phone
+  /// matches this golfer's phone). Only populated by GET /api/players/.
+  final bool isOnApp;
+
   const PlayerProfile({
     required this.id,
     required this.name,
@@ -219,6 +223,7 @@ class PlayerProfile {
     this.phone = '',
     this.sex = 'M',
     this.userId,
+    this.isOnApp = false,
   });
 
   factory PlayerProfile.fromJson(Map<String, dynamic> j) => PlayerProfile(
@@ -231,6 +236,7 @@ class PlayerProfile {
         phone: j['phone'] as String? ?? '',
         sex: j['sex'] as String? ?? 'M',
         userId: j['user_id'] as int?,
+        isOnApp: j['is_on_app'] as bool? ?? false,
       );
 
   /// Compute a safe fallback initials string from a full name.  Matches

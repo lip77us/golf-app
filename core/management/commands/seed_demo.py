@@ -277,7 +277,11 @@ class Command(BaseCommand):
                 user.save()
                 Token.objects.get_or_create(user=user)
                 player.user = user
-                player.save(update_fields=['user'])
+                # Mirror the verified phone onto the Player so this golfer
+                # shows "On Halved" in My Golfers (is_on_app phone-match).
+                if r.get('phone'):
+                    player.phone = r['phone']
+                player.save(update_fields=['user', 'phone'])
             players[r['name']] = player
         self.stdout.write(f"  Created {len(players)} players "
                           f"({sum(1 for r in ROSTER if r.get('login'))} with logins).")

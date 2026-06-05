@@ -19,6 +19,7 @@ import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
+import '../widgets/halved_mark.dart';
 import 'player_form_screen.dart';
 
 // Group badge colours — mirrors new_round_wizard.dart
@@ -394,7 +395,16 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                     onChanged: (_) => setState(() {
                       sel ? _selectedIds.remove(p.id) : _selectedIds.add(p.id);
                     }),
-                    title    : Text(p.name),
+                    title    : Row(
+                      children: [
+                        Flexible(child: Text(p.name,
+                            overflow: TextOverflow.ellipsis)),
+                        if (p.isOnApp) ...[
+                          const SizedBox(width: 6),
+                          const HalvedMark(size: 18),
+                        ],
+                      ],
+                    ),
                     subtitle : Text('Hcp ${p.handicapIndex}'),
                     secondary: CircleAvatar(
                       backgroundColor: sel

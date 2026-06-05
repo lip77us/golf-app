@@ -9,6 +9,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/halved_mark.dart';
 import 'player_form_screen.dart';
 
 class PlayerListScreen extends StatefulWidget {
@@ -214,7 +215,19 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
               ),
             ),
           ),
-          title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(p.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis),
+              ),
+              if (p.isOnApp) ...[
+                const SizedBox(width: 8),
+                const HalvedMark(size: 20),
+              ],
+            ],
+          ),
           subtitle: Text(
             [
               'Hcp ${p.handicapIndex}',
@@ -222,17 +235,35 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
             ].join('  ·  '),
             style: const TextStyle(fontSize: 13),
           ),
-          // Admins get an explicit delete icon as well as swipe-to-
-          // dismiss — discoverability beats hiding deletion behind
-          // a swipe gesture.
-          trailing: isAdmin
-              ? IconButton(
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Invite golfers who aren't on the app yet (personalized share).
+              if (!p.isOnApp)
+                Builder(
+                  builder: (btnCtx) => IconButton(
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    tooltip: 'Invite ${p.name}',
+                    onPressed: () => shareInvite(
+                      btnCtx.read<AuthProvider>(),
+                      ScaffoldMessenger.of(btnCtx),
+                      origin: shareOriginFrom(btnCtx),
+                      inviteeName: p.name,
+                    ),
+                  ),
+                ),
+              // Admins get an explicit delete icon as well as swipe-to-dismiss.
+              if (isAdmin)
+                IconButton(
                   icon: Icon(Icons.delete_outline,
                       color: Theme.of(context).colorScheme.error),
                   tooltip: 'Remove player',
                   onPressed: () => _delete(p),
                 )
-              : const Icon(Icons.chevron_right, color: Colors.grey),
+              else
+                const Icon(Icons.chevron_right, color: Colors.grey),
+            ],
+          ),
           onTap: () => _openForm(player: p),
         );
 

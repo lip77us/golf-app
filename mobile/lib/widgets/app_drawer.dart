@@ -224,12 +224,18 @@ Future<void> shareInvite(
   AuthProvider auth,
   ScaffoldMessengerState messenger, {
   Rect? origin,
+  String? inviteeName,
 }) async {
   try {
     final info = await auth.client.getInvite();
+    final name = inviteeName?.trim() ?? '';
+    final text = name.isEmpty
+        ? info.shareText
+        : '$name, join me on Halved — the easiest way to track our golf '
+          'bets. ${info.url}';
     try {
       await Share.share(
-        info.shareText,
+        text,
         subject: 'Join me on Halved',
         // iOS needs a valid, non-zero anchor; fall back to a 1×1 rect if the
         // caller couldn't supply one (it's only the popover anchor on iPad —

@@ -8,6 +8,7 @@ import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/halved_mark.dart';
 import '../widgets/inline_message.dart';
 import 'catalog_add_screen.dart';
 import 'player_form_screen.dart';
@@ -652,6 +653,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                if (player.isOnApp) ...[
+                                  const SizedBox(width: 6),
+                                  const HalvedMark(size: 18),
+                                ],
                                 if (isLockedIn) ...[
                                   const SizedBox(width: 6),
                                   Chip(

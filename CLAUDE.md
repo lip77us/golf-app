@@ -222,6 +222,32 @@ write-scoring slice where it's actually needed).
   tournament rounds, recycled-number safeguards, tightening LeaderboardView's
   open-by-id read.
 
+### Connected golfers roster — implemented
+"My Golfers" now shows which golfers have signed up ("On Halved"), unifying
+golfers=friends (a golfer is just a friend who hasn't signed up yet). Phone-
+matched, no schema change — the connection is emergent (invite a golfer → they
+sign up with that number → badge appears; same match as Phase 2a).
+- Backend: `PlayerSerializer.is_on_app` (SerializerMethodField); `PlayerListView`
+  computes an `on_app_phones` set (one `User.objects.filter(phone__in=...)` over
+  the normalized golfer phones) and passes it via context. Test:
+  `api/test_players_on_app.py`. Single-player uses (login/me) default `is_on_app`
+  False (no context).
+- Mobile: `PlayerProfile.isOnApp`; the **Halved mark** badge (`HalvedMark`
+  widget, `flutter_svg` rendering `assets/icon/halved_mark.svg`) flags signed-up
+  golfers in **My Golfers, casual round setup, and tournament setup** pickers; a
+  per-golfer **Invite** button (personalized share) appears on the rest;
+  `shareInvite(..., inviteeName:)` builds a named message.
+- Final logo: `mobile/assets/icon/halved_mark.svg` (H + flagstick in a mint cup)
+  is bundled and used for the connected badge. **Still pending for the next App
+  Store upload:** swap the app icon (re-run `flutter_launcher_icons` from a
+  1024px PNG of this mark) and the splash/drawer text wordmarks → `Image`/`Svg`.
+- Demo: `seed_demo` mirrors each login user's phone onto its `Player.phone`, so
+  the 4 login golfers show "On Halved" and the 8 others show as invitable.
+- Prerequisite for the **next slice: delegated cross-account scoring** — TD sets
+  foursomes of (mostly login-less) golfers, designates ≥1 app scorer per
+  foursome (even day-of, not enforced at setup) via a per-foursome scorer grant
+  (cross-account write); the scorer enters all four scores.
+
 Tests: `accounts/test_otp.py` (normalization, request→verify happy paths,
 self-signup, wrong/expired/too-many-attempts, rate-limit, phone uniqueness, and
 legacy password login still works).

@@ -45,12 +45,25 @@ class PlayerSerializer(serializers.ModelSerializer):
         help_text='ID of the Account member to link to this Player. '
                   'Pass null or 0 to unlink.',
     )
+    # True when a registered user exists whose verified phone matches this
+    # golfer's (normalized) phone — i.e. this golfer is "on the app". Computed
+    # only when the list view supplies `on_app_phones` in context; defaults
+    # False for single-player uses (login/me).
+    is_on_app = serializers.SerializerMethodField()
 
     class Meta:
         model  = Player
         fields = ['id', 'name', 'short_name', 'handicap_index', 'is_phantom',
-                  'email', 'phone', 'sex', 'user_id']
+                  'email', 'phone', 'sex', 'user_id', 'is_on_app']
         read_only_fields = ['id']
+
+    def get_is_on_app(self, obj) -> bool:
+        from accounts.phone import normalize
+        phones = self.context.get('on_app_phones')
+        if not phones:
+            return False
+        n = normalize(obj.phone)
+        return bool(n and n in phones)
         # short_name is writeable but optional — the Player.save() override
         # auto-fills it from initials when blank, so the mobile form can
         # either send a value or leave it out entirely.

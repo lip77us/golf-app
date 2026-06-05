@@ -1125,13 +1125,28 @@ class DeleteAccountView(APIView):
 
 class PlayerListView(APIView):
     def get(self, request):
-        players = (
+        players = list(
             Player.objects
             .for_account(request.user.account)
             .filter(is_phantom=False)
             .order_by('name')
         )
-        return Response(PlayerSerializer(players, many=True).data)
+        # "On the app" = a registered user's verified phone matches this
+        # golfer's normalized phone. One query over the candidate phones.
+        from django.contrib.auth import get_user_model
+        from accounts.phone import normalize
+        normalized = {normalize(p.phone) for p in players if p.phone}
+        normalized.discard(None)
+        on_app_phones = set(
+            get_user_model().objects
+            .filter(phone__in=normalized)
+            .values_list('phone', flat=True)
+        ) if normalized else set()
+
+        data = PlayerSerializer(
+            players, many=True, context={'on_app_phones': on_app_phones},
+        ).data
+        return Response(data)
 
     def post(self, request):
         # Roster management (create) is admin-only, matching delete and

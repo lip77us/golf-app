@@ -1,0 +1,20 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="1024" height="1024" fill="#0B1F1A"/>
+
+  <!-- HOLE BACK: mint cup with dark interior leaving a back rim -->
+  <ellipse cx="702" cy="838" rx="120" ry="42" fill="#3BD89A"/>
+  <ellipse cx="702" cy="828" rx="112" ry="36" fill="#0B1F1A"/>
+
+  <!-- H left leg (thick) -->
+  <rect x="288" y="262" width="118" height="600" rx="22" fill="#F3F1EA"/>
+  <!-- H right leg = thin flagstick, planted into the cup -->
+  <rect x="676" y="210" width="52" height="640" rx="24" fill="#F3F1EA"/>
+  <!-- Crossbar -->
+  <rect x="406" y="486" width="270" height="96" fill="#F3F1EA"/>
+
+  <!-- HOLE FRONT LIP drawn over the pin so the pin reads as going into the cup -->
+  <path d="M582 838 A120 42 0 0 0 822 838 L822 844 A120 42 0 0 1 582 844 Z" fill="#3BD89A"/>
+
+  <!-- Triangular pennant, flown high, breaking right, cream -->
+  <path d="M728 224 L956 314 L728 404 Z" fill="#F3F1EA"/>
+</svg>
