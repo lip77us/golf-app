@@ -19,6 +19,7 @@ import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
+import 'player_form_screen.dart';
 
 // Group badge colours — mirrors new_round_wizard.dart
 const _groupColors = [
@@ -122,6 +123,21 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
     } catch (e) {
       if (mounted) setState(() { _loadError = friendlyError(e); _loading = false; });
     }
+  }
+
+  /// Inline-create a login-less golfer during round setup, then add them to the
+  /// roster and auto-select them. Reuses PlayerFormScreen, which pops the saved
+  /// PlayerProfile.
+  Future<void> _addGolfer() async {
+    final created = await Navigator.of(context).push<PlayerProfile>(
+      MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
+    );
+    if (created == null || !mounted) return;
+    setState(() {
+      _allPlayers = [..._allPlayers, created]
+        ..sort((a, b) => a.name.compareTo(b.name));
+      _selectedIds.add(created.id);
+    });
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────
@@ -348,7 +364,22 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
           ),
         ]),
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: 4),
+
+      // Inline "Add a golfer" — create a login-less golfer without leaving
+      // round setup; the new golfer is added to the list and auto-selected.
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: TextButton.icon(
+            onPressed: _addGolfer,
+            icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+            label: const Text('Add a golfer'),
+          ),
+        ),
+      ),
+      const SizedBox(height: 4),
 
       Expanded(
         child: filtered.isEmpty

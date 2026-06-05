@@ -9,6 +9,7 @@ import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
+import 'player_form_screen.dart';
 
 class CasualRoundScreen extends StatefulWidget {
   const CasualRoundScreen({super.key});
@@ -169,6 +170,23 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         });
       },
     );
+  }
+
+  /// Inline-create a login-less golfer during casual-round setup. Adds them to
+  /// the roster and, if a course is already chosen, auto-selects them with their
+  /// default tee. Reuses PlayerFormScreen (which pops the saved PlayerProfile).
+  Future<void> _addGolfer() async {
+    final created = await Navigator.of(context).push<PlayerProfile>(
+      MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
+    );
+    if (created == null || !mounted) return;
+    setState(() {
+      _players = [..._players, created]
+        ..sort((a, b) => a.name.compareTo(b.name));
+    });
+    if (_selectedCourse != null) {
+      _onPlayerToggle(created.id, true);
+    }
   }
 
   void _onPlayerToggle(int playerId, bool selected) {
@@ -499,7 +517,18 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           ],
           const SizedBox(height: 24),
 
-          Text('Select Players & Tees', style: Theme.of(context).textTheme.titleLarge),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Select Players & Tees',
+                  style: Theme.of(context).textTheme.titleLarge),
+              TextButton.icon(
+                onPressed: _addGolfer,
+                icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+                label: const Text('Add a golfer'),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
 
           if (_selectedCourse == null)

@@ -32,6 +32,16 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
   final _formKey  = GlobalKey<FormState>();
   final _codeCtrl = TextEditingController();
 
+  /// The dev-only code to display. Seeded from the initial request and
+  /// refreshed whenever the user resends, so the hint never goes stale.
+  String? _debugCode;
+
+  @override
+  void initState() {
+    super.initState();
+    _debugCode = widget.debugCode;
+  }
+
   @override
   void dispose() {
     _codeCtrl.dispose();
@@ -57,9 +67,15 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
 
   Future<void> _resend() async {
     final auth = context.read<AuthProvider>();
-    await auth.requestOtp(widget.phone);
+    // Capture the fresh dev code so the on-screen hint reflects the NEW code;
+    // the previous one is invalidated server-side on reissue.
+    final newDebugCode = await auth.requestOtp(widget.phone);
     if (!mounted) return;
     if (auth.error == null) {
+      setState(() {
+        _debugCode = newDebugCode;
+        _codeCtrl.clear();
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('A new code was sent.')),
       );
@@ -87,10 +103,10 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                     style: theme.textTheme.bodyLarge,
                     textAlign: TextAlign.center,
                   ),
-                  if (widget.debugCode != null) ...[
+                  if (_debugCode != null) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Dev code: ${widget.debugCode}',
+                      'Dev code: $_debugCode',
                       style: theme.textTheme.bodySmall
                           ?.copyWith(color: theme.colorScheme.outline),
                     ),

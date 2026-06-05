@@ -135,6 +135,48 @@ Reviewers still use password login in prod (console SMS can't reach Apple).
 **NOT in scope** (deferred per §12): billing/IAP, metered free tier,
 claimable-pending-player merge, device-initiated Messages invites.
 
+---
+
+## Friends — Phase 1 ("My Golfers" roster + invite link) — implemented
+
+First step toward "play with friends who also use the app," scoped deliberately
+small because one-account-per-user isolates every tenant (a round's players /
+scores all live in one account; `PlayerListView` is filtered to
+`request.user.account`).
+
+**Key reuse:** the existing per-account `Player` roster already does most of it.
+Every phone signup is `is_account_admin=True`, so the user can already add
+**login-less** golfers (name + handicap, phone optional) via the roster and reuse
+them across rounds. Phase 1 just reframes + extends it:
+- **"My Golfers"** relabel: drawer entry + `PlayerListScreen` title (was
+  "Players"). Same screen/routes/`getPlayers()`.
+- **Inline "Add a golfer"** during round setup (`setup_round_players_screen.dart`,
+  `casual_round_screen.dart`): pushes `PlayerFormScreen`, which now **pops the
+  saved `PlayerProfile`** (was `true`) so the new golfer is added to the list and
+  auto-selected. The one existing caller (`player_list_screen.dart`) was updated
+  to `push<PlayerProfile>` + null-check.
+
+**Invite / download link (viral, user-initiated → TCPA/Apple safe):**
+- `accounts.User.invite_code` (unique, lazy-minted via `ensure_invite_code()`,
+  same base32-8 scheme as `Round.watch_token`). Migration `accounts/0006`.
+- `GET /api/invite/` (`InviteView`) → `{code, url, share_text}`; `url` built from
+  `request.build_absolute_uri` (correct in dev + prod).
+- Public landing page `GET /i/<code>/` (`api/invite_views.py`, AllowAny, plain
+  HTML like `watch_views.py`) → "<First> invited you to Halved" + a download
+  button to `APP_DOWNLOAD_URL` (settings, env-overridable placeholder until the
+  App Store listing is live). Route in `my_golf_app/urls.py`.
+- Mobile: **`share_plus`** dep; `ApiClient.getInvite()`; `shareInvite()` helper +
+  "Invite Friends" drawer entry (`app_drawer.dart`) and a My Golfers app-bar
+  button → native share sheet (user texts it from their own phone).
+
+Tests: `accounts/test_invite.py` (code minted once + stable; `/api/invite/` shape
++ auth-required; landing 200 for real code, 404 otherwise).
+
+**Deferred to Phase 2** (the parts that must solve the `PROTECT` / account-scoping
+wall): claim-on-signup (link a friend's new login to a login-less player you
+created — player can't move accounts, so it'd link in place) and cross-account
+shared-round visibility + live multi-phone scoring.
+
 Tests: `accounts/test_otp.py` (normalization, request→verify happy paths,
 self-signup, wrong/expired/too-many-attempts, rate-limit, phone uniqueness, and
 legacy password login still works).

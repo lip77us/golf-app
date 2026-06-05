@@ -982,6 +982,30 @@ class OtpVerifyView(APIView):
         return Response(body)
 
 
+class InviteView(APIView):
+    """
+    GET /api/invite/
+
+    The caller's personal invite link + a ready-to-send message.  The mobile
+    app feeds `share_text` into the native share sheet so the user texts it from
+    their OWN phone (user-initiated → TCPA / App Store safe; freemium §12).
+
+    Returns: { "code": "ABC23XYZ",
+               "url": "https://.../i/ABC23XYZ/",
+               "share_text": "Join me on Halved ... <url>" }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        code = request.user.ensure_invite_code()
+        url  = request.build_absolute_uri(f'/i/{code}/')
+        share_text = (
+            'Join me on Halved — the easiest way to track golf bets with your '
+            f'group. {url}'
+        )
+        return Response({'code': code, 'url': url, 'share_text': share_text})
+
+
 class LogoutView(APIView):
     """POST /api/auth/logout/ — invalidates the current token."""
     permission_classes = [IsAuthenticated]

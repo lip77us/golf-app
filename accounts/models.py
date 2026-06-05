@@ -153,8 +153,33 @@ class User(AbstractUser):
         null=True, blank=True,
         help_text="When the phone number was last verified via SMS OTP.",
     )
+    # Personal viral invite code → public landing page at /i/<code>/.  Minted
+    # lazily on first use (see ensure_invite_code); stable per user thereafter.
+    invite_code = models.CharField(
+        max_length=12, unique=True, null=True, blank=True,
+        help_text="Stable per-user code for the public invite link /i/<code>/.",
+    )
 
     objects = AccountUserManager()
+
+    def ensure_invite_code(self) -> str:
+        """
+        Return this user's invite code, minting a stable one on first call.
+
+        Uses the same scheme as Round.watch_token: an 8-char base32-ish code
+        (no 0/1/I/O) with collision retry — 32**8 ≈ 1.1 trillion combinations.
+        """
+        if not self.invite_code:
+            import secrets
+            import string
+            alphabet = string.ascii_uppercase + '23456789'
+            for _ in range(5):
+                candidate = ''.join(secrets.choice(alphabet) for _ in range(8))
+                if not type(self).objects.filter(invite_code=candidate).exists():
+                    self.invite_code = candidate
+                    break
+            self.save(update_fields=['invite_code'])
+        return self.invite_code
 
     class Meta:
         constraints = [

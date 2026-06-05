@@ -31,7 +31,16 @@ class SmsError(Exception):
 
 
 def _console_send(phone: str, body: str) -> None:
-    logger.info("[SMS] to=%s body=%s", phone, body)
+    # Prominent banner so the passcode is easy to spot in the runserver log
+    # during local dev (no real SMS is sent on the console backend).
+    logger.info(
+        "\n"
+        "============================================================\n"
+        "  [SMS / console]  to %s\n"
+        "  %s\n"
+        "============================================================",
+        phone, body,
+    )
 
 
 def _twilio_send(phone: str, body: str) -> None:

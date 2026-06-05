@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../api/client.dart';
 import '../config.dart';
@@ -135,8 +136,22 @@ class AppDrawer extends StatelessWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.people_outline),
-                  title: const Text('Players'),
+                  title: const Text('My Golfers'),
                   onTap: onPlayersTap,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.person_add_alt_1_outlined),
+                  title: const Text('Invite Friends'),
+                  onTap: () {
+                    // Capture provider + messenger + share anchor BEFORE
+                    // popping the drawer, so we don't touch a deactivated
+                    // context after the await.
+                    final auth      = context.read<AuthProvider>();
+                    final messenger = ScaffoldMessenger.of(context);
+                    final origin    = shareOriginFrom(context);
+                    Navigator.of(context).pop();
+                    shareInvite(auth, messenger, origin: origin);
+                  },
                 ),
                 // Manage Members shows up only for account admins.  The
                 // drawer reads AuthProvider directly so host screens
@@ -176,6 +191,54 @@ class AppDrawer extends StatelessWidget {
           const SizedBox(height: 8),
         ],
       ),
+    );
+  }
+}
+
+/// The anchor rect from a tapped widget's render box, for the iOS share-sheet
+/// popover (`sharePositionOrigin`). iOS *requires* a non-zero rect or it throws
+/// "sharePositionOrigin: argument must be set". Compute this BEFORE popping the
+/// drawer (while the widget is still laid out); null if unavailable.
+Rect? shareOriginFrom(BuildContext context) {
+  final box = context.findRenderObject();
+  if (box is RenderBox && box.hasSize) {
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+  return null;
+}
+
+/// Fetches the caller's personal invite link and opens the native share sheet
+/// so they can text it to friends from their own phone (TCPA / App Store safe).
+/// Provider + messenger are passed in (captured before the drawer popped) to
+/// avoid using a deactivated BuildContext across the await.  [origin] anchors
+/// the iOS share popover (see [shareOriginFrom]).
+Future<void> shareInvite(
+  AuthProvider auth,
+  ScaffoldMessengerState messenger, {
+  Rect? origin,
+}) async {
+  try {
+    final info = await auth.client.getInvite();
+    try {
+      await Share.share(
+        info.shareText,
+        subject: 'Join me on Halved',
+        // iOS needs a valid, non-zero anchor; fall back to a 1×1 rect if the
+        // caller couldn't supply one (it's only the popover anchor on iPad —
+        // iPhone shows a bottom sheet regardless).
+        sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
+      );
+    } catch (e) {
+      // The link was fetched fine; only the share sheet failed (e.g. the
+      // native plugin isn't registered after a hot reload — cold-restart the
+      // app). Surface the real error and the link so it's still usable.
+      messenger.showSnackBar(
+        SnackBar(content: Text('Share unavailable ($e). Link: ${info.url}')),
+      );
+    }
+  } catch (e) {
+    messenger.showSnackBar(
+      SnackBar(content: Text('Could not create your invite link: $e')),
     );
   }
 }

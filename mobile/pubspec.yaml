@@ -32,6 +32,10 @@ dependencies:
   # Connectivity monitoring (offline detection)
   connectivity_plus: ^6.0.5
 
+  # Native share sheet for the "Invite Friends" link (user sends it from
+  # their own phone → TCPA / App Store safe).
+  share_plus: ^10.1.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

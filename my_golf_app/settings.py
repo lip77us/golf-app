@@ -262,6 +262,13 @@ TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN  = os.environ.get('TWILIO_AUTH_TOKEN', '')
 TWILIO_FROM        = os.environ.get('TWILIO_FROM', '')
 
+# Where the public invite landing page (/i/<code>/) sends people to download the
+# app.  Placeholder until the App Store listing is live; set via env in prod.
+APP_DOWNLOAD_URL   = os.environ.get(
+    'APP_DOWNLOAD_URL',
+    'https://lip77us.github.io/halved-legal/',
+)
+
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Client version compatibility
@@ -304,6 +311,13 @@ LOGGING = {
             'propagate': False,
         },
         'services': {
+            'handlers': ['console'],
+            'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        # Auth/account code — INFO so the console SMS backend prints OTP codes
+        # in dev (accounts.sms logs the passcode here when SMS_BACKEND=console).
+        'accounts': {
             'handlers': ['console'],
             'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO'),
             'propagate': False,

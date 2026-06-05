@@ -8,6 +8,7 @@ import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/app_drawer.dart';
 import 'player_form_screen.dart';
 
 class PlayerListScreen extends StatefulWidget {
@@ -60,12 +61,12 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
     // backend enforces this too, so this is just to avoid showing an
     // editable form that would fail to save with a 403.
     final readOnly = !context.read<AuthProvider>().isAdmin;
-    final saved = await Navigator.of(context).push<bool>(
+    final saved = await Navigator.of(context).push<PlayerProfile>(
       MaterialPageRoute(
         builder: (_) => PlayerFormScreen(player: player, readOnly: readOnly),
       ),
     );
-    if (saved == true) _load();
+    if (saved != null) _load();
   }
 
   Future<bool> _confirmDelete(PlayerProfile p) async {
@@ -131,8 +132,19 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
     final isAdmin = context.watch<AuthProvider>().isAdmin;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Players'),
+        title: const Text('My Golfers'),
         actions: [
+          Builder(
+            builder: (btnContext) => IconButton(
+              tooltip: 'Invite friends',
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              onPressed: () => shareInvite(
+                btnContext.read<AuthProvider>(),
+                ScaffoldMessenger.of(btnContext),
+                origin: shareOriginFrom(btnContext),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _load,

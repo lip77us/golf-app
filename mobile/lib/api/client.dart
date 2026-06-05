@@ -285,6 +285,12 @@ class ApiClient {
     return MeResult.fromJson(data as Map<String, dynamic>);
   }
 
+  /// The caller's personal invite link + share text (Friends Phase 1).
+  Future<InviteInfo> getInvite() async {
+    final data = await _get('/invite/');
+    return InviteInfo.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Reference data ----
 
   Future<List<PlayerProfile>> getPlayers() async {

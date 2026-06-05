@@ -168,13 +168,14 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
       final email = _emailCtrl.text.trim();
       final phone = _phoneCtrl.text.trim();
 
+      final PlayerProfile saved;
       if (_isEdit) {
         // Only rebind the link if it actually changed — pass through
         // explicitly so the server can distinguish "unlink" from
         // "leave alone".
         final originalUserId = widget.player!.userId;
         final linkChanged    = _linkedUserId != originalUserId;
-        await client.updatePlayer(
+        saved = await client.updatePlayer(
           widget.player!.id,
           name: name,
           // Always send short_name on edit: the server treats '' as
@@ -191,7 +192,7 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
       } else {
         final username = _usernameCtrl.text.trim();
         final password = _passwordCtrl.text;
-        await client.createPlayer(
+        saved = await client.createPlayer(
           name: name,
           // Only send when non-empty so the server's auto-fill on save()
           // kicks in for users who leave the field blank.
@@ -208,7 +209,11 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
         );
       }
 
-      if (mounted) Navigator.of(context).pop(true);
+      // Pop with the saved PlayerProfile so callers (e.g. the inline
+      // "Add a golfer" flow in round setup) can select it immediately.
+      // Existing callers just null-check the result, so this stays
+      // backward-compatible.
+      if (mounted) Navigator.of(context).pop(saved);
     } catch (e) {
       if (mounted) setState(() { _error = friendlyError(e); _saving = false; });
     }

@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 
 from api import watch_views
+from api import invite_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,4 +28,7 @@ urlpatterns = [
     # Shared by the mobile app's "Share Watch Link" button.
     path('watch/<str:token>/', watch_views.watch_cup_round,
          name='watch-cup-round'),
+
+    # Public invite landing page — shared by the in-app "Invite Friends" button.
+    path('i/<str:code>/', invite_views.invite_landing, name='invite-landing'),
 ]

@@ -163,6 +163,26 @@ class MeResult {
       );
 }
 
+/// Result of GET /api/invite/ — the user's personal invite link + a
+/// ready-to-send message for the native share sheet.
+class InviteInfo {
+  final String code;
+  final String url;
+  final String shareText;
+
+  const InviteInfo({
+    required this.code,
+    required this.url,
+    required this.shareText,
+  });
+
+  factory InviteInfo.fromJson(Map<String, dynamic> j) => InviteInfo(
+        code:      j['code']       as String? ?? '',
+        url:       j['url']        as String? ?? '',
+        shareText: j['share_text'] as String? ?? '',
+      );
+}
+
 // ---------------------------------------------------------------------------
 // Reference data
 // ---------------------------------------------------------------------------
