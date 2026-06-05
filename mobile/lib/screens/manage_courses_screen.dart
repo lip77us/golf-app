@@ -214,11 +214,14 @@ class _ManageCoursesScreenState extends State<ManageCoursesScreen> {
             title: Text(c.name,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: Text(
-              c.tees.isEmpty
-                  ? 'No tees configured'
-                  : '${c.tees.length} tee set'
-                    '${c.tees.length == 1 ? '' : 's'}  ·  '
-                    '${c.tees.map((t) => t.teeName).join(", ")}',
+              [
+                if (c.location.isNotEmpty) c.location,
+                c.tees.isEmpty
+                    ? 'No tees configured'
+                    : '${c.tees.length} tee set'
+                      '${c.tees.length == 1 ? '' : 's'}  ·  '
+                      '${c.tees.map((t) => t.teeName).join(", ")}',
+              ].join('\n'),
               style: const TextStyle(fontSize: 13),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,

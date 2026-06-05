@@ -192,6 +192,8 @@ def _adapt_course_detail(raw: dict) -> dict:
         'city'       : loc.get('city', ''),
         'state'      : loc.get('state', ''),
         'country'    : loc.get('country', ''),
+        'latitude'   : loc.get('latitude'),
+        'longitude'  : loc.get('longitude'),
         'tees'       : all_tees,
     }
 

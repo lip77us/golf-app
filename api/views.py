@@ -932,7 +932,9 @@ class OtpRequestView(APIView):
             return Response({'detail': str(exc)},
                             status=status.HTTP_400_BAD_REQUEST)
         body = {'sent': True}
-        if settings.DEBUG:
+        # `code` is None on the Twilio Verify backend (Twilio owns the code), so
+        # only echo it for the local backend under DEBUG.
+        if settings.DEBUG and code:
             body['debug_code'] = code
         return Response(body)
 
@@ -4562,12 +4564,19 @@ class CourseImportView(APIView):
             )
 
         from core.models import Course as CourseModel, Tee as TeeModel
+        from services.catalog import (
+            upsert_catalog_course, clone_catalog_to_account,
+        )
         from .serializers import CourseSerializer
 
-        # Limit duplicate-name detection to THIS account so a name
-        # collision in another tenant doesn't block import.
+        # Detect an existing copy in THIS account — prefer the stable
+        # golf_api_id, fall back to name for courses imported before it existed.
         existing = (
             CourseModel.objects
+            .for_account(request.user.account)
+            .filter(golf_api_id=str(course_id))
+            .first()
+            or CourseModel.objects
             .for_account(request.user.account)
             .filter(name=course_name)
             .first()
@@ -4582,66 +4591,35 @@ class CourseImportView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # ── Create or reuse the Course row ────────────────────────────────────
-        if existing:
-            course_obj = existing
-            # Backfill provenance on courses imported before golf_api_id existed.
-            if not course_obj.golf_api_id:
-                course_obj.golf_api_id = str(course_id)
-                course_obj.save(update_fields=['golf_api_id'])
-            TeeModel.objects.filter(course=course_obj).delete()
-        else:
-            course_obj = CourseModel.objects.create(
-                account=request.user.account,
-                name=course_name,
-                golf_api_id=str(course_id),
-            )
-
-        # ── Create Tee rows ───────────────────────────────────────────────────
         import logging as _logging
         _log = _logging.getLogger(__name__)
-
         tees = api_course.get('tees', [])
         _log.info(
             'CourseImportView: course_id=%s name=%r tee_count=%d',
             course_id, course_name, len(tees),
         )
+        incomplete_tees = [
+            t.get('name', '?') for t in tees if len(t.get('holes', [])) != 18
+        ]
+        for name in incomplete_tees:
+            _log.warning('Tee "%s" imported without full 18-hole data.', name)
 
-        incomplete_tees = []
-        for priority, tee_data in enumerate(tees, start=10):
-            holes = tee_data.get('holes', [])
-            if len(holes) != 18:
-                # Log but continue — slope/rating/par are still usable for
-                # handicap differential calculation even without per-hole data.
-                _log.warning(
-                    'Tee "%s" has %d holes (expected 18); importing anyway.',
-                    tee_data.get('name', '?'), len(holes),
-                )
-                incomplete_tees.append(tee_data.get('name', '?'))
-
-            TeeModel.objects.create(
-                course        = course_obj,
-                tee_name      = tee_data['name'] or 'Default',
-                slope         = max(55, min(155, tee_data['slope'])),
-                course_rating = tee_data['course_rating'],
-                par           = tee_data['par'],
-                sex           = tee_data['sex'],
-                sort_priority = priority,
-                holes         = [
-                    {
-                        'number'      : h['number'],
-                        'par'         : h['par'],
-                        'stroke_index': h['stroke_index'],
-                        'yards'       : h['yards'],
-                    }
-                    for h in holes  # ordered 1..N from the adapter
-                ],
-            )
+        # ── Upsert the shared catalog, then copy-on-add into this account ─────
+        catalog_course = upsert_catalog_course(api_course, course_id, course_name)
+        # Backfill provenance on a legacy name-matched copy so future re-imports
+        # dedupe by golf_api_id.
+        if existing is not None and not existing.golf_api_id:
+            existing.golf_api_id = str(course_id)
+            existing.save(update_fields=['golf_api_id'])
+        course_obj, created = clone_catalog_to_account(
+            catalog_course, request.user.account,
+            replace_tees=existing is not None,  # force_update path refreshes tees
+        )
 
         tee_count = TeeModel.objects.filter(course=course_obj).count()
         result = {
             'already_exists' : existing is not None,
-            'created'        : existing is None,
+            'created'        : created,
             'tees_imported'  : tee_count,
             'course'         : CourseSerializer(course_obj).data,
         }
@@ -4652,6 +4630,63 @@ class CourseImportView(APIView):
                 f'allocation will be unavailable): {", ".join(incomplete_tees)}'
             )
         return Response(result, status=status.HTTP_201_CREATED)
+
+
+class CatalogCourseListView(APIView):
+    """
+    GET /api/catalog/courses/?q=<text>
+
+    Search the SHARED course catalog (deduped across all accounts by
+    golf_api_id) by name or city.  This is the fast, free, network-shared source
+    a user adds courses from — a friend's imported course shows up here with no
+    re-import.  Each result carries `already_in_account` so the UI can show what
+    the caller has already added.
+    """
+    def get(self, request):
+        from django.db.models import Q
+        from core.models import CatalogCourse, Course as CourseModel
+        from .serializers import CatalogCourseSerializer
+
+        q = (request.query_params.get('q') or '').strip()
+        qs = CatalogCourse.objects.all()
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(city__icontains=q))
+        qs = qs.prefetch_related('tees')[:50]
+
+        owned_api_ids = set(
+            CourseModel.objects
+            .for_account(request.user.account)
+            .exclude(golf_api_id__isnull=True)
+            .values_list('golf_api_id', flat=True)
+        )
+        data = CatalogCourseSerializer(
+            qs, many=True, context={'owned_api_ids': owned_api_ids},
+        ).data
+        return Response({'courses': data})
+
+
+class CatalogCourseAddView(APIView):
+    """
+    POST /api/catalog/courses/<pk>/add/
+
+    Copy-on-add: clone a shared catalog course into the caller's account
+    (no GolfCourseAPI call).  Idempotent — returns the existing copy if the
+    account already has it.  The clone is account-owned, so tee priority and
+    any edits stay local.
+    """
+    def post(self, request, pk):
+        from core.models import CatalogCourse
+        from services.catalog import clone_catalog_to_account
+        from .serializers import CourseSerializer
+
+        catalog_course = get_object_or_404(CatalogCourse, pk=pk)
+        course, created = clone_catalog_to_account(
+            catalog_course, request.user.account,
+        )
+        return Response(
+            {'created': created, 'course': CourseSerializer(course).data},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
 
 class PinkBallFoursomeOrderView(APIView):

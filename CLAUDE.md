@@ -135,6 +135,25 @@ Reviewers still use password login in prod (console SMS can't reach Apple).
 **NOT in scope** (deferred per §12): billing/IAP, metered free tier,
 claimable-pending-player merge, device-initiated Messages invites.
 
+### Live SMS via Twilio Verify — implemented (off by default)
+OTP delivery is now pluggable via the `OTP_BACKEND` setting:
+- `local` (default) — our `PhoneOTP` table (hashed codes, TTL, attempts) +
+  `SMS_BACKEND` delivery (console in dev). Returns `debug_code` under DEBUG.
+  Production stays here until the env var is flipped, so nothing changes yet.
+- `twilio_verify` — **Twilio Verify** generates/sends/checks the code
+  (`accounts/twilio_verify.py`: `start_verification` / `check_verification`).
+  `accounts/otp.py` branches on `_use_twilio_verify()`; account-creation logic is
+  shared. Chosen over Programmable SMS because login is one code per user/device
+  (very low volume) and Verify owns code storage + most carrier compliance.
+
+Going live (env on Railway): `OTP_BACKEND=twilio_verify`, `TWILIO_ACCOUNT_SID`,
+`TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID`. `twilio` is in
+`requirements.txt`. Rollback = set `OTP_BACKEND=local`. Test tool:
+`python manage.py send_test_otp <phone> [--code <code>]` (never creates an
+account). Full from-scratch provisioning + toll-free/10DLC steps:
+`docs/twilio-verify-setup.md`. The long pole is carrier registration (multi-day
+approval) — start it early.
+
 ---
 
 ## Friends — Phase 1 ("My Golfers" roster + invite link) — implemented
@@ -180,6 +199,65 @@ shared-round visibility + live multi-phone scoring.
 Tests: `accounts/test_otp.py` (normalization, request→verify happy paths,
 self-signup, wrong/expired/too-many-attempts, rate-limit, phone uniqueness, and
 legacy password login still works).
+
+---
+
+## Shared course catalog + copy-on-add — implemented
+
+Solves the one-account-per-user course problem: previously every account
+re-imported the same real-world course (re-hitting GolfCourseAPI, N duplicate
+`Course` rows, no sharing). Now a **global deduped catalog** (keyed by
+`golf_api_id`) is the canonical source, and accounts **copy-on-add** from it.
+
+**Why copy, not reference:** tee priority is a LOCAL preference
+(`Tee.sort_priority`), and the app's tenant isolation assumes account-owned
+courses (`for_account()` = `.filter(account=acct)`; `Round.course` /
+`FoursomeMembership.tee` are `PROTECT` within-account). So each account gets its
+own `Course`/`Tee` clone — local edits stay local, scoping/scoring untouched.
+
+**Backend:**
+- `core/models.py`: `CatalogCourse` (`golf_api_id` unique, name + location, no
+  `account`) + `CatalogTee` (mirrors `Tee`; `default_sort_priority` seeds the
+  clone). `Course` gained `city/state/country/latitude/longitude`. Migration
+  `core/0006`.
+- `services/catalog.py`: `upsert_catalog_course()` (build/refresh catalog from
+  an adapted API course) + `clone_catalog_to_account()` (idempotent copy-on-add).
+- `CourseImportView` now **upserts the catalog then clones** into the caller's
+  account; `CoursePasteView` (custom courses) stays account-private — never
+  cataloged. `services/golf_api_client.py` `_adapt_course_detail` now keeps
+  lat/lng.
+- Endpoints (`IsAccountMember`): `GET /api/catalog/courses/?q=` (search
+  name/city, `already_in_account` flag) and `POST /api/catalog/courses/<id>/add/`
+  (clone, no API call). `CatalogCourseSerializer`; `CourseSerializer` gained
+  location. Tests: `api/test_catalog.py` (import populates catalog+copy; 2nd
+  account adds w/o API call; **local tee-priority isolation invariant**; search
+  owned-flag).
+- `seed_demo` seeds 3 shared-catalog courses (`golf_api_id` `seed-*`) so the
+  "Find your course" flow is demoable without a GolfCourseAPI key; `_teardown`
+  clears them on `--reset`.
+- `seed_catalog_from_courses` backfills the catalog from existing account
+  `Course` rows using their CURRENT data (preserves local mods; no API call).
+  Keyed by `golf_api_id`, else synthetic `local-<pk>` with `--include-custom`.
+  Flags: `--account <name>`, `--overwrite`. Helper `catalog_from_course()` in
+  `services/catalog.py`.
+
+**Mobile:** `CourseInfo` gained `city/state` (+`location` getter); new
+`CatalogCourse` model; `client.searchCatalog()` / `addCatalogCourse()`. New
+`catalog_add_screen.dart` ("Find your course"): **catalog-first search** with a
+"search the full database" fallback to the existing `CourseSearchScreen`
+(GolfCourseAPI import, which now also feeds the catalog); tapping a result
+clones + pops the `CourseInfo`. `manage_courses_screen` shows city/state.
+
+**Empty-account un-blocker (key UX):** `casual_round_screen.dart` shows a
+"Find your course to get started" empty-state when the account has no courses,
+and an "Add a course" button by the picker; both push `CatalogAddScreen`, then
+refresh courses+tees and **auto-select** the new course. No arbitrary
+pre-seeding (geography deferred) — the inline add is the guaranteed un-blocker.
+
+**Deferred:** pre-seeding / seed-from-inviter, "courses near me" (needs user
+location), catalog auto-refresh of copies, the same inline-add affordance in the
+tournament round path (`setup_round_players_screen.dart`), catalog admin UI
+(Django admin suffices).
 
 ---
 

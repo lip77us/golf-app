@@ -247,8 +247,31 @@ class CourseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Course
-        fields = ['id', 'name', 'golf_api_id', 'created_at', 'tees']
+        fields = ['id', 'name', 'golf_api_id',
+                  'city', 'state', 'country', 'latitude', 'longitude',
+                  'created_at', 'tees']
         read_only_fields = ['id', 'golf_api_id', 'created_at', 'tees']
+
+
+class CatalogCourseSerializer(serializers.ModelSerializer):
+    """
+    A shared-catalog course (search results + add-from-catalog).  `tee_count`
+    keeps the payload light; `already_in_account` is True when the requesting
+    account already has a copy (set via serializer context `owned_api_ids`).
+    """
+    tee_count          = serializers.IntegerField(source='tees.count', read_only=True)
+    already_in_account = serializers.SerializerMethodField()
+
+    class Meta:
+        from core.models import CatalogCourse
+        model  = CatalogCourse
+        fields = ['id', 'golf_api_id', 'name', 'city', 'state', 'country',
+                  'latitude', 'longitude', 'tee_count', 'already_in_account']
+        read_only_fields = fields
+
+    def get_already_in_account(self, obj) -> bool:
+        owned = self.context.get('owned_api_ids') or set()
+        return obj.golf_api_id in owned
 
 
 class TeeSerializer(serializers.ModelSerializer):

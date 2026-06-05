@@ -4,7 +4,7 @@ from django import forms
 from django.contrib import admin
 from django.utils.safestring import mark_safe
 
-from .models import Player, Tee, Course
+from .models import Player, Tee, Course, CatalogCourse, CatalogTee
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +99,23 @@ class TeeAdminForm(forms.ModelForm):
         widgets = {'holes': HolesWidget}
 
 
+class CatalogTeeAdminForm(forms.ModelForm):
+    class Meta:
+        model = CatalogTee
+        fields = '__all__'
+        widgets = {'holes': HolesWidget}
+
+
+class CatalogTeeInline(admin.TabularInline):
+    """Tees shown inline on the catalog course (holes edited on the row's own
+    page — too wide for the inline table)."""
+    model  = CatalogTee
+    extra  = 0
+    fields = ('tee_name', 'sex', 'default_sort_priority',
+              'slope', 'course_rating', 'par')
+    show_change_link = True
+
+
 # ---------------------------------------------------------------------------
 # Admin registrations
 # ---------------------------------------------------------------------------
@@ -120,9 +137,36 @@ class PlayerAdmin(admin.ModelAdmin):
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display  = ('name', 'created_at')
-    search_fields = ('name',)
+    list_display  = ('name', 'account', 'city', 'state', 'golf_api_id',
+                     'created_at')
+    list_filter   = ('account', 'state')
+    search_fields = ('name', 'city', 'golf_api_id')
     ordering      = ('name',)
+
+
+@admin.register(CatalogCourse)
+class CatalogCourseAdmin(admin.ModelAdmin):
+    """The shared, account-agnostic course catalog."""
+    list_display  = ('name', 'city', 'state', 'golf_api_id', 'tee_count',
+                     'updated_at')
+    list_filter   = ('state',)
+    search_fields = ('name', 'city', 'golf_api_id')
+    ordering      = ('name',)
+    inlines       = (CatalogTeeInline,)
+
+    @admin.display(description='tees')
+    def tee_count(self, obj):
+        return obj.tees.count()
+
+
+@admin.register(CatalogTee)
+class CatalogTeeAdmin(admin.ModelAdmin):
+    form          = CatalogTeeAdminForm
+    list_display  = ('catalog_course', 'tee_name', 'sex',
+                     'default_sort_priority', 'slope', 'course_rating', 'par')
+    list_filter   = ('catalog_course', 'sex')
+    search_fields = ('catalog_course__name', 'tee_name')
+    ordering      = ('catalog_course__name', 'default_sort_priority', 'tee_name')
 
 
 @admin.register(Tee)

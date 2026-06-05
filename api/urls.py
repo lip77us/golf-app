@@ -146,6 +146,10 @@ urlpatterns = [
     path('debug/singles-matches/', views.debug_singles_matches, name='api-debug-singles'),
     path('debug/singles-matches/<int:foursome_id>/fix/', views.debug_fix_singles_match, name='api-debug-singles-fix'),
 
+    # ---- Shared course catalog ----
+    path('catalog/courses/',              views.CatalogCourseListView.as_view(), name='api-catalog-courses'),
+    path('catalog/courses/<int:pk>/add/', views.CatalogCourseAddView.as_view(),  name='api-catalog-course-add'),
+
     # ---- Course import from GolfCourseAPI ----
     path('courses/golf-api/search/',                   views.GolfApiSearchView.as_view(),        name='api-golf-api-search'),
     path('courses/golf-api/courses/<int:course_id>/',  views.GolfApiCourseDetailView.as_view(),  name='api-golf-api-course-detail'),

@@ -257,10 +257,19 @@ GOLF_API_BASE_URL = os.environ.get('GOLF_API_BASE_URL', 'https://api.golfcoursea
 #   "twilio"            — real SMS via Twilio; requires the TWILIO_* values and
 #                         (for US) 10DLC registration.  Flip this in prod when
 #                         credentials are ready — no other code changes needed.
+# OTP_BACKEND selects how login codes are generated + checked:
+#   "local"         (default) — our PhoneOTP table; delivery via SMS_BACKEND.
+#                               Returns debug_code under DEBUG (dev/CI).
+#   "twilio_verify"           — Twilio Verify owns generate/send/check (prod).
+#                               Needs TWILIO_ACCOUNT_SID/AUTH_TOKEN + the Verify
+#                               service SID below. See docs/twilio-verify-setup.md.
+OTP_BACKEND        = os.environ.get('OTP_BACKEND', 'local')
+
 SMS_BACKEND        = os.environ.get('SMS_BACKEND', 'console')
 TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN  = os.environ.get('TWILIO_AUTH_TOKEN', '')
-TWILIO_FROM        = os.environ.get('TWILIO_FROM', '')
+TWILIO_FROM        = os.environ.get('TWILIO_FROM', '')           # Programmable SMS only
+TWILIO_VERIFY_SERVICE_SID = os.environ.get('TWILIO_VERIFY_SERVICE_SID', '')
 
 # Where the public invite landing page (/i/<code>/) sends people to download the
 # app.  Placeholder until the App Store listing is live; set via env in prod.

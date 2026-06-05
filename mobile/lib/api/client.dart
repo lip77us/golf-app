@@ -484,6 +484,26 @@ class ApiClient {
         .toList();
   }
 
+  /// Search the shared course catalog (deduped across accounts). Fast + free —
+  /// no GolfCourseAPI call. Includes courses any account has imported.
+  Future<List<CatalogCourse>> searchCatalog(String query) async {
+    final data = await _get(
+      '/catalog/courses/?q=${Uri.encodeComponent(query)}',
+    );
+    final list = (data as Map<String, dynamic>)['courses'] as List? ?? [];
+    return list
+        .map((c) => CatalogCourse.fromJson(c as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Copy-on-add: clone a catalog course into the caller's account (no API
+  /// call). Returns the account's own CourseInfo (idempotent).
+  Future<CourseInfo> addCatalogCourse(int catalogId) async {
+    final data = await _post('/catalog/courses/$catalogId/add/', {});
+    final m = data as Map<String, dynamic>;
+    return CourseInfo.fromJson(m['course'] as Map<String, dynamic>);
+  }
+
   Future<CourseInfo> getCourse(int id) async {
     final data = await _get('/courses/$id/');
     return CourseInfo.fromJson(data as Map<String, dynamic>);

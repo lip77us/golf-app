@@ -132,7 +132,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _sendCode,
                     height: 48,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+
+                  // SMS consent disclosure (carrier / toll-free verification
+                  // requirement): express opt-in shown at the point the user
+                  // requests a code.
+                  Text(
+                    'By continuing, you agree to receive a one-time login code '
+                    'by SMS. Message & data rates may apply. One-time codes '
+                    'only — no marketing.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.outline),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
 
                   TextButton(
                     onPressed: () =>

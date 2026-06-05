@@ -132,6 +132,7 @@ class Command(BaseCommand):
 
         players = self._create_roster(account)
         course, tee = self._create_course(account)
+        self._seed_catalog()
         admin_player = players['Paul Avery']
 
         self.stdout.write("Building casual rounds...")
@@ -235,6 +236,10 @@ class Command(BaseCommand):
         Course.objects.filter(account=account).delete()    # cascades Tees
         User.objects.filter(account=account).delete()       # cascades tokens
         account.delete()
+        # The shared catalog is account-agnostic; clear the demo seeds so a
+        # rebuild doesn't collide on the unique golf_api_id.
+        from core.models import CatalogCourse
+        CatalogCourse.objects.filter(golf_api_id__startswith='seed-').delete()
         self.stdout.write(self.style.WARNING(f"  Tore down existing '{ACCOUNT_NAME}'."))
 
     # -----------------------------------------------------------------------
@@ -275,6 +280,32 @@ class Command(BaseCommand):
         )
         self.stdout.write(f"  Created course: {course.name} ({tee.tee_name} tee)")
         return course, tee
+
+    def _seed_catalog(self):
+        """Seed the global shared catalog so the in-app 'Find your course' flow
+        is demoable without a GolfCourseAPI key.  The catalog is account-agnostic
+        (no tenant), so we seed it once per build."""
+        from core.models import CatalogCourse, CatalogTee
+        catalog = [
+            ('seed-1001', 'Riverbend Golf Club',   'Austin',     'TX'),
+            ('seed-1002', 'Lakeside Links',         'Minneapolis', 'MN'),
+            ('seed-1003', 'Coastal Pines Golf Course', 'Savannah', 'GA'),
+        ]
+        for api_id, name, city, state in catalog:
+            cc = CatalogCourse.objects.create(
+                golf_api_id=api_id, name=name, city=city, state=state,
+                country='United States',
+            )
+            for tname, slope, rating, pri in (
+                ('Blue', 130, Decimal('72.4'), 10),
+                ('White', 122, Decimal('70.6'), 20),
+            ):
+                CatalogTee.objects.create(
+                    catalog_course=cc, tee_name=tname, slope=slope,
+                    course_rating=rating, par=72, sex='M',
+                    default_sort_priority=pri, holes=DEMO_HOLES,
+                )
+        self.stdout.write(f"  Seeded {len(catalog)} shared-catalog courses.")
 
     def _make_round(self, account, course, status, active_games, *,
                     tournament=None, round_number=1, created_by=None,

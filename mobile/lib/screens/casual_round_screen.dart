@@ -9,6 +9,7 @@ import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
+import 'catalog_add_screen.dart';
 import 'player_form_screen.dart';
 
 class CasualRoundScreen extends StatefulWidget {
@@ -114,6 +115,36 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     } catch (e) {
       if (mounted) setState(() { _error = e; _loading = false; });
     }
+  }
+
+  /// Find/add a course via the catalog (catalog-first, GolfCourseAPI fallback),
+  /// then refresh courses+tees and auto-select the new one. This is the
+  /// brand-new-account un-blocker: an account with no courses can add its home
+  /// course inline without leaving round setup.
+  Future<void> _addCourse() async {
+    final added = await Navigator.of(context).push<CourseInfo>(
+      MaterialPageRoute(builder: (_) => const CatalogAddScreen()),
+    );
+    if (added == null || !mounted) return;
+    final client = context.read<AuthProvider>().client;
+    final results = await Future.wait([client.getCourses(), client.getTees()]);
+    if (!mounted) return;
+    setState(() {
+      _courses = results[0] as List<CourseInfo>;
+      _tees    = results[1] as List<TeeInfo>;
+      _selectedCourse =
+          _courses.firstWhere((c) => c.id == added.id, orElse: () => added);
+      // Now that a course is set, assign default tees to any selected players.
+      for (final pid in _playerTees.keys.toList()) {
+        final cur = _playerTees[pid];
+        final valid = cur != 0 && _availableTees.any((t) => t.id == cur);
+        if (!valid) {
+          final player = _players.firstWhere((p) => p.id == pid,
+              orElse: () => _players.first);
+          _playerTees[pid] = _defaultTeeIdForPlayer(player);
+        }
+      }
+    });
   }
 
   List<TeeInfo> get _availableTees {
@@ -434,6 +465,29 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         children: [
           Text('Select Course', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
+          if (_courses.isEmpty)
+            Card(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'No courses yet. Find your course to get started — '
+                      'courses other golfers have added show up instantly.',
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _addCourse,
+                      icon: const Icon(Icons.search),
+                      label: const Text('Find your course'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else ...[
           DropdownButtonFormField<CourseInfo>(
             value: _selectedCourse,
             isExpanded: true,
@@ -444,7 +498,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             ),
             items: _courses.map((c) => DropdownMenuItem(
               value: c,
-              child: Text(c.name),
+              child: Text(
+                c.location.isEmpty ? c.name : '${c.name}  ·  ${c.location}',
+                overflow: TextOverflow.ellipsis,
+              ),
             )).toList(),
             onChanged: (c) {
               setState(() {
@@ -472,6 +529,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               });
             },
           ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _addCourse,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add a course'),
+            ),
+          ),
+          ],
           const SizedBox(height: 24),
 
           Text('Games', style: Theme.of(context).textTheme.titleLarge),

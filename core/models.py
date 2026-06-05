@@ -267,6 +267,16 @@ class Course(models.Model):
                         help_text="Source GolfCourseAPI course id when imported "
                                   "from there; NULL for manual courses.",
                     )
+    # Location (from the course database) — used to display and disambiguate
+    # courses (e.g. "Lincoln Park — Chicago, IL") and to power name/city search.
+    # Carried onto the account copy when cloned from the shared catalog.
+    city            = models.CharField(max_length=80, blank=True)
+    state           = models.CharField(max_length=80, blank=True)
+    country         = models.CharField(max_length=80, blank=True)
+    latitude        = models.DecimalField(max_digits=9, decimal_places=6,
+                                          null=True, blank=True)
+    longitude       = models.DecimalField(max_digits=9, decimal_places=6,
+                                          null=True, blank=True)
     created_at      = models.DateTimeField(auto_now_add=True)
 
     objects         = AccountScopedManager()
@@ -314,3 +324,60 @@ class Tee(models.Model):
 
     def __str__(self):
         return f"{self.course.name} — {self.tee_name}"
+
+
+class CatalogCourse(models.Model):
+    """
+    A course in the shared, deduped catalog — the canonical source that any
+    account can pull from.  Populated automatically whenever someone imports a
+    course from the GolfCourseAPI (keyed by golf_api_id, so the same real-world
+    course is stored once network-wide).  NOT tenant-scoped (no `account`).
+
+    Accounts don't reference catalog rows directly: "adding" a catalog course
+    CLONES it into the account's own Course/Tee rows (see services/catalog.py /
+    CourseImportView), so each account keeps local edits — above all
+    Tee.sort_priority.  Hand-typed (pasted) courses never enter the catalog.
+    """
+    golf_api_id     = models.CharField(max_length=64, unique=True, db_index=True)
+    name            = models.CharField(max_length=150)
+    city            = models.CharField(max_length=80, blank=True)
+    state           = models.CharField(max_length=80, blank=True)
+    country         = models.CharField(max_length=80, blank=True)
+    latitude        = models.DecimalField(max_digits=9, decimal_places=6,
+                                          null=True, blank=True)
+    longitude       = models.DecimalField(max_digits=9, decimal_places=6,
+                                          null=True, blank=True)
+    created_at      = models.DateTimeField(auto_now_add=True)
+    updated_at      = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        loc = ', '.join(p for p in (self.city, self.state) if p)
+        return f"{self.name}{f' — {loc}' if loc else ''}"
+
+
+class CatalogTee(models.Model):
+    """One tee set on a CatalogCourse — mirrors Tee so a clone is a
+    field-for-field copy.  `default_sort_priority` seeds the cloned
+    Tee.sort_priority, which the owning account may then change locally."""
+    catalog_course        = models.ForeignKey(
+                                CatalogCourse, on_delete=models.CASCADE,
+                                related_name='tees',
+                            )
+    tee_name              = models.CharField(max_length=50)
+    slope                 = models.PositiveSmallIntegerField(
+                                validators=[MinValueValidator(55), MaxValueValidator(155)]
+                            )
+    course_rating         = models.DecimalField(max_digits=4, decimal_places=1)
+    par                   = models.PositiveSmallIntegerField(default=72)
+    holes                 = models.JSONField()
+    sex                   = models.CharField(
+                                max_length=1, choices=PlayerSex.choices,
+                                null=True, blank=True,
+                            )
+    default_sort_priority = models.PositiveSmallIntegerField(default=100)
+
+    def __str__(self):
+        return f"{self.catalog_course.name} — {self.tee_name}"

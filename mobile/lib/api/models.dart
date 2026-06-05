@@ -254,6 +254,8 @@ class PlayerProfile {
 class CourseInfo {
   final int id;
   final String name;
+  final String city;
+  final String state;
   /// Tees configured on this course.  Populated by GET /courses/
   /// (which prefetches them); empty when this CourseInfo was
   /// inflated from a thinner payload (e.g. round.course).
@@ -262,12 +264,20 @@ class CourseInfo {
   const CourseInfo({
     required this.id,
     required this.name,
+    this.city = '',
+    this.state = '',
     this.tees = const [],
   });
+
+  /// "City, ST" (or '' when unknown) for display/disambiguation.
+  String get location =>
+      [city, state].where((s) => s.isNotEmpty).join(', ');
 
   factory CourseInfo.fromJson(Map<String, dynamic> j) => CourseInfo(
         id: j['id'] as int,
         name: j['name'] as String,
+        city: j['city'] as String? ?? '',
+        state: j['state'] as String? ?? '',
         tees: (j['tees'] as List? ?? const [])
             .map((t) => CourseTeeSummary.fromJson(t as Map<String, dynamic>))
             .toList(),
@@ -278,6 +288,37 @@ class CourseInfo {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+/// A course in the shared catalog (GET /api/catalog/courses/).
+class CatalogCourse {
+  final int id;
+  final String name;
+  final String city;
+  final String state;
+  final int teeCount;
+  final bool alreadyInAccount;
+
+  const CatalogCourse({
+    required this.id,
+    required this.name,
+    this.city = '',
+    this.state = '',
+    this.teeCount = 0,
+    this.alreadyInAccount = false,
+  });
+
+  String get location =>
+      [city, state].where((s) => s.isNotEmpty).join(', ');
+
+  factory CatalogCourse.fromJson(Map<String, dynamic> j) => CatalogCourse(
+        id: j['id'] as int,
+        name: j['name'] as String,
+        city: j['city'] as String? ?? '',
+        state: j['state'] as String? ?? '',
+        teeCount: j['tee_count'] as int? ?? 0,
+        alreadyInAccount: j['already_in_account'] as bool? ?? false,
+      );
 }
 
 
