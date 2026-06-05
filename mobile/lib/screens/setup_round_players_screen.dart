@@ -17,6 +17,7 @@ import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
+import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/halved_mark.dart';
@@ -402,6 +403,26 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                         if (p.isOnApp) ...[
                           const SizedBox(width: 6),
                           const HalvedMark(size: 18),
+                        ] else ...[
+                          const SizedBox(width: 6),
+                          // Invite a golfer who isn't on the app yet
+                          // (personalized share, sent from the TD's phone).
+                          Builder(
+                            builder: (btnCtx) => IconButton(
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              tooltip: 'Invite ${p.name}',
+                              icon: const Icon(
+                                  Icons.person_add_alt_1_outlined, size: 18),
+                              onPressed: () => shareInvite(
+                                btnCtx.read<AuthProvider>(),
+                                ScaffoldMessenger.of(btnCtx),
+                                origin: shareOriginFrom(btnCtx),
+                                inviteeName: p.name,
+                              ),
+                            ),
+                          ),
                         ],
                       ],
                     ),

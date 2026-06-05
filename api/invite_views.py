@@ -36,13 +36,32 @@ def invite_landing(request, code: str):
 
     first = html.escape(_inviter_first_name(user))
     download_url = html.escape(getattr(settings, 'APP_DOWNLOAD_URL', '') or '#')
+    og_image = html.escape(getattr(settings, 'INVITE_OG_IMAGE_URL', '') or '')
+    page_url = html.escape(request.build_absolute_uri())
+    og_title = f"{first} invited you to Halved"
+    og_desc = ("Halved is the easiest way to track golf bets — skins, nassau, "
+               "points and more — with your group.")
+
+    # Open Graph / Twitter tags so the link shows a rich preview (logo + title)
+    # when shared in Messages, social apps, etc. (the share-sheet thumbnail).
+    og_image_tags = (
+        f'<meta property="og:image" content="{og_image}">\n'
+        f'  <meta name="twitter:card" content="summary_large_image">'
+        if og_image else '<meta name="twitter:card" content="summary">'
+    )
 
     page = f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{first} invited you to Halved</title>
+  <title>{og_title}</title>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Halved">
+  <meta property="og:title" content="{og_title}">
+  <meta property="og:description" content="{og_desc}">
+  <meta property="og:url" content="{page_url}">
+  {og_image_tags}
   <style>
     body {{ font-family: -apple-system, system-ui, sans-serif; background:#0b5a2b;
             color:#fff; margin:0; min-height:100vh; display:flex;

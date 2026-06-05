@@ -277,6 +277,12 @@ APP_DOWNLOAD_URL   = os.environ.get(
     'APP_DOWNLOAD_URL',
     'https://lip77us.github.io/halved-legal/',
 )
+# Logo image shown in the invite link's social/Messages preview (og:image).
+# Host a square PNG (≈512px) and point this at it; empty = no preview image.
+INVITE_OG_IMAGE_URL = os.environ.get(
+    'INVITE_OG_IMAGE_URL',
+    'https://lip77us.github.io/halved-legal/halved-icon.png',
+)
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
