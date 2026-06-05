@@ -41,6 +41,7 @@ urlpatterns = [
     path('rounds/',                      views.RoundCreateView.as_view(),     name='api-round-create'),
     path('rounds/casual/',               views.CasualRoundListView.as_view(), name='api-casual-rounds'),
     path('rounds/shared-with-me/',       views.SharedRoundsView.as_view(),    name='api-shared-rounds'),
+    path('rounds/scoring-for-me/',       views.ScoringForMeView.as_view(),    name='api-scoring-for-me'),
     path('rounds/<int:pk>/',             views.RoundDetailView.as_view(),     name='api-round-detail'),
     path('rounds/<int:pk>/setup/',       views.RoundSetupView.as_view(),    name='api-round-setup'),
     path('rounds/<int:pk>/complete/',    views.RoundCompleteView.as_view(), name='api-round-complete'),
@@ -59,6 +60,7 @@ urlpatterns = [
          name='api-foursome-swap-position'),
     path('foursomes/<int:pk>/phantom/init/', views.PhantomInitView.as_view(),         name='phantom-init'),
     path('foursomes/<int:pk>/scorecard/',    views.ScorecardView.as_view(),           name='api-scorecard'),
+    path('foursomes/<int:pk>/scorer/',       views.ScorerDesignateView.as_view(),     name='api-foursome-scorer'),
     path('foursomes/<int:pk>/scores/',       views.ScoreSubmitView.as_view(),         name='api-score-submit'),
 
     # ---- Nassau ----

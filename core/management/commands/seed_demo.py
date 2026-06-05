@@ -341,16 +341,22 @@ class Command(BaseCommand):
                             ('Dana Wu', 7.5, 'W'),
                             ('Eli Stone', 14.2, 'M'))
         ]
-        self._round(
-            acct, course, tee, 'complete', ['skins'],
+        rnd = self._round(
+            acct, course, tee, 'in_progress', ['skins'],
             [reviewer_guest, *extras],
-            holes=18, bet_unit='5.00',
+            holes=9, bet_unit='5.00',
             setup=lambda fs, ps: setup_skins(fs, carryover=True),
             calc=calculate_skins,
         )
+        # Friends Phase 2b: designate the reviewer guest as the foursome scorer,
+        # so the round also surfaces under the reviewer's "Scoring" list and
+        # they can enter scores cross-account.
+        FoursomeMembership.objects.filter(
+            foursome__round=rnd, player=reviewer_guest,
+        ).update(is_scorer=True)
         self.stdout.write(
-            f"  Seeded '{FRIEND_ACCOUNT_NAME}' shared round for the reviewer "
-            f"(guest phone {reviewer_guest.phone})."
+            f"  Seeded '{FRIEND_ACCOUNT_NAME}' shared+scoring round for the "
+            f"reviewer (guest phone {reviewer_guest.phone})."
         )
 
     def _make_round(self, account, course, status, active_games, *,

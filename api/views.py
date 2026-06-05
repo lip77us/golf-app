@@ -58,6 +58,10 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from accounts import otp as otp_service
+from accounts.scoring_access import (
+    foursome_for_scorer, round_for_scorer, round_for_reader,
+    tournament_for_reader,
+)
 from accounts.scoping import (
     account_get_or_404,
     account_qs,
@@ -1450,11 +1454,13 @@ class TournamentLeaderboardView(APIView):
     per-round leaderboard endpoint (/api/rounds/{id}/leaderboard/).
     """
     def get(self, request, pk):
-        tournament = get_object_or_404(
-            Tournament.objects.prefetch_related(
+        # Own-account OR a phone-matched participant (scorer included). Closes
+        # the prior open-by-id read while keeping cross-account scorers/viewers.
+        tournament = tournament_for_reader(
+            request.user, pk,
+            base=Tournament.objects.prefetch_related(
                 'rounds__foursomes__memberships__player',
             ),
-            pk=pk,
         )
         active_games = tournament.active_games or []
         games: dict  = {}
@@ -1578,9 +1584,9 @@ class RoundDetailView(APIView):
     )
 
     def get(self, request, pk):
-        round_obj = account_get_or_404(
-            Round, request.user.account, pk=pk, base=self._ROUND_QS,
-        )
+        # Own-account OR a designated scorer (so a cross-account scorer can open
+        # the round to enter scores). PATCH/DELETE below stay TD-only.
+        round_obj = round_for_scorer(request.user, pk, base=self._ROUND_QS)
         return Response(RoundSerializer(round_obj).data)
 
     def patch(self, request, pk):
@@ -1795,6 +1801,92 @@ class SharedRoundsView(APIView):
         return Response(results)
 
 
+class ScoringForMeView(APIView):
+    """
+    GET /api/rounds/scoring-for-me/
+
+    Multi-foursome rounds in OTHER accounts where a member flagged `is_scorer`
+    carries the caller's VERIFIED phone — i.e. rounds a TD designated me to
+    score. Phone-matched (delegated cross-account scoring). Returns the parent
+    round + `your_foursome_id` so the app opens straight to my group.
+    """
+    def get(self, request):
+        from accounts.phone import normalize
+
+        my_phone = getattr(request.user, 'phone', None)
+        if not my_phone:
+            return Response([])
+
+        rows = (
+            FoursomeMembership.objects
+            .filter(is_scorer=True)
+            .exclude(foursome__round__account=request.user.account)
+            .exclude(player__phone='')
+            .select_related(
+                'foursome__round__course', 'foursome__round__account',
+                'foursome__round__tournament', 'foursome__round__created_by',
+                'player',
+            )
+            .order_by('-foursome__round__date')
+        )
+
+        results, seen = [], set()
+        for m in rows:
+            if normalize(m.player.phone) != my_phone:
+                continue
+            r = m.foursome.round
+            if r.id in seen:
+                continue
+            seen.add(r.id)
+            t = r.tournament
+            group_label = (
+                (t.name if t is not None else None)
+                or (r.created_by.name if r.created_by_id else None)
+                or r.account.name
+            )
+            results.append({
+                'id':               r.id,
+                'date':             r.date,
+                'course_name':      r.course.name,
+                'status':           r.status,
+                'active_games':     r.active_games,
+                'group_label':      group_label,
+                'is_tournament':    t is not None,
+                'your_foursome_id': m.foursome_id,
+            })
+        return Response(results)
+
+
+class ScorerDesignateView(APIView):
+    """
+    POST /api/foursomes/<pk>/scorer/
+    Body: {"player_id": int, "is_scorer": true}
+
+    TD designates (or clears, is_scorer=false) a foursome member as its scorer —
+    delegated cross-account score entry. Own-account only; ≥1 scorer allowed.
+    The designated member should be on the app (phone-matched), but that isn't
+    enforced (they can install day-of).
+    """
+    def post(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        player_id = request.data.get('player_id')
+        flag = bool(request.data.get('is_scorer', True))
+        m = foursome.memberships.filter(player_id=player_id).first()
+        if m is None:
+            return Response(
+                {'detail': 'That player is not in this foursome.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        m.is_scorer = flag
+        m.save(update_fields=['is_scorer'])
+        scorer_ids = list(
+            foursome.memberships.filter(is_scorer=True)
+            .values_list('player_id', flat=True)
+        )
+        return Response({'foursome_id': foursome.id,
+                         'scorer_player_ids': scorer_ids})
+
+
 class RoundSetupView(APIView):
     """
     POST /api/rounds/{id}/setup/
@@ -1894,7 +1986,7 @@ class FoursomeActiveGamesView(APIView):
                 {'detail': 'Only staff members can configure foursome games.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         games = request.data.get('active_games', [])
         if not isinstance(games, list):
             return Response(
@@ -2001,11 +2093,11 @@ class FoursomeTeesView(APIView):
 
 class ScorecardView(APIView):
     def get(self, request, pk):
-        foursome = get_object_or_404(
-            Foursome.objects
+        foursome = foursome_for_scorer(
+            request.user, pk,
+            base=Foursome.objects
                     .select_related('round__course')
                     .prefetch_related('memberships__player'),
-            pk=pk,
         )
         return Response(_build_scorecard(foursome))
 
@@ -2035,7 +2127,7 @@ class PhantomInitView(APIView):
         }
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         if not foursome.has_phantom:
             return Response({'detail': 'This foursome has no phantom player.'},
                             status=400)
@@ -2094,11 +2186,11 @@ class ScoreSubmitView(APIView):
 
     @transaction.atomic
     def post(self, request, pk):
-        foursome = get_object_or_404(
-            Foursome.objects
+        foursome = foursome_for_scorer(
+            request.user, pk,
+            base=Foursome.objects
                     .select_related('round__course')
                     .prefetch_related('memberships__player'),
-            pk=pk,
         )
 
         ser = ScoreSubmitSerializer(data=request.data)
@@ -2916,9 +3008,13 @@ class RoundMovePlayerView(APIView):
 
 class LeaderboardView(APIView):
     def get(self, request, pk):
-        round_obj = get_object_or_404(
-            Round.objects.select_related('course', 'tournament').prefetch_related('foursomes'),
-            pk=pk,
+        # Own-account, a designated scorer, OR a phone-matched participant
+        # (preserves Friends Phase 2a "Shared with me"). Closes the prior
+        # open-by-id read.
+        round_obj = round_for_reader(
+            request.user, pk,
+            base=Round.objects.select_related('course', 'tournament')
+                    .prefetch_related('foursomes'),
         )
         t          = round_obj.tournament
         # Cup competitions store their display name on the TeamTournament
@@ -2966,7 +3062,7 @@ class NassauSetupView(APIView):
     reflected immediately.  Safe to call repeatedly.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         ser = NassauSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
@@ -2996,7 +3092,7 @@ class NassauPressView(APIView):
     Returns the updated nassau summary.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         ser = NassauPressSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -3012,7 +3108,7 @@ class NassauPressView(APIView):
 class NassauResultView(APIView):
     """GET /api/foursomes/{id}/nassau/"""
     def get(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from services.nassau import nassau_summary
         summary = nassau_summary(foursome)
         if summary is None:
@@ -3034,7 +3130,7 @@ class SixesSetupView(APIView):
     See services/sixes.py for segment dict format.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         ser = SixesSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -3060,7 +3156,7 @@ class SixesExtraTeamsView(APIView):
     standard segments or hole results.  Returns the full sixes summary.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from games.models import SixesSegment, SixesTeam
         from services.sixes import sixes_summary
 
@@ -3126,7 +3222,7 @@ class SixesExtraTeamsView(APIView):
 class SixesResultView(APIView):
     """GET /api/foursomes/{id}/sixes/"""
     def get(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from services.sixes import sixes_summary
         return Response(sixes_summary(foursome))
 
@@ -3148,7 +3244,7 @@ class Points531SetupView(APIView):
     idempotent.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         ser = Points531SetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -3174,7 +3270,7 @@ class Points531SetupView(APIView):
 class Points531ResultView(APIView):
     """GET /api/foursomes/{id}/points_531/"""
     def get(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from services.points_531 import points_531_summary
         return Response(points_531_summary(foursome))
 
@@ -3199,7 +3295,7 @@ class SkinsSetupView(APIView):
     repeatedly.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from api.serializers import SkinsSetupSerializer
         ser = SkinsSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -3220,7 +3316,7 @@ class SkinsSetupView(APIView):
 class SkinsResultView(APIView):
     """GET /api/foursomes/{id}/skins/"""
     def get(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from services.skins import skins_summary
         return Response(skins_summary(foursome))
 
@@ -3238,7 +3334,7 @@ class SkinsJunkView(APIView):
     mistake without leaving orphan rows).  Returns the updated summary.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from api.serializers import SkinsJunkSerializer
         ser = SkinsJunkSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -3292,7 +3388,7 @@ class WolfSetupView(APIView):
     Idempotent.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from api.serializers import WolfSetupSerializer
         ser = WolfSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -3319,7 +3415,7 @@ class WolfSetupView(APIView):
 class WolfResultView(APIView):
     """GET /api/foursomes/{id}/wolf/"""
     def get(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from services.wolf import wolf_summary
         return Response(wolf_summary(foursome))
 
@@ -3333,7 +3429,7 @@ class WolfOrderView(APIView):
     the refreshed summary.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from api.serializers import WolfOrderSerializer
         ser = WolfOrderSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -3363,7 +3459,7 @@ class WolfDecisionView(APIView):
     that hole (must be a different real player; 4-player games only).
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from api.serializers import WolfDecisionSerializer
         ser = WolfDecisionSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -3436,7 +3532,7 @@ class RabbitSetupView(APIView):
     scores already on file are reflected in the first summary.  Idempotent.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from api.serializers import RabbitSetupSerializer
         ser = RabbitSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -3457,7 +3553,7 @@ class RabbitSetupView(APIView):
 class RabbitResultView(APIView):
     """GET /api/foursomes/{id}/rabbit/"""
     def get(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from services.rabbit import rabbit_summary
         return Response(rabbit_summary(foursome))
 
@@ -3484,7 +3580,7 @@ class TripleCupSetupView(APIView):
     reflects any hole scores already on file.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from api.serializers import TripleCupSetupSerializer
         ser = TripleCupSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -3516,7 +3612,7 @@ class TripleCupSetupView(APIView):
 class TripleCupResultView(APIView):
     """GET /api/foursomes/{id}/triple-cup/"""
     def get(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from services.triple_cup import triple_cup_summary
         summary = triple_cup_summary(foursome)
         if summary is None:
@@ -3540,7 +3636,7 @@ class TripleCupFoursomesTeeOffView(APIView):
     first alt-shot hole).
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from games.models import TripleCupGame, TripleCupMatch
 
         try:
@@ -3645,7 +3741,7 @@ class MultiSkinsSetupView(APIView):
 class MultiSkinsResultView(APIView):
     """GET /api/rounds/{pk}/multi-skins/"""
     def get(self, request, pk):
-        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        round_obj = round_for_reader(request.user, pk)
         from services.multi_skins import multi_skins_summary
         return Response(multi_skins_summary(round_obj))
 
@@ -3660,7 +3756,7 @@ class MatchPlayResultView(APIView):
         import logging
         _log = logging.getLogger(__name__)
 
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
 
         # Cup Singles — detected by RyderCupFoursomeConfig game_type.
         _cup_cfg = None
@@ -3730,7 +3826,7 @@ class MatchPlaySetupView(APIView):
     bracket reflects any scores already on file.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
 
         # Cup foursomes with SINGLES or MATCH_PLAY game type use cup_singles setup
         try:
@@ -3827,7 +3923,7 @@ class MatchPlaySetupView(APIView):
 class ThreePersonMatchResultView(APIView):
     """GET /api/foursomes/{id}/three-person-match/"""
     def get(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from services.three_person_match import (
             three_person_match_summary,
             setup_three_person_match,
@@ -3883,7 +3979,7 @@ class ThreePersonMatchSetupView(APIView):
     Returns the full summary after an immediate calculate pass.
     """
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         ser = ThreePersonMatchSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -4783,7 +4879,7 @@ class PinkBallFoursomeOrderView(APIView):
     """
 
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         from api.serializers import PinkBallOrderSerializer
         ser = PinkBallOrderSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -5918,7 +6014,7 @@ class QuotaNassauSetupView(APIView):
 
     @transaction.atomic
     def post(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         ser = QuotaNassauSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -5962,7 +6058,7 @@ class QuotaNassauResultView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        foursome = foursome_for_scorer(request.user, pk)
         summary  = quota_nassau_summary(foursome)
         if summary is None:
             return Response(

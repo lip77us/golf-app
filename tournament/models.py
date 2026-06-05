@@ -240,6 +240,15 @@ class FoursomeMembership(models.Model):
                             default=dict,
                             help_text='Algorithm-specific config (e.g. rotation order).',
                         )
+    # Delegated scoring: a TD marks an on-app golfer in the foursome as its
+    # scorer. A user whose verified phone matches this member's Player.phone may
+    # then enter scores for this foursome (cross-account) and read the whole-
+    # field leaderboard. Assignable any time (even day-of); ≥1 allowed.
+    is_scorer           = models.BooleanField(
+                            default=False,
+                            help_text='This member scores for the foursome '
+                                      '(delegated cross-account score entry).',
+                        )
 
     class Meta:
         unique_together = ('foursome', 'player')

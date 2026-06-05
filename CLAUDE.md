@@ -243,10 +243,37 @@ sign up with that number → badge appears; same match as Phase 2a).
   1024px PNG of this mark) and the splash/drawer text wordmarks → `Image`/`Svg`.
 - Demo: `seed_demo` mirrors each login user's phone onto its `Player.phone`, so
   the 4 login golfers show "On Halved" and the 8 others show as invitable.
-- Prerequisite for the **next slice: delegated cross-account scoring** — TD sets
-  foursomes of (mostly login-less) golfers, designates ≥1 app scorer per
-  foursome (even day-of, not enforced at setup) via a per-foursome scorer grant
-  (cross-account write); the scorer enters all four scores.
+- Prerequisite for delegated cross-account scoring (below).
+
+### Friends Phase 2b — delegated cross-account scoring (BACKEND done) — implemented
+A TD designates an on-app golfer in a foursome as its **scorer**; that user (in
+their OWN account) enters scores for the whole foursome and reads the whole-field
+leaderboard. **Phone-matched** (no token/claim), assignable any time (even
+day-of, not enforced at setup).
+- Model: `FoursomeMembership.is_scorer` (migration `tournament/0034`).
+- Auth (`accounts/scoring_access.py`): `foursome_for_scorer` (own-account OR
+  phone-matched `is_scorer` member — WRITE/score), `round_for_scorer` (open the
+  round), `round_for_reader`/`tournament_for_reader` (leaderboard read =
+  own-account OR any phone-matched participant — **also preserves "Shared with
+  me"**). All raise 404 like `account_get_or_404` and are behaviour-preserving
+  for own-account users.
+- Applied by swapping `account_get_or_404(Foursome, request.user.account, pk=pk)`
+  → `foursome_for_scorer(request.user, pk)` across the ~29 per-foursome score +
+  game views, and tightening the **previously-open** `ScoreSubmitView`,
+  `ScorecardView`, `LeaderboardView`, `TournamentLeaderboardView` to the
+  scorer/reader resolvers (security hardening). Round-level TD-management views
+  stay own-account; `MultiSkinsResultView`/`RoundDetailView.get` use the
+  scorer/reader resolvers.
+- Endpoints: `POST /api/foursomes/<pk>/scorer/` `{player_id, is_scorer?}` (TD,
+  own-account, ≥1 scorer allowed); `GET /api/rounds/scoring-for-me/` (rounds I'm
+  designated to score, with `your_foursome_id`). `FoursomeMembershipSerializer`
+  exposes `is_scorer`.
+- Tests: `api/test_delegated_scoring.py` (designate, scorer reach+read, non-scorer
+  404, own-account preserved, participant-can-read-not-score). Full `api`+`scoring`
+  suite green (85). Demo: `seed_demo` makes the reviewer the scorer of the
+  in-progress 'Saturday Crew' round (appears under "scoring-for-me").
+- **Mobile (PR B) pending:** TD "Set scorer" UI + a "Scoring" list/flow on the
+  scorer's app.
 
 Tests: `accounts/test_otp.py` (normalization, request→verify happy paths,
 self-signup, wrong/expired/too-many-attempts, rate-limit, phone uniqueness, and
