@@ -1859,6 +1859,87 @@ class ScoringForMeView(APIView):
         return Response(results)
 
 
+class PlayingRoundsView(APIView):
+    """
+    GET /api/rounds/playing-for-me/
+
+    Multi-foursome rounds (tournaments or multi-group skins) in OTHER accounts
+    where a player carrying my VERIFIED phone is a member — i.e. games a TD/
+    friend added me to. Unlike `scoring-for-me` (designated scorers only), this
+    is ANY phone-matched participant: I can open the round to score MY group and
+    read the whole-field leaderboard, no scorer designation needed. Returns the
+    round + `your_foursome_id` so the app opens straight to my group.
+    """
+    def get(self, request):
+        from accounts.phone import normalize
+
+        my_phone = getattr(request.user, 'phone', None)
+        if not my_phone:
+            return Response([])
+
+        rows = (
+            FoursomeMembership.objects
+            .exclude(foursome__round__account=request.user.account)
+            .exclude(player__phone='')
+            .select_related(
+                'foursome__round__course', 'foursome__round__account',
+                'foursome__round__tournament', 'foursome__round__created_by',
+                'player', 'foursome',
+            )
+            .prefetch_related('foursome__round__foursomes')
+            .order_by('-foursome__round__date')
+        )
+
+        results, seen = [], set()
+        for m in rows:
+            if normalize(m.player.phone) != my_phone:
+                continue
+            r = m.foursome.round
+            if r.id in seen:
+                continue
+            # Scope to "tournaments and multi-group skins" — a single-group
+            # casual round a friend added me to stays in read-only Shared-with-me.
+            is_multi = (r.tournament_id is not None) or (r.foursomes.count() > 1)
+            if not is_multi:
+                continue
+            seen.add(r.id)
+            t = r.tournament
+            group_label = (
+                (t.name if t is not None else None)
+                or (r.created_by.name if r.created_by_id else None)
+                or r.account.name
+            )
+            results.append({
+                'id':               r.id,
+                'date':             r.date,
+                'course_name':      r.course.name,
+                'status':           r.status,
+                'active_games':     r.active_games,
+                'group_label':      group_label,
+                'is_tournament':    t is not None,
+                'your_foursome_id': m.foursome_id,
+            })
+        return Response(results)
+
+
+class RoundJoinView(APIView):
+    """
+    POST /api/rounds/<pk>/join/
+
+    Called when a phone-matched participant first opens a shared round.
+    Idempotently mirrors the round into their account so it's fully usable from
+    their side: adds the TD (round creator) to their "My Golfers" roster and
+    copies the round's course in. Authorized to any participant
+    (`round_for_reader`); own-account rounds are a no-op.
+    """
+    def post(self, request, pk):
+        rnd = round_for_reader(request.user, pk)
+        if rnd.account_id == request.user.account_id:
+            return Response({'td_added': False, 'course_added': False})
+        from services.friends_sync import sync_shared_round
+        return Response(sync_shared_round(request.user, rnd))
+
+
 class ScorerDesignateView(APIView):
     """
     POST /api/foursomes/<pk>/scorer/

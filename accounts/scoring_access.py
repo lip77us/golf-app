@@ -4,11 +4,12 @@ accounts/scoring_access.py
 Authorization for delegated cross-account scoring.
 
 A user may act on a foursome / round / tournament if it's in their OWN account,
-or they're a **phone-matched designated scorer** (`FoursomeMembership.is_scorer`
-on a member whose `Player.phone` normalizes to the user's verified phone).
-Leaderboard READS additionally allow any **phone-matched participant** — which
-preserves Friends Phase 2a "Shared with me" (the scorer is a participant too, so
-it's covered automatically).
+or they're a **phone-matched member** of the foursome (one of its golfers,
+matched by verified phone) — so a friend/TD adding you to a multi-group round
+lets you score your own group. The explicit `FoursomeMembership.is_scorer`
+designation still works (a scorer is a member) but is no longer required.
+Leaderboard READS additionally allow any **phone-matched participant** in the
+round — which preserves Friends Phase 2a "Shared with me".
 
 These resolvers mirror `account_get_or_404`: they raise Http404 when
 unauthorized (no info leak) and return the SAME object for own-account users, so
@@ -26,12 +27,16 @@ def _phone(user):
 
 
 def user_scores_foursome(user, foursome) -> bool:
-    """True if `user` is a designated (phone-matched) scorer of `foursome`."""
+    """True if `user` is a phone-matched MEMBER of `foursome` — i.e. one of its
+    golfers (matched by verified phone), so they may score their own group. A
+    friend/TD adding you to a multi-group round is enough; the explicit
+    `is_scorer` designation still works (a scorer is a member) but is no longer
+    required."""
     phone = _phone(user)
     if not phone:
         return False
     return any(
-        m.is_scorer and m.player.phone and normalize(m.player.phone) == phone
+        m.player.phone and normalize(m.player.phone) == phone
         for m in foursome.memberships.all()
     )
 

@@ -109,16 +109,22 @@ class DelegatedScoringTests(TestCase):
             self.b_client.get(reverse('api-leaderboard', args=[self.round.id]))
             .status_code, 200)
 
-    # ---- non-scorer blocked ----
-    def test_non_scorer_blocked(self):
-        # No designation yet → B is not a scorer.
-        self.assertEqual(self.b_client.get(reverse('api-scoring-for-me')).data, [])
+    # ---- member can score own group without designation ----
+    def test_member_scores_own_group_without_designation(self):
+        # No designation, but Bob is a phone-matched MEMBER of fs1 → he can now
+        # open the round and score his own group (the new participant rule).
         self.assertEqual(
             self.b_client.get(reverse('api-scorecard', args=[self.fs1.id]))
-            .status_code, 404)
+            .status_code, 200)
         self.assertEqual(
             self.b_client.get(reverse('api-round-detail', args=[self.round.id]))
+            .status_code, 200)
+        # But NOT a group he isn't in (fs2 has no member matching his phone).
+        self.assertEqual(
+            self.b_client.get(reverse('api-scorecard', args=[self.fs2.id]))
             .status_code, 404)
+        # scoring-for-me stays scorer-only (no designation yet → empty).
+        self.assertEqual(self.b_client.get(reverse('api-scoring-for-me')).data, [])
 
     def test_unrelated_user_blocked_even_after_designation(self):
         self._designate(self.fs1, self.scorer_player)
@@ -139,12 +145,12 @@ class DelegatedScoringTests(TestCase):
             self.td_client.get(reverse('api-round-detail', args=[self.round.id]))
             .status_code, 200)
 
-    # ---- Shared-with-me leaderboard read still works (non-scorer participant) ----
-    def test_phone_matched_participant_can_read_leaderboard_not_score(self):
-        # Bob is a participant (matches phone) but NOT designated scorer.
+    # ---- phone-matched participant can read leaderboard AND score own group ----
+    def test_phone_matched_participant_can_read_and_score_own_group(self):
+        # Bob matches a member's phone in fs1 (no designation needed).
         self.assertEqual(
             self.b_client.get(reverse('api-leaderboard', args=[self.round.id]))
             .status_code, 200)  # round_for_reader allows participant
         self.assertEqual(
             self.b_client.get(reverse('api-scorecard', args=[self.fs1.id]))
-            .status_code, 404)  # but cannot score (not is_scorer)
+            .status_code, 200)  # member of fs1 → can score own group
