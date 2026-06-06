@@ -701,3 +701,46 @@ class RyderCupMatchPoints(models.Model):
             f"{self.team1.name} {self.team1_points} – "
             f"{self.team2.name} {self.team2_points}"
         )
+
+
+# ---------------------------------------------------------------------------
+# WATCHERS  (non-playing spectators invited to follow in-app, read-only)
+# ---------------------------------------------------------------------------
+
+class Watcher(models.Model):
+    """
+    A non-playing spectator invited to follow a round or tournament in the app
+    (read-only leaderboard). Phone-matched like the rest of the friend model:
+    when a user whose VERIFIED phone equals `phone` opens the app, the round /
+    tournament surfaces in their "Shared with me". A tournament watcher follows
+    the whole event; a (casual) round watcher follows that round.
+
+    Exactly one of `round` / `tournament` is set. `phone` is stored normalized
+    to E.164 so it can be compared to `User.phone` directly. Any participant of
+    the round/tournament (not just the TD) may add watchers.
+    """
+    round       = models.ForeignKey(
+                    'Round', null=True, blank=True, on_delete=models.CASCADE,
+                    related_name='watchers')
+    tournament  = models.ForeignKey(
+                    'Tournament', null=True, blank=True, on_delete=models.CASCADE,
+                    related_name='watchers')
+    phone       = models.CharField(max_length=32, help_text='Normalized E.164.')
+    name        = models.CharField(max_length=100, blank=True)
+    invited_by  = models.ForeignKey(
+                    'core.Player', null=True, blank=True,
+                    on_delete=models.SET_NULL, related_name='+')
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['round', 'phone'], name='uniq_round_watcher'),
+            models.UniqueConstraint(
+                fields=['tournament', 'phone'], name='uniq_tournament_watcher'),
+        ]
+
+    def __str__(self):
+        target = self.tournament_id and f'tournament {self.tournament_id}' \
+            or f'round {self.round_id}'
+        return f'Watcher {self.phone} → {target}'

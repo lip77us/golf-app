@@ -66,6 +66,26 @@ def ensure_friend(creator_player, account):
     return player, True
 
 
+def ensure_roster_player(account, raw_phone, name):
+    """Ensure a Player with this (normalized) phone exists in `account`'s
+    roster — used when inviting a watcher by number so they land in My Golfers.
+    Idempotent by normalized phone. Returns (player, created), or (None, False)
+    when there's no usable phone."""
+    from core.models import Player
+
+    norm = normalize(raw_phone) if raw_phone else None
+    if not norm:
+        return None, False
+    for p in Player.objects.filter(account=account).exclude(phone=''):
+        if normalize(p.phone) == norm:
+            return p, False
+    player = Player.objects.create(
+        account=account, name=(name or 'Guest'), phone=raw_phone,
+        handicap_index=0, sex='M',
+    )
+    return player, True
+
+
 def sync_shared_round(user, round_obj):
     """Mirror the TD + course of `round_obj` into `user.account`. Idempotent.
     Returns a summary dict the API can echo back."""

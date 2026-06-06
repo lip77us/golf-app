@@ -16,6 +16,7 @@ unauthorized (no info leak) and return the SAME object for own-account users, so
 swapping them into existing views is behaviour-preserving and only *adds* the
 scorer path (and closes the previously-open score/leaderboard endpoints).
 """
+from django.db.models import Q
 from django.http import Http404
 
 from .phone import normalize
@@ -84,9 +85,31 @@ def round_for_scorer(user, pk, *, base=None):
     raise Http404('No such round.')
 
 
-def round_for_reader(user, pk, *, base=None):
-    """Round if own-account OR a phone-matched participant (covers scorer +
-    "Shared with me"). (READ — leaderboard)"""
+def _user_watches_round(user, round_obj) -> bool:
+    """True if `user`'s verified phone matches a Watcher of this round, or of
+    its parent tournament (a tournament watcher follows every round)."""
+    phone = _phone(user)
+    if not phone:
+        return False
+    from tournament.models import Watcher
+    q = Q(round_id=round_obj.id)
+    if round_obj.tournament_id is not None:
+        q |= Q(tournament_id=round_obj.tournament_id)
+    return Watcher.objects.filter(phone=phone).filter(q).exists()
+
+
+def _user_watches_tournament(user, tournament) -> bool:
+    phone = _phone(user)
+    if not phone:
+        return False
+    from tournament.models import Watcher
+    return Watcher.objects.filter(
+        phone=phone, tournament_id=tournament.id).exists()
+
+
+def round_for_participant(user, pk, *, base=None):
+    """Round if own-account OR a phone-matched PLAYER in it. Use to gate actions
+    only participants may take (e.g. inviting watchers). Watchers do NOT pass."""
     from tournament.models import Round
     own = account_qs(Round, user.account, base=base).filter(pk=pk).first()
     if own is not None:
@@ -98,9 +121,24 @@ def round_for_reader(user, pk, *, base=None):
     raise Http404('No such round.')
 
 
-def tournament_for_reader(user, pk, *, base=None):
+def round_for_reader(user, pk, *, base=None):
+    """Round if own-account OR a phone-matched participant OR an invited watcher.
+    (READ — leaderboard; covers scorer, "Shared with me", and spectators.)"""
+    try:
+        return round_for_participant(user, pk, base=base)
+    except Http404:
+        pass
+    from tournament.models import Round
+    qs = base if base is not None else Round.objects.select_related('course', 'tournament')
+    rnd = qs.filter(pk=pk).first()
+    if rnd is not None and _user_watches_round(user, rnd):
+        return rnd
+    raise Http404('No such round.')
+
+
+def tournament_for_participant(user, pk, *, base=None):
     """Tournament if own-account OR a phone-matched participant in any of its
-    rounds. (READ — tournament leaderboard)"""
+    rounds. Watchers do NOT pass."""
     from tournament.models import Tournament
     own = account_qs(Tournament, user.account, base=base).filter(pk=pk).first()
     if own is not None:
@@ -118,4 +156,19 @@ def tournament_for_reader(user, pk, *, base=None):
             for m in fs.memberships.all()
         ):
             return t
+    raise Http404('No such tournament.')
+
+
+def tournament_for_reader(user, pk, *, base=None):
+    """Tournament if own-account OR a phone-matched participant OR an invited
+    watcher. (READ — tournament leaderboard.)"""
+    try:
+        return tournament_for_participant(user, pk, base=base)
+    except Http404:
+        pass
+    from tournament.models import Tournament
+    qs = base if base is not None else Tournament.objects.all()
+    t = qs.filter(pk=pk).first()
+    if t is not None and _user_watches_tournament(user, t):
+        return t
     raise Http404('No such tournament.')

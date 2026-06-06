@@ -33,6 +33,7 @@ urlpatterns = [
     path('tournaments/',                              views.TournamentListView.as_view(),        name='api-tournament-list'),
     path('tournaments/<int:pk>/',                     views.TournamentDetailView.as_view(),      name='api-tournament-detail'),
     path('tournaments/<int:pk>/leaderboard/',         views.TournamentLeaderboardView.as_view(),   name='api-tournament-leaderboard'),
+    path('tournaments/<int:pk>/watchers/',            views.TournamentWatcherView.as_view(),       name='api-tournament-watchers'),
     path('tournaments/<int:pk>/cup-standings/',       views.TournamentCupStandingsView.as_view(), name='api-tournament-cup-standings'),
     path('tournaments/<int:pk>/low-net/',             views.TournamentLowNetView.as_view(),       name='api-tournament-low-net'),
     path('tournaments/<int:pk>/low-net/setup/',       views.TournamentLowNetSetupView.as_view(), name='api-tournament-low-net-setup'),
@@ -51,6 +52,7 @@ urlpatterns = [
     path('rounds/<int:pk>/move-player/', views.RoundMovePlayerView.as_view(),
          name='api-round-move-player'),
     path('rounds/<int:pk>/leaderboard/', views.LeaderboardView.as_view(),   name='api-leaderboard'),
+    path('rounds/<int:pk>/watchers/',    views.RoundWatcherView.as_view(),  name='api-round-watchers'),
 
     # ---- Foursomes ----
     path('foursomes/<int:pk>/',              views.FoursomeDetailView.as_view(),      name='api-foursome-detail'),

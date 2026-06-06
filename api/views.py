@@ -60,7 +60,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from accounts import otp as otp_service
 from accounts.scoring_access import (
     foursome_for_scorer, round_for_scorer, round_for_reader,
-    tournament_for_reader,
+    tournament_for_reader, round_for_participant, tournament_for_participant,
 )
 from accounts.scoping import (
     account_get_or_404,
@@ -1745,61 +1745,104 @@ class SharedRoundsView(APIView):
     """
     def get(self, request):
         from accounts.phone import normalize
+        from tournament.models import Watcher, Tournament
 
         my_phone = getattr(request.user, 'phone', None)  # E.164, or None (legacy)
         if not my_phone:
             return Response([])
 
-        # Players in OTHER accounts whose free-text phone normalizes to mine.
+        status = request.query_params.get('status')
+        def _status_ok(s):
+            return status not in ('in_progress', 'complete', 'pending') or s == status
+
+        results = []
+        seen_rounds = set()
+
+        def _round_row(r, *, your_name=None):
+            return {
+                'id':            r.id,
+                'date':          r.date,
+                'course_name':   r.course.name,
+                'status':        r.status,
+                'active_games':  r.active_games,
+                'group_label':   (r.created_by.name if r.created_by_id else None)
+                                 or r.account.name,
+                'your_name':     your_name,
+                'is_tournament': False,
+            }
+
+        # 1. Casual rounds I'm a PLAYER in (read-only history).
         matched_name = {}
         for c in (
-            Player.objects
-            .exclude(account=request.user.account)
-            .exclude(phone='')
-            .values('id', 'phone', 'name')
+            Player.objects.exclude(account=request.user.account)
+            .exclude(phone='').values('id', 'phone', 'name')
         ):
             if normalize(c['phone']) == my_phone:
                 matched_name[c['id']] = c['name']
-        if not matched_name:
-            return Response([])
+        if matched_name:
+            qs = (
+                Round.objects
+                .filter(tournament__isnull=True,
+                        foursomes__memberships__player_id__in=list(matched_name))
+                .exclude(account=request.user.account)
+                .select_related('course', 'account', 'created_by')
+                .prefetch_related('foursomes__memberships')
+                .distinct().order_by('-date', '-created_at')
+            )
+            if status in ('in_progress', 'complete', 'pending'):
+                qs = qs.filter(status=status)
+            for r in qs:
+                your_name = next(
+                    (matched_name[m.player_id]
+                     for fs in r.foursomes.all() for m in fs.memberships.all()
+                     if m.player_id in matched_name), None)
+                results.append(_round_row(r, your_name=your_name))
+                seen_rounds.add(r.id)
 
-        qs = (
-            Round.objects
-            .filter(
-                tournament__isnull=True,  # casual rounds only for this slice
-                foursomes__memberships__player_id__in=list(matched_name),
+        # 2. Casual rounds I'm a WATCHER of.
+        watch_round_ids = list(
+            Watcher.objects.filter(phone=my_phone, round__isnull=False)
+            .values_list('round_id', flat=True))
+        if watch_round_ids:
+            qs = (
+                Round.objects.filter(id__in=watch_round_ids)
+                .exclude(account=request.user.account)
+                .select_related('course', 'account', 'created_by')
+                .order_by('-date', '-created_at')
             )
-            .exclude(account=request.user.account)
-            .select_related('course', 'account', 'created_by')
-            .prefetch_related('foursomes__memberships')
-            .distinct()
-            .order_by('-date', '-created_at')
-        )
-        requested_status = request.query_params.get('status')
-        if requested_status in ('in_progress', 'complete', 'pending'):
-            qs = qs.filter(status=requested_status)
+            for r in qs:
+                if r.id in seen_rounds or not _status_ok(r.status):
+                    continue
+                results.append(_round_row(r))
+                seen_rounds.add(r.id)
 
-        results = []
-        for r in qs:
-            your_name = next(
-                (matched_name[m.player_id]
-                 for fs in r.foursomes.all()
-                 for m in fs.memberships.all()
-                 if m.player_id in matched_name),
-                None,
-            )
-            group_label = (
-                (r.created_by.name if r.created_by_id else None) or r.account.name
-            )
-            results.append({
-                'id':           r.id,
-                'date':         r.date,
-                'course_name':  r.course.name,
-                'status':       r.status,
-                'active_games': r.active_games,
-                'group_label':  group_label,
-                'your_name':    your_name,
-            })
+        # 3. Tournaments I'm a WATCHER of (whole-event, read-only).
+        watch_t_ids = list(
+            Watcher.objects.filter(phone=my_phone, tournament__isnull=False)
+            .values_list('tournament_id', flat=True))
+        if watch_t_ids:
+            for t in (
+                Tournament.objects.filter(id__in=watch_t_ids)
+                .exclude(account=request.user.account)
+                .select_related('account')
+                .prefetch_related('rounds__course')
+            ):
+                rounds = list(t.rounds.all())
+                t_status = ('complete'
+                            if rounds and all(rr.status == 'complete' for rr in rounds)
+                            else 'in_progress')
+                if not _status_ok(t_status):
+                    continue
+                results.append({
+                    'id':            t.id,
+                    'date':          rounds[0].date if rounds else None,
+                    'course_name':   rounds[0].course.name if rounds else '',
+                    'status':        t_status,
+                    'active_games':  t.active_games,
+                    'group_label':   t.name,
+                    'your_name':     None,
+                    'is_tournament': True,
+                })
         return Response(results)
 
 
@@ -1938,6 +1981,69 @@ class RoundJoinView(APIView):
             return Response({'td_added': False, 'course_added': False})
         from services.friends_sync import sync_shared_round
         return Response(sync_shared_round(request.user, rnd))
+
+
+def _add_watcher(request, *, round_obj=None, tournament=None):
+    """Shared body for the round/tournament watcher-add endpoints. Resolves the
+    watcher's phone+name (from a roster golfer via player_id, or a raw phone),
+    ensures they're in the inviter's My Golfers roster, and records the Watcher.
+    """
+    from accounts.phone import normalize
+    from core.models import Player
+    from tournament.models import Watcher
+    from services.friends_sync import ensure_roster_player
+
+    phone_raw = (request.data.get('phone') or '').strip()
+    name      = (request.data.get('name') or '').strip()
+    player_id = request.data.get('player_id')
+    if player_id:
+        p = account_get_or_404(Player, request.user.account, pk=player_id)
+        phone_raw = (p.phone or phone_raw).strip()
+        name = name or p.name
+    if not phone_raw:
+        return Response(
+            {'detail': 'A phone number is required to invite a watcher.'},
+            status=status.HTTP_400_BAD_REQUEST)
+    norm = normalize(phone_raw)
+    if not norm:
+        return Response({'detail': 'Enter a valid phone number.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # Put the watcher in the inviter's roster (so they can be re-invited / seen).
+    roster_player, _ = ensure_roster_player(request.user.account, phone_raw, name)
+    inviter = getattr(request.user, 'player_profile', None)
+    watcher, created = Watcher.objects.get_or_create(
+        round=round_obj, tournament=tournament, phone=norm,
+        defaults={'name': name, 'invited_by': inviter},
+    )
+    return Response(
+        {'watcher_id': watcher.id, 'created': created,
+         'player_id': roster_player.id if roster_player else None},
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class RoundWatcherView(APIView):
+    """
+    POST /api/rounds/<pk>/watchers/   body {phone? | player_id?, name?}
+
+    Invite a non-playing spectator to follow this (casual) round in-app,
+    read-only. Allowed to ANY participant of the round (not just the TD).
+    """
+    def post(self, request, pk):
+        rnd = round_for_participant(request.user, pk)
+        return _add_watcher(request, round_obj=rnd)
+
+
+class TournamentWatcherView(APIView):
+    """
+    POST /api/tournaments/<pk>/watchers/   body {phone? | player_id?, name?}
+
+    Invite a spectator to follow a whole tournament in-app, read-only. Allowed
+    to any participant in any of the tournament's rounds.
+    """
+    def post(self, request, pk):
+        t = tournament_for_participant(request.user, pk)
+        return _add_watcher(request, tournament=t)
 
 
 class ScorerDesignateView(APIView):
