@@ -1113,6 +1113,9 @@ class DeleteAccountView(APIView):
             user.phone_verified_at = None
             user.save(update_fields=['phone', 'phone_verified_at'])
 
+        # Drop any push tokens for this device/user.
+        user.device_tokens.all().delete()
+
         # Drop the auth token, then the user.
         try:
             user.auth_token.delete()
@@ -2178,6 +2181,60 @@ class HalvedUserLookupView(APIView):
             'sex': (prof.sex if prof else 'M') or 'M',
             'handicap_index': str(prof.handicap_index) if prof else '0.0',
         })
+
+
+class DeviceRegisterView(APIView):
+    """
+    POST /api/devices/register/   {token, platform}
+
+    Register (or move) this device's push token to the current user. Idempotent;
+    a token always belongs to exactly one user (handles a shared device).
+    """
+    def post(self, request):
+        from accounts.models import DeviceToken
+        token = (request.data.get('token') or '').strip()
+        platform = (request.data.get('platform') or '').strip()
+        if not token:
+            return Response({'detail': 'token required'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        DeviceToken.objects.update_or_create(
+            token=token,
+            defaults={'user': request.user, 'platform': platform})
+        return Response({'ok': True})
+
+
+class DeviceUnregisterView(APIView):
+    """POST /api/devices/unregister/  {token} — drop a token (e.g. on logout)."""
+    def post(self, request):
+        from accounts.models import DeviceToken
+        token = (request.data.get('token') or '').strip()
+        if token:
+            DeviceToken.objects.filter(
+                token=token, user=request.user).delete()
+        return Response({'ok': True})
+
+
+class NotificationPrefsView(APIView):
+    """
+    GET  /api/notification-prefs/  → all categories (defaults overlaid by mine)
+    PATCH same body {category: bool, ...} → merge into my prefs
+    """
+    def get(self, request):
+        from services.push import NOTIFICATION_CATEGORIES
+        prefs = dict(NOTIFICATION_CATEGORIES)
+        prefs.update(request.user.notification_prefs or {})
+        return Response(prefs)
+
+    def patch(self, request):
+        from services.push import NOTIFICATION_CATEGORIES
+        cur = dict(request.user.notification_prefs or {})
+        for k, v in (request.data or {}).items():
+            if k in NOTIFICATION_CATEGORIES:
+                cur[k] = bool(v)
+        request.user.notification_prefs = cur
+        request.user.save(update_fields=['notification_prefs'])
+        merged = dict(NOTIFICATION_CATEGORIES); merged.update(cur)
+        return Response(merged)
 
 
 class ScorerDesignateView(APIView):

@@ -159,6 +159,10 @@ class User(AbstractUser):
         max_length=12, unique=True, null=True, blank=True,
         help_text="Stable per-user code for the public invite link /i/<code>/.",
     )
+    # Per-category push toggles (see services/push.NOTIFICATION_CATEGORIES).
+    # Missing key = use the category default (mostly on). OS-level permission is
+    # separate and checked on the device.
+    notification_prefs = models.JSONField(default=dict, blank=True)
 
     objects = AccountUserManager()
 
@@ -280,3 +284,38 @@ class PhoneOTP(models.Model):
         otp.consumed_at = now
         otp.save(update_fields=['attempts', 'consumed_at'])
         return True
+
+
+class DeviceToken(models.Model):
+    """
+    A device's push (FCM) registration token for a user. A user may have several
+    (phone + tablet). Registered on login / app start / token refresh; removed on
+    logout and account deletion. Stale tokens are pruned when FCM reports them
+    unregistered.
+    """
+    PLATFORMS = [('ios', 'iOS'), ('android', 'Android')]
+
+    user       = models.ForeignKey(
+                    'accounts.User', on_delete=models.CASCADE,
+                    related_name='device_tokens')
+    token      = models.CharField(max_length=255, unique=True)
+    platform   = models.CharField(max_length=10, choices=PLATFORMS, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'DeviceToken({self.user_id}, {self.platform})'
+
+
+class SentNotification(models.Model):
+    """
+    Idempotency log for event-driven pushes. Skins/leaderboards recompute on
+    every score edit, so we record a stable `dedup_key` (e.g.
+    "skin_won:round=42:hole=7") and only send when inserting a new key succeeds.
+    """
+    event_type = models.CharField(max_length=40)
+    dedup_key  = models.CharField(max_length=200, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.dedup_key

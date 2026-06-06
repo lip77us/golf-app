@@ -265,6 +265,11 @@ GOLF_API_BASE_URL = os.environ.get('GOLF_API_BASE_URL', 'https://api.golfcoursea
 #                               service SID below. See docs/twilio-verify-setup.md.
 OTP_BACKEND        = os.environ.get('OTP_BACKEND', 'local')
 
+# PUSH_BACKEND selects how push notifications are delivered:
+#   "console" (default) — logs the payload, sends nothing (dev/CI).
+#   "fcm"               — Firebase Cloud Messaging (see docs/push-notifications.md).
+PUSH_BACKEND       = os.environ.get('PUSH_BACKEND', 'console')
+
 SMS_BACKEND        = os.environ.get('SMS_BACKEND', 'console')
 TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN  = os.environ.get('TWILIO_AUTH_TOKEN', '')
