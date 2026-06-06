@@ -30,6 +30,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   List<CourseInfo> _courses = [];
   List<TeeInfo> _tees = [];
   List<PlayerProfile> _players = [];
+  /// Search text for the player picker (keeps it usable with a big roster).
+  String _playerSearch = '';
+  final TextEditingController _playerSearchCtrl = TextEditingController();
 
   CourseInfo? _selectedCourse;
   // Map of Player ID to Tee ID
@@ -79,6 +82,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _playerSearchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -230,9 +239,33 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     }
   }
 
+  /// Players to show in the picker: filtered by the search box, with selected
+  /// golfers (and You) floated to the top, then alphabetical — so the screen
+  /// stays usable even with a large roster.
+  List<PlayerProfile> _playersForDisplay() {
+    final myId = context.read<AuthProvider>().player?.id;
+    final q = _playerSearch.trim().toLowerCase();
+    final list = _players
+        .where((p) => q.isEmpty || p.name.toLowerCase().contains(q))
+        .toList();
+    list.sort((a, b) {
+      final aSel = _playerTees.containsKey(a.id);
+      final bSel = _playerTees.containsKey(b.id);
+      if (aSel != bSel) return aSel ? -1 : 1;
+      if (a.id == myId) return -1;
+      if (b.id == myId) return 1;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return list;
+  }
+
   void _onPlayerToggle(int playerId, bool selected) {
     setState(() {
       if (selected) {
+        // Clear the search after a pick so the checked golfers (floated to the
+        // top) are visible again, ready for the next selection.
+        _playerSearch = '';
+        _playerSearchCtrl.clear();
         // Assign the right default tee for this specific player (by sex
         // + priority).  Women get their lowest-priority women's tee,
         // men get their lowest-priority men's tee.
@@ -549,13 +582,32 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               text: 'Please select a course first to assign tees.',
               kind: InlineMessageKind.info,
             )
-          else
-            ListView.builder(
+          else ...[
+            TextField(
+              controller: _playerSearchCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Search golfers…',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              onChanged: (v) => setState(() => _playerSearch = v),
+            ),
+            const SizedBox(height: 8),
+            Builder(builder: (context) {
+              final shown = _playersForDisplay();
+              if (shown.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Text('No golfers match your search.'),
+                );
+              }
+              return ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _players.length,
+              itemCount: shown.length,
               itemBuilder: (context, i) {
-                final player = _players[i];
+                final player = shown[i];
                 final isSelected = _playerTees.containsKey(player.id);
                 final playerTeeId = _playerTees[player.id];
                 // The logged-in player is always locked in as a participant.
@@ -694,7 +746,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                   ),
                 );
               },
-            ),
+            );
+            }),
+          ],
             const SizedBox(height: 80),
         ],
       ),
