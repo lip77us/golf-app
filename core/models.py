@@ -205,12 +205,40 @@ class Player(models.Model):
 
     objects         = AccountScopedManager()
 
+    def effective_handicap_index(self):
+        """The authoritative WHS index to use for this golfer.
+
+        For a golfer who's "On Halved" — their phone matches a registered user
+        who maintains their OWN profile — return THAT profile's index so a
+        friend's copy follows the golfer's self-maintained handicap. Otherwise
+        (login-less guests, or no match) fall back to the locally-stored value.
+        """
+        if not self.phone:
+            return self.handicap_index
+        from accounts.phone import normalize
+        from django.contrib.auth import get_user_model
+        n = normalize(self.phone)
+        if not n:
+            return self.handicap_index
+        u = (get_user_model().objects.filter(phone=n)
+             .select_related('player_profile').first())
+        if u is not None:
+            prof = getattr(u, 'player_profile', None)
+            # prof.id != self.id guards the golfer's own profile (no self-loop).
+            # A 0/unset owner index means "not provided yet" — fall back to the
+            # locally-typed value rather than overriding it with a default 0.
+            if prof is not None and prof.id != self.id and prof.handicap_index != 0:
+                return prof.handicap_index
+        return self.handicap_index
+
     def course_handicap(self, tee):
         """
         Calculate course handicap for a given Tee.
-        Returns an integer per WHS rules.
+        Returns an integer per WHS rules. Uses the golfer's authoritative index
+        (see effective_handicap_index) so a connected golfer's self-maintained
+        handicap is what gets applied at round setup.
         """
-        ch = float(self.handicap_index) * (float(tee.slope) / 113.0) + (float(tee.course_rating) - float(tee.par))
+        ch = float(self.effective_handicap_index()) * (float(tee.slope) / 113.0) + (float(tee.course_rating) - float(tee.par))
         return round(ch)
 
     @staticmethod

@@ -51,13 +51,23 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
 
   bool get _isEdit => widget.player != null;
 
+  /// A connected (On Halved) golfer maintains their own handicap, so a friend
+  /// can't edit it here — except your OWN profile, which you may edit.
+  bool _handicapLocked = false;
+
   @override
   void initState() {
     super.initState();
     final p = widget.player;
+    final myId = context.read<AuthProvider>().player?.id;
+    // Lock only when the index is the golfer's OWN authoritative value (and it
+    // isn't my own card). If they haven't set one, it falls back to the local
+    // value, which I can still edit.
+    _handicapLocked =
+        p != null && p.handicapIsAuthoritative && p.id != myId;
     _nameCtrl     = TextEditingController(text: p?.name ?? '');
     _shortCtrl    = TextEditingController(text: p?.shortName ?? '');
-    _hcpCtrl      = TextEditingController(text: p?.handicapIndex ?? '');
+    _hcpCtrl      = TextEditingController(text: p?.displayHandicap ?? '');
     _emailCtrl    = TextEditingController(text: p?.email ?? '');
     _phoneCtrl    = TextEditingController(text: p?.phone ?? '');
     _sex          = p?.sex ?? 'M';
@@ -211,11 +221,14 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
               // ---- Handicap Index ----
               GolfTextField(
                 controller: _hcpCtrl,
+                readOnly: _handicapLocked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                 label: 'Handicap Index',
                 hint: 'e.g. 14.2',
                 prefixIcon: Icons.golf_course,
-                helper: 'WHS index between -10.0 and 54.0',
+                helper: _handicapLocked
+                    ? '${widget.player!.name} keeps this up to date on Halved.'
+                    : 'WHS index between -10.0 and 54.0',
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Handicap is required';
                   final d = double.tryParse(v.trim());

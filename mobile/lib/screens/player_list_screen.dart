@@ -185,9 +185,17 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
       return ErrorView(message: _error!, isNetwork: _networkError, onRetry: _load);
     }
 
-    final isAdmin = context.watch<AuthProvider>().isAdmin;
+    final auth    = context.watch<AuthProvider>();
+    final isAdmin = auth.isAdmin;
+    final myId    = auth.player?.id;
 
-    final players = _filtered;
+    // Pin my own card to the top so I can update my index quickly even with a
+    // long friends list (the rest stay in the server's alphabetical order).
+    final players = [..._filtered];
+    if (myId != null) {
+      final i = players.indexWhere((p) => p.id == myId);
+      if (i > 0) players.insert(0, players.removeAt(i));
+    }
     if (players.isEmpty) {
       return Center(
         child: Text(
@@ -219,7 +227,7 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
           title: Row(
             children: [
               Flexible(
-                child: Text(p.name,
+                child: Text(p.id == myId ? '${p.name} (You)' : p.name,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                     overflow: TextOverflow.ellipsis),
               ),
@@ -231,7 +239,7 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
           ),
           subtitle: Text(
             [
-              'Hcp ${p.handicapIndex}',
+              'Hcp ${p.displayHandicap}',
               if (p.email.isNotEmpty) p.email,
             ].join('  ·  '),
             style: const TextStyle(fontSize: 13),

@@ -197,6 +197,13 @@ class PlayerProfile {
   /// payloads fall back to a computed initials string via [displayShort].
   final String shortName;
   final String handicapIndex;
+  /// The index to DISPLAY: for a connected (On Halved) golfer this is their
+  /// self-maintained index from their own profile; otherwise == handicapIndex.
+  /// Only populated by GET /api/players/ (and watcher-candidates).
+  final String effectiveHandicapIndex;
+  /// True when the displayed index is the golfer's OWN (they set a real value)
+  /// — a friend's copy is then read-only. False when it falls back to local.
+  final bool handicapIsAuthoritative;
   final bool isPhantom;
   final String email;
   final String phone;
@@ -218,6 +225,8 @@ class PlayerProfile {
     required this.name,
     this.shortName = '',
     required this.handicapIndex,
+    this.effectiveHandicapIndex = '',
+    this.handicapIsAuthoritative = false,
     required this.isPhantom,
     required this.email,
     this.phone = '',
@@ -231,6 +240,10 @@ class PlayerProfile {
         name: j['name'] as String,
         shortName: (j['short_name'] as String?) ?? '',
         handicapIndex: j['handicap_index']?.toString() ?? '0.0',
+        effectiveHandicapIndex:
+            j['effective_handicap_index']?.toString() ?? '',
+        handicapIsAuthoritative:
+            j['handicap_is_authoritative'] as bool? ?? false,
         isPhantom: j['is_phantom'] as bool? ?? false,
         email: j['email'] as String? ?? '',
         phone: j['phone'] as String? ?? '',
@@ -255,6 +268,11 @@ class PlayerProfile {
   /// and offline-drafted players working until the next server sync.
   String get displayShort =>
       shortName.isNotEmpty ? shortName : computeInitials(name);
+
+  /// Index to show in the UI — a connected golfer's authoritative index when
+  /// the list endpoint supplied it, else the local value.
+  String get displayHandicap =>
+      effectiveHandicapIndex.isNotEmpty ? effectiveHandicapIndex : handicapIndex;
 }
 
 class CourseInfo {

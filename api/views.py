@@ -1136,19 +1136,10 @@ class PlayerListView(APIView):
             .order_by('name')
         )
         # "On the app" = a registered user's verified phone matches this
-        # golfer's normalized phone. One query over the candidate phones.
-        from django.contrib.auth import get_user_model
-        from accounts.phone import normalize
-        normalized = {normalize(p.phone) for p in players if p.phone}
-        normalized.discard(None)
-        on_app_phones = set(
-            get_user_model().objects
-            .filter(phone__in=normalized)
-            .values_list('phone', flat=True)
-        ) if normalized else set()
-
+        # golfer's normalized phone; that user's profile also carries the
+        # authoritative handicap index for connected golfers.
         data = PlayerSerializer(
-            players, many=True, context={'on_app_phones': on_app_phones},
+            players, many=True, context=_on_app_context(players),
         ).data
         return Response(data)
 
@@ -2086,11 +2077,32 @@ def _round_participant_keys(rnd):
     return ids, phones
 
 
+def _on_app_context(players):
+    """Serializer context for a set of golfers: which are On Halved + each
+    connected golfer's authoritative (self-maintained) index, keyed by
+    normalized phone."""
+    from accounts.phone import normalize
+    from django.contrib.auth import get_user_model
+
+    normalized = {normalize(p.phone) for p in players if p.phone}
+    normalized.discard(None)
+    on_app_phones, authoritative = set(), {}
+    if normalized:
+        for u in (get_user_model().objects.filter(phone__in=normalized)
+                  .select_related('player_profile')):
+            on_app_phones.add(u.phone)
+            prof = getattr(u, 'player_profile', None)
+            # 0/unset index = "not provided" → leave it out so display falls
+            # back to the local value.
+            if prof is not None and prof.handicap_index != 0:
+                authoritative[u.phone] = str(prof.handicap_index)
+    return {'on_app_phones': on_app_phones, 'authoritative_index': authoritative}
+
+
 def _watcher_candidates_response(request, exclude_ids, exclude_phones):
     """My roster minus anyone already PLAYING (matched by id or normalized
     phone) — so you don't invite a player to 'watch'."""
     from accounts.phone import normalize
-    from django.contrib.auth import get_user_model
     from .serializers import PlayerSerializer
 
     roster = list(
@@ -2101,13 +2113,8 @@ def _watcher_candidates_response(request, exclude_ids, exclude_phones):
         if p.id not in exclude_ids
         and not (p.phone and normalize(p.phone) in exclude_phones)
     ]
-    normalized = {normalize(p.phone) for p in candidates if p.phone}
-    normalized.discard(None)
-    on_app_phones = set(
-        get_user_model().objects.filter(phone__in=normalized)
-        .values_list('phone', flat=True)) if normalized else set()
     data = PlayerSerializer(candidates, many=True,
-                            context={'on_app_phones': on_app_phones}).data
+                            context=_on_app_context(candidates)).data
     return Response(data)
 
 
