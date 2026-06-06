@@ -8,6 +8,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../utils/watcher_invite.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 
@@ -176,6 +177,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       appBar: GolfAppBar(
         title: 'Leaderboard',
         actions: [
+          // Invite a non-playing watcher to follow this round in-app.
+          IconButton(
+            tooltip: 'Invite a watcher',
+            icon: const Icon(Icons.visibility_outlined),
+            onPressed: () => inviteWatcher(context, roundId: widget.roundId),
+          ),
           // Share the public spectator URL — supported for cup rounds
           // and casual Skins / Multi-Skins / Low-Net rounds.
           if (watchToken != null)

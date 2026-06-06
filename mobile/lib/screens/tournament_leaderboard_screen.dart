@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
+import '../utils/watcher_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
 import 'tournament_low_net_setup_screen.dart';
@@ -102,6 +103,12 @@ class _TournamentLeaderboardScreenState
       appBar: AppBar(
         title: Text(widget.tournamentName),
         actions: [
+          IconButton(
+            tooltip: 'Invite a watcher',
+            icon: const Icon(Icons.visibility_outlined),
+            onPressed: () =>
+                inviteWatcher(context, tournamentId: widget.tournamentId),
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           if (isStaff && activeGames.isNotEmpty)
             PopupMenuButton<String>(

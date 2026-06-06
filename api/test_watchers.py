@@ -36,6 +36,10 @@ class WatcherTests(TestCase):
         self.td = User.objects.create_user(username='td', account=self.acct_a)
         self.td.is_account_admin = True
         self.td.save(update_fields=['is_account_admin'])
+        # The TD as a Player (so Watcher.invited_by is populated on invite).
+        self.td_player = Player.objects.create(
+            account=self.acct_a, name='Ryan', phone='(212) 555-0000',
+            handicap_index=Decimal('5.0'), user=self.td)
         self.course = Course.objects.create(account=self.acct_a, name='Pebble')
 
         # A casual multi-group round.
@@ -95,7 +99,7 @@ class WatcherTests(TestCase):
     def test_tournament_watcher_sees_event(self):
         resp = self.td_client.post(
             reverse('api-tournament-watchers', args=[self.tournament.id]),
-            {'phone': '+1 415 555 7777'}, format='json')
+            {'phone': '+1 415 555 7777', 'name': 'Wanda'}, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         shared = self.b_client.get(reverse('api-shared-rounds')).data
         row = next((r for r in shared if r['is_tournament']), None)
@@ -109,12 +113,20 @@ class WatcherTests(TestCase):
 
     def test_invite_idempotent(self):
         url = reverse('api-round-watchers', args=[self.round.id])
-        a = self.td_client.post(url, {'phone': '4155557777'}, format='json')
-        b = self.td_client.post(url, {'phone': '(415) 555-7777'}, format='json')
+        a = self.td_client.post(url, {'phone': '4155557777', 'name': 'Bob'},
+                                format='json')
+        b = self.td_client.post(url, {'phone': '(415) 555-7777', 'name': 'Bob'},
+                                format='json')
         self.assertEqual(a.status_code, 201)
         self.assertEqual(b.status_code, 200)
         self.assertEqual(
             Watcher.objects.filter(round=self.round).count(), 1)
+
+    def test_invite_requires_name(self):
+        resp = self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '4155557777'}, format='json')
+        self.assertEqual(resp.status_code, 400)
 
     def test_invite_requires_phone(self):
         # A roster golfer with no phone can't be made a (matchable) watcher.
@@ -124,6 +136,40 @@ class WatcherTests(TestCase):
             reverse('api-round-watchers', args=[self.round.id]),
             {'player_id': p.id}, format='json')
         self.assertEqual(resp.status_code, 400)
+
+    # ---- mutual connection + watcher-invites-watcher ----
+    def test_watcher_join_adds_inviter_to_roster(self):
+        self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '(415) 555-7777', 'name': 'Bob'}, format='json')
+        # Bob opens the round → the inviter (Ryan) lands in Bob's My Golfers.
+        resp = self.b_client.post(reverse('api-round-join', args=[self.round.id]))
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(
+            Player.objects.filter(account=self.acct_b, name='Ryan').exists())
+
+    def test_watcher_can_invite_another_watcher(self):
+        # Ryan invites Bob; Bob (a watcher) then invites Bill by phone.
+        self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '(415) 555-7777', 'name': 'Bob'}, format='json')
+        resp = self.b_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '(305) 555-1212', 'name': 'Bill'}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertTrue(Watcher.objects.filter(
+            round=self.round, phone='+13055551212').exists())
+        # Bill is in Bob's roster (the inviter's account).
+        self.assertTrue(
+            Player.objects.filter(account=self.acct_b, name='Bill').exists())
+
+    def test_candidates_exclude_current_players(self):
+        resp = self.td_client.get(
+            reverse('api-round-watcher-candidates', args=[self.round.id]))
+        self.assertEqual(resp.status_code, 200)
+        names = {p['name'] for p in resp.data}
+        self.assertNotIn('Al', names)   # Al is playing in fs1 → not a candidate
+        self.assertIn('Ryan', names)    # Ryan isn't a player in this round
 
     def test_non_participant_cannot_invite(self):
         acct_c = Account.objects.create(name='Outsider')

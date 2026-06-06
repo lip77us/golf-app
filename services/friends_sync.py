@@ -66,6 +66,35 @@ def ensure_friend(creator_player, account):
     return player, True
 
 
+def ensure_watch_connection(user, *, round=None, tournament=None):
+    """When a watcher opens a round/tournament they were invited to, add the
+    INVITER to their "My Golfers" so the connection is mutual (the invitee was
+    already added to the inviter's roster at invite time). Idempotent. Returns
+    a summary dict."""
+    from django.db.models import Q
+    from tournament.models import Watcher
+
+    result = {'inviter_added': False, 'inviter_player_id': None}
+    phone = getattr(user, 'phone', None)
+    if not phone:
+        return result
+
+    if tournament is not None:
+        q = Q(tournament_id=tournament.id)
+    else:
+        q = Q(round_id=round.id)
+        if round.tournament_id:
+            q |= Q(tournament_id=round.tournament_id)
+    w = (Watcher.objects.filter(phone=phone).filter(q)
+         .select_related('invited_by__user').first())
+    if w is None or w.invited_by is None:
+        return result
+    player, created = ensure_friend(w.invited_by, user.account)
+    result['inviter_added'] = created
+    result['inviter_player_id'] = player.id if player else None
+    return result
+
+
 def ensure_roster_player(account, raw_phone, name):
     """Ensure a Player with this (normalized) phone exists in `account`'s
     roster — used when inviting a watcher by number so they land in My Golfers.

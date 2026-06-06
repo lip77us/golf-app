@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import 'tournament_leaderboard_screen.dart';
 
 class SharedRoundsScreen extends StatefulWidget {
   const SharedRoundsScreen({super.key});
@@ -43,6 +44,29 @@ class _SharedRoundsScreenState extends State<SharedRoundsScreen> {
   String _formatDate(String iso) {
     final d = DateTime.tryParse(iso);
     return d == null ? iso : DateFormat('MMM d, yyyy').format(d);
+  }
+
+  /// Open a shared item. First calls join (best-effort) so the person who
+  /// invited me lands in my "My Golfers", then opens the read-only leaderboard.
+  Future<void> _openShared(SharedRoundSummary r) async {
+    final client = context.read<AuthProvider>().client;
+    final nav = Navigator.of(context);
+    try {
+      if (r.isTournament) {
+        await client.joinTournament(r.id);
+      } else {
+        await client.joinRound(r.id);
+      }
+    } catch (_) {/* non-fatal — open anyway */}
+    if (!mounted) return;
+    if (r.isTournament) {
+      nav.push(MaterialPageRoute(
+        builder: (_) => TournamentLeaderboardScreen(
+            tournamentId: r.id, tournamentName: r.groupLabel),
+      ));
+    } else {
+      nav.pushNamed('/leaderboard', arguments: r.id);
+    }
   }
 
   @override
@@ -94,15 +118,21 @@ class _SharedRoundsScreenState extends State<SharedRoundsScreen> {
           final r = _rounds[i];
           final games = r.activeGames.isEmpty
               ? '' : '  ·  ${r.activeGames.join(", ")}';
+          // Tournament watchers show the event name as the title (no single
+          // course); casual rounds show the course.
+          final title = r.isTournament && r.courseName.isEmpty
+              ? r.groupLabel
+              : r.courseName;
           return ListTile(
             leading: CircleAvatar(
               backgroundColor:
                   Theme.of(context).colorScheme.primaryContainer,
               foregroundColor:
                   Theme.of(context).colorScheme.onPrimaryContainer,
-              child: const Icon(Icons.golf_course),
+              child: Icon(
+                  r.isTournament ? Icons.emoji_events : Icons.golf_course),
             ),
-            title: Text(r.courseName,
+            title: Text(title,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: Text(
               '${r.groupLabel}  ·  ${_formatDate(r.date)}$games',
@@ -114,8 +144,7 @@ class _SharedRoundsScreenState extends State<SharedRoundsScreen> {
                     visualDensity: VisualDensity.compact,
                   )
                 : const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context)
-                .pushNamed('/leaderboard', arguments: r.id),
+            onTap: () => _openShared(r),
           );
         },
       ),

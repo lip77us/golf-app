@@ -497,9 +497,53 @@ class ApiClient {
   }
 
   /// Called when I open a shared round: idempotently mirrors it into my account
-  /// (adds the TD to My Golfers + copies the course in). Safe to call each open.
+  /// (participant → TD + course; watcher → the person who invited me). Safe to
+  /// call on every open.
   Future<void> joinRound(int roundId) async {
     await _post('/rounds/$roundId/join/', {});
+  }
+
+  /// Called when I open a shared tournament I'm watching — adds the person who
+  /// invited me to My Golfers. Idempotent.
+  Future<void> joinTournament(int tournamentId) async {
+    await _post('/tournaments/$tournamentId/join/', {});
+  }
+
+  /// My Golfers eligible to invite as watchers of a round/tournament —
+  /// excludes anyone already playing in it.
+  Future<List<PlayerProfile>> getRoundWatcherCandidates(int roundId) async {
+    final data = await _get('/rounds/$roundId/watcher-candidates/');
+    return (data as List)
+        .map((p) => PlayerProfile.fromJson(p as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<PlayerProfile>> getTournamentWatcherCandidates(
+      int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/watcher-candidates/');
+    return (data as List)
+        .map((p) => PlayerProfile.fromJson(p as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Invite a non-playing watcher to a round (by roster golfer or raw phone).
+  Future<void> addRoundWatcher(int roundId,
+      {int? playerId, String? phone, String? name}) async {
+    await _post('/rounds/$roundId/watchers/', {
+      if (playerId != null) 'player_id': playerId,
+      if (phone != null) 'phone': phone,
+      if (name != null && name.isNotEmpty) 'name': name,
+    });
+  }
+
+  /// Invite a non-playing watcher to a whole tournament.
+  Future<void> addTournamentWatcher(int tournamentId,
+      {int? playerId, String? phone, String? name}) async {
+    await _post('/tournaments/$tournamentId/watchers/', {
+      if (playerId != null) 'player_id': playerId,
+      if (phone != null) 'phone': phone,
+      if (name != null && name.isNotEmpty) 'name': name,
+    });
   }
 
   /// TD designates (or clears) a foursome member as its scorer.

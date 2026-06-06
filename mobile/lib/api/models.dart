@@ -587,6 +587,9 @@ class SharedRoundSummary {
   final String groupLabel;
   /// The name of the player (in that group) that matched your phone.
   final String yourName;
+  /// True when [id] is a TOURNAMENT id (a whole event you're watching) rather
+  /// than a single round — routes to the tournament leaderboard.
+  final bool isTournament;
 
   const SharedRoundSummary({
     required this.id,
@@ -596,17 +599,19 @@ class SharedRoundSummary {
     required this.activeGames,
     required this.groupLabel,
     required this.yourName,
+    this.isTournament = false,
   });
 
   factory SharedRoundSummary.fromJson(Map<String, dynamic> j) =>
       SharedRoundSummary(
-        id:          j['id'] as int,
-        date:        j['date'] as String? ?? '',
-        courseName:  j['course_name'] as String? ?? '',
-        status:      j['status'] as String? ?? '',
-        activeGames: List<String>.from(j['active_games'] as List? ?? []),
-        groupLabel:  j['group_label'] as String? ?? '',
-        yourName:    j['your_name'] as String? ?? '',
+        id:           j['id'] as int,
+        date:         j['date'] as String? ?? '',
+        courseName:   j['course_name'] as String? ?? '',
+        status:       j['status'] as String? ?? '',
+        activeGames:  List<String>.from(j['active_games'] as List? ?? []),
+        groupLabel:   j['group_label'] as String? ?? '',
+        yourName:     j['your_name'] as String? ?? '',
+        isTournament: j['is_tournament'] as bool? ?? false,
       );
 }
 

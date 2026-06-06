@@ -46,7 +46,7 @@ Match Play
 
 from django.conf import settings
 from django.contrib.auth import authenticate
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -60,7 +60,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from accounts import otp as otp_service
 from accounts.scoring_access import (
     foursome_for_scorer, round_for_scorer, round_for_reader,
-    tournament_for_reader, round_for_participant, tournament_for_participant,
+    tournament_for_reader, round_for_participant,
 )
 from accounts.scoping import (
     account_get_or_404,
@@ -1969,18 +1969,37 @@ class RoundJoinView(APIView):
     """
     POST /api/rounds/<pk>/join/
 
-    Called when a phone-matched participant first opens a shared round.
-    Idempotently mirrors the round into their account so it's fully usable from
-    their side: adds the TD (round creator) to their "My Golfers" roster and
-    copies the round's course in. Authorized to any participant
-    (`round_for_reader`); own-account rounds are a no-op.
+    Called when someone opens a shared round, to mirror the connection into
+    their account (idempotent; own-account = no-op):
+      * a PARTICIPANT gets the TD added to "My Golfers" + the course copied in;
+      * a WATCHER just gets the person who invited them added to "My Golfers".
     """
     def post(self, request, pk):
         rnd = round_for_reader(request.user, pk)
         if rnd.account_id == request.user.account_id:
             return Response({'td_added': False, 'course_added': False})
-        from services.friends_sync import sync_shared_round
+        from services.friends_sync import (
+            sync_shared_round, ensure_watch_connection)
+        try:
+            round_for_participant(request.user, pk)
+        except Http404:
+            return Response(ensure_watch_connection(request.user, round=rnd))
         return Response(sync_shared_round(request.user, rnd))
+
+
+class TournamentJoinView(APIView):
+    """
+    POST /api/tournaments/<pk>/join/
+
+    Called when a watcher opens a shared tournament — adds the person who
+    invited them to "My Golfers". Idempotent; own-account = no-op.
+    """
+    def post(self, request, pk):
+        t = tournament_for_reader(request.user, pk)
+        if t.account_id == request.user.account_id:
+            return Response({'inviter_added': False})
+        from services.friends_sync import ensure_watch_connection
+        return Response(ensure_watch_connection(request.user, tournament=t))
 
 
 def _add_watcher(request, *, round_obj=None, tournament=None):
@@ -2000,6 +2019,9 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
         p = account_get_or_404(Player, request.user.account, pk=player_id)
         phone_raw = (p.phone or phone_raw).strip()
         name = name or p.name
+    if not name:
+        return Response({'detail': 'A name is required to invite a watcher.'},
+                        status=status.HTTP_400_BAD_REQUEST)
     if not phone_raw:
         return Response(
             {'detail': 'A phone number is required to invite a watcher.'},
@@ -2024,26 +2046,96 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
 
 class RoundWatcherView(APIView):
     """
-    POST /api/rounds/<pk>/watchers/   body {phone? | player_id?, name?}
+    POST /api/rounds/<pk>/watchers/   body {phone | player_id, name}
 
     Invite a non-playing spectator to follow this (casual) round in-app,
-    read-only. Allowed to ANY participant of the round (not just the TD).
+    read-only. Allowed to anyone already involved with the round — a participant
+    OR an existing watcher (so the viral chain continues).
     """
     def post(self, request, pk):
-        rnd = round_for_participant(request.user, pk)
+        rnd = round_for_reader(request.user, pk)
         return _add_watcher(request, round_obj=rnd)
 
 
 class TournamentWatcherView(APIView):
     """
-    POST /api/tournaments/<pk>/watchers/   body {phone? | player_id?, name?}
+    POST /api/tournaments/<pk>/watchers/   body {phone | player_id, name}
 
     Invite a spectator to follow a whole tournament in-app, read-only. Allowed
-    to any participant in any of the tournament's rounds.
+    to any participant or existing watcher of the tournament.
     """
     def post(self, request, pk):
-        t = tournament_for_participant(request.user, pk)
+        t = tournament_for_reader(request.user, pk)
         return _add_watcher(request, tournament=t)
+
+
+def _round_participant_keys(rnd):
+    """(player_ids, normalized_phones) of the non-phantom players in a round."""
+    from accounts.phone import normalize
+    ids, phones = set(), set()
+    for fs in rnd.foursomes.all():
+        for m in fs.memberships.all():
+            p = m.player
+            if p.is_phantom:
+                continue
+            ids.add(p.id)
+            if p.phone:
+                n = normalize(p.phone)
+                if n:
+                    phones.add(n)
+    return ids, phones
+
+
+def _watcher_candidates_response(request, exclude_ids, exclude_phones):
+    """My roster minus anyone already PLAYING (matched by id or normalized
+    phone) — so you don't invite a player to 'watch'."""
+    from accounts.phone import normalize
+    from django.contrib.auth import get_user_model
+    from .serializers import PlayerSerializer
+
+    roster = list(
+        Player.objects.for_account(request.user.account)
+        .filter(is_phantom=False).order_by('name'))
+    candidates = [
+        p for p in roster
+        if p.id not in exclude_ids
+        and not (p.phone and normalize(p.phone) in exclude_phones)
+    ]
+    normalized = {normalize(p.phone) for p in candidates if p.phone}
+    normalized.discard(None)
+    on_app_phones = set(
+        get_user_model().objects.filter(phone__in=normalized)
+        .values_list('phone', flat=True)) if normalized else set()
+    data = PlayerSerializer(candidates, many=True,
+                            context={'on_app_phones': on_app_phones}).data
+    return Response(data)
+
+
+class RoundWatcherCandidatesView(APIView):
+    """
+    GET /api/rounds/<pk>/watcher-candidates/
+
+    My Golfers eligible to invite as watchers of this round — excludes anyone
+    already playing in it.
+    """
+    def get(self, request, pk):
+        rnd = round_for_reader(request.user, pk)
+        ids, phones = _round_participant_keys(rnd)
+        return _watcher_candidates_response(request, ids, phones)
+
+
+class TournamentWatcherCandidatesView(APIView):
+    """
+    GET /api/tournaments/<pk>/watcher-candidates/  (excludes players in any round)
+    """
+    def get(self, request, pk):
+        t = tournament_for_reader(request.user, pk)
+        ids, phones = set(), set()
+        for r in t.rounds.all():
+            i, ph = _round_participant_keys(r)
+            ids |= i
+            phones |= ph
+        return _watcher_candidates_response(request, ids, phones)
 
 
 class ScorerDesignateView(APIView):

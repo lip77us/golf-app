@@ -34,6 +34,7 @@ urlpatterns = [
     path('tournaments/<int:pk>/',                     views.TournamentDetailView.as_view(),      name='api-tournament-detail'),
     path('tournaments/<int:pk>/leaderboard/',         views.TournamentLeaderboardView.as_view(),   name='api-tournament-leaderboard'),
     path('tournaments/<int:pk>/watchers/',            views.TournamentWatcherView.as_view(),       name='api-tournament-watchers'),
+    path('tournaments/<int:pk>/watcher-candidates/',  views.TournamentWatcherCandidatesView.as_view(), name='api-tournament-watcher-candidates'),
     path('tournaments/<int:pk>/cup-standings/',       views.TournamentCupStandingsView.as_view(), name='api-tournament-cup-standings'),
     path('tournaments/<int:pk>/low-net/',             views.TournamentLowNetView.as_view(),       name='api-tournament-low-net'),
     path('tournaments/<int:pk>/low-net/setup/',       views.TournamentLowNetSetupView.as_view(), name='api-tournament-low-net-setup'),
@@ -46,6 +47,7 @@ urlpatterns = [
     path('rounds/playing-for-me/',       views.PlayingRoundsView.as_view(),   name='api-playing-for-me'),
     path('rounds/<int:pk>/',             views.RoundDetailView.as_view(),     name='api-round-detail'),
     path('rounds/<int:pk>/join/',        views.RoundJoinView.as_view(),       name='api-round-join'),
+    path('tournaments/<int:pk>/join/',   views.TournamentJoinView.as_view(),  name='api-tournament-join'),
     path('rounds/<int:pk>/setup/',       views.RoundSetupView.as_view(),    name='api-round-setup'),
     path('rounds/<int:pk>/complete/',    views.RoundCompleteView.as_view(), name='api-round-complete'),
     path('rounds/<int:pk>/reopen/',      views.RoundReopenView.as_view(),   name='api-round-reopen'),
@@ -53,6 +55,7 @@ urlpatterns = [
          name='api-round-move-player'),
     path('rounds/<int:pk>/leaderboard/', views.LeaderboardView.as_view(),   name='api-leaderboard'),
     path('rounds/<int:pk>/watchers/',    views.RoundWatcherView.as_view(),  name='api-round-watchers'),
+    path('rounds/<int:pk>/watcher-candidates/', views.RoundWatcherCandidatesView.as_view(), name='api-round-watcher-candidates'),
 
     # ---- Foursomes ----
     path('foursomes/<int:pk>/',              views.FoursomeDetailView.as_view(),      name='api-foursome-detail'),
