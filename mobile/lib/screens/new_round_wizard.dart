@@ -17,6 +17,7 @@ import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../widgets/payout_config_field.dart';
+import 'catalog_add_screen.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
 import 'ryder_cup_draft_screen.dart';
@@ -268,6 +269,55 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       if (mounted) {
         setState(() { _dataError = friendlyError(e); _dataLoading = false; });
       }
+    }
+  }
+
+  /// Open the combined course search (your courses + shared catalog, with a
+  /// full-database/GolfCourseAPI fallback), refresh the wizard's course/tee
+  /// data (the search can clone a brand-new course into the account), and
+  /// select the result.
+  ///
+  /// [additionalIndex] null → Round 1. Picking Round 1 also defaults every
+  /// extra day that hasn't been set yet to the same course, since most
+  /// tournaments play one course (the user can still change a day).
+  Future<void> _pickWizardCourse({int? additionalIndex}) async {
+    final added = await Navigator.of(context).push<CourseInfo>(
+      MaterialPageRoute(builder: (_) => const CatalogAddScreen()),
+    );
+    if (added == null || !mounted) return;
+    final client = context.read<AuthProvider>().client;
+    try {
+      final rawTees = await client.getTees();
+      if (!mounted) return;
+      int sexRank(String? s) => s == 'M' ? 0 : (s == null ? 1 : 2);
+      final tees = [...rawTees]..sort((a, b) {
+          final pc = a.sortPriority.compareTo(b.sortPriority);
+          if (pc != 0) return pc;
+          final sc = sexRank(a.sex).compareTo(sexRank(b.sex));
+          if (sc != 0) return sc;
+          return a.teeName.compareTo(b.teeName);
+        });
+      final courseMap = <int, CourseInfo>{};
+      for (final t in tees) courseMap[t.course.id] = t.course;
+      final courses = courseMap.values.toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      setState(() {
+        _tees    = tees;
+        _courses = courses;
+        if (additionalIndex == null) {
+          _selectedCourseId = added.id;
+          // Tee list changed → drop any per-player tee assignments.
+          _playerTees.clear();
+          // Default the extra days to this course (only those not yet chosen).
+          for (final d in _additionalRounds) {
+            d.courseId ??= added.id;
+          }
+        } else {
+          _additionalRounds[additionalIndex].courseId = added.id;
+        }
+      });
+    } catch (_) {
+      // Non-fatal — leave existing course/tee data in place.
     }
   }
 
@@ -779,12 +829,13 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _numRounds = n;
             // Resize _additionalRounds to (n - 1)
             while (_additionalRounds.length < n - 1) {
-              // Stagger dates by 1 day each; no default course so user must pick
+              // Stagger dates by 1 day each; default each new day to Round 1's
+              // course (most tournaments play one course — user can change it).
               final baseDate = _additionalRounds.isEmpty
                   ? _date
                   : _additionalRounds.last.date;
               _additionalRounds.add(_RoundDraft(
-                courseId: null,
+                courseId: _selectedCourseId,
                 date    : baseDate.add(const Duration(days: 1)),
               ));
             }
@@ -813,11 +864,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           netMaxDoubleBogey : _netMaxDoubleBogey,
           formKey           : _step1Key,
           additionalRounds  : _additionalRounds,
-          onPickCourse      : (id) => setState(() {
-            _selectedCourseId = id;
-            // Clear per-player tees if course changes (tees list changes)
-            _playerTees.clear();
-          }),
+          onPickCourse      : () => _pickWizardCourse(),
           onPickDate        : (d) => setState(() => _date = d),
           onChangeHandicap  : (mode, pct) => setState(() {
             _handicapMode = mode;
@@ -825,9 +872,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           }),
           onChangeNetMaxDoubleBogey: (v) =>
               setState(() => _netMaxDoubleBogey = v),
-          onPickAdditionalCourse: (idx, id) => setState(() {
-            _additionalRounds[idx].courseId = id;
-          }),
+          onPickAdditionalCourse: (idx) =>
+              _pickWizardCourse(additionalIndex: idx),
           onPickAdditionalDate: (idx, d) => setState(() {
             _additionalRounds[idx].date = d;
           }),
@@ -1196,12 +1242,37 @@ class _Step1Details extends StatelessWidget {
   final bool              netMaxDoubleBogey;
   final GlobalKey<FormState> formKey;
   final List<_RoundDraft> additionalRounds;
-  final ValueChanged<int?>      onPickCourse;
+  final VoidCallback            onPickCourse;
   final ValueChanged<DateTime>  onPickDate;
   final void Function(String mode, int pct) onChangeHandicap;
   final ValueChanged<bool> onChangeNetMaxDoubleBogey;
-  final void Function(int idx, int? courseId) onPickAdditionalCourse;
+  final void Function(int idx) onPickAdditionalCourse;
   final void Function(int idx, DateTime date) onPickAdditionalDate;
+
+  /// Tappable "Course" field that opens the combined search. Shows the chosen
+  /// course name, or a search hint when none is picked yet.
+  Widget _courseField(BuildContext context, int? courseId, VoidCallback onTap) {
+    final name = courses.where((c) => c.id == courseId).firstOrNull?.name;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Course',
+          border: OutlineInputBorder(),
+          prefixIcon: Icon(Icons.golf_course),
+          suffixIcon: Icon(Icons.search),
+        ),
+        child: Text(
+          name ?? 'Search by city or course',
+          overflow: TextOverflow.ellipsis,
+          style: name == null
+              ? TextStyle(color: Theme.of(context).hintColor)
+              : null,
+        ),
+      ),
+    );
+  }
 
   const _Step1Details({
     required this.courses,
@@ -1244,21 +1315,9 @@ class _Step1Details extends StatelessWidget {
             const SizedBox(height: 10),
           ],
 
-          // Course picker (Round 1)
-          DropdownButtonFormField<int>(
-            value: selectedCourseId,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Course',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.golf_course),
-            ),
-            items: courses.map((c) => DropdownMenuItem(
-              value: c.id, child: Text(c.name),
-            )).toList(),
-            onChanged: onPickCourse,
-            validator: (v) => v == null ? 'Select a course' : null,
-          ),
+          // Course picker (Round 1) — combined search (your courses + catalog +
+          // full database).
+          _courseField(context, selectedCourseId, onPickCourse),
           const SizedBox(height: 16),
 
           // Date (Round 1)
@@ -1291,20 +1350,8 @@ class _Step1Details extends StatelessWidget {
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            DropdownButtonFormField<int>(
-              value: additionalRounds[i].courseId,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Course',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.golf_course),
-              ),
-              items: courses.map((c) => DropdownMenuItem(
-                value: c.id, child: Text(c.name),
-              )).toList(),
-              onChanged: (id) => onPickAdditionalCourse(i, id),
-              validator: (v) => v == null ? 'Select a course' : null,
-            ),
+            _courseField(context, additionalRounds[i].courseId,
+                () => onPickAdditionalCourse(i)),
             const SizedBox(height: 12),
             Builder(builder: (ctx) => InkWell(
               onTap: () async {

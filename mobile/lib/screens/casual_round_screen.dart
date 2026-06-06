@@ -119,11 +119,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     }
   }
 
-  /// Find/add a course via the catalog (catalog-first, GolfCourseAPI fallback),
-  /// then refresh courses+tees and auto-select the new one. This is the
-  /// brand-new-account un-blocker: an account with no courses can add its home
-  /// course inline without leaving round setup.
-  Future<void> _addCourse() async {
+  /// Pick a course via the combined search: your account courses + the shared
+  /// catalog in one type-ahead, with a "full database" (GolfCourseAPI) fallback.
+  /// Selecting an existing course just picks it; selecting a catalog/API course
+  /// clones it in first. Either way we refresh courses+tees and select it. This
+  /// is also the brand-new-account un-blocker — an empty account can find its
+  /// home course inline without leaving round setup.
+  Future<void> _pickCourse() async {
     final added = await Navigator.of(context).push<CourseInfo>(
       MaterialPageRoute(builder: (_) => const CatalogAddScreen()),
     );
@@ -467,78 +469,41 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         children: [
           Text('Select Course', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
-          if (_courses.isEmpty)
-            Card(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'No courses yet. Find your course to get started — '
-                      'courses other golfers have added show up instantly.',
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: _addCourse,
-                      icon: const Icon(Icons.search),
-                      label: const Text('Find your course'),
-                    ),
-                  ],
-                ),
+          // One tappable field that opens the combined search (your courses +
+          // shared catalog, with a full-database/API fallback). Replaces the
+          // old dropdown + separate "Add a course" button.
+          InkWell(
+            onTap: _pickCourse,
+            borderRadius: BorderRadius.circular(4),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Course',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.golf_course),
+                suffixIcon: Icon(Icons.search),
               ),
-            )
-          else ...[
-          DropdownButtonFormField<CourseInfo>(
-            value: _selectedCourse,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Course',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.golf_course),
-            ),
-            items: _courses.map((c) => DropdownMenuItem(
-              value: c,
               child: Text(
-                c.location.isEmpty ? c.name : '${c.name}  ·  ${c.location}',
+                _selectedCourse == null
+                    ? 'Search by city or course'
+                    : (_selectedCourse!.location.isEmpty
+                        ? _selectedCourse!.name
+                        : '${_selectedCourse!.name}  ·  ${_selectedCourse!.location}'),
                 overflow: TextOverflow.ellipsis,
+                style: _selectedCourse == null
+                    ? TextStyle(color: Theme.of(context).hintColor)
+                    : null,
               ),
-            )).toList(),
-            onChanged: (c) {
-              setState(() {
-                _selectedCourse = c;
-                // Recompute each selected player's default tee when the
-                // course changes.  Using the per-player helper keeps
-                // Women pointed at a Women's tee and Men at a Men's tee,
-                // sorted by sort_priority.  We overwrite only tees that
-                // became invalid (wrong course) or were unassigned (0)
-                // so manual overrides survive course changes where the
-                // tee_id happens to still be valid — rare, but the
-                // failure mode is safe.
-                for (final pid in _playerTees.keys.toList()) {
-                  final cur = _playerTees[pid];
-                  final teeStillValid = cur != 0 &&
-                      _availableTees.any((t) => t.id == cur);
-                  if (!teeStillValid) {
-                    final player = _players.firstWhere(
-                      (p) => p.id == pid,
-                      orElse: () => _players.first,
-                    );
-                    _playerTees[pid] = _defaultTeeIdForPlayer(player);
-                  }
-                }
-              });
-            },
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: _addCourse,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add a course'),
             ),
           ),
+          if (_selectedCourse == null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Searches your courses and the shared catalog. '
+              'Not there? Use the full course database.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
           ],
           const SizedBox(height: 24),
 

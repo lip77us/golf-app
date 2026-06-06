@@ -21,7 +21,12 @@ import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 
 class CourseSearchScreen extends StatefulWidget {
-  const CourseSearchScreen({super.key});
+  /// Optional text to pre-fill the search box with (and run immediately) —
+  /// e.g. carried over from the combined catalog search so the user doesn't
+  /// retype what they already entered.
+  final String? initialQuery;
+
+  const CourseSearchScreen({super.key, this.initialQuery});
 
   @override
   State<CourseSearchScreen> createState() => _CourseSearchScreenState();
@@ -34,6 +39,21 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
   List<Map<String, dynamic>> _courses      = [];
   bool    _searching   = false;
   Object? _searchError;
+
+  @override
+  void initState() {
+    super.initState();
+    final seed = widget.initialQuery?.trim() ?? '';
+    if (seed.isNotEmpty) {
+      _searchCtrl.text = seed;
+      if (seed.length >= 2) {
+        // Run the API search right away so results are waiting for the user.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _search(seed);
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
