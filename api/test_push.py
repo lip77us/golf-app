@@ -113,3 +113,40 @@ class NotifyRoundEventTests(TestCase):
         toks = tokens_for_users(users_for_round(self.round), 'skins')
         self.assertIn('tok-bob', toks)
         self.assertNotIn('tok-w', toks)
+
+
+@override_settings(PUSH_BACKEND='console')
+class RoundLifecycleNotifyTests(TestCase):
+    def setUp(self):
+        self.acct = Account.objects.create(name='Host')
+        self.course = Course.objects.create(account=self.acct, name='Pebble')
+
+    def _round(self, *, foursomes=1):
+        r = Round.objects.create(
+            account=self.acct, course=self.course, status='in_progress',
+            active_games=['skins'])
+        for g in range(foursomes):
+            Foursome.objects.create(round=r, group_number=g + 1)
+        return r
+
+    def test_multigroup_start_notifies_once(self):
+        from services.push import maybe_notify_round_started
+        r = self._round(foursomes=2)
+        maybe_notify_round_started(r)
+        maybe_notify_round_started(r)  # dedup
+        self.assertEqual(SentNotification.objects.filter(
+            dedup_key=f'round_start:round={r.id}').count(), 1)
+
+    def test_single_foursome_casual_is_skipped(self):
+        from services.push import maybe_notify_round_started
+        r = self._round(foursomes=1)
+        maybe_notify_round_started(r)
+        self.assertFalse(
+            SentNotification.objects.filter(event_type='round_start').exists())
+
+    def test_multigroup_complete_notifies(self):
+        from services.push import maybe_notify_round_complete
+        r = self._round(foursomes=2)
+        maybe_notify_round_complete(r)
+        self.assertTrue(SentNotification.objects.filter(
+            dedup_key=f'round_complete:round={r.id}').exists())

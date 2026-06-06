@@ -2324,6 +2324,10 @@ class RoundSetupView(APIView):
         round_obj.status = 'in_progress'
         round_obj.save(update_fields=update_fields)
 
+        # Notify followers a multi-group round has started (once; best-effort).
+        from services.push import maybe_notify_round_started
+        maybe_notify_round_started(round_obj)
+
         if d['auto_setup_games']:
             _auto_setup_games(round_obj, foursomes)
 
@@ -2725,6 +2729,9 @@ class RoundCompleteView(APIView):
         if all_done and round_obj.status != 'complete':
             round_obj.status = 'complete'
             round_obj.save(update_fields=['status'])
+            # Notify followers the multi-group round is final (once; best-effort).
+            from services.push import maybe_notify_round_complete
+            maybe_notify_round_complete(round_obj)
 
         # Finalise cup points whenever this is called — partial-round
         # calls still want their group's points reflected on the live

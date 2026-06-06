@@ -141,3 +141,43 @@ def notify_round_event(round_obj, *, category, dedup_key, title, body,
     if dead:
         DeviceToken.objects.filter(token__in=dead).delete()
     return True
+
+
+# --------------------------------------------------------------------------
+# Event hooks (Phase 1 — basic: round started / completed)
+# --------------------------------------------------------------------------
+
+def _is_multi_group(round_obj):
+    """Notify only for multi-group rounds: multi-foursome tournaments and
+    multi-group skins. Single-foursome casual rounds get nothing."""
+    return (round_obj.tournament_id is not None
+            or round_obj.foursomes.count() > 1)
+
+
+def maybe_notify_round_started(round_obj):
+    """Round-start push for multi-group rounds. Best-effort; never raises (a
+    notification problem must not break starting a round)."""
+    try:
+        if not _is_multi_group(round_obj):
+            return
+        notify_round_event(
+            round_obj, category='round_start',
+            dedup_key=f'round_start:round={round_obj.id}',
+            title='Round under way',
+            body=f'Your round at {round_obj.course.name} has started.')
+    except Exception:  # pragma: no cover - defensive
+        logger.exception('push: round_started failed (round %s)', round_obj.id)
+
+
+def maybe_notify_round_complete(round_obj):
+    """Round-complete push for multi-group rounds. Best-effort; never raises."""
+    try:
+        if not _is_multi_group(round_obj):
+            return
+        notify_round_event(
+            round_obj, category='round_complete',
+            dedup_key=f'round_complete:round={round_obj.id}',
+            title='Round complete',
+            body=f'Final results are in for {round_obj.course.name}.')
+    except Exception:  # pragma: no cover - defensive
+        logger.exception('push: round_complete failed (round %s)', round_obj.id)
