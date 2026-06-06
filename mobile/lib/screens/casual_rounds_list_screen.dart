@@ -6,9 +6,11 @@ import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../utils/shared_round.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/shared_round_card.dart';
 import 'casual_round_screen.dart';
 import 'player_list_screen.dart';
 
@@ -23,6 +25,8 @@ class CasualRoundsListScreen extends StatefulWidget {
 
 class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
   List<CasualRoundSummary>? _rounds;
+  /// Multi-group skins games in OTHER accounts a friend added me to.
+  List<ScoringRound> _shared = [];
   bool    _loading      = true;
   String? _error;
   bool    _networkError = false;
@@ -41,7 +45,15 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
       final data   = await client.getCasualRounds(
         status: _showCompleted ? 'complete' : 'in_progress',
       );
-      if (mounted) setState(() { _rounds = data; });
+      // Multi-group skins a friend/TD added me to (cross-account). Best-effort:
+      // a failure here must not break my own rounds list.
+      List<ScoringRound> shared = [];
+      try {
+        shared = (await client.getPlayingForMe())
+            .where((r) => !r.isTournament)
+            .toList();
+      } catch (_) {/* ignore — show own rounds regardless */}
+      if (mounted) setState(() { _rounds = data; _shared = shared; });
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -260,7 +272,10 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
     final rounds = (_rounds ?? []).where((r) {
       return _showCompleted ? r.status == 'complete' : r.status != 'complete';
     }).toList();
-    if (rounds.isEmpty) {
+    final shared = _shared.where((r) {
+      return _showCompleted ? r.status == 'complete' : r.status != 'complete';
+    }).toList();
+    if (rounds.isEmpty && shared.isEmpty) {
       final emptyMsg = _showCompleted
           ? 'No completed rounds yet.'
           : 'No rounds in progress.';
@@ -291,25 +306,48 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.builder(
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
-        itemCount: rounds.length,
-        itemBuilder: (_, i) {
-          final round = rounds[i];
-          final isCreator = myId != null && round.createdByPlayerId == myId;
-          return _CasualRoundCard(
-            round:       round,
-            isCompleted: _showCompleted,
-            onTap: () async {
-              await _openRound(round);
-              _load();
-            },
-            onDelete: isCreator ? () => _confirmDelete(round) : null,
-          );
-        },
+        children: [
+          if (shared.isNotEmpty) ...[
+            _sectionHeader(context, 'Shared with you'),
+            for (final r in shared)
+              SharedRoundCard(
+                round: r,
+                onTap: () async {
+                  await openSharedRound(context, r.id);
+                  _load();
+                },
+              ),
+            if (rounds.isNotEmpty) _sectionHeader(context, 'Your rounds'),
+          ],
+          for (final round in rounds)
+            _CasualRoundCard(
+              round:       round,
+              isCompleted: _showCompleted,
+              onTap: () async {
+                await _openRound(round);
+                _load();
+              },
+              onDelete: (myId != null && round.createdByPlayerId == myId)
+                  ? () => _confirmDelete(round)
+                  : null,
+            ),
+        ],
       ),
     );
   }
+
+  Widget _sectionHeader(BuildContext context, String label) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+      );
 }
 
 // ---------------------------------------------------------------------------

@@ -486,6 +486,22 @@ class ApiClient {
         .toList();
   }
 
+  /// Multi-foursome rounds (tournaments / multi-group skins) in OTHER accounts
+  /// that a friend/TD added me to — I can open these to score my own group and
+  /// read the whole-field leaderboard (no scorer designation needed).
+  Future<List<ScoringRound>> getPlayingForMe() async {
+    final data = await _get('/rounds/playing-for-me/');
+    return (data as List)
+        .map((r) => ScoringRound.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Called when I open a shared round: idempotently mirrors it into my account
+  /// (adds the TD to My Golfers + copies the course in). Safe to call each open.
+  Future<void> joinRound(int roundId) async {
+    await _post('/rounds/$roundId/join/', {});
+  }
+
   /// TD designates (or clears) a foursome member as its scorer.
   Future<void> setFoursomeScorer(int foursomeId, int playerId,
       {bool isScorer = true}) async {

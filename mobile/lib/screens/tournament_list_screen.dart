@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
+import '../utils/shared_round.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
+import '../widgets/shared_round_card.dart';
 import 'new_round_wizard.dart';
 import 'player_list_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
@@ -25,6 +27,8 @@ class TournamentListScreen extends StatefulWidget {
 
 class _TournamentListScreenState extends State<TournamentListScreen> {
   List<Tournament>? _tournaments;
+  /// Tournament rounds in OTHER accounts a friend/TD added me to.
+  List<ScoringRound> _shared = [];
   bool    _loading      = true;
   String? _error;
   bool    _networkError = false;
@@ -54,7 +58,14 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     try {
       final client = context.read<AuthProvider>().client;
       final data   = await client.getTournaments();
-      if (mounted) setState(() { _tournaments = data; });
+      // Tournament rounds a friend/TD added me to (cross-account). Best-effort.
+      List<ScoringRound> shared = [];
+      try {
+        shared = (await client.getPlayingForMe())
+            .where((r) => r.isTournament)
+            .toList();
+      } catch (_) {/* ignore — show my own tournaments regardless */}
+      if (mounted) setState(() { _tournaments = data; _shared = shared; });
 
       // First-load only: if the user has no active tournaments, drop them
       // straight onto the casual rounds list.  Use push (not replace) so the
@@ -62,7 +73,8 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       // or create a new one.
       if (!_didAutoRedirect && mounted) {
         _didAutoRedirect = true;
-        final hasActive = data.any((t) => !_isComplete(t));
+        final hasActive = data.any((t) => !_isComplete(t)) ||
+            shared.any((r) => r.status != 'complete');
         if (!hasActive) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) Navigator.of(context).pushNamed('/casual-rounds');
@@ -332,6 +344,9 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     final filtered = all.where(
       (t) => _showCompleted ? _isComplete(t) : !_isComplete(t),
     ).toList();
+    final shared = _shared.where((r) {
+      return _showCompleted ? r.status == 'complete' : r.status != 'complete';
+    }).toList();
 
     return Column(children: [
       Padding(
@@ -357,18 +372,48 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         ),
       ),
       Expanded(
-        child: filtered.isEmpty
+        child: (filtered.isEmpty && shared.isEmpty)
             ? Center(child: Text(_showCompleted
                 ? 'No completed tournaments.'
                 : 'No active tournaments.'))
             : RefreshIndicator(
                 onRefresh: _load,
-                child: ListView.builder(
+                child: ListView(
                   padding: const EdgeInsets.all(12),
-                  itemCount: filtered.length,
-                  itemBuilder: (_, i) {
-                    final t = filtered[i];
-          return _TournamentCard(
+                  children: [
+                    if (shared.isNotEmpty) ...[
+                      _sectionHeader('Shared with you'),
+                      for (final r in shared)
+                        SharedRoundCard(
+                          round: r,
+                          onTap: () async {
+                            await openSharedRound(context, r.id);
+                            _load();
+                          },
+                        ),
+                      if (filtered.isNotEmpty) _sectionHeader('Your tournaments'),
+                    ],
+                    for (final t in filtered) _tournamentCard(t),
+                  ],
+                ),
+              ),
+      ),
+    ]);
+  }
+
+  Widget _sectionHeader(String label) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+      );
+
+  Widget _tournamentCard(Tournament t) {
+    return _TournamentCard(
             tournament       : t,
             isStaff          : context.read<AuthProvider>().isAdmin,
             isComplete       : _isComplete(t),
@@ -452,11 +497,6 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
             },
             onDelete         : () => _deleteTournament(t),
           );
-                  },
-                ),
-              ),
-      ),
-    ]);
   }
 }
 
