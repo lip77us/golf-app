@@ -64,6 +64,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme    = Theme.of(context);
     final settings = context.watch<SettingsProvider>();
+    final isAdmin  = context.watch<AuthProvider>().isAdmin;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -99,6 +100,22 @@ class SettingsScreen extends StatelessWidget {
             value: settings.autoAdvanceHole,
             onChanged: (v) => settings.setAutoAdvanceHole(v),
           ),
+          if (isAdmin) ...[
+            const Divider(height: 32),
+            ListTile(
+              leading: const Icon(Icons.golf_course),
+              title: const Text('Manage Courses'),
+              subtitle: Text(
+                'Edit tee priority, or rename and remove courses in your '
+                'account. Adding a course happens during round setup.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).pushNamed('/manage-courses'),
+            ),
+          ],
           const Divider(height: 32),
           ListTile(
             leading: Icon(Icons.delete_forever, color: theme.colorScheme.error),
