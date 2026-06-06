@@ -16,8 +16,8 @@ import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_double_bogey_card.dart';
+import '../widgets/course_search_field.dart';
 import '../widgets/payout_config_field.dart';
-import 'catalog_add_screen.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
 import 'ryder_cup_draft_screen.dart';
@@ -272,19 +272,16 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     }
   }
 
-  /// Open the combined course search (your courses + shared catalog, with a
-  /// full-database/GolfCourseAPI fallback), refresh the wizard's course/tee
-  /// data (the search can clone a brand-new course into the account), and
-  /// select the result.
+  /// Called by the inline [CourseSearchField] once a course is chosen (an
+  /// existing account course, or a catalog/API one it just cloned in). Refresh
+  /// the wizard's course/tee data (a freshly cloned course brings new tees) and
+  /// select it.
   ///
   /// [additionalIndex] null → Round 1. Picking Round 1 also defaults every
   /// extra day that hasn't been set yet to the same course, since most
   /// tournaments play one course (the user can still change a day).
-  Future<void> _pickWizardCourse({int? additionalIndex}) async {
-    final added = await Navigator.of(context).push<CourseInfo>(
-      MaterialPageRoute(builder: (_) => const CatalogAddScreen()),
-    );
-    if (added == null || !mounted) return;
+  Future<void> _selectWizardCourse(CourseInfo course,
+      {int? additionalIndex}) async {
     final client = context.read<AuthProvider>().client;
     try {
       final rawTees = await client.getTees();
@@ -305,15 +302,15 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         _tees    = tees;
         _courses = courses;
         if (additionalIndex == null) {
-          _selectedCourseId = added.id;
+          _selectedCourseId = course.id;
           // Tee list changed → drop any per-player tee assignments.
           _playerTees.clear();
           // Default the extra days to this course (only those not yet chosen).
           for (final d in _additionalRounds) {
-            d.courseId ??= added.id;
+            d.courseId ??= course.id;
           }
         } else {
-          _additionalRounds[additionalIndex].courseId = added.id;
+          _additionalRounds[additionalIndex].courseId = course.id;
         }
       });
     } catch (_) {
@@ -864,7 +861,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           netMaxDoubleBogey : _netMaxDoubleBogey,
           formKey           : _step1Key,
           additionalRounds  : _additionalRounds,
-          onPickCourse      : () => _pickWizardCourse(),
+          onPickCourse      : (course) => _selectWizardCourse(course),
           onPickDate        : (d) => setState(() => _date = d),
           onChangeHandicap  : (mode, pct) => setState(() {
             _handicapMode = mode;
@@ -872,8 +869,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           }),
           onChangeNetMaxDoubleBogey: (v) =>
               setState(() => _netMaxDoubleBogey = v),
-          onPickAdditionalCourse: (idx) =>
-              _pickWizardCourse(additionalIndex: idx),
+          onPickAdditionalCourse: (idx, course) =>
+              _selectWizardCourse(course, additionalIndex: idx),
           onPickAdditionalDate: (idx, d) => setState(() {
             _additionalRounds[idx].date = d;
           }),
@@ -1242,36 +1239,19 @@ class _Step1Details extends StatelessWidget {
   final bool              netMaxDoubleBogey;
   final GlobalKey<FormState> formKey;
   final List<_RoundDraft> additionalRounds;
-  final VoidCallback            onPickCourse;
+  final ValueChanged<CourseInfo> onPickCourse;
   final ValueChanged<DateTime>  onPickDate;
   final void Function(String mode, int pct) onChangeHandicap;
   final ValueChanged<bool> onChangeNetMaxDoubleBogey;
-  final void Function(int idx) onPickAdditionalCourse;
+  final void Function(int idx, CourseInfo course) onPickAdditionalCourse;
   final void Function(int idx, DateTime date) onPickAdditionalDate;
 
-  /// Tappable "Course" field that opens the combined search. Shows the chosen
-  /// course name, or a search hint when none is picked yet.
-  Widget _courseField(BuildContext context, int? courseId, VoidCallback onTap) {
-    final name = courses.where((c) => c.id == courseId).firstOrNull?.name;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: InputDecorator(
-        decoration: const InputDecoration(
-          labelText: 'Course',
-          border: OutlineInputBorder(),
-          prefixIcon: Icon(Icons.golf_course),
-          suffixIcon: Icon(Icons.search),
-        ),
-        child: Text(
-          name ?? 'Search by city or course',
-          overflow: TextOverflow.ellipsis,
-          style: name == null
-              ? TextStyle(color: Theme.of(context).hintColor)
-              : null,
-        ),
-      ),
-    );
+  /// Inline combined-search "Course" field (your courses + shared catalog, with
+  /// a full-database fallback). [courseId] is the currently-selected course id
+  /// for this round (looked up in [courses] for the collapsed display).
+  Widget _courseField(int? courseId, ValueChanged<CourseInfo> onSelected) {
+    final selected = courses.where((c) => c.id == courseId).firstOrNull;
+    return CourseSearchField(selected: selected, onSelected: onSelected);
   }
 
   const _Step1Details({
@@ -1315,9 +1295,9 @@ class _Step1Details extends StatelessWidget {
             const SizedBox(height: 10),
           ],
 
-          // Course picker (Round 1) — combined search (your courses + catalog +
-          // full database).
-          _courseField(context, selectedCourseId, onPickCourse),
+          // Course picker (Round 1) — inline combined search (your courses +
+          // catalog + full database).
+          _courseField(selectedCourseId, onPickCourse),
           const SizedBox(height: 16),
 
           // Date (Round 1)
@@ -1350,8 +1330,8 @@ class _Step1Details extends StatelessWidget {
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            _courseField(context, additionalRounds[i].courseId,
-                () => onPickAdditionalCourse(i)),
+            _courseField(additionalRounds[i].courseId,
+                (course) => onPickAdditionalCourse(i, course)),
             const SizedBox(height: 12),
             Builder(builder: (ctx) => InkWell(
               onTap: () async {

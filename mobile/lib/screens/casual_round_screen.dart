@@ -11,7 +11,7 @@ import '../utils/golfer_invite.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/inline_message.dart';
-import 'catalog_add_screen.dart';
+import '../widgets/course_search_field.dart';
 import 'player_form_screen.dart';
 
 class CasualRoundScreen extends StatefulWidget {
@@ -119,17 +119,11 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     }
   }
 
-  /// Pick a course via the combined search: your account courses + the shared
-  /// catalog in one type-ahead, with a "full database" (GolfCourseAPI) fallback.
-  /// Selecting an existing course just picks it; selecting a catalog/API course
-  /// clones it in first. Either way we refresh courses+tees and select it. This
-  /// is also the brand-new-account un-blocker — an empty account can find its
-  /// home course inline without leaving round setup.
-  Future<void> _pickCourse() async {
-    final added = await Navigator.of(context).push<CourseInfo>(
-      MaterialPageRoute(builder: (_) => const CatalogAddScreen()),
-    );
-    if (added == null || !mounted) return;
+  /// Called by the inline [CourseSearchField] once a course is chosen (an
+  /// existing account course, or a catalog/API one it just cloned in). Refresh
+  /// courses+tees (a freshly cloned course brings new tees), select it, and
+  /// assign default tees to any already-selected players.
+  Future<void> _onCourseSelected(CourseInfo course) async {
     final client = context.read<AuthProvider>().client;
     final results = await Future.wait([client.getCourses(), client.getTees()]);
     if (!mounted) return;
@@ -137,8 +131,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       _courses = results[0] as List<CourseInfo>;
       _tees    = results[1] as List<TeeInfo>;
       _selectedCourse =
-          _courses.firstWhere((c) => c.id == added.id, orElse: () => added);
-      // Now that a course is set, assign default tees to any selected players.
+          _courses.firstWhere((c) => c.id == course.id, orElse: () => course);
       for (final pid in _playerTees.keys.toList()) {
         final cur = _playerTees[pid];
         final valid = cur != 0 && _availableTees.any((t) => t.id == cur);
@@ -469,42 +462,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         children: [
           Text('Select Course', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
-          // One tappable field that opens the combined search (your courses +
-          // shared catalog, with a full-database/API fallback). Replaces the
-          // old dropdown + separate "Add a course" button.
-          InkWell(
-            onTap: _pickCourse,
-            borderRadius: BorderRadius.circular(4),
-            child: InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Course',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.golf_course),
-                suffixIcon: Icon(Icons.search),
-              ),
-              child: Text(
-                _selectedCourse == null
-                    ? 'Search by city or course'
-                    : (_selectedCourse!.location.isEmpty
-                        ? _selectedCourse!.name
-                        : '${_selectedCourse!.name}  ·  ${_selectedCourse!.location}'),
-                overflow: TextOverflow.ellipsis,
-                style: _selectedCourse == null
-                    ? TextStyle(color: Theme.of(context).hintColor)
-                    : null,
-              ),
-            ),
+          // Inline combined search: type to see matches from your courses + the
+          // shared catalog right here, with a full-database/API fallback.
+          CourseSearchField(
+            selected: _selectedCourse,
+            onSelected: _onCourseSelected,
           ),
-          if (_selectedCourse == null) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Searches your courses and the shared catalog. '
-              'Not there? Use the full course database.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-          ],
           const SizedBox(height: 24),
 
           Text('Games', style: Theme.of(context).textTheme.titleLarge),
