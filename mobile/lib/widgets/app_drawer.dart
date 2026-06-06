@@ -143,14 +143,6 @@ class AppDrawer extends StatelessWidget {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.edit_note_outlined),
-                  title: const Text('Scoring'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).pushNamed('/scoring-rounds');
-                  },
-                ),
-                ListTile(
                   leading: const Icon(Icons.people_outline),
                   title: const Text('My Golfers'),
                   onTap: onPlayersTap,

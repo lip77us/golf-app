@@ -706,82 +706,6 @@ class _FoursomeCard extends StatelessWidget {
     }
   }
 
-  /// TD-only — designate (or clear) the golfer who scores this foursome from
-  /// their own phone (delegated cross-account scoring). Allowed day-of; the
-  /// scorer just needs the app with their number on their golfer card.
-  Future<void> _setScorer(BuildContext context) async {
-    final members = foursome.realPlayers;
-    final picked = await showModalBottomSheet<Membership>(
-      context: context,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Scorer for ${foursome.label}',
-                        style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Pick the golfer who will enter scores for this group '
-                      'from their own phone. They can be set up day-of — they '
-                      'just need the app with their number on their golfer card.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              ...members.map((m) => ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor:
-                          theme.colorScheme.surfaceContainerHighest,
-                      child: Text(m.player.name.isNotEmpty
-                          ? m.player.name[0].toUpperCase() : '?'),
-                    ),
-                    title: Text(m.player.name),
-                    trailing: m.isScorer
-                        ? const Icon(Icons.check_circle, color: Colors.green)
-                        : null,
-                    onTap: () => Navigator.of(ctx).pop(m),
-                  )),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
-    );
-    if (picked == null || !context.mounted) return;
-    final client = context.read<AuthProvider>().client;
-    try {
-      await client.setFoursomeScorer(
-        foursome.id, picked.player.id, isScorer: !picked.isScorer,
-      );
-      onGamesChanged();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(picked.isScorer
-              ? '${picked.player.name} is no longer the scorer.'
-              : '${picked.player.name} will score ${foursome.label}.'),
-        ));
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Could not set scorer.'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ));
-      }
-    }
-  }
-
   /// TD-only "rebalance" tool — pick a player from this foursome,
   /// then pick a target foursome to move them to.  Backend reconfigs
   /// both sides' TC games and revalidates the donor pool; pre-play
@@ -1188,9 +1112,6 @@ class _FoursomeCard extends StatelessWidget {
                     case 'configure_games':
                       _showGameSheet(context);
                       break;
-                    case 'set_scorer':
-                      _setScorer(context);
-                      break;
                   }
                 },
                 itemBuilder: (_) => [
@@ -1203,15 +1124,6 @@ class _FoursomeCard extends StatelessWidget {
                               : theme.colorScheme.onSurfaceVariant),
                       const SizedBox(width: 12),
                       const Flexible(child: Text('Configure group games')),
-                    ]),
-                  ),
-                  PopupMenuItem(
-                    value: 'set_scorer',
-                    child: Row(children: [
-                      Icon(Icons.edit_note, size: 18,
-                          color: theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 12),
-                      const Flexible(child: Text('Set scorer')),
                     ]),
                   ),
                 ],
