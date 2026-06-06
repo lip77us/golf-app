@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
+import '../utils/add_halved_golfer.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/halved_mark.dart';
@@ -207,10 +208,22 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     final created = await Navigator.of(context).push<PlayerProfile>(
       MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
     );
+    _addCreatedGolfer(created);
+  }
+
+  /// Add an existing Halved member (not yet in my roster) by phone number.
+  Future<void> _addHalvedGolfer() async {
+    final created = await addHalvedGolferByPhone(context);
+    _addCreatedGolfer(created);
+  }
+
+  void _addCreatedGolfer(PlayerProfile? created) {
     if (created == null || !mounted) return;
     setState(() {
-      _players = [..._players, created]
-        ..sort((a, b) => a.name.compareTo(b.name));
+      if (!_players.any((p) => p.id == created.id)) {
+        _players = [..._players, created]
+          ..sort((a, b) => a.name.compareTo(b.name));
+      }
     });
     if (_selectedCourse != null) {
       _onPlayerToggle(created.id, true);
@@ -513,15 +526,19 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           ],
           const SizedBox(height: 24),
 
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Text('Select Players & Tees',
+              style: Theme.of(context).textTheme.titleLarge),
+          Wrap(
             children: [
-              Text('Select Players & Tees',
-                  style: Theme.of(context).textTheme.titleLarge),
               TextButton.icon(
                 onPressed: _addGolfer,
                 icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
                 label: const Text('Add a golfer'),
+              ),
+              TextButton.icon(
+                onPressed: _addHalvedGolfer,
+                icon: const Icon(Icons.phone_iphone, size: 18),
+                label: const Text('Add by phone #'),
               ),
             ],
           ),

@@ -17,6 +17,7 @@ import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
+import '../utils/add_halved_golfer.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
@@ -134,10 +135,23 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
     final created = await Navigator.of(context).push<PlayerProfile>(
       MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
     );
+    _addCreatedGolfer(created);
+  }
+
+  /// Add an existing Halved member (not yet in my roster) by phone number.
+  Future<void> _addHalvedGolfer() async {
+    final created = await addHalvedGolferByPhone(context);
+    _addCreatedGolfer(created);
+  }
+
+  void _addCreatedGolfer(PlayerProfile? created) {
     if (created == null || !mounted) return;
+    // Avoid a duplicate if the golfer was already in the list (e.g. re-added).
     setState(() {
-      _allPlayers = [..._allPlayers, created]
-        ..sort((a, b) => a.name.compareTo(b.name));
+      if (!_allPlayers.any((p) => p.id == created.id)) {
+        _allPlayers = [..._allPlayers, created]
+          ..sort((a, b) => a.name.compareTo(b.name));
+      }
       _selectedIds.add(created.id);
     });
   }
@@ -368,17 +382,22 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
       ),
       const SizedBox(height: 4),
 
-      // Inline "Add a golfer" — create a login-less golfer without leaving
-      // round setup; the new golfer is added to the list and auto-selected.
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: TextButton.icon(
-            onPressed: _addGolfer,
-            icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
-            label: const Text('Add a golfer'),
-          ),
+      // Inline add: a login-less golfer, or look one up on Halved by number.
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Wrap(
+          children: [
+            TextButton.icon(
+              onPressed: _addGolfer,
+              icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+              label: const Text('Add a golfer'),
+            ),
+            TextButton.icon(
+              onPressed: _addHalvedGolfer,
+              icon: const Icon(Icons.phone_iphone, size: 18),
+              label: const Text('Add by phone #'),
+            ),
+          ],
         ),
       ),
       const SizedBox(height: 4),

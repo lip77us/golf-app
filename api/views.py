@@ -2145,6 +2145,41 @@ class TournamentWatcherCandidatesView(APIView):
         return _watcher_candidates_response(request, ids, phones)
 
 
+class HalvedUserLookupView(APIView):
+    """
+    GET /api/halved-users/lookup/?phone=<number>
+
+    Look up a registered Halved member by phone so you can add them to a round
+    even if they're not in your roster yet. You must know the number — there is
+    NO browsable directory, and we never return phone numbers. Returns the
+    member's profile fields (to confirm + seed a local golfer); their handicap
+    then follows them via the usual phone match. {found:false} when no verified
+    user has that number.
+    """
+    def get(self, request):
+        from accounts.phone import normalize
+        from django.contrib.auth import get_user_model
+
+        raw = (request.query_params.get('phone') or '').strip()
+        n = normalize(raw) if raw else None
+        if not n:
+            return Response({'found': False})
+        u = (get_user_model().objects.filter(phone=n)
+             .select_related('player_profile').first())
+        if u is None:
+            return Response({'found': False})
+        prof = getattr(u, 'player_profile', None)
+        name = ((prof.name if prof else '') or u.get_full_name()
+                or u.username)
+        return Response({
+            'found': True,
+            'name': name,
+            'short_name': (prof.short_name if prof else '') or '',
+            'sex': (prof.sex if prof else 'M') or 'M',
+            'handicap_index': str(prof.handicap_index) if prof else '0.0',
+        })
+
+
 class ScorerDesignateView(APIView):
     """
     POST /api/foursomes/<pk>/scorer/

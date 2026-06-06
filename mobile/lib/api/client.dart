@@ -509,6 +509,14 @@ class ApiClient {
     await _post('/tournaments/$tournamentId/join/', {});
   }
 
+  /// Look up a registered Halved member by phone number (no browsable
+  /// directory). Returns {found, name, short_name, sex, handicap_index}.
+  Future<Map<String, dynamic>> lookupHalvedUser(String phone) async {
+    final data = await _get(
+        '/halved-users/lookup/?phone=${Uri.encodeQueryComponent(phone)}');
+    return (data as Map).cast<String, dynamic>();
+  }
+
   /// My Golfers eligible to invite as watchers of a round/tournament —
   /// excludes anyone already playing in it.
   Future<List<PlayerProfile>> getRoundWatcherCandidates(int roundId) async {
