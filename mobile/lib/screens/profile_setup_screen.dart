@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/golf_primary_button.dart';
 import '../widgets/golf_text_field.dart';
@@ -21,27 +22,51 @@ class ProfileSetupScreen extends StatefulWidget {
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _formKey  = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
+  late final TextEditingController _shortCtrl;
   late final TextEditingController _hcpCtrl;
   String  _sex     = 'M';
   bool    _saving  = false;
   String? _error;
 
+  /// While false, the short name auto-tracks the initials of the name field.
+  /// A brand-new account starts with an auto-derived short ("NG" for the
+  /// "New Golfer" default), so we begin in auto-sync mode — changing the name
+  /// to the real one updates the short too. Editing the short field manually
+  /// stops the auto-sync so the user's choice isn't overwritten.
+  bool _shortNameUserEdited = false;
+
   @override
   void initState() {
     super.initState();
     final player = context.read<AuthProvider>().player;
-    _nameCtrl = TextEditingController(text: player?.name ?? '');
-    _hcpCtrl  = TextEditingController(
+    // Don't pre-fill the "New Golfer" placeholder the backend assigns when a
+    // user signs up without a name — start empty so they enter their real one
+    // (and the short name auto-fills from it).
+    final rawName  = player?.name ?? '';
+    final isDefault = rawName == 'New Golfer';
+    _nameCtrl  = TextEditingController(text: isDefault ? '' : rawName);
+    _shortCtrl = TextEditingController(
+        text: isDefault ? '' : (player?.shortName ?? ''));
+    _hcpCtrl   = TextEditingController(
       text: (player != null && player.handicapIndex.isNotEmpty)
           ? player.handicapIndex
           : '',
     );
     _sex = player?.sex ?? 'M';
+    _nameCtrl.addListener(_maybeAutoFillShortName);
+  }
+
+  void _maybeAutoFillShortName() {
+    if (_shortNameUserEdited) return;
+    final next = PlayerProfile.computeInitials(_nameCtrl.text);
+    if (_shortCtrl.text != next) _shortCtrl.text = next;
   }
 
   @override
   void dispose() {
+    _nameCtrl.removeListener(_maybeAutoFillShortName);
     _nameCtrl.dispose();
+    _shortCtrl.dispose();
     _hcpCtrl.dispose();
     super.dispose();
   }
@@ -67,6 +92,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       final updated = await auth.client.updatePlayer(
         player.id,
         name: _nameCtrl.text.trim(),
+        // Always send short_name: a non-empty value is used as-is; '' tells the
+        // server to re-derive it from the (new) name, so the stale "NG" default
+        // can't linger after the name is set.
+        shortName: _shortCtrl.text.trim(),
         handicapIndex: _hcpCtrl.text.trim().isEmpty
             ? '0.0'
             : _hcpCtrl.text.trim(),
@@ -113,10 +142,24 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 GolfTextField(
                   controller: _nameCtrl,
                   label: 'Full name',
+                  textCapitalization: TextCapitalization.words,
                   prefixIcon: Icons.person_outline,
                   textInputAction: TextInputAction.next,
                   validator: (v) =>
                       (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 16),
+
+                GolfTextField(
+                  controller: _shortCtrl,
+                  label: 'Short name',
+                  hint: 'e.g. TS',
+                  helper: 'Up to 5 chars, shown on compact scoreboards. '
+                          'Auto-fills from your name.',
+                  prefixIcon: Icons.badge_outlined,
+                  maxLength: 5,
+                  textInputAction: TextInputAction.next,
+                  onChanged: (_) => _shortNameUserEdited = true,
                 ),
                 const SizedBox(height: 16),
 
