@@ -1380,6 +1380,11 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getStablefordResult(int roundId) async {
+    final data = await _get('/rounds/$roundId/stableford/');
+    return data as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getStablefordConfig(int roundId) async {
     final data = await _get('/rounds/$roundId/stableford/setup/');
     return data as Map<String, dynamic>;

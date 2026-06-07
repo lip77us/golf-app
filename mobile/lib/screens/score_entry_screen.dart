@@ -368,6 +368,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         rp.points531Summary != null) {
       rp.loadPoints531(widget.foursomeId);
     }
+    // Stableford is round-scoped; refresh the authoritative per-hole points.
+    if (games.contains('stableford') && rp.round != null) {
+      rp.loadStableford(rp.round!.id);
+    }
     // Stroke Play stores handicap mode in its own config (not the round object).
     // Both casual ('low_net_round') and championship ('low_net') use the same endpoint.
     if ((games.contains('low_net_round') || games.contains('low_net')) &&
@@ -1536,6 +1540,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
           presses:       nas.presses,
           bottomPresses: nas.bottomPresses,
           currentHole:   _selectedHole,
+        ),
+
+      // Stableford per-hole points (authoritative; updates after each save).
+      if (games.contains('stableford') && rp.stablefordResult != null)
+        _StablefordStrip(
+          result:      rp.stablefordResult!,
+          currentHole: _selectedHole,
         ),
 
       Expanded(
@@ -5274,6 +5285,53 @@ class _TeamBanner extends StatelessWidget {
                 color: Colors.blue.shade700,
               ),
               overflow: TextOverflow.ellipsis),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Compact read-only strip showing each player's authoritative Stableford
+/// points for the current hole (config-aware; appears once the hole is saved).
+class _StablefordStrip extends StatelessWidget {
+  final Map<String, dynamic> result;
+  final int currentHole;
+  const _StablefordStrip({required this.result, required this.currentHole});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final results = (result['results'] as List? ?? []);
+    final key     = '$currentHole';
+    final chips    = <Widget>[];
+    for (final e in results) {
+      final r     = e as Map<String, dynamic>;
+      final holes = r['holes'] as Map<String, dynamic>?;
+      final pts   = holes?[key];
+      if (pts == null) continue;
+      final name = (r['player_name']?.toString() ?? '').split(' ').first;
+      chips.add(Padding(
+        padding: const EdgeInsets.only(right: 12),
+        child: Text('$name $pts',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(fontWeight: FontWeight.w600)),
+      ));
+    }
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+      child: Row(children: [
+        Text('Stableford pts:',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: chips),
+          ),
         ),
       ]),
     );

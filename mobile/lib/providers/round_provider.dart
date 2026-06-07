@@ -285,6 +285,7 @@ class RoundProvider extends ChangeNotifier {
       _scorecard        = null;
       _nassauSummary    = null;
       _skinsSummary     = null;
+      _stablefordResult = null;
       _tripleCupSummary = null;
       _sixesSummary     = null;
       _points531Summary = null;
@@ -646,6 +647,23 @@ class RoundProvider extends ChangeNotifier {
       debugPrint('loadSkins error: $e');
     } finally {
       _loadingSkins = false;
+      notifyListeners();
+    }
+  }
+
+  /// Authoritative per-hole + total Stableford points (config-aware) for the
+  /// round, matching the leaderboard/watch page. Round-scoped.
+  Map<String, dynamic>? _stablefordResult;
+  Map<String, dynamic>? get stablefordResult => _stablefordResult;
+
+  Future<void> loadStableford(int roundId) async {
+    try {
+      _stablefordResult = await _client.getStablefordResult(roundId);
+    } on NetworkException {
+      // Offline — keep the previous result around.
+    } catch (e) {
+      debugPrint('loadStableford error: $e');
+    } finally {
       notifyListeners();
     }
   }
