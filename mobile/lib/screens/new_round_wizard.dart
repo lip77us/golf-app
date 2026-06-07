@@ -84,7 +84,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // The wizard only captures the cup name, team count, and team colours
   // here.  Default palette avoids the red/blue political read by going
   // SF-Giants-style on the second team for 2-team setups.
-  final _cupNameCtrl = TextEditingController(text: 'Team Cup');
+  // Start blank so the user must name their cup (Next is gated on a non-empty
+  // name in _canAdvance).
+  final _cupNameCtrl = TextEditingController();
   int   _cupTeamCount = 2;
   /// Colour name per team index (0-based).  Length always matches
   /// _cupTeamCount; trimmed / extended whenever the team count changes.
@@ -1897,7 +1899,7 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
         ),
         const SizedBox(height: 24),
 
-        // Cup name
+        // Cup name (required)
         GolfTextField(
           controller: widget.cupNameCtrl,
           label: 'Cup name',
@@ -1906,6 +1908,13 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
           textCapitalization: TextCapitalization.words,
           onChanged: (_) => setState(() {}),
         ),
+        if (widget.cupNameCtrl.text.trim().isEmpty) ...[
+          const SizedBox(height: 6),
+          const InlineMessage(
+            kind: InlineMessageKind.warn,
+            text: 'Give your cup a name to continue.',
+          ),
+        ],
         const SizedBox(height: 24),
 
         // Number of teams

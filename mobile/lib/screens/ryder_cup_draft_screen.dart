@@ -42,7 +42,8 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
   bool    _notSetUp     = false;   // 404 → show setup form
 
   // ── Setup-form controllers ─────────────────────────────────────────────────
-  final _cupNameCtrl      = TextEditingController(text: 'Team Cup');
+  // Blank by default — the user must name their cup (validated on save).
+  final _cupNameCtrl      = TextEditingController();
   final _ppTeamCtrl       = TextEditingController(text: '6');
   int   _teamCount        = 2;
   final List<TextEditingController> _teamNameCtrls = [
