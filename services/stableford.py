@@ -87,19 +87,25 @@ def _strokes_on_hole(hcp: int, stroke_index: int) -> int:
     return hcp // 18 + base
 
 
-def _build_stableford_totals(round_obj) -> dict:
+def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
+                             points_fn=None) -> dict:
     """{player_id: {name, points, holes_played, foursome_id, holes:{hole:pts}}}.
 
-    Computed config-aware from gross scores + the Stableford config's own
-    handicap (Net% or Gross — no Strokes-Off) and points table, like Low Net.
-    Falls back to the round's net handicap when no config is set up yet.
+    Computed config-aware from gross scores + a handicap (Net% or Gross — no
+    Strokes-Off) and points table, like Low Net. By default reads the round's
+    own StablefordGame config (casual). The Championship passes the tournament's
+    `mode`/`net_pct`/`points_fn` so every round is scored on the same table.
     """
-    from games.models import StablefordGame
     from tournament.models import Foursome
 
     config = getattr(round_obj, 'stableford_config', None)
-    mode    = config.handicap_mode if config else round_obj.handicap_mode
-    net_pct = config.net_percent if config else round_obj.net_percent
+    if mode is None:
+        mode = config.handicap_mode if config else round_obj.handicap_mode
+    if net_pct is None:
+        net_pct = config.net_percent if config else round_obj.net_percent
+    if points_fn is None:
+        points_fn = (config.points_for_diff if config
+                     else (lambda d: max(0, 2 - d)))
 
     foursomes = list(
         Foursome.objects.filter(round=round_obj)
@@ -111,7 +117,7 @@ def _build_stableford_totals(round_obj) -> dict:
     }
 
     def _points(diff):
-        return config.points_for_diff(diff) if config else max(0, 2 - diff)
+        return points_fn(diff)
 
     qs = (
         HoleScore.objects

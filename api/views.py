@@ -1447,6 +1447,70 @@ class TournamentLowNetView(APIView):
         return Response(low_net_championship_summary(tournament))
 
 
+class TournamentStablefordSetupView(APIView):
+    """GET/POST /api/tournaments/{id}/stableford/setup/ — Stableford Championship
+    config (editable 6-bucket table, Net%/Gross, pool payouts)."""
+    _PTS = ['pts_albatross', 'pts_eagle', 'pts_birdie',
+            'pts_par', 'pts_bogey', 'pts_double']
+
+    def _dict(self, cfg):
+        return {
+            'configured'         : True,
+            'handicap_mode'      : cfg.handicap_mode,
+            'net_percent'        : cfg.net_percent,
+            'entry_fee'          : float(cfg.entry_fee),
+            'payouts'            : cfg.payouts or [],
+            'excluded_player_ids': cfg.excluded_player_ids or [],
+            **{k: getattr(cfg, k) for k in self._PTS},
+        }
+
+    def get(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        from games.models import StablefordChampionshipConfig
+        cfg = StablefordChampionshipConfig.objects.filter(
+            tournament=tournament).first()
+        if cfg is not None:
+            return Response(self._dict(cfg))
+        return Response({
+            'configured': False, 'handicap_mode': 'net', 'net_percent': 100,
+            'entry_fee': 0.00, 'payouts': [], 'excluded_player_ids': [],
+            'pts_albatross': 5, 'pts_eagle': 4, 'pts_birdie': 3,
+            'pts_par': 2, 'pts_bogey': 1, 'pts_double': 0,
+        })
+
+    def post(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        from api.serializers import StablefordChampionshipSetupSerializer
+        ser = StablefordChampionshipSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        from games.models import StablefordChampionshipConfig
+        cfg, _ = StablefordChampionshipConfig.objects.update_or_create(
+            tournament=tournament,
+            defaults={
+                'handicap_mode'      : d['handicap_mode'],
+                'net_percent'        : d['net_percent'],
+                'entry_fee'          : d['entry_fee'],
+                'payouts'            : d['payouts'],
+                'excluded_player_ids': d.get('excluded_player_ids', []),
+                **{k: d[k] for k in self._PTS},
+            },
+        )
+        if 'stableford_championship' not in (tournament.active_games or []):
+            tournament.active_games = (list(tournament.active_games or [])
+                                       + ['stableford_championship'])
+            tournament.save(update_fields=['active_games'])
+        return Response(self._dict(cfg), status=status.HTTP_201_CREATED)
+
+
+class TournamentStablefordView(APIView):
+    """GET /api/tournaments/{id}/stableford/ — cumulative Stableford standings."""
+    def get(self, request, pk):
+        tournament = tournament_for_reader(request.user, pk)
+        from services.stableford_championship import stableford_championship_summary
+        return Response(stableford_championship_summary(tournament))
+
+
 class TournamentLeaderboardView(APIView):
     """
     GET /api/tournaments/{id}/leaderboard/
@@ -1482,6 +1546,13 @@ class TournamentLeaderboardView(APIView):
             games['low_net'] = {
                 'label'  : 'Low Net Championship',
                 **low_net_championship_summary(tournament, round_id=round_filter),
+            }
+
+        if 'stableford_championship' in active_games:
+            from services.stableford_championship import stableford_championship_summary
+            games['stableford_championship'] = {
+                'label': 'Stableford Championship',
+                **stableford_championship_summary(tournament),
             }
 
         if 'match_play' in active_games:

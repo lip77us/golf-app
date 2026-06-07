@@ -1315,6 +1315,43 @@ class LowNetChampionshipConfig(models.Model):
         return f"Low Net Championship config — {self.tournament}"
 
 
+class StablefordChampionshipConfig(models.Model):
+    """
+    Configuration for the Stableford Championship — total Stableford points
+    accumulated across every round of a Tournament (all rounds count; N-of-M
+    is deferred, matching the Low Net Championship). Mirrors the casual
+    StablefordGame's scoring (editable 6-bucket table, Net% or Gross) but is
+    scoped to the Tournament and is pool-paid (entry_fee + payouts).
+    """
+    tournament    = models.OneToOneField(
+                        'tournament.Tournament', on_delete=models.CASCADE,
+                        related_name='stableford_championship_config')
+    handicap_mode = models.CharField(max_length=20, choices=HandicapMode.choices,
+                                     default=HandicapMode.NET)
+    net_percent   = models.PositiveSmallIntegerField(default=100)
+
+    pts_albatross = models.SmallIntegerField(default=5)
+    pts_eagle     = models.SmallIntegerField(default=4)
+    pts_birdie    = models.SmallIntegerField(default=3)
+    pts_par       = models.SmallIntegerField(default=2)
+    pts_bogey     = models.SmallIntegerField(default=1)
+    pts_double    = models.SmallIntegerField(default=0)
+
+    entry_fee           = models.DecimalField(max_digits=8, decimal_places=2,
+                                              default=0.00)
+    payouts             = models.JSONField(default=list)
+    excluded_player_ids = models.JSONField(default=list)
+
+    def points_for_diff(self, diff: int) -> int:
+        if diff <= -3:
+            return self.pts_albatross
+        return {-2: self.pts_eagle, -1: self.pts_birdie, 0: self.pts_par,
+                1: self.pts_bogey}.get(diff, self.pts_double)
+
+    def __str__(self):
+        return f"Stableford Championship config — {self.tournament}"
+
+
 # ---------------------------------------------------------------------------
 # PINK BALL CONFIG (round-level settings for the survivor pool game)
 # ---------------------------------------------------------------------------

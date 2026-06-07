@@ -1026,6 +1026,27 @@ class StablefordSetupSerializer(serializers.Serializer):
     pts_double    = serializers.IntegerField(default=0)
 
 
+class StablefordChampionshipSetupSerializer(serializers.Serializer):
+    """POST /api/tournaments/{id}/stableford/setup/ — pool-paid championship
+    (cross-round points total). Net%/Gross + editable 6-bucket table."""
+    handicap_mode = serializers.ChoiceField(choices=['net', 'gross'],
+                                            default='net')
+    net_percent   = serializers.IntegerField(min_value=0, max_value=200,
+                                             default=100)
+    entry_fee     = serializers.DecimalField(max_digits=8, decimal_places=2,
+                                             default='0.00')
+    payouts       = serializers.ListField(child=serializers.DictField(),
+                                          default=list)
+    excluded_player_ids = serializers.ListField(
+                              child=serializers.IntegerField(), default=list)
+    pts_albatross = serializers.IntegerField(default=5)
+    pts_eagle     = serializers.IntegerField(default=4)
+    pts_birdie    = serializers.IntegerField(default=3)
+    pts_par       = serializers.IntegerField(default=2)
+    pts_bogey     = serializers.IntegerField(default=1)
+    pts_double    = serializers.IntegerField(default=0)
+
+
 class PinkBallSetupSerializer(serializers.Serializer):
     """POST /api/rounds/{id}/pink-ball/setup/"""
     ball_color = serializers.CharField(max_length=50, default='Pink')

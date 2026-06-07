@@ -1,0 +1,63 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Stableford" }} · Stableford
+{% endblock %}
+
+{% block body %}
+  <h1>{{ tournament.name|default:"Stableford Championship" }}</h1>
+  <p class="sub">
+    Stableford Championship · {{ summary.rounds_played|default:0 }} of
+    {{ summary.total_rounds|default:0 }} rounds · {{ course_name }}
+  </p>
+
+  {% if summary and summary.results %}
+    <div class="card">
+      <div class="match-meta">
+        <span class="game-pill">
+          {% if summary.handicap_mode == 'gross' %}Gross{% else %}Net {{ summary.net_percent }}%{% endif %}
+        </span>
+        <span class="meta-text">
+          {% if summary.entry_fee %}
+            ${{ summary.entry_fee|floatformat:"-2" }} entry · ${{ summary.pool|floatformat:"-2" }} pool
+          {% endif %}
+        </span>
+      </div>
+
+      {% if summary.table %}
+        <p class="meta-text" style="margin:4px 0 8px;">
+          Alb {{ summary.table.albatross }} · Eag {{ summary.table.eagle }} ·
+          Bird {{ summary.table.birdie }} · Par {{ summary.table.par }} ·
+          Bog {{ summary.table.bogey }} · Dbl {{ summary.table.double }}
+        </p>
+      {% endif %}
+
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Player</th>
+            <th class="num">Rds</th>
+            <th class="num">Points</th>
+            <th class="num">Payout</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in summary.results %}
+            <tr>
+              <td>{{ r.rank|default:"—" }}</td>
+              <td>{{ r.player_name }}{% if r.excluded %} <span class="each">(no prize)</span>{% endif %}</td>
+              <td class="num">{{ r.rounds_played }}</td>
+              <td class="num">{{ r.total_points }}</td>
+              <td class="num">
+                {% if r.payout %}+${{ r.payout|floatformat:"-2" }}{% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card empty">No Stableford scores yet for this tournament.</div>
+  {% endif %}
+{% endblock %}

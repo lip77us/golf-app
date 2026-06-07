@@ -522,6 +522,14 @@ def _has_casual_skins(round_obj) -> bool:
 def _has_casual_stableford(round_obj) -> bool:
     return 'stableford' in (round_obj.active_games or [])
 
+def _has_stableford_championship(round_obj) -> bool:
+    """Tournament-wide Stableford — total points across every round."""
+    t = round_obj.tournament
+    if not t:
+        return False
+    return ('stableford_championship' in (t.active_games or [])
+            or hasattr(t, 'stableford_championship_config'))
+
 def _has_casual_multi_skins(round_obj) -> bool:
     return 'multi_skins' in (round_obj.active_games or [])
 
@@ -678,6 +686,12 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'key': 'stroke_play', 'label': _stroke_play_label(round_obj),
             'url': f'{base}?view=stroke_play',
             'active': current == 'stroke_play',
+        })
+    if _has_stableford_championship(round_obj):
+        tabs.append({
+            'key': 'stableford_championship', 'label': 'Stableford',
+            'url': f'{base}?view=stableford_championship',
+            'active': current == 'stableford_championship',
         })
     if _has_low_net_round(round_obj):
         tabs.append({
@@ -888,6 +902,21 @@ def _render_casual_stableford(request, round_obj, token: str, tabs: list):
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
         'summary':      stableford_summary(round_obj),
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _render_stableford_championship(request, round_obj, token: str, tabs: list):
+    """Tournament-wide Stableford — total points across every round."""
+    from services.stableford_championship import stableford_championship_summary
+    tourney = round_obj.tournament
+    summary = stableford_championship_summary(tourney) if tourney else None
+    return render(request, 'watch/stableford_championship.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   tourney,
+        'summary':      summary,
         'refresh_secs': 30,
         'tabs':         tabs,
     })
@@ -1404,6 +1433,7 @@ _VIEW_DISPATCH = {
     'cup':          _render_cup_standings,
     'skins':        _render_casual_skins,
     'stableford':   _render_casual_stableford,
+    'stableford_championship': _render_stableford_championship,
     'multi_skins':  _render_casual_multi_skins,
     'points_531':   _render_casual_points_531,
     'sixes':        _render_casual_sixes,

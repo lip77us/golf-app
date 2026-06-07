@@ -42,6 +42,8 @@ urlpatterns = [
     path('tournaments/<int:pk>/cup-standings/',       views.TournamentCupStandingsView.as_view(), name='api-tournament-cup-standings'),
     path('tournaments/<int:pk>/low-net/',             views.TournamentLowNetView.as_view(),       name='api-tournament-low-net'),
     path('tournaments/<int:pk>/low-net/setup/',       views.TournamentLowNetSetupView.as_view(), name='api-tournament-low-net-setup'),
+    path('tournaments/<int:pk>/stableford/',          views.TournamentStablefordView.as_view(),      name='api-tournament-stableford'),
+    path('tournaments/<int:pk>/stableford/setup/',    views.TournamentStablefordSetupView.as_view(), name='api-tournament-stableford-setup'),
 
     # ---- Rounds ----
     path('rounds/',                      views.RoundCreateView.as_view(),     name='api-round-create'),
