@@ -1881,6 +1881,44 @@ class _MsScorecardState extends State<_MsScorecard> {
   static const double _cellW     = 32.0;
   static const double _rowH      = 26.0;
 
+  final ScrollController _ctrl = ScrollController();
+
+  int get _lastScoredHole => widget.holes
+      .map((h) => (h['hole'] as int?) ?? 0)
+      .fold(0, (a, b) => a > b ? a : b);
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleScroll();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MsScorecard old) {
+    super.didUpdateWidget(old);
+    _scheduleScroll();
+  }
+
+  // Scroll so the latest scored hole is visible (~7 columns from the left), so
+  // the most recent activity shows without scrolling right.
+  void _scheduleScroll() {
+    final hole = _lastScoredHole;
+    if (hole == 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_ctrl.hasClients) return;
+      final target = (_labelColW + (hole - 7) * _cellW)
+          .clamp(0.0, _ctrl.position.maxScrollExtent);
+      _ctrl.animateTo(target,
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme  = Theme.of(context);
@@ -2000,6 +2038,7 @@ class _MsScorecardState extends State<_MsScorecard> {
           ]),
         ),
         SingleChildScrollView(
+          controller: _ctrl,
           scrollDirection: Axis.horizontal,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
