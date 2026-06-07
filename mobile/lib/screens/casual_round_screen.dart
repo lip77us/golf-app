@@ -30,6 +30,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   List<CourseInfo> _courses = [];
   List<TeeInfo> _tees = [];
   List<PlayerProfile> _players = [];
+  /// Wizard step: 0 = course + game, 1 = players + tees.
+  int _step = 0;
   /// Search text for the player picker (keeps it usable with a big roster).
   String _playerSearch = '';
   final TextEditingController _playerSearchCtrl = TextEditingController();
@@ -481,12 +483,47 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const GolfAppBar(title: 'Start Casual Round'),
+      appBar: GolfAppBar(
+        title: _step == 0
+            ? 'Casual Round · Course & Game'
+            : 'Casual Round · Players',
+      ),
       body: _buildBody(),
-      floatingActionButton: _loading || _error != null ? null : FloatingActionButton.extended(
-        onPressed: _creating ? null : _createRound,
-        icon: _creating ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.tune),
-        label: Text(_creating ? 'Configuring...' : 'Configure Round'),
+      bottomNavigationBar: (_loading || _error != null) ? null : _buildNav(),
+    );
+  }
+
+  Widget _buildNav() {
+    final canNext = _selectedCourse != null && _activeGames.isNotEmpty;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Row(
+          children: [
+            if (_step == 1)
+              OutlinedButton(
+                onPressed: _creating ? null : () => setState(() => _step = 0),
+                child: const Text('Back'),
+              ),
+            const Spacer(),
+            if (_step == 0)
+              FilledButton(
+                onPressed: canNext ? () => setState(() => _step = 1) : null,
+                child: const Text('Next'),
+              )
+            else
+              FilledButton.icon(
+                onPressed: _creating ? null : _createRound,
+                icon: _creating
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.tune),
+                label: Text(_creating ? 'Configuring…' : 'Configure Round'),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -506,6 +543,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Step 1: course + game ──
+          if (_step == 0) ...[
           Text('Select Course', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
           // Inline combined search: type to see matches from your courses + the
@@ -526,38 +565,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 _buildGameChip(meta),
             ],
           ),
-          // Inline player-count warnings driven by the game catalog.
-          for (final gameId in _activeGames) ...[
-            Builder(builder: (_) {
-              final meta = gameMeta(gameId);
-              if (meta == null) return const SizedBox.shrink();
-              final n = _playerTees.length;
-              String? warning;
-              if (meta.exactPlayers != null && n != meta.exactPlayers) {
-                final diff = meta.exactPlayers! - n;
-                warning = diff > 0
-                    ? '${meta.displayName} needs exactly ${meta.exactPlayers} players'
-                      ' — add $diff more below.'
-                    : '${meta.displayName} is a ${meta.exactPlayers}-player game'
-                      ' — remove ${-diff} player(s) below.';
-              } else if (meta.minPlayers != null && n < meta.minPlayers!) {
-                warning = '${meta.displayName} needs at least ${meta.minPlayers}'
-                    ' players — add ${meta.minPlayers! - n} more below.';
-              } else if (meta.maxPlayers != null && n > meta.maxPlayers!) {
-                warning = '${meta.displayName} supports at most ${meta.maxPlayers}'
-                    ' players — remove ${n - meta.maxPlayers!} player(s) below.';
-              }
-              if (warning == null) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: InlineMessage(
-                  text: warning,
-                  kind: InlineMessageKind.error,
-                ),
-              );
-            }),
-          ],
-          const SizedBox(height: 24),
+          ], // ── end step 1
+
+          // ── Step 2: players + tees ──
+          if (_step == 1) ...[
+          // How many golfers the chosen game(s) allow — shown up front, and
+          // it flips to an error if the current selection is off.
+          for (final gameId in _activeGames)
+            _gamePlayerCountHint(gameId),
+          const SizedBox(height: 8),
 
           Text('Select Players & Tees',
               style: Theme.of(context).textTheme.titleLarge),
@@ -750,8 +766,46 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             }),
           ],
             const SizedBox(height: 80),
+          ], // ── end step 2
         ],
       ),
+    );
+  }
+
+  /// Players-step guidance: how many golfers the chosen game allows, turning
+  /// into an error when the current count is off.
+  Widget _gamePlayerCountHint(String gameId) {
+    final meta = gameMeta(gameId);
+    if (meta == null) return const SizedBox.shrink();
+    final n = _playerTees.length;
+    final String range;
+    if (meta.exactPlayers != null) {
+      range = '${meta.exactPlayers} players';
+    } else if (meta.minPlayers != null && meta.maxPlayers != null) {
+      range = '${meta.minPlayers}–${meta.maxPlayers} players';
+    } else if (meta.minPlayers != null) {
+      range = '${meta.minPlayers}+ players';
+    } else if (meta.maxPlayers != null) {
+      range = 'up to ${meta.maxPlayers} players';
+    } else {
+      range = 'any number of players';
+    }
+    var text = '${meta.displayName}: $range';
+    var kind = InlineMessageKind.info;
+    if (meta.exactPlayers != null && n != meta.exactPlayers) {
+      final diff = meta.exactPlayers! - n;
+      text += diff > 0 ? ' — add $diff more.' : ' — remove ${-diff}.';
+      kind = InlineMessageKind.error;
+    } else if (meta.minPlayers != null && n < meta.minPlayers!) {
+      text += ' — add ${meta.minPlayers! - n} more.';
+      kind = InlineMessageKind.error;
+    } else if (meta.maxPlayers != null && n > meta.maxPlayers!) {
+      text += ' — remove ${n - meta.maxPlayers!}.';
+      kind = InlineMessageKind.error;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: InlineMessage(text: text, kind: kind),
     );
   }
 }
