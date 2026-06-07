@@ -1619,6 +1619,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                     .firstOrNull,
                 phantomInit: rp.phantomInitFor(widget.foursomeId),
               ),
+
+              // Stableford running-points band — sits between the score-entry
+              // box and the points table below.
+              if (games.contains('stableford') && rp.stablefordResult != null)
+                _StablefordStrip(
+                  result:      rp.stablefordResult!,
+                  currentHole: _selectedHole,
+                ),
               const SizedBox(height: 12),
 
               // Game status cards
@@ -5295,6 +5303,65 @@ class _TeamBanner extends StatelessWidget {
                 color: Colors.blue.shade700,
               ),
               overflow: TextOverflow.ellipsis),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Compact running-points band shown between the score-entry box and the
+/// points table: each player's running total with the current hole's points
+/// as a (+N) delta. Appears once a hole has been saved.
+class _StablefordStrip extends StatelessWidget {
+  final Map<String, dynamic> result;
+  final int currentHole;
+  const _StablefordStrip({required this.result, required this.currentHole});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final results = (result['results'] as List? ?? []);
+    final key     = '$currentHole';
+    final chips    = <Widget>[];
+    for (final e in results) {
+      final r       = e as Map<String, dynamic>;
+      if ((r['holes_played'] as int? ?? 0) == 0) continue; // not started
+      final total   = r['total_points'] ?? 0;               // running total
+      final holes   = r['holes'] as Map<String, dynamic>?;
+      final holePts = holes?[key];                           // this hole's pts
+      final name    = (r['player_name']?.toString() ?? '').split(' ').first;
+      final delta   = holePts == null
+          ? ''
+          : ' (${(holePts as num) >= 0 ? '+' : ''}$holePts)';
+      chips.add(Padding(
+        padding: const EdgeInsets.only(right: 14),
+        child: Text.rich(TextSpan(children: [
+          TextSpan(text: '$name ',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          TextSpan(text: '$total',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          TextSpan(text: delta, style: theme.textTheme.bodySmall),
+        ])),
+      ));
+    }
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: theme.colorScheme.surfaceVariant.withValues(alpha: 0.4),
+      child: Row(children: [
+        Text('Stableford:',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: chips),
+          ),
         ),
       ]),
     );
