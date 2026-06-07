@@ -362,7 +362,7 @@ List<GameMeta> get primaryGames =>
 const List<(String, String)> kChampionshipGames = [
   (GameIds.championshipStrokePlay, 'Stroke Play Championship'),
   (GameIds.championshipStableford, 'Stableford Championship'),
-  (GameIds.teamCup,                'Cup Play'),
+  (GameIds.teamCup,                'Team (Cup) Play'),
 ];
 
 // ── Combination logic ─────────────────────────────────────────────────────────

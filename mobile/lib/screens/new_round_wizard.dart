@@ -608,6 +608,31 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         ),
       );
     }
+
+    // 1c. Stableford Championship config — reuses the same buy-in state. Posts
+    // the stakes + tournament handicap with the standard points table; the TD
+    // can customise the table later via "Configure Stableford".
+    if (tournamentId != null &&
+        _tournamentActiveGames.contains(GameIds.championshipStableford) &&
+        (_lowNetEntryFee > 0 || _lowNetPayouts.any((p) => p > 0))) {
+      final payoutList = <Map<String, dynamic>>[];
+      for (int i = 0; i < _lowNetNumPayouts; i++) {
+        if (_lowNetPayouts[i] > 0) {
+          payoutList.add({'place': i + 1, 'amount': _lowNetPayouts[i].toDouble()});
+        }
+      }
+      await client.postTournamentStablefordSetup(
+        tournamentId,
+        handicapMode: _handicapMode == 'gross' ? 'gross' : 'net',
+        netPercent  : _netPercent,
+        entryFee    : _lowNetEntryFee.toDouble(),
+        payouts     : payoutList,
+        pointsTable : const {
+          'albatross': 5, 'eagle': 4, 'birdie': 3,
+          'par': 2, 'bogey': 1, 'double': 0,
+        },
+      );
+    }
     if (!mounted) return;
 
     // 2. Create stub rounds for rounds 2..N
@@ -870,12 +895,27 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             }
           }),
           onToggleTournamentGame: (g, on) => setState(() {
-            on ? _tournamentActiveGames.add(g) : _tournamentActiveGames.remove(g);
-            // Picking Cup Play auto-enables Stroke Play Championship by
-            // default — without it the cup leaderboard has no place to
-            // show per-player round detail.  User can untoggle on the
-            // Cup Design step (2 of 4) if they really don't want it.
-            if (g == GameIds.teamCup && on) {
+            const champs = {
+              GameIds.championshipStrokePlay,
+              GameIds.championshipStableford,
+              GameIds.teamCup,
+            };
+            if (!on) {
+              _tournamentActiveGames.remove(g);
+              // Cup carries a hidden Stroke Play — drop it too.
+              if (g == GameIds.teamCup) {
+                _tournamentActiveGames.remove(GameIds.championshipStrokePlay);
+              }
+              return;
+            }
+            // The three championships are mutually exclusive — pick one.
+            if (champs.contains(g)) {
+              _tournamentActiveGames.removeAll(champs);
+            }
+            _tournamentActiveGames.add(g);
+            // Cup Play always includes Stroke Play underneath (per-player round
+            // detail) — so it never needs to be picked explicitly.
+            if (g == GameIds.teamCup) {
               _tournamentActiveGames.add(GameIds.championshipStrokePlay);
             }
           }),
@@ -903,6 +943,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           onPickAdditionalDate: (idx, d) => setState(() {
             _additionalRounds[idx].date = d;
           }),
+          isStablefordChampionship:
+              _tournamentActiveGames.contains(GameIds.championshipStableford),
         );
       case 2:
         return _Step2Players(
@@ -955,6 +997,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             on ? _activeGames.add(g) : _activeGames.remove(g);
           }),
           hasTournamentLowNet       : _tournamentActiveGames.contains(GameIds.championshipStrokePlay),
+          hasTournamentStableford   : _tournamentActiveGames.contains(GameIds.championshipStableford),
           numPlayers                : _selectedIds.length,
           initialLowNetFee          : _lowNetEntryFee,
           initialLowNetNumPayouts   : _lowNetNumPayouts,
@@ -1209,7 +1252,13 @@ class _Step0Tournament extends StatelessWidget {
                 for (final (gameValue, gameLabel) in kChampionshipGames)
                   GameSelectableChip(
                     label:      gameLabel,
-                    selected:   tournamentActiveGames.contains(gameValue),
+                    // Stroke Play is shown selected only on its own — when Cup
+                    // Play is picked it's included silently underneath.
+                    selected:   gameValue == GameIds.championshipStrokePlay
+                        ? (tournamentActiveGames
+                                .contains(GameIds.championshipStrokePlay) &&
+                            !tournamentActiveGames.contains(GameIds.teamCup))
+                        : tournamentActiveGames.contains(gameValue),
                     onSelected: (v) => onToggleTournamentGame(gameValue, v),
                   ),
               ],
@@ -1224,7 +1273,8 @@ class _Step0Tournament extends StatelessWidget {
                 if (hasPrimary) return const SizedBox.shrink();
                 return const InlineMessage(
                   kind: InlineMessageKind.warn,
-                  text: 'Select Stroke Play or Cup Play to continue.',
+                  text: 'Select a championship (Stroke Play, Stableford, or '
+                      'Team (Cup) Play) to continue.',
                 );
               }),
             ],
@@ -1276,6 +1326,9 @@ class _Step1Details extends StatelessWidget {
   final ValueChanged<bool> onChangeNetMaxDoubleBogey;
   final void Function(int idx, CourseInfo course) onPickAdditionalCourse;
   final void Function(int idx, DateTime date) onPickAdditionalDate;
+  /// Stableford uses its own points table (and its 'double+' bucket is the
+  /// floor) — so Strokes-Off and the net double-bogey cap don't apply.
+  final bool isStablefordChampionship;
 
   /// Inline combined-search "Course" field (your courses + shared catalog, with
   /// a full-database fallback). [courseId] is the currently-selected course id
@@ -1300,6 +1353,7 @@ class _Step1Details extends StatelessWidget {
     required this.onChangeNetMaxDoubleBogey,
     required this.onPickAdditionalCourse,
     required this.onPickAdditionalDate,
+    this.isStablefordChampionship = false,
   });
 
   @override
@@ -1404,6 +1458,7 @@ class _Step1Details extends StatelessWidget {
           HandicapModeSelector(
             mode:             handicapMode,
             netPercent:       netPercent,
+            allowStrokesOff:  !isStablefordChampionship,
             onModeChanged:    (m) => onChangeHandicap(m, netPercent),
             onPercentChanged: (p) => onChangeHandicap(handicapMode, p),
             soNote: 'The lowest-handicap player in each foursome plays '
@@ -1411,14 +1466,16 @@ class _Step1Details extends StatelessWidget {
                 '(their HCP − foursome low HCP), scaled by Net %.',
           ),
 
-          const SizedBox(height: 16),
-
-          // Net double-bogey cap — round-level rule, applied to every
-          // round in this tournament at creation time.
-          NetDoubleBogeyCard(
-            value: netMaxDoubleBogey,
-            onChanged: onChangeNetMaxDoubleBogey,
-          ),
+          if (!isStablefordChampionship) ...[
+            const SizedBox(height: 16),
+            // Net double-bogey cap — round-level rule, applied to every
+            // round in this tournament at creation time. Stableford's points
+            // table already floors scores, so it's hidden there.
+            NetDoubleBogeyCard(
+              value: netMaxDoubleBogey,
+              onChanged: onChangeNetMaxDoubleBogey,
+            ),
+          ],
         ]),
       ),
     );
@@ -2625,6 +2682,9 @@ class _Step4Games extends StatefulWidget {
   final void Function(String game, bool on) onToggleGame;
   /// When true, the Stroke Play Championship buy-in section is shown first.
   final bool          hasTournamentLowNet;
+  /// Stableford Championship selected — reuses the same buy-in UI/state, but
+  /// the header reads "Stableford" and it's posted to the Stableford config.
+  final bool          hasTournamentStableford;
   /// Total number of selected players — pool multiplier for the championship.
   final int           numPlayers;
   // Stroke Play Championship buy-in
@@ -2652,6 +2712,7 @@ class _Step4Games extends StatefulWidget {
     required this.groupSizeList,
     required this.onToggleGame,
     this.hasTournamentLowNet        = false,
+    this.hasTournamentStableford    = false,
     this.numPlayers                 = 0,
     this.initialLowNetFee           = 0,
     this.initialLowNetNumPayouts    = 3,
@@ -2802,9 +2863,11 @@ class _Step4GamesState extends State<_Step4Games> {
           const SizedBox(height: 16),
         ],
 
-        // ── Stroke Play Championship Buy-In (shown first) ──────────────────────
-        if (widget.hasTournamentLowNet) ...[
-          Text('Stroke Play Championship',
+        // ── Championship Buy-In (Stroke Play or Stableford) ────────────────────
+        if (widget.hasTournamentLowNet || widget.hasTournamentStableford) ...[
+          Text(widget.hasTournamentStableford
+                  ? 'Stableford Championship'
+                  : 'Stroke Play Championship',
               style: theme.textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
