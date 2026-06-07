@@ -168,6 +168,7 @@ def stableford_standings(round_obj) -> list:
     from collections import defaultdict
 
     config = getattr(round_obj, 'stableford_config', None)
+    style = config.payout_style if config else 'pool'
     payouts_cfg  = ({p['place']: float(p['amount']) for p in (config.payouts or [])}
                     if config else {})
     excluded_ids = set(config.excluded_player_ids or []) if config else set()
@@ -179,6 +180,19 @@ def stableford_standings(round_obj) -> list:
         d = kv[1]
         return (1, 0) if d['holes_played'] == 0 else (0, -d['points'])
     rows = sorted(totals.items(), key=_key)
+
+    # Per-point ("pay everyone above you"): net = rate × (n·pts − total) across
+    # eligible, scored players. Zero-sum; +ve collects, −ve pays.
+    per_point_payout = None
+    if style == 'per_point' and config is not None:
+        rate = float(config.per_point_rate)
+        elig = [(pid, d['points']) for pid, d in totals.items()
+                if pid not in excluded_ids and d['holes_played'] > 0]
+        n = len(elig)
+        tot = sum(p for _pid, p in elig)
+        per_point_payout = {
+            pid: round(rate * (n * pts - tot), 2) for pid, pts in elig
+        }
 
     def _rank_list(items):
         out, rank = [], 1
@@ -211,8 +225,11 @@ def stableford_standings(round_obj) -> list:
     standings = []
     for pid, data, display_rank in ranked:
         is_excluded = pid in excluded_ids
-        payout = (None if is_excluded
-                  else prize_rank_payout.get(prize_rank_map.get(pid)))
+        if per_point_payout is not None:
+            payout = per_point_payout.get(pid)
+        else:
+            payout = (None if is_excluded
+                      else prize_rank_payout.get(prize_rank_map.get(pid)))
         standings.append({
             'rank'        : display_rank,
             'player_id'   : pid,
@@ -240,12 +257,16 @@ def stableford_summary(round_obj) -> dict:
             'birdie':    config.pts_birdie,    'par':   config.pts_par,
             'bogey':     config.pts_bogey,     'double': config.pts_double,
         }
+    style = config.payout_style if config else 'pool'
     return {
-        'status'       : round_obj.status,
-        'handicap_mode': config.handicap_mode if config else 'net',
-        'net_percent'  : config.net_percent if config else 100,
-        'entry_fee'    : entry_fee,
-        'pool'         : round(entry_fee * len(standings), 2),
-        'table'        : table,
-        'results'      : standings,
+        'status'        : round_obj.status,
+        'handicap_mode' : config.handicap_mode if config else 'net',
+        'net_percent'   : config.net_percent if config else 100,
+        'payout_style'  : style,
+        'per_point_rate': float(config.per_point_rate) if config else 0.0,
+        'entry_fee'     : entry_fee,
+        'pool'          : (round(entry_fee * len(standings), 2)
+                           if style == 'pool' else 0.0),
+        'table'         : table,
+        'results'       : standings,
     }

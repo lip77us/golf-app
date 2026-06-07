@@ -1005,6 +1005,10 @@ class StablefordSetupSerializer(serializers.Serializer):
                                             default='net')
     net_percent   = serializers.IntegerField(min_value=0, max_value=200,
                                              default=100)
+    payout_style  = serializers.ChoiceField(choices=['pool', 'per_point'],
+                                            default='pool')
+    per_point_rate = serializers.DecimalField(max_digits=6, decimal_places=2,
+                                              default='0.00')
     entry_fee     = serializers.DecimalField(max_digits=8, decimal_places=2,
                                              default='0.00')
     payouts       = serializers.ListField(child=serializers.DictField(),

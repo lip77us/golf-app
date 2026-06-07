@@ -1389,6 +1389,8 @@ class ApiClient {
     int roundId, {
     required String                     handicapMode,
     required int                        netPercent,
+    required String                     payoutStyle, // 'pool' | 'per_point'
+    required double                     perPointRate,
     required double                     entryFee,
     required List<Map<String, dynamic>> payouts,
     required Map<String, int>           pointsTable, // keys: albatross..double
@@ -1397,6 +1399,8 @@ class ApiClient {
     final data = await _post('/rounds/$roundId/stableford/setup/', {
       'handicap_mode'      : handicapMode,
       'net_percent'        : netPercent,
+      'payout_style'       : payoutStyle,
+      'per_point_rate'     : perPointRate.toStringAsFixed(2),
       'entry_fee'          : entryFee.toStringAsFixed(2),
       'payouts'            : payouts,
       'excluded_player_ids': excludedPlayerIds,

@@ -1227,9 +1227,21 @@ class StablefordGame(models.Model):
     pts_bogey     = models.SmallIntegerField(default=1)  # +1
     pts_double    = models.SmallIntegerField(default=0)  # +2 or worse
 
+    # Settlement style:
+    #   pool      — entry-fee pool split among the top `places` (Low-Net style).
+    #   per_point — no pool; each player settles vs every opponent at
+    #               per_point_rate × the points margin ("pay everyone above you").
+    PAYOUT_STYLES = [('pool', 'Pool (places paid)'), ('per_point', 'Per point')]
+    payout_style   = models.CharField(max_length=12, choices=PAYOUT_STYLES,
+                                      default='pool')
+    per_point_rate = models.DecimalField(
+                        max_digits=6, decimal_places=2, default=0.00,
+                        help_text="$ per point of margin vs each opponent "
+                                  "(per_point style).")
+
     entry_fee           = models.DecimalField(
                             max_digits=8, decimal_places=2, default=0.00,
-                            help_text="Entry fee per player.")
+                            help_text="Entry fee per player (pool style).")
     payouts             = models.JSONField(
                             default=list,
                             help_text="Payout per finishing place, e.g. "

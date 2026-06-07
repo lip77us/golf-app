@@ -105,6 +105,17 @@ class StablefordTests(TestCase):
         self.assertEqual(rows['A']['payout'], 30.0)
         self.assertIsNone(rows['B']['payout'])
 
+    def test_per_point_pay_everyone_above_you(self):
+        # 3 players, points 54 / 36 / 18 (birdies/pars/bogeys), $1 a point.
+        self._setup(payout_style='per_point', per_point_rate='1.00')
+        rows = {r['player_name']: r for r in self._result()['results']}
+        # net = rate × (n·pts − total); total = 108, n = 3.
+        self.assertEqual(rows['A']['payout'], 3 * 54 - 108)   # +54
+        self.assertEqual(rows['B']['payout'], 3 * 36 - 108)   #   0
+        self.assertEqual(rows['C']['payout'], 3 * 18 - 108)   # -54
+        # Zero-sum.
+        self.assertEqual(sum(r['payout'] for r in rows.values()), 0)
+
     def test_excluded_player_gets_no_money(self):
         self._setup(entry_fee='10.00',
                     payouts=[{'place': 1, 'amount': '30.00'}],
