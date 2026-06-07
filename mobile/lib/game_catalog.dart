@@ -264,14 +264,13 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.stableford,
     displayName  : 'Stableford',
-    // Disabled until the per-round Stableford implementation is finished
-    // (scoring service + UI screens still TODO).  Tournament-side use is
-    // handled by the separate `stableford_championship` entry in
-    // kChampionshipGames, which is unaffected by this flag.
-    casual       : false,
+    // Casual Stableford is live (editable points table + Low-Net-style money).
+    // Tournament-side use is the separate `stableford_championship` entry in
+    // kChampionshipGames (still deferred — casual first).
+    casual       : true,
     tournament   : false,
     canBePrimary : false,
-    enabled      : false,
+    enabled      : true,
     minPlayers   : 2,
     excludes     : {GameIds.points531},
   ),

@@ -448,6 +448,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           case GameIds.strokePlay:
             directRoute = '/low-net-setup';
             directArgs  = fullRound.id;
+          case GameIds.stableford:
+            directRoute = '/stableford-setup';
+            directArgs  = fullRound.id;
           case GameIds.matchPlay:
             // Match Play auto-dispatches by foursome size:
             //   3 players → Three-Person Match (Points 5-3-1 + 1v1 final)

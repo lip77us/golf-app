@@ -13,6 +13,7 @@ import 'providers/auth_provider.dart';
 import 'providers/round_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/push_service.dart';
+import 'screens/stableford_setup_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/password_login_screen.dart';
 import 'screens/otp_verify_screen.dart';
@@ -403,6 +404,9 @@ class _GolfAppState extends State<GolfApp> {
       case '/low-net-setup':
         final roundId = settings.arguments as int;
         return page((_) => LowNetSetupScreen(roundId: roundId));
+      case '/stableford-setup':
+        final roundId = settings.arguments as int;
+        return page((_) => StablefordSetupScreen(roundId: roundId));
       case '/pink-ball-setup':
         final roundId = settings.arguments as int;
         return page((_) => PinkBallSetupScreen(roundId: roundId));
