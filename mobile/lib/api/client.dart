@@ -450,6 +450,34 @@ class ApiClient {
     return LowNetChampionshipSetup.fromJson(data as Map<String, dynamic>);
   }
 
+  Future<Map<String, dynamic>> getTournamentStablefordSetup(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/stableford/setup/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> postTournamentStablefordSetup(
+    int tournamentId, {
+    required String                     handicapMode,
+    required int                        netPercent,
+    required double                     entryFee,
+    required List<Map<String, dynamic>> payouts,
+    required Map<String, int>           pointsTable,
+  }) async {
+    final data = await _post('/tournaments/$tournamentId/stableford/setup/', {
+      'handicap_mode': handicapMode,
+      'net_percent'  : netPercent,
+      'entry_fee'    : entryFee.toStringAsFixed(2),
+      'payouts'      : payouts,
+      'pts_albatross': pointsTable['albatross'],
+      'pts_eagle'    : pointsTable['eagle'],
+      'pts_birdie'   : pointsTable['birdie'],
+      'pts_par'      : pointsTable['par'],
+      'pts_bogey'    : pointsTable['bogey'],
+      'pts_double'   : pointsTable['double'],
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   // ---- Rounds ----
 
   Future<Round> getRound(int id) async {

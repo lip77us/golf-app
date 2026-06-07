@@ -14,6 +14,7 @@ import '../utils/watcher_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
 import 'tournament_low_net_setup_screen.dart';
+import 'tournament_stableford_setup_screen.dart';
 
 class TournamentLeaderboardScreen extends StatefulWidget {
   final int    tournamentId;
@@ -121,6 +122,10 @@ class _TournamentLeaderboardScreenState
                   const PopupMenuItem(
                       value: 'low_net',
                       child: Text('Configure Stroke Play')),
+                if (activeGames.contains('stableford_championship'))
+                  const PopupMenuItem(
+                      value: 'stableford_championship',
+                      child: Text('Configure Stableford')),
               ],
             ),
         ],
@@ -170,6 +175,11 @@ class _TournamentLeaderboardScreenState
     if (game == 'low_net') {
       Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => TournamentLowNetSetupScreen(
+            tournamentId: widget.tournamentId),
+      )).then((_) => _load());
+    } else if (game == 'stableford_championship') {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => TournamentStablefordSetupScreen(
             tournamentId: widget.tournamentId),
       )).then((_) => _load());
     }

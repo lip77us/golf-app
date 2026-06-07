@@ -1464,14 +1464,24 @@ class TournamentStablefordSetupView(APIView):
             **{k: getattr(cfg, k) for k in self._PTS},
         }
 
+    @staticmethod
+    def _num_players(tournament):
+        from tournament.models import FoursomeMembership
+        return (FoursomeMembership.objects
+                .filter(foursome__round__tournament=tournament,
+                        player__is_phantom=False)
+                .values('player_id').distinct().count())
+
     def get(self, request, pk):
         tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         from games.models import StablefordChampionshipConfig
         cfg = StablefordChampionshipConfig.objects.filter(
             tournament=tournament).first()
+        num = self._num_players(tournament)
         if cfg is not None:
-            return Response(self._dict(cfg))
+            return Response({'num_players': num, **self._dict(cfg)})
         return Response({
+            'num_players': num,
             'configured': False, 'handicap_mode': 'net', 'net_percent': 100,
             'entry_fee': 0.00, 'payouts': [], 'excluded_player_ids': [],
             'pts_albatross': 5, 'pts_eagle': 4, 'pts_birdie': 3,
