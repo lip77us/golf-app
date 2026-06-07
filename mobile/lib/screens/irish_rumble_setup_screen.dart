@@ -51,6 +51,9 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
   /// per-player breakdown shown under each payout field.
   List<int> _groupSizes = const [];
 
+  // 2-step wizard: 0 = game (variant/handicap), 1 = money (entry fee/payouts).
+  int _step = 0;
+
   // ── Variant ───────────────────────────────────────────────────────────────
   /// One of: 'classic', 'arizona_shuffle', 'shuffle', 'custom'.
   String _variant = 'classic';
@@ -288,7 +291,8 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Irish Rumble — Setup')),
+      appBar: AppBar(title: Text(
+          _step == 0 ? 'Irish Rumble · Game' : 'Irish Rumble · Money')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null && _loading == false && !_saving
@@ -298,40 +302,43 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
                   onRetry: _load,
                 )
               : Column(children: [
-                  Expanded(child: _buildBody()),
-                  // Persistent Save button — in-body so it stays above
-                  // the soft keyboard when the entry-fee / payout fields
-                  // are open.
-                  SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: FilledButton(
-                          onPressed:
-                              (_saving || !_poolBalanced) ? null : _save,
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 20, height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white))
-                              : Text(
-                                  _configured ? 'Save Changes' : 'Save Setup',
-                                  style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  Expanded(child: _step == 0 ? _gameBody() : _moneyBody()),
+                  SafeArea(top: false, child: _nav()),
                 ]),
     );
   }
 
-  Widget _buildBody() {
+  Widget _nav() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(children: [
+        if (_step == 1)
+          OutlinedButton(
+            onPressed: _saving ? null : () => setState(() => _step = 0),
+            child: const Text('Back'),
+          ),
+        const Spacer(),
+        if (_step == 0)
+          FilledButton(
+            onPressed: () => setState(() => _step = 1),
+            child: const Text('Next'),
+          )
+        else
+          FilledButton(
+            onPressed: (_saving || !_poolBalanced) ? null : _save,
+            child: _saving
+                ? const SizedBox(width: 20, height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text(_configured ? 'Save Changes' : 'Save Setup',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+      ]),
+    );
+  }
+
+  // ── Step 1: game (variant + handicap) ──
+  Widget _gameBody() {
     final theme = Theme.of(context);
 
     return SingleChildScrollView(
@@ -393,9 +400,20 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
                   ctx.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v),
             );
           }),
+        ],
+      ),
+    );
+  }
 
-          const SizedBox(height: 16),
+  // ── Step 2: money (entry fee + payouts) ──
+  Widget _moneyBody() {
+    final theme = Theme.of(context);
 
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           // ── Entry fee ───────────────────────────────────────────────────
           SectionCard(
             title: 'Entry Fee',
