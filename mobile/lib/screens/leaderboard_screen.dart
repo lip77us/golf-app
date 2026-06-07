@@ -51,20 +51,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     // Triple Cup plays 6 holes alt-shot per foursome, so low net is
     // meaningless on these rounds — suppress the Stroke Play tab.
     final isTripleCupRound = lb.activeGames.contains('triple_cup');
+    // Tab order: the round's own game(s) first (main game on the left), then
+    // the tournament championship / cup / my-foursome utility tabs, and finally
+    // Low Net is appended last (see below) so the scores tab is always rightmost.
     final games = [
       ...lb.activeGames.where((g) =>
           !(lb.isCupRound && _rawSinglesKeys.contains(g)) &&
           !(isTripleCupRound && g == 'low_net_round')),
     ];
-    // Always offer a Low Net (scores) tab for individual-ball rounds — it's the
-    // only place to see every player's actual score. The backend supplies the
-    // block (it's not in active_games), so surface it from the games map here.
-    // Excluded for Triple Cup (alt-shot — no individual scores).
-    if (!isTripleCupRound &&
-        lb.games.containsKey('low_net_round') &&
-        !games.contains('low_net_round')) {
-      games.add('low_net_round');
-    }
     if (lb.tournamentId != null && lb.tournamentActiveGames.isNotEmpty) {
       games.add('__championship__');
     }
@@ -88,6 +82,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     final myPid = context.read<AuthProvider>().player?.id;
     if (myPid != null && _viewerIsInAnyFoursome(lb, myPid)) {
       games.add('__my_foursome__');
+    }
+    // Low Net (scores) is ALWAYS the rightmost tab — the at-a-glance reference
+    // for everyone's actual score. The backend supplies the block for any
+    // individual-ball round (it's not in active_games); excluded for Triple Cup.
+    if (!isTripleCupRound &&
+        lb.games.containsKey('low_net_round') &&
+        !games.contains('low_net_round')) {
+      games.add('low_net_round');
     }
     if (_gameTabs.join(',') == games.join(',')) return;
     _gameTabs = games;
