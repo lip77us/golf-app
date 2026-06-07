@@ -21,6 +21,7 @@ import '../widgets/course_search_field.dart';
 import '../widgets/payout_config_field.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
+import 'player_form_screen.dart';
 import 'ryder_cup_draft_screen.dart';
 
 // Group badge colours — cycles for > 4 foursomes
@@ -319,10 +320,22 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     }
   }
 
+  /// Create a new login-less golfer inline, then select them.
+  Future<void> _addGolfer() async {
+    final created = await Navigator.of(context).push<PlayerProfile>(
+      MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
+    );
+    _selectCreatedGolfer(created);
+  }
+
   /// Add an existing Halved member (not yet in my roster) by phone number,
   /// then select them for the tournament.
   Future<void> _addHalvedGolfer() async {
     final created = await addHalvedGolferByPhone(context);
+    _selectCreatedGolfer(created);
+  }
+
+  void _selectCreatedGolfer(PlayerProfile? created) {
     if (created == null || !mounted) return;
     setState(() {
       if (!_allPlayers.any((p) => p.id == created.id)) {
@@ -914,6 +927,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _groupSizesOverride = null;
           }),
           onAddByPhone: _addHalvedGolfer,
+          onAddGolfer:  _addGolfer,
         );
       case 3:
         return _Step3GroupsAndTees(
@@ -1424,6 +1438,7 @@ class _Step2Players extends StatelessWidget {
   final VoidCallback onSelectAll;
   final VoidCallback onClearAll;
   final VoidCallback onAddByPhone;
+  final VoidCallback onAddGolfer;
 
   const _Step2Players({
     required this.players,
@@ -1434,6 +1449,7 @@ class _Step2Players extends StatelessWidget {
     required this.onSelectAll,
     required this.onClearAll,
     required this.onAddByPhone,
+    required this.onAddGolfer,
   });
 
   @override
@@ -1476,16 +1492,20 @@ class _Step2Players extends StatelessWidget {
           TextButton(onPressed: onClearAll,  child: const Text('None')),
         ]),
       ),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: TextButton.icon(
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Wrap(children: [
+          TextButton.icon(
+            onPressed: onAddGolfer,
+            icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+            label: const Text('Add a golfer'),
+          ),
+          TextButton.icon(
             onPressed: onAddByPhone,
             icon: const Icon(Icons.phone_iphone, size: 18),
-            label: const Text('Add a golfer on Halved by phone #'),
+            label: const Text('Add by phone #'),
           ),
-        ),
+        ]),
       ),
       const SizedBox(height: 4),
 

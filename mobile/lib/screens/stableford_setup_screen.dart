@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/handicap_mode_selector.dart';
 import '../widgets/payout_config_field.dart';
 
 // Bucket order, top (best) to bottom.
@@ -38,7 +39,7 @@ class StablefordSetupScreen extends StatefulWidget {
 class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   int _step = 0; // 0 = handicap + points, 1 = payout
   String _mode = 'net';
-  final _netPctCtrl = TextEditingController(text: '100');
+  int _netPercent = 100;
 
   String _payoutStyle = 'pool';        // 'pool' | 'per_point'
   final _entryCtrl  = TextEditingController(text: '5');
@@ -64,7 +65,6 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
 
   @override
   void dispose() {
-    _netPctCtrl.dispose();
     _entryCtrl.dispose();
     _rateCtrl.dispose();
     for (final c in _points.values) c.dispose();
@@ -87,7 +87,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
         _numPlayers = cfg['num_players'] as int? ?? 0;
         final mode = (cfg['handicap_mode']?.toString() ?? 'net');
         _mode = (mode == 'gross') ? 'gross' : 'net';
-        _netPctCtrl.text = '${cfg['net_percent'] ?? 100}';
+        _netPercent = cfg['net_percent'] as int? ?? 100;
         _payoutStyle = (cfg['payout_style']?.toString() == 'per_point')
             ? 'per_point' : 'pool';
         _rateCtrl.text   = _fmt(cfg['per_point_rate'] as num? ?? 1);
@@ -133,6 +133,21 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
     });
   }
 
+  /// Quick-fill from a preset split (Stroke Play parity): set places + amounts.
+  void _applyPoolPreset(List<double> ratios) {
+    final pool = _pool.round();
+    setState(() {
+      _numPayouts = ratios.length;
+      var remaining = pool;
+      for (var i = 0; i < 4; i++) {
+        if (i >= ratios.length) { _payoutCtrls[i].text = '0'; continue; }
+        final amt = i == ratios.length - 1 ? remaining : (pool * ratios[i]).round();
+        remaining -= amt;
+        _payoutCtrls[i].text = '$amt';
+      }
+    });
+  }
+
   Future<void> _save() async {
     setState(() { _saving = true; _error = null; });
     try {
@@ -144,7 +159,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
       await context.read<AuthProvider>().client.postStablefordSetup(
         widget.roundId,
         handicapMode: _mode,
-        netPercent: int.tryParse(_netPctCtrl.text.trim()) ?? 100,
+        netPercent: _netPercent,
         payoutStyle: _payoutStyle,
         perPointRate: double.tryParse(_rateCtrl.text.trim()) ?? 0.0,
         entryFee: double.tryParse(_entryCtrl.text.trim()) ?? 0.0,
@@ -213,31 +228,14 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── Handicap ──
-        Text('Handicap', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'net', label: Text('Net')),
-            ButtonSegment(value: 'gross', label: Text('Gross')),
-          ],
-          selected: {_mode},
-          onSelectionChanged: (s) => setState(() => _mode = s.first),
+        // ── Handicap (Net%/Gross — shared slider widget, no Strokes-Off) ──
+        HandicapModeSelector(
+          mode: _mode,
+          netPercent: _netPercent,
+          allowStrokesOff: false,
+          onModeChanged: (m) => setState(() => _mode = m),
+          onPercentChanged: (p) => setState(() => _netPercent = p),
         ),
-        if (_mode == 'net') ...[
-          const SizedBox(height: 12),
-          SizedBox(
-            width: 160,
-            child: TextField(
-              controller: _netPctCtrl,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
-                labelText: 'Handicap %', suffixText: '%',
-                border: OutlineInputBorder(), isDense: true),
-            ),
-          ),
-        ],
         const SizedBox(height: 24),
 
         // ── Points table ──
@@ -318,7 +316,9 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
           const SizedBox(height: 6),
           Text('Pool: \$${_pool.toStringAsFixed(0)}  ($_numPlayers players)',
               style: theme.textTheme.bodySmall),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          PayoutPresetsRow(onPreset: _applyPoolPreset),
+          const SizedBox(height: 8),
           PayoutConfigField(
             pool: _pool.round(),
             numPayouts: _numPayouts,

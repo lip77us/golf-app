@@ -195,3 +195,41 @@ class PayoutConfigField extends StatelessWidget {
     );
   }
 }
+
+/// Suggested-split quick-fill chips, matching the Stroke Play (Low Net) setup
+/// so payout config looks the same across games. [onPreset] receives ratios
+/// that sum to 1.0; the caller fills the pool accordingly.
+class PayoutPresetsRow extends StatelessWidget {
+  final void Function(List<double> ratios) onPreset;
+  const PayoutPresetsRow({super.key, required this.onPreset});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final btnStyle = TextButton.styleFrom(
+      minimumSize: Size.zero,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: const TextStyle(fontSize: 12),
+    );
+    Widget chip(String label, List<double> ratios) => TextButton(
+          style: btnStyle,
+          onPressed: () => onPreset(ratios),
+          child: Text(label),
+        );
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('Suggested:', style: muted),
+        const SizedBox(width: 2),
+        chip('Winner takes all', [1.0]),
+        Text('·', style: muted),
+        chip('60/40', [0.6, 0.4]),
+        Text('·', style: muted),
+        chip('60/30/10', [0.6, 0.3, 0.1]),
+      ],
+    );
+  }
+}

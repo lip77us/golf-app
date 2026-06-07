@@ -33,6 +33,10 @@ class HandicapModeSelector extends StatelessWidget {
   /// that explicit.  Defaults to the per-foursome wording.
   final String? soNote;
 
+  /// When false, the Strokes-Off-Low option is hidden (Net / Gross only) —
+  /// e.g. Stableford, which only offers full-handicap-% or gross.
+  final bool allowStrokesOff;
+
   const HandicapModeSelector({
     super.key,
     required this.mode,
@@ -41,6 +45,7 @@ class HandicapModeSelector extends StatelessWidget {
     required this.onPercentChanged,
     this.wrapInCard = true,
     this.soNote,
+    this.allowStrokesOff = true,
   });
 
   @override
@@ -55,10 +60,11 @@ class HandicapModeSelector extends StatelessWidget {
                 color: theme.colorScheme.primary)),
         const SizedBox(height: 8),
         SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'net',         label: Text('Net')),
-            ButtonSegment(value: 'gross',       label: Text('Gross')),
-            ButtonSegment(value: 'strokes_off', label: Text('SO Low')),
+          segments: [
+            const ButtonSegment(value: 'net',   label: Text('Net')),
+            const ButtonSegment(value: 'gross', label: Text('Gross')),
+            if (allowStrokesOff)
+              const ButtonSegment(value: 'strokes_off', label: Text('SO Low')),
           ],
           selected: {mode},
           onSelectionChanged: (s) => onModeChanged(s.first),
