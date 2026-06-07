@@ -1542,13 +1542,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
           currentHole:   _selectedHole,
         ),
 
-      // Stableford per-hole points (authoritative; updates after each save).
-      if (games.contains('stableford') && rp.stablefordResult != null)
-        _StablefordStrip(
-          result:      rp.stablefordResult!,
-          currentHole: _selectedHole,
-        ),
-
       Expanded(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
@@ -1661,6 +1654,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                     rp.lowNetConfig?['handicap_mode'] as String? ?? 'net',
                 strokePlayNetPercent:
                     rp.lowNetConfig?['net_percent']   as int?    ?? 100,
+                stablefordResult:
+                    games.contains('stableford') ? rp.stablefordResult : null,
               ),
 
               const SizedBox(height: 16),
@@ -3722,6 +3717,8 @@ class _GameStatusSection extends StatelessWidget {
   // (not the round-level handicap_mode, which casual stroke play overrides).
   final String                      strokePlayHandicapMode;
   final int                         strokePlayNetPercent;
+  // Stableford — authoritative per-hole + total points (config-aware).
+  final Map<String, dynamic>?       stablefordResult;
 
   const _GameStatusSection({
     required this.games,
@@ -3751,6 +3748,7 @@ class _GameStatusSection extends StatelessWidget {
     this.irHandicapMode  = 'net',
     this.strokePlayHandicapMode = 'net',
     this.strokePlayNetPercent   = 100,
+    this.stablefordResult,
   });
 
   @override
@@ -3870,6 +3868,18 @@ class _GameStatusSection extends StatelessWidget {
             onTapHole:    onTapHole,
             handicapMode: strokePlayHandicapMode,
             netPercent:   strokePlayNetPercent,
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Stableford — per-player per-hole points grid + running total.
+        if (games.contains('stableford') && stablefordResult != null) ...[
+          _StablefordProgressGrid(
+            players:     players,
+            scorecard:   scorecard,
+            result:      stablefordResult!,
+            currentHole: currentHole,
+            onTapHole:   onTapHole,
           ),
           const SizedBox(height: 12),
         ],
@@ -5291,59 +5301,152 @@ class _TeamBanner extends StatelessWidget {
   }
 }
 
-/// Compact read-only strip showing each player's authoritative Stableford
-/// points for the current hole (config-aware; appears once the hole is saved).
-class _StablefordStrip extends StatelessWidget {
+/// Stableford per-hole points grid below the score card — modelled on
+/// _StrokePlayProgressGrid. Each cell is the authoritative (config-aware)
+/// points for that hole; the last column is the running total. Shows the
+/// player rows with empty cells immediately, so it's visible before any score.
+class _StablefordProgressGrid extends StatelessWidget {
+  final List<Membership>     players;
+  final Scorecard            scorecard;
   final Map<String, dynamic> result;
-  final int currentHole;
-  const _StablefordStrip({required this.result, required this.currentHole});
+  final int                  currentHole;
+  final void Function(int hole)? onTapHole;
+
+  const _StablefordProgressGrid({
+    required this.players,
+    required this.scorecard,
+    required this.result,
+    required this.currentHole,
+    this.onTapHole,
+  });
+
+  static const double _labelColW = 60.0;
+  static const double _cellW     = 28.0;
+  static const double _rowH      = 26.0;
+  static const double _totW      = 36.0;
 
   @override
   Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final results = (result['results'] as List? ?? []);
-    final key     = '$currentHole';
-    final chips    = <Widget>[];
-    for (final e in results) {
-      final r       = e as Map<String, dynamic>;
-      if ((r['holes_played'] as int? ?? 0) == 0) continue; // not started
-      final total   = r['total_points'] ?? 0;               // running total
-      final holes   = r['holes'] as Map<String, dynamic>?;
-      final holePts = holes?[key];                           // this hole's pts
-      final name    = (r['player_name']?.toString() ?? '').split(' ').first;
-      final delta   = holePts == null
-          ? ''
-          : ' (${(holePts as num) >= 0 ? '+' : ''}$holePts)';
-      chips.add(Padding(
-        padding: const EdgeInsets.only(right: 14),
-        child: Text.rich(TextSpan(children: [
-          TextSpan(text: '$name ',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          TextSpan(text: '$total',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          TextSpan(text: delta, style: theme.textTheme.bodySmall),
-        ])),
-      ));
-    }
-    if (chips.isEmpty) return const SizedBox.shrink();
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
-      child: Row(children: [
-        Text('Stableford:',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: chips),
+    final theme     = Theme.of(context);
+    final holeRange = List.generate(18, (i) => i + 1);
+    final byId = <int, Map<String, dynamic>>{
+      for (final e in (result['results'] as List? ?? []))
+        (e as Map<String, dynamic>)['player_id'] as int: e,
+    };
+
+    Widget holeCell(int h, {required Widget child}) {
+      final isCurrent = h == currentHole;
+      return GestureDetector(
+        onTap: onTapHole == null ? null : () => onTapHole!(h),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: _cellW, height: _rowH, alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isCurrent
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.35)
+                : null,
+            border: isCurrent
+                ? Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.6),
+                    width: 1.2)
+                : null,
           ),
+          child: child,
         ),
-      ]),
+      );
+    }
+
+    Widget labelCell(String s, {bool bold = false, bool italic = false}) =>
+        SizedBox(
+          width: _labelColW, height: _rowH,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(s,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                    fontStyle: italic ? FontStyle.italic : FontStyle.normal)),
+          ),
+        );
+
+    Widget totCell(Widget child) =>
+        SizedBox(width: _totW, height: _rowH, child: Center(child: child));
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Stableford points',
+                style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary)),
+            const SizedBox(height: 4),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Hole numbers + Total
+                  Row(children: [
+                    labelCell('Hole', bold: true),
+                    for (final h in holeRange)
+                      holeCell(h,
+                          child: Text('$h',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.bold))),
+                    totCell(const Text('Tot',
+                        style: TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.bold))),
+                  ]),
+                  // Par
+                  Row(children: [
+                    labelCell('Par', italic: true),
+                    for (final h in holeRange)
+                      holeCell(h,
+                          child: Text('${scorecard.holeData(h)?.par ?? "-"}',
+                              style: theme.textTheme.bodySmall)),
+                    totCell(const SizedBox.shrink()),
+                  ]),
+                  Container(
+                    height: 1,
+                    width: _labelColW + _cellW * holeRange.length + _totW,
+                    color: theme.colorScheme.outlineVariant,
+                    margin: const EdgeInsets.symmetric(vertical: 2),
+                  ),
+                  // Per-player points
+                  for (final m in players)
+                    () {
+                      final r     = byId[m.player.id];
+                      final holes = (r?['holes'] as Map<String, dynamic>?) ?? {};
+                      final total = r?['total_points'] ?? 0;
+                      return Row(children: [
+                        labelCell(m.player.shortName.isNotEmpty
+                            ? m.player.shortName
+                            : m.player.name.split(' ').first),
+                        for (final h in holeRange)
+                          holeCell(h,
+                              child: Text(
+                                  holes['$h'] == null ? '' : '${holes['$h']}',
+                                  style: theme.textTheme.bodySmall)),
+                        totCell(Text('$total',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold))),
+                      ]);
+                    }(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
