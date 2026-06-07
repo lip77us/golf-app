@@ -456,24 +456,90 @@ class _StablefordView extends StatelessWidget {
   final Map<String, dynamic> data;
   const _StablefordView({required this.data});
 
+  Widget _chip(String label) => Chip(
+        label: Text(label, style: const TextStyle(fontSize: 11)),
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+      );
+
+  String _num(num v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
   @override
   Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
     final results = (data['results'] as List? ?? []);
-    return ListView.separated(
+    final style   = data['payout_style']?.toString() ?? 'pool';
+    final hmode   = data['handicap_mode']?.toString() ?? 'net';
+    final netPct  = data['net_percent'] as int? ?? 100;
+    final table   = data['table'] as Map<String, dynamic>?;
+    final entry   = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
+    final rate    = (data['per_point_rate'] as num?)?.toDouble() ?? 0.0;
+    final ppMode  = data['per_point_mode']?.toString() ?? 'all';
+
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: results.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (_, i) {
-        final r = results[i] as Map<String, dynamic>;
-        return ListTile(
-          leading: CircleAvatar(child: Text('${r['rank'] ?? i + 1}')),
-          title: Text(r['player_name']?.toString() ?? '—'),
-          trailing: Text(
-            '${r['total_points'] ?? 0} pts',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      children: [
+        Wrap(spacing: 8, runSpacing: 4, children: [
+          _chip(hmode == 'gross' ? 'Gross' : 'Net $netPct%'),
+          if (style == 'pool' && entry > 0)
+            _chip('Pool \$${_num(entry)}/player'),
+          if (style == 'per_point')
+            _chip('\$${_num(rate)}/pt · '
+                '${ppMode == 'first' ? 'Just first' : 'Everyone above'}'),
+        ]),
+        if (table != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Alb ${table['albatross']} · Eag ${table['eagle']} · '
+            'Bird ${table['birdie']} · Par ${table['par']} · '
+            'Bog ${table['bogey']} · Dbl ${table['double']}',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
-        );
-      },
+        ],
+        const SizedBox(height: 8),
+        ...results.map((e) {
+          final r        = e as Map<String, dynamic>;
+          final pts      = r['total_points'] as int? ?? 0;
+          final payout   = (r['payout'] as num?)?.toDouble();
+          final excluded = r['excluded'] as bool? ?? false;
+          final hp       = r['holes_played'] as int? ?? 0;
+          return Card(
+            margin: const EdgeInsets.only(bottom: 6),
+            child: ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              leading: CircleAvatar(
+                  radius: 16, child: Text('${r['rank'] ?? ''}')),
+              title: Text(r['player_name']?.toString() ?? '—'),
+              subtitle: Text(
+                excluded ? 'Not eligible for prizes'
+                    : (hp > 0 ? 'Thru $hp' : 'Not started'),
+                style: theme.textTheme.bodySmall,
+              ),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('$pts pts',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                  if (payout != null && payout != 0)
+                    Text(
+                      payout >= 0 ? '+\$${_num(payout)}' : '−\$${_num(-payout)}',
+                      style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600,
+                          color: payout >= 0
+                              ? Colors.green.shade700
+                              : theme.colorScheme.error),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
     );
   }
 }
