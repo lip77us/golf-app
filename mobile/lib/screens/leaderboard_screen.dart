@@ -51,20 +51,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     // Triple Cup plays 6 holes alt-shot per foursome, so low net is
     // meaningless on these rounds — suppress the Stroke Play tab.
     final isTripleCupRound = lb.activeGames.contains('triple_cup');
-    // Tab order: the round's own game(s) first (main game on the left), then
-    // the tournament championship / cup / my-foursome utility tabs, and finally
-    // Low Net is appended last (see below) so the scores tab is always rightmost.
-    final games = [
-      ...lb.activeGames.where((g) =>
-          !(lb.isCupRound && _rawSinglesKeys.contains(g)) &&
-          !(isTripleCupRound && g == 'low_net_round')),
-    ];
-    if (lb.tournamentId != null && lb.tournamentActiveGames.isNotEmpty) {
-      games.add('__championship__');
-    }
-    // Add a single Bandon Cup tab for cup rounds (IR + Singles) OR whenever
-    // there are nassau cup matches.  The tab loads both cumulative standings
-    // AND current-round live data — no separate __cup_round__ tab needed.
+
+    // Tab order, left → right:
+    //   1. Tournament TYPE (the headline): Cup, then Championship.
+    //   2. The round's own per-round game(s) (side games).
+    //   3. "My Foursome" utility tab.
+    //   4. Low Net (scores) — ALWAYS rightmost.
+    final games = <String>[];
+
+    // 1. Tournament type — leftmost. A single Bandon Cup tab covers cup rounds
+    // (IR + Singles) or any nassau cup matches; the championship covers non-cup
+    // tournaments (Stableford / Stroke Play). For a cup, the cup leads and the
+    // stroke-play championship sits just after it.
     final hasCupNassau = lb.games.containsKey('nassau') &&
         ((lb.games['nassau']!.data as Map<String, dynamic>? ?? {})['by_group']
                 as List? ??
@@ -73,19 +71,24 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     if (lb.isCupRound || hasCupNassau) {
       games.add('__bandon_cup__');
     }
+    if (lb.tournamentId != null && lb.tournamentActiveGames.isNotEmpty) {
+      games.add('__championship__');
+    }
 
-    // "My Foursome" tab — shown when the round has any per-foursome game
-    // data the viewer's player_id appears in.  Lets the user jump
-    // straight to their group without scrolling through 12+ other
-    // foursomes' cards.  The body builds at render time based on the
-    // currently-logged-in PlayerProfile.
+    // 2. The round's own games (side games). Low Net is excluded here — it's
+    // pinned rightmost below even when it's an active round game.
+    games.addAll(lb.activeGames.where((g) =>
+        !(lb.isCupRound && _rawSinglesKeys.contains(g)) &&
+        g != 'low_net_round'));
+
+    // 3. "My Foursome" — jump to the viewer's own group without scrolling.
     final myPid = context.read<AuthProvider>().player?.id;
     if (myPid != null && _viewerIsInAnyFoursome(lb, myPid)) {
       games.add('__my_foursome__');
     }
-    // Low Net (scores) is ALWAYS the rightmost tab — the at-a-glance reference
-    // for everyone's actual score. The backend supplies the block for any
-    // individual-ball round (it's not in active_games); excluded for Triple Cup.
+
+    // 4. Low Net (scores) — ALWAYS rightmost; the backend supplies the block for
+    // any individual-ball round (not in active_games). Excluded for Triple Cup.
     if (!isTripleCupRound &&
         lb.games.containsKey('low_net_round') &&
         !games.contains('low_net_round')) {

@@ -33,12 +33,17 @@ def _aggregate_rounds(tournament, mode, net_pct, points_fn) -> dict:
             entry = aggregated.setdefault(pid, {
                 'name': data['name'], 'points': 0, 'holes_played': 0,
                 'rounds_played': 0, 'round_totals': [], 'round_labels': [],
+                'current_round': round_obj.round_number, 'current_thru': 0,
             })
             entry['points']        += data['points']
             entry['holes_played']  += data['holes_played']
             entry['rounds_played'] += 1
             entry['round_totals'].append(data['points'])
             entry['round_labels'].append(f'R{round_obj.round_number}')
+            # Rounds iterate in round_number order, so the last one with any
+            # scores is the player's current round + holes-thru in it.
+            entry['current_round'] = round_obj.round_number
+            entry['current_thru']  = data['holes_played']
     return aggregated
 
 
@@ -97,6 +102,8 @@ def stableford_championship_standings(tournament) -> list:
             'total_points' : data['points'],
             'holes_played' : data['holes_played'],
             'rounds_played': data['rounds_played'],
+            'current_round': data.get('current_round'),
+            'current_thru' : data.get('current_thru', 0),
             'round_totals' : data['round_totals'],
             'round_labels' : data['round_labels'],
             'excluded'     : is_excluded,

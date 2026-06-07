@@ -253,10 +253,15 @@ class _StablefordChampView extends StatelessWidget {
         ],
         const SizedBox(height: 8),
         ...results.map((e) {
-          final r      = e as Map<String, dynamic>;
-          final pts    = r['total_points'] as int? ?? 0;
-          final payout = (r['payout'] as num?)?.toDouble();
-          final rounds = r['rounds_played'] as int? ?? 0;
+          final r        = e as Map<String, dynamic>;
+          final pts      = r['total_points'] as int? ?? 0;
+          final payout   = (r['payout'] as num?)?.toDouble();
+          final thru     = r['current_thru'] as int? ?? 0;
+          final curRound = r['current_round'] as int? ?? 0;
+          final thruStr  = thru >= 18 ? 'F' : '$thru';
+          final subtitle = totalRounds > 1
+              ? 'Thru $thruStr · Round $curRound of $totalRounds'
+              : 'Thru $thruStr';
           return Card(
             margin: const EdgeInsets.only(bottom: 6),
             child: ListTile(
@@ -264,8 +269,7 @@ class _StablefordChampView extends StatelessWidget {
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               leading: CircleAvatar(radius: 16, child: Text('${r['rank'] ?? ''}')),
               title: Text(r['player_name']?.toString() ?? '—'),
-              subtitle: Text('$rounds of $totalRounds rounds',
-                  style: theme.textTheme.bodySmall),
+              subtitle: Text(subtitle, style: theme.textTheme.bodySmall),
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
