@@ -447,31 +447,51 @@ setup and the Skins / Points 5-3-1 / Nassau / Sixes calculators).
   `Tee.course_name`). `seed_demo` follows the current schema — use it as the
   reference for programmatic data creation.
 
-## Stableford — hidden until built out
-Stableford is **hidden from the tournament menu** (App Store completeness: it
-was only partially working — no per-hole points under score entry or on the
-leaderboard).
-- The per-round `stableford` catalog entry is `enabled: false` (already hidden
-  from `tournamentRoundGames`).
-- The **Stableford Championship** option is commented out of
-  `kChampionshipGames` in `game_catalog.dart`; its display label is preserved
-  in `_kExtraGameLabels` so any existing tournament still renders the name.
-  Helper text in `new_round_wizard.dart` that listed "Stableford" as a
-  selectable championship was updated to drop it.
-- Re-enable by uncommenting the `kChampionshipGames` line and restoring the
-  helper-text wording.
+## Stableford — casual implemented (tournament championship still deferred)
+Casual Stableford is **live** end-to-end. The defining feature is an **editable
+6-bucket points table** per round; with the standard table (5/4/3/2/1/0) it
+ranks identically to low-net-with-a-double-bogey-cap — custom tables (e.g.
+Modified `8/5/2/0/-1/-3`) are where it diverges.
 
-**TODO before re-enabling (user requirements):**
-1. Track and display Stableford points per hole below score entry.
-2. Show Stableford points/totals on the leaderboard.
-3. Add a Stableford setup screen with an **editable points-per-score table**
-   (e.g. eagle/birdie/par/bogey/double values) so the user can modify the
-   points awarded per score.
-4. Build **both a casual version and a tournament version**:
-   - Casual: re-enable the per-round `stableford` catalog entry (`casual: true`,
-     `enabled: true`) with its own setup + scoring, like the other casual games.
-   - Tournament: the `stableford_championship` accumulator (uncomment in
-     `kChampionshipGames`) that totals points across rounds.
+**Backend:**
+- `games.StablefordGame` (OneToOne round): `handicap_mode` (net|gross only — no
+  Strokes-Off), `net_percent`, 6 `pts_*` buckets (albatross/eagle/birdie/par/
+  bogey/double, SmallInteger, **negatives allowed**, default 5/4/3/2/1/0),
+  `payout_style` (`pool`|`per_point`), `per_point_rate`, `per_point_mode`
+  (`all`|`first`), plus Low-Net-style `entry_fee`/`payouts`/`excluded_player_ids`.
+  `points_for_diff()`. Migrations `games/0033`,`0034`,`0035`.
+- `services/stableford.py`: standings computed **config-aware from gross + the
+  game's own handicap** (mirrors Low Net; does NOT trust stored `net_score`),
+  ranked by points desc. Pool payout = Low-Net prize-rank/tie-split/excluded;
+  per-point = `rate × (n·pts − total)` (`all`) or winner-collects-the-margins
+  (`first`) — both zero-sum. `stableford_summary()` → standings + table + pool +
+  style; each standing carries a per-hole `holes:{hole:pts}` map.
+- Endpoints: `GET/POST /rounds/<id>/stableford/setup/`
+  (`StablefordSetupSerializer`), `GET /rounds/<id>/stableford/`
+  (`StablefordResultView`). Leaderboard block spreads the rich summary.
+- Note: `HoleScore.stableford_points` is intentionally left **standard** (the
+  generic scorecard field); the Stableford GAME recomputes config-aware in the
+  service. Tests: `api/test_stableford.py` (8: setup/defaults, standard ranking,
+  modified table, pool payout, excluded, per-point all+first, watch render).
+
+**Mobile:**
+- `stableford_setup_screen.dart` — 2-step wizard: (1) handicap (shared
+  `HandicapModeSelector`, `allowStrokesOff:false`) + points table (3 presets:
+  Standard / Modified / Reward birdies, editable) → (2) payout (Pool via
+  `PayoutConfigField`+`PayoutPresetsRow`, or Per-point with an Everyone-above /
+  Just-first toggle). Routes `/stableford-setup` (after round create, like Low
+  Net); catalog entry re-enabled (`casual:true, enabled:true`).
+- Three surfaces: `_StablefordView` (leaderboard — points + payout + table/style
+  chips), `watch/stableford.html` (+ `_render_casual_stableford` tab), and a
+  `_StablefordStrip` in `score_entry_screen` (per-hole points, authoritative via
+  `RoundProvider.loadStableford` → `getStablefordResult`, refreshed after save).
+- `client`: `getStablefordConfig`/`postStablefordSetup`/`getStablefordResult`.
+
+**Still deferred — tournament Stableford championship:** the
+`stableford_championship` accumulator stays commented out of `kChampionshipGames`
+(display label preserved in `_kExtraGameLabels`). Re-enable that line +
+helper-text wording, and add a cross-round points accumulator, when building the
+tournament version.
 
 ## Nassau — implemented
 Enabled in `game_catalog.dart` (casual, 2–4 players; excludes Sixes/Points).
