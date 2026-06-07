@@ -605,11 +605,19 @@ class _TournamentCard extends StatelessWidget {
           ],
 
           // ── Championship Leaderboard (always shown for multi-game tournaments)
+          // Name the championship type so the tournament's format is visible
+          // right here on the main screen.
           if (tournament.activeGames.isNotEmpty) ...[
             const Divider(height: 16),
             _ActionButton(
               icon : Icons.emoji_events_outlined,
-              label: 'Championship Leaderboard',
+              label: tournament.activeGames.contains('stableford_championship')
+                  ? 'Stableford Championship Leaderboard'
+                  : tournament.activeGames.contains('team_cup')
+                      ? 'Cup Leaderboard'
+                      : tournament.activeGames.contains('low_net')
+                          ? 'Stroke Play Championship Leaderboard'
+                          : 'Championship Leaderboard',
               onTap: onViewLeaderboard,
             ),
           ],

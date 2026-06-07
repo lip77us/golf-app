@@ -55,9 +55,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       ...lb.activeGames.where((g) =>
           !(lb.isCupRound && _rawSinglesKeys.contains(g)) &&
           !(isTripleCupRound && g == 'low_net_round')),
-      if (lb.tournamentId != null && lb.tournamentActiveGames.isNotEmpty)
-        '__championship__',
     ];
+    // Always offer a Low Net (scores) tab for individual-ball rounds — it's the
+    // only place to see every player's actual score. The backend supplies the
+    // block (it's not in active_games), so surface it from the games map here.
+    // Excluded for Triple Cup (alt-shot — no individual scores).
+    if (!isTripleCupRound &&
+        lb.games.containsKey('low_net_round') &&
+        !games.contains('low_net_round')) {
+      games.add('low_net_round');
+    }
+    if (lb.tournamentId != null && lb.tournamentActiveGames.isNotEmpty) {
+      games.add('__championship__');
+    }
     // Add a single Bandon Cup tab for cup rounds (IR + Singles) OR whenever
     // there are nassau cup matches.  The tab loads both cumulative standings
     // AND current-round live data — no separate __cup_round__ tab needed.
