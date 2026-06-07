@@ -1009,6 +1009,8 @@ class StablefordSetupSerializer(serializers.Serializer):
                                             default='pool')
     per_point_rate = serializers.DecimalField(max_digits=6, decimal_places=2,
                                               default='0.00')
+    per_point_mode = serializers.ChoiceField(choices=['all', 'first'],
+                                             default='all')
     entry_fee     = serializers.DecimalField(max_digits=8, decimal_places=2,
                                              default='0.00')
     payouts       = serializers.ListField(child=serializers.DictField(),

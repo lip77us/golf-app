@@ -395,7 +395,7 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
             TextButton.icon(
               onPressed: _addHalvedGolfer,
               icon: const Icon(Icons.phone_iphone, size: 18),
-              label: const Text('Add by phone #'),
+              label: const Text('Search for Halved golfer'),
             ),
           ],
         ),

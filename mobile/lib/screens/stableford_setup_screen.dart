@@ -42,6 +42,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   int _netPercent = 100;
 
   String _payoutStyle = 'pool';        // 'pool' | 'per_point'
+  String _perPointMode = 'all';        // 'all' | 'first'
   final _entryCtrl  = TextEditingController(text: '5');
   final _rateCtrl   = TextEditingController(text: '1'); // $/point (per_point)
   int _numPlayers = 0;
@@ -90,6 +91,8 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
         _netPercent = cfg['net_percent'] as int? ?? 100;
         _payoutStyle = (cfg['payout_style']?.toString() == 'per_point')
             ? 'per_point' : 'pool';
+        _perPointMode = (cfg['per_point_mode']?.toString() == 'first')
+            ? 'first' : 'all';
         _rateCtrl.text   = _fmt(cfg['per_point_rate'] as num? ?? 1);
         _entryCtrl.text  = _fmt(cfg['entry_fee'] as num? ?? 5);
         for (final b in _kBuckets) {
@@ -162,6 +165,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
         netPercent: _netPercent,
         payoutStyle: _payoutStyle,
         perPointRate: double.tryParse(_rateCtrl.text.trim()) ?? 0.0,
+        perPointMode: _perPointMode,
         entryFee: double.tryParse(_entryCtrl.text.trim()) ?? 0.0,
         payouts: payouts,
         pointsTable: {
@@ -328,10 +332,23 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
             onSuggest: _suggest,
           ),
         ] else ...[
-          Text('No pool — you pay everyone above you (and collect from everyone '
-              'below) at this rate per point of difference.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'all', label: Text('Everyone above you')),
+              ButtonSegment(value: 'first', label: Text('Just first')),
+            ],
+            selected: {_perPointMode},
+            onSelectionChanged: (s) => setState(() => _perPointMode = s.first),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _perPointMode == 'first'
+                ? 'Only the leader collects — everyone else pays the leader '
+                  'their points deficit at this rate per point.'
+                : 'You pay everyone above you (and collect from everyone below) '
+                  'at this rate per point of difference.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 12),
           SizedBox(
             width: 180,

@@ -116,6 +116,16 @@ class StablefordTests(TestCase):
         # Zero-sum.
         self.assertEqual(sum(r['payout'] for r in rows.values()), 0)
 
+    def test_per_point_first_only(self):
+        # Only the leader (A) collects; B and C pay their deficit × $1.
+        self._setup(payout_style='per_point', per_point_rate='1.00',
+                    per_point_mode='first')
+        rows = {r['player_name']: r for r in self._result()['results']}
+        self.assertEqual(rows['A']['payout'], (54 - 36) + (54 - 18))  # +54
+        self.assertEqual(rows['B']['payout'], -(54 - 36))              # -18
+        self.assertEqual(rows['C']['payout'], -(54 - 18))              # -36
+        self.assertEqual(sum(r['payout'] for r in rows.values()), 0)
+
     def test_excluded_player_gets_no_money(self):
         self._setup(entry_fee='10.00',
                     payouts=[{'place': 1, 'amount': '30.00'}],

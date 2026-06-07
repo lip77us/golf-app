@@ -590,7 +590,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               TextButton.icon(
                 onPressed: _addHalvedGolfer,
                 icon: const Icon(Icons.phone_iphone, size: 18),
-                label: const Text('Add by phone #'),
+                label: const Text('Search for Halved golfer'),
               ),
             ],
           ),

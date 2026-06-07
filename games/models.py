@@ -1238,6 +1238,11 @@ class StablefordGame(models.Model):
                         max_digits=6, decimal_places=2, default=0.00,
                         help_text="$ per point of margin vs each opponent "
                                   "(per_point style).")
+    # per_point: settle against everyone ('all') or only pay the winner the
+    # margin ('first').
+    PER_POINT_MODES = [('all', 'Pay everyone above you'), ('first', 'Pay first')]
+    per_point_mode = models.CharField(max_length=8, choices=PER_POINT_MODES,
+                                      default='all')
 
     entry_fee           = models.DecimalField(
                             max_digits=8, decimal_places=2, default=0.00,

@@ -189,10 +189,23 @@ def stableford_standings(round_obj) -> list:
         elig = [(pid, d['points']) for pid, d in totals.items()
                 if pid not in excluded_ids and d['holes_played'] > 0]
         n = len(elig)
-        tot = sum(p for _pid, p in elig)
-        per_point_payout = {
-            pid: round(rate * (n * pts - tot), 2) for pid, pts in elig
-        }
+        if config.per_point_mode == 'first' and n:
+            # Only the leader(s) collect: everyone else pays the leader their
+            # points deficit × rate; ties for first split the take.
+            top = max(p for _pid, p in elig)
+            winners = [pid for pid, p in elig if p == top]
+            take = sum((top - p) * rate for _pid, p in elig)
+            per_winner = round(take / len(winners), 2)
+            per_point_payout = {
+                pid: (per_winner if pid in winners
+                      else round(-(top - p) * rate, 2))
+                for pid, p in elig
+            }
+        else:  # 'all' — pay everyone above you
+            tot = sum(p for _pid, p in elig)
+            per_point_payout = {
+                pid: round(rate * (n * pts - tot), 2) for pid, pts in elig
+            }
 
     def _rank_list(items):
         out, rank = [], 1
@@ -264,6 +277,7 @@ def stableford_summary(round_obj) -> dict:
         'net_percent'   : config.net_percent if config else 100,
         'payout_style'  : style,
         'per_point_rate': float(config.per_point_rate) if config else 0.0,
+        'per_point_mode': config.per_point_mode if config else 'all',
         'entry_fee'     : entry_fee,
         'pool'          : (round(entry_fee * len(standings), 2)
                            if style == 'pool' else 0.0),
