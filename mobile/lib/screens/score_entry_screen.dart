@@ -5068,7 +5068,7 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
 // Skins standings card
 // ---------------------------------------------------------------------------
 
-class _SkinsStandingsCard extends StatelessWidget {
+class _SkinsStandingsCard extends StatefulWidget {
   final SkinsSummary skins;
   final int          currentHole;
 
@@ -5078,7 +5078,43 @@ class _SkinsStandingsCard extends StatelessWidget {
   });
 
   @override
+  State<_SkinsStandingsCard> createState() => _SkinsStandingsCardState();
+}
+
+class _SkinsStandingsCardState extends State<_SkinsStandingsCard> {
+  final ScrollController _ctrl = ScrollController();
+  static const double _stride = 36.0; // 32px cell + 4px gap
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SkinsStandingsCard old) {
+    super.didUpdateWidget(old);
+    if (old.currentHole != widget.currentHole) _schedule();
+  }
+
+  void _schedule() => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_ctrl.hasClients) return;
+        final target = ((widget.currentHole - 4) * _stride)
+            .clamp(0.0, _ctrl.position.maxScrollExtent);
+        _ctrl.animateTo(target,
+            duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      });
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final skins       = widget.skins;        // aliases keep the body unchanged
+    final currentHole = widget.currentHole;
     final theme = Theme.of(context);
 
     // Sort by total_skins descending.
@@ -5132,6 +5168,7 @@ class _SkinsStandingsCard extends StatelessWidget {
             SizedBox(
               height: 44,
               child: ListView.separated(
+                controller: _ctrl,
                 scrollDirection: Axis.horizontal,
                 itemCount: 18,
                 separatorBuilder: (_, __) => const SizedBox(width: 4),
@@ -5372,6 +5409,65 @@ class _StablefordStrip extends StatelessWidget {
 /// _StrokePlayProgressGrid. Each cell is the authoritative (config-aware)
 /// points for that hole; the last column is the running total. Shows the
 /// player rows with empty cells immediately, so it's visible before any score.
+/// Horizontal scroll view that auto-scrolls so the current hole's column is
+/// visible (positions it ~7 columns from the left) and re-scrolls when the
+/// hole changes. Reused by the per-hole grids/strips under the score card so
+/// you never have to scroll right to see the hole you just entered.
+/// [leading] = fixed left label-column width, [stride] = per-hole column width.
+class _AutoScrollHoleRow extends StatefulWidget {
+  final int    currentHole;
+  final double leading;
+  final double stride;
+  final Widget child;
+  const _AutoScrollHoleRow({
+    required this.currentHole,
+    required this.leading,
+    required this.stride,
+    required this.child,
+  });
+
+  @override
+  State<_AutoScrollHoleRow> createState() => _AutoScrollHoleRowState();
+}
+
+class _AutoScrollHoleRowState extends State<_AutoScrollHoleRow> {
+  final ScrollController _ctrl = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AutoScrollHoleRow old) {
+    super.didUpdateWidget(old);
+    if (old.currentHole != widget.currentHole) _schedule();
+  }
+
+  void _schedule() => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_ctrl.hasClients) return;
+        final target =
+            (widget.leading + (widget.currentHole - 7) * widget.stride)
+                .clamp(0.0, _ctrl.position.maxScrollExtent);
+        _ctrl.animateTo(target,
+            duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      });
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        controller: _ctrl,
+        child: widget.child,
+      );
+}
+
 class _StablefordProgressGrid extends StatelessWidget {
   final List<Membership>     players;
   final Scorecard            scorecard;
@@ -5456,8 +5552,10 @@ class _StablefordProgressGrid extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
             const SizedBox(height: 4),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+            _AutoScrollHoleRow(
+              currentHole: currentHole,
+              leading: _labelColW,
+              stride: _cellW,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
