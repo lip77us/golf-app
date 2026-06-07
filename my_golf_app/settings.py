@@ -299,7 +299,9 @@ INVITE_OG_IMAGE_URL = os.environ.get(
 # continue.  Leave CLIENT_MIN_VERSION at the last compatible release to
 # allow older clients to keep working.
 SERVER_VERSION    = '1.5.0'
-CLIENT_MIN_VERSION = '1.1.0'
+# Env-overridable so a forced upgrade is a Railway env-var flip (no code deploy):
+# set CLIENT_MIN_VERSION to the newly-released App Store version once it's live.
+CLIENT_MIN_VERSION = os.environ.get('CLIENT_MIN_VERSION', '1.1.0')
 
 # ---------------------------------------------------------------------------
 # Logging
