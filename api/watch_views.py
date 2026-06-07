@@ -519,6 +519,9 @@ def _is_casual_round(round_obj) -> bool:
 def _has_casual_skins(round_obj) -> bool:
     return 'skins' in (round_obj.active_games or [])
 
+def _has_casual_stableford(round_obj) -> bool:
+    return 'stableford' in (round_obj.active_games or [])
+
 def _has_casual_multi_skins(round_obj) -> bool:
     return 'multi_skins' in (round_obj.active_games or [])
 
@@ -639,6 +642,12 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'key': 'skins', 'label': 'Skins',
             'url': f'{base}?view=skins',
             'active': current == 'skins',
+        })
+    if _has_casual_stableford(round_obj):
+        tabs.append({
+            'key': 'stableford', 'label': 'Stableford',
+            'url': f'{base}?view=stableford',
+            'active': current == 'stableford',
         })
     if _has_casual_points_531(round_obj):
         tabs.append({
@@ -866,6 +875,19 @@ def _render_tournament_stroke_play(request, round_obj, token: str, tabs: list):
         'tournament':   tourney,
         'summary':      summary,
         'scope':        'championship',
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _render_casual_stableford(request, round_obj, token: str, tabs: list):
+    """Stableford spectator tab — ranked points + payouts (pool or per-point)."""
+    from services.stableford import stableford_summary
+    return render(request, 'watch/stableford.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'summary':      stableford_summary(round_obj),
         'refresh_secs': 30,
         'tabs':         tabs,
     })
@@ -1381,6 +1403,7 @@ _VIEW_DISPATCH = {
     'stroke_play':  _render_tournament_stroke_play,
     'cup':          _render_cup_standings,
     'skins':        _render_casual_skins,
+    'stableford':   _render_casual_stableford,
     'multi_skins':  _render_casual_multi_skins,
     'points_531':   _render_casual_points_531,
     'sixes':        _render_casual_sixes,

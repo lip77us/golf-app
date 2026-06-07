@@ -116,6 +116,15 @@ class StablefordTests(TestCase):
         # Zero-sum.
         self.assertEqual(sum(r['payout'] for r in rows.values()), 0)
 
+    def test_watch_page_renders(self):
+        self._setup(payout_style='per_point', per_point_rate='1.00')
+        from django.test import Client
+        resp = Client().get(
+            f'/watch/{self.round.watch_token}/?view=stableford')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Stableford')
+        self.assertContains(resp, 'A')  # player names render
+
     def test_per_point_first_only(self):
         # Only the leader (A) collects; B and C pay their deficit × $1.
         self._setup(payout_style='per_point', per_point_rate='1.00',

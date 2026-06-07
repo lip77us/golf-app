@@ -1,0 +1,69 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{{ tournament.name|default:"Stableford" }} · Round {{ round.round_number }}
+{% endblock %}
+
+{% block body %}
+  <h1>{% if tournament %}{{ tournament.name }}{% else %}Stableford{% endif %}</h1>
+  <p class="sub">
+    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+  </p>
+
+  {% if summary and summary.results %}
+    <div class="card">
+      <div class="match-meta">
+        <span class="game-pill">
+          {% if summary.handicap_mode == 'gross' %}Gross{% else %}Net {{ summary.net_percent }}%{% endif %}
+        </span>
+        <span class="meta-text">
+          {% if summary.payout_style == 'per_point' %}
+            ${{ summary.per_point_rate|floatformat:"-2" }}/pt ·
+            {% if summary.per_point_mode == 'first' %}Just first{% else %}Everyone above{% endif %}
+          {% elif summary.entry_fee %}
+            ${{ summary.entry_fee|floatformat:"-2" }} entry · ${{ summary.pool|floatformat:"-2" }} pool
+          {% endif %}
+        </span>
+      </div>
+
+      {% if summary.table %}
+        <p class="meta-text" style="margin:4px 0 8px;">
+          Alb {{ summary.table.albatross }} · Eag {{ summary.table.eagle }} ·
+          Bird {{ summary.table.birdie }} · Par {{ summary.table.par }} ·
+          Bog {{ summary.table.bogey }} · Dbl {{ summary.table.double }}
+        </p>
+      {% endif %}
+
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Player</th>
+            <th class="num">Thru</th>
+            <th class="num">Points</th>
+            <th class="num">Payout</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in summary.results %}
+            <tr>
+              <td>{{ r.rank|default:"—" }}</td>
+              <td>{{ r.player_name }}{% if r.excluded %} <span class="each">(no prize)</span>{% endif %}</td>
+              <td class="num">{% if r.holes_played %}{{ r.holes_played }}{% else %}—{% endif %}</td>
+              <td class="num">{{ r.total_points }}</td>
+              <td class="num">
+                {% if r.payout %}
+                  {% if r.payout > 0 %}+${{ r.payout|floatformat:"-2" }}
+                  {% else %}-${{ r.payout|floatformat:"-2"|cut:"-" }}
+                  {% endif %}
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card empty">No Stableford scores yet for this round.</div>
+  {% endif %}
+{% endblock %}
