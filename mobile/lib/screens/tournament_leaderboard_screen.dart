@@ -90,6 +90,7 @@ class _TournamentLeaderboardScreenState
 
   static const _labels = {
     'low_net'   : 'Stroke Play',
+    'stableford_championship': 'Stableford',
     'match_play': 'Match Play',
   };
 
@@ -189,11 +190,91 @@ class _GameView extends StatelessWidget {
     switch (gameKey) {
       case 'low_net':
         return _LowNetChampView(data: data);
+      case 'stableford_championship':
+        return _StablefordChampView(data: data);
       case 'match_play':
         return _MatchPlayChampView(data: data);
       default:
         return Center(child: Text('Unknown game: $gameKey'));
     }
+  }
+}
+
+// ===========================================================================
+// Stableford Championship view — cumulative points across rounds
+// ===========================================================================
+
+class _StablefordChampView extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _StablefordChampView({required this.data});
+
+  Widget _chip(String s) => Chip(
+        label: Text(s, style: const TextStyle(fontSize: 11)),
+        visualDensity: VisualDensity.compact, padding: EdgeInsets.zero);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme       = Theme.of(context);
+    final results     = (data['results'] as List? ?? []);
+    final table       = data['table'] as Map<String, dynamic>?;
+    final hmode       = data['handicap_mode']?.toString() ?? 'net';
+    final netPct      = data['net_percent'] as int? ?? 100;
+    final entry       = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
+    final totalRounds = data['total_rounds'] as int? ?? 0;
+    if (results.isEmpty) {
+      return const Center(child: Text('No Stableford scores yet.'));
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Wrap(spacing: 8, runSpacing: 4, children: [
+          _chip(hmode == 'gross' ? 'Gross' : 'Net $netPct%'),
+          if (entry > 0) _chip('Pool \$${entry.toStringAsFixed(0)}/player'),
+        ]),
+        if (table != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Alb ${table['albatross']} · Eag ${table['eagle']} · '
+            'Bird ${table['birdie']} · Par ${table['par']} · '
+            'Bog ${table['bogey']} · Dbl ${table['double']}',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ],
+        const SizedBox(height: 8),
+        ...results.map((e) {
+          final r      = e as Map<String, dynamic>;
+          final pts    = r['total_points'] as int? ?? 0;
+          final payout = (r['payout'] as num?)?.toDouble();
+          final rounds = r['rounds_played'] as int? ?? 0;
+          return Card(
+            margin: const EdgeInsets.only(bottom: 6),
+            child: ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              leading: CircleAvatar(radius: 16, child: Text('${r['rank'] ?? ''}')),
+              title: Text(r['player_name']?.toString() ?? '—'),
+              subtitle: Text('$rounds of $totalRounds rounds',
+                  style: theme.textTheme.bodySmall),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('$pts pts',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                  if (payout != null && payout > 0)
+                    Text('+\$${payout.toStringAsFixed(payout == payout.roundToDouble() ? 0 : 2)}',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600,
+                            color: Colors.green.shade700)),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
   }
 }
 
@@ -935,6 +1016,7 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
 
   static const _labels = {
     'low_net'   : 'Stroke Play',
+    'stableford_championship': 'Stableford',
     'match_play': 'Match Play',
   };
 

@@ -361,12 +361,7 @@ List<GameMeta> get primaryGames =>
 /// (like Irish Rumble) rather than a cross-day accumulator.
 const List<(String, String)> kChampionshipGames = [
   (GameIds.championshipStrokePlay, 'Stroke Play Championship'),
-  // Stableford Championship is hidden from the tournament picker until the
-  // Stableford feature is built out (per-hole points display in score entry
-  // + leaderboard, and a setup screen with an editable points-per-score
-  // table).  Re-enable by uncommenting this line.  The display label is kept
-  // in _kExtraGameLabels so any existing tournament still renders its name.
-  // (GameIds.championshipStableford, 'Stableford Championship'),
+  (GameIds.championshipStableford, 'Stableford Championship'),
   (GameIds.teamCup,                'Cup Play'),
 ];
 
