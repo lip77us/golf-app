@@ -1557,12 +1557,12 @@ class _Step2Players extends StatelessWidget {
           TextButton.icon(
             onPressed: onAddGolfer,
             icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
-            label: const Text('Add a golfer'),
+            label: const Text('Add Golfer'),
           ),
           TextButton.icon(
             onPressed: onAddByPhone,
             icon: const Icon(Icons.phone_iphone, size: 18),
-            label: const Text('Search for Halved golfer'),
+            label: const Text('Halved Golfer search'),
           ),
         ]),
       ),
