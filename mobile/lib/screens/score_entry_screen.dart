@@ -5305,16 +5305,26 @@ class _StablefordStrip extends StatelessWidget {
     final key     = '$currentHole';
     final chips    = <Widget>[];
     for (final e in results) {
-      final r     = e as Map<String, dynamic>;
-      final holes = r['holes'] as Map<String, dynamic>?;
-      final pts   = holes?[key];
-      if (pts == null) continue;
-      final name = (r['player_name']?.toString() ?? '').split(' ').first;
+      final r       = e as Map<String, dynamic>;
+      if ((r['holes_played'] as int? ?? 0) == 0) continue; // not started
+      final total   = r['total_points'] ?? 0;               // running total
+      final holes   = r['holes'] as Map<String, dynamic>?;
+      final holePts = holes?[key];                           // this hole's pts
+      final name    = (r['player_name']?.toString() ?? '').split(' ').first;
+      final delta   = holePts == null
+          ? ''
+          : ' (${(holePts as num) >= 0 ? '+' : ''}$holePts)';
       chips.add(Padding(
-        padding: const EdgeInsets.only(right: 12),
-        child: Text('$name $pts',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(fontWeight: FontWeight.w600)),
+        padding: const EdgeInsets.only(right: 14),
+        child: Text.rich(TextSpan(children: [
+          TextSpan(text: '$name ',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          TextSpan(text: '$total',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          TextSpan(text: delta, style: theme.textTheme.bodySmall),
+        ])),
       ));
     }
     if (chips.isEmpty) return const SizedBox.shrink();
@@ -5323,7 +5333,7 @@ class _StablefordStrip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
       child: Row(children: [
-        Text('Stableford pts:',
+        Text('Stableford:',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(width: 10),

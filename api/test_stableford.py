@@ -116,6 +116,15 @@ class StablefordTests(TestCase):
         # Zero-sum.
         self.assertEqual(sum(r['payout'] for r in rows.values()), 0)
 
+    def test_leaderboard_has_low_net_scores_tab(self):
+        # A casual Stableford round still exposes a Low Net (scores) block so
+        # players can see gross/net totals, not just points.
+        self._setup()
+        data = self.client.get(
+            reverse('api-leaderboard', args=[self.round.id])).data
+        self.assertIn('stableford', data['games'])
+        self.assertIn('low_net_round', data['games'])  # scores fallback
+
     def test_watch_page_renders(self):
         self._setup(payout_style='per_point', per_point_rate='1.00')
         from django.test import Client

@@ -420,6 +420,16 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'label': 'Low Net',
             **low_net_round_summary(round_obj),
         }
+    elif round_obj.tournament_id is None:
+        # Casual fallback: every casual round gets a Low Net "scores" tab so
+        # players can always see gross/net totals — even in a points-only game
+        # like Stableford. Mirrors the watch page (_has_low_net_round), where
+        # the Low Net tab doubles as the scorecard view.
+        from services.low_net_round import low_net_round_summary
+        games['low_net_round'] = {
+            'label': 'Low Net',
+            **low_net_round_summary(round_obj),
+        }
 
     if 'irish_rumble' in active_games:
         from services.irish_rumble import irish_rumble_summary
