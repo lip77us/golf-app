@@ -487,11 +487,24 @@ Modified `8/5/2/0/-1/-3`) are where it diverges.
   `RoundProvider.loadStableford` → `getStablefordResult`, refreshed after save).
 - `client`: `getStablefordConfig`/`postStablefordSetup`/`getStablefordResult`.
 
-**Still deferred — tournament Stableford championship:** the
-`stableford_championship` accumulator stays commented out of `kChampionshipGames`
-(display label preserved in `_kExtraGameLabels`). Re-enable that line +
-helper-text wording, and add a cross-round points accumulator, when building the
-tournament version.
+### Stableford Championship (tournament, cross-round) — implemented
+Total Stableford points accumulated across **every round** of a tournament
+(all rounds count; N-of-M deferred, matching Low Net Championship). Pool-paid.
+- Backend: `games.StablefordChampionshipConfig` (OneToOne tournament; Net%/Gross,
+  6-bucket table, entry_fee/payouts/excluded; migration `games/0036`).
+  `services/stableford_championship.py` aggregates per-round points via the
+  refactored `stableford._build_stableford_totals(round, mode, net_pct,
+  points_fn)` (so every round is scored on the tournament's own table), ranks by
+  total points desc, pool prize-rank/tie-split like Low Net. Endpoints
+  `GET/POST /tournaments/<id>/stableford/setup/` (+`num_players`) and
+  `GET /tournaments/<id>/stableford/`; `TournamentLeaderboardView` spreads it
+  under `stableford_championship`. Watch: `_render_stableford_championship` tab +
+  `watch/stableford_championship.html`. Tests `api/test_stableford_championship.py`.
+- Mobile: `championshipStableford` re-enabled in `kChampionshipGames` (shows in
+  the tournament championship picker; activated with the standard table by
+  default). `tournament_leaderboard_screen` → `_StablefordChampView` tab +
+  "Configure Stableford" → `tournament_stableford_setup_screen.dart` (handicap +
+  table presets/editor + pool payout). `client.get/postTournamentStablefordSetup`.
 
 ## Nassau — implemented
 Enabled in `game_catalog.dart` (casual, 2–4 players; excludes Sixes/Points).
