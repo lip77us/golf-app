@@ -208,7 +208,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 controller: _tabController,
                 isScrollable: true,
                 tabs: _gameTabs
-                    .map((g) => Tab(text: _label(g, lb?.cupName)))
+                    .map((g) => Tab(text: _label(g, lb)))
                     .toList(),
               )
             : null,
@@ -331,15 +331,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     );
   }
 
-  String _label(String g, [String? cupName]) {
+  String _label(String g, [Leaderboard? lb]) {
     // Cup tab title tracks the cup competition's display name — falls
     // back to a generic "Cup" only when no cup name is set on the
     // TeamTournament row (e.g. older data or non-cup contexts).
     if (g == '__bandon_cup__') {
-      return cupName ?? 'Cup';
+      return lb?.cupName ?? 'Cup';
     }
     if (g == '__my_foursome__') return 'My Foursome';
-    if (g == '__championship__') return 'Low Net';
+    if (g == '__championship__') {
+      // Reflect the tournament's actual championship rather than a hardcoded
+      // "Low Net" — a Stableford Championship round should read "Stableford".
+      final ta = lb?.tournamentActiveGames ?? const <String>[];
+      if (ta.contains('stableford_championship')) return 'Stableford';
+      if (ta.contains('match_play') && !ta.contains('low_net')) return 'Match Play';
+      return 'Low Net';
+    }
     return gameDisplayName(g);
   }
 
@@ -572,25 +579,22 @@ class _RedBallView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Info chips — match Low Net style
-        Row(children: [
+        // Info chips — wrap so they never overflow the row.
+        Wrap(spacing: 8, runSpacing: 4, children: [
           Chip(
             label: Text('$ballColor Ball',
                 style: const TextStyle(fontSize: 11)),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
           ),
-          if (entryFee > 0) ...[
-            const SizedBox(width: 8),
+          if (entryFee > 0)
             Chip(
               label: Text('Entry \$${entryFee.formatBet()}',
                   style: const TextStyle(fontSize: 11)),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
             ),
-          ],
-          if (payouts.isNotEmpty) ...[
-            const SizedBox(width: 8),
+          if (payouts.isNotEmpty)
             Chip(
               label: Text(
                   payouts.length == 1 ? 'Winner takes all' : '${payouts.length} places paid',
@@ -598,7 +602,6 @@ class _RedBallView extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
             ),
-          ],
         ]),
         const SizedBox(height: 8),
 
@@ -864,24 +867,21 @@ class _LowNetViewState extends State<_LowNetView> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Info chips
-        Row(children: [
+        // Info chips — wrap so they never overflow the row.
+        Wrap(spacing: 8, runSpacing: 4, children: [
           Chip(
             label: Text(modeLabel, style: const TextStyle(fontSize: 11)),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
           ),
-          if (entryFee > 0) ...[
-            const SizedBox(width: 8),
+          if (entryFee > 0)
             Chip(
               label: Text('Entry \$${entryFee.formatBet()}',
                   style: const TextStyle(fontSize: 11)),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
             ),
-          ],
-          if (payouts.isNotEmpty) ...[
-            const SizedBox(width: 8),
+          if (payouts.isNotEmpty)
             Chip(
               label: Text(
                   payouts.length == 1
@@ -891,7 +891,6 @@ class _LowNetViewState extends State<_LowNetView> {
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
             ),
-          ],
         ]),
         const SizedBox(height: 8),
 
@@ -1093,8 +1092,8 @@ class _IrishRumbleView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Info chips — same pattern as Low Net
-        Row(children: [
+        // Info chips — wrap so they never overflow the row.
+        Wrap(spacing: 8, runSpacing: 4, children: [
           Chip(
             label: Text(modeLabel, style: const TextStyle(fontSize: 11)),
             visualDensity: VisualDensity.compact,
@@ -1105,7 +1104,6 @@ class _IrishRumbleView extends StatelessWidget {
           // by segment), so a single "Best N count" pill would lie.
           // Show the variant name instead; the score-entry screen
           // already surfaces "Best N count this hole" per hole.
-          const SizedBox(width: 8),
           Chip(
             label: Text(
               switch (variant) {
@@ -1119,17 +1117,14 @@ class _IrishRumbleView extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
           ),
-          if (entryFee > 0) ...[
-            const SizedBox(width: 8),
+          if (entryFee > 0)
             Chip(
               label: Text('Entry \$${entryFee.formatBet()}',
                   style: const TextStyle(fontSize: 11)),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
             ),
-          ],
-          if (payouts.isNotEmpty) ...[
-            const SizedBox(width: 8),
+          if (payouts.isNotEmpty)
             Chip(
               label: Text(
                   payouts.length == 1 ? 'Winner takes all' : '${payouts.length} places paid',
@@ -1137,7 +1132,6 @@ class _IrishRumbleView extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
             ),
-          ],
         ]),
         const SizedBox(height: 8),
 
