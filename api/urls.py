@@ -125,6 +125,8 @@ urlpatterns = [
 
     # ---- Low Net setup (round-level) ----
     path('rounds/<int:pk>/low-net/setup/', views.LowNetSetupView.as_view(), name='api-low-net-setup'),
+    path('rounds/<int:pk>/stableford/setup/', views.StablefordSetupView.as_view(), name='api-stableford-setup'),
+    path('rounds/<int:pk>/stableford/',       views.StablefordResultView.as_view(), name='api-stableford-result'),
 
     # ---- Pink Ball setup (round-level) + per-foursome order ----
     path('rounds/<int:pk>/pink-ball/setup/',      views.PinkBallSetupView.as_view(),          name='api-pink-ball-setup'),

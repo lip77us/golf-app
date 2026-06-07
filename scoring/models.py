@@ -52,6 +52,9 @@ class HoleScore(models.Model):
             if tee is not None:
                 hole_par = tee.hole(self.hole_number)['par']
                 diff = self.net_score - hole_par
+                # Standard Stableford points (generic per-hole field). The
+                # casual Stableford GAME recomputes points config-aware (custom
+                # table + its own net%/gross) in services/stableford.py.
                 self.stableford_points = max(0, 2 - diff)
         super().save(*args, **kwargs)
 

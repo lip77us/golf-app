@@ -185,9 +185,8 @@ def _recalculate_games(foursome: Foursome) -> None:
         from services.multi_skins import calculate_multi_skins
         calculate_multi_skins(round_obj)
 
-    if 'stableford' in active_games:
-        from services.stableford import calculate_stableford
-        calculate_stableford(round_obj)
+    # Stableford standings are computed on the fly (config-aware) in
+    # stableford_summary() below — no persisted recompute needed here.
 
     if 'pink_ball' in active_games:
         from services.red_ball import calculate_red_ball
@@ -404,8 +403,8 @@ def _build_leaderboard(round_obj: Round) -> dict:
     if 'stableford' in active_games:
         from services.stableford import stableford_summary
         games['stableford'] = {
-            'label'  : 'Stableford',
-            'results': stableford_summary(round_obj),
+            'label': 'Stableford',
+            **stableford_summary(round_obj),
         }
 
     if 'pink_ball' in active_games:
@@ -4664,6 +4663,92 @@ class LowNetSetupView(APIView):
             },
         )
         return Response(self._config_dict(config), status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Stableford setup (round-level) + result
+# ---------------------------------------------------------------------------
+
+class StablefordSetupView(APIView):
+    """
+    GET  /api/rounds/{id}/stableford/setup/  → current config (or defaults).
+    POST same — save the points table + handicap (net%/gross) + money, mark the
+    round's `stableford` game active.
+    """
+    _PTS = ['pts_albatross', 'pts_eagle', 'pts_birdie',
+            'pts_par', 'pts_bogey', 'pts_double']
+
+    def _config_dict(self, config):
+        return {
+            'configured'         : True,
+            'handicap_mode'      : config.handicap_mode,
+            'net_percent'        : config.net_percent,
+            'entry_fee'          : float(config.entry_fee),
+            'payouts'            : config.payouts or [],
+            'excluded_player_ids': config.excluded_player_ids or [],
+            **{k: getattr(config, k) for k in self._PTS},
+        }
+
+    @staticmethod
+    def _count_players(round_obj):
+        return sum(
+            1 for fs in round_obj.foursomes.all()
+            for m in fs.memberships.all() if not m.player.is_phantom
+        )
+
+    def get(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        from games.models import StablefordGame
+        config = StablefordGame.objects.filter(round=round_obj).first()
+        num = self._count_players(round_obj)
+        if config is not None:
+            return Response({'num_players': num, **self._config_dict(config)})
+        return Response({
+            'num_players'        : num,
+            'configured'         : False,
+            'handicap_mode'      : round_obj.handicap_mode
+                                   if round_obj.handicap_mode in ('net', 'gross')
+                                   else 'net',
+            'net_percent'        : round_obj.net_percent,
+            'entry_fee'          : 0.00,
+            'payouts'            : [],
+            'excluded_player_ids': [],
+            'pts_albatross': 5, 'pts_eagle': 4, 'pts_birdie': 3,
+            'pts_par': 2, 'pts_bogey': 1, 'pts_double': 0,
+        })
+
+    def post(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        from api.serializers import StablefordSetupSerializer
+        ser = StablefordSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from games.models import StablefordGame
+        config, _ = StablefordGame.objects.update_or_create(
+            round=round_obj,
+            defaults={
+                'handicap_mode'      : d['handicap_mode'],
+                'net_percent'        : d['net_percent'],
+                'entry_fee'          : d['entry_fee'],
+                'payouts'            : d['payouts'],
+                'excluded_player_ids': d.get('excluded_player_ids', []),
+                **{k: d[k] for k in self._PTS},
+            },
+        )
+        if 'stableford' not in (round_obj.active_games or []):
+            round_obj.active_games = list(round_obj.active_games or []) + ['stableford']
+            round_obj.save(update_fields=['active_games'])
+        return Response(self._config_dict(config),
+                        status=status.HTTP_201_CREATED)
+
+
+class StablefordResultView(APIView):
+    """GET /api/rounds/{id}/stableford/ → ranked standings + table + pool."""
+    def get(self, request, pk):
+        round_obj = round_for_reader(request.user, pk)
+        from services.stableford import stableford_summary
+        return Response(stableford_summary(round_obj))
 
 
 # ---------------------------------------------------------------------------

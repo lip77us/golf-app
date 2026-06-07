@@ -1195,6 +1195,62 @@ class LowNetRoundConfig(models.Model):
         return f"Low Net config — {self.round}"
 
 
+class StablefordGame(models.Model):
+    """
+    Configuration for the casual Stableford game within a round.
+
+    Points are awarded per hole by the player's score relative to par (net or
+    gross), via an EDITABLE 6-bucket table. With the standard table
+    (5/4/3/2/1/0) Stableford is identical in ranking to low-net-with-a-double-
+    bogey-cap; the table is what lets it diverge (e.g. Modified Stableford
+    8/5/2/0/-1/-3 rewarding birdies and penalising bogeys, including negatives).
+
+    Money mirrors Low Net: an entry fee per player forms the pool, distributed
+    to the top finishers per the `payouts` list; excluded players appear in
+    standings but receive nothing.
+    """
+    round         = models.OneToOneField(
+                        Round, on_delete=models.CASCADE,
+                        related_name='stableford_config')
+    # Net (variable %) or Gross only — Strokes-Off is intentionally not offered.
+    handicap_mode = models.CharField(
+                        max_length=20, choices=HandicapMode.choices,
+                        default=HandicapMode.NET)
+    net_percent   = models.PositiveSmallIntegerField(default=100)
+
+    # Editable points table, keyed by score relative to par. Defaults are the
+    # standard Stableford values; values may be negative (Modified Stableford).
+    pts_albatross = models.SmallIntegerField(default=5)  # -3 or better
+    pts_eagle     = models.SmallIntegerField(default=4)  # -2
+    pts_birdie    = models.SmallIntegerField(default=3)  # -1
+    pts_par       = models.SmallIntegerField(default=2)  #  0
+    pts_bogey     = models.SmallIntegerField(default=1)  # +1
+    pts_double    = models.SmallIntegerField(default=0)  # +2 or worse
+
+    entry_fee           = models.DecimalField(
+                            max_digits=8, decimal_places=2, default=0.00,
+                            help_text="Entry fee per player.")
+    payouts             = models.JSONField(
+                            default=list,
+                            help_text="Payout per finishing place, e.g. "
+                                      "[{'place': 1, 'amount': 60}].")
+    excluded_player_ids = models.JSONField(default=list)
+
+    def points_for_diff(self, diff: int) -> int:
+        """Stableford points for a net/gross score `diff` strokes over par."""
+        if diff <= -3:
+            return self.pts_albatross
+        return {
+            -2: self.pts_eagle,
+            -1: self.pts_birdie,
+            0:  self.pts_par,
+            1:  self.pts_bogey,
+        }.get(diff, self.pts_double)
+
+    def __str__(self):
+        return f"Stableford config — {self.round}"
+
+
 class LowNetChampionshipConfig(models.Model):
     """
     Configuration for the Low Net Championship game spanning a full Tournament.
