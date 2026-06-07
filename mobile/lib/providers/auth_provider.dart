@@ -45,6 +45,12 @@ class AuthProvider extends ChangeNotifier {
   bool           get isNewAccount      => _isNewAccount;
   bool           get isLoggedIn       => _token != null;
 
+  /// Optional hooks so platform integrations (push notifications) can react to
+  /// auth changes without coupling this provider to Firebase. Wired in main().
+  /// Both are best-effort; failures must never affect auth.
+  Future<void> Function()? onAuthenticated;
+  Future<void> Function()? onLoggingOut;
+
   ApiClient get client => ApiClient(
         token: _token,
         onSessionExpired: () => logout(silent: true),
@@ -102,6 +108,7 @@ class AuthProvider extends ChangeNotifier {
       _isStaff          = result.isStaff;
       _isAccountAdmin   = result.isAccountAdmin;
       _lastAccountName  = accountName;
+      onAuthenticated?.call();   // register for push (best-effort)
     } on ApiException catch (e) {
       _error   = e.message;
       _token   = null;
@@ -164,6 +171,7 @@ class AuthProvider extends ChangeNotifier {
       _isAccountAdmin   = result.isAccountAdmin;
       _isNewAccount     = result.isNewAccount;
       _lastAccountName  = result.account.name;
+      onAuthenticated?.call();   // register for push (best-effort)
     } on ApiException catch (e) {
       _error   = e.message;
       _token   = null;
@@ -213,6 +221,8 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout({bool silent = false}) async {
+    // Drop this device's push token while we still have a valid token/client.
+    try { await onLoggingOut?.call(); } catch (_) {}
     if (!silent) {
       try {
         await client.logout();

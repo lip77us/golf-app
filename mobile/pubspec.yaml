@@ -39,6 +39,8 @@ dependencies:
   # Renders the Halved brand mark (SVG) inline — e.g. the "On Halved"
   # connected-golfer badge.
   flutter_svg: ^2.0.16
+  firebase_core: ^4.10.0
+  firebase_messaging: ^16.3.0
 
 dev_dependencies:
   flutter_test:

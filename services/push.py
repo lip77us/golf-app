@@ -15,6 +15,7 @@ Nothing here ever raises into the caller — a push failure must never block
 scoring. Going live = flip `PUSH_BACKEND=fcm` + creds; no code change.
 """
 import logging
+import os
 
 from django.conf import settings
 
@@ -65,13 +66,49 @@ def _send_console(tokens, title, body, data):
     return set()
 
 
+_FCM_APP = None
+
+
+def _fcm_app():  # pragma: no cover - needs creds
+    """Lazily init the firebase-admin app from FCM_SERVICE_ACCOUNT_JSON (the
+    Railway secret). Returns None when creds aren't configured."""
+    global _FCM_APP
+    if _FCM_APP is not None:
+        return _FCM_APP
+    raw = os.environ.get('FCM_SERVICE_ACCOUNT_JSON')
+    if not raw:
+        return None
+    import json
+    import firebase_admin
+    from firebase_admin import credentials
+    _FCM_APP = firebase_admin.initialize_app(
+        credentials.Certificate(json.loads(raw)), name='halved-push')
+    return _FCM_APP
+
+
 def _send_fcm(tokens, title, body, data):  # pragma: no cover - needs creds
-    """FCM HTTP v1 send. Stubbed until the Firebase project + service account
-    are provisioned (see docs/push-notifications.md). Returns unregistered
-    tokens to prune."""
-    raise NotImplementedError(
-        'FCM backend not configured yet — set up Firebase, then implement '
-        '_send_fcm. Use PUSH_BACKEND=console until then.')
+    """FCM HTTP v1 multicast send. Returns the tokens FCM reports as no longer
+    registered (so callers prune them)."""
+    app = _fcm_app()
+    if app is None:
+        logger.error('push: PUSH_BACKEND=fcm but FCM_SERVICE_ACCOUNT_JSON unset')
+        return set()
+    from firebase_admin import messaging
+    toks = list(tokens)
+    msg = messaging.MulticastMessage(
+        tokens=toks,
+        notification=messaging.Notification(title=title, body=body),
+        data={k: str(v) for k, v in (data or {}).items()},
+    )
+    resp = messaging.send_each_for_multicast(msg, app=app)
+    dead = set()
+    for i, r in enumerate(resp.responses):
+        if not r.success:
+            exc = r.exception
+            if isinstance(exc, getattr(messaging, 'UnregisteredError', ())) \
+                    or 'unregistered' in str(getattr(exc, 'code', '')).lower():
+                dead.add(toks[i])
+    return dead
 
 
 # --------------------------------------------------------------------------

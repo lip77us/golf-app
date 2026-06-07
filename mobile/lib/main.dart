@@ -12,6 +12,7 @@ import 'sync/sync_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/round_provider.dart';
 import 'providers/settings_provider.dart';
+import 'services/push_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/password_login_screen.dart';
 import 'screens/otp_verify_screen.dart';
@@ -80,6 +81,11 @@ void main() async {
 
   final settings = SettingsProvider();
   await settings.load();
+
+  // Push notifications (FCM). Guarded — a build without the native Firebase
+  // setup simply has no push; the app runs normally.
+  await PushService.initFirebase();
+  PushService.attach(auth, navigatorKey);
 
   runApp(GolfApp(auth: auth, localDb: localDb, settings: settings));
 }

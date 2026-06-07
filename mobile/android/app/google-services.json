@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1013357037229",
+    "project_id": "halved-f5327",
+    "storage_bucket": "halved-f5327.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1013357037229:android:5938df0c4447c46fa4a824",
+        "android_client_info": {
+          "package_name": "com.lipkin.usgolf_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA-CAqsmYRQdbi3mibpsYFy62kBTc-ZEIs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

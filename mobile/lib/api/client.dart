@@ -509,6 +509,16 @@ class ApiClient {
     await _post('/tournaments/$tournamentId/join/', {});
   }
 
+  /// Register this device's push (FCM) token for the current user.
+  Future<void> registerDevice(String token, String platform) async {
+    await _post('/devices/register/', {'token': token, 'platform': platform});
+  }
+
+  /// Drop this device's push token (on logout).
+  Future<void> unregisterDevice(String token) async {
+    await _post('/devices/unregister/', {'token': token});
+  }
+
   /// Look up a registered Halved member by phone number (no browsable
   /// directory). Returns {found, name, short_name, sex, handicap_index}.
   Future<Map<String, dynamic>> lookupHalvedUser(String phone) async {
