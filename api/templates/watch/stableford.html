@@ -7,7 +7,7 @@
 {% block body %}
   <h1>{% if tournament %}{{ tournament.name }}{% else %}Stableford{% endif %}</h1>
   <p class="sub">
-    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
   </p>
 
   {% if summary and summary.results %}

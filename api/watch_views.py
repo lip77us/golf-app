@@ -545,6 +545,16 @@ def _nassau_is_match(round_obj) -> bool:
     g = NassauGame.objects.filter(foursome__round=round_obj).first()
     return bool(g and not g.play_front and not g.play_back and g.play_overall)
 
+def _round_thru(round_obj) -> int:
+    """Highest hole number scored anywhere in the round — a round-level 'thru'
+    for the spectator sub-line. Game-agnostic: read straight from HoleScore so
+    it works on every casual page regardless of the game summary's shape."""
+    from django.db.models import Max
+    from scoring.models import HoleScore
+    return HoleScore.objects.filter(
+        foursome__round=round_obj, gross_score__gt=0
+    ).aggregate(m=Max('hole_number'))['m'] or 0
+
 def _has_casual_sixes(round_obj) -> bool:
     return 'sixes' in (round_obj.active_games or [])
 
@@ -914,6 +924,7 @@ def _render_casual_stableford(request, round_obj, token: str, tabs: list):
     """Stableford spectator tab — ranked points + payouts (pool or per-point)."""
     from services.stableford import stableford_summary
     return render(request, 'watch/stableford.html', {
+        'thru':         _round_thru(round_obj),
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
@@ -944,6 +955,7 @@ def _render_casual_red_ball(request, round_obj, token: str, tabs: list):
     from services.red_ball import red_ball_summary
     summary = red_ball_summary(round_obj)
     return render(request, 'watch/casual_red_ball.html', {
+        'thru':         _round_thru(round_obj),
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
@@ -960,6 +972,7 @@ def _render_casual_irish_rumble(request, round_obj, token: str, tabs: list):
     from services.irish_rumble import irish_rumble_summary
     summary = irish_rumble_summary(round_obj)
     return render(request, 'watch/casual_irish_rumble.html', {
+        'thru':         _round_thru(round_obj),
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
@@ -1020,12 +1033,8 @@ def _render_casual_skins(request, round_obj, token: str, tabs: list):
         .order_by('group_number')
     )
     groups = []
-    thru = 0
     for fs in foursomes:
         summary = skins_summary(fs)
-        if summary:
-            thru = max(thru, max((h['hole'] for h in summary.get('holes', [])),
-                                 default=0))
         groups.append({
             'group_number': fs.group_number,
             'foursome_id' : fs.id,
@@ -1036,7 +1045,7 @@ def _render_casual_skins(request, round_obj, token: str, tabs: list):
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
         'groups':       groups,
-        'thru':         thru,
+        'thru':         _round_thru(round_obj),
         'refresh_secs': 30,
         'tabs':         tabs,
     })
@@ -1108,6 +1117,7 @@ def _render_casual_multi_skins(request, round_obj, token: str, tabs: list):
     from services.multi_skins import multi_skins_summary
     summary = multi_skins_summary(round_obj)
     return render(request, 'watch/casual_multi_skins.html', {
+        'thru':         _round_thru(round_obj),
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
@@ -1238,6 +1248,7 @@ def _render_casual_sixes(request, round_obj, token: str, tabs: list):
             'summary'     : summary,
         })
     return render(request, 'watch/casual_sixes.html', {
+        'thru':         _round_thru(round_obj),
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
@@ -1316,6 +1327,7 @@ def _render_casual_points_531(request, round_obj, token: str, tabs: list):
             'progress'    : _build_p531_progress(summary) if summary else None,
         })
     return render(request, 'watch/casual_points_531.html', {
+        'thru':         _round_thru(round_obj),
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
@@ -1400,6 +1412,7 @@ def _render_casual_nassau(request, round_obj, token: str, tabs: list):
             'card':         _nassau_watch_card(s),
         })
     return render(request, 'watch/casual_nassau.html', {
+        'thru':         _round_thru(round_obj),
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,

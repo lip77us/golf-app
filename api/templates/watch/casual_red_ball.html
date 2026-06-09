@@ -9,7 +9,7 @@
     {% if tournament %}{{ tournament.name }}{% else %}{{ summary.ball_color|default:"Pink" }} Ball{% endif %}
   </h1>
   <p class="sub">
-    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
   </p>
 
   {% if summary and summary.results %}
