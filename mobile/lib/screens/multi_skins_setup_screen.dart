@@ -37,6 +37,8 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
 
   final TextEditingController _betCtrl = TextEditingController();
   bool _betCtrlInitialized = false;
+  /// Explicit opt-in to a no-money game (lets Start proceed at $0 entry).
+  bool _noStakes = false;
 
   /// player_id → checked
   final Map<int, bool> _participants = {};
@@ -114,7 +116,8 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
 
   double get _pool => _participantCount * _betUnit;
 
-  bool get _canStart => _participantCount >= 2 && _betUnit > 0;
+  bool get _canStart =>
+      _participantCount >= 2 && (_betUnit > 0 || _noStakes);
 
   Future<void> _start() async {
     if (!_canStart) return;
@@ -206,7 +209,9 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                     decoration: const InputDecoration(
                       prefixText: '\$ ', isDense: true,
                     ),
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) => setState(() {
+                      if (_betUnit > 0 && _noStakes) _noStakes = false;
+                    }),
                   ),
                 ),
               ]),
@@ -215,6 +220,17 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                 'Pool: \$${_pool.toStringAsFixed(2)} '
                 '($_participantCount × \$${_betUnit.toStringAsFixed(2)})',
                 style: Theme.of(context).textTheme.bodySmall,
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Play for fun — no stakes'),
+                value: _noStakes,
+                onChanged: (v) => setState(() {
+                  _noStakes = v ?? false;
+                  if (_noStakes) _betCtrl.text = '0';
+                }),
               ),
               const Divider(height: 32),
 
@@ -275,7 +291,7 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                     kind: InlineMessageKind.warn,
                     text: _participantCount < 2
                         ? 'Pick at least 2 participants.'
-                        : 'Enter a positive entry fee.',
+                        : 'Enter an entry fee, or tick “Play for fun”.',
                   ),
                 ),
             ]),
