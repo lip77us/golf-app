@@ -1097,21 +1097,18 @@ def _build_ms_scorecard(summary: dict) -> dict:
 
 
 def _render_casual_multi_skins(request, round_obj, token: str, tabs: list):
-    """Multi-Group Skins standings + per-hole skin-winner scorecard.
+    """Multi-Group Skins standings — bare-bones spectator view.
 
-    The standings table mirrors the top of the in-app screen.  The
-    scorecard grid at the bottom is the only place an observer can see
-    which holes were won by whom (the Low Net tab shows net scores
-    only, not who claimed each skin)."""
+    Just the standings table (pool, skins, payout per player). The
+    per-hole skin-winner scorecard is intentionally left out of the web
+    view to keep it light and steer watchers to the app for the detail."""
     from services.multi_skins import multi_skins_summary
-    summary   = multi_skins_summary(round_obj)
-    scorecard = _build_ms_scorecard(summary) if summary else None
+    summary = multi_skins_summary(round_obj)
     return render(request, 'watch/casual_multi_skins.html', {
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
         'summary':      summary,
-        'scorecard':    scorecard,
         'refresh_secs': 30,
         'tabs':         tabs,
     })
