@@ -51,6 +51,7 @@ urlpatterns = [
     path('rounds/shared-with-me/',       views.SharedRoundsView.as_view(),    name='api-shared-rounds'),
     path('rounds/scoring-for-me/',       views.ScoringForMeView.as_view(),    name='api-scoring-for-me'),
     path('rounds/playing-for-me/',       views.PlayingRoundsView.as_view(),   name='api-playing-for-me'),
+    path('support/round/',               views.SupportRoundLookupView.as_view(), name='api-support-round'),
     path('rounds/<int:pk>/',             views.RoundDetailView.as_view(),     name='api-round-detail'),
     path('rounds/<int:pk>/join/',        views.RoundJoinView.as_view(),       name='api-round-join'),
     path('tournaments/<int:pk>/join/',   views.TournamentJoinView.as_view(),  name='api-tournament-join'),

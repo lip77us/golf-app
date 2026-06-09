@@ -1986,6 +1986,62 @@ class ScoringForMeView(APIView):
         return Response(results)
 
 
+def _resolve_support_round(q: str):
+    """Resolve a Round from a watch token, a /watch/<token>/ URL, or a numeric
+    round id. Returns the Round or None."""
+    from tournament.models import Round
+    if not q:
+        return None
+    if '/watch/' in q:
+        q = q.split('/watch/', 1)[1].strip('/').split('/')[0]
+    q = q.strip()
+    base = Round.objects.select_related('course', 'tournament', 'account')
+    if q.isdigit():
+        return base.filter(pk=int(q)).first()
+    return base.filter(watch_token=q.upper()).first()
+
+
+class SupportRoundLookupView(APIView):
+    """
+    GET /api/support/round/?q=<watch-token | /watch/ URL | round-id>
+
+    Support staff (User.is_support) or superusers only. Resolves a round the
+    caller may not own, LOGS the access (SupportAccessLog), and returns a
+    lightweight summary + the round id so the app can open it READ-ONLY through
+    the normal leaderboard screen (round_for_reader now admits support staff).
+    Grants no write access.
+    """
+    def get(self, request):
+        u = request.user
+        if not (getattr(u, 'is_support', False) or u.is_superuser):
+            return Response({'detail': 'Support access required.'},
+                            status=status.HTTP_403_FORBIDDEN)
+        q = (request.query_params.get('q') or '').strip()
+        rnd = _resolve_support_round(q)
+        if rnd is None:
+            return Response({'detail': 'No round found for that token or id.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        from accounts.models import SupportAccessLog
+        SupportAccessLog.objects.create(
+            user=u, round=rnd,
+            account_name=getattr(rnd.account, 'name', '') or '',
+            query=q[:64],
+        )
+        t = rnd.tournament
+        return Response({
+            'round_id':        rnd.id,
+            'watch_token':     rnd.watch_token,
+            'date':            rnd.date,
+            'status':          rnd.status,
+            'course_name':     rnd.course.name if rnd.course_id else None,
+            'account_name':    getattr(rnd.account, 'name', ''),
+            'active_games':    rnd.active_games or [],
+            'num_foursomes':   rnd.foursomes.count(),
+            'is_tournament':   t is not None,
+            'tournament_name': t.name if t is not None else None,
+        })
+
+
 class PlayingRoundsView(APIView):
     """
     GET /api/rounds/playing-for-me/

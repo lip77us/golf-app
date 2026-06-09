@@ -131,7 +131,9 @@ def round_for_reader(user, pk, *, base=None):
     from tournament.models import Round
     qs = base if base is not None else Round.objects.select_related('course', 'tournament')
     rnd = qs.filter(pk=pk).first()
-    if rnd is not None and _user_watches_round(user, rnd):
+    # Support staff get READ-ONLY access to any round for issue diagnosis.
+    if rnd is not None and (_user_watches_round(user, rnd)
+                            or getattr(user, 'is_support', False)):
         return rnd
     raise Http404('No such round.')
 
@@ -169,6 +171,7 @@ def tournament_for_reader(user, pk, *, base=None):
     from tournament.models import Tournament
     qs = base if base is not None else Tournament.objects.all()
     t = qs.filter(pk=pk).first()
-    if t is not None and _user_watches_tournament(user, t):
+    if t is not None and (_user_watches_tournament(user, t)
+                          or getattr(user, 'is_support', False)):
         return t
     raise Http404('No such tournament.')

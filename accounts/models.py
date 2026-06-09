@@ -133,6 +133,13 @@ class User(AbstractUser):
                   "set roles, configure games, etc.  Multiple admins per "
                   "account allowed.",
     )
+    is_support = models.BooleanField(
+        default=False,
+        help_text="Halved support staff: READ-ONLY cross-account access to any "
+                  "round's leaderboard/scorecard for diagnosing reported issues. "
+                  "Does NOT grant write access. Every support lookup is logged "
+                  "(SupportAccessLog).",
+    )
     # Phone-first identity (freemium design §12): the verified cell number is
     # the primary login credential.  Stored normalized to E.164 (e.g.
     # "+14155551234").  GLOBALLY unique so a number maps to exactly one user →
@@ -319,3 +326,29 @@ class SentNotification(models.Model):
 
     def __str__(self):
         return self.dedup_key
+
+
+class SupportAccessLog(models.Model):
+    """
+    Audit trail for support staff (User.is_support / superuser) opening a
+    round they don't own, to diagnose a reported issue. One row per lookup so
+    cross-tenant access is always accountable.
+    """
+    user         = models.ForeignKey(
+                     'accounts.User', on_delete=models.SET_NULL, null=True,
+                     related_name='+')
+    round        = models.ForeignKey(
+                     'tournament.Round', on_delete=models.SET_NULL, null=True,
+                     related_name='+')
+    account_name = models.CharField(max_length=255, blank=True,
+                     help_text="Snapshot of the viewed account's name.")
+    query        = models.CharField(max_length=64, blank=True,
+                     help_text="What support typed (watch token or round id).")
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        who = self.user.username if self.user else '?'
+        return f'SupportAccess({who} → round {self.round_id} @ {self.created_at:%Y-%m-%d %H:%M})'

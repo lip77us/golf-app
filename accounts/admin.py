@@ -11,7 +11,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .admin_forms import AccountAdminAuthenticationForm, AccountUserCreationForm
-from .models import Account, User
+from .models import Account, SupportAccessLog, User
 
 
 # Replace the stock admin login form with the account-aware one so
@@ -47,11 +47,11 @@ class UserAdmin(BaseUserAdmin):
     add_form = AccountUserCreationForm
 
     list_display = (
-        'username', 'account', 'is_account_admin',
+        'username', 'account', 'is_account_admin', 'is_support',
         'email', 'first_name', 'last_name', 'is_staff',
     )
     list_filter = (
-        'account', 'is_account_admin',
+        'account', 'is_account_admin', 'is_support',
         'is_staff', 'is_superuser', 'is_active', 'groups',
     )
     search_fields = ('username', 'email', 'first_name', 'last_name',
@@ -62,7 +62,7 @@ class UserAdmin(BaseUserAdmin):
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal info', {'fields': ('first_name', 'last_name', 'email')}),
-        ('Account', {'fields': ('account', 'is_account_admin')}),
+        ('Account', {'fields': ('account', 'is_account_admin', 'is_support')}),
         ('Permissions', {'fields': (
             'is_active', 'is_staff', 'is_superuser',
             'groups', 'user_permissions',
@@ -84,3 +84,19 @@ class UserAdmin(BaseUserAdmin):
             ),
         }),
     )
+
+
+@admin.register(SupportAccessLog)
+class SupportAccessLogAdmin(admin.ModelAdmin):
+    """Read-only audit trail of support staff opening other accounts' rounds."""
+    list_display  = ('created_at', 'user', 'round', 'account_name', 'query')
+    list_filter   = ('user', 'created_at')
+    search_fields = ('account_name', 'query', 'user__username')
+    readonly_fields = ('user', 'round', 'account_name', 'query', 'created_at')
+    date_hierarchy = 'created_at'
+
+    def has_add_change_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
