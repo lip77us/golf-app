@@ -277,10 +277,11 @@ TWILIO_FROM        = os.environ.get('TWILIO_FROM', '')           # Programmable 
 TWILIO_VERIFY_SERVICE_SID = os.environ.get('TWILIO_VERIFY_SERVICE_SID', '')
 
 # Where the public invite landing page (/i/<code>/) sends people to download the
-# app.  Placeholder until the App Store listing is live; set via env in prod.
+# app.  Points at the marketing site; env-overridable (e.g. a direct App Store
+# link once the listing is live).
 APP_DOWNLOAD_URL   = os.environ.get(
     'APP_DOWNLOAD_URL',
-    'https://lip77us.github.io/halved-legal/',
+    'https://halved.golf',
 )
 # Logo image shown in the invite link's social/Messages preview (og:image).
 # Host a square PNG (≈512px) and point this at it; empty = no preview image.
