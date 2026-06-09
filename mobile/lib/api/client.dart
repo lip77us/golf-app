@@ -514,6 +514,15 @@ class ApiClient {
         .toList();
   }
 
+  /// Support staff only: resolve a round by watch token, /watch/ URL, or numeric
+  /// id for READ-ONLY review. Returns a summary {round_id, account_name, …};
+  /// the lookup is audited server-side. Throws on 403 (not support) / 404.
+  Future<Map<String, dynamic>> supportLookupRound(String query) async {
+    final data = await _get(
+        '/support/round/?q=${Uri.encodeQueryComponent(query.trim())}');
+    return (data as Map).cast<String, dynamic>();
+  }
+
   /// Multi-foursome rounds (tournaments / multi-group skins) in OTHER accounts
   /// that a friend/TD added me to — I can open these to score my own group and
   /// read the whole-field leaderboard (no scorer designation needed).

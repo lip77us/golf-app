@@ -909,6 +909,7 @@ class LoginView(APIView):
             'username':         user.username,
             'is_staff':         user.is_staff,
             'is_account_admin': user.is_account_admin,
+            'is_support': user.is_support,
             'account': {
                 'id':   user.account_id,
                 'name': user.account.name,
@@ -984,6 +985,7 @@ class OtpVerifyView(APIView):
             'username':         user.username,
             'is_staff':         user.is_staff,
             'is_account_admin': user.is_account_admin,
+            'is_support': user.is_support,
             'is_new_account':   is_new,
             'account': {
                 'id':   user.account_id,
@@ -1042,6 +1044,7 @@ class MeView(APIView):
             'username':         request.user.username,
             'is_staff':         request.user.is_staff,
             'is_account_admin': request.user.is_account_admin,
+            'is_support': request.user.is_support,
             'account': {
                 'id':   request.user.account_id,
                 'name': request.user.account.name,

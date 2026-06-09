@@ -178,6 +178,16 @@ class AppDrawer extends StatelessWidget {
               showAppAboutDialog(context);
             },
           ),
+          // Support staff only — read-only cross-account round lookup.
+          if (context.watch<AuthProvider>().isSupport)
+            ListTile(
+              leading: const Icon(Icons.support_agent_outlined),
+              title: const Text('Support: Open Round'),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushNamed('/support-lookup');
+              },
+            ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.logout),

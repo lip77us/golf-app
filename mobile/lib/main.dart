@@ -40,6 +40,7 @@ import 'screens/nassau_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/casual_rounds_list_screen.dart';
 import 'screens/shared_rounds_screen.dart';
+import 'screens/support_lookup_screen.dart';
 import 'screens/irish_rumble_setup_screen.dart';
 import 'screens/pink_ball_setup_screen.dart';
 import 'screens/pink_ball_screen.dart';
@@ -322,6 +323,8 @@ class _GolfAppState extends State<GolfApp> {
         return page((_) => const CasualRoundsListScreen());
       case '/shared-rounds':
         return page((_) => const SharedRoundsScreen());
+      case '/support-lookup':
+        return page((_) => const SupportLookupScreen());
       case '/settings':
         return page((_) => const SettingsScreen());
       case '/manage-courses':

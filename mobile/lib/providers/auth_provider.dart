@@ -19,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
   AccountInfo?   _account;
   bool           _isStaff        = false;
   bool           _isAccountAdmin = false;
+  bool           _isSupport      = false;
   bool           _loading        = false;
   String?        _error;
   String?        _lastAccountName;
@@ -30,6 +31,8 @@ class AuthProvider extends ChangeNotifier {
   AccountInfo?   get account          => _account;
   bool           get isStaff          => _isStaff;
   bool           get isAccountAdmin   => _isAccountAdmin;
+  /// Halved support staff — gates the read-only "Support: open round" tool.
+  bool           get isSupport        => _isSupport;
   /// True for anyone who should see admin-level controls in the app
   /// (configure games, edit other foursomes, create tournaments, etc.).
   /// `isStaff` = Django superuser-style access (legacy, pre-accounts).
@@ -75,6 +78,7 @@ class AuthProvider extends ChangeNotifier {
       _account        = result.account;
       _isStaff        = result.isStaff;
       _isAccountAdmin = result.isAccountAdmin;
+      _isSupport      = result.isSupport;
     } catch (_) {
       // Token expired or server unreachable — clear it.
       _token = null;
@@ -107,6 +111,7 @@ class AuthProvider extends ChangeNotifier {
       _account          = result.account;
       _isStaff          = result.isStaff;
       _isAccountAdmin   = result.isAccountAdmin;
+      _isSupport        = result.isSupport;
       _lastAccountName  = accountName;
       onAuthenticated?.call();   // register for push (best-effort)
     } on ApiException catch (e) {
@@ -169,6 +174,7 @@ class AuthProvider extends ChangeNotifier {
       _account          = result.account;
       _isStaff          = result.isStaff;
       _isAccountAdmin   = result.isAccountAdmin;
+      _isSupport        = result.isSupport;
       _isNewAccount     = result.isNewAccount;
       _lastAccountName  = result.account.name;
       onAuthenticated?.call();   // register for push (best-effort)

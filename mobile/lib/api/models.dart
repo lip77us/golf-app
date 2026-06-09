@@ -102,6 +102,10 @@ class AuthResult {
   /// Members screen.
   final bool isAccountAdmin;
 
+  /// True for Halved support staff — unlocks the read-only "Support: open
+  /// round" tool for diagnosing reported issues across accounts.
+  final bool isSupport;
+
   /// The Account this user belongs to.
   final AccountInfo account;
 
@@ -118,6 +122,7 @@ class AuthResult {
     this.player,
     this.isStaff        = false,
     this.isAccountAdmin = false,
+    this.isSupport      = false,
     this.isNewAccount   = false,
   });
 
@@ -126,6 +131,7 @@ class AuthResult {
         username:       j['username'] as String? ?? '',
         isStaff:        j['is_staff']         as bool? ?? false,
         isAccountAdmin: j['is_account_admin'] as bool? ?? false,
+        isSupport:      j['is_support']       as bool? ?? false,
         isNewAccount:   j['is_new_account']   as bool? ?? false,
         account:        AccountInfo.fromJson(
                           j['account'] as Map<String, dynamic>),
@@ -140,6 +146,7 @@ class MeResult {
   final String username;
   final bool isStaff;
   final bool isAccountAdmin;
+  final bool isSupport;
   final AccountInfo account;
   final PlayerProfile? player;
 
@@ -148,6 +155,7 @@ class MeResult {
     required this.account,
     this.isStaff        = false,
     this.isAccountAdmin = false,
+    this.isSupport      = false,
     this.player,
   });
 
@@ -155,6 +163,7 @@ class MeResult {
         username:       j['username'] as String? ?? '',
         isStaff:        j['is_staff']         as bool? ?? false,
         isAccountAdmin: j['is_account_admin'] as bool? ?? false,
+        isSupport:      j['is_support']       as bool? ?? false,
         account:        AccountInfo.fromJson(
                           j['account'] as Map<String, dynamic>),
         player:         j['player'] is Map<String, dynamic>
