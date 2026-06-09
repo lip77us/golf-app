@@ -1905,7 +1905,20 @@ class _MsScorecard extends StatefulWidget {
   /// in the same order the standings table shows them).
   final List<Map<String, dynamic>> participants;
 
-  const _MsScorecard({required this.holes, required this.participants});
+  /// When true, a second block of per-player rows shows each hole's points
+  /// (read from each score entry's `points`) below the gross rows.
+  final bool showPoints;
+
+  /// Legend text shown beside the "Scorecard" heading. Null hides it (used by
+  /// games with no skin-winner highlight, e.g. Sixes / Wolf).
+  final String? legend;
+
+  const _MsScorecard({
+    required this.holes,
+    required this.participants,
+    this.showPoints = false,
+    this.legend = 'green = skin winner',
+  });
 
   @override
   State<_MsScorecard> createState() => _MsScorecardState();
@@ -1918,7 +1931,11 @@ class _MsScorecardState extends State<_MsScorecard> {
 
   final ScrollController _ctrl = ScrollController();
 
+  // Last hole that actually has scores — so the auto-scroll lands on the
+  // latest *played* hole, not the highest hole present in the data (Wolf
+  // lists all 18 up front, including unplayed ones).
   int get _lastScoredHole => widget.holes
+      .where((h) => ((h['scores'] as List?) ?? const []).isNotEmpty)
       .map((h) => (h['hole'] as int?) ?? 0)
       .fold(0, (a, b) => a > b ? a : b);
 
@@ -2058,6 +2075,55 @@ class _MsScorecardState extends State<_MsScorecard> {
       );
     }
 
+    Widget pointsCell(int playerId, int h) {
+      final entry = holeMap[h];
+      if (entry == null) return SizedBox(width: _cellW, height: _rowH);
+      final scores =
+          (entry['scores'] as List? ?? []).cast<Map<String, dynamic>>();
+      final mine = scores.firstWhere(
+        (s) => s['player_id'] == playerId,
+        orElse: () => const {},
+      );
+      if (mine.isEmpty || mine['points'] == null) {
+        return SizedBox(width: _cellW, height: _rowH);
+      }
+      final pts = (mine['points'] as num).toDouble();
+      final color = pts > 0
+          ? Colors.green.shade700
+          : pts < 0
+              ? Colors.red.shade700
+              : theme.colorScheme.onSurfaceVariant;
+      final txt = pts == 0
+          ? '·'
+          : '${pts > 0 ? '+' : '−'}${pts.abs() == pts.abs().roundToDouble() ? pts.abs().toStringAsFixed(0) : pts.abs().toStringAsFixed(1)}';
+      return SizedBox(
+        width: _cellW, height: _rowH,
+        child: Center(
+          child: Text(txt,
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: color, fontWeight: FontWeight.w600)),
+        ),
+      );
+    }
+
+    Widget participantLabel(Map<String, dynamic> p, {String? suffix}) => SizedBox(
+          width: _labelColW, height: _rowH,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              ((p['short_name'] as String?)?.isNotEmpty == true
+                      ? p['short_name'] as String
+                      : (p['name'] as String? ?? '')) +
+                  (suffix ?? ''),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              softWrap: false,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2067,9 +2133,10 @@ class _MsScorecardState extends State<_MsScorecard> {
             Text('Scorecard',
                 style: theme.textTheme.titleSmall),
             const Spacer(),
-            Text('green = skin winner',
-                style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant)),
+            if (widget.legend != null)
+              Text(widget.legend!,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
           ]),
         ),
         SingleChildScrollView(
@@ -2145,6 +2212,22 @@ class _MsScorecardState extends State<_MsScorecard> {
                   for (final h in visibleHoles)
                     scoreCell(p['player_id'] as int, h),
                 ]),
+
+              // Second block: per-player points won on each hole.
+              if (widget.showPoints) ...[
+                Container(
+                  height: 1,
+                  width: _labelColW + _cellW * visibleHoles.length,
+                  color: theme.colorScheme.outlineVariant,
+                  margin: const EdgeInsets.symmetric(vertical: 2),
+                ),
+                for (final p in widget.participants)
+                  Row(children: [
+                    participantLabel(p, suffix: ' pts'),
+                    for (final h in visibleHoles)
+                      pointsCell(p['player_id'] as int, h),
+                  ]),
+              ],
             ],
           ),
         ),
@@ -3247,7 +3330,7 @@ class _SixesGroupCard extends StatelessWidget {
           // with no single per-hole player winner).
           if (holes.isNotEmpty) ...[
             const Divider(height: 20),
-            _MsScorecard(holes: holes, participants: players),
+            _MsScorecard(holes: holes, participants: players, legend: null),
           ],
         ]),
       ),
@@ -3573,11 +3656,14 @@ class _WolfGroupCard extends StatelessWidget {
               ),
             ),
 
-          // Per-hole gross scorecard — same table the Skins/Sixes cards show
-          // under the standings, built from each hole's per-player entries.
+          // Per-hole gross scorecard + a second block of per-hole points,
+          // built from each hole's per-player entries (only entries that have
+          // actually been scored). No winner highlight.
           if (holes.isNotEmpty) ...[
             const Divider(height: 20),
             _MsScorecard(
+              showPoints: true,
+              legend: null,
               holes: <Map<String, dynamic>>[
                 for (final h in holes)
                   <String, dynamic>{
@@ -3586,14 +3672,16 @@ class _WolfGroupCard extends StatelessWidget {
                     'winner_id': null,
                     'scores'   : <Map<String, dynamic>>[
                       for (final e in (h['entries'] as List? ?? const []))
-                        <String, dynamic>{
-                          'player_id': (e as Map)['player_id'],
-                          'gross'    : e['gross'],
-                          'strokes'  : (((e['gross'] as int?) ?? 0) -
-                                  ((e['net_score'] as int?) ??
-                                      (e['gross'] as int?) ?? 0))
-                              .clamp(0, 9),
-                        },
+                        if ((e as Map)['gross'] != null)
+                          <String, dynamic>{
+                            'player_id': e['player_id'],
+                            'gross'    : e['gross'],
+                            'strokes'  : (((e['gross'] as int?) ?? 0) -
+                                    ((e['net_score'] as int?) ??
+                                        (e['gross'] as int?) ?? 0))
+                                .clamp(0, 9),
+                            'points'   : e['points'],
+                          },
                     ],
                   },
               ],

@@ -444,14 +444,7 @@ class _WolfScreenState extends State<WolfScreen> {
                 ),
               ),
             ),
-          IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
-          ),
+          // Standard order: Leaderboard then Scorecard (scorecard rightmost).
           IconButton(
             tooltip: 'Leaderboard',
             icon: const Icon(Icons.leaderboard_outlined),
@@ -459,6 +452,14 @@ class _WolfScreenState extends State<WolfScreen> {
                 ? null
                 : () => Navigator.of(context).pushNamed(
                     '/leaderboard', arguments: rp.round!.id),
+          ),
+          IconButton(
+            tooltip: 'Full scorecard',
+            icon: const Icon(Icons.table_chart_outlined),
+            onPressed: sc == null
+                ? null
+                : () => Navigator.of(context).pushNamed('/scorecard',
+                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
           ),
         ],
       ),
