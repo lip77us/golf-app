@@ -95,6 +95,14 @@ class GameMeta {
   /// Exact player count required; overrides min/max when non-null.
   final int? exactPlayers;
 
+  /// Explicit set of supported player counts (e.g. Nassau = {2, 4}, which
+  /// min/max can't express). Overrides exact/min/max when non-null.
+  final Set<int>? sizes;
+
+  /// A game played ACROSS multiple foursomes/groups (e.g. Multi-Group Skins).
+  /// Surfaced under the "Across foursomes" group-size filter rather than 2/3/4.
+  final bool acrossGroups;
+
   /// IDs of games that cannot be active simultaneously with this one.
   /// Exclusion is enforced symmetrically — if A excludes B, B also excludes A.
   final Set<String> excludes;
@@ -110,8 +118,19 @@ class GameMeta {
     this.minPlayers,
     this.maxPlayers,
     this.exactPlayers,
+    this.sizes,
+    this.acrossGroups         = false,
     this.excludes             = const {},
   });
+
+  /// True if this game can be played with exactly [n] real players.
+  bool supportsSize(int n) {
+    if (sizes != null)        return sizes!.contains(n);
+    if (exactPlayers != null) return n == exactPlayers;
+    if (minPlayers != null && n < minPlayers!) return false;
+    if (maxPlayers != null && n > maxPlayers!) return false;
+    return true;
+  }
 }
 
 // ── Full catalogue ────────────────────────────────────────────────────────────
@@ -143,8 +162,10 @@ const List<GameMeta> kGameCatalog = [
     id          : GameIds.nassau,
     displayName : 'Nassau',
     casual      : true,
+    // Heads-up (2) or 2-v-2 best-ball (4) — three players doesn't form sides.
     minPlayers  : 2,
     maxPlayers  : 4,
+    sizes       : {2, 4},
     // Nassau and Sixes are mutually exclusive (both are team-bet games that
     // own the front-9 / back-9 structure).  Skins can run alongside Nassau.
     excludes    : {GameIds.sixes, GameIds.points531},
@@ -242,6 +263,7 @@ const List<GameMeta> kGameCatalog = [
     // Round-level pool that crosses foursomes.  Needs at least 2 participants;
     // there's no upper limit — the round may have any number of groups.
     minPlayers  : 2,
+    acrossGroups: true,
     // Multi-Group Skins is the only multi-foursome game in the casual flow;
     // mutually exclusive with other multi-foursome games as they're added.
     // It CAN combine with per-foursome side games (sixes / nassau / points

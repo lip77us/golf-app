@@ -47,6 +47,19 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   // The catalog drives which games are shown and which can combine.
   final Set<String> _activeGames = {};
 
+  /// Group-size filter for the game picker: '2' | '3' | '4' | 'groups'.
+  /// Defaults to a foursome (the common case — sees the most games); smaller
+  /// groups tap their size to get the curated list of games that fit.
+  String _sizeFilter = '4';
+
+  /// Games shown for the current group-size filter. Already-selected games
+  /// stay visible so changing the filter never hides what you've picked.
+  List<GameMeta> get _filteredCasualGames => casualGames.where((m) {
+        if (_activeGames.contains(m.id)) return true;
+        if (_sizeFilter == 'groups') return m.acrossGroups;
+        return !m.acrossGroups && m.supportsSize(int.parse(_sizeFilter));
+      }).toList();
+
   /// True when the user picked Multi-Group Skins — turns on the per-player
   /// Group dropdown and lets the foursome count exceed one.
   bool get _multiGroup => _activeGames.contains(GameIds.multiSkins);
@@ -560,11 +573,29 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
           Text('Games', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
+          // Group-size filter — surfaces the games that fit your group so a
+          // twosome/threesome isn't hunting through foursome-only options.
+          Text("Who's playing?",
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 6),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: '2', label: Text('2')),
+              ButtonSegment(value: '3', label: Text('3')),
+              ButtonSegment(value: '4', label: Text('4')),
+              ButtonSegment(value: 'groups', label: Text('Across groups')),
+            ],
+            selected: {_sizeFilter},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => setState(() => _sizeFilter = s.first),
+          ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 4,
             children: [
-              for (final meta in casualGames)
+              for (final meta in _filteredCasualGames)
                 _buildGameChip(meta),
             ],
           ),
@@ -777,12 +808,21 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
   /// Players-step guidance: how many golfers the chosen game allows, turning
   /// into an error when the current count is off.
+  /// "2 or 4" / "2, 3 or 4" for a set of supported sizes.
+  String _sizesLabel(Set<int> s) {
+    final l = s.toList()..sort();
+    if (l.length == 1) return '${l.first}';
+    return '${l.sublist(0, l.length - 1).join(', ')} or ${l.last}';
+  }
+
   Widget _gamePlayerCountHint(String gameId) {
     final meta = gameMeta(gameId);
     if (meta == null) return const SizedBox.shrink();
     final n = _playerTees.length;
     final String range;
-    if (meta.exactPlayers != null) {
+    if (meta.sizes != null) {
+      range = '${_sizesLabel(meta.sizes!)} players';
+    } else if (meta.exactPlayers != null) {
       range = '${meta.exactPlayers} players';
     } else if (meta.minPlayers != null && meta.maxPlayers != null) {
       range = '${meta.minPlayers}–${meta.maxPlayers} players';
@@ -795,7 +835,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     }
     var text = '${meta.displayName}: $range';
     var kind = InlineMessageKind.info;
-    if (meta.exactPlayers != null && n != meta.exactPlayers) {
+    if (meta.sizes != null && !meta.sizes!.contains(n)) {
+      text += ' — needs ${_sizesLabel(meta.sizes!)}.';
+      kind = InlineMessageKind.error;
+    } else if (meta.exactPlayers != null && n != meta.exactPlayers) {
       final diff = meta.exactPlayers! - n;
       text += diff > 0 ? ' — add $diff more.' : ' — remove ${-diff}.';
       kind = InlineMessageKind.error;
