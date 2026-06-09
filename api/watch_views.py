@@ -545,6 +545,70 @@ def _nassau_is_match(round_obj) -> bool:
     g = NassauGame.objects.filter(foursome__round=round_obj).first()
     return bool(g and not g.play_front and not g.play_back and g.play_overall)
 
+def _has_casual_match_play(round_obj) -> bool:
+    """A non-cup match-play bracket (single-elim or three-player) on any
+    foursome. (Cup match play renders under the cup's Matches/Four Ball tabs.)"""
+    from games.models import MatchPlayBracket
+    return MatchPlayBracket.objects.filter(
+        foursome__round=round_obj,
+        bracket_type__in=['single_elim', 'three_player_points'],
+    ).exists()
+
+
+def _match_play_watch_row(m: dict) -> dict:
+    """Display row for one match — label, the two players, and the status text
+    ("Name 2 UP thru 5" / "Name 3 UP" / "Halved" / "Not started")."""
+    holes  = m.get('holes', [])
+    thru   = len(holes)
+    margin = holes[-1]['margin'] if holes else 0          # + = player1 up
+    p1, p2 = m.get('player1', 'Player 1'), m.get('player2', 'Player 2')
+    result = m.get('result')
+    complete = result is not None
+    if thru == 0:
+        text, leader = 'Not started', ''
+    elif complete:
+        text   = _final_text(margin, p1, p2)
+        leader = _leader_from_margin(margin, result)
+    else:
+        text   = _holes_up_text(margin, thru, p1, p2)
+        leader = _leader_from_margin(margin, None)
+    # Map team1/team2 → player1/player2 for colouring.
+    leader = {'team1': 'p1', 'team2': 'p2'}.get(leader, '')
+    return {'label': m.get('label', ''), 'p1': p1, 'p2': p2,
+            'text': text, 'leader': leader}
+
+
+def _render_casual_match_play(request, round_obj, token: str, tabs: list):
+    """Match Play — summary-only spectator view: each match's players + status
+    score. The hole-by-hole detail lives in the app."""
+    from services.match_play import match_play_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = []
+    for fs in foursomes:
+        s = match_play_summary(fs)
+        if not s or s.get('bracket_type') not in (
+                'single_elim', 'three_player_points'):
+            continue
+        groups.append({
+            'group_number': fs.group_number,
+            'winner'      : s.get('winner'),
+            'matches'     : [_match_play_watch_row(m) for m in s.get('matches', [])],
+        })
+    return render(request, 'watch/casual_match_play.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'thru':         _round_thru(round_obj),
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
 def _round_thru(round_obj) -> int:
     """Highest hole number scored anywhere in the round — a round-level 'thru'
     for the spectator sub-line. Game-agnostic: read straight from HoleScore so
@@ -688,6 +752,12 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'label': '18-Hole Match' if _nassau_is_match(round_obj) else 'Nassau',
             'url': f'{base}?view=nassau',
             'active': current == 'nassau',
+        })
+    if _has_casual_match_play(round_obj):
+        tabs.append({
+            'key': 'match_play', 'label': 'Match Play',
+            'url': f'{base}?view=match_play',
+            'active': current == 'match_play',
         })
     if _has_casual_sixes(round_obj):
         tabs.append({
@@ -1551,6 +1621,7 @@ _VIEW_DISPATCH = {
     'multi_skins':  _render_casual_multi_skins,
     'points_531':   _render_casual_points_531,
     'nassau':       _render_casual_nassau,
+    'match_play':   _render_casual_match_play,
     'sixes':        _render_casual_sixes,
     'red_ball':     _render_casual_red_ball,
     'irish_rumble': _render_casual_irish_rumble,

@@ -1,0 +1,36 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{% if tournament %}{{ tournament.name }} · {% endif %}Match Play
+{% endblock %}
+
+{% block body %}
+  <h1>{% if tournament %}{{ tournament.name }}{% else %}Match Play{% endif %}</h1>
+  <p class="sub">
+    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
+  </p>
+
+  {% for g in groups %}
+    <div class="card">
+      {% if groups|length > 1 %}
+        <div class="match-meta" style="margin-bottom: 4px;">
+          <span class="game-pill">Group {{ g.group_number }}</span>
+        </div>
+      {% endif %}
+      {% for m in g.matches %}
+        <div class="mp-row">
+          {% if m.label %}<div class="mp-label">{{ m.label }}</div>{% endif %}
+          <div class="mp-names">{{ m.p1 }} vs {{ m.p2 }}</div>
+          <div class="mp-status {{ m.leader }}">{{ m.text }}</div>
+        </div>
+      {% empty %}
+        <div class="empty" style="padding: 16px 4px;">No matches yet.</div>
+      {% endfor %}
+      {% if g.winner %}<div class="mp-winner">Winner: {{ g.winner }}</div>{% endif %}
+    </div>
+  {% empty %}
+    <div class="card empty">Match Play isn’t set up for this round yet.</div>
+  {% endfor %}
+
+  <p class="teaser">Open Halved for the full hole-by-hole match.</p>
+{% endblock %}
