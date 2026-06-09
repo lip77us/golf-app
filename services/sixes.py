@@ -836,8 +836,51 @@ def sixes_summary(foursome) -> dict:
         key=lambda e: (-e['amount'], e['name']),
     )
 
+    # ── Per-hole gross scorecard grid ────────────────────────────────────
+    # Mirrors the Skins card's _MsScorecard payload so the leaderboard can
+    # show the same table under the money box. No skin-winner highlight —
+    # Sixes is a team best-ball with no single per-hole player winner.
+    from scoring.models import HoleScore
+    real_members = [
+        m for m in foursome.memberships.select_related('player', 'tee').all()
+        if not m.player.is_phantom
+    ]
+    players_out = [
+        {'player_id': m.player_id, 'name': m.player.name,
+         'short_name': m.player.short_name}
+        for m in real_members
+    ]
+    real_pids   = [m.player_id for m in real_members]
+    tee         = real_members[0].tee if real_members else None
+    par_by_hole = {h.get('number'): h.get('par')
+                   for h in ((tee.holes if tee else None) or [])}
+    score_by = {}
+    for hs in HoleScore.objects.filter(foursome=foursome,
+                                       player_id__in=real_pids):
+        score_by[(hs.player_id, hs.hole_number)] = (
+            hs.gross_score, hs.handicap_strokes or 0)
+    holes_grid = []
+    for hn in range(1, 19):
+        scored = [pid for pid in real_pids
+                  if score_by.get((pid, hn), (None, 0))[0]]
+        if not scored:
+            continue
+        holes_grid.append({
+            'hole'      : hn,
+            'par'       : par_by_hole.get(hn),
+            'winner_id' : None,
+            'scores'    : [
+                {'player_id': pid,
+                 'gross'    : score_by[(pid, hn)][0],
+                 'strokes'  : score_by[(pid, hn)][1]}
+                for pid in scored
+            ],
+        })
+
     return {
         'segments': seg_out,
+        'players' : players_out,
+        'holes'   : holes_grid,
         'overall' : {
             'team1_wins' : t1_total_wins,
             'team2_wins' : t2_total_wins,

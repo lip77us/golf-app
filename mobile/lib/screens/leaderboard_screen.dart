@@ -3143,6 +3143,10 @@ class _SixesGroupCard extends StatelessWidget {
     final money    = summary['money']   as Map<String, dynamic>? ?? const {};
     final byPlayer = (money['by_player'] as List? ?? const []);
     final betUnit  = (money['bet_unit'] as num?)?.toDouble() ?? 0.0;
+    final holes    = (summary['holes']   as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final players  = (summary['players'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
 
     // In a single-foursome round the "Group N" header is pointless.
     // _ByGroupView injects this flag so we can hide it.
@@ -3236,6 +3240,14 @@ class _SixesGroupCard extends StatelessWidget {
                 ]),
               );
             }),
+          ],
+
+          // Per-hole gross scorecard — the same table the Skins card shows
+          // under its money box (no winner highlight; Sixes is a team best-ball
+          // with no single per-hole player winner).
+          if (holes.isNotEmpty) ...[
+            const Divider(height: 20),
+            _MsScorecard(holes: holes, participants: players),
           ],
         ]),
       ),
