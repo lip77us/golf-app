@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../widgets/stake_field.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/handicap_mode_selector.dart';
@@ -40,6 +41,8 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
   int    _segments   = 1;
 
   final TextEditingController _betCtrl = TextEditingController();
+  /// True once a stake is entered or "no stakes" is chosen (gates Start).
+  bool _stakeOk = false;
   bool _betCtrlInitialized = false;
 
   bool   _loading  = true;
@@ -136,7 +139,6 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
   Widget build(BuildContext context) {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -160,7 +162,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
                         width: double.infinity,
                         height: 52,
                         child: FilledButton(
-                          onPressed: (_starting || !_rosterValid) ? null : _start,
+                          onPressed: (_starting || !_rosterValid || !_stakeOk) ? null : _start,
                           child: _starting
                               ? const SizedBox(
                                   width: 20, height: 20,
@@ -246,7 +248,9 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
           ),
           const SizedBox(height: 16),
 
-          _BetUnitCard(controller: _betCtrl),
+          StakeField(
+            controller: _betCtrl,
+            onChanged: (v) => setState(() => _stakeOk = v)),
           const SizedBox(height: 16),
 
           _Card(
@@ -345,58 +349,6 @@ class _RosterBanner extends StatelessWidget {
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ]),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _BetUnitCard extends StatelessWidget {
-  final TextEditingController controller;
-  const _BetUnitCard({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Entry per player',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'Entry (\$)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.attach_money),
-              isDense: true,
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 6),
-          AnimatedBuilder(
-            animation: controller,
-            builder: (_, __) {
-              final each = double.tryParse(controller.text.trim());
-              final potText = each == null
-                  ? ''
-                  : '  Pot = 3 × \$${each.formatBet()} = \$${(each * 3).formatBet()}.';
-              return Text(
-                'Each player chips in this amount.$potText  The rabbit holder '
-                'at the end of each segment wins that share of the pot.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              );
-            },
           ),
         ]),
       ),

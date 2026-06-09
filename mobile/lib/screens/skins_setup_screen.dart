@@ -20,6 +20,7 @@ import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../widgets/stake_field.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/golf_primary_button.dart';
@@ -45,8 +46,8 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
   final TextEditingController _betCtrl = TextEditingController();
   bool _betCtrlInitialized = false;
-  /// Explicit opt-in to a no-money game; lets Start proceed at $0.
-  bool _noStakes = false;
+  /// True once a stake is entered or "no stakes" is chosen (gates Start).
+  bool _stakeOk = false;
 
   bool    _loading  = true;
   bool    _starting = false;
@@ -54,21 +55,9 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
   SkinsSummary? _summary;
 
-  /// Start is gated on this: a real stake entered, or "no stakes" ticked.
-  bool get _stakeChosen =>
-      _noStakes || (double.tryParse(_betCtrl.text.trim()) ?? 0) > 0;
-
   @override
   void initState() {
     super.initState();
-    // Rebuild as the stake changes so Start enables/disables live; entering a
-    // real stake clears the "no stakes" opt-in.
-    _betCtrl.addListener(() {
-      if ((double.tryParse(_betCtrl.text.trim()) ?? 0) > 0 && _noStakes) {
-        _noStakes = false;
-      }
-      setState(() {});
-    });
     _load();
   }
 
@@ -170,7 +159,6 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
   Widget build(BuildContext context) {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -197,7 +185,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                       child: GolfPrimaryButton(
                         label: 'Start Game',
                         loading: _starting,
-                        onPressed: (_rosterValid && _stakeChosen) ? _start : null,
+                        onPressed: (_rosterValid && _stakeOk) ? _start : null,
                       ),
                     ),
                   ),
@@ -281,17 +269,9 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
           // ── Stake (kept at the bottom; Start stays disabled until it's set,
           // which guarantees the user scrolls past the carryover/junk options
           // above on the way down) ──
-          _BetUnitCard(controller: _betCtrl),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('Play for fun — no stakes'),
-            value: _noStakes,
-            onChanged: (v) => setState(() {
-              _noStakes = v ?? false;
-              if (_noStakes) _betCtrl.text = '0';
-            }),
+          StakeField(
+            controller: _betCtrl,
+            onChanged: (v) => setState(() => _stakeOk = v),
           ),
 
           const SizedBox(height: 16),
@@ -402,50 +382,6 @@ class _RosterBanner extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ===========================================================================
-// _BetUnitCard
-// ===========================================================================
-
-class _BetUnitCard extends StatelessWidget {
-  final TextEditingController controller;
-  const _BetUnitCard({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Stake',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary)),
-          const SizedBox(height: 8),
-          GolfTextField(
-            controller: controller,
-            label: 'Stake (\$)',
-            prefixIcon: Icons.attach_money,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Each player chips in this amount.  The pool is split among '
-            'players proportional to skins won.',
-            style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ]),
       ),
     );
   }

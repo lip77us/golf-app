@@ -24,6 +24,7 @@ import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/section_card.dart';
+import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
 
 class TripleCupSetupScreen extends StatefulWidget {
@@ -55,6 +56,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
   final List<int> _team2Order = [];
 
   final _betCtrl = TextEditingController();
+  bool _stakeOk = false;
   bool _betCtrlInitialized = false;
 
   bool _loading = true;
@@ -251,7 +253,6 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
   Widget build(BuildContext context) {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -275,7 +276,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                         width: double.infinity,
                         height: 52,
                         child: FilledButton(
-                          onPressed: (_starting || !_rosterValid) ? null : _start,
+                          onPressed: (_starting || !_rosterValid || !_stakeOk) ? null : _start,
                           child: _starting
                               ? const SizedBox(
                                   width: 20, height: 20,
@@ -494,31 +495,14 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
             if (_is2v1) const SizedBox(height: 16),
 
-            // ── Round bet unit ───────────────────────────────────────
-            SectionCard(
-              title: 'Stake (cup payout)',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  GolfTextField(
-                    controller: _betCtrl,
-                    label: 'Stake (\$)',
-                    prefixIcon: Icons.attach_money,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'One payout for the whole cup.  Each player on the '
-                    'losing side pays this amount; each player on the '
-                    'winning side collects it.  A tied cup is a wash.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
+            // ── Stake ────────────────────────────────────────────────
+            StakeField(
+              controller: _betCtrl,
+              label: 'Stake (cup payout)',
+              helpText: 'One payout for the whole cup.  Each player on the '
+                  'losing side pays this amount; each player on the winning '
+                  'side collects it.  A tied cup is a wash.',
+              onChanged: (v) => setState(() => _stakeOk = v),
             ),
 
             const SizedBox(height: 16),

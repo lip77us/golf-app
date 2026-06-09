@@ -24,6 +24,7 @@ import '../widgets/golf_primary_button.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/section_card.dart';
+import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
   // round's current bet_unit after the round loads.  On Start Match we
   // PATCH the round if this value differs from what's on the server.
   final _betCtrl = TextEditingController();
+  bool  _stakeOk = false;
   bool  _betCtrlInitialized = false;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -296,7 +298,6 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     // the round is available.  Doing this in build (rather than initState)
     // means we naturally wait for loadRound() to finish.
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -354,8 +355,11 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       ],
                       const SizedBox(height: 20),
 
-                      // ── Bet unit (round-level, editable here) ──
-                      _BetUnitCard(controller: _betCtrl),
+                      // ── Stake (round-level, editable here) ──
+                      StakeField(
+                        controller: _betCtrl,
+                        onChanged: (v) => setState(() => _stakeOk = v),
+                      ),
                       const SizedBox(height: 20),
 
                       // ── Match preview ──
@@ -381,7 +385,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                   child: GolfPrimaryButton(
                     label: 'Start Match',
                     loading: rp.submitting,
-                    onPressed: _orderedPlayers.length < 4
+                    onPressed: (_orderedPlayers.length < 4 || !_stakeOk)
                         ? null
                         : () => _startMatch(context),
                   ),
@@ -677,48 +681,5 @@ class _MatchPreview extends StatelessWidget {
 
 /// Small card with a single dollar-amount field for the round's bet
 /// unit.  Edits here are saved back to Round.bet_unit when the user taps
-/// Start Match.  No submit button of its own — the value is just read
-/// off the controller by _startMatch.
-class _BetUnitCard extends StatelessWidget {
-  final TextEditingController controller;
-
-  const _BetUnitCard({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Stake',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary)),
-          const SizedBox(height: 8),
-          GolfTextField(
-            controller: controller,
-            label: 'Stake (\$)',
-            prefixIcon: Icons.attach_money,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Applies to every game in this round.  Edit here to update the '
-            'round-level value without leaving match setup.',
-            style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ]),
-      ),
-    );
-  }
-}
 
 

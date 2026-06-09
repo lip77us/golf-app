@@ -22,6 +22,7 @@ import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../widgets/stake_field.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/handicap_mode_selector.dart';
@@ -44,6 +45,8 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
   int    _netPercent = 100;
 
   final TextEditingController _betCtrl = TextEditingController();
+  /// True once a stake is entered or "no stakes" is chosen (gates Start).
+  bool _stakeOk = false;
   bool _betCtrlInitialized = false;
 
   bool   _loading   = true;
@@ -153,7 +156,6 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
     final rp = context.watch<RoundProvider>();
     // One-time seed of the bet controller once the round is available.
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -181,7 +183,7 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
                         width: double.infinity,
                         height: 52,
                         child: FilledButton(
-                          onPressed: (_starting || !_rosterValid) ? null : _start,
+                          onPressed: (_starting || !_rosterValid || !_stakeOk) ? null : _start,
                           child: _starting
                               ? const SizedBox(
                                   width: 20, height: 20,
@@ -223,7 +225,9 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
 
           const SizedBox(height: 16),
 
-          _BetUnitCard(controller: _betCtrl),
+          StakeField(
+            controller: _betCtrl,
+            onChanged: (v) => setState(() => _stakeOk = v)),
 
           const SizedBox(height: 16),
 
@@ -325,55 +329,6 @@ class _RosterBanner extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ===========================================================================
-// _BetUnitCard — same shape as in sixes_setup_screen, duplicated for
-// the same reason the handicap card is (private to that file).
-// ===========================================================================
-
-class _BetUnitCard extends StatelessWidget {
-  final TextEditingController controller;
-  const _BetUnitCard({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Stake',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary)),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'Stake (\$)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.attach_money),
-              isDense: true,
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'One point = one stake.  Par is 3 points / hole, '
-            'so a 55-point finish (over 18 holes) wins 1 stake.',
-            style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ]),
       ),
     );
   }

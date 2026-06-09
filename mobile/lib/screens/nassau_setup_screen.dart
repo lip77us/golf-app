@@ -22,6 +22,7 @@ import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/section_card.dart';
+import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
 
 class NassauSetupScreen extends StatefulWidget {
@@ -54,6 +55,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
   final _pressUnitCtrl = TextEditingController(text: '0');
   final _betCtrl       = TextEditingController();
+  bool  _stakeOk = false;
   bool  _betCtrlInitialized = false;
 
   /// playerId → team number (1 or 2)
@@ -212,7 +214,6 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   Widget build(BuildContext context) {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
-      _betCtrl.text = rp.round!.betUnit.formatBet();
       _betCtrlInitialized = true;
     }
 
@@ -240,7 +241,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                         width: double.infinity,
                         height: 52,
                         child: FilledButton(
-                          onPressed: (_starting || !_rosterValid) ? null : _start,
+                          onPressed: (_starting || !_rosterValid || !_stakeOk) ? null : _start,
                           child: _starting
                               ? const SizedBox(
                                   width: 20, height: 20,
@@ -374,44 +375,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
           const SizedBox(height: 16),
 
-          // ── Bets + Press (Nassau only; an 18-hole match is Overall, no
-          //     presses) ──
+          // ── Press (Nassau only; an 18-hole match has no presses) ──
           if (!widget.overallOnly) ...[
-          // ── Bets (Front / Back / Overall) ─────────────────────────────────
-          SectionCard(
-            title: 'Bets',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'A full Nassau plays all three. Turn Front and Back off for a '
-                  'straight 18-hole match.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 4),
-                _BetToggle(
-                  label: 'Front 9', value: _playFront,
-                  onChanged: (v) => setState(() => _playFront = v)),
-                _BetToggle(
-                  label: 'Back 9', value: _playBack,
-                  onChanged: (v) => setState(() => _playBack = v)),
-                _BetToggle(
-                  label: 'Overall (18)', value: _playOverall,
-                  onChanged: (v) => setState(() => _playOverall = v)),
-                if (!_playFront && !_playBack && _playOverall)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text('18-Hole Match',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.bold)),
-                  ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
           // ── Press configuration ───────────────────────────────────────────
           SectionCard(
             title: 'Press stakes',
@@ -457,32 +422,15 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           const SizedBox(height: 16),
           ],
 
-          // ── Bet unit ──────────────────────────────────────────────────────
-          SectionCard(
-            title: widget.overallOnly ? 'Stake' : 'Stake (main games)',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                GolfTextField(
-                  controller: _betCtrl,
-                  label: 'Stake (\$)',
-                  prefixIcon: Icons.attach_money,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  widget.overallOnly
-                      ? 'What the 18-hole match is worth.'
-                      : 'Each of the three standard Nassau games '
-                        '(Front 9, Back 9, Overall) is worth this amount.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
+          // ── Stake ─────────────────────────────────────────────────────────
+          StakeField(
+            controller: _betCtrl,
+            label: widget.overallOnly ? 'Stake' : 'Stake (main games)',
+            helpText: widget.overallOnly
+                ? 'What the 18-hole match is worth.'
+                : 'Each of the three standard Nassau games '
+                  '(Front 9, Back 9, Overall) is worth this amount.',
+            onChanged: (v) => setState(() => _stakeOk = v),
           ),
 
           // ── Advanced / variant (Nassau only) ──────────────────────────────
@@ -679,22 +627,3 @@ class _VariantCard extends StatelessWidget {
   }
 }
 
-
-/// Compact on/off row for a single Nassau bet (Front / Back / Overall).
-class _BetToggle extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _BetToggle({
-    required this.label, required this.value, required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) => SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-        title: Text(label),
-        value: value,
-        onChanged: onChanged,
-      );
-}
