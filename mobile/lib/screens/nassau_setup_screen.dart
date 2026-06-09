@@ -22,7 +22,6 @@ import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/section_card.dart';
-import '../widgets/net_double_bogey_card.dart';
 import '../widgets/team_splitter_4.dart';
 
 class NassauSetupScreen extends StatefulWidget {
@@ -367,18 +366,6 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             onModeChanged:    (m) => setState(() => _mode = m),
             onPercentChanged: (p) => setState(() => _netPercent = p),
           ),
-
-          const SizedBox(height: 16),
-
-          // ── Net double-bogey cap (round-level) ────────────────────────────
-          if (rp.round != null)
-            NetDoubleBogeyCard(
-              handicapMode: _mode, netPercent: _netPercent,
-              value: rp.round!.netMaxDoubleBogey,
-              onChanged: (v) {
-                context.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v);
-              },
-            ),
 
           const SizedBox(height: 16),
 

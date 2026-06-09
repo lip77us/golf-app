@@ -24,7 +24,6 @@ import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/handicap_mode_selector.dart';
-import '../widgets/net_double_bogey_card.dart';
 
 class RabbitSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -245,19 +244,6 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
                 ),
             ]),
           ),
-          const SizedBox(height: 16),
-
-          // ── Net double-bogey cap (round-level) ──
-          Builder(builder: (ctx) {
-            final round = ctx.watch<RoundProvider>().round;
-            if (round == null) return const SizedBox.shrink();
-            return NetDoubleBogeyCard(
-              handicapMode: _mode, netPercent: _netPercent,
-              value: round.netMaxDoubleBogey,
-              onChanged: (v) =>
-                  ctx.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v),
-            );
-          }),
           const SizedBox(height: 16),
 
           _BetUnitCard(controller: _betCtrl),

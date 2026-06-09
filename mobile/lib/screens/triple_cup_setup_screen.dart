@@ -24,7 +24,6 @@ import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/section_card.dart';
-import '../widgets/net_double_bogey_card.dart';
 import '../widgets/team_splitter_4.dart';
 
 class TripleCupSetupScreen extends StatefulWidget {
@@ -521,17 +520,6 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                 ],
               ),
             ),
-
-            const SizedBox(height: 16),
-
-            if (rp.round != null)
-              NetDoubleBogeyCard(
-              handicapMode: _mode, netPercent: _netPercent,
-                value: rp.round!.netMaxDoubleBogey,
-                onChanged: (v) {
-                  context.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v);
-                },
-              ),
 
             const SizedBox(height: 16),
 

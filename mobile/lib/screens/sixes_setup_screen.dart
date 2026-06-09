@@ -24,7 +24,6 @@ import '../widgets/golf_primary_button.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/section_card.dart';
-import '../widgets/net_double_bogey_card.dart';
 import '../widgets/team_splitter_4.dart';
 
 // ---------------------------------------------------------------------------
@@ -353,18 +352,6 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                               setState(() => _handicapAllocation = v),
                         ),
                       ],
-                      const SizedBox(height: 20),
-
-                      // ── Net double-bogey cap (round-level) ──
-                      if (rp.round != null)
-                        NetDoubleBogeyCard(
-                          handicapMode: _handicapMode, netPercent: _netPercent,
-                          value: rp.round!.netMaxDoubleBogey,
-                          onChanged: (v) {
-                            context.read<RoundProvider>()
-                                .updateRoundNetMaxDoubleBogey(v);
-                          },
-                        ),
                       const SizedBox(height: 20),
 
                       // ── Bet unit (round-level, editable here) ──
