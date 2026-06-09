@@ -526,6 +526,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
             if (rp.round != null)
               NetDoubleBogeyCard(
+              handicapMode: _mode, netPercent: _netPercent,
                 value: rp.round!.netMaxDoubleBogey,
                 onChanged: (v) {
                   context.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v);

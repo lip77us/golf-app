@@ -41,7 +41,12 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
     for all real players in the round, with handicap adjustment and the
     optional net-double-bogey cap applied per Round.net_max_double_bogey.
     """
-    cap_enabled = bool(round_obj.net_max_double_bogey)
+    # The net-double-bogey cap only applies at full Net (100%). It's meaningless
+    # for Gross and gets weird with a reduced allowance or Strokes-Off, so it's
+    # ignored outside Net-100% regardless of the stored round flag.
+    cap_enabled = (bool(round_obj.net_max_double_bogey)
+                   and handicap_mode == HandicapMode.NET
+                   and net_percent == 100)
 
     foursomes = list(
         Foursome.objects

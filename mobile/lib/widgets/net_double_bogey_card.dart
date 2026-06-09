@@ -8,15 +8,25 @@ import 'package:flutter/material.dart';
 class NetDoubleBogeyCard extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
+  /// The setup screen's current handicap settings. The cap only makes sense at
+  /// full Net (100%) — it gets weird with a reduced allowance or Strokes-Off —
+  /// so the card hides entirely unless mode == 'net' and netPercent == 100.
+  final String handicapMode;
+  final int netPercent;
 
   const NetDoubleBogeyCard({
     super.key,
     required this.value,
     required this.onChanged,
+    required this.handicapMode,
+    required this.netPercent,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (handicapMode != 'net' || netPercent != 100) {
+      return const SizedBox.shrink();
+    }
     final theme = Theme.of(context);
     return Card(
       elevation: 0,
@@ -28,8 +38,8 @@ class NetDoubleBogeyCard extends StatelessWidget {
         title: const Text('Net Double-Bogey Cap'),
         subtitle: Text(
           value
-              ? 'Per-hole scores capped at net par + 2 for game scoring. '
-                'Applies to Net and Strokes-Off modes only.'
+              ? 'Per-hole scores capped at net par + 2 — one blow-up hole '
+                'can\'t wreck your round.'
               : 'No cap — raw net scores drive every game.',
           style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant),

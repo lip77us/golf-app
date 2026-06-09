@@ -252,6 +252,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
             final round = ctx.watch<RoundProvider>().round;
             if (round == null) return const SizedBox.shrink();
             return NetDoubleBogeyCard(
+              handicapMode: _mode, netPercent: _netPercent,
               value: round.netMaxDoubleBogey,
               onChanged: (v) =>
                   ctx.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v),

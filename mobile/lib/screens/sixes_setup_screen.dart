@@ -358,6 +358,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       // ── Net double-bogey cap (round-level) ──
                       if (rp.round != null)
                         NetDoubleBogeyCard(
+                          handicapMode: _handicapMode, netPercent: _netPercent,
                           value: rp.round!.netMaxDoubleBogey,
                           onChanged: (v) {
                             context.read<RoundProvider>()

@@ -229,6 +229,7 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
             final round = ctx.watch<RoundProvider>().round;
             if (round == null) return const SizedBox.shrink();
             return NetDoubleBogeyCard(
+              handicapMode: _mode, netPercent: _netPercent,
               value: round.netMaxDoubleBogey,
               onChanged: (v) {
                 ctx.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v);

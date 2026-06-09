@@ -1474,6 +1474,7 @@ class _Step1Details extends StatelessWidget {
             // round in this tournament at creation time. Stableford's points
             // table already floors scores, so it's hidden there.
             NetDoubleBogeyCard(
+              handicapMode: handicapMode, netPercent: netPercent,
               value: netMaxDoubleBogey,
               onChanged: onChangeNetMaxDoubleBogey,
             ),
