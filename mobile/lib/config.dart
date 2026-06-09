@@ -27,5 +27,5 @@ class Config {
   ///
   /// TODO: read this from pubspec at build time via package_info_plus
   /// so we stop having two sources of truth.
-  static const String appVersion = '1.5.0';
+  static const String appVersion = '2.0.0';
 }
