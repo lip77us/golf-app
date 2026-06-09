@@ -15,6 +15,9 @@ class GameIds {
   static const String sixes      = 'sixes';
   static const String points531  = 'points_531';
   static const String nassau     = 'nassau';
+  /// UI-only shortcut: an "18-Hole Match" — a Nassau with only the Overall bet.
+  /// Translated to `nassau` (Overall-only) when the round is created.
+  static const String match18    = 'match_18';
   static const String skins      = 'skins';
   static const String multiSkins = 'multi_skins';
   static const String tripleCup  = 'triple_cup';
@@ -169,6 +172,14 @@ const List<GameMeta> kGameCatalog = [
     // Nassau and Sixes are mutually exclusive (both are team-bet games that
     // own the front-9 / back-9 structure).  Skins can run alongside Nassau.
     excludes    : {GameIds.sixes, GameIds.points531},
+  ),
+  GameMeta(
+    id          : GameIds.match18,
+    displayName : '18-Hole Match',
+    casual      : true,
+    // A straight heads-up 18-hole match — runs on Nassau (Overall bet only).
+    sizes       : {2},
+    excludes    : {GameIds.nassau, GameIds.sixes, GameIds.points531},
   ),
   GameMeta(
     id          : GameIds.skins,

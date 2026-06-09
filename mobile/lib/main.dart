@@ -384,6 +384,10 @@ class _GolfAppState extends State<GolfApp> {
       case '/nassau-setup':
         final foursomeId = settings.arguments as int;
         return page((_) => NassauSetupScreen(foursomeId: foursomeId));
+      case '/nassau-setup-18':
+        final foursomeId = settings.arguments as int;
+        return page((_) =>
+            NassauSetupScreen(foursomeId: foursomeId, overallOnly: true));
       case '/nassau':
         final foursomeId = settings.arguments as int;
         return page((_) => NassauScreen(foursomeId: foursomeId));

@@ -905,6 +905,9 @@ class ApiClient {
     String pressMode    = 'none',
     double pressUnit    = 0.0,
     String variant      = 'none',  // 'none' | 'tiebreak_2nd' | 'claremont'
+    bool   playFront    = true,
+    bool   playBack     = true,
+    bool   playOverall  = true,
   }) async {
     final data = await _post('/foursomes/$foursomeId/nassau/setup/', {
       'team1_player_ids': team1Ids,
@@ -914,6 +917,9 @@ class ApiClient {
       'press_mode'      : pressMode,
       'press_unit'      : pressUnit,
       'variant'         : variant,
+      'play_front'      : playFront,
+      'play_back'       : playBack,
+      'play_overall'    : playOverall,
     });
     return NassauSummary.fromJson(data as Map<String, dynamic>);
   }

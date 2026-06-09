@@ -384,7 +384,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       final round = await client.createRound(
         courseId: _selectedCourse!.id,
         date: dateStr,
-        activeGames: _activeGames.toList(),
+        // "18-Hole Match" is a UI shortcut for an Overall-only Nassau.
+        activeGames: _activeGames
+            .map((g) => g == GameIds.match18 ? GameIds.nassau : g)
+            .toList(),
       );
 
       // Setup foursome with players and their specific tees.  In
@@ -457,6 +460,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             directArgs  = fullRound.id;
           case GameIds.nassau:
             directRoute = '/nassau-setup';
+            directArgs  = firstFs.id;
+          case GameIds.match18:
+            directRoute = '/nassau-setup-18';   // Overall-only Nassau
             directArgs  = firstFs.id;
           case GameIds.strokePlay:
             directRoute = '/low-net-setup';

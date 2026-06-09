@@ -952,6 +952,9 @@ class RoundProvider extends ChangeNotifier {
     String pressMode    = 'none',
     double pressUnit    = 0.0,
     String variant      = 'none',
+    bool   playFront    = true,
+    bool   playBack     = true,
+    bool   playOverall  = true,
   }) async {
     _submitting = true;
     _clearError();
@@ -966,6 +969,9 @@ class RoundProvider extends ChangeNotifier {
         pressMode:    pressMode,
         pressUnit:    pressUnit,
         variant:      variant,
+        playFront:    playFront,
+        playBack:     playBack,
+        playOverall:  playOverall,
       );
       return true;
     } on NetworkException {

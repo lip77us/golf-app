@@ -27,7 +27,12 @@ import '../widgets/team_splitter_4.dart';
 
 class NassauSetupScreen extends StatefulWidget {
   final int foursomeId;
-  const NassauSetupScreen({super.key, required this.foursomeId});
+  /// When true, default to an Overall-only game (a straight 18-hole match) —
+  /// used by the "18-Hole Match" casual game shortcut.
+  final bool overallOnly;
+  const NassauSetupScreen({
+    super.key, required this.foursomeId, this.overallOnly = false,
+  });
 
   @override
   State<NassauSetupScreen> createState() => _NassauSetupScreenState();
@@ -42,6 +47,11 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   String _pressMode  = 'none';
   /// 'none' | 'tiebreak_2nd' | 'claremont'
   String _variant    = 'none';
+
+  /// Which of the three bets are live (Front+Back off = an 18-hole match).
+  late bool _playFront   = !widget.overallOnly;
+  late bool _playBack    = !widget.overallOnly;
+  bool      _playOverall = true;
 
   final _pressUnitCtrl = TextEditingController(text: '0');
   final _betCtrl       = TextEditingController();
@@ -121,6 +131,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           _netPercent = existing.netPercent;
           _pressMode  = existing.pressMode;
           _variant    = existing.variant;
+          _playFront   = existing.playFront;
+          _playBack    = existing.playBack;
+          _playOverall = existing.playOverall;
           _pressUnitCtrl.text = existing.pressUnit.truncate().toString();
         });
 
@@ -175,6 +188,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         pressMode:    _pressMode,
         pressUnit:    pressUnit,
         variant:      _variant,
+        playFront:    _playFront,
+        playBack:     _playBack,
+        playOverall:  _playOverall,
       );
 
       if (!mounted) return;
@@ -362,6 +378,41 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                 context.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v);
               },
             ),
+
+          const SizedBox(height: 16),
+
+          // ── Bets (Front / Back / Overall) ─────────────────────────────────
+          SectionCard(
+            title: 'Bets',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'A full Nassau plays all three. Turn Front and Back off for a '
+                  'straight 18-hole match.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 4),
+                _BetToggle(
+                  label: 'Front 9', value: _playFront,
+                  onChanged: (v) => setState(() => _playFront = v)),
+                _BetToggle(
+                  label: 'Back 9', value: _playBack,
+                  onChanged: (v) => setState(() => _playBack = v)),
+                _BetToggle(
+                  label: 'Overall (18)', value: _playOverall,
+                  onChanged: (v) => setState(() => _playOverall = v)),
+                if (!_playFront && !_playBack && _playOverall)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text('18-Hole Match',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold)),
+                  ),
+              ],
+            ),
+          ),
 
           const SizedBox(height: 16),
 
@@ -625,3 +676,22 @@ class _VariantCard extends StatelessWidget {
   }
 }
 
+
+/// Compact on/off row for a single Nassau bet (Front / Back / Overall).
+class _BetToggle extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _BetToggle({
+    required this.label, required this.value, required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: Text(label),
+        value: value,
+        onChanged: onChanged,
+      );
+}

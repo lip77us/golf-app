@@ -2690,6 +2690,11 @@ class NassauSummary {
   final double betUnit;
   final double pressUnit;
 
+  // Which of the three bets are live (Front+Back off = an 18-hole match).
+  final bool playFront;
+  final bool playBack;
+  final bool playOverall;
+
   // Teams
   final List<NassauPlayerInfo> team1;
   final List<NassauPlayerInfo> team2;
@@ -2745,6 +2750,9 @@ class NassauSummary {
     required this.pressMode,
     required this.betUnit,
     required this.pressUnit,
+    this.playFront   = true,
+    this.playBack    = true,
+    this.playOverall = true,
     required this.team1,
     required this.team2,
     required this.front9,
@@ -2804,6 +2812,9 @@ class NassauSummary {
       pressMode:    j['press_mode']    as String? ?? 'none',
       betUnit:      (j['bet_unit']     as num?)?.toDouble() ?? 1.0,
       pressUnit:    (j['press_unit']   as num?)?.toDouble() ?? 0.0,
+      playFront:    j['play_front']    as bool?   ?? true,
+      playBack:     j['play_back']     as bool?   ?? true,
+      playOverall:  j['play_overall']  as bool?   ?? true,
       team1: ((teams['team1'] as List?) ?? [])
           .map((p) => NassauPlayerInfo.fromJson(p as Map<String, dynamic>))
           .toList(),
