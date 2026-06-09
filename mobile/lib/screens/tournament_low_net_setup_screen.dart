@@ -154,7 +154,7 @@ class _TournamentLowNetSetupScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Low Net Championship — Setup')),
+      appBar: AppBar(title: const Text('Stroke Play Championship — Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null && !_saving
@@ -199,7 +199,7 @@ class _TournamentLowNetSetupScreenState
 
           // ── About ─────────────────────────────────────────────────────────
           SectionCard(
-            title: 'Low Net Championship',
+            title: 'Stroke Play Championship',
             child: Text(
               'Cumulative net strokes across all rounds determine the winner. '
               'Each round\'s score is capped at double-bogey (par + 2) per hole '

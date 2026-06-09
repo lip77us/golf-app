@@ -760,7 +760,7 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Low Net — Setup')),
+      appBar: AppBar(title: const Text('Stroke Play — Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null && !_loading && !_saving
@@ -872,9 +872,9 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                   ]),
                   const SizedBox(height: 4),
                   Text(
-                    'These players won prize money in the Low Net '
+                    'These players won prize money in the Stroke Play '
                     'Championship and are suggested for exclusion from '
-                    'the Day 2 Low Net prize.',
+                    'the Day 2 Stroke Play prize.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
@@ -954,7 +954,7 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'No championship placers found. '
-                'Run the championship Low Net setup first.',
+                'Run the championship Stroke Play setup first.',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant),
               ),

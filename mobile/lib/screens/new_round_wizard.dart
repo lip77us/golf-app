@@ -1978,7 +1978,7 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
         const SizedBox(height: 10),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Low Net (Stroke Play)'),
+          title: const Text('Stroke Play'),
           subtitle: const Text('Individual net scores across all players'),
           value: widget.lowNetEnabled,
           onChanged: (v) {

@@ -717,7 +717,7 @@ def _stroke_play_label(round_obj) -> str:
       championship reads e.g. "Pacific Grove Open".
     * Fallback → "Stroke Play"."""
     if _has_cup_matches(round_obj):
-        return 'Low Net'
+        return 'Stroke Play'
     t = round_obj.tournament
     return (t.name if t and t.name else 'Stroke Play')
 
@@ -840,7 +840,7 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
         })
     if _has_low_net_round(round_obj):
         tabs.append({
-            'key': 'low_net', 'label': 'Low Net',
+            'key': 'low_net', 'label': 'Stroke Play',
             'url': f'{base}?view=low_net',
             'active': current == 'low_net',
         })

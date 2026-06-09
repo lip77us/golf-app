@@ -1,16 +1,16 @@
 {% extends "watch/base.html" %}
 
 {% block title %}
-{{ tournament.name|default:"Low Net" }} · Low Net
+{{ tournament.name|default:"Stroke Play" }} · Stroke Play
 {% endblock %}
 
 {% block body %}
   <h1>
-    {% if tournament %}{{ tournament.name }}{% else %}Low Net{% endif %}
+    {% if tournament %}{{ tournament.name }}{% else %}Stroke Play{% endif %}
   </h1>
   <p class="sub">
     {% if scope == 'championship' %}
-      Low Net Championship · {{ summary.rounds_played|default:0 }} of {{ summary.total_rounds|default:0 }} rounds played
+      Stroke Play Championship · {{ summary.rounds_played|default:0 }} of {{ summary.total_rounds|default:0 }} rounds played
     {% else %}
       Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
     {% endif %}
@@ -54,6 +54,6 @@
       </details>
     {% endfor %}
   {% else %}
-    <div class="card empty">No Low Net scores yet.</div>
+    <div class="card empty">No Stroke Play scores yet.</div>
   {% endif %}
 {% endblock %}

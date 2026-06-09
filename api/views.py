@@ -417,7 +417,7 @@ def _build_leaderboard(round_obj: Round) -> dict:
     if 'low_net_round' in active_games:
         from services.low_net_round import low_net_round_summary
         games['low_net_round'] = {
-            'label': 'Low Net',
+            'label': 'Stroke Play',
             **low_net_round_summary(round_obj),
         }
     elif not ({'triple_cup', 'scramble'} & set(active_games)):
@@ -427,7 +427,7 @@ def _build_leaderboard(round_obj: Round) -> dict:
         # team-ball formats (Triple Cup alt-shot, Scramble).
         from services.low_net_round import low_net_round_summary
         games['low_net_round'] = {
-            'label': 'Low Net',
+            'label': 'Stroke Play',
             **low_net_round_summary(round_obj),
         }
 
@@ -1554,7 +1554,7 @@ class TournamentLeaderboardView(APIView):
         if 'low_net' in active_games:
             from services.low_net_championship import low_net_championship_summary
             games['low_net'] = {
-                'label'  : 'Low Net Championship',
+                'label'  : 'Stroke Play Championship',
                 **low_net_championship_summary(tournament, round_id=round_filter),
             }
 

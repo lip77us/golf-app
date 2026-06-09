@@ -378,7 +378,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       final ta = lb?.tournamentActiveGames ?? const <String>[];
       if (ta.contains('stableford_championship')) return 'Stableford';
       if (ta.contains('match_play') && !ta.contains('low_net')) return 'Match Play';
-      return 'Low Net';
+      return 'Stroke Play';
     }
     return gameDisplayName(g);
   }

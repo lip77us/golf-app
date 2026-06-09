@@ -150,7 +150,7 @@ class _TournamentLeaderboardScreenState
     if (_tabs.isEmpty || _tabCtrl == null) {
       return const Center(
         child: Text('No championship games configured.\n'
-            'Select Low Net or Match Play when creating the tournament.',
+            'Select Stroke Play or Match Play when creating the tournament.',
             textAlign: TextAlign.center),
       );
     }
