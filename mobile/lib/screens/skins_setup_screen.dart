@@ -217,22 +217,6 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
           const SizedBox(height: 16),
 
-          // ── Stake (up top + gates Start so it's never missed) ──
-          _BetUnitCard(controller: _betCtrl),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('Play for fun — no stakes'),
-            value: _noStakes,
-            onChanged: (v) => setState(() {
-              _noStakes = v ?? false;
-              if (_noStakes) _betCtrl.text = '0';
-            }),
-          ),
-
-          const SizedBox(height: 16),
-
           HandicapModeSelector(
             mode:             _mode,
             netPercent:       _netPercent,
@@ -290,6 +274,24 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                 ],
               ),
             ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Stake (kept at the bottom; Start stays disabled until it's set,
+          // which guarantees the user scrolls past the carryover/junk options
+          // above on the way down) ──
+          _BetUnitCard(controller: _betCtrl),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text('Play for fun — no stakes'),
+            value: _noStakes,
+            onChanged: (v) => setState(() {
+              _noStakes = v ?? false;
+              if (_noStakes) _betCtrl.text = '0';
+            }),
           ),
 
           const SizedBox(height: 16),
