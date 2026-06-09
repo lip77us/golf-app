@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SMS Consent &amp; Opt-In — Halved</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+      color: #1a1a1a;
+      background: #fff;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { color: #e6e6e6; background: #121212; }
+      a { color: #6db36d; }
+      hr { border-color: #333; }
+      .phone { background: #1c1c1c; border-color: #333; }
+      .field { background: #222; border-color: #444; }
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.2em; }
+    h2 { font-size: 1.25rem; margin-top: 2em; }
+    .meta { color: #666; font-size: 0.95rem; margin-bottom: 1.5em; }
+    a { color: #2e7d32; }
+    hr { border: none; border-top: 1px solid #e0e0e0; margin: 2.5em 0; }
+    ul { padding-left: 1.3em; }
+    li { margin-bottom: 0.4em; }
+    code { background: rgba(127,127,127,0.15); padding: 1px 5px; border-radius: 4px; }
+
+    /* Simple rendering of the in-app sign-in screen showing the opt-in. */
+    .phone {
+      max-width: 320px; margin: 1.5em auto; padding: 28px 22px;
+      border: 1px solid #ddd; border-radius: 28px; background: #fafafa;
+      text-align: center;
+    }
+    .phone .logo { font-size: 1.6rem; font-weight: 800; color: #2e7d32;
+                   letter-spacing: 1px; }
+    .phone .sub { color: #777; font-size: 0.9rem; margin: 4px 0 18px; }
+    .field { text-align: left; border: 1px solid #ccc; border-radius: 10px;
+             padding: 10px 12px; margin: 10px 0; background: #fff;
+             color: #999; font-size: 0.95rem; }
+    .btn { background: #2e7d32; color: #fff; font-weight: 700;
+           border-radius: 999px; padding: 12px; margin-top: 8px; }
+    .consent { font-size: 0.78rem; color: #888; margin-top: 14px; }
+  </style>
+</head>
+<body>
+
+  <h1>SMS Consent &amp; Opt-In</h1>
+  <p class="meta">
+    <strong>Halved</strong> &mdash; operated by Paul Lipkin<br>
+    Last updated: June 4, 2026
+  </p>
+
+  <p>
+    This page documents how users of the <strong>Halved</strong> mobile app
+    consent to receive SMS text messages. Halved sends exactly one type of
+    text: a <strong>one-time passcode (OTP)</strong> used to verify a phone
+    number and sign the user in. No marketing or promotional messages are ever
+    sent.
+  </p>
+
+  <hr>
+
+  <h2>How users opt in</h2>
+  <p>
+    A user opts in by <strong>entering their own mobile number on the sign-in
+    screen and tapping &ldquo;Send code&rdquo;</strong> to request a login
+    passcode. The screen displays a clear consent disclosure before the user
+    requests a code. Phone sign-in is optional &mdash; users may instead sign in
+    with a username and password.
+  </p>
+
+  <!-- Representation of the app's sign-in screen. Replace with an actual
+       screenshot if desired (the consent wording below matches the app). -->
+  <div class="phone">
+    <div class="logo">Halved</div>
+    <div class="sub">Sign in with your phone number</div>
+    <div class="field">Phone number &nbsp; (555) 555-1234</div>
+    <div class="field">Your name (new accounts)</div>
+    <div class="field btn">Send code</div>
+    <div class="consent">
+      By continuing, you agree to receive a one-time login code by SMS.
+      Message &amp; data rates may apply. One-time codes only — no marketing.
+    </div>
+  </div>
+
+  <h2>Message details</h2>
+  <ul>
+    <li><strong>Use case:</strong> account verification / two-factor login
+        (one-time passcodes).</li>
+    <li><strong>Sample message:</strong>
+        <code>Your Halved verification code is: 123456</code></li>
+    <li><strong>Frequency:</strong> only when the user requests a code &mdash;
+        typically a few times per year (sign-in or new-device setup).</li>
+    <li><strong>Rates:</strong> message and data rates may apply.</li>
+    <li><strong>Opt-out:</strong> users can reply <code>STOP</code>, or simply
+        stop requesting codes (and may use username/password sign-in instead).</li>
+    <li><strong>Privacy:</strong> mobile numbers are never sold or shared with
+        third parties for marketing. See our
+        <a href="privacy.html">Privacy
+        Policy</a>.</li>
+  </ul>
+
+  <hr>
+
+  <p class="meta">
+    Questions: <a href="mailto:paul@lipkin.us">paul@lipkin.us</a>
+  </p>
+
+</body>
+</html>
