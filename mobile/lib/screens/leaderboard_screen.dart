@@ -354,6 +354,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       return lb?.cupName ?? 'Cup';
     }
     if (g == '__my_foursome__') return 'My Foursome';
+    // An Overall-only Nassau is a straight 18-hole match — label it as such.
+    if (g == 'nassau') {
+      final groups =
+          ((lb?.games['nassau']?.data as Map?)?['by_group'] as List?) ?? const [];
+      final s = groups.isNotEmpty
+          ? ((groups.first as Map?)?['summary'] as Map?)
+          : null;
+      if (s != null &&
+          s['play_front'] == false &&
+          s['play_back'] == false &&
+          s['play_overall'] != false) {
+        return '18-Hole Match';
+      }
+    }
     if (g == '__championship__') {
       // Reflect the tournament's actual championship rather than a hardcoded
       // "Low Net" — a Stableford Championship round should read "Stableford".
@@ -2190,6 +2204,252 @@ class _SkinsGroupCard extends StatelessWidget {
   }
 }
 
+// ---- 18-Hole Match leaderboard card (Overall-only Nassau) ----
+//
+// Mirrors the under-score-entry "Match Progress" table: full names, blue/red
+// sides, a per-hole grid (net scores + colour-coded Won-by), the running match
+// status, and the leader's running money (awarded even before the match ends).
+class _MatchLeaderboardCard extends StatefulWidget {
+  final NassauSummary nas;
+  const _MatchLeaderboardCard({required this.nas});
+
+  @override
+  State<_MatchLeaderboardCard> createState() => _MatchLeaderboardCardState();
+}
+
+class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
+  final ScrollController _scroll = ScrollController();
+  static const double _labelW = 96;
+  static const double _cellW = 26;
+  static const double _rowH = 24;
+
+  @override
+  void initState() {
+    super.initState();
+    // Scroll the grid so the latest played hole is in view.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final thru = widget.nas.overall.holesPlayed;
+      if (_scroll.hasClients && thru > 7) {
+        _scroll.jumpTo(((thru - 7) * _cellW)
+            .clamp(0.0, _scroll.position.maxScrollExtent));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  String _clip(String s) => s.length > 5 ? s.substring(0, 5) : s;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final nas = widget.nas;
+    final t1Color = Colors.blue.shade700;
+    final t2Color = Colors.red.shade700;
+
+    final p1 = nas.team1.isNotEmpty ? nas.team1.first : null;
+    final p2 = nas.team2.isNotEmpty ? nas.team2.first : null;
+    String full(p, fallback) =>
+        (p?.name.isNotEmpty ?? false) ? p!.name as String : fallback;
+    String short(p, fallback) =>
+        (p?.shortName.isNotEmpty ?? false) ? p!.shortName as String : fallback;
+    final n1 = full(p1, 'Player 1');
+    final n2 = full(p2, 'Player 2');
+    final s1 = short(p1, n1);
+    final s2 = short(p2, n2);
+
+    final margin  = nas.overall.margin;        // + = player 1 up
+    final thru    = nas.overall.holesPlayed;
+    final decided = nas.overall.result != null;
+    final leaderColor =
+        margin > 0 ? t1Color : margin < 0 ? t2Color : theme.colorScheme.onSurface;
+    final leaderName = margin > 0 ? n1 : margin < 0 ? n2 : null;
+
+    String status;
+    if (decided) {
+      final left = 18 - thru;
+      status = left > 0
+          ? '$leaderName wins ${margin.abs()}&$left'
+          : '$leaderName wins ${margin.abs()} up';
+    } else if (margin == 0) {
+      status = 'All Square';
+    } else {
+      status = '$leaderName ${margin.abs()} UP';
+    }
+
+    // Award the current leader the stake even mid-match (status-screen style).
+    final bet = nas.betUnit;
+    final money = margin == 0
+        ? (decided ? 'Halved — no money' : 'All square — no money')
+        : '$leaderName  +\$${bet.formatBet()}';
+
+    final byHole = {for (final h in nas.holes) h.hole: h};
+
+    Widget cell(Widget child, {Color? bg, bool current = false}) => Container(
+          width: _cellW,
+          height: _rowH,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: bg ??
+                (current
+                    ? theme.colorScheme.primaryContainer.withValues(alpha: .3)
+                    : null),
+          ),
+          child: child,
+        );
+
+    Widget labelCell(String text, {Color? color, FontStyle? style}) => SizedBox(
+          width: _labelW,
+          height: _rowH,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(text,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: color, fontWeight: FontWeight.w600, fontStyle: style)),
+          ),
+        );
+
+    Widget scoreRow(String label, Color color, int? Function(NassauHoleData) get) =>
+        Row(children: [
+          labelCell(label, color: color),
+          for (var h = 1; h <= 18; h++)
+            cell(
+              Text(
+                byHole[h] != null && get(byHole[h]!) != null
+                    ? '${get(byHole[h]!)}'
+                    : '·',
+                style: theme.textTheme.labelSmall,
+              ),
+              current: h == thru,
+            ),
+        ]);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Header — full names, blue vs red
+          Center(
+            child: RichText(
+              textAlign: TextAlign.center,
+              text: TextSpan(
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                children: [
+                  TextSpan(text: n1, style: TextStyle(color: t1Color)),
+                  TextSpan(
+                      text: '  vs  ',
+                      style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.normal)),
+                  TextSpan(text: n2, style: TextStyle(color: t2Color)),
+                ],
+              ),
+            ),
+          ),
+          if (thru > 0 && thru < 18)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('Thru $thru',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              ),
+            ),
+          const Divider(height: 14),
+
+          // Match status + running money
+          Center(
+            child: Text(status,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(color: leaderColor, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 2),
+          Center(
+            child: Text(money,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: margin == 0
+                      ? theme.colorScheme.onSurfaceVariant
+                      : Colors.green.shade700,
+                  fontWeight: FontWeight.w600,
+                )),
+          ),
+          const SizedBox(height: 10),
+
+          // Per-hole grid
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            controller: _scroll,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                labelCell('Hole'),
+                for (var h = 1; h <= 18; h++)
+                  cell(
+                    Text('$h',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    current: h == thru,
+                  ),
+              ]),
+              scoreRow(s1, t1Color, (d) => d.t1Net),
+              scoreRow(s2, t2Color, (d) => d.t2Net),
+              // Won-by — colour-coded short name of the hole winner
+              Row(children: [
+                labelCell('Won by', style: FontStyle.italic,
+                    color: theme.colorScheme.onSurfaceVariant),
+                for (var h = 1; h <= 18; h++)
+                  Builder(builder: (_) {
+                    final d = byHole[h];
+                    if (d == null || d.winner == null) {
+                      return cell(Text('·', style: theme.textTheme.labelSmall));
+                    }
+                    if (d.winner == 'team1') {
+                      return cell(
+                        Text(_clip(s1),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            softWrap: false,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: t1Color)),
+                        bg: Colors.blue.shade50,
+                      );
+                    }
+                    if (d.winner == 'team2') {
+                      return cell(
+                        Text(_clip(s2),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            softWrap: false,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: t2Color)),
+                        bg: Colors.red.shade50,
+                      );
+                    }
+                    return cell(
+                      Text('=',
+                          style: theme.textTheme.labelSmall
+                              ?.copyWith(color: Colors.grey.shade600)),
+                      bg: Colors.grey.shade100,
+                    );
+                  }),
+              ]),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
 // ---- Nassau group card ----
 
 class _NassauGroupCard extends StatelessWidget {
@@ -2280,6 +2540,11 @@ class _NassauGroupCard extends StatelessWidget {
           ]),
         ),
       );
+    }
+
+    // ── 18-Hole Match: dedicated 1-v-1 card (full per-hole grid) ──────────
+    if (nas.isEighteenHoleMatch) {
+      return _MatchLeaderboardCard(nas: nas);
     }
 
     // ── Casual match: original layout ─────────────────────────────────────
