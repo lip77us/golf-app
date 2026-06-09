@@ -9,7 +9,7 @@
     {% if tournament %}{{ tournament.name }}{% else %}Skins{% endif %}
   </h1>
   <p class="sub">
-    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
   </p>
 
   {% for g in groups %}
@@ -38,43 +38,6 @@
         {% empty %}
           <div class="empty" style="padding: 20px 4px;">No skins won yet.</div>
         {% endfor %}
-
-        {% if g.scorecard and g.scorecard.rows %}
-          <div class="divider"></div>
-          <div class="ms-scroll" style="margin-top: 4px;">
-            <table class="ms-card">
-              <thead>
-                <tr>
-                  <th class="ms-name">Hole</th>
-                  {% for h in g.scorecard.hole_headers %}
-                    <th class="{% if h.is_dead %}dead{% endif %}">{{ h.num }}</th>
-                  {% endfor %}
-                </tr>
-                <tr>
-                  <th class="ms-name ms-par">Par</th>
-                  {% for h in g.scorecard.hole_headers %}
-                    <th class="ms-par">{{ h.par|default:"–" }}</th>
-                  {% endfor %}
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in g.scorecard.rows %}
-                  <tr>
-                    <td class="ms-name">{{ row.name }}{% if row.phcp_in_play is not None %} <span class="phcp">({{ row.phcp_in_play }})</span>{% endif %}</td>
-                    {% for cell in row.cells %}
-                      <td class="{% if cell.is_winner %}win{% endif %}">
-                        {% if cell.gross %}{{ cell.gross }}{% if cell.strokes %}<span class="strk" data-strokes="{{ cell.strokes }}">{{ cell.strokes }}</span>{% endif %}{% endif %}
-                      </td>
-                    {% endfor %}
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          <div class="ms-legend">
-            <span class="win-swatch"></span> skin winner · grey header = no skin (tied)
-          </div>
-        {% endif %}
       </div>
     {% endwith %}
   {% empty %}

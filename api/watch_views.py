@@ -1009,11 +1009,10 @@ def _render_cup_standings(request, round_obj, token: str, tabs: list):
 # ---------------------------------------------------------------------------
 
 def _render_casual_skins(request, round_obj, token: str, tabs: list):
-    """Per-foursome Skins leaderboards — mirrors the in-app Skins tab.
+    """Per-foursome Skins standings — bare-bones spectator view.
 
-    Each group card carries the standings up top and a per-hole gross
-    scorecard at the bottom (winner's cell highlighted), so observers
-    can see who won each skin at a glance."""
+    Standings only (skins won + payout per player); the per-hole gross
+    scorecard is intentionally left to the app to keep the web view light."""
     from services.skins import skins_summary
     foursomes = list(
         round_obj.foursomes
@@ -1021,19 +1020,23 @@ def _render_casual_skins(request, round_obj, token: str, tabs: list):
         .order_by('group_number')
     )
     groups = []
+    thru = 0
     for fs in foursomes:
         summary = skins_summary(fs)
+        if summary:
+            thru = max(thru, max((h['hole'] for h in summary.get('holes', [])),
+                                 default=0))
         groups.append({
             'group_number': fs.group_number,
             'foursome_id' : fs.id,
             'summary'     : summary,
-            'scorecard'   : _build_ms_scorecard(summary) if summary else None,
         })
     return render(request, 'watch/casual_skins.html', {
         'round':        round_obj,
         'course_name':  round_obj.course.name,
         'tournament':   round_obj.tournament,
         'groups':       groups,
+        'thru':         thru,
         'refresh_secs': 30,
         'tabs':         tabs,
     })

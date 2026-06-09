@@ -9,7 +9,7 @@
     {% if tournament %}{{ tournament.name }}{% else %}Multi-Group Skins{% endif %}
   </h1>
   <p class="sub">
-    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}
   </p>
 
   {% if summary %}
