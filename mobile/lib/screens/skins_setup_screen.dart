@@ -46,6 +46,8 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
   final TextEditingController _betCtrl = TextEditingController();
   bool _betCtrlInitialized = false;
+  /// Explicit opt-in to a no-money game; lets Start proceed at $0.
+  bool _noStakes = false;
 
   bool    _loading  = true;
   bool    _starting = false;
@@ -53,9 +55,21 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
   SkinsSummary? _summary;
 
+  /// Start is gated on this: a real stake entered, or "no stakes" ticked.
+  bool get _stakeChosen =>
+      _noStakes || (double.tryParse(_betCtrl.text.trim()) ?? 0) > 0;
+
   @override
   void initState() {
     super.initState();
+    // Rebuild as the stake changes so Start enables/disables live; entering a
+    // real stake clears the "no stakes" opt-in.
+    _betCtrl.addListener(() {
+      if ((double.tryParse(_betCtrl.text.trim()) ?? 0) > 0 && _noStakes) {
+        _noStakes = false;
+      }
+      setState(() {});
+    });
     _load();
   }
 
@@ -184,7 +198,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                       child: GolfPrimaryButton(
                         label: 'Start Game',
                         loading: _starting,
-                        onPressed: _rosterValid ? _start : null,
+                        onPressed: (_rosterValid && _stakeChosen) ? _start : null,
                       ),
                     ),
                   ),
@@ -201,6 +215,22 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _RosterBanner(members: _realMembers),
+
+          const SizedBox(height: 16),
+
+          // ── Stake (up top + gates Start so it's never missed) ──
+          _BetUnitCard(controller: _betCtrl),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text('Play for fun — no stakes'),
+            value: _noStakes,
+            onChanged: (v) => setState(() {
+              _noStakes = v ?? false;
+              if (_noStakes) _betCtrl.text = '0';
+            }),
+          ),
 
           const SizedBox(height: 16),
 
@@ -277,10 +307,6 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
               ),
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          _BetUnitCard(controller: _betCtrl),
 
           const SizedBox(height: 16),
 
