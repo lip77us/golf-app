@@ -2787,6 +2787,8 @@ class NassauSummary {
   bool get isStrokesOff => handicapMode == 'strokes_off';
   bool get isClaremont    => variant == 'claremont';
   bool get isTiebreak2nd  => variant == 'tiebreak_2nd';
+  /// Overall-only (Front + Back off) = a straight 18-hole match.
+  bool get isEighteenHoleMatch => !playFront && !playBack && playOverall;
   bool get allowsManualPress => pressMode == 'manual' || pressMode == 'both';
 
   String get t1Label => team1.isNotEmpty ? team1.first.shortName : 'T1';

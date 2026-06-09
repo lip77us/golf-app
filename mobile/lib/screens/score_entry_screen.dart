@@ -1149,7 +1149,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       String label = gameDisplayName(g);
       if (g == 'nassau' && nas != null) {
         final modeStr = _modeLabel(nas.handicapMode, nas.netPercent);
-        label = '$label ($modeStr)';
+        final base = nas.isEighteenHoleMatch ? '18 Hole Match' : label;
+        label = '$base ($modeStr)';
       } else if (g == 'skins' && sk != null) {
         final modeStr = _modeLabel(sk.handicapMode, sk.netPercent);
         label = '$label ($modeStr)';
@@ -1910,6 +1911,13 @@ class _HoleScoreCard extends StatelessWidget {
         if (match['player2_id'] == m.player.id) return _kMatchPlayP2Color;
       }
     }
+    // 18-hole match (Overall-only Nassau): tint the two sides blue/red since
+    // the T1/T2 badge is suppressed for the 1-v-1.
+    final n = nassau;
+    if (n != null && n.isEighteenHoleMatch) {
+      if (n.team1.any((p) => p.playerId == m.player.id)) return Colors.blue.shade700;
+      if (n.team2.any((p) => p.playerId == m.player.id)) return Colors.red.shade700;
+    }
     return _cupSinglesColors[m.player.id];
   }
 
@@ -2272,6 +2280,8 @@ class _HoleScoreCard extends StatelessWidget {
       }
     }
     if (nassau == null) return null;
+    // 18-hole match is 1-v-1 — no T1/T2 badge; the red/blue name says it all.
+    if (nassau!.isEighteenHoleMatch) return null;
     // Red team (team2) = T1, Blue team (team1) = T2
     if (nassau!.team2.any((p) => p.playerId == playerId)) return 'T1';
     if (nassau!.team1.any((p) => p.playerId == playerId)) return 'T2';
@@ -3021,22 +3031,31 @@ class _NassauHoleOutcome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme  = Theme.of(context);
-    final winner = hole.winner!;
+    final winner  = hole.winner!;
+    final isMatch = nassau.isEighteenHoleMatch;
+    final prefix  = isMatch ? 'Match' : 'Nassau';
+    String sideName(List<NassauPlayerInfo> t) => t.isNotEmpty
+        ? (t.first.shortName.isNotEmpty ? t.first.shortName : t.first.name)
+        : '';
     final Color bg;
     final Color fg;
     final String label;
     if (winner == 'halved') {
       bg    = Colors.grey.shade100;
       fg    = Colors.grey.shade700;
-      label = 'Nassau: Halved';
+      label = '$prefix: Halved';
     } else if (winner == 'team1') {
       bg    = Colors.blue.shade50;
       fg    = Colors.blue.shade700;
-      label = 'Nassau: T2 wins hole';
+      label = isMatch
+          ? '$prefix: ${sideName(nassau.team1)} wins hole'
+          : 'Nassau: T2 wins hole';
     } else {
       bg    = Colors.red.shade50;
       fg    = Colors.red.shade700;
-      label = 'Nassau: T1 wins hole';
+      label = isMatch
+          ? '$prefix: ${sideName(nassau.team2)} wins hole'
+          : 'Nassau: T1 wins hole';
     }
     return Container(
       color: bg,
@@ -4534,7 +4553,7 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Nassau progress',
+            Text(nassau.isEighteenHoleMatch ? 'Match Progress' : 'Nassau progress',
                 style: theme.textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
@@ -4625,6 +4644,7 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                         Color? bg;
                         Color? fg;
                         final String label;
+                        bool nameStyle = false;
                         if (nassau.isClaremont) {
                           // Compact Claremont style: "1" coloured, "—" grey
                           if (winner == 'team1') {
@@ -4638,6 +4658,32 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                           } else if (winner == 'halved') {
                             fg = Colors.grey.shade500;
                             label = '—';
+                          } else {
+                            label = '·';
+                          }
+                        } else if (nassau.isEighteenHoleMatch) {
+                          // 1-v-1: show the winner's colour-coded short name
+                          // (≤5 chars — the colour is what catches the eye).
+                          nameStyle = true;
+                          String short(List<NassauPlayerInfo> t) {
+                            final s = t.isNotEmpty
+                                ? (t.first.shortName.isNotEmpty
+                                    ? t.first.shortName : t.first.name)
+                                : '';
+                            return s.length > 5 ? s.substring(0, 5) : s;
+                          }
+                          if (winner == 'team1') {
+                            bg = Colors.blue.shade100;
+                            fg = Colors.blue.shade700;
+                            label = short(nassau.team1);
+                          } else if (winner == 'team2') {
+                            bg = Colors.red.shade100;
+                            fg = Colors.red.shade700;
+                            label = short(nassau.team2);
+                          } else if (winner == 'halved') {
+                            bg = Colors.grey.shade100;
+                            fg = Colors.grey.shade600;
+                            label = '=';
                           } else {
                             label = '·';
                           }
@@ -4662,7 +4708,11 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                         return holeCell(h,
                             bg: bg,
                             child: Text(label,
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.clip,
                                 style: theme.textTheme.labelSmall?.copyWith(
+                                  fontSize: nameStyle ? 9 : null,
                                   fontWeight: FontWeight.bold,
                                   color: fg ?? theme.colorScheme.onSurfaceVariant,
                                 )));
@@ -5312,8 +5362,15 @@ class _TeamBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final t1 = summary.team1.map((p) => p.shortName.isNotEmpty ? p.shortName : p.name).join(' & ');
-    final t2 = summary.team2.map((p) => p.shortName.isNotEmpty ? p.shortName : p.name).join(' & ');
+    // An 18-hole match is 1-v-1 — show full names; Nassau best-ball uses shorts.
+    final full = summary.isEighteenHoleMatch;
+    String label(List<NassauPlayerInfo> team) => team
+        .map((p) => full
+            ? (p.name.isNotEmpty ? p.name : p.shortName)
+            : (p.shortName.isNotEmpty ? p.shortName : p.name))
+        .join(' & ');
+    final t1 = label(summary.team1);
+    final t2 = label(summary.team2);
 
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
@@ -5742,13 +5799,16 @@ class _MatchStatusBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         // Top bet row — labelled "Top" only when Claremont is active.
+        // An 18-hole match has a single bet: show one "Match" chip.
         betRow(
           hasBottom ? 'Top' : null,
-          [
-            _betChip(context, 'F9',  summary.front9,  isNine: true),
-            _betChip(context, 'B9',  summary.back9,   isNine: true),
-            _betChip(context, 'ALL', summary.overall, isNine: false),
-          ],
+          summary.isEighteenHoleMatch
+              ? [_betChip(context, 'Match', summary.overall, isNine: false)]
+              : [
+                  _betChip(context, 'F9',  summary.front9,  isNine: true),
+                  _betChip(context, 'B9',  summary.back9,   isNine: true),
+                  _betChip(context, 'ALL', summary.overall, isNine: false),
+                ],
         ),
         // Bottom bet row (Claremont only).
         if (hasBottom) ...[
