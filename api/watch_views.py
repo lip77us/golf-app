@@ -536,6 +536,15 @@ def _has_casual_multi_skins(round_obj) -> bool:
 def _has_casual_points_531(round_obj) -> bool:
     return 'points_531' in (round_obj.active_games or [])
 
+def _has_casual_nassau(round_obj) -> bool:
+    return 'nassau' in (round_obj.active_games or [])
+
+def _nassau_is_match(round_obj) -> bool:
+    """True when the casual Nassau is Overall-only — a straight 18-hole match."""
+    from games.models import NassauGame
+    g = NassauGame.objects.filter(foursome__round=round_obj).first()
+    return bool(g and not g.play_front and not g.play_back and g.play_overall)
+
 def _has_casual_sixes(round_obj) -> bool:
     return 'sixes' in (round_obj.active_games or [])
 
@@ -662,6 +671,13 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'key': 'points_531', 'label': 'Points 5-3-1',
             'url': f'{base}?view=points_531',
             'active': current == 'points_531',
+        })
+    if _has_casual_nassau(round_obj):
+        tabs.append({
+            'key': 'nassau',
+            'label': '18-Hole Match' if _nassau_is_match(round_obj) else 'Nassau',
+            'url': f'{base}?view=nassau',
+            'active': current == 'nassau',
         })
     if _has_casual_sixes(round_obj):
         tabs.append({
@@ -1309,6 +1325,91 @@ def _render_casual_points_531(request, round_obj, token: str, tabs: list):
     })
 
 
+def _nassau_watch_card(s: dict) -> dict:
+    """Teaser-level summary for the casual Nassau / 18-Hole Match watch tab —
+    matchup + match status + the leader's money, no per-hole grid (that's the
+    reason to open the app)."""
+    def names(team):
+        return ' & '.join((p['name'] or p['short_name'])
+                          for p in s['teams'].get(team, [])) or team
+    t1, t2 = names('team1'), names('team2')
+    is_match = (not s.get('play_front') and not s.get('play_back')
+                and s.get('play_overall'))
+    bet = float(s.get('bet_unit') or 0)
+    ov  = s.get('overall', {})
+    thru = ov.get('holes_played') or 0
+    card = {'t1': t1, 't2': t2, 'thru': thru, 'is_match': is_match,
+            'status': '', 'leader': '', 'money': '', 'segments': []}
+
+    if is_match:
+        margin = ov.get('margin') or 0
+        result = ov.get('result')
+        card['leader'] = _leader_from_margin(margin, result)
+        leader_name = t1 if margin > 0 else (t2 if margin < 0 else '')
+        if result is not None:
+            left = 18 - thru
+            if margin == 0:
+                card['status'] = 'Halved'
+            elif left > 0:
+                card['status'] = f'{leader_name} wins {abs(margin)}&{left}'
+            else:
+                card['status'] = f'{leader_name} wins {abs(margin)} up'
+        elif margin == 0:
+            card['status'] = 'All Square'
+        else:
+            card['status'] = f'{leader_name} {abs(margin)} UP'
+        if bet and margin != 0:
+            card['money'] = f'{leader_name}  +${bet:g}'
+        elif margin == 0:
+            card['money'] = 'All square — no money'
+    else:
+        def seg(label, d, seg_len):
+            margin = d.get('margin') or 0
+            holes  = d.get('holes_played') or 0
+            result = d.get('result')
+            if holes <= 0:
+                text = 'Not started'
+            elif result is not None:
+                text = _final_text(margin, t1, t2)
+            else:
+                text = _holes_up_text(margin, holes, t1, t2)
+            return {'label': label, 'text': text,
+                    'leader': _leader_from_margin(margin, result)}
+        if s.get('play_front'):   card['segments'].append(seg('Front 9', s['front9'], 9))
+        if s.get('play_back'):    card['segments'].append(seg('Back 9',  s['back9'],  9))
+        if s.get('play_overall'): card['segments'].append(seg('Overall', s['overall'], 18))
+    return card
+
+
+def _render_casual_nassau(request, round_obj, token: str, tabs: list):
+    """Casual Nassau / 18-Hole Match — summary-only watch view (a teaser that
+    points spectators to the app for the full hole-by-hole action)."""
+    from services.nassau import nassau_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = []
+    for fs in foursomes:
+        s = nassau_summary(fs)
+        if not s:
+            continue
+        groups.append({
+            'group_number': fs.group_number,
+            'card':         _nassau_watch_card(s),
+        })
+    return render(request, 'watch/casual_nassau.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'is_match':     _nassau_is_match(round_obj),
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
 def _build_nassau_progress(ns_summary: dict) -> dict:
     """Build the hole-by-hole progress grid for a Four Ball match.
 
@@ -1436,6 +1537,7 @@ _VIEW_DISPATCH = {
     'stableford_championship': _render_stableford_championship,
     'multi_skins':  _render_casual_multi_skins,
     'points_531':   _render_casual_points_531,
+    'nassau':       _render_casual_nassau,
     'sixes':        _render_casual_sixes,
     'red_ball':     _render_casual_red_ball,
     'irish_rumble': _render_casual_irish_rumble,

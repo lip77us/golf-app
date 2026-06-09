@@ -1,0 +1,45 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{% if tournament %}{{ tournament.name }} · {% endif %}{% if is_match %}18-Hole Match{% else %}Nassau{% endif %}
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}{% if is_match %}18-Hole Match{% else %}Nassau{% endif %}{% endif %}
+  </h1>
+  <p class="sub">
+    Round {{ round.round_number }} · {{ round.date|date:"D, M j, Y" }} · {{ course_name }}
+  </p>
+
+  {% for g in groups %}
+    {% with c=g.card %}
+    <div class="card">
+      <div class="match-head">
+        <span class="m-t1">{{ c.t1 }}</span><span class="m-vs">vs</span><span class="m-t2">{{ c.t2 }}</span>
+      </div>
+      {% if c.thru and c.thru < 18 %}
+        <div class="m-thru">Thru {{ c.thru }}</div>
+      {% endif %}
+
+      {% if c.is_match %}
+        {% if c.status %}<div class="m-status {{ c.leader }}">{{ c.status }}</div>{% endif %}
+        {% if c.money %}<div class="m-money">{{ c.money }}</div>{% endif %}
+      {% else %}
+        <div style="margin-top:10px;">
+          {% for seg in c.segments %}
+            <div class="m-seg">
+              <span class="m-seg-label">{{ seg.label }}</span>
+              <span class="m-seg-text {{ seg.leader }}">{{ seg.text }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+    {% endwith %}
+  {% empty %}
+    <div class="card">The match hasn’t started yet.</div>
+  {% endfor %}
+
+  <p class="teaser">Open Halved for the full hole-by-hole match.</p>
+{% endblock %}
