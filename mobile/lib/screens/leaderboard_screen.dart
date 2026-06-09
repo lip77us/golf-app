@@ -192,6 +192,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
 
     final watchToken = rp.round?.watchToken;
 
+    // Cross-account support read: this round belongs to a different account and
+    // the viewer is support staff. Flag it so it's clear it's a read-only copy.
+    final auth = context.watch<AuthProvider>();
+    final isSupportView = auth.isSupport &&
+        lb?.accountId != null &&
+        lb!.accountId != auth.account?.id;
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Leaderboard',
@@ -215,7 +222,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             onPressed: () =>
                 context.read<RoundProvider>().loadLeaderboard(widget.roundId),
           ),
-          if (isFinal)
+          if (isFinal && !isSupportView)
             IconButton(
               tooltip: 'Reopen round',
               icon: const Icon(Icons.lock_open_outlined),
@@ -247,7 +254,34 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               ),
             )
           : null,
-      body: _buildBody(context, rp),
+      body: isSupportView
+          ? Column(children: [
+              Material(
+                color: Colors.amber.shade700,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: Row(children: [
+                    const Icon(Icons.visibility_outlined,
+                        size: 16, color: Colors.black87),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Support · read-only — '
+                        '${lb.accountName ?? 'another account'} · round #${lb.roundId}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12.5),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+              Expanded(child: _buildBody(context, rp)),
+            ])
+          : _buildBody(context, rp),
     );
   }
 

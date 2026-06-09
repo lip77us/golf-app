@@ -2964,6 +2964,10 @@ class Leaderboard {
   /// part of a cup competition.
   final String? cupName;
   final List<String> tournamentActiveGames;
+  /// The account that owns this round. Lets the app flag a cross-account
+  /// (support / shared) read-only view. Null on older backends.
+  final int? accountId;
+  final String? accountName;
 
   const Leaderboard({
     required this.roundId,
@@ -2977,6 +2981,8 @@ class Leaderboard {
     this.tournamentName,
     this.cupName,
     this.tournamentActiveGames = const [],
+    this.accountId,
+    this.accountName,
   });
 
   factory Leaderboard.fromJson(Map<String, dynamic> j) {
@@ -3002,6 +3008,8 @@ class Leaderboard {
       cupName: j['cup_name'] as String?,
       tournamentActiveGames: List<String>.from(
           j['tournament_active_games'] as List? ?? []),
+      accountId:   j['account_id']   as int?,
+      accountName: j['account_name'] as String?,
     );
   }
 }

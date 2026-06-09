@@ -3588,6 +3588,10 @@ class LeaderboardView(APIView):
             'round_date'            : str(round_obj.date),
             'course'                : str(round_obj.course),
             'status'                : round_obj.status,
+            # The owning account — lets the app flag a cross-account (support /
+            # shared) read-only view without trusting how the round was opened.
+            'account_id'            : round_obj.account_id,
+            'account_name'          : getattr(round_obj.account, 'name', ''),
             'is_cup_round'          : is_cup_rnd,
             'active_games'          : _leaderboard_active_games(round_obj, lb_games),
             'tournament_id'         : t.id   if t else None,
