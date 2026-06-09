@@ -82,8 +82,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         g != 'low_net_round'));
 
     // 3. "My Foursome" — jump to the viewer's own group without scrolling.
+    //    Skipped when (multi-)skins is active: a single-foursome skins game just
+    //    duplicates the Skins tab, and multi-group skins has no per-foursome
+    //    view (the pool spans every group).
     final myPid = context.read<AuthProvider>().player?.id;
-    if (myPid != null && _viewerIsInAnyFoursome(lb, myPid)) {
+    final skinsActive = lb.activeGames.contains('skins') ||
+        lb.activeGames.contains('multi_skins');
+    if (myPid != null && !skinsActive && _viewerIsInAnyFoursome(lb, myPid)) {
       games.add('__my_foursome__');
     }
 
