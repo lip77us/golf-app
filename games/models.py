@@ -897,6 +897,11 @@ class NassauGame(models.Model):
                             default='none',
                             help_text="Game variant: standard, 2nd-ball tie-break, or Claremont.",
                         )
+    # Which of the three bets are live. Turning Front and Back off leaves an
+    # Overall-only game — i.e. a straight 18-hole match.
+    play_front          = models.BooleanField(default=True)
+    play_back           = models.BooleanField(default=True)
+    play_overall        = models.BooleanField(default=True)
     # Top (standard Nassau) results
     front9_result       = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
     back9_result        = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)

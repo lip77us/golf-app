@@ -3574,6 +3574,9 @@ class NassauSetupView(APIView):
             press_mode    = d.get('press_mode', 'none'),
             press_unit    = d.get('press_unit', '0.00'),
             variant       = d.get('variant', 'none'),
+            play_front    = d.get('play_front', True),
+            play_back     = d.get('play_back', True),
+            play_overall  = d.get('play_overall', True),
         )
         calculate_nassau(foursome)
         return Response(nassau_summary(foursome), status=status.HTTP_201_CREATED)

@@ -742,6 +742,18 @@ class NassauSetupSerializer(serializers.Serializer):
         choices=['none', 'tiebreak_2nd', 'claremont'],
         default='none',
     )
+    # Which of the three bets are live. Front+Back off = an Overall-only
+    # 18-hole match.
+    play_front   = serializers.BooleanField(default=True)
+    play_back    = serializers.BooleanField(default=True)
+    play_overall = serializers.BooleanField(default=True)
+
+    def validate(self, data):
+        if not (data.get('play_front') or data.get('play_back')
+                or data.get('play_overall')):
+            raise serializers.ValidationError(
+                'At least one bet (Front, Back, or Overall) must be on.')
+        return data
 
 
 class NassauPressSerializer(serializers.Serializer):

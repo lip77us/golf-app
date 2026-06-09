@@ -176,6 +176,9 @@ def setup_nassau(
     press_mode:    str   = 'none',
     press_unit:    float = 0.00,
     variant:       str   = 'none',
+    play_front:    bool  = True,
+    play_back:     bool  = True,
+    play_overall:  bool  = True,
 ) -> NassauGame:
     """
     Create (or replace) the NassauGame and its two fixed teams.
@@ -199,6 +202,9 @@ def setup_nassau(
         press_mode    = press_mode,
         press_unit    = press_unit,
         variant       = variant,
+        play_front    = play_front,
+        play_back     = play_back,
+        play_overall  = play_overall,
         status        = MatchStatus.PENDING,
     )
 
@@ -670,9 +676,11 @@ def calculate_nassau(foursome) -> NassauGame | None:
     back_complete   = holes_played >= 18 or back9_decided_margin   is not None
     overall_complete = holes_played >= 18 or overall_decided_margin is not None
 
-    game.front9_result  = _resolve(front9_decided_margin  if front9_decided_margin  is not None else front9_up)  if front_complete  else None
-    game.back9_result   = _resolve(back9_decided_margin   if back9_decided_margin   is not None else back9_up)   if back_complete   else None
-    game.overall_result = _resolve(overall_decided_margin if overall_decided_margin is not None else overall_up) if overall_complete else None
+    # Only the live segments resolve — an inactive bet (e.g. Front/Back off for
+    # an Overall-only 18-hole match) stays None so it never settles or shows.
+    game.front9_result  = (_resolve(front9_decided_margin  if front9_decided_margin  is not None else front9_up)  if front_complete  else None) if game.play_front   else None
+    game.back9_result   = (_resolve(back9_decided_margin   if back9_decided_margin   is not None else back9_up)   if back_complete   else None) if game.play_back    else None
+    game.overall_result = (_resolve(overall_decided_margin if overall_decided_margin is not None else overall_up) if overall_complete else None) if game.play_overall else None
 
     # ── Resolve BOTTOM standard bets (Claremont) ──────────────────────────
     if is_claremont:
@@ -1042,6 +1050,9 @@ def nassau_summary(foursome) -> dict | None:
         'press_mode'    : game.press_mode,
         'bet_unit'      : bet_unit,
         'press_unit'    : press_unit,
+        'play_front'    : game.play_front,
+        'play_back'     : game.play_back,
+        'play_overall'  : game.play_overall,
         'teams'         : {
             'team1': _team_players(1),
             'team2': _team_players(2),
