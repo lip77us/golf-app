@@ -539,6 +539,34 @@ def _has_casual_points_531(round_obj) -> bool:
 def _has_casual_nassau(round_obj) -> bool:
     return 'nassau' in (round_obj.active_games or [])
 
+def _has_casual_wolf(round_obj) -> bool:
+    return 'wolf' in (round_obj.active_games or [])
+
+def _render_casual_wolf(request, round_obj, token: str, tabs: list):
+    """Wolf — summary points standings (per player) for spectators; the
+    hole-by-hole wolf decisions live in the app."""
+    from services.wolf import wolf_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = []
+    for fs in foursomes:
+        s = wolf_summary(fs)
+        if not s:
+            continue
+        groups.append({'group_number': fs.group_number, 'summary': s})
+    return render(request, 'watch/casual_wolf.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'thru':         _round_thru(round_obj),
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
 def _nassau_is_match(round_obj) -> bool:
     """True when the casual Nassau is Overall-only — a straight 18-hole match."""
     from games.models import NassauGame
@@ -767,6 +795,12 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'label': '18-Hole Match' if _nassau_is_match(round_obj) else 'Nassau',
             'url': f'{base}?view=nassau',
             'active': current == 'nassau',
+        })
+    if _has_casual_wolf(round_obj):
+        tabs.append({
+            'key': 'wolf', 'label': 'Wolf',
+            'url': f'{base}?view=wolf',
+            'active': current == 'wolf',
         })
     if _has_casual_match_play(round_obj):
         tabs.append({
@@ -1636,6 +1670,7 @@ _VIEW_DISPATCH = {
     'multi_skins':  _render_casual_multi_skins,
     'points_531':   _render_casual_points_531,
     'nassau':       _render_casual_nassau,
+    'wolf':         _render_casual_wolf,
     'match_play':   _render_casual_match_play,
     'sixes':        _render_casual_sixes,
     'red_ball':     _render_casual_red_ball,

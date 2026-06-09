@@ -3572,6 +3572,34 @@ class _WolfGroupCard extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
+
+          // Per-hole gross scorecard — same table the Skins/Sixes cards show
+          // under the standings, built from each hole's per-player entries.
+          if (holes.isNotEmpty) ...[
+            const Divider(height: 20),
+            _MsScorecard(
+              holes: <Map<String, dynamic>>[
+                for (final h in holes)
+                  <String, dynamic>{
+                    'hole'     : (h as Map)['hole'],
+                    'par'      : h['par'],
+                    'winner_id': null,
+                    'scores'   : <Map<String, dynamic>>[
+                      for (final e in (h['entries'] as List? ?? const []))
+                        <String, dynamic>{
+                          'player_id': (e as Map)['player_id'],
+                          'gross'    : e['gross'],
+                          'strokes'  : (((e['gross'] as int?) ?? 0) -
+                                  ((e['net_score'] as int?) ??
+                                      (e['gross'] as int?) ?? 0))
+                              .clamp(0, 9),
+                        },
+                    ],
+                  },
+              ],
+              participants: players.cast<Map<String, dynamic>>(),
+            ),
+          ],
         ]),
       ),
     );

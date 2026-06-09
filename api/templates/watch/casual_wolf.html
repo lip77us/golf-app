@@ -1,0 +1,44 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{% if tournament %}{{ tournament.name }} · {% endif %}Wolf
+{% endblock %}
+
+{% block body %}
+  <h1>{% if tournament %}{{ tournament.name }}{% else %}Wolf{% endif %}</h1>
+  <p class="sub">
+    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
+  </p>
+
+  {% for g in groups %}
+    {% with s=g.summary %}
+    <div class="card">
+      <div class="match-meta">
+        <span class="game-pill">{% if groups|length > 1 %}Group {{ g.group_number }} · {% endif %}Wolf</span>
+        <span class="meta-text">
+          {% if s.handicap.mode %}{{ s.handicap.mode|upper }}{% if s.handicap.mode == 'net' and s.handicap.net_percent != 100 %} ({{ s.handicap.net_percent }}%){% endif %}{% endif %}
+          {% if s.money.bet_unit %} · ${{ s.money.bet_unit|floatformat:"-2" }}/pt{% endif %}
+        </span>
+      </div>
+
+      {% for p in s.players %}
+        <div class="lb-row">
+          <span class="name">{{ p.name }}</span>
+          <span class="detail" style="{% if p.points > 0 %}color:#1b8a3a;{% elif p.points < 0 %}color:#c62828;{% endif %}">
+            {% if p.points >= 0 %}+{% endif %}{{ p.points|floatformat:"-1" }} pts
+          </span>
+          {% if s.money.bet_unit %}
+            <span class="payout">{% if p.money > 0 %}+${{ p.money|floatformat:2 }}{% elif p.money < 0 %}−${{ p.money|floatformat:2|cut:"-" }}{% else %}—{% endif %}</span>
+          {% endif %}
+        </div>
+      {% empty %}
+        <div class="empty" style="padding: 16px 4px;">No points yet.</div>
+      {% endfor %}
+    </div>
+    {% endwith %}
+  {% empty %}
+    <div class="card empty">Wolf isn’t set up for this round yet.</div>
+  {% endfor %}
+
+  <p class="teaser">Open Halved for the hole-by-hole wolf decisions.</p>
+{% endblock %}
