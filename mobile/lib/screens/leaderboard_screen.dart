@@ -204,14 +204,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         title: 'Leaderboard',
         actions: [
           // Invite a non-playing watcher to follow this round in-app.
-          IconButton(
-            tooltip: 'Invite a watcher',
-            icon: const Icon(Icons.visibility_outlined),
-            onPressed: () => inviteWatcher(context, roundId: widget.roundId),
-          ),
+          // Hidden in a support view — support is read-only and doesn't own it.
+          if (!isSupportView)
+            IconButton(
+              tooltip: 'Invite a watcher',
+              icon: const Icon(Icons.visibility_outlined),
+              onPressed: () => inviteWatcher(context, roundId: widget.roundId),
+            ),
           // Share the public spectator URL — supported for cup rounds
           // and casual Skins / Multi-Skins / Low-Net rounds.
-          if (watchToken != null)
+          if (watchToken != null && !isSupportView)
             IconButton(
               tooltip: 'Share spectator link',
               icon: const Icon(Icons.share_outlined),
@@ -256,28 +258,31 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           : null,
       body: isSupportView
           ? Column(children: [
-              Material(
-                color: Colors.amber.shade700,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Row(children: [
-                    const Icon(Icons.visibility_outlined,
-                        size: 16, color: Colors.black87),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Support · read-only — '
-                        '${lb.accountName ?? 'another account'} · round #${lb.roundId}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12.5),
-                      ),
-                    ),
-                  ]),
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade700,
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                child: Row(children: [
+                  const Icon(Icons.visibility_outlined,
+                      size: 16, color: Colors.black87),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Support · read-only — '
+                      '${lb.accountName ?? 'another account'} · round #${lb.roundId}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12.5),
+                    ),
+                  ),
+                ]),
               ),
               Expanded(child: _buildBody(context, rp)),
             ])
