@@ -81,14 +81,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         !(lb.isCupRound && _rawSinglesKeys.contains(g)) &&
         g != 'low_net_round'));
 
-    // 3. "My Foursome" — jump to the viewer's own group without scrolling.
-    //    Skipped when (multi-)skins is active: a single-foursome skins game just
-    //    duplicates the Skins tab, and multi-group skins has no per-foursome
-    //    view (the pool spans every group).
+    // 3. "My Foursome" — only earns a tab in multi-foursome rounds (tournaments,
+    //    multi-group play), where it isolates the viewer's group. In a single-
+    //    foursome round it just duplicates the game tab, so require 2+ groups.
     final myPid = context.read<AuthProvider>().player?.id;
-    final skinsActive = lb.activeGames.contains('skins') ||
-        lb.activeGames.contains('multi_skins');
-    if (myPid != null && !skinsActive && _viewerIsInAnyFoursome(lb, myPid)) {
+    if (myPid != null &&
+        _foursomeCount(lb) > 1 &&
+        _viewerIsInAnyFoursome(lb, myPid)) {
       games.add('__my_foursome__');
     }
 
@@ -390,6 +389,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
   /// `nassau`, `quota_nassau`, `skins`, `sixes` — every per-group
   /// game uses a `by_group` shape with player IDs accessible
   /// somewhere on each group entry.
+  /// Number of distinct foursomes/groups in the round, read from any
+  /// per-foursome game's `by_group` list. 1 (or 0) for a single-foursome
+  /// casual round; N for a tournament or multi-group round.
+  int _foursomeCount(Leaderboard lb) {
+    final groups = <Object>{};
+    for (final g in lb.games.values) {
+      final list = ((g.data as Map?)?['by_group'] as List? ?? const []);
+      for (final grp in list) {
+        if (grp is Map) {
+          groups.add((grp['group_number'] ?? grp['foursome_id'] ?? grp.hashCode)
+              as Object);
+        }
+      }
+    }
+    return groups.length;
+  }
+
   bool _viewerIsInAnyFoursome(Leaderboard lb, int playerId) {
     for (final key in const ['triple_cup', 'nassau', 'quota_nassau',
                               'skins', 'sixes']) {
