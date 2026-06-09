@@ -2336,11 +2336,17 @@ class _NassauGroupCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: theme.colorScheme.primary)),
             ),
-          _betRow(nas.isClaremont ? 'F9' : 'Front 9', nas.front9,  t1Names, t2Names, theme, team2Color: team2Color),
-          const SizedBox(height: 4),
-          _betRow(nas.isClaremont ? 'B9' : 'Back 9',  nas.back9,   t1Names, t2Names, theme, team2Color: team2Color),
-          const SizedBox(height: 4),
-          _betRow(nas.isClaremont ? 'All' : 'Overall', nas.overall, t1Names, t2Names, theme, team2Color: team2Color),
+          // Only show the live bets — an Overall-only game is an 18-hole match.
+          if (nas.playFront) ...[
+            _betRow(nas.isClaremont ? 'F9' : 'Front 9', nas.front9,  t1Names, t2Names, theme, team2Color: team2Color),
+            const SizedBox(height: 4),
+          ],
+          if (nas.playBack) ...[
+            _betRow(nas.isClaremont ? 'B9' : 'Back 9',  nas.back9,   t1Names, t2Names, theme, team2Color: team2Color),
+            const SizedBox(height: 4),
+          ],
+          if (nas.playOverall)
+            _betRow(nas.isClaremont ? 'All' : 'Overall', nas.overall, t1Names, t2Names, theme, team2Color: team2Color),
 
           // Top presses
           if (nas.presses.isNotEmpty) ...[
