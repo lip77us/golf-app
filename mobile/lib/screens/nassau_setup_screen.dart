@@ -217,7 +217,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nassau — Setup')),
+      appBar: AppBar(
+          title: Text(
+              widget.overallOnly ? '18-Hole Match — Setup' : 'Nassau — Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -269,7 +271,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
 
-          // ── Team assignment card ──────────────────────────────────────────
+          // ── Team assignment card (hidden for a 1-v-1 18-hole match — the
+          //     two players are simply the two sides) ──
+          if (!widget.overallOnly) ...[
           SectionCard(
             title: 'Teams',
             child: Column(
@@ -358,6 +362,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           ),
 
           const SizedBox(height: 16),
+          ],
 
           // ── Handicap mode ─────────────────────────────────────────────────
           HandicapModeSelector(
@@ -369,6 +374,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
           const SizedBox(height: 16),
 
+          // ── Bets + Press (Nassau only; an 18-hole match is Overall, no
+          //     presses) ──
+          if (!widget.overallOnly) ...[
           // ── Bets (Front / Back / Overall) ─────────────────────────────────
           SectionCard(
             title: 'Bets',
@@ -447,10 +455,11 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           ),
 
           const SizedBox(height: 16),
+          ],
 
           // ── Bet unit ──────────────────────────────────────────────────────
           SectionCard(
-            title: 'Stake (main games)',
+            title: widget.overallOnly ? 'Stake' : 'Stake (main games)',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -465,8 +474,10 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Each of the three standard Nassau games '
-                  '(Front 9, Back 9, Overall) is worth this amount.',
+                  widget.overallOnly
+                      ? 'What the 18-hole match is worth.'
+                      : 'Each of the three standard Nassau games '
+                        '(Front 9, Back 9, Overall) is worth this amount.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
                 ),
@@ -474,9 +485,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             ),
           ),
 
-          const SizedBox(height: 16),
-
-          // ── Advanced / variant ────────────────────────────────────────────
+          // ── Advanced / variant (Nassau only) ──────────────────────────────
+          if (!widget.overallOnly) ...[
           _VariantCard(
             variant:       _variant,
             isFoursome:    _realMembers.length == 4,
@@ -484,16 +494,21 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           ),
 
           const SizedBox(height: 16),
+          ],
 
           // ── Rules reminder ────────────────────────────────────────────────
           SectionCard(
-            title: 'How Nassau works',
+            title: widget.overallOnly ? 'How the match works' : 'How Nassau works',
             child: Text(
-              'Three simultaneous games — Front 9, Back 9, and Overall. '
-              'Each hole is won by the team with the lower best-ball score. '
-              'Tied holes are halved (no point changes). '
-              'A tied nine is a push (no money changes hands). '
-              'Lower score wins the hole; equal scores are halved.',
+              widget.overallOnly
+                  ? 'A single 18-hole match. Each hole goes to the lower score '
+                    '(per the handicap mode above); tied holes are halved. '
+                    'Whoever is up after 18 holes wins the match.'
+                  : 'Three simultaneous games — Front 9, Back 9, and Overall. '
+                    'Each hole is won by the team with the lower best-ball score. '
+                    'Tied holes are halved (no point changes). '
+                    'A tied nine is a push (no money changes hands). '
+                    'Lower score wins the hole; equal scores are halved.',
               style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant),
             ),
