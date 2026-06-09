@@ -555,18 +555,29 @@ def _has_casual_match_play(round_obj) -> bool:
     ).exists()
 
 
-def _match_play_watch_row(m: dict) -> dict:
+def _match_play_watch_row(m: dict, r1_done: bool, bracket_type: str) -> dict:
     """Display row for one match — label, the two players, and the status text
     ("Name 2 UP thru 5" / "Name 3 UP" / "Halved" / "Not started")."""
+    label  = m.get('label', '')
+    p1, p2 = m.get('player1', 'Player 1'), m.get('player2', 'Player 2')
+
+    # Final / 3rd-place carry placeholder players until both semis resolve —
+    # show the matchup as TBD rather than the seed-order stand-ins.
+    if (m.get('round') == 2 and not r1_done
+            and bracket_type == 'single_elim'):
+        if label == 'Final':
+            p1, p2 = 'Semi 1 Winner', 'Semi 2 Winner'
+        else:
+            p1, p2 = 'Semi 1 Loser', 'Semi 2 Loser'
+        return {'label': label, 'p1': p1, 'p2': p2, 'text': 'TBD', 'leader': ''}
+
     holes  = m.get('holes', [])
     thru   = len(holes)
     margin = holes[-1]['margin'] if holes else 0          # + = player1 up
-    p1, p2 = m.get('player1', 'Player 1'), m.get('player2', 'Player 2')
     result = m.get('result')
-    complete = result is not None
     if thru == 0:
         text, leader = 'Not started', ''
-    elif complete:
+    elif result is not None:
         text   = _final_text(margin, p1, p2)
         leader = _leader_from_margin(margin, result)
     else:
@@ -574,8 +585,7 @@ def _match_play_watch_row(m: dict) -> dict:
         leader = _leader_from_margin(margin, None)
     # Map team1/team2 → player1/player2 for colouring.
     leader = {'team1': 'p1', 'team2': 'p2'}.get(leader, '')
-    return {'label': m.get('label', ''), 'p1': p1, 'p2': p2,
-            'text': text, 'leader': leader}
+    return {'label': label, 'p1': p1, 'p2': p2, 'text': text, 'leader': leader}
 
 
 def _render_casual_match_play(request, round_obj, token: str, tabs: list):
@@ -593,10 +603,15 @@ def _render_casual_match_play(request, round_obj, token: str, tabs: list):
         if not s or s.get('bracket_type') not in (
                 'single_elim', 'three_player_points'):
             continue
+        matches = s.get('matches', [])
+        r1 = [m for m in matches if m.get('round') == 1]
+        r1_done = bool(r1) and all(m.get('result') is not None for m in r1)
+        btype = s.get('bracket_type')
         groups.append({
             'group_number': fs.group_number,
             'winner'      : s.get('winner'),
-            'matches'     : [_match_play_watch_row(m) for m in s.get('matches', [])],
+            'matches'     : [_match_play_watch_row(m, r1_done, btype)
+                             for m in matches],
         })
     return render(request, 'watch/casual_match_play.html', {
         'round':        round_obj,
