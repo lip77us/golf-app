@@ -5,6 +5,7 @@
 /// diagnosing a reported issue. The lookup is audited server-side.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../api/client.dart';
@@ -22,6 +23,20 @@ class _SupportLookupScreenState extends State<SupportLookupScreen> {
   bool _loading = false;
   String? _error;
   Map<String, dynamic>? _result;
+
+  Future<void> _paste() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim();
+    if (text == null || text.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Clipboard is empty (no plain text).')));
+      }
+      return;
+    }
+    setState(() => _ctrl.text = text);
+    _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+  }
 
   Future<void> _lookup() async {
     final q = _ctrl.text.trim();
@@ -65,10 +80,15 @@ class _SupportLookupScreenState extends State<SupportLookupScreen> {
         TextField(
           controller: _ctrl,
           autocorrect: false,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Watch link / code / round ID',
             hintText: 'OA3R5LZS  ·  /watch/OA3R5LZS/  ·  495',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              tooltip: 'Paste',
+              icon: const Icon(Icons.content_paste),
+              onPressed: _paste,
+            ),
           ),
           onSubmitted: (_) => _lookup(),
         ),
