@@ -45,6 +45,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   String _perPointMode = 'all';        // 'all' | 'first'
   final _entryCtrl  = TextEditingController(text: '5');
   final _rateCtrl   = TextEditingController(text: '1'); // $/point (per_point)
+  bool _noStakes = false;
   int _numPlayers = 0;
 
   final _points = {for (final b in _kBuckets) b: TextEditingController()};
@@ -60,8 +61,27 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   @override
   void initState() {
     super.initState();
-    _entryCtrl.addListener(() => setState(() {}));
+    _entryCtrl.addListener(_onStakeChanged);
+    _rateCtrl.addListener(_onStakeChanged);
     _load();
+  }
+
+  /// Re-evaluate the Start gate as the active stake field changes; entering a
+  /// real amount clears the "no stakes" opt-in.
+  void _onStakeChanged() {
+    final ctrl = _payoutStyle == 'pool' ? _entryCtrl : _rateCtrl;
+    if ((double.tryParse(ctrl.text.trim()) ?? 0) > 0 && _noStakes) {
+      _noStakes = false;
+    }
+    setState(() {});
+  }
+
+  /// Start gate: a positive entry fee (pool) or rate (per-point) entered, or
+  /// "no stakes" ticked.
+  bool get _stakeChosen {
+    if (_noStakes) return true;
+    final ctrl = _payoutStyle == 'pool' ? _entryCtrl : _rateCtrl;
+    return (double.tryParse(ctrl.text.trim()) ?? 0) > 0;
   }
 
   @override
@@ -214,7 +234,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
           )
         else
           FilledButton(
-            onPressed: _saving ? null : _save,
+            onPressed: (_saving || !_stakeChosen) ? null : _save,
             child: _saving
                 ? const SizedBox(width: 20, height: 20,
                     child: CircularProgressIndicator(
@@ -301,6 +321,17 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
           ],
           selected: {_payoutStyle},
           onSelectionChanged: (s) => setState(() => _payoutStyle = s.first),
+        ),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('Play for fun — no stakes'),
+          value: _noStakes,
+          onChanged: (v) => setState(() {
+            _noStakes = v ?? false;
+            if (_noStakes) { _entryCtrl.text = '0'; _rateCtrl.text = '0'; }
+          }),
         ),
         const SizedBox(height: 16),
 

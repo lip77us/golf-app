@@ -78,6 +78,8 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
 
   // Entry fee
   final _entryFeeCtrl = TextEditingController(text: '0');
+  /// Explicit opt-in to a no-money match (lets Start proceed at $0).
+  bool _noStakes = false;
 
   // Payouts: N paid places (1–4) with one integer amount per place
   int _numPayouts = 3;
@@ -218,7 +220,15 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
     }).toList();
   }
 
-  void _onFeeChanged() => setState(() {});
+  void _onFeeChanged() => setState(() {
+        if ((double.tryParse(_entryFeeCtrl.text.trim()) ?? 0) > 0 && _noStakes) {
+          _noStakes = false;
+        }
+      });
+
+  /// Start gate: an entry fee entered, or "no stakes" ticked.
+  bool get _stakeChosen =>
+      _noStakes || (double.tryParse(_entryFeeCtrl.text.trim()) ?? 0) > 0;
 
   void _autoSeed() {
     final sorted = List<_SeedPlayer>.from(_seedPlayers)
@@ -355,7 +365,7 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
           child: SizedBox(
             width: double.infinity, height: 52,
             child: FilledButton(
-              onPressed: _saving ? null : _save,
+              onPressed: (_saving || !_stakeChosen) ? null : _save,
               child: _saving
                   ? const SizedBox(
                       width: 20, height: 20,
@@ -541,6 +551,17 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
           label: 'Per player (\$)',
           prefixIcon: Icons.attach_money,
           keyboardType: TextInputType.number,
+        ),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('Play for fun — no stakes'),
+          value: _noStakes,
+          onChanged: (v) => setState(() {
+            _noStakes = v ?? false;
+            if (_noStakes) _entryFeeCtrl.text = '0';
+          }),
         ),
         if (_pool > 0) ...[
           const SizedBox(height: 6),

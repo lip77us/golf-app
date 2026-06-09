@@ -39,6 +39,7 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
   String _mode       = 'net';
   int    _netPercent = 100;
   final  _entryCtrl  = TextEditingController(text: '5');
+  bool _noStakes = false;
 
   // Payout rows: one controller per paid place.  Values are GROUP TOTALS
   // — the prize for finishing in that place, before splitting among the
@@ -76,7 +77,9 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
   @override
   void initState() {
     super.initState();
-    _entryCtrl.addListener(() => setState(() {}));
+    _entryCtrl.addListener(() => setState(() {
+      if ((double.tryParse(_entryCtrl.text.trim()) ?? 0) > 0 && _noStakes) _noStakes = false;
+    }));
     _load();
   }
 
@@ -96,6 +99,10 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
 
   double get _allocated =>
       _payoutCtrls.fold(0.0, (s, c) => s + (double.tryParse(c.text.trim()) ?? 0.0));
+
+  /// Start gate: an entry fee entered, or "no stakes" ticked.
+  bool get _stakeChosen =>
+      _noStakes || (double.tryParse(_entryCtrl.text.trim()) ?? 0) > 0;
 
   bool get _poolBalanced {
     if (_numPlayers == 0) return true;
@@ -325,7 +332,7 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
           )
         else
           FilledButton(
-            onPressed: (_saving || !_poolBalanced) ? null : _save,
+            onPressed: (_saving || !_poolBalanced || !_stakeChosen) ? null : _save,
             child: _saving
                 ? const SizedBox(width: 20, height: 20,
                     child: CircularProgressIndicator(
@@ -434,6 +441,17 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
                   'Total pool = entry fee × number of players.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Play for fun — no stakes'),
+                  value: _noStakes,
+                  onChanged: (v) => setState(() {
+                    _noStakes = v ?? false;
+                    if (_noStakes) _entryCtrl.text = '0';
+                  }),
                 ),
               ],
             ),
@@ -544,6 +562,7 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   String _mode       = 'net';
   int    _netPercent = 100;
   final  _entryCtrl  = TextEditingController(text: '5');
+  bool _noStakes = false;
 
   // Payout rows: each is a {place, amount} controller pair
   final List<TextEditingController> _payoutCtrls = [];
@@ -566,7 +585,9 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   void initState() {
     super.initState();
     // Rebuild whenever entry fee changes so pool balance recalculates live.
-    _entryCtrl.addListener(() => setState(() {}));
+    _entryCtrl.addListener(() => setState(() {
+      if ((double.tryParse(_entryCtrl.text.trim()) ?? 0) > 0 && _noStakes) _noStakes = false;
+    }));
     _load();
   }
 
@@ -588,6 +609,10 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
       _payoutCtrls.fold(0.0, (s, c) => s + (double.tryParse(c.text.trim()) ?? 0.0));
 
   /// True when payouts balance the pool (or there is no pool to balance).
+  /// Start gate: an entry fee entered, or "no stakes" ticked.
+  bool get _stakeChosen =>
+      _noStakes || (double.tryParse(_entryCtrl.text.trim()) ?? 0) > 0;
+
   bool get _poolBalanced {
     if (_numPlayers == 0) return true;           // round not yet set up
     if (_pool <= 0) return true;                 // no entry fee → skip check
@@ -758,7 +783,7 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                         height: 52,
                         child: FilledButton(
                           onPressed:
-                              (_saving || !_poolBalanced) ? null : _save,
+                              (_saving || !_poolBalanced || !_stakeChosen) ? null : _save,
                           child: _saving
                               ? const SizedBox(
                                   width: 20, height: 20,
@@ -995,6 +1020,17 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                   'Collected from each player before the round.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Play for fun — no stakes'),
+                  value: _noStakes,
+                  onChanged: (v) => setState(() {
+                    _noStakes = v ?? false;
+                    if (_noStakes) _entryCtrl.text = '0';
+                  }),
                 ),
               ],
             ),
