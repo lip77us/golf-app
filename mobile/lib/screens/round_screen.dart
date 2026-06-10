@@ -240,6 +240,10 @@ class _RoundScreenState extends State<RoundScreen> {
                         !fs.configuredGames.contains('triple_cup')) {
                       // Triple Cup needs team assignment + handicap config.
                       route = '/triple-cup-setup';
+                    } else if (fsGames.contains('triple_cup')) {
+                      // Configured Triple Cup → its home screen (cup points +
+                      // holes); its FAB jumps to universal score entry.
+                      route = '/triple-cup';
                     } else {
                       // Everything configured (or no setup required) →
                       // universal score entry.
