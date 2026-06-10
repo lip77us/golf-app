@@ -29,17 +29,20 @@
       <div class="total">
         of {{ g.possible }} possible · {{ g.t1_wins }}W / {{ g.t2_wins }}W / {{ g.halves }}H
       </div>
-      {% if g.t1_roster or g.t2_roster %}
-        <div class="lineup" style="margin-top:8px;">
-          <span class="t2-name" style="text-align:left;">{{ g.t2_roster }}</span>
-          <span class="vs"></span>
-          <span class="t1-name" style="text-align:right;">{{ g.t1_roster }}</span>
+      {% for m in g.matches %}
+        <div class="m-seg" style="display:block;padding:7px 0;">
+          <div class="m-seg-label" style="margin-bottom:2px;">{{ m.label }}</div>
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;">
+            <span class="t2-name" style="text-align:left;font-weight:600;">{{ m.t2_names }}</span>
+            <span class="m-seg-text {% if m.leader == 'team1' %}team1{% elif m.leader == 'team2' %}team2{% endif %}">{{ m.status }}</span>
+            <span class="t1-name" style="text-align:right;font-weight:600;">{{ m.t1_names }}</span>
+          </div>
         </div>
-      {% endif %}
+      {% endfor %}
     </div>
   {% empty %}
     <div class="card empty">Triple Cup isn’t set up for this round yet.</div>
   {% endfor %}
 
-  <p class="teaser">Open Halved for the match-by-match details and hole-by-hole scoring.</p>
+  <p class="teaser">Open Halved for hole-by-hole scoring.</p>
 {% endblock %}

@@ -572,6 +572,39 @@ def _has_casual_triple_cup(round_obj) -> bool:
     return 'triple_cup' in (round_obj.active_games or [])
 
 
+def _tc_match_status(m: dict):
+    """Live match score for a Triple Cup match — mirrors the mobile
+    TripleCupMatch.statusDisplay ("AS thru 3", "2 UP thru 5", "3 & 2",
+    "Halved").  Returns (text, leader) where leader is 'team1'|'team2'|''."""
+    t1 = (m.get('team1') or {}).get('shorts') or []
+    t2 = (m.get('team2') or {}).get('shorts') or []
+    if not t1 or not t2:
+        return ('Pending', '')
+    holes = m.get('holes') or []
+    if not holes:
+        return ('—', '')
+    played = len(holes)
+    margin = holes[-1].get('margin') or 0
+    abs_m  = abs(margin)
+    total  = (m.get('end_hole') or 0) - (m.get('start_hole') or 0) + 1
+    left   = max(total - played, 0)
+    status = m.get('status')
+    result = m.get('result')
+    margin_leader = 'team1' if margin > 0 else 'team2' if margin < 0 else ''
+    if status in ('complete', 'halved') or result:
+        if result == 'halved':
+            return ('Halved', '')
+        leader = result if result in ('team1', 'team2') else margin_leader
+        if left > 0:
+            return (f'{abs_m} & {left}', leader)
+        return (f'{abs_m} UP', leader) if abs_m else ('Halved', '')
+    if status == 'in_progress':
+        if margin == 0:
+            return (f'AS thru {played}', '')
+        return (f'{abs_m} UP thru {played}', margin_leader)
+    return ('—', '')
+
+
 def _render_casual_triple_cup(request, round_obj, token: str, tabs: list):
     """Triple Cup OVERVIEW — the cup scoreboard (team points, W/W/H, rosters)
     for spectators; the match-by-match detail + hole scoring live in the app."""
@@ -587,15 +620,17 @@ def _render_casual_triple_cup(request, round_obj, token: str, tabs: list):
         if not s:
             continue
         overall = s.get('overall', {})
-        # Each team's roster — first-seen order across all matches.
-        t1, t2, seen1, seen2 = [], [], set(), set()
+        # One box per match with its live score as it progresses.
+        matches = []
         for m in s.get('matches', []):
-            for nm in ((m.get('team1') or {}).get('shorts') or []):
-                if nm not in seen1:
-                    seen1.add(nm); t1.append(nm)
-            for nm in ((m.get('team2') or {}).get('shorts') or []):
-                if nm not in seen2:
-                    seen2.add(nm); t2.append(nm)
+            status_text, leader = _tc_match_status(m)
+            matches.append({
+                'label'    : m.get('label', ''),
+                't1_names' : ' & '.join((m.get('team1') or {}).get('shorts') or []),
+                't2_names' : ' & '.join((m.get('team2') or {}).get('shorts') or []),
+                'status'   : status_text,
+                'leader'   : leader,   # 'team1' | 'team2' | ''
+            })
         groups.append({
             'group_number': fs.group_number,
             't1_name'   : (s.get('team1_name') or 'Blue'),
@@ -606,8 +641,7 @@ def _render_casual_triple_cup(request, round_obj, token: str, tabs: list):
             't1_wins'   : overall.get('team1_wins', 0),
             't2_wins'   : overall.get('team2_wins', 0),
             'halves'    : overall.get('halves', 0),
-            't1_roster' : ' & '.join(t1),
-            't2_roster' : ' & '.join(t2),
+            'matches'   : matches,
         })
     return render(request, 'watch/casual_triple_cup.html', {
         'round':        round_obj,
