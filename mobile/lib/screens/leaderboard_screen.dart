@@ -99,6 +99,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         !games.contains('low_net_round')) {
       games.add('low_net_round');
     }
+    // Triple Cup gets two tabs: a prominent cup-score Overview (the "cool
+    // screen") followed by the per-match Details card.
+    final tcIdx = games.indexOf('triple_cup');
+    if (tcIdx >= 0) games.insert(tcIdx, '__triple_cup_overview__');
+
     if (_gameTabs.join(',') == games.join(',')) return;
     _gameTabs = games;
     _tabController?.dispose();
@@ -375,6 +380,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                   tournamentId: lb.tournamentId!,
                 );
               }
+              if (gameKey == '__triple_cup_overview__') {
+                final game = lb.games['triple_cup'];
+                if (game == null) {
+                  return const Center(child: Text('No data yet.'));
+                }
+                return RefreshIndicator(
+                  onRefresh: () => rp.loadLeaderboard(widget.roundId),
+                  child: _TripleCupOverviewView(
+                      data: game.data as Map<String, dynamic>),
+                );
+              }
               final game = lb.games[gameKey];
               if (game == null) {
                 return const Center(child: Text('No data yet.'));
@@ -398,6 +414,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       return lb?.cupName ?? 'Cup';
     }
     if (g == '__my_foursome__') return 'My Foursome';
+    // Triple Cup is split into an Overview (cup score) + Details (matches).
+    if (g == '__triple_cup_overview__') return 'Overview';
+    if (g == 'triple_cup') return 'Details';
     // An Overall-only Nassau is a straight 18-hole match — label it as such.
     if (g == 'nassau') {
       final groups =
@@ -7379,6 +7398,139 @@ String? _tcMatchSoLine(Map<String, dynamic> match, int teamNumber) {
     return 'Team ${fmt(players.first['strokes_off'])}';
   }
   return players.map((p) => fmt(p['strokes_off'])).join(' / ');
+}
+
+/// Triple Cup **Overview** tab — the prominent cup scoreboard (the "cool
+/// screen"): Orange (team 2) on the left, Blue (team 1) on the right, the
+/// points line, and each team's roster. One card per foursome/group.
+class _TripleCupOverviewView extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _TripleCupOverviewView({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = (data['by_group'] as List? ?? const []);
+    if (groups.isEmpty) {
+      return const Center(child: Text('No data yet.'));
+    }
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        for (final g in groups)
+          _card(context, g as Map, multiGroup: groups.length > 1),
+      ],
+    );
+  }
+
+  Widget _card(BuildContext context, Map group, {required bool multiGroup}) {
+    final theme   = Theme.of(context);
+    final summary = (group['summary'] as Map?) ?? const {};
+    final overall = (summary['overall'] as Map?) ?? const {};
+
+    final t1Color = resolveTripleCupTeamColor(
+        summary['team1_colour'] as String?, kTripleCupTeam1Color);
+    final t2Color = resolveTripleCupTeamColor(
+        summary['team2_colour'] as String?, kTripleCupTeam2Color);
+    String labelFor(String? name, String fallback) {
+      final n = (name ?? '').trim();
+      return n.isEmpty ? fallback : n;
+    }
+    final t1Label = labelFor(summary['team1_name'] as String?, 'Blue');
+    final t2Label = labelFor(summary['team2_name'] as String?, 'Orange');
+
+    final t1Pts = (overall['team1_points'] as num?)?.toDouble() ?? 0;
+    final t2Pts = (overall['team2_points'] as num?)?.toDouble() ?? 0;
+    final possible = overall['points_available'] as int? ?? 0;
+    final t1Wins = overall['team1_wins'] as int? ?? 0;
+    final t2Wins = overall['team2_wins'] as int? ?? 0;
+    final halves = overall['halves'] as int? ?? 0;
+
+    // Rosters — collect each team's player shorts across all matches.
+    final t1Roster = <String>{};
+    final t2Roster = <String>{};
+    for (final m in (summary['matches'] as List? ?? const [])) {
+      if (m is! Map) continue;
+      for (final s in ((m['team1'] as Map?)?['shorts'] as List? ?? const [])) {
+        t1Roster.add('$s');
+      }
+      for (final s in ((m['team2'] as Map?)?['shorts'] as List? ?? const [])) {
+        t2Roster.add('$s');
+      }
+    }
+
+    String fmt(double p) =>
+        p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
+
+    Widget pill(String label, double pts, Color color) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: TextStyle(
+                    color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(fmt(pts),
+                style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 36,
+                    height: 1)),
+          ],
+        );
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(children: [
+          if (multiGroup)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text('Group ${group['group_number']}',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Orange (team 2) left, Blue (team 1) right — app convention.
+              pill(t2Label, t2Pts, t2Color),
+              Text('—',
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              pill(t1Label, t1Pts, t1Color),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'of $possible possible  •  ${t1Wins}W / ${t2Wins}W / ${halves}H',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          if (t1Roster.isNotEmpty || t2Roster.isNotEmpty) ...[
+            const Divider(height: 18),
+            Row(children: [
+              Expanded(
+                child: Text(t2Roster.join(' & '),
+                    style: TextStyle(
+                        color: t2Color,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12)),
+              ),
+              Expanded(
+                child: Text(t1Roster.join(' & '),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        color: t1Color,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12)),
+              ),
+            ]),
+          ],
+        ]),
+      ),
+    );
+  }
 }
 
 class _TripleCupGroupCard extends StatelessWidget {
