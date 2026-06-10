@@ -330,6 +330,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   void _loadGameSummaries(RoundProvider rp) {
     final games      = _activeGames(rp.round);
     final configured = _configuredGames(rp.round);
+    // Collected so we can rebuild once they resolve — see the whenComplete at
+    // the end of this method.
+    final futures = <Future<void>>[];
     // Per-foursome summary loads gate on active_games (set at round
     // creation) OR configured_games (set after the per-game setup row
     // exists) OR a previously-loaded summary.  The active_games branch
@@ -342,42 +345,42 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (games.contains('nassau') ||
         configured.contains('nassau') ||
         rp.nassauSummary != null) {
-      rp.loadNassau(widget.foursomeId);
+      futures.add(rp.loadNassau(widget.foursomeId));
     }
     if (games.contains('skins') ||
         configured.contains('skins') ||
         rp.skinsSummary != null) {
-      rp.loadSkins(widget.foursomeId);
+      futures.add(rp.loadSkins(widget.foursomeId));
     }
     // Multi-Group Skins is round-scoped (no foursome configured_games
     // entry), so gate purely on the round's active_games list.
     if (games.contains('multi_skins') && rp.round != null) {
-      rp.loadMultiSkins(rp.round!.id);
+      futures.add(rp.loadMultiSkins(rp.round!.id));
     }
     if (games.contains('sixes') ||
         configured.contains('sixes') ||
         rp.sixesSummary != null) {
-      rp.loadSixes(widget.foursomeId);
+      futures.add(rp.loadSixes(widget.foursomeId));
     }
     if (games.contains('triple_cup') ||
         configured.contains('triple_cup') ||
         rp.tripleCupSummary != null) {
-      rp.loadTripleCup(widget.foursomeId);
+      futures.add(rp.loadTripleCup(widget.foursomeId));
     }
     if (games.contains('points_531') ||
         configured.contains('points_531') ||
         rp.points531Summary != null) {
-      rp.loadPoints531(widget.foursomeId);
+      futures.add(rp.loadPoints531(widget.foursomeId));
     }
     // Stableford is round-scoped; refresh the authoritative per-hole points.
     if (games.contains('stableford') && rp.round != null) {
-      rp.loadStableford(rp.round!.id);
+      futures.add(rp.loadStableford(rp.round!.id));
     }
     // Stroke Play stores handicap mode in its own config (not the round object).
     // Both casual ('low_net_round') and championship ('low_net') use the same endpoint.
     if ((games.contains('low_net_round') || games.contains('low_net')) &&
         rp.round != null)
-      rp.loadLowNetConfig(rp.round!.id);
+      futures.add(rp.loadLowNetConfig(rp.round!.id));
     // Load match play if it's in the active game list OR if a bracket has
     // already been configured (handles cases where match_play is set at the
     // foursome level but the games list resolution missed it).
@@ -400,17 +403,28 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
             configured.contains('match_play') ||
             rp.matchPlayData != null ||
             _hasCupSingles))
-      rp.loadMatchPlay(widget.foursomeId);
+      futures.add(rp.loadMatchPlay(widget.foursomeId));
     if (games.contains('three_person_match') ||
         configured.contains('three_person_match') ||
         (_isThreesome && games.contains('match_play')))
-      rp.loadThreePersonMatch(widget.foursomeId);
+      futures.add(rp.loadThreePersonMatch(widget.foursomeId));
     // Initialise phantom player if this foursome has one.  Idempotent —
     // the provider skips the network call if already done.
     final fs = rp.round?.foursomes
         .where((f) => f.id == widget.foursomeId)
         .firstOrNull;
     if (fs?.hasPhantom == true) rp.initPhantom(widget.foursomeId);
+
+    // This screen reads game summaries via context.read (it doesn't watch the
+    // provider), so it won't repaint when these async loads finish notifying.
+    // Rebuild once they resolve — otherwise the first entry after a restart
+    // shows the wrong handicap mode (full vs SO) and no per-game status strip,
+    // and it's only correct on the second entry (when the summary is cached).
+    if (futures.isNotEmpty) {
+      Future.wait(futures).whenComplete(() {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   // ── Handicap mode for stroke-dot display ────────────────────────────────────
