@@ -26,9 +26,6 @@
           <div class="team-pts t1-name">{{ g.t1_points|floatformat:"-1" }}</div>
         </div>
       </div>
-      <div class="total">
-        of {{ g.possible }} possible · {{ g.t1_wins }}W / {{ g.t2_wins }}W / {{ g.halves }}H
-      </div>
       {% for m in g.matches %}
         <div class="m-seg" style="display:block;padding:7px 0;">
           <div class="m-seg-label" style="margin-bottom:2px;">{{ m.label }}</div>

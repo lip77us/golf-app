@@ -7478,14 +7478,7 @@ class _TripleCupOverviewView extends StatelessWidget {
               pill(t1Label, summary.team1Points, t1Color),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'of ${summary.pointsAvailable} possible  •  '
-            '${summary.team1Wins}W / ${summary.team2Wins}W / ${summary.halves}H',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           // One box per match — live score as it progresses.
           for (final m in summary.matches)
             _matchBox(theme, m, t1Color, t2Color),
