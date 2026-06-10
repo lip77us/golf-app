@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../config.dart';
 import '../game_catalog.dart';
+import '../game_colors.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../providers/auth_provider.dart';
@@ -2391,8 +2392,8 @@ class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final nas = widget.nas;
-    final t1Color = Colors.blue.shade700;
-    final t2Color = Colors.red.shade700;
+    final t1Color = GameColors.team1;
+    final t2Color = GameColors.team2;
 
     final p1 = nas.team1.isNotEmpty ? nas.team1.first : null;
     final p2 = nas.team2.isNotEmpty ? nas.team2.first : null;
@@ -2561,7 +2562,7 @@ class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
                                 color: t1Color)),
-                        bg: Colors.blue.shade50,
+                        bg: GameColors.team1Bg,
                       );
                     }
                     if (d.winner == 'team2') {
@@ -2574,7 +2575,7 @@ class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
                                 color: t2Color)),
-                        bg: Colors.red.shade50,
+                        bg: GameColors.team2Bg,
                       );
                     }
                     return cell(
@@ -2818,14 +2819,14 @@ class _NassauGroupCard extends StatelessWidget {
                         '${team1Name.isNotEmpty ? team1Name : t1Names}: ${fmtPts(t1Total)} pts',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade700,
+                          color: GameColors.team1,
                         ),
                       ),
                       Text(
                         '${team2Name.isNotEmpty ? team2Name : t2Names}: ${fmtPts(t2Total)} pts',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.red.shade700,
+                          color: GameColors.team2,
                         ),
                       ),
                     ],
@@ -3739,10 +3740,11 @@ class _WolfGroupCard extends StatelessWidget {
     final dec  = h['decision']?.toString() ?? '';
     final tag  = dec == 'blind' ? 'B' : dec == 'lone' ? 'L'
               : dec == 'partner' ? 'P' : '';
+    // Wolf-side = team 1 (blue), Opponents = team 2 (orange); ties neutral.
     final c = side == 'wolf'
-        ? Colors.green.shade700
+        ? GameColors.team1
         : side == 'opponents'
-            ? theme.colorScheme.error
+            ? GameColors.team2
             : theme.colorScheme.onSurfaceVariant;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
