@@ -23,6 +23,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../game_catalog.dart';
+import '../game_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
@@ -1893,8 +1894,8 @@ class _HoleScoreCard extends StatelessWidget {
   // MatchPlayDetailView swatches).  Per the May 2026 design audit (D-04),
   // team identity uses the calmer palette so loud reds stay reserved for
   // errors and destructive actions.
-  static const _kMatchPlayP1Color = Color(0xFF8E2E2E); // calm burgundy
-  static const _kMatchPlayP2Color = Color(0xFF1B4F8E); // slate navy
+  static final _kMatchPlayP1Color = GameColors.team1; // blue
+  static final _kMatchPlayP2Color = GameColors.team2; // orange
 
   Color? _nameColorFor(Membership m, int hole) {
     // Match Play single-elim: per-match green/blue based on player1
@@ -1918,8 +1919,8 @@ class _HoleScoreCard extends StatelessWidget {
     if (cup != null) return cup;
     final n = nassau;
     if (n != null) {
-      if (n.team1.any((p) => p.playerId == m.player.id)) return Colors.blue.shade700;
-      if (n.team2.any((p) => p.playerId == m.player.id)) return Colors.red.shade700;
+      if (n.team1.any((p) => p.playerId == m.player.id)) return GameColors.team1;
+      if (n.team2.any((p) => p.playerId == m.player.id)) return GameColors.team2;
     }
     return null;
   }
@@ -3048,14 +3049,14 @@ class _NassauHoleOutcome extends StatelessWidget {
       fg    = Colors.grey.shade700;
       label = '$prefix: Halved';
     } else if (winner == 'team1') {
-      bg    = Colors.blue.shade50;
-      fg    = Colors.blue.shade700;
+      bg    = GameColors.team1Bg;
+      fg    = GameColors.team1;
       label = isMatch
           ? '$prefix: ${sideName(nassau.team1)} wins hole'
           : 'Nassau: T2 wins hole';
     } else {
-      bg    = Colors.red.shade50;
-      fg    = Colors.red.shade700;
+      bg    = GameColors.team2Bg;
+      fg    = GameColors.team2;
       label = isMatch
           ? '$prefix: ${sideName(nassau.team2)} wins hole'
           : 'Nassau: T1 wins hole';
@@ -4651,12 +4652,12 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                         if (nassau.isClaremont) {
                           // Compact Claremont style: "1" coloured, "—" grey
                           if (winner == 'team1') {
-                            bg = Colors.blue.shade100;
-                            fg = Colors.blue.shade700;
+                            bg = GameColors.team1Bg;
+                            fg = GameColors.team1;
                             label = '1';
                           } else if (winner == 'team2') {
-                            bg = Colors.red.shade100;
-                            fg = Colors.red.shade700;
+                            bg = GameColors.team2Bg;
+                            fg = GameColors.team2;
                             label = '1';
                           } else if (winner == 'halved') {
                             fg = Colors.grey.shade500;
@@ -4676,12 +4677,12 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                             return s.length > 5 ? s.substring(0, 5) : s;
                           }
                           if (winner == 'team1') {
-                            bg = Colors.blue.shade100;
-                            fg = Colors.blue.shade700;
+                            bg = GameColors.team1Bg;
+                            fg = GameColors.team1;
                             label = short(nassau.team1);
                           } else if (winner == 'team2') {
-                            bg = Colors.red.shade100;
-                            fg = Colors.red.shade700;
+                            bg = GameColors.team2Bg;
+                            fg = GameColors.team2;
                             label = short(nassau.team2);
                           } else if (winner == 'halved') {
                             bg = Colors.grey.shade100;
@@ -4693,12 +4694,12 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                         } else {
                           // Standard style: T1=red(team2) / T2=blue(team1) / =
                           if (winner == 'team1') {
-                            bg = Colors.blue.shade100;
-                            fg = Colors.blue.shade700;
+                            bg = GameColors.team1Bg;
+                            fg = GameColors.team1;
                             label = 'T2';
                           } else if (winner == 'team2') {
-                            bg = Colors.red.shade100;
-                            fg = Colors.red.shade700;
+                            bg = GameColors.team2Bg;
+                            fg = GameColors.team2;
                             label = 'T1';
                           } else if (winner == 'halved') {
                             bg = Colors.grey.shade100;
@@ -4750,12 +4751,12 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                             final pts = delta.abs();
                             if (delta > 0) {
                               bg = pts == 2
-                                  ? Colors.blue.shade100
+                                  ? GameColors.team1Bg
                                   : Colors.blue.shade50;
-                              fg = Colors.blue.shade700;
+                              fg = GameColors.team1;
                             } else {
                               bg = pts == 2
-                                  ? Colors.red.shade100
+                                  ? GameColors.team2Bg
                                   : Colors.red.shade50;
                               fg = Colors.red.shade700;
                             }
@@ -5377,12 +5378,12 @@ class _TeamBanner extends StatelessWidget {
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(children: [
-        // Red (team2) on left
+        // Orange (team2) on left
         Expanded(
           child: Text(t2,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.red.shade700,
+                color: GameColors.team2,
               ),
               overflow: TextOverflow.ellipsis),
         ),
@@ -5395,7 +5396,7 @@ class _TeamBanner extends StatelessWidget {
               textAlign: TextAlign.right,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.blue.shade700,
+                color: GameColors.team1,
               ),
               overflow: TextOverflow.ellipsis),
         ),
@@ -5847,8 +5848,8 @@ class _MatchStatusBar extends StatelessWidget {
     final t1Leads  = bet.margin > 0;
     // Team colours used both for the chip fill and the subtitle text,
     // so a glance tells you who's ahead in F9/B9/ALL.
-    final t1Color = Colors.blue.shade700;
-    final t2Color = Colors.red.shade700;
+    final t1Color = GameColors.team1;
+    final t2Color = GameColors.team2;
     Color  bg;
     String subtitle;
     Color? subtitleColor;
@@ -5880,7 +5881,7 @@ class _MatchStatusBar extends StatelessWidget {
       subtitleColor = t1Leads ? t1Color : t2Color;
       subtitle      = '${bet.margin.abs()}&$holesLeft';
     } else {
-      bg            = t1Leads ? Colors.blue.shade50 : Colors.red.shade50;
+      bg            = t1Leads ? GameColors.team1Bg : GameColors.team2Bg;
       subtitleColor = t1Leads ? t1Color : t2Color;
       subtitle      = '${bet.margin.abs()}UP';
     }
@@ -5913,8 +5914,8 @@ class _MatchStatusBar extends StatelessWidget {
   ) {
     final theme  = Theme.of(context);
     final result = bet.result;
-    final t1Color = Colors.blue.shade700;
-    final t2Color = Colors.red.shade700;
+    final t1Color = GameColors.team1;
+    final t2Color = GameColors.team2;
     Color  bg;
     String subtitle;
     Color? subtitleColor;
@@ -5937,7 +5938,7 @@ class _MatchStatusBar extends StatelessWidget {
       subtitle = 'AS';
     } else {
       final t1Leads = bet.margin > 0;
-      bg            = t1Leads ? Colors.blue.shade50 : Colors.red.shade50;
+      bg            = t1Leads ? GameColors.team1Bg : GameColors.team2Bg;
       subtitleColor = t1Leads ? t1Color : t2Color;
       subtitle      = t1Leads ? '+${bet.margin}' : '${bet.margin}';
     }
