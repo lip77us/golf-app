@@ -1911,14 +1911,17 @@ class _HoleScoreCard extends StatelessWidget {
         if (match['player2_id'] == m.player.id) return _kMatchPlayP2Color;
       }
     }
-    // 18-hole match (Overall-only Nassau): tint the two sides blue/red since
-    // the T1/T2 badge is suppressed for the 1-v-1.
+    // Casual Nassau (1-v-1 match or 2-v-2 best-ball): tint each side blue
+    // (team 1) / red (team 2) so the names, the T1/T2 badges, AND the header
+    // banner all share the same two team colours. Cup colours win when present.
+    final cup = _cupSinglesColors[m.player.id];
+    if (cup != null) return cup;
     final n = nassau;
-    if (n != null && n.isEighteenHoleMatch) {
+    if (n != null) {
       if (n.team1.any((p) => p.playerId == m.player.id)) return Colors.blue.shade700;
       if (n.team2.any((p) => p.playerId == m.player.id)) return Colors.red.shade700;
     }
-    return _cupSinglesColors[m.player.id];
+    return null;
   }
 
   /// Returns a playerId → team color map for the active games that
@@ -5362,12 +5365,10 @@ class _TeamBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // An 18-hole match is 1-v-1 — show full names; Nassau best-ball uses shorts.
-    final full = summary.isEighteenHoleMatch;
+    // Full names across the header (short names like "PL"/"DP" are cryptic and
+    // inconsistent); the row ellipsises if a 2-v-2 side runs long.
     String label(List<NassauPlayerInfo> team) => team
-        .map((p) => full
-            ? (p.name.isNotEmpty ? p.name : p.shortName)
-            : (p.shortName.isNotEmpty ? p.shortName : p.name))
+        .map((p) => p.name.isNotEmpty ? p.name : p.shortName)
         .join(' & ');
     final t1 = label(summary.team1);
     final t2 = label(summary.team2);
