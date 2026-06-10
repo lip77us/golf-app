@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../game_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
@@ -59,15 +60,16 @@ int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
   return full + extra;
 }
 
-/// Team accent color for a player's role on a hole.  The Wolf side
-/// (Wolf + partner) is warm; the opponents are cool.  Null = no team yet.
+/// Team accent color for a player's role on a hole. Per the color standard the
+/// Wolf side (Wolf + partner) is team 1 (blue); the opponents are team 2
+/// (orange). Null = no team yet.
 Color? _wolfTeamColor(String? role) {
   switch (role) {
     case 'wolf':
     case 'partner':
-      return Colors.deepOrange.shade400;
+      return GameColors.team1;
     case 'opponent':
-      return Colors.blue.shade600;
+      return GameColors.team2;
   }
   return null;
 }
@@ -1147,10 +1149,10 @@ class _HoleScoreCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
               child: Row(children: [
-                _legendDot(theme, Colors.deepOrange.shade400,
+                _legendDot(theme, GameColors.team1,
                     holeInfo?.decision == 'partner' ? 'Wolf + partner' : 'Wolf'),
                 const SizedBox(width: 16),
-                _legendDot(theme, Colors.blue.shade600, 'Opponents'),
+                _legendDot(theme, GameColors.team2, 'Opponents'),
               ]),
             ),
           ...players.asMap().entries.expand((entry) {
