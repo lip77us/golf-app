@@ -7400,9 +7400,10 @@ String? _tcMatchSoLine(Map<String, dynamic> match, int teamNumber) {
   return players.map((p) => fmt(p['strokes_off'])).join(' / ');
 }
 
-/// Triple Cup **Overview** tab — the prominent cup scoreboard (the "cool
-/// screen"): Orange (team 2) on the left, Blue (team 1) on the right, the
-/// points line, and each team's roster. One card per foursome/group.
+/// Triple Cup **Overview** tab — the "cool screen": the cup scoreboard
+/// (Orange/team 2 left, Blue/team 1 right) followed by a box per match showing
+/// each match's live score as it progresses ("2 UP thru 5", "AS thru 3",
+/// "3 and 2"). One card per foursome/group.
 class _TripleCupOverviewView extends StatelessWidget {
   final Map<String, dynamic> data;
   const _TripleCupOverviewView({required this.data});
@@ -7423,40 +7424,16 @@ class _TripleCupOverviewView extends StatelessWidget {
   }
 
   Widget _card(BuildContext context, Map group, {required bool multiGroup}) {
-    final theme   = Theme.of(context);
-    final summary = (group['summary'] as Map?) ?? const {};
-    final overall = (summary['overall'] as Map?) ?? const {};
+    final theme = Theme.of(context);
+    final raw = Map<String, dynamic>.from((group['summary'] as Map?) ?? const {});
+    final summary = TripleCupSummary.fromJson(raw);
+    final t1Color = summary.team1Color;
+    final t2Color = summary.team2Color;
 
-    final t1Color = resolveTripleCupTeamColor(
-        summary['team1_colour'] as String?, kTripleCupTeam1Color);
-    final t2Color = resolveTripleCupTeamColor(
-        summary['team2_colour'] as String?, kTripleCupTeam2Color);
-    String labelFor(String? name, String fallback) {
-      final n = (name ?? '').trim();
-      return n.isEmpty ? fallback : n;
-    }
-    final t1Label = labelFor(summary['team1_name'] as String?, 'Blue');
-    final t2Label = labelFor(summary['team2_name'] as String?, 'Orange');
-
-    final t1Pts = (overall['team1_points'] as num?)?.toDouble() ?? 0;
-    final t2Pts = (overall['team2_points'] as num?)?.toDouble() ?? 0;
-    final possible = overall['points_available'] as int? ?? 0;
-    final t1Wins = overall['team1_wins'] as int? ?? 0;
-    final t2Wins = overall['team2_wins'] as int? ?? 0;
-    final halves = overall['halves'] as int? ?? 0;
-
-    // Rosters — collect each team's player shorts across all matches.
-    final t1Roster = <String>{};
-    final t2Roster = <String>{};
-    for (final m in (summary['matches'] as List? ?? const [])) {
-      if (m is! Map) continue;
-      for (final s in ((m['team1'] as Map?)?['shorts'] as List? ?? const [])) {
-        t1Roster.add('$s');
-      }
-      for (final s in ((m['team2'] as Map?)?['shorts'] as List? ?? const [])) {
-        t2Roster.add('$s');
-      }
-    }
+    String nameOr(String? n, String fb) =>
+        (n ?? '').trim().isEmpty ? fb : (n ?? '').trim();
+    final t1Label = nameOr(raw['team1_name'] as String?, 'Blue');
+    final t2Label = nameOr(raw['team2_name'] as String?, 'Orange');
 
     String fmt(double p) =>
         p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
@@ -7478,7 +7455,7 @@ class _TripleCupOverviewView extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         child: Column(children: [
           if (multiGroup)
             Align(
@@ -7494,41 +7471,84 @@ class _TripleCupOverviewView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               // Orange (team 2) left, Blue (team 1) right — app convention.
-              pill(t2Label, t2Pts, t2Color),
+              pill(t2Label, summary.team2Points, t2Color),
               Text('—',
                   style: theme.textTheme.headlineSmall
                       ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-              pill(t1Label, t1Pts, t1Color),
+              pill(t1Label, summary.team1Points, t1Color),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            'of $possible possible  •  ${t1Wins}W / ${t2Wins}W / ${halves}H',
+            'of ${summary.pointsAvailable} possible  •  '
+            '${summary.team1Wins}W / ${summary.team2Wins}W / ${summary.halves}H',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
-          if (t1Roster.isNotEmpty || t2Roster.isNotEmpty) ...[
-            const Divider(height: 18),
-            Row(children: [
-              Expanded(
-                child: Text(t2Roster.join(' & '),
-                    style: TextStyle(
-                        color: t2Color,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12)),
-              ),
-              Expanded(
-                child: Text(t1Roster.join(' & '),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                        color: t1Color,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12)),
-              ),
-            ]),
-          ],
+          const SizedBox(height: 10),
+          // One box per match — live score as it progresses.
+          for (final m in summary.matches)
+            _matchBox(theme, m, t1Color, t2Color),
         ]),
       ),
+    );
+  }
+
+  Widget _matchBox(
+      ThemeData theme, TripleCupMatch m, Color t1Color, Color t2Color) {
+    // Colour the status by whoever currently leads (or the final winner).
+    Color leaderColor;
+    if (m.result == 'team1') {
+      leaderColor = t1Color;
+    } else if (m.result == 'team2') {
+      leaderColor = t2Color;
+    } else if (m.result == 'halved') {
+      leaderColor = theme.colorScheme.onSurfaceVariant;
+    } else {
+      final margin = m.holes.isNotEmpty ? m.holes.last.margin : 0;
+      leaderColor = margin > 0
+          ? t1Color
+          : margin < 0
+              ? t2Color
+              : theme.colorScheme.onSurfaceVariant;
+    }
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(m.label,
+            style: TextStyle(
+                fontSize: 11,
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600)),
+        const SizedBox(height: 3),
+        Row(children: [
+          // Orange (team 2) left, Blue (team 1) right.
+          Expanded(
+            child: Text(m.team2.shorts.join(' & '),
+                style: TextStyle(
+                    color: t2Color, fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(m.statusDisplay,
+                style: TextStyle(
+                    color: leaderColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold)),
+          ),
+          Expanded(
+            child: Text(m.team1.shorts.join(' & '),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    color: t1Color, fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+        ]),
+      ]),
     );
   }
 }
