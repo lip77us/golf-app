@@ -7408,41 +7408,51 @@ class _TripleCupGroupCard extends StatelessWidget {
     final t2Color = resolveTripleCupTeamColor(
         summary['team2_colour'] as String?, kTripleCupTeam2Color);
     // One-letter team marker for the hole-by-hole won-by row.  Falls
-    // back to 'R'/'B' for casual rounds (no team names assigned).
+    // back to 'B'/'O' (Blue / Orange) for casual rounds (no team names).
     String initialFrom(String? name, String fallback) {
       final n = (name ?? '').trim();
       if (n.isEmpty) return fallback;
       return n.substring(0, 1).toUpperCase();
     }
-    final t1Initial = initialFrom(summary['team1_name'] as String?, 'R');
-    final t2Initial = initialFrom(summary['team2_name'] as String?, 'B');
+    final t1Initial = initialFrom(summary['team1_name'] as String?, 'B');
+    final t2Initial = initialFrom(summary['team2_name'] as String?, 'O');
 
     String fmt(double p) =>
         p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
 
+    final foursomeId = group['foursome_id'] as int?;
     return Card(
-      child: Padding(
+      child: InkWell(
+        onTap: foursomeId == null
+            ? null
+            : () => Navigator.of(context)
+                .pushNamed('/triple-cup', arguments: foursomeId),
+        child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Text('Group ${group['group_number']}',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right,
+                size: 16, color: theme.colorScheme.onSurfaceVariant),
             const Spacer(),
-            // Live cup score in team colors.
-            Text(fmt(t1Pts),
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: t1Color)),
-            Text(' – ',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurfaceVariant)),
+            // Live cup score in team colors — Orange (team 2) left, Blue
+            // (team 1) right, per the app convention (blue renders second).
             Text(fmt(t2Pts),
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: t2Color)),
+            Text(' – ',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant)),
+            Text(fmt(t1Pts),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: t1Color)),
             Text(' of $possible',
                 style: TextStyle(
                     fontSize: 12,
@@ -7502,30 +7512,8 @@ class _TripleCupGroupCard extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Team 1 side — names on top, SO under.
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(t1Names,
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: t1Color,
-                                      fontWeight: FontWeight.w600)),
-                              if (t1So != null)
-                                Text(t1So,
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: t1Color)),
-                            ],
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Text('vs',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurfaceVariant)),
-                          ),
-                          // Team 2 side — names on top, SO under.
+                          // Team 2 (Orange) side on the left — names on top,
+                          // SO under.
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -7539,6 +7527,30 @@ class _TripleCupGroupCard extends StatelessWidget {
                                     style: TextStyle(
                                         fontSize: 11,
                                         color: t2Color)),
+                            ],
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Text('vs',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant)),
+                          ),
+                          // Team 1 (Blue) side on the right — names on top,
+                          // SO under.
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t1Names,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: t1Color,
+                                      fontWeight: FontWeight.w600)),
+                              if (t1So != null)
+                                Text(t1So,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: t1Color)),
                             ],
                           ),
                         ],
@@ -7565,6 +7577,7 @@ class _TripleCupGroupCard extends StatelessWidget {
           // per-foursome payouts.  Cup-level settlement (if any) lives
           // on the tournament-level Bandon Cup card.
         ]),
+      ),
       ),
     );
   }

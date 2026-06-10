@@ -8082,7 +8082,8 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
     final t1Color = t1ColourStr == null ? kTripleCupTeam1Color : _tc(t1ColourStr);
     final t2Color = t2ColourStr == null ? kTripleCupTeam2Color : _tc(t2ColourStr);
 
-    // Always put Blue on top, Orange below. Casual (null colour) = team 1 blue.
+    // Orange (team 2) on top, Blue (team 1) below — blue renders second, per
+    // the app convention. Casual (null colour) = team 1 blue.
     final t1IsBlue = (t1ColourStr ?? 'blue').toLowerCase() == 'blue';
     final blueColor = t1IsBlue ? t1Color : t2Color;
     final redColor  = t1IsBlue ? t2Color : t1Color;
@@ -8208,20 +8209,7 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
         );
       }
 
-      // Blue player
-      rows.add(Row(children: [
-        labelCell(blueP, color: blueColor),
-        for (final h in holeRange)
-          scoreCell(
-            h,
-            holeMap.containsKey(h)
-                ? '${t1IsBlue ? holeMap[h]!['p1_net'] : holeMap[h]!['p2_net']}'
-                : null,
-            blueColor,
-          ),
-      ]));
-
-      // Red player
+      // Orange player (team 2) on top
       rows.add(Row(children: [
         labelCell(redP, color: redColor),
         for (final h in holeRange)
@@ -8231,6 +8219,19 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
                 ? '${t1IsBlue ? holeMap[h]!['p2_net'] : holeMap[h]!['p1_net']}'
                 : null,
             redColor,
+          ),
+      ]));
+
+      // Blue player (team 1) below — blue renders second, per convention
+      rows.add(Row(children: [
+        labelCell(blueP, color: blueColor),
+        for (final h in holeRange)
+          scoreCell(
+            h,
+            holeMap.containsKey(h)
+                ? '${t1IsBlue ? holeMap[h]!['p1_net'] : holeMap[h]!['p2_net']}'
+                : null,
+            blueColor,
           ),
       ]));
 

@@ -148,13 +148,13 @@ class _OverallScoreCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _scorePill(theme, 'Blue', summary.team1Points,
-                    isLeader: summary.team1Points > summary.team2Points),
+                _scorePill(theme, 'Orange', summary.team2Points,
+                    isLeader: summary.team2Points > summary.team1Points),
                 Text('—',
                     style: theme.textTheme.headlineSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
-                _scorePill(theme, 'Orange', summary.team2Points,
-                    isLeader: summary.team2Points > summary.team1Points),
+                _scorePill(theme, 'Blue', summary.team1Points,
+                    isLeader: summary.team1Points > summary.team2Points),
               ],
             ),
             const SizedBox(height: 6),
@@ -252,11 +252,12 @@ class _MatchCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // Team rosters + status line.
+            // Team rosters + status line — Orange (team 2) left, Blue (team 1)
+            // right, per the app convention (blue renders second).
             Row(children: [
-              Expanded(child: _teamLine(theme, 'Blue', match.team1.players,
-                  highlight: match.result == 'team1',
-                  color: kTripleCupTeam1Color)),
+              Expanded(child: _teamLine(theme, 'Orange', match.team2.players,
+                  highlight: match.result == 'team2',
+                  color: kTripleCupTeam2Color)),
               const SizedBox(width: 8),
               SizedBox(
                 width: 92,
@@ -271,10 +272,10 @@ class _MatchCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(child: _teamLine(theme, 'Orange', match.team2.players,
-                  highlight: match.result == 'team2',
+              Expanded(child: _teamLine(theme, 'Blue', match.team1.players,
+                  highlight: match.result == 'team1',
                   alignRight: true,
-                  color: kTripleCupTeam2Color)),
+                  color: kTripleCupTeam1Color)),
             ]),
 
             if (match.holes.isNotEmpty) ...[
