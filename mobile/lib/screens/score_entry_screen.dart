@@ -262,11 +262,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       final sync = context.read<SyncService>();
 
       if (rp.scorecard == null || rp.activeFoursomeId != widget.foursomeId) {
-        rp.loadScorecard(widget.foursomeId);
+        // loadScorecard clears the per-game summaries for the previous
+        // foursome, so the game-summary loads must run AFTER it resolves —
+        // otherwise on first entry they race the clear and the screen paints
+        // with no summary (wrong handicap mode, no status strip), only
+        // correcting on the second entry once the scorecard is cached.
+        rp.loadScorecard(widget.foursomeId).whenComplete(() {
+          if (mounted) _loadGameSummaries(context.read<RoundProvider>());
+        });
       } else {
         rp.refreshPendingOverlay();
+        _loadGameSummaries(rp);
       }
-      _loadGameSummaries(rp);
 
       // Register a direct listener so we catch the pending→idle transition
       // even when it completes within a single frame.
