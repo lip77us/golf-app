@@ -4622,9 +4622,9 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                       rowH:          _rowH,
                       strokesOnHole: (h) => _strokesOnHoleFor(m, h),
                       nameColor: nassau.team1.any((p) => p.playerId == m.player.id)
-                          ? Colors.blue.shade700
+                          ? GameColors.team1
                           : nassau.team2.any((p) => p.playerId == m.player.id)
-                              ? Colors.red.shade700
+                              ? GameColors.team2
                               : null,
                     ),
                   // Top hole winner row
