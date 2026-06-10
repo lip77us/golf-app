@@ -11,9 +11,10 @@ class GameColors {
   GameColors._();
 
   // ── Sides / teams ─────────────────────────────────────────────────────────
-  // Used by casual two-side games (Nassau, Sixes, Triple Cup, Match Play) and
-  // by Wolf (Wolf-side vs Opponents). Cup games OVERRIDE these with the TD's
-  // configured team colours — those are real, named teams.
+  // Used by casual two-side games (Nassau, 18-Hole Match, Match Play) and by
+  // Wolf (Wolf-side vs Opponents). Deliberate deviations (see
+  // docs/color-standard.md): cup games + casual Triple Cup keep named-team
+  // colours; Sixes has no fixed team colours (partners rotate each segment).
   static final Color team1 = Colors.blue.shade700;     // Team 1 / Wolf-side
   static final Color team2 = Colors.orange.shade800;   // Team 2 / Opponents
   /// Pale fills for chips / badges / cell backgrounds.

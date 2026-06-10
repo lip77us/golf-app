@@ -18,11 +18,12 @@ watch CSS vars in `api/templates/watch/base.html`.
 
 - **Individual games** (Skins, Points 5-3-1, Rabbit, Stableford): no team color
   — just the green/red money semantics.
-- **Two-side casual games** (Nassau 2-v-2, Sixes, Triple Cup, Match Play): the
-  two sides are blue (1) / orange (2), used consistently for names, badges, and
-  the header banner.
+- **Two-side casual games** (Nassau 2-v-2, 18-Hole Match, Match Play): the two
+  sides are blue (1) / orange (2), used consistently for names, badges, and the
+  header banner.
 - **Wolf**: per hole, Wolf + partner = **blue**, Opponents = **orange**; who won
   the hole / the points uses green/red as usual.
+- (Sixes and Triple Cup deviate on purpose — see below.)
 
 ## Why blue/orange (not the classic blue/red)
 
@@ -37,7 +38,15 @@ watch CSS vars in `api/templates/watch/base.html`.
 - **Cup games keep the TD's configured team colours** (red/blue/green/gold/
   purple/…). Those are real, named teams a tournament director chose — the
   blue/orange default only applies to *casual* games with anonymous sides.
-- That's the only sanctioned deviation. Everything else uses the table above.
+- **Triple Cup (casual)** names its two teams literally **"Red" vs "Blue"** (a
+  casual mini-cup), so it keeps red/blue — the colour *is* the team name. Forcing
+  blue/orange here would show a team called "Red" in blue.
+- **Sixes** has **no fixed team colours** on purpose: the 2-v-2 partnerships
+  rotate every 6-hole segment, so there's no stable "Team 1." It shows the
+  pairings as name-pairs with the leading side emphasized — not a two-colour
+  scheme.
+
+Everything else (Nassau, 18-Hole Match, Wolf, Match Play) uses the table above.
 
 ## Migration note
 
