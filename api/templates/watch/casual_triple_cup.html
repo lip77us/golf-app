@@ -1,0 +1,45 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{% if tournament %}{{ tournament.name }} · {% endif %}Triple Cup
+{% endblock %}
+
+{% block body %}
+  <h1>{% if tournament %}{{ tournament.name }}{% else %}Triple Cup{% endif %}</h1>
+  <p class="sub">
+    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
+  </p>
+
+  {% for g in groups %}
+    <div class="card">
+      {% if groups|length > 1 %}
+        <div class="match-head" style="font-size:13px;color:var(--muted);">Group {{ g.group_number }}</div>
+      {% endif %}
+      <div class="scoreboard">
+        <div style="text-align:center;">
+          <div class="team-name t2-name">{{ g.t2_name }}</div>
+          <div class="team-pts t2-name">{{ g.t2_points|floatformat:"-1" }}</div>
+        </div>
+        <div class="dash">–</div>
+        <div style="text-align:center;">
+          <div class="team-name t1-name">{{ g.t1_name }}</div>
+          <div class="team-pts t1-name">{{ g.t1_points|floatformat:"-1" }}</div>
+        </div>
+      </div>
+      <div class="total">
+        of {{ g.possible }} possible · {{ g.t1_wins }}W / {{ g.t2_wins }}W / {{ g.halves }}H
+      </div>
+      {% if g.t1_roster or g.t2_roster %}
+        <div class="lineup" style="margin-top:8px;">
+          <span class="t2-name" style="text-align:left;">{{ g.t2_roster }}</span>
+          <span class="vs"></span>
+          <span class="t1-name" style="text-align:right;">{{ g.t1_roster }}</span>
+        </div>
+      {% endif %}
+    </div>
+  {% empty %}
+    <div class="card empty">Triple Cup isn’t set up for this round yet.</div>
+  {% endfor %}
+
+  <p class="teaser">Open Halved for the match-by-match details and hole-by-hole scoring.</p>
+{% endblock %}

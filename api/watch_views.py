@@ -567,6 +567,59 @@ def _render_casual_wolf(request, round_obj, token: str, tabs: list):
         'tabs':         tabs,
     })
 
+def _has_casual_triple_cup(round_obj) -> bool:
+    """Casual One-Round Triple Cup (round-level active game)."""
+    return 'triple_cup' in (round_obj.active_games or [])
+
+
+def _render_casual_triple_cup(request, round_obj, token: str, tabs: list):
+    """Triple Cup OVERVIEW — the cup scoreboard (team points, W/W/H, rosters)
+    for spectators; the match-by-match detail + hole scoring live in the app."""
+    from services.triple_cup import triple_cup_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = []
+    for fs in foursomes:
+        s = triple_cup_summary(fs)
+        if not s:
+            continue
+        overall = s.get('overall', {})
+        # Each team's roster — first-seen order across all matches.
+        t1, t2, seen1, seen2 = [], [], set(), set()
+        for m in s.get('matches', []):
+            for nm in ((m.get('team1') or {}).get('shorts') or []):
+                if nm not in seen1:
+                    seen1.add(nm); t1.append(nm)
+            for nm in ((m.get('team2') or {}).get('shorts') or []):
+                if nm not in seen2:
+                    seen2.add(nm); t2.append(nm)
+        groups.append({
+            'group_number': fs.group_number,
+            't1_name'   : (s.get('team1_name') or 'Blue'),
+            't2_name'   : (s.get('team2_name') or 'Orange'),
+            't1_points' : overall.get('team1_points', 0),
+            't2_points' : overall.get('team2_points', 0),
+            'possible'  : overall.get('points_available', 0),
+            't1_wins'   : overall.get('team1_wins', 0),
+            't2_wins'   : overall.get('team2_wins', 0),
+            'halves'    : overall.get('halves', 0),
+            't1_roster' : ' & '.join(t1),
+            't2_roster' : ' & '.join(t2),
+        })
+    return render(request, 'watch/casual_triple_cup.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'thru':         _round_thru(round_obj),
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
 def _nassau_is_match(round_obj) -> bool:
     """True when the casual Nassau is Overall-only — a straight 18-hole match."""
     from games.models import NassauGame
@@ -699,6 +752,11 @@ def _has_low_net_round(round_obj) -> bool:
         return True
     if hasattr(round_obj, 'low_net_config'):
         return True
+    # Triple Cup is alternate-shot through the middle six holes — a round-wide
+    # stroke-play / low-net board is meaningless, so suppress the casual
+    # fallback Stroke Play tab for it.
+    if 'triple_cup' in (round_obj.active_games or []):
+        return False
     if _is_casual_round(round_obj):
         return True
     return False
@@ -795,6 +853,12 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'label': '18-Hole Match' if _nassau_is_match(round_obj) else 'Nassau',
             'url': f'{base}?view=nassau',
             'active': current == 'nassau',
+        })
+    if _has_casual_triple_cup(round_obj):
+        tabs.append({
+            'key': 'triple_cup', 'label': 'Triple Cup',
+            'url': f'{base}?view=triple_cup',
+            'active': current == 'triple_cup',
         })
     if _has_casual_wolf(round_obj):
         tabs.append({
@@ -1670,6 +1734,7 @@ _VIEW_DISPATCH = {
     'multi_skins':  _render_casual_multi_skins,
     'points_531':   _render_casual_points_531,
     'nassau':       _render_casual_nassau,
+    'triple_cup':   _render_casual_triple_cup,
     'wolf':         _render_casual_wolf,
     'match_play':   _render_casual_match_play,
     'sixes':        _render_casual_sixes,
