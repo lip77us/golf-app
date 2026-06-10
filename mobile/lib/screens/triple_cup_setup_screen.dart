@@ -365,13 +365,13 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                             segments: [
                               ButtonSegment(
                                 value: 1,
-                                label: const Text('Red',
+                                label: const Text('Blue',
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold)),
                               ),
                               ButtonSegment(
                                 value: 2,
-                                label: const Text('Blue',
+                                label: const Text('Orange',
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold)),
                               ),
@@ -391,13 +391,13 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                     }),
                     const SizedBox(height: 12),
                     Row(children: [
-                      const _ColoredTeamChip(team: 1, label: 'Red'),
+                      const _ColoredTeamChip(team: 1, label: 'Blue'),
                       const SizedBox(width: 6),
                       Expanded(child: Text(_teamLabel(members, 1))),
                     ]),
                     const SizedBox(height: 4),
                     Row(children: [
-                      const _ColoredTeamChip(team: 2, label: 'Blue'),
+                      const _ColoredTeamChip(team: 2, label: 'Orange'),
                       const SizedBox(width: 6),
                       Expanded(child: Text(_teamLabel(members, 2))),
                     ]),
@@ -696,9 +696,9 @@ class _ForsomesTeeOffPicker extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
-        pickerRow('Red',  kTripleCupTeam1Color, t1, t1Selected,
+        pickerRow('Blue',  kTripleCupTeam1Color, t1, t1Selected,
             (id) => onChanged(id, team2FirstTee ?? _defaultFor(t2))),
-        pickerRow('Blue', kTripleCupTeam2Color, t2, t2Selected,
+        pickerRow('Orange', kTripleCupTeam2Color, t2, t2Selected,
             (id) => onChanged(team1FirstTee ?? _defaultFor(t1), id)),
       ],
     );

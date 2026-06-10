@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../game_colors.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
@@ -147,12 +148,12 @@ class _OverallScoreCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _scorePill(theme, 'Red', summary.team1Points,
+                _scorePill(theme, 'Blue', summary.team1Points,
                     isLeader: summary.team1Points > summary.team2Points),
                 Text('—',
                     style: theme.textTheme.headlineSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
-                _scorePill(theme, 'Blue', summary.team2Points,
+                _scorePill(theme, 'Orange', summary.team2Points,
                     isLeader: summary.team2Points > summary.team1Points),
               ],
             ),
@@ -171,7 +172,7 @@ class _OverallScoreCard extends StatelessWidget {
 
   Widget _scorePill(ThemeData theme, String label, double points,
       {required bool isLeader}) {
-    final teamColor = label == 'Team 1' || label == 'Red'
+    final teamColor = label == 'Team 1' || label == 'Blue'
         ? kTripleCupTeam1Color
         : kTripleCupTeam2Color;
     return Column(
@@ -253,7 +254,7 @@ class _MatchCard extends StatelessWidget {
 
             // Team rosters + status line.
             Row(children: [
-              Expanded(child: _teamLine(theme, 'Red', match.team1.players,
+              Expanded(child: _teamLine(theme, 'Blue', match.team1.players,
                   highlight: match.result == 'team1',
                   color: kTripleCupTeam1Color)),
               const SizedBox(width: 8),
@@ -270,7 +271,7 @@ class _MatchCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(child: _teamLine(theme, 'Blue', match.team2.players,
+              Expanded(child: _teamLine(theme, 'Orange', match.team2.players,
                   highlight: match.result == 'team2',
                   alignRight: true,
                   color: kTripleCupTeam2Color)),
@@ -321,13 +322,13 @@ class _MatchCard extends StatelessWidget {
       child: Row(
         children: match.holes.map((h) {
           final bg = switch (h.winner) {
-            'T1'     => Colors.red.shade100,
-            'T2'     => Colors.blue.shade100,
+            'T1'     => GameColors.team1Bg,
+            'T2'     => GameColors.team2Bg,
             _        => theme.colorScheme.surfaceContainerHighest,
           };
           final fg = switch (h.winner) {
-            'T1' => Colors.red.shade900,
-            'T2' => Colors.blue.shade900,
+            'T1' => GameColors.team1,
+            'T2' => GameColors.team2,
             _    => theme.colorScheme.onSurfaceVariant,
           };
           return Container(

@@ -1240,8 +1240,11 @@ class SixesSummary {
 // free of theme imports; keep the two files in sync.  Per the May 2026
 // design audit (D-04), team identity colors stay distinct from the
 // loud Material reds reserved for errors and destructive actions.
-const Color kTripleCupTeam1Color = Color(0xFF8E2E2E); // calm burgundy
-const Color kTripleCupTeam2Color = Color(0xFF1B4F8E); // slate navy
+// Casual Triple Cup team colours — the color standard's blue (team 1) / orange
+// (team 2). Matches GameColors.team1/team2 (blue.shade700 / orange.shade800).
+// Cup mode overrides these with the TD's configured team colours.
+const Color kTripleCupTeam1Color = Color(0xFF1976D2); // blue  (team 1)
+const Color kTripleCupTeam2Color = Color(0xFFEF6C00); // orange (team 2)
 
 /// Map a cup colour name (case-insensitive — "Red", "blue", "Gold",
 /// "Tilden Green", etc.) to a flat Material colour.  Falls back to

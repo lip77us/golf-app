@@ -631,8 +631,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     // the modal reads as "Tilden Green tees off?" instead of the
     // generic "Red".  Falls back to Red/Blue for casual rounds.
     final tcSummary = context.read<RoundProvider>().tripleCupSummary;
-    final t1Label   = tcSummary?.team1Name ?? 'Red';
-    final t2Label   = tcSummary?.team2Name ?? 'Blue';
+    final t1Label   = tcSummary?.team1Name ?? 'Blue';
+    final t2Label   = tcSummary?.team2Name ?? 'Orange';
     final t1Color   = tcSummary?.team1Color ?? kTripleCupTeam1Color;
     final t2Color   = tcSummary?.team2Color ?? kTripleCupTeam2Color;
 
@@ -8075,14 +8075,15 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
     final onTap     = widget.onTapHole;
     final holeRange = List.generate(18, (i) => i + 1);
 
-    // Team colours — default Red/Blue matching cup-live endpoint.
-    final t1ColourStr = (widget.data['team1_colour'] as String?) ?? 'Red';
-    final t2ColourStr = (widget.data['team2_colour'] as String?) ?? 'Blue';
-    final t1Color = _tc(t1ColourStr);
-    final t2Color = _tc(t2ColourStr);
+    // Team colours: cup mode carries configured colours; casual (null) uses the
+    // standard blue (team 1) / orange (team 2) constants.
+    final t1ColourStr = widget.data['team1_colour'] as String?;
+    final t2ColourStr = widget.data['team2_colour'] as String?;
+    final t1Color = t1ColourStr == null ? kTripleCupTeam1Color : _tc(t1ColourStr);
+    final t2Color = t2ColourStr == null ? kTripleCupTeam2Color : _tc(t2ColourStr);
 
-    // Always put Blue on top, Red below.
-    final t1IsBlue = t1ColourStr.toLowerCase() == 'blue';
+    // Always put Blue on top, Orange below. Casual (null colour) = team 1 blue.
+    final t1IsBlue = (t1ColourStr ?? 'blue').toLowerCase() == 'blue';
     final blueColor = t1IsBlue ? t1Color : t2Color;
     final redColor  = t1IsBlue ? t2Color : t1Color;
 
