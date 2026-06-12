@@ -55,8 +55,16 @@ class GolfAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      title: Text(title),
+      // Shrink the title to fit rather than ellipsize when actions crowd it
+      // (e.g. the Leaderboard's watcher / share / help / refresh icons on a
+      // narrow phone). scaleDown never enlarges, so titles that already fit are
+      // unchanged. Paired with a tighter titleSpacing for a touch more room.
+      title: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(title, maxLines: 1, softWrap: false),
+      ),
       centerTitle: centerTitle,
+      titleSpacing: 8,
       actions: actions,
       bottom: bottom,
       leading: leading,
