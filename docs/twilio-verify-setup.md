@@ -12,6 +12,16 @@ the Twilio env vars below. Nothing here changes behaviour until you flip it.
 > volume. Verify owns the code, resends, rate-limits, and most carrier
 > compliance, for ~$0.05 per verification (pennies total). See CLAUDE.md.
 
+> **OUTCOME (June 2026): no number needed.** Tested live — Twilio **Verify
+> delivers OTP codes over Twilio's managed sender pool** to ordinary US mobiles
+> on an upgraded account, with **no verified toll-free and no 10DLC**. The
+> toll-free path was tried and **abandoned**: rejected 3× on code **30484**
+> (Legal Business Name must match an IRS **CP 575** — a sole-proprietor
+> individual name doesn't reliably match). Both purchased numbers were released.
+> §4 below is kept for reference / higher-volume futures but is **not required
+> at login volume**. Remaining go-live = set the §5 env vars on Railway, run §6,
+> then `seed_demo` against prod.
+
 ---
 
 ## 1. Create a Twilio account
@@ -39,6 +49,11 @@ Twilio trial accounts can send Verify codes **only to verified caller IDs**:
    `APPROVED` means the integration works end to end.
 
 ## 4. Go to production (sending to ANY US number)
+> **Not needed at login volume — see the OUTCOME note up top.** Verify routed
+> over the managed pool to an arbitrary US mobile without either path below.
+> Keep this section only if volume grows or you later want a fixed branded
+> sender. (Toll-free for a sole proprietor was a dead end — see 30484 above.)
+
 Trial restrictions lift once you **upgrade the account** (add a payment method).
 For US A2P traffic you also need a registered sender. Two paths:
 
