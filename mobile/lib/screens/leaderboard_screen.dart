@@ -6,6 +6,7 @@ import '../config.dart';
 import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -42,6 +43,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RoundProvider>().loadLeaderboard(widget.roundId);
+      // First time here: explain the watcher / spectator-link icons.
+      maybeShowLeaderboardHelp(context);
     });
   }
 
@@ -224,6 +227,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               tooltip: 'Share spectator link',
               icon: const Icon(Icons.share_outlined),
               onPressed: () => _shareWatchLink(context, watchToken),
+            ),
+          if (!isSupportView)
+            IconButton(
+              tooltip: 'What do these buttons do?',
+              icon: const Icon(Icons.help_outline),
+              onPressed: () => showLeaderboardHelp(context),
             ),
           IconButton(
             icon: const Icon(Icons.refresh),

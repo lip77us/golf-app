@@ -11,10 +11,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsProvider extends ChangeNotifier {
   static const _netStyleEntryKey   = 'net_style_entry';
   static const _autoAdvanceHoleKey = 'auto_advance_hole';
+  /// Prefix for one-time "help seen" flags, e.g. `help_seen_score_entry_icons`.
+  static const _helpSeenPrefix     = 'help_seen_';
 
   bool _netStyleEntry   = true;
   bool _autoAdvanceHole = false;
   bool _loaded          = false;
+
+  /// Keys of one-time help/onboarding nudges already shown on this device.
+  final Set<String> _helpSeen = {};
 
   /// True when the score-entry button should color and shape its squares
   /// relative to NET par (par + the player's strokes on the hole).  When
@@ -32,10 +37,26 @@ class SettingsProvider extends ChangeNotifier {
 
   bool get loaded => _loaded;
 
+  /// True once the one-time help nudge keyed by [key] has been shown on this
+  /// device.  Used to auto-open an icon-legend sheet exactly once per screen.
+  bool hasSeenHelp(String key) => _helpSeen.contains(key);
+
+  Future<void> markHelpSeen(String key) async {
+    if (!_helpSeen.add(key)) return; // already recorded
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('$_helpSeenPrefix$key', true);
+  }
+
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _netStyleEntry   = prefs.getBool(_netStyleEntryKey)   ?? true;
     _autoAdvanceHole = prefs.getBool(_autoAdvanceHoleKey) ?? false;
+    for (final k in prefs.getKeys()) {
+      if (k.startsWith(_helpSeenPrefix) && (prefs.getBool(k) ?? false)) {
+        _helpSeen.add(k.substring(_helpSeenPrefix.length));
+      }
+    }
     _loaded = true;
     notifyListeners();
   }

@@ -28,6 +28,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/team_splitter_4.dart';
@@ -288,6 +289,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         _wasPending = nowPending;
       };
       sync.addListener(_syncWatcher!);
+
+      // First time on this screen: explain the Leaderboard / Scorecard icons.
+      maybeShowScoreEntryHelp(context);
     });
   }
 
@@ -1263,6 +1267,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 ? null
                 : () => Navigator.of(context).pushNamed('/scorecard',
                     arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
+          ),
+          IconButton(
+            tooltip: 'What do these buttons do?',
+            icon: const Icon(Icons.help_outline),
+            onPressed: () => showScoreEntryHelp(context),
           ),
         ],
       ),
