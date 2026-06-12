@@ -18,6 +18,7 @@ import 'screens/login_screen.dart';
 import 'screens/password_login_screen.dart';
 import 'screens/otp_verify_screen.dart';
 import 'screens/profile_setup_screen.dart';
+import 'screens/onboarding_wizard.dart';
 import 'screens/tournament_list_screen.dart';
 import 'screens/round_screen.dart';
 import 'screens/scorecard_screen.dart';
@@ -317,6 +318,8 @@ class _GolfAppState extends State<GolfApp> {
             ));
       case '/profile-setup':
         return page((_) => const ProfileSetupScreen());
+      case '/onboarding':
+        return page((_) => const OnboardingWizard());
       case '/tournaments':
         return page((_) => const TournamentListScreen());
       case '/casual-rounds':

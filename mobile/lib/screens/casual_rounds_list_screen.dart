@@ -299,6 +299,17 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
             const SizedBox(height: 8),
             Text(hintMsg,
                 style: Theme.of(context).textTheme.bodySmall),
+            if (!_showCompleted) ...[
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () async {
+                  await Navigator.of(context).pushNamed('/onboarding');
+                  _load();
+                },
+                icon: const Icon(Icons.auto_awesome_outlined),
+                label: const Text('Set up your first round'),
+              ),
+            ],
           ],
         ),
       );

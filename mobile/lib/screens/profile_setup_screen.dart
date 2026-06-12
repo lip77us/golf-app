@@ -72,8 +72,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   }
 
   void _goToApp() {
-    Navigator.of(context)
-        .pushNamedAndRemoveUntil('/tournaments', (_) => false);
+    final nav = Navigator.of(context);
+    // Home goes to the bottom of the stack; brand-new accounts then land in the
+    // guided first-round wizard on top of it (so Skip / finishing a round pops
+    // back to a real list rather than an empty stack).
+    nav.pushNamedAndRemoveUntil('/tournaments', (_) => false);
+    if (context.read<AuthProvider>().isNewAccount) {
+      nav.pushNamed('/onboarding');
+    }
   }
 
   Future<void> _save() async {

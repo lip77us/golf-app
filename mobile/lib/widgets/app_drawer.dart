@@ -135,6 +135,14 @@ class AppDrawer extends StatelessWidget {
                   onTap: onCasualRoundsTap,
                 ),
                 ListTile(
+                  leading: const Icon(Icons.auto_awesome_outlined),
+                  title: const Text('Start your first round'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pushNamed('/onboarding');
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.groups_2_outlined),
                   title: const Text('Shared with me'),
                   onTap: () {

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../utils/create_casual_round.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../utils/add_halved_golfer.dart';
@@ -375,128 +375,24 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     setState(() { _creating = true; _error = null; });
 
     try {
-      final client = context.read<AuthProvider>().client;
-      final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-      // Create standalone round.  The cap defaults to True on the
-      // server; each game's setup screen lets the user opt out alongside
-      // the handicap-mode picker, so there's no need to surface it here.
-      final round = await client.createRound(
+      // Create the round + foursome and work out where to route via the shared
+      // helper (also used by the onboarding wizard, so the dispatch can't
+      // drift).  For a single-game casual round it drops the user straight on
+      // the game's setup screen; multi-game combos fall back to the /round hub.
+      final launch = await createCasualRound(
+        client: context.read<AuthProvider>().client,
+        roundProvider: context.read<RoundProvider>(),
         courseId: _selectedCourse!.id,
-        date: dateStr,
-        // "18-Hole Match" is a UI shortcut for an Overall-only Nassau.
-        activeGames: _activeGames
-            .map((g) => g == GameIds.match18 ? GameIds.nassau : g)
-            .toList(),
-      );
-
-      // Setup foursome with players and their specific tees.  In
-      // multi-group mode we also pass group_number per player so the
-      // server respects the user's group assignments (and skips the
-      // automatic 4-then-3 partition + phantom padding).
-      final playersSetup = _playerTees.entries.map((e) {
-        final entry = <String, int>{
-          'player_id': e.key,
-          'tee_id'   : e.value,
-        };
-        if (_multiGroup) {
-          entry['group_number'] = _playerGroups[e.key] ?? 1;
-        }
-        return entry;
-      }).toList();
-
-      final fullRound = await client.setupRound(
-        round.id,
-        players: playersSetup,
-        // Don't randomise in multi-group mode — the user picked the groups.
-        randomise: !_multiGroup,
-        autoSetupGames: false,
+        playerTees: _playerTees,
+        activeGames: _activeGames,
+        playerGroups: _multiGroup ? _playerGroups : null,
       );
 
       if (!mounted) return;
-
-      // For a casual round there's exactly one foursome, and we already
-      // know which game is active — so skip the /round "group card" hub
-      // and drop the user straight on the match setup screen they would
-      // have tapped into from /round anyway.  Fewer taps, same outcome.
-      // Fallback to /round only if we can't figure out where to go
-      // (defensive; shouldn't happen in practice).
-      final rp = context.read<RoundProvider>();
-      await rp.loadRound(fullRound.id);
-      if (!mounted) return;
-
-      final firstFs = fullRound.foursomes.isNotEmpty
-          ? fullRound.foursomes.first
-          : null;
-
-      // For single-game casual rounds, skip the /round hub and drop directly
-      // onto the game's setup screen.  For multi-game combos (e.g. Skins +
-      // Nassau), go to /round so the user can configure each game in turn.
-      String? directRoute;
-      Object? directArgs;
-
-      if (_activeGames.length == 1 && firstFs != null) {
-        switch (_activeGames.first) {
-          case GameIds.sixes:
-            directRoute = '/sixes-setup';
-            directArgs  = firstFs.id;
-          case GameIds.points531:
-            directRoute = '/points-531-setup';
-            directArgs  = firstFs.id;
-          case GameIds.skins:
-            directRoute = '/skins-setup';
-            directArgs  = firstFs.id;
-          case GameIds.wolf:
-            directRoute = '/wolf-setup';
-            directArgs  = firstFs.id;
-          case GameIds.rabbit:
-            directRoute = '/rabbit-setup';
-            directArgs  = firstFs.id;
-          case GameIds.tripleCup:
-            directRoute = '/triple-cup-setup';
-            directArgs  = firstFs.id;
-          case GameIds.multiSkins:
-            directRoute = '/multi-skins-setup';
-            directArgs  = fullRound.id;
-          case GameIds.nassau:
-            directRoute = '/nassau-setup';
-            directArgs  = firstFs.id;
-          case GameIds.match18:
-            directRoute = '/nassau-setup-18';   // Overall-only Nassau
-            directArgs  = firstFs.id;
-          case GameIds.strokePlay:
-            directRoute = '/low-net-setup';
-            directArgs  = fullRound.id;
-          case GameIds.stableford:
-            directRoute = '/stableford-setup';
-            directArgs  = fullRound.id;
-          case GameIds.matchPlay:
-            // Match Play auto-dispatches by foursome size:
-            //   3 players → Three-Person Match (Points 5-3-1 + 1v1 final)
-            //   4 players → single-elimination bracket (semis 1–9,
-            //               Final + 3rd-place 10–18)
-            final realCount = firstFs.realPlayers.length;
-            if (realCount == 3) {
-              directRoute = '/three-person-match-setup';
-            } else {
-              directRoute = '/match-play-setup';
-            }
-            directArgs = firstFs.id;
-        }
-      }
-
-      if (directRoute != null) {
-        Navigator.of(context).pushReplacementNamed(
-          directRoute,
-          arguments: directArgs,
-        );
-      } else {
-        // Multi-game combo or Stableford (no per-round setup yet) → hub.
-        Navigator.of(context).pushReplacementNamed(
-          '/round',
-          arguments: fullRound.id,
-        );
-      }
+      Navigator.of(context).pushReplacementNamed(
+        launch.effectiveRoute,
+        arguments: launch.effectiveArgs,
+      );
     } catch (e) {
       if (mounted) setState(() { _error = e; _creating = false; });
     }
