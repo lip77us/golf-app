@@ -149,6 +149,94 @@ class SkinsTests(TestCase):
         assert alice['junk_skins']  == 2, alice
         assert alice['total_skins'] == 3, alice
 
+    # ── Mid-round withdrawal ────────────────────────────────────────────────
+
+    def _withdraw(self, name, after_hole, *, killed_next=False):
+        m = self.fs.memberships.get(player_id=self.pid[name])
+        m.withdrew_after_hole       = after_hole
+        m.withdrew_killed_next_hole = killed_next
+        m.save(update_fields=['withdrew_after_hole', 'withdrew_killed_next_hole'])
+
+    def test_withdrawal_splits_pool_into_segments(self):
+        """A WD partitions the round: holes 1–9 (4 players) are one pool,
+        holes 11–18 (survivors) another, the abandoned hole 10 evaporates.
+        Mirrors the product example: $10/player → $20 over the first 9 holes
+        split among 2 skins = $10/skin; survivors play for 8/18 of the pot."""
+        self.round.bet_unit = 10
+        self.round.save(update_fields=['bet_unit'])
+        setup_skins(self.fs, handicap_mode='gross', carryover=False)
+
+        # Segment A (4 players): Alice wins hole 4, Bob wins hole 7.
+        submit_hole(self.fs, 4, [(self.pid['Alice'], 3), (self.pid['Bob'], 5),
+                                  (self.pid['Carol'], 5), (self.pid['Dave'], 5)])
+        submit_hole(self.fs, 7, [(self.pid['Alice'], 4), (self.pid['Bob'], 2),
+                                  (self.pid['Carol'], 4), (self.pid['Dave'], 4)])
+        # Dave hurts his back after hole 9; hole 10 is abandoned.
+        self._withdraw('Dave', 9, killed_next=True)
+        # Segment B (Alice, Bob, Carol): Carol wins hole 11.
+        submit_hole(self.fs, 11, [(self.pid['Alice'], 5), (self.pid['Bob'], 5),
+                                   (self.pid['Carol'], 3)])
+
+        calculate_skins(self.fs)
+        summary = skins_summary(self.fs)
+        pay = {p['name']: p['payout'] for p in summary['players']}
+        # Segment A (9 holes × 4 players × $10/18 = $20) / 2 skins → $10 each.
+        assert pay['Alice'] == 10.0, pay
+        assert pay['Bob']   == 10.0, pay
+        # Segment B is funded by the THREE remaining players only (the
+        # withdrawn player stops contributing): 8 × 3 × $10/18 = $13.33.
+        assert pay['Carol'] == 13.33, pay
+        # Withdrawn player keeps only what he won before leaving (nothing here).
+        assert pay['Dave']  == 0.0, pay
+        assert summary['money']['pool'] == 40.0, summary['money']
+        assert summary['money']['pool_at_risk'] == 33.33, summary['money']
+        killed = [h for h in summary['holes'] if h.get('is_killed')]
+        assert [h['hole'] for h in killed] == [10], killed
+
+    def test_lone_survivor_reduces_pool_by_unplayed_fraction(self):
+        """2-player skins: when one withdraws the game is over (one player
+        can't contest a skin), and only the played fraction of the pool is
+        at risk — the rest evaporates."""
+        fs = make_foursome(self.round, [('Eve', 10), ('Finn', 10)],
+                           tee=self.tee, group_number=2)
+        pid = {m.player.name: m.player_id for m in fs.memberships.all()}
+        self.round.bet_unit = 10
+        self.round.save(update_fields=['bet_unit'])
+        setup_skins(fs, handicap_mode='gross', carryover=False)
+        # Eve wins holes 1–3 outright.
+        for h, par in ((1, 4), (2, 4), (3, 3)):
+            submit_hole(fs, h, [(pid['Eve'], par - 1), (pid['Finn'], par)])
+        # Finn withdraws after hole 9 → only Eve remains → game over.
+        m = fs.memberships.get(player_id=pid['Finn'])
+        m.withdrew_after_hole = 9
+        m.save(update_fields=['withdrew_after_hole'])
+
+        calculate_skins(fs)
+        summary = skins_summary(fs)
+        pay = {p['name']: p['payout'] for p in summary['players']}
+        # Pool $20; 9/18 in play → $10, all to Eve (3 skins, sole winner).
+        assert pay['Eve']  == 10.0, pay
+        assert pay['Finn'] == 0.0, pay
+        assert summary['money']['pool'] == 20.0, summary['money']
+        assert summary['money']['pool_at_risk'] == 10.0, summary['money']
+
+    def test_withdrawal_round_reaches_complete(self):
+        """A round with a WD still flips to COMPLETE once every contested
+        hole is scored — the withdrawn player's later holes aren't expected
+        and the killed hole needs no score."""
+        setup_skins(self.fs, handicap_mode='gross', carryover=False)
+        self._withdraw('Dave', 9, killed_next=True)
+        # Holes 1–9: all four players. Holes 11–18: the three survivors.
+        for h in range(1, 10):
+            submit_hole(self.fs, h, [(self.pid[n], 4) for n in
+                                     ('Alice', 'Bob', 'Carol', 'Dave')])
+        for h in range(11, 19):
+            submit_hole(self.fs, h, [(self.pid[n], 4) for n in
+                                     ('Alice', 'Bob', 'Carol')])
+        calculate_skins(self.fs)
+        summary = skins_summary(self.fs)
+        assert summary['status'] == 'complete', summary['status']
+
     # ── Gross mode ─────────────────────────────────────────────────────────
 
     def test_gross_mode_ignores_handicap(self):

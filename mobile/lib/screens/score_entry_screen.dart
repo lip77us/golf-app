@@ -815,19 +815,40 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
     for (int i = 0; i < players.length; i++) {
       if (_isInactiveAltShotPlayer(players[i].player.id)) continue;
+      if (players[i].isWithdrawnOnHole(_selectedHole)) continue;
       if (!scores.containsKey(players[i].player.id)) return i;
     }
     return -1;
+  }
+
+  /// Holes the group abandoned at a mid-round withdrawal — voided for
+  /// everyone, so no score is expected on them.
+  Set<int> _killedHoles(List<Membership> players) {
+    final out = <int>{};
+    for (final m in players) {
+      if (m.withdrewAfterHole != null &&
+          m.withdrewKilledNextHole &&
+          m.withdrewAfterHole! + 1 <= 18) {
+        out.add(m.withdrewAfterHole! + 1);
+      }
+    }
+    return out;
   }
 
   /// True iff every "real" player has a score at *hole*, treating the
   /// dimmed alt-shot partner on that hole as not-required.  *hole* is
   /// the hole being validated — must NOT be assumed to be _selectedHole
   /// because _allHolesScored iterates 1–18.
-  bool _allScored(List<Membership> players, Map<int, int> scores, int hole) =>
-      players.every((m) =>
-          _isInactiveAltShotPlayerAt(m.player.id, hole) ||
-          scores.containsKey(m.player.id));
+  ///
+  /// Mid-round withdrawals relax this: a player who withdrew before *hole*
+  /// isn't required, and a hole abandoned at a withdrawal needs no score.
+  bool _allScored(List<Membership> players, Map<int, int> scores, int hole) {
+    if (_killedHoles(players).contains(hole)) return true;
+    return players.every((m) =>
+        m.isWithdrawnOnHole(hole) ||
+        _isInactiveAltShotPlayerAt(m.player.id, hole) ||
+        scores.containsKey(m.player.id));
+  }
 
   /// True iff the given player is the dimmed partner on the current
   /// hole of a Triple Cup foursomes (alt-shot) match.  Used to skip
@@ -1165,6 +1186,195 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   int _pressStartHole(NassauSummary nas) {
     final lastPlayed = nas.holes.isEmpty ? 0 : nas.holes.last.hole;
     return lastPlayed + 1;
+  }
+
+  // ── Mid-round withdrawal ──────────────────────────────────────────────
+
+  /// Highest hole this player has a posted gross score on (0 if none).
+  int _lastScoredHole(int playerId) {
+    final sc = context.read<RoundProvider>().scorecard;
+    if (sc == null) return 0;
+    for (int h = 18; h >= 1; h--) {
+      if ((sc.holeData(h)?.scoreFor(playerId)?.grossScore) != null) return h;
+    }
+    return 0;
+  }
+
+  /// Long-press a player row → manage their mid-round withdrawal.
+  Future<void> _showWithdrawSheet(
+      RoundProvider rp, Membership m, List<String> games) async {
+    if (m.player.isPhantom) return;
+    final theme = Theme.of(context);
+
+    // Already out → offer to reinstate (undo a mistaken WD).
+    if (m.withdrewAfterHole != null) {
+      final undo = await showModalBottomSheet<bool>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.undo),
+              title: Text('Reinstate ${m.player.name}'),
+              subtitle: Text(
+                  'They withdrew after hole ${m.withdrewAfterHole}. '
+                  'Bring them back into the round.'),
+              onTap: () => Navigator.pop(ctx, true),
+            ),
+          ]),
+        ),
+      );
+      if (undo == true) await _doReinstate(rp, m);
+      return;
+    }
+
+    final isSixes = games.contains('sixes');
+    int afterHole = _lastScoredHole(m.player.id).clamp(0, 17);
+    bool killNext = false;
+    String sixesAction = 'void';
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
+        final nextHole = afterHole + 1;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Withdraw ${m.player.name}',
+                    style: theme.textTheme.titleLarge),
+                const SizedBox(height: 8),
+                Text(
+                  "Their scores stand and the rest of the group keeps playing. "
+                  "They won't be scored on the remaining holes.",
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 16),
+                // Last hole completed stepper.
+                Row(children: [
+                  Expanded(
+                    child: Text('Last hole completed',
+                        style: theme.textTheme.bodyLarge),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: afterHole > 0
+                        ? () => setSheet(() => afterHole--)
+                        : null,
+                  ),
+                  Text(afterHole == 0 ? 'None' : '$afterHole',
+                      style: theme.textTheme.titleMedium),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: afterHole < 17
+                        ? () => setSheet(() => afterHole++)
+                        : null,
+                  ),
+                ]),
+                if (nextHole <= 18)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Group abandoned hole $nextHole'),
+                    subtitle: const Text(
+                        'Void that hole for everyone (nobody scores it).'),
+                    value: killNext,
+                    onChanged: (v) => setSheet(() => killNext = v),
+                  ),
+                if (isSixes) ...[
+                  const Divider(height: 24),
+                  Text('Sixes matches', style: theme.textTheme.titleSmall),
+                  RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Void the affected matches'),
+                    subtitle: const Text('0 points, excluded from the result.'),
+                    value: 'void',
+                    groupValue: sixesAction,
+                    onChanged: (v) => setSheet(() => sixesAction = v!),
+                  ),
+                  RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Partner plays solo'),
+                    subtitle: const Text('Their teammate plays on alone.'),
+                    value: 'solo',
+                    groupValue: sixesAction,
+                    onChanged: (v) => setSheet(() => sixesAction = v!),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Withdraw'),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+
+    if (confirmed == true) {
+      await _doWithdraw(rp, m, afterHole, killNext,
+          isSixes ? sixesAction : null);
+    }
+  }
+
+  Future<void> _doWithdraw(RoundProvider rp, Membership m, int afterHole,
+      bool killNext, String? sixesAction) async {
+    final client = context.read<AuthProvider>().client;
+    try {
+      await client.withdrawPlayer(
+        widget.foursomeId, m.player.id, afterHole,
+        killNextHole: killNext, sixesAction: sixesAction,
+      );
+      final roundId = rp.round?.id;
+      if (roundId != null) await rp.loadRound(roundId);
+      if (!mounted) return;
+      _loadGameSummaries(context.read<RoundProvider>());
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${m.player.name} withdrew after hole $afterHole.'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not withdraw player: $e'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    }
+  }
+
+  Future<void> _doReinstate(RoundProvider rp, Membership m) async {
+    final client = context.read<AuthProvider>().client;
+    try {
+      await client.reinstatePlayer(widget.foursomeId, m.player.id);
+      final roundId = rp.round?.id;
+      if (roundId != null) await rp.loadRound(roundId);
+      if (!mounted) return;
+      _loadGameSummaries(context.read<RoundProvider>());
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${m.player.name} is back in the round.'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not reinstate player: $e'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    }
   }
 
   // ── App bar title ────────────────────────────────────────────────────────────
@@ -1642,6 +1852,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                     _editScore(ctx, m, par, _selectedHole, players, hMode, hPct),
                 onJunkAdd:    (pid) => _adjustJunk(pid, _selectedHole, 1),
                 onJunkRemove: (pid) => _adjustJunk(pid, _selectedHole, -1),
+                // Long-press a player to record / undo a mid-round withdrawal.
+                // Disabled once the round is final.
+                onWithdrawTap: isComplete
+                    ? null
+                    : (m) => _showWithdrawSheet(rp, m, games),
                 // Phantom player data (null when foursome has no phantom).
                 phantomMembership: rp.round?.foursomes
                     .where((f) => f.id == widget.foursomeId)
@@ -1851,6 +2066,10 @@ class _HoleScoreCard extends StatelessWidget {
   final void Function(int pid)  onJunkAdd;
   final void Function(int pid)  onJunkRemove;
 
+  /// Long-press a player row to manage a mid-round withdrawal.  Null when
+  /// the viewer can't manage the foursome (not TD / not the scorer).
+  final void Function(Membership)?     onWithdrawTap;
+
   const _HoleScoreCard({
     required this.holeData,
     required this.holeNumber,
@@ -1877,6 +2096,7 @@ class _HoleScoreCard extends StatelessWidget {
     required this.onEditTap,
     required this.onJunkAdd,
     required this.onJunkRemove,
+    this.onWithdrawTap,
     this.phantomMembership,
     this.phantomInit,
   });
@@ -2579,8 +2799,13 @@ class _HoleScoreCard extends StatelessWidget {
             // Active is determined by hole parity from the team's
             // first-tee-off pick (server-supplied).
             final dimmed = _isInactiveAltShot(m.player.id);
+            final withdrawn = m.isWithdrawnOnHole(holeNumber);
             return [
-              _PlayerRow(
+              GestureDetector(
+                onLongPress: onWithdrawTap != null
+                    ? () => onWithdrawTap!(m)
+                    : null,
+                child: _PlayerRow(
                 member:              m,
                 running:             rt,
                 gross:               gross,
@@ -2594,14 +2819,18 @@ class _HoleScoreCard extends StatelessWidget {
                 allowJunk:           allowJunk,
                 junkCount:           junkCount,
                 dimmed:              dimmed,
+                withdrawn:           withdrawn,
                 p531HolePoints:      p531Hole,
                 p531CumulativePoints: p531Cumulative,
-                // Block taps while extra-match teams are unassigned.
-                onTap: (gross != null && !isHot && blockedExtraSeg == null)
+                // Block taps while extra-match teams are unassigned, and for
+                // withdrawn players on holes they're out for.
+                onTap: (!withdrawn && gross != null && !isHot
+                        && blockedExtraSeg == null)
                     ? () => onEditTap(m)
                     : null,
                 onJunkAdd:    allowJunk ? () => onJunkAdd(m.player.id)    : null,
                 onJunkRemove: allowJunk ? () => onJunkRemove(m.player.id) : null,
+                ),
               ),
               if (isHot)
                 blockedExtraSeg == null
@@ -3196,6 +3425,10 @@ class _PlayerRow extends StatelessWidget {
   /// partner shouldn't be the score target.  Score selection disabled.
   final bool          dimmed;
 
+  /// True when this player has withdrawn ("can't continue") and is out
+  /// for the hole being shown — render a WD badge and no score box.
+  final bool          withdrawn;
+
   /// Points 5-3-1: points this player earned on the active hole (null = not yet scored).
   final double?       p531HolePoints;
 
@@ -3219,6 +3452,7 @@ class _PlayerRow extends StatelessWidget {
     this.onJunkAdd,
     this.onJunkRemove,
     this.dimmed = false,
+    this.withdrawn = false,
     this.p531HolePoints,
     this.p531CumulativePoints,
   });
@@ -3319,6 +3553,23 @@ class _PlayerRow extends StatelessWidget {
                       style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant)),
                 ],
+                if (withdrawn) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'WD',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ],
               ]),
               // Skins junk controls below name
               if (allowJunk) ...[
@@ -3392,6 +3643,20 @@ class _PlayerRow extends StatelessWidget {
           ),
         const SizedBox(width: 8),
 
+        // Withdrawn players have no score box on holes they're out for —
+        // just a muted "Out" marker.  Earlier holes still render normally
+        // (they keep the gross they posted before withdrawing).
+        if (withdrawn)
+          Container(
+            width: 40,
+            height: 36,
+            alignment: Alignment.center,
+            child: Text('Out',
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontStyle: FontStyle.italic)),
+          )
+        else
         // Score box — shows a NetScoreButton-style result once a score is
         // entered, or a plain highlighted border while the player is hot.
         GestureDetector(

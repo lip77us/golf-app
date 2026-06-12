@@ -56,6 +56,11 @@ games correctly.
   withdrawn before that hole**; award among present scores as today. Earlier
   fully-scored holes are unaffected; the WD player's skins freeze.
 
+  > **IMPLEMENTED — richer than the note above.** After the product discussion
+  > the Skins settlement became a **segmented pool** (see "Skins (segmented
+  > pool)" below). The "expected participants" idea is the foundation, but the
+  > money is split per segment by hole-fraction, not as one global pool.
+
 ---
 
 ## Data model
@@ -74,9 +79,29 @@ games correctly.
 - **Universal:** a WD player is dropped from the per-hole "everyone scored?"
   check and the round-completion check for holes `> withdrew_after_hole`. Stored
   scores untouched.
-- **Skins:** per-hole expected set = real members not withdrawn before that hole;
-  award among present scores. (A later hole with a single remaining player simply
-  awards them that skin — acceptable; note it in code.)
+- **Skins (segmented pool) — IMPLEMENTED:** a WD partitions the round into
+  constant-roster **segments**. Each player antes one `bet_unit` spread evenly
+  over 18 holes (`bet_unit/18` per hole) and **a withdrawn player stops
+  contributing the moment they leave**, so a segment's pot is funded only by
+  the players still in it: `seg_pot = holes_in_segment × roster_size ×
+  bet_unit / 18`. It's split *within* the segment proportional to skins won
+  there (regular + junk) — today's `pool × skins/total` math, scoped. A round
+  with no WD is one segment over all 18 holes with the full roster → unchanged.
+  - **Killed hole (a question at WD time):** if the group abandoned the hole in
+    progress when the player went down, that hole is voided for everyone and its
+    `1/18` of the pool **evaporates**. The withdraw flow asks this (`kill_next_hole`).
+  - **Carries die at every boundary** (killed hole / roster change).
+  - **Lone survivor → game over:** once fewer than two players remain the pool
+    is reduced by the unplayed fraction (those holes evaporate); the completed
+    segment(s) still settle.
+  - **Worked example** (4 players, $10 ante, WD completes hole 9, hole 10 killed):
+    holes 1–9 = `9 × 4 × $10/18 = $20` among 4; hole 10 evaporates; holes 11–18
+    = `8 × 3 × $10/18 = $13.33` among the 3 survivors (the withdrawn player no
+    longer contributes). A single skin on a 3-player hole is worth less than on
+    a 4-player hole — exactly the fix from testing.
+  - **Future per-skin styles** (pay-the-winner / pay-those-above): no
+    fractioning — settle the completed segment as a closed game, void the killed
+    hole, fresh-calc the survivor segment. Documented in `_skins_withdrawal_plan`.
 - **Sixes:** completed segments stand. For the segment containing/after the WD,
   apply the TD's choice:
   - **Void** → set `SixesSegment.is_void`; 0 points, excluded.
@@ -88,13 +113,13 @@ games correctly.
 
 ## API
 
-- `POST /api/foursomes/<id>/withdraw-player/`
-  body `{player_id, after_hole, sixes_segment_action?: 'void'|'solo'}`.
-  Sets `withdrew_after_hole`; for Sixes applies void/solo to the affected +
-  remaining segments; recalculates; returns the refreshed round/summary.
-  Auth via `foursome_for_scorer` (own-account or designated scorer).
-- *(nice-to-have)* `POST .../reinstate-player/` — clears `withdrew_after_hole`
-  and un-voids, to undo a mistaken WD.
+- `POST /api/foursomes/<id>/withdraw-player/` — **IMPLEMENTED**
+  body `{player_id, after_hole, kill_next_hole?, sixes_segment_action?: 'void'|'solo'}`.
+  Sets `withdrew_after_hole` (+ `withdrew_killed_next_hole`); for Sixes applies
+  void/solo to the affected + remaining segments; recalculates; returns the
+  refreshed summary. Auth via `foursome_for_scorer` (own-account or scorer).
+- `POST .../reinstate-player/` — **IMPLEMENTED** — clears the WD fields and
+  un-voids Sixes segments, to undo a mistaken WD.
 
 ---
 

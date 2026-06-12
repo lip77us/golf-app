@@ -249,6 +249,26 @@ class FoursomeMembership(models.Model):
                             help_text='This member scores for the foursome '
                                       '(delegated cross-account score entry).',
                         )
+    # Mid-round withdrawal ("can't continue"). null = played all 18; N =
+    # completed holes 1..N and is out for N+1..18. The player's stored
+    # HoleScores for 1..N are kept and still settle; later holes are simply
+    # not expected from them. Per-game settlement (Skins segments, Sixes
+    # void/solo) keys off this field. See docs/mid-round-withdrawal.md.
+    withdrew_after_hole = models.SmallIntegerField(
+                            null=True, blank=True,
+                            help_text='Last hole this player completed before '
+                                      'withdrawing; null = played the full round.',
+                        )
+    # When the withdrawal interrupted a hole in progress, the group abandons
+    # that hole (the one *after* withdrew_after_hole) for everyone. It scores
+    # for nobody and its pot fraction evaporates in pool games. False = the
+    # group played on cleanly and the next hole counts for the remaining
+    # players. Only meaningful when withdrew_after_hole is set.
+    withdrew_killed_next_hole = models.BooleanField(
+                            default=False,
+                            help_text='True if the hole after withdrawal was '
+                                      'abandoned by the whole group (voided).',
+                        )
 
     class Meta:
         unique_together = ('foursome', 'player')

@@ -2909,23 +2909,53 @@ class RoundCompleteView(APIView):
     @staticmethod
     def _all_foursomes_done(round_obj) -> bool:
         """True when every foursome has at least one non-null gross
-        score on every hole 1..18.  Alt-shot holes only have one
-        partner posting, so this counts hole coverage rather than
+        score on every hole it's *expected* to play.  Alt-shot holes only
+        have one partner posting, so this counts hole coverage rather than
         per-player completeness — matches the mobile-side check that
-        already exempts the dimmed alt-shot partner."""
+        already exempts the dimmed alt-shot partner.
+
+        Mid-round withdrawals shrink the expected set: a hole abandoned at
+        the withdrawal (``withdrew_killed_next_hole``) is exempt for the
+        whole group, and a hole no remaining player is active for is exempt
+        too — so the round can still complete once everyone still playing
+        has finished."""
         from scoring.models import HoleScore
-        foursomes = list(round_obj.foursomes.all())
+        foursomes = list(round_obj.foursomes.prefetch_related('memberships'))
         if not foursomes:
             return False
         for fs in foursomes:
+            expected = RoundCompleteView._expected_holes(fs)
             holes = set(
                 HoleScore.objects
                 .filter(foursome=fs, gross_score__isnull=False)
                 .values_list('hole_number', flat=True)
             )
-            if holes != set(range(1, 19)):
+            if expected - holes:
                 return False
         return True
+
+    @staticmethod
+    def _expected_holes(fs) -> set:
+        """Holes a foursome must have a score on to be 'done', accounting
+        for mid-round withdrawals (killed holes + game-over holes excluded)."""
+        members = list(fs.memberships.all())
+        # Holes abandoned at a withdrawal — voided for everyone.
+        killed = {
+            m.withdrew_after_hole + 1
+            for m in members
+            if m.withdrew_after_hole is not None
+            and m.withdrew_killed_next_hole
+            and m.withdrew_after_hole + 1 <= 18
+        }
+        expected = set()
+        for h in range(1, 19):
+            if h in killed:
+                continue
+            # At least one member must still be active on this hole.
+            if any(m.withdrew_after_hole is None or h <= m.withdrew_after_hole
+                   for m in members):
+                expected.add(h)
+        return expected
 
 
 class RoundReopenView(APIView):
@@ -3150,6 +3180,139 @@ class FoursomeRemovePlayerView(APIView):
             'removed_player_id': player_id,
             'new_size'         : new_size,
             'group_number'     : foursome.group_number,
+        })
+
+
+class WithdrawPlayerView(APIView):
+    """
+    POST /api/foursomes/{id}/withdraw-player/
+        body: {
+            "player_id"     : int,
+            "after_hole"    : int,            # last hole they completed (0..17)
+            "kill_next_hole": bool,           # group abandoned hole after_hole+1
+            "sixes_segment_action": "void"|"solo"   # Sixes only
+        }
+
+    Mid-round withdrawal ("can't continue") — the OPPOSITE of remove-player:
+    the player and all their posted scores are KEPT; they're simply not
+    expected on holes after ``after_hole``.  The rest of the group keeps
+    scoring and the round can complete.  See docs/mid-round-withdrawal.md.
+
+    Unlike FoursomeRemovePlayerView this is allowed (in fact intended) once
+    scoring has begun.  Auth is the delegated-scoring resolver so the group's
+    designated scorer can record a WD from their own account.
+    """
+    def post(self, request, pk):
+        from accounts.scoring_access import foursome_for_scorer
+
+        foursome = foursome_for_scorer(request.user, pk)
+
+        player_id  = request.data.get('player_id')
+        after_hole = request.data.get('after_hole')
+        kill_next  = bool(request.data.get('kill_next_hole', False))
+        sixes_action = request.data.get('sixes_segment_action')
+
+        if not isinstance(player_id, int):
+            return Response({'detail': 'player_id (int) is required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(after_hole, int) or not (0 <= after_hole <= 17):
+            return Response(
+                {'detail': 'after_hole (int 0..17) is required — the last '
+                           'hole the player completed before withdrawing.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        if sixes_action not in (None, 'void', 'solo'):
+            return Response(
+                {'detail': "sixes_segment_action must be 'void' or 'solo'."},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        membership = (
+            foursome.memberships
+            .select_related('player')
+            .filter(player_id=player_id, player__is_phantom=False)
+            .first()
+        )
+        if membership is None:
+            return Response(
+                {'detail': f'Player {player_id} is not in foursome '
+                           f'{foursome.id} (or is a phantom).'},
+                status=status.HTTP_404_NOT_FOUND)
+
+        membership.withdrew_after_hole       = after_hole
+        membership.withdrew_killed_next_hole = kill_next
+        membership.save(update_fields=['withdrew_after_hole',
+                                       'withdrew_killed_next_hole'])
+
+        # Sixes void/solo: apply the TD's per-WD choice to the affected +
+        # remaining segments before recalculating.  Defaults to 'void' (the
+        # safe choice) if Sixes is active but no action was supplied.
+        active_games = (set(foursome.active_games or [])
+                        | set(foursome.round.active_games or []))
+        if 'sixes' in active_games:
+            from services.sixes import apply_withdrawal_to_sixes
+            apply_withdrawal_to_sixes(
+                foursome, player_id, after_hole,
+                action=sixes_action or 'void',
+            )
+
+        _recalculate_games(foursome)
+
+        return Response({
+            'foursome_id'        : foursome.id,
+            'player_id'          : player_id,
+            'withdrew_after_hole': after_hole,
+            'killed_hole'        : (after_hole + 1) if kill_next
+                                   and after_hole + 1 <= 18 else None,
+            'group_number'       : foursome.group_number,
+        })
+
+
+class ReinstatePlayerView(APIView):
+    """
+    POST /api/foursomes/{id}/reinstate-player/   body: {"player_id": int}
+
+    Undo a mistaken withdrawal — clears ``withdrew_after_hole`` and the
+    killed-hole flag, and un-voids any Sixes segments that were voided by
+    the withdrawal.  Idempotent.
+    """
+    def post(self, request, pk):
+        from accounts.scoring_access import foursome_for_scorer
+
+        foursome  = foursome_for_scorer(request.user, pk)
+        player_id = request.data.get('player_id')
+        if not isinstance(player_id, int):
+            return Response({'detail': 'player_id (int) is required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        membership = (
+            foursome.memberships
+            .filter(player_id=player_id, player__is_phantom=False)
+            .first()
+        )
+        if membership is None:
+            return Response(
+                {'detail': f'Player {player_id} is not in foursome {foursome.id}.'},
+                status=status.HTTP_404_NOT_FOUND)
+
+        membership.withdrew_after_hole       = None
+        membership.withdrew_killed_next_hole = False
+        membership.save(update_fields=['withdrew_after_hole',
+                                       'withdrew_killed_next_hole'])
+
+        active_games = (set(foursome.active_games or [])
+                        | set(foursome.round.active_games or []))
+        if 'sixes' in active_games:
+            # No withdrawals left → un-void every segment.
+            still_out = foursome.memberships.filter(
+                withdrew_after_hole__isnull=False).exists()
+            if not still_out:
+                foursome.sixes_segments.filter(is_void=True).update(is_void=False)
+
+        _recalculate_games(foursome)
+
+        return Response({
+            'foursome_id': foursome.id,
+            'player_id'  : player_id,
+            'reinstated' : True,
         })
 
 

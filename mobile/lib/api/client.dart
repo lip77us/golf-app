@@ -821,6 +821,42 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  /// Mid-round withdrawal ("can't continue").  Keeps the player and their
+  /// posted scores; they're simply not expected on holes after [afterHole].
+  /// [killNextHole] voids the hole the group abandoned at the withdrawal.
+  /// [sixesAction] ('void' | 'solo') is only used when Sixes is active.
+  Future<Map<String, dynamic>> withdrawPlayer(
+    int foursomeId,
+    int playerId,
+    int afterHole, {
+    bool killNextHole = false,
+    String? sixesAction,
+  }) async {
+    final data = await _post(
+      '/foursomes/$foursomeId/withdraw-player/',
+      {
+        'player_id'     : playerId,
+        'after_hole'    : afterHole,
+        'kill_next_hole': killNextHole,
+        if (sixesAction != null) 'sixes_segment_action': sixesAction,
+      },
+    );
+    return data as Map<String, dynamic>;
+  }
+
+  /// Undo a mistaken withdrawal — clears the WD flags and un-voids any
+  /// Sixes segments that were voided by it.
+  Future<Map<String, dynamic>> reinstatePlayer(
+    int foursomeId,
+    int playerId,
+  ) async {
+    final data = await _post(
+      '/foursomes/$foursomeId/reinstate-player/',
+      {'player_id': playerId},
+    );
+    return data as Map<String, dynamic>;
+  }
+
   /// TD-only "rebalance at the tee box" tool — move a player from
   /// one foursome to another.  Both sides' TC games reconfigure
   /// automatically (4↔3 phantom add/strip, 3↔2 Nassau swap).  Same

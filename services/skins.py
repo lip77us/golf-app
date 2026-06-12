@@ -140,6 +140,90 @@ def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Mid-round withdrawal — segment plan
+# ---------------------------------------------------------------------------
+
+def _skins_withdrawal_plan(real_members) -> dict:
+    """
+    Derive the segment structure a mid-round withdrawal imposes on Skins.
+
+    Returns::
+
+        {
+          'killed_holes' : set[int],   # abandoned holes — score for nobody
+          'segments'     : [           # ordered, each a constant-roster run
+              {'holes': [int, ...], 'roster': [player_id, ...]},
+          ],
+          'eligible'     : set[int],   # holes that belong to some segment
+          'has_wd'       : bool,
+          'withdrawals'  : [{'player_id', 'after_hole', 'killed_next_hole'}],
+        }
+
+    A real member is *active* on hole h iff they have not withdrawn before it
+    (``withdrew_after_hole`` is None or ``h <= withdrew_after_hole``).  A hole
+    is *eligible* (contested) when it is not killed and ≥ 2 players are active
+    — fewer than two players is "game over", so those holes evaporate.
+    Segments are maximal runs of consecutive eligible holes that share the same
+    active roster; both a killed hole and a roster change start a new segment
+    (so a pot can never carry across a withdrawal).
+
+    With no withdrawals this yields exactly one segment over holes 1..18 with
+    the full roster — i.e. the historical single-pool behaviour, unchanged.
+
+    NOTE — per-skin payout styles (pay-the-winner / pay-those-above-you), if
+    added to Skins later, don't use these fractional segment pots: they settle
+    each segment as an independent closed game (void the killed hole, then a
+    fresh calculation for the survivor segment). This helper still gives them
+    the right hole→segment partition; only the money math differs.
+    """
+    all_pids = [m.player_id for m in real_members]
+    wd = {
+        m.player_id: m.withdrew_after_hole
+        for m in real_members
+        if m.withdrew_after_hole is not None
+    }
+    killed = {
+        m.withdrew_after_hole + 1
+        for m in real_members
+        if m.withdrew_after_hole is not None
+        and m.withdrew_killed_next_hole
+        and m.withdrew_after_hole + 1 <= 18
+    }
+
+    def active_on(h):
+        return [pid for pid in all_pids if pid not in wd or h <= wd[pid]]
+
+    segments: list = []
+    eligible: set = set()
+    cur = None  # current run: {'holes': [...], 'roster': [...]}
+    for h in range(1, 19):
+        roster = active_on(h)
+        if h in killed or len(roster) < 2:
+            cur = None  # boundary — close the current run, carry dies
+            continue
+        eligible.add(h)
+        if cur is not None and cur['roster'] == roster:
+            cur['holes'].append(h)
+        else:
+            cur = {'holes': [h], 'roster': roster}
+            segments.append(cur)
+
+    return {
+        'killed_holes': killed,
+        'segments'    : segments,
+        'eligible'    : eligible,
+        'has_wd'      : bool(wd),
+        'withdrawals' : [
+            {'player_id'      : m.player_id,
+             'after_hole'     : m.withdrew_after_hole,
+             'killed_next_hole': m.withdrew_killed_next_hole}
+            for m in real_members
+            if m.withdrew_after_hole is not None
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Calculator
 # ---------------------------------------------------------------------------
 
@@ -190,68 +274,86 @@ def calculate_skins(foursome) -> list:
     # Wipe prior hole results — re-created from scratch each call.
     SkinsHoleResult.objects.filter(game=game).delete()
 
+    # Mid-round withdrawals partition the round into constant-roster segments
+    # (one segment over all 18 holes when nobody withdrew). The carry pot is
+    # scoped to a segment — it never crosses a withdrawal or a killed hole.
+    plan          = _skins_withdrawal_plan(real_members)
+    total_eligible = len(plan['eligible'])
     rows          = []
-    pot           = 0   # skins accumulated in the current carry run
-    fully_scored  = 0   # holes where all real players have a score
+    scored        = 0   # eligible holes where the active roster all scored
 
-    for hole_num in range(1, 19):
-        # All real players must have a score for this hole to be counted.
-        scores_by_id: dict = {}
-        for pid in real_ids:
-            s = score_index.get(pid, {}).get(hole_num)
-            if s is None:
-                break
-            scores_by_id[pid] = s
-        if len(scores_by_id) != len(real_ids):
-            continue  # at least one player missing — skip
+    for seg in plan['segments']:
+        roster = seg['roster']
+        pot    = 0   # skins accumulated in this segment's carry run
+        for hole_num in seg['holes']:
+            # Every *active* player on this hole must have a score for it to
+            # be counted (withdrawn players are simply not expected).
+            scores_by_id: dict = {}
+            missing = False
+            for pid in roster:
+                s = score_index.get(pid, {}).get(hole_num)
+                if s is None:
+                    missing = True
+                    break
+                scores_by_id[pid] = s
+            if missing:
+                continue  # at least one active player missing — skip
 
-        fully_scored += 1
-        pot += 1  # this hole adds 1 to the pot
+            scored += 1
+            pot    += 1  # this hole adds 1 to the pot
 
-        min_score = min(scores_by_id.values())
-        leaders   = [pid for pid, s in scores_by_id.items() if s == min_score]
+            min_score = min(scores_by_id.values())
+            leaders   = [pid for pid, s in scores_by_id.items() if s == min_score]
 
-        if len(leaders) == 1:
-            # Outright winner — collects the whole pot.
-            rows.append(SkinsHoleResult(
-                game        = game,
-                hole_number = hole_num,
-                winner_id   = leaders[0],
-                skins_value = pot,
-                is_carry    = False,
-            ))
-            pot = 0  # reset after a win
+            if len(leaders) == 1:
+                # Outright winner — collects the whole pot.
+                rows.append(SkinsHoleResult(
+                    game        = game,
+                    hole_number = hole_num,
+                    winner_id   = leaders[0],
+                    skins_value = pot,
+                    is_carry    = False,
+                ))
+                pot = 0  # reset after a win
 
-        elif game.carryover:
-            # Tied hole with carryover — skin carries to next hole.
-            rows.append(SkinsHoleResult(
-                game        = game,
-                hole_number = hole_num,
-                winner      = None,
-                skins_value = pot,   # current pot being carried
-                is_carry    = True,
-            ))
-            # pot keeps accumulating; do NOT reset
+            elif game.carryover:
+                # Tied hole with carryover — skin carries within this segment.
+                rows.append(SkinsHoleResult(
+                    game        = game,
+                    hole_number = hole_num,
+                    winner      = None,
+                    skins_value = pot,   # current pot being carried
+                    is_carry    = True,
+                ))
+                # pot keeps accumulating; do NOT reset
 
-        else:
-            # Tied hole without carryover — skin is killed.
-            rows.append(SkinsHoleResult(
-                game        = game,
-                hole_number = hole_num,
-                winner      = None,
-                skins_value = 1,     # the 1 skin that died
-                is_carry    = False,
-            ))
-            pot = 0  # reset; next hole starts a fresh 1-skin pot
+            else:
+                # Tied hole without carryover — skin is killed.
+                rows.append(SkinsHoleResult(
+                    game        = game,
+                    hole_number = hole_num,
+                    winner      = None,
+                    skins_value = 1,     # the 1 skin that died
+                    is_carry    = False,
+                ))
+                pot = 0  # reset; next hole starts a fresh 1-skin pot
 
     if rows:
         SkinsHoleResult.objects.bulk_create(rows)
 
-    # Status: pending / in_progress / complete.
-    if fully_scored == 0:
-        game.status = MatchStatus.PENDING
-    elif fully_scored >= 18:
+    # Status: pending / in_progress / complete. "Complete" means every
+    # *eligible* (contested) hole has been scored — killed and game-over
+    # holes are never expected, so a withdrawn round still completes.
+    if total_eligible > 0 and scored >= total_eligible:
         game.status = MatchStatus.COMPLETE
+    elif scored == 0 and not plan['has_wd']:
+        game.status = MatchStatus.PENDING
+    elif scored == 0 and total_eligible == 0:
+        # All remaining holes evaporated (e.g. only one player left) — the
+        # contested portion is settled, so the game is done.
+        game.status = MatchStatus.COMPLETE if plan['has_wd'] else MatchStatus.PENDING
+    elif scored == 0:
+        game.status = MatchStatus.PENDING
     else:
         game.status = MatchStatus.IN_PROGRESS
     game.save(update_fields=['status'])
@@ -376,6 +478,41 @@ def skins_summary(foursome) -> dict:
     }
     grand_total = sum(total_skins_by_pid.values())
 
+    # Segment-aware settlement. A withdrawal partitions the round into
+    # constant-roster segments. Each player antes one bet_unit spread evenly
+    # over the 18 holes (bet_unit/18 per hole), and a withdrawn player stops
+    # contributing the moment they leave — so a segment's pot is funded only by
+    # the players actually IN it:
+    #     seg_pot = holes_in_segment × roster_size × bet_unit / 18
+    # split *within* the segment proportional to skins won there (regular +
+    # junk). A killed/abandoned hole and any holes after the group drops below
+    # two players are in no segment, so those stakes evaporate. With no
+    # withdrawal there's one 18-hole segment with the full roster, so this is
+    # identical to the historical "pool × skins / total_skins" split.
+    plan        = _skins_withdrawal_plan(real_members)
+    hr_by_hole  = {hr.hole_number: hr for hr in hole_results}
+    payout_by_pid: dict = {m.player_id: 0.0 for m in real_members}
+    pool_at_risk = 0.0
+    for seg in plan['segments']:
+        seg_pot      = len(seg['holes']) * len(seg['roster']) * bet_unit / 18.0
+        pool_at_risk += seg_pot
+        seg_skins: dict = {}
+        seg_total = 0
+        for hole_num in seg['holes']:
+            hr = hr_by_hole.get(hole_num)
+            if hr is not None and hr.winner_id:
+                seg_skins[hr.winner_id] = seg_skins.get(hr.winner_id, 0) + hr.skins_value
+                seg_total += hr.skins_value
+            if game.allow_junk:
+                for (hn, pid), entry in junk_by_hole_player.items():
+                    if hn == hole_num:
+                        seg_skins[pid] = seg_skins.get(pid, 0) + entry['count']
+                        seg_total     += entry['count']
+        if seg_total > 0:
+            for pid, sk in seg_skins.items():
+                if pid in payout_by_pid:
+                    payout_by_pid[pid] += seg_pot * sk / seg_total
+
     # Net strokes actually in play for each foursome member — drives
     # the "(N)" label on the scorecard so observers can see whose
     # handicap is feeding which gross-to-net adjustment.
@@ -398,7 +535,6 @@ def skins_summary(foursome) -> dict:
     for m in real_members:
         pid    = m.player_id
         ts     = total_skins_by_pid[pid]
-        payout = (ts / grand_total * pool) if grand_total > 0 else 0.0
         players_out.append({
             'player_id'   : pid,
             'name'        : m.player.name,
@@ -406,7 +542,8 @@ def skins_summary(foursome) -> dict:
             'skins_won'   : regular_skins[pid],
             'junk_skins'  : junk_skins[pid],
             'total_skins' : ts,
-            'payout'      : round(payout, 2),
+            'payout'      : round(payout_by_pid[pid], 2),
+            'withdrew_after_hole': m.withdrew_after_hole,
             'phcp_in_play': _phcp_in_play(m.playing_handicap or 0),
         })
     players_out.sort(key=lambda x: (-x['total_skins'], x['name']))
@@ -447,10 +584,9 @@ def skins_summary(foursome) -> dict:
             par_by_hole[h] = sample_tee.hole(h).get('par')
 
     # ---- Holes grid ---------------------------------------------------------
-    # Index existing SkinsHoleResult rows so we can also emit a row for
-    # holes that have been scored but the calculator hasn't produced a
-    # result for yet (e.g. mid-round before recalc).
-    hr_by_hole = {hr.hole_number: hr for hr in hole_results}
+    # Holes the group abandoned at a withdrawal — voided for everyone, their
+    # pot fraction evaporates. Surfaced so the UI can label them.
+    killed_holes = plan['killed_holes']
     holes_out: list = []
     for hole_num in range(1, 19):
         hr            = hr_by_hole.get(hole_num)
@@ -458,7 +594,8 @@ def skins_summary(foursome) -> dict:
             pid for pid in real_pids
             if hole_num in gross_index.get(pid, {})
         ]
-        if hr is None and not scored_pids:
+        is_killed = hole_num in killed_holes
+        if hr is None and not scored_pids and not is_killed:
             continue   # nobody has played this hole yet
 
         scores = []
@@ -493,6 +630,7 @@ def skins_summary(foursome) -> dict:
             'skins_value' : hr.skins_value if hr else 0,
             'is_carry'    : is_carry,
             'is_dead'     : is_dead,
+            'is_killed'   : is_killed,
             'scores'      : scores,
             'junk'        : junk_entries,
         })
@@ -507,9 +645,15 @@ def skins_summary(foursome) -> dict:
         'allow_junk': game.allow_junk,
         'players'   : players_out,
         'holes'     : holes_out,
+        # Withdrawal context for the UI (empty list = normal round). Lets the
+        # leaderboard explain a shrunken pool / voided holes.
+        'withdrawals': plan['withdrawals'],
         'money'     : {
-            'bet_unit'   : bet_unit,
-            'pool'       : pool,
-            'total_skins': grand_total,
+            'bet_unit'    : bet_unit,
+            'pool'        : pool,                    # full ante pool
+            # When a withdrawal voids holes, less than the full pool is
+            # actually contested; pool_at_risk is what gets distributed.
+            'pool_at_risk': round(pool_at_risk, 2),
+            'total_skins' : grand_total,
         },
     }

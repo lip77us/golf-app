@@ -9,7 +9,13 @@ the segment math.
 """
 from django.test import TestCase
 
-from services.sixes import calculate_sixes, setup_sixes, sixes_summary
+from games.models import SixesHoleResult
+from services.sixes import (
+    apply_withdrawal_to_sixes,
+    calculate_sixes,
+    setup_sixes,
+    sixes_summary,
+)
 
 from ._helpers import (
     make_foursome,
@@ -133,3 +139,95 @@ class SixesTests(TestCase):
         # being applied per-segment rather than ignored).
         winners = [seg.get('winner') for seg in summary['segments']]
         assert any(w == 'Team 2' for w in winners), winners
+
+    # ── Mid-round withdrawal ──────────────────────────────────────────────
+
+    def _withdraw(self, name, after_hole):
+        m = self.fs.memberships.get(player_id=self.pid[name])
+        m.withdrew_after_hole = after_hole
+        m.save(update_fields=['withdrew_after_hole'])
+
+    def _std_sixes(self, **kw):
+        setup_sixes(
+            self.fs,
+            _team_data(self.pid['T1A'], self.pid['T1B'],
+                       self.pid['T2A'], self.pid['T2B']),
+            handicap_mode='gross', **kw,
+        )
+
+    def test_withdrawal_void_excludes_affected_segments(self):
+        """WD after hole 9 with 'void': segment 1 (done) stands; the segment
+        in progress and all later ones are voided — 0 points, excluded from
+        the win/halve tally."""
+        self._std_sixes()
+        # Segment 1 (1-6): T1 wins hole 1, rest halved → Team 1.
+        for h in range(1, 7):
+            par = self.tee.hole(h)['par']
+            submit_hole(self.fs, h, [
+                (self.pid['T1A'], par), (self.pid['T1B'], par),
+                (self.pid['T2A'], par + (1 if h == 1 else 0)),
+                (self.pid['T2B'], par + (1 if h == 1 else 0)),
+            ])
+        # Holes 7-9 played by all four before the WD.
+        for h in range(7, 10):
+            par = self.tee.hole(h)['par']
+            submit_hole(self.fs, h, [(self.pid[n], par) for n in
+                                     ('T1A', 'T1B', 'T2A', 'T2B')])
+
+        self._withdraw('T2B', 9)
+        apply_withdrawal_to_sixes(self.fs, self.pid['T2B'], 9, 'void')
+        calculate_sixes(self.fs)
+
+        summary = sixes_summary(self.fs)
+        ordered = sorted(summary['segments'], key=lambda s: s['start_hole'])
+        assert ordered[0]['winner'] == 'Team 1', ordered[0]
+        assert ordered[1]['is_void'] and ordered[1]['winner'] == 'Voided', ordered[1]
+        assert ordered[2]['is_void'] and ordered[2]['winner'] == 'Voided', ordered[2]
+        assert summary['overall'] == {'team1_wins': 1, 'team2_wins': 0,
+                                      'halves': 0}, summary['overall']
+
+    def test_withdrawal_solo_best_ball_uses_lone_ball(self):
+        """WD after hole 9 with 'solo': the remaining partner plays on and
+        their lone ball is the team's ball for the rest of the segment."""
+        self._std_sixes()
+        # Holes 1-9: everyone pars (segment 1 halved; seg 2 holes 7-9 halved).
+        for h in range(1, 10):
+            par = self.tee.hole(h)['par']
+            submit_hole(self.fs, h, [(self.pid[n], par) for n in
+                                     ('T1A', 'T1B', 'T2A', 'T2B')])
+        self._withdraw('T2B', 9)
+        apply_withdrawal_to_sixes(self.fs, self.pid['T2B'], 9, 'solo')
+        # Holes 10-12: T2A (solo) birdies, T1 pars → Team 2 takes the segment.
+        for h in range(10, 13):
+            par = self.tee.hole(h)['par']
+            submit_hole(self.fs, h, [(self.pid['T1A'], par),
+                                     (self.pid['T1B'], par),
+                                     (self.pid['T2A'], par - 1)])
+        calculate_sixes(self.fs)
+
+        summary = sixes_summary(self.fs)
+        seg2 = next(s for s in summary['segments'] if s['start_hole'] == 7)
+        assert not seg2['is_void'], seg2
+        assert seg2['winner'] == 'Team 2', seg2
+        # The lone-ball holes produced results using T2A's score.
+        hr = SixesHoleResult.objects.get(segment__foursome=self.fs, hole_number=10)
+        assert hr.team2_best_net == self.tee.hole(10)['par'] - 1, hr.team2_best_net
+
+    def test_withdrawal_solo_high_low_lone_net_is_both_ends(self):
+        """High-Low 'solo': a one-player team uses its lone net as BOTH the
+        high and the low ball."""
+        self._std_sixes(scoring_format='high_low')
+        for h in range(1, 10):
+            par = self.tee.hole(h)['par']
+            submit_hole(self.fs, h, [(self.pid[n], par) for n in
+                                     ('T1A', 'T1B', 'T2A', 'T2B')])
+        self._withdraw('T2B', 9)
+        apply_withdrawal_to_sixes(self.fs, self.pid['T2B'], 9, 'solo')
+        # Hole 10: T2A alone scores 3; T1 both score 4.
+        submit_hole(self.fs, 10, [(self.pid['T1A'], 4), (self.pid['T1B'], 4),
+                                  (self.pid['T2A'], 3)])
+        calculate_sixes(self.fs)
+
+        hr = SixesHoleResult.objects.get(segment__foursome=self.fs, hole_number=10)
+        assert hr.team2_best_net == 3, hr.team2_best_net
+        assert hr.team2_worst_net == 3, hr.team2_worst_net

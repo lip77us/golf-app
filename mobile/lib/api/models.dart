@@ -714,6 +714,15 @@ class Membership {
   /// (delegated cross-account score entry, Friends Phase 2b).
   final bool isScorer;
 
+  /// Mid-round withdrawal: the last hole this player completed before
+  /// withdrawing ("can't continue").  Null = played the full round.  They're
+  /// not expected on holes after this; their earlier scores stand.
+  final int? withdrewAfterHole;
+
+  /// True if the hole right after [withdrewAfterHole] was abandoned by the
+  /// whole group when this player withdrew (voided for everyone).
+  final bool withdrewKilledNextHole;
+
   const Membership({
     required this.id,
     required this.player,
@@ -723,7 +732,13 @@ class Membership {
     this.cupTeamColour,
     this.cupTeamName,
     this.isScorer = false,
+    this.withdrewAfterHole,
+    this.withdrewKilledNextHole = false,
   });
+
+  /// True when this member has withdrawn and is out for [hole] (1-based).
+  bool isWithdrawnOnHole(int hole) =>
+      withdrewAfterHole != null && hole > withdrewAfterHole!;
 
   factory Membership.fromJson(Map<String, dynamic> j) => Membership(
         id: j['id'] as int,
@@ -734,6 +749,8 @@ class Membership {
         cupTeamColour: j['cup_team_colour'] as String?,
         cupTeamName:   j['cup_team_name']   as String?,
         isScorer:      j['is_scorer'] as bool? ?? false,
+        withdrewAfterHole:      j['withdrew_after_hole'] as int?,
+        withdrewKilledNextHole: j['withdrew_killed_next_hole'] as bool? ?? false,
       );
 }
 

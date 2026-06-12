@@ -349,10 +349,12 @@ class MembershipSerializer(serializers.ModelSerializer):
             'id', 'player', 'player_id', 'tee',
             'course_handicap', 'playing_handicap',
             'cup_team_colour', 'cup_team_name', 'is_scorer',
+            'withdrew_after_hole', 'withdrew_killed_next_hole',
         ]
         read_only_fields = [
             'id', 'tee', 'course_handicap', 'playing_handicap',
             'cup_team_colour', 'cup_team_name', 'is_scorer',
+            'withdrew_after_hole', 'withdrew_killed_next_hole',
         ]
 
     def _team_for(self, obj):

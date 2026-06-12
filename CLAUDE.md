@@ -513,3 +513,61 @@ Full stack present: `nassau_setup_screen.dart` + `nassau_screen.dart`,
 `NassauResultView` / `NassauSetupView` / `NassauPressView`. (This supersedes
 the earlier "not yet implemented" note; the "Implemented casual games" list
 above predates Nassau and Triple Cup / Match Play / Multi-Skins.)
+## Mid-round withdrawal ("player can't continue") — implemented (Phase 1 + Sixes)
+Lets a group keep scoring and complete the round when a player can't finish
+(e.g. injury). The player and their posted scores are KEPT (unlike
+`FoursomeRemovePlayerView`, which refuses once any score exists). Full kickoff
+brief + decisions in `docs/mid-round-withdrawal.md`.
+
+**Data model:** `FoursomeMembership.withdrew_after_hole` (SmallInteger, null =
+played all 18; N = completed 1..N, out N+1..18) and `withdrew_killed_next_hole`
+(group abandoned hole N+1). `SixesSegment.is_void` (voided segment = 0 pts,
+excluded). Migrations `tournament/0036`, `games/0038`.
+
+**Universal unblocker:** `RoundCompleteView._all_foursomes_done` now compares
+each foursome's scored holes against an `_expected_holes(fs)` set that drops
+killed holes and holes no remaining player is active for. Mobile `_allScored`
+(used by `_allHolesScored` / `_firstMissingHole`) excludes withdrawn players and
+killed holes, so the advance gate + Complete Round unblock automatically.
+
+**API (`api/views.py`, auth = `foursome_for_scorer`):**
+- `POST /api/foursomes/<id>/withdraw-player/` `{player_id, after_hole,
+  kill_next_hole?, sixes_segment_action?: 'void'|'solo'}` → sets the WD fields,
+  applies Sixes void/solo (`apply_withdrawal_to_sixes`), recalculates.
+- `POST /api/foursomes/<id>/reinstate-player/` `{player_id}` → undo.
+
+**Skins (segmented pool):** `services/skins.py` `_skins_withdrawal_plan()`
+partitions the round into constant-roster segments; `calculate_skins` scopes the
+carry pot per segment (carries die at every boundary) and `skins_summary`
+settles each segment as its own pool funded only by the players IN it — a
+withdrawn player stops contributing when they leave: `seg_pot = holes ×
+roster_size × bet_unit / 18`, split within the segment by skins won (regular +
+junk). So a skin on a 3-player hole is worth less than on a 4-player hole.
+Killed holes + post-game-over holes evaporate. No-WD round = single 18-hole
+segment with the full roster = unchanged. Summary gains
+`withdrawals`, per-hole `is_killed`, and `money.pool_at_risk`. (Per-skin payout
+styles — pay-the-winner / pay-those-above — aren't in Skins yet; when added they
+settle each segment as a closed game instead of fractioning, noted in the plan
+helper.)
+
+**Sixes:** `apply_withdrawal_to_sixes()` marks the affected + remaining segments
+`is_void` (void) or leaves them active (solo). Best-ball uses the lone ball
+automatically; High-Low uses the lone net as both high and low
+(`_high_low_nets_for_team` keys off a per-hole expected-roster check). Voided
+segments label "Voided" and are excluded from money + the win/halve tally.
+
+**Mobile (`score_entry_screen.dart`):** `Membership.withdrewAfterHole` /
+`withdrewKilledNextHole`; `MembershipSerializer` exposes both. Long-press a
+player row → withdraw sheet (last-hole stepper + "group abandoned hole N+1"
+toggle + Sixes void/solo radios) or reinstate. `_PlayerRow` shows a **WD** badge
+and an "Out" marker (no score box) on holes the player is out for.
+`client.withdrawPlayer()` / `reinstatePlayer()`.
+
+**Tests:** `scoring/tests/test_skins.py` (segmented pool split, lone-survivor
+pool reduction, WD round completes), `scoring/tests/test_sixes.py` (void
+excludes segments, solo best-ball lone ball, solo high-low lone net),
+`api/test_withdrawal.py` (endpoint sets fields/killed hole, round completes with
+WD + killed hole, control stays open, reinstate).
+
+**Deferred:** Nassau / Points 5-3-1 / Match Play settlement (universal unblocker
+already lets those rounds complete; per-game money for them is a follow-up).

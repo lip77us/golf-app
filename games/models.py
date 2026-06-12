@@ -62,6 +62,15 @@ class SixesSegment(models.Model):
                             default=False,
                             help_text="True for the 4th match created from leftover holes after an early finish."
                         )
+    # Mid-round withdrawal: when a player can't continue, the TD may choose to
+    # VOID the segment that contains/follows the withdrawal (vs. having the
+    # remaining partner play solo). A voided segment awards 0 points and is
+    # excluded from totals, money, and closeout. See docs/mid-round-withdrawal.md.
+    is_void             = models.BooleanField(
+                            default=False,
+                            help_text="True if voided due to a mid-round withdrawal; "
+                                      "scores 0 points and is excluded from totals.",
+                        )
     # Handicap mode is per-foursome (the user picks it once when setting up Sixes).
     # We persist the value on every segment of the same foursome for simplicity;
     # setup_sixes keeps them in sync.  Gross mode ignores handicaps entirely;

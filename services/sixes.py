@@ -173,13 +173,28 @@ def setup_sixes(
 # Calculator
 # ---------------------------------------------------------------------------
 
-def _best_net_for_team(team: SixesTeam, hole_number: int, score_index: dict) -> int | None:
+def _expected_team_pids(team: SixesTeam, hole_number: int, withdrawn: dict) -> list:
+    """Player ids on *team* still expected to post a score on hole_number —
+    i.e. not withdrawn before it.  ``withdrawn`` maps player_id →
+    withdrew_after_hole; a player is out for holes > that value."""
+    return [
+        pid for pid in team.players.values_list('id', flat=True)
+        if pid not in withdrawn or hole_number <= withdrawn[pid]
+    ]
+
+
+def _best_net_for_team(team: SixesTeam, hole_number: int, score_index: dict,
+                       withdrawn: dict | None = None) -> int | None:
     """
     Return the lowest score among this team's players on hole_number.
 
     The value in score_index may be a net or gross score depending on the
     match's handicap_mode (see scoring.handicap.build_score_index); this
     function is agnostic to which — it just picks the minimum for best-ball.
+
+    When a partner has withdrawn (mid-round WD, "play solo"), the lone
+    remaining ball IS the team's ball — `min` of the present scores handles
+    that automatically with no special case.
     """
     nets = [
         score_index[p_id][hole_number]
@@ -189,29 +204,39 @@ def _best_net_for_team(team: SixesTeam, hole_number: int, score_index: dict) -> 
     return min(nets) if nets else None
 
 
-def _high_low_nets_for_team(team: SixesTeam, hole_number: int, score_index: dict):
+def _high_low_nets_for_team(team: SixesTeam, hole_number: int, score_index: dict,
+                            withdrawn: dict | None = None):
     """
     Return (best_net, worst_net) for this team on hole_number.
 
     High-Low uses both ends of each team's score distribution: low-vs-low
-    decides the "low" point, high-vs-high decides the "high" point.  Both
-    nets must be present (i.e. both team-members scored) for the hole to
-    be evaluated — partial entries return (None, None) so the calculator
-    can mark the hole as incomplete.
+    decides the "low" point, high-vs-high decides the "high" point.  Every
+    *expected* team-member must have scored for the hole to be evaluated —
+    partial entries return (None, None) so the calculator marks the hole
+    incomplete.
+
+    Mid-round WD ("play solo"): once a partner has withdrawn the team is
+    down to a single expected player, and that lone net serves as BOTH the
+    team's high and low (min == max).  This is the high-low equivalent of
+    best-ball's lone ball — without it a short team could never be scored.
     """
+    withdrawn = withdrawn or {}
+    expected  = _expected_team_pids(team, hole_number, withdrawn)
     nets = [
-        score_index[p_id][hole_number]
-        for p_id in team.players.values_list('id', flat=True)
-        if p_id in score_index and hole_number in score_index[p_id]
+        score_index[pid][hole_number]
+        for pid in expected
+        if pid in score_index and hole_number in score_index[pid]
     ]
-    if len(nets) < 2:
-        # 3-player groups don't play High-Low (it's a 2v2 game), and a
-        # missing score means the hole isn't ready to evaluate yet.
+    # Not every expected player has posted yet (or this isn't a 2-player
+    # team at all) → the hole isn't ready to evaluate.
+    if not nets or len(nets) < len(expected):
         return (None, None)
+    # One expected player (partner withdrew) → lone net is high and low.
     return (min(nets), max(nets))
 
 
-def _score_segment(seg: SixesSegment, score_index: dict) -> tuple:
+def _score_segment(seg: SixesSegment, score_index: dict,
+                   withdrawn: dict | None = None) -> tuple:
     """
     Score all playable holes in *seg*, persist SixesHoleResult rows, and
     update the segment's status field.
@@ -219,7 +244,23 @@ def _score_segment(seg: SixesSegment, score_index: dict) -> tuple:
     Returns (results, finished_on) where finished_on is the hole number
     where the match ended early, or None if it ran to completion / is still
     in progress.  Returns ([], None) when teams haven't been assigned yet.
+
+    A segment voided by a mid-round withdrawal (``is_void``) scores nothing
+    and is dropped from the standings — its holes still belong to it (so the
+    surrounding segments don't collapse into them), they just award 0 points.
     """
+    withdrawn = withdrawn or {}
+
+    if seg.is_void:
+        SixesHoleResult.objects.filter(segment=seg).delete()
+        seg.status = 'complete'   # decided (voided) — not pending/in-progress
+        seg.save(update_fields=['status'])
+        for t in seg.teams.all():
+            if t.is_winner:
+                t.is_winner = False
+                t.save(update_fields=['is_winner'])
+        return [], None
+
     teams = list(seg.teams.all())
     if len(teams) < 2:
         seg.status = 'pending'
@@ -243,14 +284,14 @@ def _score_segment(seg: SixesSegment, score_index: dict) -> tuple:
 
     for hole_num in range(seg.start_hole, seg.end_hole + 1):
         if is_high_low:
-            t1_best, t1_worst = _high_low_nets_for_team(t1, hole_num, score_index)
-            t2_best, t2_worst = _high_low_nets_for_team(t2, hole_num, score_index)
+            t1_best, t1_worst = _high_low_nets_for_team(t1, hole_num, score_index, withdrawn)
+            t2_best, t2_worst = _high_low_nets_for_team(t2, hole_num, score_index, withdrawn)
             if (t1_best is None or t2_best is None
                     or t1_worst is None or t2_worst is None):
                 break  # incomplete — stop here
         else:
-            t1_best = _best_net_for_team(t1, hole_num, score_index)
-            t2_best = _best_net_for_team(t2, hole_num, score_index)
+            t1_best = _best_net_for_team(t1, hole_num, score_index, withdrawn)
+            t2_best = _best_net_for_team(t2, hole_num, score_index, withdrawn)
             if t1_best is None or t2_best is None:
                 break
             t1_worst = t2_worst = None
@@ -463,6 +504,15 @@ def calculate_sixes(foursome) -> list:
     handicap_allocation = first_seg.handicap_allocation or 'per_segment'
     is_high_low         = scoring_format == 'high_low'
 
+    # Mid-round withdrawals: player_id → last hole completed. The net helpers
+    # use this to know when a team is legitimately down to one player (play
+    # solo) vs simply waiting on a score.
+    withdrawn = {
+        m.player_id: m.withdrew_after_hole
+        for m in foursome.memberships.all()
+        if m.withdrew_after_hole is not None
+    }
+
     standard_segs = [s for s in segments if not s.is_extra]
     extra_segs    = [s for s in segments if s.is_extra]
 
@@ -571,7 +621,7 @@ def calculate_sixes(foursome) -> list:
                 seg, idx, player_so, member_by_pid, score_index
             )
 
-        results, finished_on = _score_segment(seg, score_index)
+        results, finished_on = _score_segment(seg, score_index, withdrawn)
         all_results.extend(results)
 
         # Classic format advances the pointer: next match starts right
@@ -643,7 +693,7 @@ def calculate_sixes(foursome) -> list:
                 )
 
             processed_ids.add(extra.id)
-            results, finished_on = _score_segment(extra, score_index)
+            results, finished_on = _score_segment(extra, score_index, withdrawn)
             all_results.extend(results)
 
             # Chain: if this extra ended early, start another immediately after.
@@ -662,6 +712,48 @@ def calculate_sixes(foursome) -> list:
         SixesSegment.objects.filter(foursome=foursome, is_extra=True).delete()
 
     return all_results
+
+
+# ---------------------------------------------------------------------------
+# Mid-round withdrawal
+# ---------------------------------------------------------------------------
+
+def apply_withdrawal_to_sixes(foursome, player_id: int, after_hole: int,
+                              action: str = 'void') -> None:
+    """
+    Apply a mid-round withdrawal to this foursome's Sixes match.
+
+    The withdrawal affects every segment the player could not finish — the
+    one in progress when they left plus all later ones (segments completed
+    before ``after_hole`` stand untouched).  The TD picks, for those:
+
+      * ``'void'`` → mark the segment ``is_void`` (0 points, excluded from
+        totals and money).
+      * ``'solo'`` → leave the segment active; the remaining partner plays
+        solo.  Best-ball uses the lone ball automatically; High-Low uses the
+        lone net as both high and low (see ``_high_low_nets_for_team``).
+
+    The caller is expected to set ``withdrew_after_hole`` on the membership
+    and re-run ``calculate_sixes`` afterwards.  Idempotent.
+    """
+    affected = (
+        SixesSegment.objects
+        .filter(foursome=foursome, end_hole__gt=after_hole)
+    )
+    void = (action == 'void')
+    for seg in affected:
+        # Only segments this player actually belongs to are theirs to void /
+        # play solo; a segment they're not rostered in (shouldn't happen in a
+        # rotating 2v2, but be safe) is left alone.
+        in_segment = any(
+            player_id in t.players.values_list('id', flat=True)
+            for t in seg.teams.all()
+        )
+        if not in_segment:
+            continue
+        if seg.is_void != void:
+            seg.is_void = void
+            seg.save(update_fields=['is_void'])
 
 
 # ---------------------------------------------------------------------------
@@ -727,7 +819,11 @@ def sixes_summary(foursome) -> dict:
         # paid out yet.
         winning_team = None
         losing_team  = None
-        if seg.status == 'complete':
+        if seg.is_void:
+            # Voided by a mid-round withdrawal — no winner, no money, and
+            # excluded from the win/halve tally entirely.
+            winner_label = 'Voided'
+        elif seg.status == 'complete':
             if t1 and t1.is_winner:
                 winner_label = 'Team 1'
                 t1_total_wins += 1
@@ -805,6 +901,7 @@ def sixes_summary(foursome) -> dict:
             'start_hole' : seg.start_hole,
             'end_hole'   : seg.end_hole,
             'is_extra'   : seg.is_extra,
+            'is_void'    : seg.is_void,
             'status'     : seg.status,
             'winner'     : winner_label,
             # Running point totals for this segment — for classic these
