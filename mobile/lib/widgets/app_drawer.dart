@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -60,16 +61,29 @@ class AppDrawer extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Temporary text wordmark until the final "Halved"
-                        // logo asset is added (replace with Image.asset then).
-                        Text(
-                          'Halved',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
-                            color: Theme.of(ctx).colorScheme.primary,
-                          ),
+                        // Brand mark + wordmark lockup.
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(9),
+                              child: SvgPicture.asset(
+                                'assets/icon/halved_mark.svg',
+                                width: 40,
+                                height: 40,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Halved',
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                                color: Theme.of(ctx).colorScheme.primary,
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 6),
                         // Who's logged in.  Player name plus the

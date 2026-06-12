@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 /// Branded splash screen shown on desktop (Windows/macOS/Linux) while the
 /// app initialises.  On iOS the native LaunchImage handles the very first
@@ -65,17 +66,30 @@ class _SplashScreenState extends State<SplashScreen>
               child: SizedBox(
                 width: 260,
                 height: 260,
-                // Temporary text wordmark until the final "Halved" logo
-                // asset is added (replace with Image.asset then).
+                // Brand mark (rounded badge) above the wordmark.
                 child: Center(
-                  child: Text(
-                    'Halved',
-                    style: TextStyle(
-                      fontSize: 44,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 3,
-                      color: const Color(0xFF2E7D32),
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: SvgPicture.asset(
+                          'assets/icon/halved_mark.svg',
+                          width: 132,
+                          height: 132,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Halved',
+                        style: TextStyle(
+                          fontSize: 40,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 3,
+                          color: const Color(0xFF2E7D32),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
