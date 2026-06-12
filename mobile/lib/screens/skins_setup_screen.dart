@@ -74,8 +74,14 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       _summary = await client.getSkinsSummary(widget.foursomeId);
       if (!mounted) return;
 
-      // Game already started — jump straight to score entry.
-      if (_summary!.status == 'in_progress') {
+      // Game already set up — jump straight to score entry.  A configured
+      // game reports its players even before any hole is scored (the backend
+      // sends status 'pending' both when no game exists AND when one exists
+      // but is unscored — an empty players list is the "never set up" tell).
+      // Without the players check, a game configured via the onboarding wizard
+      // (which sets Skins up directly) would bounce the user back here when
+      // they re-open the round before entering a score.
+      if (_summary!.status == 'in_progress' || _summary!.players.isNotEmpty) {
         Navigator.of(context).pushReplacementNamed(
           '/score-entry',
           arguments: widget.foursomeId,
