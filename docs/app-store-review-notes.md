@@ -54,7 +54,7 @@ Settings → Delete Account.)
 
 No special hardware is required. The app sends no data to third parties beyond
 the app's own backend and an anonymous golf-course lookup (no personal data in
-that lookup). Privacy policy: https://lip77us.github.io/halved-legal/privacy.html
+that lookup). Privacy policy: https://halved.golf/privacy
 
 ---
 
