@@ -96,6 +96,7 @@ def setup_wolf(
     non_wolf_bonus: bool = False,
     last_place_wolf_1718: bool = True,
     require_lone_or_blind: bool = False,
+    loss_cap=None,
 ) -> 'WolfGame':
     """
     Create (or replace) the Wolf game for a foursome.  Safe to call again —
@@ -112,6 +113,11 @@ def setup_wolf(
     net_percent = max(0, min(200, int(net_percent)))
     order = _clean_order(foursome, wolf_order)
 
+    if loss_cap is not None:
+        loss_cap = Decimal(str(loss_cap))
+        if loss_cap < 0:
+            loss_cap = None
+
     game = WolfGame.objects.create(
         foursome             = foursome,
         handicap_mode        = handicap_mode,
@@ -124,6 +130,7 @@ def setup_wolf(
         non_wolf_bonus        = bool(non_wolf_bonus),
         last_place_wolf_1718  = bool(last_place_wolf_1718),
         require_lone_or_blind = bool(require_lone_or_blind),
+        loss_cap              = loss_cap,
         status                = MatchStatus.PENDING,
     )
     return game
@@ -536,7 +543,7 @@ def wolf_summary(foursome) -> dict:
             'wolf_order': [],
             'players'   : [],
             'holes'     : [],
-            'money'     : {'bet_unit': bet_unit},
+            'money'     : {'bet_unit': bet_unit, 'loss_cap': None},
         }
 
     members  = _real_members(foursome)
@@ -670,6 +677,16 @@ def wolf_summary(foursome) -> dict:
         points_total[r.player_id] += r.points
         holes_played[r.player_id] += 1
 
+    # Money via the shared wager engine. Wolf points already net to zero per
+    # hole, so the vs-average baseline is 0 and settle reproduces
+    # points × bet_unit — but now the optional loss_cap (clip losers, rescale
+    # winners pro-rata) applies too.
+    from services.wager import PER_POINT, VS_AVERAGE, WagerConfig, settle
+    cfg = WagerConfig(funding=PER_POINT, settlement=VS_AVERAGE,
+                      rate=Decimal(str(bet_unit)), cap=game.loss_cap)
+    payouts = settle(
+        {pid: points_total.get(pid, Decimal('0')) for pid in by_pid}, cfg)
+
     players_out = []
     for pid, player in by_pid.items():
         pts = float(points_total.get(pid, Decimal('0')))
@@ -679,7 +696,7 @@ def wolf_summary(foursome) -> dict:
             'short_name'  : player.short_name,
             'points'      : pts,
             'holes_played': holes_played.get(pid, 0),
-            'money'       : pts * bet_unit,
+            'money'       : float(payouts[pid]),
             'phcp_in_play': phcp_by_pid.get(pid),
         })
     players_out.sort(key=lambda e: (-e['money'], e['name']))
@@ -699,5 +716,8 @@ def wolf_summary(foursome) -> dict:
         'wolf_order': order,
         'players'   : players_out,
         'holes'     : holes_out,
-        'money'     : {'bet_unit': bet_unit},
+        'money'     : {
+            'bet_unit': bet_unit,
+            'loss_cap': float(game.loss_cap) if game.loss_cap is not None else None,
+        },
     }

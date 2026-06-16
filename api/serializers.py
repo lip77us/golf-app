@@ -740,6 +740,14 @@ class NassauSetupSerializer(serializers.Serializer):
     press_unit = serializers.DecimalField(
         max_digits=8, decimal_places=2, default='0.00',
     )
+    # Per-side loss cap — only meaningful with presses/Claremont (the match can
+    # then escalate). Null = uncapped. The unbounded base (no press, not
+    # Claremont) is a fixed bet_unit × 3, so the client shows a read-only max
+    # there instead of asking for a cap.
+    loss_cap = serializers.DecimalField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True,
+        default=None, min_value=0,
+    )
     variant = serializers.ChoiceField(
         choices=['none', 'tiebreak_2nd', 'claremont'],
         default='none',
@@ -822,6 +830,16 @@ class Points531SetupSerializer(serializers.Serializer):
                     )
     net_percent   = serializers.IntegerField(
                         min_value=0, max_value=200, default=100,
+                    )
+    loss_cap      = serializers.DecimalField(
+                        max_digits=8, decimal_places=2,
+                        required=False, allow_null=True, default=None,
+                        min_value=0,
+                        help_text=(
+                            "Optional per-player loss cap. Null = uncapped "
+                            "(equivalently 36 × bet_unit, the 5-3-1 max). "
+                            "Lower it to clip losses; winners reduce pro-rata."
+                        ),
                     )
 
 
@@ -1023,8 +1041,11 @@ class StablefordSetupSerializer(serializers.Serializer):
                                             default='pool')
     per_point_rate = serializers.DecimalField(max_digits=6, decimal_places=2,
                                               default='0.00')
-    per_point_mode = serializers.ChoiceField(choices=['all', 'first'],
-                                             default='all')
+    per_point_mode = serializers.ChoiceField(choices=['average', 'all', 'first'],
+                                             default='average')
+    loss_cap      = serializers.DecimalField(max_digits=8, decimal_places=2,
+                                             required=False, allow_null=True,
+                                             default=None, min_value=0)
     entry_fee     = serializers.DecimalField(max_digits=8, decimal_places=2,
                                              default='0.00')
     payouts       = serializers.ListField(child=serializers.DictField(),
@@ -1133,6 +1154,11 @@ class WolfSetupSerializer(serializers.Serializer):
     non_wolf_bonus        = serializers.BooleanField(default=False)
     last_place_wolf_1718  = serializers.BooleanField(default=True)
     require_lone_or_blind = serializers.BooleanField(default=False)
+    loss_cap             = serializers.DecimalField(
+                              max_digits=8, decimal_places=2,
+                              required=False, allow_null=True,
+                              default=None, min_value=0,
+                          )
 
 
 class RabbitSetupSerializer(serializers.Serializer):

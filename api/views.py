@@ -1172,7 +1172,13 @@ class PlayerListView(APIView):
         # account is injected via save() so the client can never
         # spoof which tenant a new Player belongs to.
         player = ser.save(account=request.user.account)
-        return Response(PlayerSerializer(player).data, status=status.HTTP_201_CREATED)
+        # Compute is_on_app / authoritative index so a golfer added via
+        # "Add Halved golfer" is flagged immediately, not only after the
+        # next My Golfers reload.
+        return Response(
+            PlayerSerializer(player, context=_on_app_context([player])).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class PlayerDetailView(APIView):
@@ -1180,7 +1186,8 @@ class PlayerDetailView(APIView):
         player = account_get_or_404(
             Player, request.user.account, pk=pk, is_phantom=False,
         )
-        return Response(PlayerSerializer(player).data)
+        return Response(
+            PlayerSerializer(player, context=_on_app_context([player])).data)
 
     def patch(self, request, pk):
         # Editing a player is admin-only, matching create/delete.
@@ -1195,7 +1202,8 @@ class PlayerDetailView(APIView):
         ser = PlayerSerializer(player, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         player = ser.save()
-        return Response(PlayerSerializer(player).data)
+        return Response(
+            PlayerSerializer(player, context=_on_app_context([player])).data)
 
     def delete(self, request, pk):
         """
@@ -3803,6 +3811,7 @@ class NassauSetupView(APIView):
             play_front    = d.get('play_front', True),
             play_back     = d.get('play_back', True),
             play_overall  = d.get('play_overall', True),
+            loss_cap      = d.get('loss_cap'),
         )
         calculate_nassau(foursome)
         return Response(nassau_summary(foursome), status=status.HTTP_201_CREATED)
@@ -3982,6 +3991,7 @@ class Points531SetupView(APIView):
             foursome,
             handicap_mode = data.get('handicap_mode', 'net'),
             net_percent   = data.get('net_percent', 100),
+            loss_cap      = data.get('loss_cap'),
         )
         # Score any pre-existing hole entries right away so the first
         # UI fetch isn't blank.  calculate_points_531 is a no-op if
@@ -4133,6 +4143,7 @@ class WolfSetupView(APIView):
             non_wolf_bonus        = d.get('non_wolf_bonus', False),
             last_place_wolf_1718  = d.get('last_place_wolf_1718', True),
             require_lone_or_blind = d.get('require_lone_or_blind', False),
+            loss_cap              = d.get('loss_cap'),
         )
         calculate_wolf(foursome)
         return Response(wolf_summary(foursome), status=status.HTTP_201_CREATED)
@@ -5006,6 +5017,8 @@ class StablefordSetupView(APIView):
             'payout_style'       : config.payout_style,
             'per_point_rate'     : float(config.per_point_rate),
             'per_point_mode'     : config.per_point_mode,
+            'loss_cap'           : (float(config.loss_cap)
+                                    if config.loss_cap is not None else None),
             'entry_fee'          : float(config.entry_fee),
             'payouts'            : config.payouts or [],
             'excluded_player_ids': config.excluded_player_ids or [],
@@ -5035,7 +5048,8 @@ class StablefordSetupView(APIView):
             'net_percent'        : round_obj.net_percent,
             'payout_style'       : 'pool',
             'per_point_rate'     : 0.00,
-            'per_point_mode'     : 'all',
+            'per_point_mode'     : 'average',
+            'loss_cap'           : None,
             'entry_fee'          : 0.00,
             'payouts'            : [],
             'excluded_player_ids': [],
@@ -5059,6 +5073,7 @@ class StablefordSetupView(APIView):
                 'payout_style'       : d['payout_style'],
                 'per_point_rate'     : d['per_point_rate'],
                 'per_point_mode'     : d['per_point_mode'],
+                'loss_cap'           : d.get('loss_cap'),
                 'entry_fee'          : d['entry_fee'],
                 'payouts'            : d['payouts'],
                 'excluded_player_ids': d.get('excluded_player_ids', []),

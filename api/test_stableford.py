@@ -105,9 +105,21 @@ class StablefordTests(TestCase):
         self.assertEqual(rows['A']['payout'], 30.0)
         self.assertIsNone(rows['B']['payout'])
 
+    def test_per_point_vs_average_is_the_default(self):
+        # 3 players, points 54 / 36 / 18 (birdies/pars/bogeys), $1 a point.
+        # No per_point_mode → the new standard: settle vs the field average
+        # (mean 36). net = (pts − mean) × rate.
+        self._setup(payout_style='per_point', per_point_rate='1.00')
+        rows = {r['player_name']: r for r in self._result()['results']}
+        self.assertEqual(rows['A']['payout'], 54 - 36)   # +18
+        self.assertEqual(rows['B']['payout'], 36 - 36)   #   0
+        self.assertEqual(rows['C']['payout'], 18 - 36)   # -18
+        self.assertEqual(sum(r['payout'] for r in rows.values()), 0)
+
     def test_per_point_pay_everyone_above_you(self):
         # 3 players, points 54 / 36 / 18 (birdies/pars/bogeys), $1 a point.
-        self._setup(payout_style='per_point', per_point_rate='1.00')
+        self._setup(payout_style='per_point', per_point_rate='1.00',
+                    per_point_mode='all')
         rows = {r['player_name']: r for r in self._result()['results']}
         # net = rate × (n·pts − total); total = 108, n = 3.
         self.assertEqual(rows['A']['payout'], 3 * 54 - 108)   # +54
@@ -115,6 +127,18 @@ class StablefordTests(TestCase):
         self.assertEqual(rows['C']['payout'], 3 * 18 - 108)   # -54
         # Zero-sum.
         self.assertEqual(sum(r['payout'] for r in rows.values()), 0)
+
+    def test_per_point_loss_cap_clips_and_rescales(self):
+        # vs-average raw is A +18 / B 0 / C −18. Cap C at $10 → C pays 10,
+        # winner A (owed 18) rescales to 10, still zero-sum.
+        self._setup(payout_style='per_point', per_point_rate='1.00',
+                    loss_cap='10.00')
+        rows = {r['player_name']: r for r in self._result()['results']}
+        self.assertEqual(rows['C']['payout'], -10.0)
+        self.assertEqual(rows['A']['payout'], 10.0)
+        self.assertEqual(rows['B']['payout'], 0.0)
+        self.assertEqual(sum(r['payout'] for r in rows.values()), 0)
+        self.assertEqual(self._result()['loss_cap'], 10.0)
 
     def test_leaderboard_has_low_net_scores_tab(self):
         # A casual Stableford round still exposes a Low Net (scores) block so

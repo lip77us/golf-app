@@ -955,6 +955,7 @@ class RoundProvider extends ChangeNotifier {
     bool   playFront    = true,
     bool   playBack     = true,
     bool   playOverall  = true,
+    double? lossCap,
   }) async {
     _submitting = true;
     _clearError();
@@ -972,6 +973,7 @@ class RoundProvider extends ChangeNotifier {
         playFront:    playFront,
         playBack:     playBack,
         playOverall:  playOverall,
+        lossCap:      lossCap,
       );
       return true;
     } on NetworkException {

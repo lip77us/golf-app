@@ -22,6 +22,7 @@ import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/section_card.dart';
+import '../widgets/max_liability_note.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -58,6 +59,19 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   bool  _stakeOk = false;
   bool  _betCtrlInitialized = false;
 
+  // Optional per-side loss cap. Only relevant once the match can escalate
+  // (presses or Claremont); otherwise max loss is a fixed bet × 3 (or × 1 for
+  // an overall-only match) and we show that read-only instead.
+  bool _capEnabled = false;
+  final _capCtrl = TextEditingController();
+
+  /// True when presses or Claremont are on — the only way the match can run
+  /// past the fixed base bets, so the only case a cap is offered.
+  bool get _canEscalate => _pressMode != 'none' || _variant == 'claremont';
+
+  /// Independent base bets a side can lose with no escalation.
+  int get _baseMultiple => widget.overallOnly ? 1 : 3;
+
   /// playerId → team number (1 or 2)
   final Map<int, int> _teamMap = {};
 
@@ -75,6 +89,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   void dispose() {
     _pressUnitCtrl.dispose();
     _betCtrl.dispose();
+    _capCtrl.dispose();
     super.dispose();
   }
 
@@ -136,6 +151,12 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           _playBack    = existing.playBack;
           _playOverall = existing.playOverall;
           _pressUnitCtrl.text = existing.pressUnit.truncate().toString();
+          _capEnabled = existing.lossCap != null;
+          if (existing.lossCap != null) {
+            _capCtrl.text = existing.lossCap! % 1 == 0
+                ? existing.lossCap!.toStringAsFixed(0)
+                : existing.lossCap!.toStringAsFixed(2);
+          }
         });
 
         // Restore team assignments if teams exist.
@@ -192,6 +213,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         playFront:    _playFront,
         playBack:     _playBack,
         playOverall:  _playOverall,
+        lossCap: (_canEscalate && _capEnabled)
+            ? double.tryParse(_capCtrl.text.trim())
+            : null,
       );
 
       if (!mounted) return;
@@ -443,6 +467,55 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
           const SizedBox(height: 16),
           ],
+
+          // ── Loss cap (escalating) / max liability (bounded) ───────────────
+          if (_canEscalate)
+            SectionCard(
+              title: 'Cap losses',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Presses and Claremont can run the stakes up with no fixed '
+                    'ceiling, so you can cap each side’s losses. A side at the '
+                    'cap can’t press (it would be free).',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('Cap each side’s losses'),
+                    value: _capEnabled,
+                    onChanged: (v) => setState(() => _capEnabled = v),
+                  ),
+                  if (_capEnabled)
+                    SizedBox(
+                      width: 180,
+                      child: TextField(
+                        controller: _capCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          prefixText: '\$ ',
+                          labelText: 'Max loss per side',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            )
+          else
+            MaxLiabilityNote(
+              bet: double.tryParse(_betCtrl.text.trim()) ?? 0,
+              multiple: _baseMultiple,
+              detail: widget.overallOnly
+                  ? 'the 18-hole match'
+                  : 'lose all 3 (front, back, overall)',
+            ),
+          const SizedBox(height: 16),
 
           // ── Rules reminder ────────────────────────────────────────────────
           SectionCard(

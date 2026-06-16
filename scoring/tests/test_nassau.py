@@ -9,9 +9,16 @@ The fixtures keep the score patterns simple so anyone reading the
 test can mentally verify the expected winner without running the
 service.
 """
+from decimal import Decimal
+
 from django.test import TestCase
 
-from services.nassau import calculate_nassau, nassau_summary, setup_nassau
+from services.nassau import (
+    add_manual_press,
+    calculate_nassau,
+    nassau_summary,
+    setup_nassau,
+)
 
 from ._helpers import (
     make_foursome,
@@ -63,6 +70,99 @@ class NassauTests(TestCase):
         # T1 wins 5 holes, T2 wins 0, halve 4.  Margin = +5.
         assert s['front9']['margin'] == 5, s['front9']
         assert s['front9']['holes_played'] == 9
+
+    def test_loss_cap_clamps_the_net_total(self):
+        """T1 sweeps all 18 → wins F9, B9, overall = 3 × $5 = $15, clamped to
+        the $10 cap. With 2 sides the cap is a symmetric clamp of the net."""
+        self.round.bet_unit = Decimal('5')
+        self.round.save(update_fields=['bet_unit'])
+        setup_nassau(self.fs, self.team1, self.team2,
+                     handicap_mode='gross', loss_cap=Decimal('10'))
+        for hole in range(1, 19):
+            submit_hole(self.fs, hole, [
+                (self.pid['T1A'], 4), (self.pid['T1B'], 4),
+                (self.pid['T2A'], 5), (self.pid['T2B'], 5),
+            ])
+        calculate_nassau(self.fs)
+        pay = nassau_summary(self.fs)['payouts']
+        assert pay['total'] == 15.0, pay           # raw: 3 bets × $5
+        assert pay['total_capped'] == 10.0, pay    # clamped to the cap
+        assert pay['loss_cap'] == 10.0, pay
+
+    def test_negative_loss_cap_is_uncapped(self):
+        game = setup_nassau(self.fs, self.team1, self.team2,
+                            loss_cap=Decimal('-5'))
+        assert game.loss_cap is None
+
+    def _front_loss_then_down_on_back(self, cap):
+        """Team1 loses the front bet ($5) and is then 1-down on a still-open
+        back nine — so it would press. Nothing else is decided, so team1's
+        concluded loss is exactly the front bet."""
+        self.round.bet_unit = Decimal('5')
+        self.round.save(update_fields=['bet_unit'])
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross',
+                     press_mode='manual', press_unit='5.00', loss_cap=cap)
+        # Front: T2 wins hole 1, the rest halved → T1 loses the front by 1.
+        submit_hole(self.fs, 1, [(self.pid['T1A'], 5), (self.pid['T1B'], 5),
+                                 (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        for h in range(2, 10):
+            submit_hole(self.fs, h, [(self.pid['T1A'], 4), (self.pid['T1B'], 4),
+                                     (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        # Back (partial): T2 wins hole 10, rest halved → T1 down 1, back + overall
+        # still open (so only the front bet is concluded).
+        submit_hole(self.fs, 10, [(self.pid['T1A'], 5), (self.pid['T1B'], 5),
+                                  (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        for h in range(11, 14):
+            submit_hole(self.fs, h, [(self.pid['T1A'], 4), (self.pid['T1B'], 4),
+                                     (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        calculate_nassau(self.fs)
+        return nassau_summary(self.fs)
+
+    def test_press_closes_when_a_side_hits_the_cap(self):
+        s = self._front_loss_then_down_on_back(cap=Decimal('5'))
+        # T1's locked-in loss is $5 = the cap → no more pressing for them.
+        assert s['payouts']['total'] == -5.0, s['payouts']
+        assert s['can_press'] is False, s['payouts']
+        with self.assertRaises(ValueError):
+            add_manual_press(self.fs, start_hole=14)
+
+    def test_press_stays_open_below_the_cap(self):
+        s = self._front_loss_then_down_on_back(cap=Decimal('10'))
+        # Same $5 loss, but the cap is $10 → real downside remains, press allowed.
+        assert s['can_press'] is True, s['payouts']
+        add_manual_press(self.fs, start_hole=14)   # must not raise
+
+    def _auto_front_loss_then_2down_back(self, cap):
+        """AUTO mode: T1 loses the front bet ($5) WITHOUT ever being 2-down (so
+        no front auto-press), then goes 2-down on the back → a back auto-press
+        would trigger. Returns the back-nine auto-presses in the summary."""
+        self.round.bet_unit = Decimal('5')
+        self.round.save(update_fields=['bet_unit'])
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross',
+                     press_mode='auto', press_unit='5.00', loss_cap=cap)
+        # Front: T2 wins hole 1, rest halved → T1 down 1 throughout (never 2-down).
+        submit_hole(self.fs, 1, [(self.pid['T1A'], 5), (self.pid['T1B'], 5),
+                                 (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        for h in range(2, 10):
+            submit_hole(self.fs, h, [(self.pid['T1A'], 4), (self.pid['T1B'], 4),
+                                     (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        # Back: T2 wins holes 10 & 11 → T1 is 2-down → back auto-press fires.
+        submit_hole(self.fs, 10, [(self.pid['T1A'], 5), (self.pid['T1B'], 5),
+                                  (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        submit_hole(self.fs, 11, [(self.pid['T1A'], 5), (self.pid['T1B'], 5),
+                                  (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+        return [p for p in s['presses']
+                if p['nine'] == 'back' and p['press_type'] == 'auto']
+
+    def test_auto_press_suppressed_when_capped(self):
+        # T1's $5 front loss == the $5 cap → the back auto-press must not fire.
+        assert self._auto_front_loss_then_2down_back(cap=Decimal('5')) == []
+
+    def test_auto_press_fires_below_cap(self):
+        # $5 loss under a $10 cap → real downside remains, the auto-press fires.
+        assert len(self._auto_front_loss_then_2down_back(cap=Decimal('10'))) == 1
 
     def test_back9_scored_independently_of_front(self):
         """A blowout on the front doesn't bleed into the back-9 bet."""

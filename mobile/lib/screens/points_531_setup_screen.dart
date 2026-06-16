@@ -49,6 +49,20 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
   bool _stakeOk = false;
   bool _betCtrlInitialized = false;
 
+  /// Optional per-player loss cap.  **On by default** — the safer choice,
+  /// and it reinforces that the stake is per-point (a pool game wouldn't
+  /// need one). Pre-filled with the 36 × stake worst case; the player can
+  /// lower it. Uncapped is equivalent to 36 × bet_unit, the 5-3-1 max.
+  bool _capEnabled = true;
+  /// True once the player types their own cap, so auto-sync stops
+  /// overwriting it when the stake changes.
+  bool _capEdited = false;
+  final TextEditingController _capCtrl = TextEditingController();
+
+  /// You can fall at most 2 points/hole below the 3-pt mean × 18 holes,
+  /// so the worst-case loss is 36 × the stake.
+  static const int _maxLossMultiple = 36;
+
   bool   _loading   = true;
   bool   _starting  = false;
   Object? _error;
@@ -64,7 +78,25 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
   @override
   void dispose() {
     _betCtrl.dispose();
+    _capCtrl.dispose();
     super.dispose();
+  }
+
+  /// The stake currently in play: the edited bet field if valid, else the
+  /// round's existing bet unit.  Drives the suggested 36× loss cap.
+  double get _currentBet {
+    final parsed = double.tryParse(_betCtrl.text.trim());
+    if (parsed != null) return parsed;
+    return context.read<RoundProvider>().round?.betUnit ?? 0;
+  }
+
+  /// Keep the cap pre-filled at 36 × stake as the stake is typed, until
+  /// the player overrides it themselves.
+  void _syncCapToStake() {
+    if (_capEnabled && !_capEdited) {
+      final sugg = _currentBet * _maxLossMultiple;
+      _capCtrl.text = sugg > 0 ? sugg.toStringAsFixed(0) : '';
+    }
   }
 
   Future<void> _load() async {
@@ -92,6 +124,13 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
         if (_summary!.status != 'pending') {
           _mode       = _summary!.handicapMode;
           _netPercent = _summary!.netPercent;
+          // Adopt the saved cap state (null = the user chose uncapped).
+          _capEnabled = _summary!.lossCap != null;
+          if (_summary!.lossCap != null) {
+            _capEdited    = true;   // don't auto-resync over a saved value
+            _capCtrl.text = _summary!.lossCap!
+                .toStringAsFixed(_summary!.lossCap! % 1 == 0 ? 0 : 2);
+          }
         }
         _loading    = false;
       });
@@ -134,6 +173,9 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
         widget.foursomeId,
         handicapMode: _mode,
         netPercent:   _netPercent,
+        // null = uncapped. An enabled-but-unparseable field also falls
+        // back to uncapped rather than blocking Start.
+        lossCap: _capEnabled ? double.tryParse(_capCtrl.text.trim()) : null,
       );
 
       // Pre-load the Points 5-3-1 summary so the score-entry status
@@ -227,7 +269,27 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
 
           StakeField(
             controller: _betCtrl,
-            onChanged: (v) => setState(() => _stakeOk = v)),
+            label: 'Per-point stake',
+            helpText:
+                'Points 5-3-1 pays per point: you win or lose this much for '
+                'every point you finish above or below the 54-point average.',
+            onChanged: (v) => setState(() {
+              _stakeOk = v;
+              _syncCapToStake();
+            })),
+
+          const SizedBox(height: 16),
+
+          _LossCapCard(
+            enabled:    _capEnabled,
+            controller: _capCtrl,
+            suggested:  _currentBet * _maxLossMultiple,
+            onToggle: (on) => setState(() {
+              _capEnabled = on;
+              if (on) _syncCapToStake();
+            }),
+            onEdited: () => _capEdited = true,
+          ),
 
           const SizedBox(height: 16),
 
@@ -258,10 +320,19 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'Settlement: a player who finishes 18 holes with 54 '
-                    'points breaks even.  Every point above 54 is worth one '
-                    'stake; every point below 54 is owed.  Because each '
-                    'hole pays exactly 9 points total, the three players '
+                    'points breaks even.  Every point above 54 wins one '
+                    'per-point stake; every point below 54 owes one.  Because '
+                    'each hole pays exactly 9 points total, the three players '
                     'net to zero at the end.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Capping losses: with a cap on, no one loses more than the '
+                    'cap. A player who would owe more stops there, and the '
+                    'winners share what was actually collected in proportion '
+                    'to what they were owed — so the table still nets to zero.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
@@ -329,6 +400,88 @@ class _RosterBanner extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// Loss-cap card — optional table-wide per-player loss ceiling
+// ===========================================================================
+
+class _LossCapCard extends StatelessWidget {
+  final bool enabled;
+  final TextEditingController controller;
+  final double suggested;            // 36 × current stake
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onEdited;       // fired when the player types a cap
+
+  const _LossCapCard({
+    required this.enabled,
+    required this.controller,
+    required this.suggested,
+    required this.onToggle,
+    required this.onEdited,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: const EdgeInsets.fromLTRB(14, 4, 8, 0),
+            title: const Text('Cap losses',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(
+              enabled
+                  ? 'Nobody loses more than the amount below.'
+                  : 'Off — the most you can lose is 36 × the stake.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+            value: enabled,
+            onChanged: onToggle,
+          ),
+          if (enabled)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: controller,
+                    onChanged: (_) => onEdited(),
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    decoration: const InputDecoration(
+                      prefixText: '\$',
+                      labelText: 'Max loss per player',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    suggested > 0
+                        ? 'Worst case at this stake is \$${suggested.toStringAsFixed(0)} '
+                          '(36 × stake). Losers stop at the cap; winners share '
+                          'what’s collected, pro-rata.'
+                        : 'Enter a stake above to see the suggested maximum.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -230,6 +230,19 @@ class Points531Game(models.Model):
                             validators=[MinValueValidator(0), MaxValueValidator(200)],
                             help_text="Percentage of playing handicap applied when handicap_mode='net'.",
                         )
+    loss_cap            = models.DecimalField(
+                            max_digits=8, decimal_places=2,
+                            null=True, blank=True,
+                            help_text=(
+                                "Optional per-side loss cap (one table-wide value "
+                                "applied per player). Null = uncapped; the "
+                                "theoretical max 5-3-1 loss is 36 × bet_unit "
+                                "(2 pts/hole below the mean × 18), so a null cap "
+                                "and 36×bet_unit are equivalent. When set lower, "
+                                "losers clip at the cap and winners are reduced "
+                                "pro-rata — see services.wager.settle()."
+                            ),
+                        )
     created_at          = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -502,6 +515,15 @@ class WolfGame(models.Model):
                                           "player has been Wolf 3 times all as partner, "
                                           "their next (last) Wolf turn locks out the "
                                           "partner option.",
+                            )
+    # Optional per-player loss cap. Null = uncapped. Wolf points already net to
+    # zero per hole, so money is points × bet_unit; a cap clips losers and
+    # rescales winners pro-rata via services.wager.settle().
+    loss_cap              = models.DecimalField(
+                                max_digits=8, decimal_places=2,
+                                null=True, blank=True,
+                                help_text="Optional per-player loss cap; "
+                                          "null = uncapped.",
                             )
     created_at            = models.DateTimeField(auto_now_add=True)
 
@@ -900,6 +922,16 @@ class NassauGame(models.Model):
                             max_digits=8, decimal_places=2, default='0.00',
                             help_text="Dollar amount per press bet (separate from Round.bet_unit).",
                         )
+    # Optional per-side loss cap. Only meaningful once the match can escalate
+    # (presses or Claremont); with neither, max loss is a fixed bet_unit × 3 so
+    # no cap is needed. With 2 sides the cap is a simple clamp of the net total
+    # to ±cap, and it also gates pressing (a side at the cap can't press —
+    # see calculate_nassau / add_manual_press). Null = uncapped.
+    loss_cap            = models.DecimalField(
+                            max_digits=8, decimal_places=2, null=True, blank=True,
+                            help_text="Per-side loss cap (presses/Claremont only); "
+                                      "null = uncapped.",
+                        )
     variant             = models.CharField(
                             max_length=20,
                             choices=NASSAU_VARIANT_CHOICES,
@@ -1252,11 +1284,23 @@ class StablefordGame(models.Model):
                         max_digits=6, decimal_places=2, default=0.00,
                         help_text="$ per point of margin vs each opponent "
                                   "(per_point style).")
-    # per_point: settle against everyone ('all') or only pay the winner the
-    # margin ('first').
-    PER_POINT_MODES = [('all', 'Pay everyone above you'), ('first', 'Pay first')]
+    # per_point settlement (all map to services.wager.settle):
+    #   average — STANDARD: settle vs the field average (Points 5-3-1 economics)
+    #   all     — pay everyone above you (= n × average; advanced)
+    #   first   — only the leader(s) collect the margin (advanced)
+    PER_POINT_MODES = [
+        ('average', 'Settle vs the field average'),
+        ('all',     'Pay everyone above you'),
+        ('first',   'Pay first'),
+    ]
     per_point_mode = models.CharField(max_length=8, choices=PER_POINT_MODES,
-                                      default='all')
+                                      default='average')
+    # Optional per-player loss cap (per_point only). Null = uncapped. When set,
+    # losers clip at the cap and winners reduce pro-rata (services.wager.settle).
+    loss_cap       = models.DecimalField(
+                        max_digits=8, decimal_places=2, null=True, blank=True,
+                        help_text="Optional per-player loss cap (per_point "
+                                  "style); null = uncapped.")
 
     entry_fee           = models.DecimalField(
                             max_digits=8, decimal_places=2, default=0.00,

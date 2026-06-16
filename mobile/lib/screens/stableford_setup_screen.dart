@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
+import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/payout_config_field.dart';
@@ -42,11 +43,17 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   int _netPercent = 100;
 
   String _payoutStyle = 'pool';        // 'pool' | 'per_point'
-  String _perPointMode = 'all';        // 'all' | 'first'
+  String _perPointMode = 'average';    // 'average' | 'all' | 'first'
   final _entryCtrl  = TextEditingController(text: '5');
   final _rateCtrl   = TextEditingController(text: '1'); // $/point (per_point)
   bool _noStakes = false;
   int _numPlayers = 0;
+
+  // Optional per-player loss cap (per_point only). Off by default — unlike
+  // 5-3-1 the points table is editable, so there's no fixed "max loss" to
+  // pre-fill; the player opts in and sets an amount.
+  bool _capEnabled = false;
+  final _capCtrl = TextEditingController();
 
   final _points = {for (final b in _kBuckets) b: TextEditingController()};
 
@@ -88,6 +95,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   void dispose() {
     _entryCtrl.dispose();
     _rateCtrl.dispose();
+    _capCtrl.dispose();
     for (final c in _points.values) c.dispose();
     for (final c in _payoutCtrls) c.dispose();
     super.dispose();
@@ -111,8 +119,11 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
         _netPercent = cfg['net_percent'] as int? ?? 100;
         _payoutStyle = (cfg['payout_style']?.toString() == 'per_point')
             ? 'per_point' : 'pool';
-        _perPointMode = (cfg['per_point_mode']?.toString() == 'first')
-            ? 'first' : 'all';
+        final ppm = cfg['per_point_mode']?.toString();
+        _perPointMode = (ppm == 'first' || ppm == 'all') ? ppm! : 'average';
+        final cap = (cfg['loss_cap'] as num?)?.toDouble();
+        _capEnabled = cap != null;
+        if (cap != null) _capCtrl.text = _fmt(cap);
         _rateCtrl.text   = _fmt(cfg['per_point_rate'] as num? ?? 1);
         _entryCtrl.text  = _fmt(cfg['entry_fee'] as num? ?? 5);
         for (final b in _kBuckets) {
@@ -186,13 +197,26 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
         payoutStyle: _payoutStyle,
         perPointRate: double.tryParse(_rateCtrl.text.trim()) ?? 0.0,
         perPointMode: _perPointMode,
+        lossCap: (_payoutStyle == 'per_point' && _capEnabled)
+            ? double.tryParse(_capCtrl.text.trim())
+            : null,
         entryFee: double.tryParse(_entryCtrl.text.trim()) ?? 0.0,
         payouts: payouts,
         pointsTable: {
           for (final b in _kBuckets) b: int.tryParse(_points[b]!.text.trim()) ?? 0,
         },
       );
-      if (mounted) Navigator.of(context).pop(true);
+      if (!mounted) return;
+      // Jump straight to scoring, like the per-foursome games (5-3-1, Sixes…),
+      // so the flow is consistent — there's no reconfigure step to come back
+      // for. Stableford is round-level; a casual round has one foursome.
+      final fs = context.read<RoundProvider>().round?.foursomes;
+      if (fs != null && fs.isNotEmpty) {
+        Navigator.of(context)
+            .pushReplacementNamed('/score-entry', arguments: fs.first.id);
+      } else {
+        Navigator.of(context).pop(true);   // fallback: no foursome loaded
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e; _saving = false; });
     }
@@ -365,19 +389,24 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
         ] else ...[
           SegmentedButton<String>(
             segments: const [
-              ButtonSegment(value: 'all', label: Text('Everyone above you')),
-              ButtonSegment(value: 'first', label: Text('Just first')),
+              ButtonSegment(value: 'average', label: Text('vs Average')),
+              ButtonSegment(value: 'all',     label: Text('Above you')),
+              ButtonSegment(value: 'first',   label: Text('Just first')),
             ],
             selected: {_perPointMode},
             onSelectionChanged: (s) => setState(() => _perPointMode = s.first),
           ),
           const SizedBox(height: 8),
           Text(
-            _perPointMode == 'first'
-                ? 'Only the leader collects — everyone else pays the leader '
-                  'their points deficit at this rate per point.'
-                : 'You pay everyone above you (and collect from everyone below) '
-                  'at this rate per point of difference.',
+            switch (_perPointMode) {
+              'first' => 'Only the leader collects — everyone else pays the '
+                  'leader their points deficit at this rate per point.',
+              'all' => 'You pay everyone above you (and collect from everyone '
+                  'below) at this rate per point of difference.',
+              _ => 'Standard: settle against the field average. Every point '
+                  'above the average wins; every point below owes — at this '
+                  'rate per point.',
+            },
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 12),
@@ -394,6 +423,40 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
                 border: OutlineInputBorder(), isDense: true),
             ),
           ),
+          const SizedBox(height: 12),
+          // Optional per-player loss cap.
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Cap losses'),
+            subtitle: Text(
+              _capEnabled
+                  ? 'Nobody loses more than the amount below; winners share '
+                    'what’s collected, pro-rata.'
+                  : 'Off — per-point losses are uncapped.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            value: _capEnabled,
+            onChanged: (v) => setState(() => _capEnabled = v),
+          ),
+          if (_capEnabled)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SizedBox(
+                width: 180,
+                child: TextField(
+                  controller: _capCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Max loss per player', prefixText: '\$ ',
+                    border: OutlineInputBorder(), isDense: true),
+                ),
+              ),
+            ),
         ],
       ],
     );

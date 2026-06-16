@@ -953,6 +953,7 @@ class ApiClient {
     bool   playFront    = true,
     bool   playBack     = true,
     bool   playOverall  = true,
+    double? lossCap,               // presses/Claremont only; null = uncapped
   }) async {
     final data = await _post('/foursomes/$foursomeId/nassau/setup/', {
       'team1_player_ids': team1Ids,
@@ -965,6 +966,7 @@ class ApiClient {
       'play_front'      : playFront,
       'play_back'       : playBack,
       'play_overall'    : playOverall,
+      'loss_cap'        : lossCap?.toStringAsFixed(2),
     });
     return NassauSummary.fromJson(data as Map<String, dynamic>);
   }
@@ -1062,12 +1064,16 @@ class ApiClient {
   /// summary so the caller doesn't need a second GET.
   Future<Points531Summary> postPoints531Setup(
     int foursomeId, {
-    String handicapMode = 'net',
-    int    netPercent   = 100,
+    String  handicapMode = 'net',
+    int     netPercent   = 100,
+    double? lossCap,
   }) async {
     final data = await _post('/foursomes/$foursomeId/points_531/setup/', {
       'handicap_mode': handicapMode,
       'net_percent'  : netPercent,
+      // null = uncapped; the backend treats a missing/null cap as the
+      // 36×bet_unit theoretical max (never binds).
+      'loss_cap'     : lossCap,
     });
     return Points531Summary.fromJson(data as Map<String, dynamic>);
   }
@@ -1198,6 +1204,7 @@ class ApiClient {
     bool       nonWolfBonus      = false,
     bool       lastPlaceWolf1718 = true,
     bool       requireLoneOrBlind = false,
+    double?    lossCap,
   }) async {
     final data = await _post('/foursomes/$foursomeId/wolf/setup/', {
       'handicap_mode'         : handicapMode,
@@ -1210,6 +1217,7 @@ class ApiClient {
       'non_wolf_bonus'        : nonWolfBonus,
       'last_place_wolf_1718'  : lastPlaceWolf1718,
       'require_lone_or_blind' : requireLoneOrBlind,
+      'loss_cap'              : lossCap?.toStringAsFixed(2),
     });
     return WolfSummary.fromJson(data as Map<String, dynamic>);
   }
@@ -1475,11 +1483,12 @@ class ApiClient {
     required int                        netPercent,
     required String                     payoutStyle, // 'pool' | 'per_point'
     required double                     perPointRate,
-    required String                     perPointMode, // 'all' | 'first'
+    required String                     perPointMode, // 'average' | 'all' | 'first'
     required double                     entryFee,
     required List<Map<String, dynamic>> payouts,
     required Map<String, int>           pointsTable, // keys: albatross..double
     List<int>                           excludedPlayerIds = const [],
+    double?                             lossCap, // per_point only; null = uncapped
   }) async {
     final data = await _post('/rounds/$roundId/stableford/setup/', {
       'handicap_mode'      : handicapMode,
@@ -1487,6 +1496,7 @@ class ApiClient {
       'payout_style'       : payoutStyle,
       'per_point_rate'     : perPointRate.toStringAsFixed(2),
       'per_point_mode'     : perPointMode,
+      'loss_cap'           : lossCap?.toStringAsFixed(2),
       'entry_fee'          : entryFee.toStringAsFixed(2),
       'payouts'            : payouts,
       'excluded_player_ids': excludedPlayerIds,

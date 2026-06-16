@@ -244,3 +244,28 @@ class WolfTests(TestCase):
         summary = wolf_summary(self.fs)
         assert abs(sum(p['points'] for p in summary['players'])) < 1e-9
         assert abs(sum(p['money']  for p in summary['players'])) < 1e-9
+
+    # ── Loss cap ─────────────────────────────────────────────────────────────
+
+    def test_loss_cap_clips_loser_and_stays_zero_sum(self):
+        # Lone Wolf loss: Alice −3 pts, the other three +1 each. At $1/pt and a
+        # $2 cap, Alice's loss clips to $2 and the winners rescale pro-rata so
+        # the table still nets to zero.
+        from decimal import Decimal
+        self.round.bet_unit = Decimal('1.00')
+        self.round.save(update_fields=['bet_unit'])
+        self._setup(loss_cap=Decimal('2'))
+        self._decide(1, 'lone')
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 6), (self.pid['Bob'], 4),
+                                  (self.pid['Carol'], 4), (self.pid['Dave'], 4)])
+        calculate_wolf(self.fs)
+        summary = wolf_summary(self.fs)
+        money = {p['name']: p['money'] for p in summary['players']}
+        assert money['Alice'] == -2.0, money            # clipped at the cap
+        assert abs(sum(money.values())) < 1e-9          # winners rescaled
+        assert summary['money']['loss_cap'] == 2.0
+
+    def test_negative_cap_is_uncapped(self):
+        from decimal import Decimal
+        game = self._setup(loss_cap=Decimal('-5'))
+        assert game.loss_cap is None

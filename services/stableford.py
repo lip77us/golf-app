@@ -187,31 +187,27 @@ def stableford_standings(round_obj) -> list:
         return (1, 0) if d['holes_played'] == 0 else (0, -d['points'])
     rows = sorted(totals.items(), key=_key)
 
-    # Per-point ("pay everyone above you"): net = rate × (n·pts − total) across
-    # eligible, scored players. Zero-sum; +ve collects, −ve pays.
+    # Per-point: settle eligible, scored players via the shared wager engine,
+    # which applies the optional loss cap (clip losers, rescale winners
+    # pro-rata) uniformly across all three modes. Zero-sum; +ve collects.
     per_point_payout = None
     if style == 'per_point' and config is not None:
-        rate = float(config.per_point_rate)
-        elig = [(pid, d['points']) for pid, d in totals.items()
-                if pid not in excluded_ids and d['holes_played'] > 0]
-        n = len(elig)
-        if config.per_point_mode == 'first' and n:
-            # Only the leader(s) collect: everyone else pays the leader their
-            # points deficit × rate; ties for first split the take.
-            top = max(p for _pid, p in elig)
-            winners = [pid for pid, p in elig if p == top]
-            take = sum((top - p) * rate for _pid, p in elig)
-            per_winner = round(take / len(winners), 2)
-            per_point_payout = {
-                pid: (per_winner if pid in winners
-                      else round(-(top - p) * rate, 2))
-                for pid, p in elig
-            }
-        else:  # 'all' — pay everyone above you
-            tot = sum(p for _pid, p in elig)
-            per_point_payout = {
-                pid: round(rate * (n * pts - tot), 2) for pid, pts in elig
-            }
+        from services.wager import (PER_POINT, WagerConfig, settle,
+                                     PAY_ABOVE, PAY_WINNER, VS_AVERAGE)
+        elig = {pid: d['points'] for pid, d in totals.items()
+                if pid not in excluded_ids and d['holes_played'] > 0}
+        if elig:
+            settlement = {'first': PAY_WINNER, 'all': PAY_ABOVE,
+                          'average': VS_AVERAGE}.get(config.per_point_mode,
+                                                     VS_AVERAGE)
+            cfg = WagerConfig(
+                funding    = PER_POINT,
+                settlement = settlement,
+                rate       = config.per_point_rate,
+                cap        = config.loss_cap,
+            )
+            per_point_payout = {pid: float(v)
+                                for pid, v in settle(elig, cfg).items()}
 
     def _rank_list(items):
         out, rank = [], 1
@@ -283,7 +279,9 @@ def stableford_summary(round_obj) -> dict:
         'net_percent'   : config.net_percent if config else 100,
         'payout_style'  : style,
         'per_point_rate': float(config.per_point_rate) if config else 0.0,
-        'per_point_mode': config.per_point_mode if config else 'all',
+        'per_point_mode': config.per_point_mode if config else 'average',
+        'loss_cap'      : (float(config.loss_cap)
+                           if config and config.loss_cap is not None else None),
         'entry_fee'     : entry_fee,
         'pool'          : (round(entry_fee * len(standings), 2)
                            if style == 'pool' else 0.0),

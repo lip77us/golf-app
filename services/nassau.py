@@ -52,12 +52,48 @@ Public API
     press   = add_manual_press(foursome, start_hole)   # losing team calls top press
 """
 
+from decimal import Decimal
+
 from django.db import transaction
 
 from core.models import HandicapMode, MatchStatus
 from games.models import NassauGame, NassauTeam, NassauHoleScore, NassauPress
 from scoring.handicap import build_score_index
 from scoring.models import HoleScore
+
+
+# ---------------------------------------------------------------------------
+# Settlement helpers
+# ---------------------------------------------------------------------------
+
+def _clamp_to_cap(total: float, cap) -> float:
+    """Clamp a 2-side net total to ±cap (the per-side loss cap).
+
+    With only two sides every settlement model reduces to 'the loser pays the
+    winner the difference', so the cap is just a symmetric clamp. ``cap=None``
+    → unchanged. ``total`` is from team1's perspective (>0 = team1 collects).
+    """
+    if cap is None:
+        return total
+    c = abs(float(cap))
+    return max(-c, min(c, total))
+
+
+def _press_blocked_by_cap(game, concluded_net: float, nine_margin: int) -> bool:
+    """True when the side that is DOWN on a nine (the one who would press) has
+    already locked in losses ≥ the cap — so pressing would be a free option
+    and must be blocked.
+
+    Uses CONCLUDED bets only (the non-aggressive rule): a side is only cut off
+    once its settled losses reach the cap, not on projected/live-nine position.
+    ``concluded_net`` is team1's net from settled bets (>0 = team1 ahead);
+    ``nine_margin`` > 0 = team1 up on this nine (team2 is down and presses),
+    < 0 = team1 down (team1 presses).
+    """
+    if game.loss_cap is None or nine_margin == 0:
+        return False
+    down_side_loss = concluded_net if nine_margin > 0 else -concluded_net
+    return down_side_loss >= float(game.loss_cap)
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +215,7 @@ def setup_nassau(
     play_front:    bool  = True,
     play_back:     bool  = True,
     play_overall:  bool  = True,
+    loss_cap             = None,
 ) -> NassauGame:
     """
     Create (or replace) the NassauGame and its two fixed teams.
@@ -195,6 +232,11 @@ def setup_nassau(
     if variant not in ('none', 'tiebreak_2nd', 'claremont'):
         variant = 'none'
 
+    if loss_cap is not None:
+        loss_cap = Decimal(str(loss_cap))
+        if loss_cap < 0:
+            loss_cap = None
+
     game = NassauGame.objects.create(
         foursome      = foursome,
         handicap_mode = handicap_mode,
@@ -205,6 +247,7 @@ def setup_nassau(
         play_front    = play_front,
         play_back     = play_back,
         play_overall  = play_overall,
+        loss_cap      = loss_cap,
         status        = MatchStatus.PENDING,
     )
 
@@ -257,6 +300,17 @@ def add_manual_press(foursome, start_hole: int) -> NassauPress:
         game=game, press_type='manual', start_hole=start_hole
     ).exists():
         raise ValueError(f"A manual press already starts on hole {start_hole}.")
+
+    # Cap gate (defends the API directly, mirroring nassau_summary.can_press):
+    # a side that has hit the cap can't press — it would be a free option.
+    if game.loss_cap is not None:
+        s = nassau_summary(foursome)
+        if s is not None:
+            nine_margin = (s['front9']['margin'] if nine == 'front'
+                           else s['back9']['margin'])
+            if _press_blocked_by_cap(game, s['payouts']['total'], nine_margin):
+                raise ValueError(
+                    "That side has reached its loss cap — pressing is closed.")
 
     press = NassauPress.objects.create(
         game             = game,
@@ -409,6 +463,39 @@ def calculate_nassau(foursome) -> NassauGame | None:
     auto_enabled   = game.press_mode in ('auto', 'both')
     manual_enabled = game.press_mode in ('manual', 'both')
 
+    # ── Cap gate for AUTO presses ─────────────────────────────────────────
+    # A side that has hit the cap can't auto-press (it would be a free option).
+    # Concluded (locked-in) net in dollars, team1's perspective — only DECIDED
+    # main + bottom bets and COMPLETED presses count; live/contested bets don't.
+    # Re-evaluated at each fire so a later concluded win can re-open pressing
+    # (concluded loss isn't monotonic — winning a bet later reduces it).
+    cap_bet_unit   = float(foursome.round.bet_unit)
+    cap_press_unit = float(game.press_unit)
+
+    def _decided_dollars(margin):
+        if not margin:                 # None or 0 (push) → no money
+            return 0.0
+        return cap_bet_unit if margin > 0 else -cap_bet_unit
+
+    def _concluded_net():
+        net = (_decided_dollars(front9_decided_margin)
+               + _decided_dollars(back9_decided_margin)
+               + _decided_dollars(overall_decided_margin))
+        if is_claremont:
+            net += (_decided_dollars(bot_front9_decided_margin)
+                    + _decided_dollars(bot_back9_decided_margin)
+                    + _decided_dollars(bot_overall_decided_margin))
+        for p in top_completed_presses + bot_completed_presses:
+            if p['margin'] > 0:
+                net += cap_press_unit
+            elif p['margin'] < 0:
+                net -= cap_press_unit
+        return net
+
+    def _auto_press_blocked(nine_margin):
+        return (game.loss_cap is not None
+                and _press_blocked_by_cap(game, _concluded_net(), nine_margin))
+
     for hole_num in range(1, 19):
         t1_net = _best_ball(t1, hole_num, score_index)
         t2_net = _best_ball(t2, hole_num, score_index)
@@ -505,7 +592,9 @@ def calculate_nassau(foursome) -> NassauGame | None:
             holes_left_in_nine = nine_end - hole_num
             if holes_left_in_nine > 0 and top_nine_margin in AUTO_TOP_THRESHOLDS:
                 tf = top_front9_thresholds_fired if nine_key == 'front' else top_back9_thresholds_fired
-                if top_nine_margin not in tf:
+                # Suppress (without marking fired, so it can re-open) when the
+                # side that would press has already hit the cap.
+                if top_nine_margin not in tf and not _auto_press_blocked(top_nine_margin):
                     tf.add(top_nine_margin)
                     top_active_presses.append({
                         'nine': nine_key, 'press_type': 'auto', 'side': 'top',
@@ -579,7 +668,7 @@ def calculate_nassau(foursome) -> NassauGame | None:
                 pts_left_in_nine = (nine_end - hole_num) * 2
                 if pts_left_in_nine > 0 and bot_nine_margin in AUTO_BOT_THRESHOLDS:
                     bf = bot_front9_thresholds_fired if nine_key == 'front' else bot_back9_thresholds_fired
-                    if bot_nine_margin not in bf:
+                    if bot_nine_margin not in bf and not _auto_press_blocked(bot_nine_margin):
                         bf.add(bot_nine_margin)
                         bot_active_presses.append({
                             'nine': nine_key, 'press_type': 'auto', 'side': 'bottom',
@@ -993,6 +1082,13 @@ def nassau_summary(foursome) -> dict | None:
             if back9_margin != 0:
                 can_press = True
                 press_available_nine = 'back'
+        # Cap gate: a side that has hit the cap can't press (it would be free).
+        if can_press:
+            nine_margin = (front9_margin if press_available_nine == 'front'
+                           else back9_margin)
+            if _press_blocked_by_cap(game, top_total + bot_total, nine_margin):
+                can_press = False
+                press_available_nine = None
 
     # ── Team display ──────────────────────────────────────────────────────
     # Cup nassau always uses strokes-off-low regardless of stored handicap_mode.
@@ -1129,6 +1225,11 @@ def nassau_summary(foursome) -> dict | None:
             'bottom_presses' : bot_press_total,
             'bottom_total'   : bot_total,
             'total'          : top_total + bot_total,
+            # With 2 sides the cap is a clamp of the net total to ±cap (the
+            # loser pays the winner the difference, capped). `total` is from
+            # team1's perspective. None when uncapped.
+            'loss_cap'       : float(game.loss_cap) if game.loss_cap is not None else None,
+            'total_capped'   : _clamp_to_cap(top_total + bot_total, game.loss_cap),
         },
         'holes'               : holes_out,
         'can_press'           : can_press,

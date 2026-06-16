@@ -24,6 +24,7 @@ import '../widgets/golf_primary_button.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/section_card.dart';
+import '../widgets/max_liability_note.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -359,6 +360,14 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       StakeField(
                         controller: _betCtrl,
                         onChanged: (v) => setState(() => _stakeOk = v),
+                      ),
+                      MaxLiabilityNote(
+                        bet: double.tryParse(_betCtrl.text.trim()) ?? 0,
+                        // 3 standard segments + up to 2 extra matches (an early
+                        // close-out immediately starts the next match), so the
+                        // worst case is losing all 5.
+                        multiple: 5,
+                        detail: 'lose all 5 matches (3 + up to 2 extras)',
                       ),
                       const SizedBox(height: 20),
 

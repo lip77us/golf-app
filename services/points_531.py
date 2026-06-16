@@ -72,6 +72,7 @@ from core.models import HandicapMode, MatchStatus
 from games.models import Points531Game, Points531PlayerHoleResult
 from scoring.handicap import build_score_index
 from scoring.models import HoleScore
+from services.wager import PER_POINT, VS_AVERAGE, WagerConfig, settle
 from tournament.models import Foursome
 
 
@@ -84,6 +85,7 @@ def setup_points_531(
     foursome,
     handicap_mode: str = HandicapMode.NET,
     net_percent: int = 100,
+    loss_cap=None,
 ) -> 'Points531Game':
     """
     Create (or replace) the Points 5-3-1 game for a foursome.
@@ -105,10 +107,17 @@ def setup_points_531(
 
     net_percent = max(0, min(200, int(net_percent)))
 
+    # A negative cap is meaningless; treat it as "no cap".
+    if loss_cap is not None:
+        loss_cap = Decimal(str(loss_cap))
+        if loss_cap < 0:
+            loss_cap = None
+
     game = Points531Game.objects.create(
         foursome      = foursome,
         handicap_mode = handicap_mode,
         net_percent   = net_percent,
+        loss_cap      = loss_cap,
         status        = MatchStatus.PENDING,
     )
     return game
@@ -469,18 +478,34 @@ def points_531_summary(foursome) -> dict:
         for m in real_members
     }
 
+    # Money via the shared wager engine. 5-3-1 is the constant-baseline
+    # case of vs-average settlement: because a hole is only scored once
+    # all three players reported, holes_played is uniform, so total/n is
+    # identically 3 × holes_played — same result the old
+    # (points − 3 × holes) × bet_unit produced, but now the optional
+    # loss_cap (clip losers, rescale winners pro-rata) applies too.
+    cfg = WagerConfig(
+        funding    = PER_POINT,
+        settlement = VS_AVERAGE,
+        rate       = Decimal(str(bet_unit)),
+        cap        = game.loss_cap,
+    )
+    payouts = settle(
+        {pid: points_by_pid.get(pid, Decimal('0')) for pid in by_pid},
+        cfg,
+    )
+
     players_out: list = []
     for pid, player in by_pid.items():
         pts = float(points_by_pid.get(pid, Decimal('0')))
         hp  = holes_played_by_pid.get(pid, 0)
-        money = (pts - par_per_hole * hp) * bet_unit
         players_out.append({
             'player_id'   : pid,
             'name'        : player.name,
             'short_name'  : player.short_name,
             'points'      : pts,
             'holes_played': hp,
-            'money'       : money,
+            'money'       : float(payouts[pid]),
             'phcp_in_play': phcp_by_pid.get(pid),
         })
     # Leaderboard: money desc, then name for stable ordering.
@@ -497,5 +522,6 @@ def points_531_summary(foursome) -> dict:
         'money'   : {
             'bet_unit'    : bet_unit,
             'par_per_hole': par_per_hole,
+            'loss_cap'    : float(game.loss_cap) if game.loss_cap is not None else None,
         },
     }

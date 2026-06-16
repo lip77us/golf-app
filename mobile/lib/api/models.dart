@@ -1755,6 +1755,10 @@ class Points531Summary {
   final List<Points531Hole>        holes;
   final double betUnit;
   final int    parPerHole;
+  /// Per-player loss cap, or null when uncapped.  Null is equivalent to
+  /// 36 × betUnit (the theoretical 5-3-1 max loss), so the setup screen
+  /// pre-fills 36 × betUnit and only stores a value when the user lowers it.
+  final double? lossCap;
 
   const Points531Summary({
     required this.status,
@@ -1764,6 +1768,7 @@ class Points531Summary {
     required this.holes,
     required this.betUnit,
     required this.parPerHole,
+    this.lossCap,
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -1786,6 +1791,7 @@ class Points531Summary {
           .toList(),
       betUnit:    (money['bet_unit']     as num?)?.toDouble() ?? 1.0,
       parPerHole: money['par_per_hole']  as int?    ?? 3,
+      lossCap:    (money['loss_cap']     as num?)?.toDouble(),
     );
   }
 }
@@ -2095,6 +2101,7 @@ class WolfSummary {
   final List<WolfPlayerTotal> players;
   final List<WolfHole>        holes;
   final double betUnit;
+  final double? lossCap;   // per-player loss cap, or null when uncapped
 
   const WolfSummary({
     required this.status,
@@ -2111,6 +2118,7 @@ class WolfSummary {
     required this.players,
     required this.holes,
     required this.betUnit,
+    this.lossCap,
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -2149,6 +2157,7 @@ class WolfSummary {
           .map((h) => WolfHole.fromJson(h as Map<String, dynamic>))
           .toList(),
       betUnit: (money['bet_unit'] as num?)?.toDouble() ?? 1.0,
+      lossCap: (money['loss_cap'] as num?)?.toDouble(),
     );
   }
 }
@@ -2756,6 +2765,8 @@ class NassauSummary {
   final double payoutBottomPresses;
   final double payoutBottomTotal;
   final double payoutTotal;
+  final double? lossCap;        // per-side loss cap, or null when uncapped
+  final double  payoutTotalCapped;  // payoutTotal clamped to ±lossCap
 
   // Hole-by-hole data
   final List<NassauHoleData> holes;
@@ -2803,6 +2814,8 @@ class NassauSummary {
     required this.payoutBottomPresses,
     required this.payoutBottomTotal,
     required this.payoutTotal,
+    this.lossCap,
+    this.payoutTotalCapped = 0.0,
     required this.holes,
     required this.canPress,
     this.pressAvailableNine,
@@ -2875,6 +2888,9 @@ class NassauSummary {
       payoutBottomPresses: (payouts['bottom_presses']  as num?)?.toDouble() ?? 0.0,
       payoutBottomTotal:   (payouts['bottom_total']    as num?)?.toDouble() ?? 0.0,
       payoutTotal:         (payouts['total']           as num?)?.toDouble() ?? 0.0,
+      lossCap:             (payouts['loss_cap']        as num?)?.toDouble(),
+      payoutTotalCapped:   (payouts['total_capped']    as num?)?.toDouble()
+                            ?? (payouts['total']       as num?)?.toDouble() ?? 0.0,
       holes: ((j['holes'] as List?) ?? [])
           .map((h) => NassauHoleData.fromJson(h as Map<String, dynamic>))
           .toList(),

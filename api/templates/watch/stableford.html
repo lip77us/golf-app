@@ -19,7 +19,8 @@
         <span class="meta-text">
           {% if summary.payout_style == 'per_point' %}
             ${{ summary.per_point_rate|floatformat:"-2" }}/pt ·
-            {% if summary.per_point_mode == 'first' %}Just first{% else %}Everyone above{% endif %}
+            {% if summary.per_point_mode == 'first' %}Just first{% elif summary.per_point_mode == 'all' %}Everyone above{% else %}vs Average{% endif %}
+            {% if summary.loss_cap %} · Cap ${{ summary.loss_cap|floatformat:"-2" }}{% endif %}
           {% elif summary.entry_fee %}
             ${{ summary.entry_fee|floatformat:"-2" }} entry · ${{ summary.pool|floatformat:"-2" }} pool
           {% endif %}

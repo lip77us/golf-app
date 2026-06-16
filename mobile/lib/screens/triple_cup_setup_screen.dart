@@ -24,6 +24,7 @@ import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/section_card.dart';
+import '../widgets/max_liability_note.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -503,6 +504,11 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                   'losing side pays this amount; each player on the winning '
                   'side collects it.  A tied cup is a wash.',
               onChanged: (v) => setState(() => _stakeOk = v),
+            ),
+            MaxLiabilityNote(
+              bet: double.tryParse(_betCtrl.text.trim()) ?? 0,
+              multiple: 1,                   // the whole cup is one bet
+              detail: 'one cup payout',
             ),
 
             const SizedBox(height: 16),

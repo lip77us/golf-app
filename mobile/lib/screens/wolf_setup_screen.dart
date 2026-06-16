@@ -57,6 +57,11 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
   bool _stakeOk = false;
   bool _betCtrlInitialized = false;
 
+  // Optional per-player loss cap. Off by default — Wolf's point config is
+  // adjustable, so there's no fixed "max loss" to pre-fill.
+  bool _capEnabled = false;
+  final TextEditingController _capCtrl = TextEditingController();
+
   bool   _loading  = true;
   bool   _starting = false;
   Object? _error;
@@ -72,6 +77,7 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
   @override
   void dispose() {
     _betCtrl.dispose();
+    _capCtrl.dispose();
     super.dispose();
   }
 
@@ -107,6 +113,11 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
           _nonWolfBonus  = _summary!.nonWolfBonus;
           _lastPlace1718 = _summary!.lastPlaceWolf1718;
           _requireLoneOrBlind = _summary!.requireLoneOrBlind;
+          _capEnabled    = _summary!.lossCap != null;
+          if (_summary!.lossCap != null) {
+            _capCtrl.text = _summary!.lossCap!
+                .toStringAsFixed(_summary!.lossCap! % 1 == 0 ? 0 : 2);
+          }
         }
         _order   = _initialOrder(_summary!);
         _loading = false;
@@ -175,6 +186,7 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
         nonWolfBonus:      _nonWolfBonus,
         lastPlaceWolf1718: _lastPlace1718,
         requireLoneOrBlind: _requireLoneOrBlind,
+        lossCap: _capEnabled ? double.tryParse(_capCtrl.text.trim()) : null,
       );
       rp.setWolfSummary(summary);
 
@@ -354,6 +366,50 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
           StakeField(
             controller: _betCtrl,
             onChanged: (v) => setState(() => _stakeOk = v)),
+          const SizedBox(height: 16),
+
+          // Optional per-player loss cap.
+          _SectionCard(
+            title: 'Cap losses',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Cap each player’s losses'),
+                  subtitle: Text(
+                    _capEnabled
+                        ? 'Nobody loses more than the amount below; winners '
+                          'share what’s collected, pro-rata.'
+                        : 'Off — Wolf losses are uncapped.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  value: _capEnabled,
+                  onChanged: (v) => setState(() => _capEnabled = v),
+                ),
+                if (_capEnabled)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: SizedBox(
+                      width: 180,
+                      child: TextField(
+                        controller: _capCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          prefixText: '\$ ',
+                          labelText: 'Max loss per player',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           const SizedBox(height: 16),
 
           // Rules reminder.

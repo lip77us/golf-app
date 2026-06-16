@@ -600,7 +600,13 @@ class _StablefordView extends StatelessWidget {
     final table   = data['table'] as Map<String, dynamic>?;
     final entry   = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
     final rate    = (data['per_point_rate'] as num?)?.toDouble() ?? 0.0;
-    final ppMode  = data['per_point_mode']?.toString() ?? 'all';
+    final ppMode  = data['per_point_mode']?.toString() ?? 'average';
+    final lossCap = (data['loss_cap'] as num?)?.toDouble();
+    final modeLabel = switch (ppMode) {
+      'first' => 'Just first',
+      'all'   => 'Everyone above',
+      _       => 'vs Average',
+    };
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -610,8 +616,9 @@ class _StablefordView extends StatelessWidget {
           if (style == 'pool' && entry > 0)
             _chip('Pool \$${_num(entry)}/player'),
           if (style == 'per_point')
-            _chip('\$${_num(rate)}/pt · '
-                '${ppMode == 'first' ? 'Just first' : 'Everyone above'}'),
+            _chip('\$${_num(rate)}/pt · $modeLabel'),
+          if (style == 'per_point' && lossCap != null)
+            _chip('Cap \$${_num(lossCap)}/player'),
         ]),
         if (table != null) ...[
           const SizedBox(height: 8),
@@ -2663,6 +2670,17 @@ class _NassauGroupCard extends StatelessWidget {
       return '$sign\$${v.abs().formatBet()}';
     }
 
+    // When the cap clamps the settlement, the headline shows the (smaller)
+    // amount that actually changes hands \u2014 so surface the real, uncapped match
+    // position too, or the losing side can't see how big the hole really is.
+    final isCapped = nas.lossCap != null &&
+        nas.payoutTotal.abs() > nas.lossCap! + 0.001;
+    String capContext(double rawSigned) {
+      if (!isCapped) return '';
+      final mag = rawSigned.abs().formatBet();
+      return rawSigned >= 0 ? '  (up \$$mag)' : '  (down \$$mag)';
+    }
+
     // ── Cup match: QuotaNassau-style layout ──────────────────────────────
     // Use the Overall bet's holesPlayed as the "thru N" count — it
     // tracks total holes played across the round, while F9/B9 cap at 9.
@@ -2891,17 +2909,21 @@ class _NassauGroupCard extends StatelessWidget {
                       const SizedBox(height: 2),
                     ],
                     Text(
-                      '$t1Names: ${signedDollar(nas.payoutTotal)}',
+                      // payoutTotalCapped == payoutTotal when uncapped; the
+                      // "(down $X)" suffix shows the real hole when capped.
+                      '$t1Names: ${signedDollar(nas.payoutTotalCapped)}'
+                      '${capContext(nas.payoutTotal)}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: totalColor(nas.payoutTotal),
+                        color: totalColor(nas.payoutTotalCapped),
                       ),
                     ),
                     Text(
-                      '$t2Names: ${signedDollar(-nas.payoutTotal)}',
+                      '$t2Names: ${signedDollar(-nas.payoutTotalCapped)}'
+                      '${capContext(-nas.payoutTotal)}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: totalColor(-nas.payoutTotal),
+                        color: totalColor(-nas.payoutTotalCapped),
                       ),
                     ),
                   ],
@@ -2918,6 +2940,12 @@ class _NassauGroupCard extends StatelessWidget {
                   if (nas.pressUnit > 0)
                     Text(
                       'Press: \$${nas.pressUnit.formatBet()}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  if (nas.lossCap != null)
+                    Text(
+                      'Cap: \$${nas.lossCap!.formatBet()}',
                       style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant),
                     ),
@@ -3432,6 +3460,7 @@ class _Points531GroupCard extends StatelessWidget {
     final money    = summary['money']    as Map<String, dynamic>? ?? const {};
     final betUnit  = (money['bet_unit']  as num?)?.toDouble() ?? 0.0;
     final parPH    = (money['par_per_hole'] as num?)?.toInt() ?? 3;
+    final lossCap  = (money['loss_cap']  as num?)?.toDouble();
 
     // In a single-foursome round the "Group N" header is pointless.
     final singleGroup = group['_single_group'] == true;
@@ -3551,7 +3580,8 @@ class _Points531GroupCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'Bet unit \$${betUnit.formatBet()}  '
-                '\u2022  Par is $parPH pts / hole.',
+                '\u2022  Par is $parPH pts / hole.'
+                '${lossCap != null ? '  \u2022  Loss cap \$${lossCap.formatBet()}/player.' : ''}',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant),
               ),
@@ -3616,6 +3646,7 @@ class _WolfGroupCard extends StatelessWidget {
     final holes   = (summary['holes']   as List? ?? const []);
     final money   = summary['money']    as Map<String, dynamic>? ?? const {};
     final betUnit = (money['bet_unit']  as num?)?.toDouble() ?? 0.0;
+    final lossCap = (money['loss_cap']  as num?)?.toDouble();
 
     final singleGroup = group['_single_group'] == true;
 
@@ -3718,7 +3749,8 @@ class _WolfGroupCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'Bet unit \$${betUnit.formatBet()}  •  one point = one stake.',
+                'Bet unit \$${betUnit.formatBet()}  •  one point = one stake.'
+                '${lossCap != null ? '  •  Loss cap \$${lossCap.formatBet()}/player.' : ''}',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant),
               ),

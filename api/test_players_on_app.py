@@ -58,3 +58,16 @@ class PlayersOnAppTests(TestCase):
         # Unmatched phone and no-phone golfers are not on the app.
         self.assertFalse(byname['Carl']['is_on_app'])
         self.assertFalse(byname['Dave']['is_on_app'])
+
+    def test_create_response_flags_on_app_immediately(self):
+        # Regression: a golfer added via "Add Halved golfer" (POST /players/)
+        # must come back is_on_app=True in the create response, not only after
+        # the next My Golfers reload.
+        self.me.is_account_admin = True
+        self.me.save(update_fields=['is_account_admin'])
+        resp = self.client.post(reverse('api-players'), {
+            'name': 'Erin', 'handicap_index': '7.0',
+            'phone': '(310) 555-0101', 'sex': 'M',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertTrue(resp.data['is_on_app'])
