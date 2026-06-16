@@ -31,6 +31,10 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
   String? _error;
   bool    _networkError = false;
   bool    _showCompleted = false;   // false = Active, true = Completed
+  /// True once we know the account has at least one casual round (active OR
+  /// completed). Gates the brand-new "Set up your first round" onboarding CTA so
+  /// it doesn't reappear on the empty Active tab after a round is completed.
+  bool    _hasAnyRound  = false;
 
   @override
   void initState() {
@@ -53,7 +57,24 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
             .where((r) => !r.isTournament)
             .toList();
       } catch (_) {/* ignore — show own rounds regardless */}
-      if (mounted) setState(() { _rounds = data; _shared = shared; });
+
+      // Does the account have ANY casual round? If the current tab is non-empty
+      // we already know; if it's empty, check the other status before concluding
+      // the account is brand-new (so the onboarding CTA only shows for a truly
+      // empty account, not just an empty Active tab after completing a round).
+      bool hasAny = data.isNotEmpty;
+      if (!hasAny) {
+        try {
+          final other = await client.getCasualRounds(
+            status: _showCompleted ? 'in_progress' : 'complete');
+          hasAny = other.isNotEmpty;
+        } catch (_) {
+          hasAny = true; // unknown → don't show the "first round" CTA spuriously
+        }
+      }
+      if (mounted) {
+        setState(() { _rounds = data; _shared = shared; _hasAnyRound = hasAny; });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -299,7 +320,9 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
             const SizedBox(height: 8),
             Text(hintMsg,
                 style: Theme.of(context).textTheme.bodySmall),
-            if (!_showCompleted) ...[
+            // Onboarding CTA only for a truly empty account (no rounds at all) —
+            // not just an empty Active tab when completed rounds exist.
+            if (!_showCompleted && !_hasAnyRound) ...[
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: () async {
