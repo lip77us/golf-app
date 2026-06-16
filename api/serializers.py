@@ -16,7 +16,9 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from core.models import Player, Tee
-from tournament.models import Tournament, Round, Foursome, FoursomeMembership
+from tournament.models import (
+    Tournament, Round, Foursome, FoursomeMembership, Message,
+)
 from scoring.models import HoleScore, StablefordResult, SkinsResult
 
 User = get_user_model()
@@ -1508,3 +1510,21 @@ class TeeTimeBulkSerializer(serializers.Serializer):
      {"group_number": 2, "tee_time": "08:10"}, ...]
     """
     tee_times = TeeTimeEntrySerializer(many=True)
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    """A round-thread message — human chat or a server event card."""
+    author_id    = serializers.IntegerField(read_only=True, allow_null=True)
+    author_name  = serializers.SerializerMethodField()
+    author_short = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Message
+        fields = ('id', 'kind', 'author_id', 'author_name', 'author_short',
+                  'body', 'data', 'created_at')
+
+    def get_author_name(self, obj):
+        return obj.author.name if obj.author_id else None
+
+    def get_author_short(self, obj):
+        return obj.author.short_name if obj.author_id else None

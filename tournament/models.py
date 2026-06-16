@@ -764,3 +764,69 @@ class Watcher(models.Model):
         target = self.tournament_id and f'tournament {self.tournament_id}' \
             or f'round {self.round_id}'
         return f'Watcher {self.phone} → {target}'
+
+
+# ---------------------------------------------------------------------------
+# MESSAGING (in-app feed: human chat + server event announcements)
+# ---------------------------------------------------------------------------
+
+class MessageThread(models.Model):
+    """A message feed for a round (Phase 1). Audience = the round's participants
+    across all foursomes + its watchers, resolved dynamically. Tournament- and
+    team-scoped threads are later phases."""
+    round = models.OneToOneField(
+        Round, on_delete=models.CASCADE, related_name='message_thread',
+        null=True, blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'MessageThread<round={self.round_id}>'
+
+
+class Message(models.Model):
+    """One message in a thread — either a human `user` post or a server `event`
+    announcement (birdie, skin won, …) carrying a structured `data` payload."""
+    KIND_USER = 'user'
+    KIND_EVENT = 'event'
+    KIND_CHOICES = ((KIND_USER, 'User'), (KIND_EVENT, 'Event'))
+
+    thread = models.ForeignKey(
+        MessageThread, on_delete=models.CASCADE, related_name='messages')
+    kind = models.CharField(max_length=8, choices=KIND_CHOICES, default=KIND_USER)
+    # Null author = system / event message.
+    author = models.ForeignKey(
+        Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    body = models.TextField(blank=True)
+    # Event payload (type, hole, player, value) — drives rich rendering + push.
+    data = models.JSONField(default=dict, blank=True)
+    # Idempotency for event messages (e.g. 'birdie:7:42'); blank for human chat.
+    event_key = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('created_at', 'id')
+        indexes = [models.Index(fields=['thread', 'id'])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['thread', 'event_key'],
+                condition=~models.Q(event_key=''),
+                name='uniq_thread_event_key',
+            ),
+        ]
+
+
+class ThreadRead(models.Model):
+    """Per-user read marker for a thread (drives unread counts)."""
+    thread = models.ForeignKey(
+        MessageThread, on_delete=models.CASCADE, related_name='reads')
+    user = models.ForeignKey(
+        'accounts.User', on_delete=models.CASCADE, related_name='thread_reads')
+    last_read_message_id = models.PositiveBigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['thread', 'user'], name='uniq_thread_read'),
+        ]

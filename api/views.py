@@ -82,7 +82,7 @@ from .serializers import (
     SixesSetupSerializer, CourseSerializer,
     Points531SetupSerializer, CasualRoundSummarySerializer,
     IrishRumbleSetupSerializer, LowNetSetupSerializer,
-    ThreePersonMatchSetupSerializer,
+    ThreePersonMatchSetupSerializer, MessageSerializer,
 )
 
 
@@ -7032,3 +7032,65 @@ class TeeTimeBulkView(APIView):
                 pass  # silently skip unknown group numbers
 
         return Response(FoursomeSerializer(updated, many=True).data)
+
+
+# ---------------------------------------------------------------------------
+# Messaging — round message feed (chat + server event cards)
+# ---------------------------------------------------------------------------
+
+class RoundMessagesView(APIView):
+    """
+    GET  /api/rounds/<pk>/messages/?since=<id>  → {messages, unread, my_player_id}
+    POST /api/rounds/<pk>/messages/  {body}     → post a chat message (201)
+
+    Audience = the leaderboard reader set (round participants across foursomes +
+    invited watchers), via round_for_reader.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        from accounts.scoring_access import round_for_reader
+        from services import messaging
+        rnd = round_for_reader(request.user, pk)
+        thread = messaging.get_or_create_thread(rnd)
+        try:
+            since = int(request.query_params.get('since', 0))
+        except (TypeError, ValueError):
+            since = 0
+        msgs = messaging.list_messages(thread, since_id=since)
+        player = getattr(request.user, 'player_profile', None)
+        return Response({
+            'messages':     MessageSerializer(msgs, many=True).data,
+            'unread':       messaging.unread_count(thread, request.user),
+            'my_player_id': player.id if player else None,
+        })
+
+    def post(self, request, pk):
+        from accounts.scoring_access import round_for_reader
+        from services import messaging
+        rnd = round_for_reader(request.user, pk)
+        body = (request.data.get('body') or '').strip()
+        if not body:
+            return Response({'detail': 'Message body required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        thread = messaging.get_or_create_thread(rnd)
+        author = getattr(request.user, 'player_profile', None)
+        msg = messaging.post_user_message(thread, author, body)
+        # Your own message shouldn't count as unread for you.
+        messaging.mark_read(thread, request.user, msg.id)
+        return Response(MessageSerializer(msg).data,
+                        status=status.HTTP_201_CREATED)
+
+
+class RoundMessagesReadView(APIView):
+    """POST /api/rounds/<pk>/messages/read/  {last_seen_id}  → {unread}"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from accounts.scoring_access import round_for_reader
+        from services import messaging
+        rnd = round_for_reader(request.user, pk)
+        thread = messaging.get_or_create_thread(rnd)
+        messaging.mark_read(thread, request.user,
+                            request.data.get('last_seen_id', 0))
+        return Response({'unread': messaging.unread_count(thread, request.user)})
