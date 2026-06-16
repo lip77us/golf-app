@@ -264,6 +264,14 @@ GOLF_API_BASE_URL = os.environ.get('GOLF_API_BASE_URL', 'https://api.golfcoursea
 #                               Needs TWILIO_ACCOUNT_SID/AUTH_TOKEN + the Verify
 #                               service SID below. See docs/twilio-verify-setup.md.
 OTP_BACKEND        = os.environ.get('OTP_BACKEND', 'local')
+# App Store reviewer demo-phone OTP bypass. When BOTH are set, request_code skips
+# real SMS for REVIEW_BYPASS_PHONE and verify_code accepts REVIEW_BYPASS_CODE
+# without contacting Twilio — so Apple's reviewer can sign in through the phone
+# screen (they can't receive our SMS). The phone must already map to a seeded
+# User (seed_demo's reviewer = +13105550101). Empty = disabled. Keep the values
+# only in the App Store review notes; set them on Railway and rotate at will.
+REVIEW_BYPASS_PHONE = os.environ.get('REVIEW_BYPASS_PHONE', '')
+REVIEW_BYPASS_CODE  = os.environ.get('REVIEW_BYPASS_CODE', '')
 
 # PUSH_BACKEND selects how push notifications are delivered:
 #   "console" (default) — logs the payload, sends nothing (dev/CI).

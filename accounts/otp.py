@@ -57,6 +57,25 @@ def _use_twilio_verify() -> bool:
     return getattr(settings, 'OTP_BACKEND', 'local') == 'twilio_verify'
 
 
+def _review_bypass_phone() -> str | None:
+    """Normalized reviewer demo-phone that skips real OTP, or None when the
+    bypass isn't configured (BOTH REVIEW_BYPASS_PHONE and _CODE must be set).
+    Lets the App Store reviewer log in via the phone screen without an SMS; the
+    number must already map to a seeded User (seed_demo's reviewer)."""
+    raw  = (getattr(settings, 'REVIEW_BYPASS_PHONE', '') or '').strip()
+    code = (getattr(settings, 'REVIEW_BYPASS_CODE', '') or '').strip()
+    if not raw or not code:
+        return None
+    return normalize(raw)
+
+
+def _is_review_bypass(phone: str, code: str) -> bool:
+    """True when (phone, code) match the configured reviewer demo bypass."""
+    if _review_bypass_phone() != phone:
+        return False
+    return code == (getattr(settings, 'REVIEW_BYPASS_CODE', '') or '').strip()
+
+
 def request_code(raw_phone: str) -> tuple[str, str | None]:
     """
     Send a login code to `raw_phone`.  Returns (normalized_phone, code) where
@@ -66,6 +85,11 @@ def request_code(raw_phone: str) -> tuple[str, str | None]:
     phone = normalize(raw_phone)
     if not phone:
         raise OtpError("Enter a valid phone number.")
+
+    # Reviewer demo-phone: skip real OTP delivery (Apple can't receive an SMS).
+    # The fixed code is accepted in verify_code; nothing is sent here.
+    if _review_bypass_phone() == phone:
+        return phone, None
 
     if _use_twilio_verify():
         from . import twilio_verify
@@ -100,7 +124,9 @@ def verify_code(raw_phone: str, code: str, name: str | None = None):
     if not code:
         raise OtpError("That code is invalid or expired.")
 
-    if _use_twilio_verify():
+    if _is_review_bypass(phone, code):
+        pass  # reviewer demo-phone — approved without contacting Twilio/PhoneOTP
+    elif _use_twilio_verify():
         from . import twilio_verify
         try:
             approved = twilio_verify.check_verification(phone, code)

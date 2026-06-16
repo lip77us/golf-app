@@ -23,6 +23,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import Account, PhoneOTP, OTP_MAX_ATTEMPTS
+from accounts.otp import request_code, verify_code, OtpError
 from accounts.phone import normalize
 from core.models import Player
 
@@ -166,3 +167,37 @@ class LegacyLoginIntactTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['token'])
+
+
+@override_settings(REVIEW_BYPASS_PHONE='+13105550101', REVIEW_BYPASS_CODE='424242')
+class ReviewBypassTests(TestCase):
+    """App Store reviewer demo-phone bypass: the configured fictional number +
+    fixed code logs into a pre-seeded User without contacting Twilio/PhoneOTP,
+    so Apple's reviewer can sign in through the phone screen with no SMS."""
+
+    def setUp(self):
+        account = Account.objects.create(name='DemoClub')
+        self.user = User.objects.create_user(username='reviewer', account=account)
+        self.user.phone = '+13105550101'
+        self.user.save()
+
+    def test_request_skips_send_and_issues_no_code(self):
+        phone, code = request_code('310-555-0101')
+        self.assertEqual(phone, '+13105550101')
+        self.assertIsNone(code)
+        self.assertFalse(PhoneOTP.objects.filter(phone='+13105550101').exists())
+
+    def test_fixed_code_logs_in_existing_user(self):
+        user, is_new = verify_code('310-555-0101', '424242')
+        self.assertEqual(user.pk, self.user.pk)
+        self.assertFalse(is_new)
+
+    def test_wrong_code_rejected(self):
+        with self.assertRaises(OtpError):
+            verify_code('310-555-0101', '000000')
+
+    @override_settings(REVIEW_BYPASS_PHONE='', REVIEW_BYPASS_CODE='')
+    def test_disabled_when_unset(self):
+        # Bypass off → the fixed code is just a wrong code (no real OTP issued).
+        with self.assertRaises(OtpError):
+            verify_code('310-555-0101', '424242')
