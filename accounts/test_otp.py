@@ -208,3 +208,17 @@ class ReviewBypassTests(TestCase):
         # Bypass off → the fixed code is just a wrong code (no real OTP issued).
         with self.assertRaises(OtpError):
             verify_code('310-555-0101', '424242')
+
+    @override_settings(
+        REVIEW_BYPASS_PHONE='+13105550101, +13105550102', REVIEW_BYPASS_CODE='424242')
+    def test_comma_separated_list_covers_delete_account(self):
+        # Second seeded number (reviewer_delete) also bypasses with the same code,
+        # so the reviewer can test account deletion on a deletable account.
+        account = Account.objects.create(name='DemoClub2')
+        deletable = User.objects.create_user(username='reviewer_delete',
+                                              account=account)
+        deletable.phone = '+13105550102'
+        deletable.save()
+        user, is_new = verify_code('310-555-0102', '424242')
+        self.assertEqual(user.pk, deletable.pk)
+        self.assertFalse(is_new)

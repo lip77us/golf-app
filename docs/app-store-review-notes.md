@@ -1,18 +1,23 @@
-# App Store review notes — Halved 2.0.0
+# App Store review notes — Halved (phone-only build)
 
-Paste the **"App Review Information → Notes"** block below into App Store Connect
-for the 2.0.0 submission, and put the demo credentials in the **Sign-In
-Information** fields (check "Sign-in required").
+Paste the **"App Review Information → Notes"** block below into App Store Connect,
+and put the demo phone + code in the **Sign-In Information** fields.
+
+> **Before submitting** — set these on Railway and run **`seed_demo --reset`
+> against prod** so the demo numbers map to seeded users:
+> ```
+> REVIEW_BYPASS_PHONE=+13105550101,+13105550102
+> REVIEW_BYPASS_CODE=<pick 6 digits>
+> ```
+> `+13105550101` = reviewer (admin); `+13105550102` = reviewer_delete (for the
+> deletion check). Both are fictional NANP 555-01xx numbers — **no real SMS is
+> sent**; the backend accepts the fixed code for these numbers only.
 
 ---
 
 ## Sign-In Information (App Store Connect fields)
-- **User name:** `reviewer`
-- **Password:** `HalvedDemo2026`
-
-(These belong in the dedicated Sign-In Information fields *and* are repeated in
-the notes below so the reviewer also sees the account name + the
-which-button-to-tap instruction.)
+- **User name:** `3105550101`
+- **Password:** `<REVIEW_BYPASS_CODE>`  (the 6-digit code set above)
 
 ---
 
@@ -21,36 +26,27 @@ which-button-to-tap instruction.)
 Halved is a golf scorekeeping app for tracking friendly betting games (Skins,
 Nassau, Sixes, Stableford, Match Play, etc.) during a round.
 
-HOW TO SIGN IN (please read — the default screen is phone-based):
-The app opens to a phone-number sign-in screen that texts a one-time code. That
-SMS can't reach your review device, so please use the username/password path
-instead:
+HOW TO SIGN IN (phone-number login — please read):
+The app signs in with a phone number + a one-time SMS code. For review we set up
+a demo number that accepts a fixed code WITHOUT sending a text, so you don't need
+to receive an SMS:
 
-1. On the sign-in screen, tap **"Sign in with a username instead"** (link below
-   the phone field).
-2. Enter:
-   • Account name: **DemoClub**
-   • Username: **reviewer**
-   • Password: **HalvedDemo2026**
-3. Tap Sign In.
-
-This demo account ("DemoClub") is pre-loaded with sample players, courses,
-completed and in-progress rounds, and tournaments so every screen has content.
+1. On the sign-in screen, enter phone number: 3105550101
+2. Continue / send code.
+3. Enter the code: <REVIEW_BYPASS_CODE>
+4. You're signed in to the demo account ("DemoClub"), pre-loaded with sample
+   players, courses, rounds, and tournaments.
 
 WHAT YOU CAN TRY:
-- Open a casual round from "Casual Rounds" and tap into it to view the
-  scorecard and the live Leaderboard.
-- Tap "Start your first round" (drawer) or the New Casual Round button to see
-  the guided setup wizard (course → players → game).
-- Open a tournament from "Tournaments" to see multi-foursome standings.
+- Open a casual round from "Casual Rounds" and tap in to see the scorecard and
+  the live Leaderboard.
+- Tap "Start your first round" (drawer) to see the guided setup wizard.
+- Open a tournament from "Tournaments" for multi-foursome standings.
 
 ACCOUNT DELETION (Guideline 5.1.1(v)):
-In-app account deletion is at **Settings → Delete Account**. To test it without
-affecting the main demo login, a second account is provided:
-   • Username: **reviewer_delete**
-   • Password: **HalvedDemo2026**
-(Sign in with that one via the same "Sign in with a username instead" path, then
-Settings → Delete Account.)
+In-app deletion is at Settings → Delete Account. To test it on a deletable
+account, sign in with demo number 3105550102 and the same code
+<REVIEW_BYPASS_CODE>, then Settings → Delete Account.
 
 No special hardware is required. The app sends no data to third parties beyond
 the app's own backend and an anonymous golf-course lookup (no personal data in
@@ -59,8 +55,9 @@ that lookup). Privacy policy: https://halved.golf/privacy
 ---
 
 ## Pre-submit reminders
-- [ ] `seed_demo --reset` has been run against **prod** (the reviewer hits prod).
-- [ ] Build is **2.0.0 (4)** — `pubspec.yaml` `version: 2.0.0+4`.
-- [ ] Leave `CLIENT_MIN_VERSION=1.1.0` on Railway until 2.0.0 is live (don't force
-      an update with no downloadable build).
-- [ ] Privacy policy URL set in App Store Connect → App Privacy.
+- [ ] `REVIEW_BYPASS_PHONE=+13105550101,+13105550102` + `REVIEW_BYPASS_CODE` set
+      on Railway (deployed).
+- [ ] `seed_demo --reset` run against **prod** (so the two numbers map to users).
+- [ ] `PASSWORD_LOGIN_ENABLED` left unset/false — password login stays off.
+- [ ] iOS build/version bumped; privacy-policy URL set in App Store Connect.
+- [ ] Flip `CLIENT_MIN_VERSION` only after the new build is live.

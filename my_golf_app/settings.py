@@ -267,9 +267,11 @@ OTP_BACKEND        = os.environ.get('OTP_BACKEND', 'local')
 # App Store reviewer demo-phone OTP bypass. When BOTH are set, request_code skips
 # real SMS for REVIEW_BYPASS_PHONE and verify_code accepts REVIEW_BYPASS_CODE
 # without contacting Twilio — so Apple's reviewer can sign in through the phone
-# screen (they can't receive our SMS). The phone must already map to a seeded
-# User (seed_demo's reviewer = +13105550101). Empty = disabled. Keep the values
-# only in the App Store review notes; set them on Railway and rotate at will.
+# screen (they can't receive our SMS). REVIEW_BYPASS_PHONE may be a
+# comma-separated list (reviewer + reviewer_delete for the account-deletion
+# check); each must map to a seeded User (seed_demo: +13105550101 / ...0102).
+# Empty = disabled. Keep the values only in the App Store review notes; set them
+# on Railway and rotate at will.
 REVIEW_BYPASS_PHONE = os.environ.get('REVIEW_BYPASS_PHONE', '')
 REVIEW_BYPASS_CODE  = os.environ.get('REVIEW_BYPASS_CODE', '')
 # Legacy account-name + username + password login. Deactivated by default now
