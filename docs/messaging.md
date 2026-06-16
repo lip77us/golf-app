@@ -17,6 +17,30 @@ its watchers. (Per-foursome sub-threads are intentionally **not** built.)
 
 ---
 
+## STATUS
+
+- **Slice 1 — backend foundation: IMPLEMENTED** (commit "Messaging Phase 1
+  (backend): round threads + chat API"). Models `MessageThread` / `Message`
+  (`kind` user|event, idempotent `event_key`) / `ThreadRead` in
+  `tournament/models.py` (migration `tournament/0037`). Service
+  `services/messaging.py` (`get_or_create_thread`, `list_messages(since_id=)`,
+  `post_user_message`, `post_event` (idempotent), `mark_read`, `unread_count`).
+  Endpoints — audience = `round_for_reader` (participants + watchers,
+  cross-account): `GET/POST /api/rounds/<id>/messages/` (GET → `{messages,
+  unread, my_player_id}`; POST `{body}` → 201, auto-advances the poster's read
+  marker) and `POST /api/rounds/<id>/messages/read/` `{last_seen_id}`.
+  `MessageSerializer` (id, kind, author_id/name/short, body, data, created_at).
+  Tests: `api/test_messaging.py` (8, green).
+- **Slice 2 — mobile chat: NEXT.** Dart `Message`/thread models +
+  `client.getMessages(since)/postMessage/markRead`; a round feed screen (chat +
+  unread badge + compose), entry points (round screen / leaderboard / shared
+  round), outbound offline queue via `SyncService`.
+- **Slice 3 — events: AFTER.** Emission hooks (birdie/skin/lead/withdrawal/
+  round) call `messaging.post_event(...)` from the scoring recalc; event cards;
+  per-category push via `services/push.py`.
+
+---
+
 ## Decisions (from the discussion)
 
 - **Channels:** round-level thread (v1) covering all foursomes in the round +
