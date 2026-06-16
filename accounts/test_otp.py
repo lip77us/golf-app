@@ -222,3 +222,31 @@ class ReviewBypassTests(TestCase):
         user, is_new = verify_code('310-555-0102', '424242')
         self.assertEqual(user.pk, deletable.pk)
         self.assertFalse(is_new)
+
+
+class ExpireLoginsCommandTests(TestCase):
+    """`expire_logins` purges legacy/password-only sessions by default and
+    everyone with --all, forcing re-auth via phone."""
+
+    def setUp(self):
+        from rest_framework.authtoken.models import Token
+        account = Account.objects.create(name='X')
+        self.legacy = User.objects.create_user(username='legacy', account=account)
+        self.phoner = User.objects.create_user(username='phoner', account=account)
+        self.phoner.phone = '+14155550123'
+        self.phoner.save()
+        Token.objects.create(user=self.legacy)
+        Token.objects.create(user=self.phoner)
+
+    def test_default_spares_phone_sessions(self):
+        from django.core.management import call_command
+        from rest_framework.authtoken.models import Token
+        call_command('expire_logins')
+        self.assertFalse(Token.objects.filter(user=self.legacy).exists())
+        self.assertTrue(Token.objects.filter(user=self.phoner).exists())
+
+    def test_all_purges_everyone(self):
+        from django.core.management import call_command
+        from rest_framework.authtoken.models import Token
+        call_command('expire_logins', '--all')
+        self.assertEqual(Token.objects.count(), 0)
