@@ -15,7 +15,6 @@ import 'providers/settings_provider.dart';
 import 'services/push_service.dart';
 import 'screens/stableford_setup_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/password_login_screen.dart';
 import 'screens/otp_verify_screen.dart';
 import 'screens/profile_setup_screen.dart';
 import 'screens/onboarding_wizard.dart';
@@ -307,8 +306,6 @@ class _GolfAppState extends State<GolfApp> {
             ));
       case '/login':
         return page((_) => const LoginScreen());
-      case '/login-password':
-        return page((_) => const PasswordLoginScreen());
       case '/verify-otp':
         final args = settings.arguments as Map? ?? const {};
         return page((_) => OtpVerifyScreen(

@@ -1,9 +1,9 @@
 /// screens/login_screen.dart
-/// Phone-first sign-in (freemium design §12): the user enters their cell
+/// Phone-only sign-in (freemium design §12): the user enters their cell
 /// number, we send an SMS one-time passcode, and they verify it on the next
-/// screen.  A new number self-creates an account.  The legacy
-/// account/username/password form is still reachable via the link at the
-/// bottom ([PasswordLoginScreen] at /login-password).
+/// screen.  A new number self-creates an account.  Password login has been
+/// deactivated (backend returns 403); the App Store reviewer signs in via the
+/// configured demo-phone OTP bypass.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -144,13 +144,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: theme.colorScheme.outline),
                     textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-
-                  TextButton(
-                    onPressed: () =>
-                        Navigator.of(context).pushNamed('/login-password'),
-                    child: const Text('Sign in with a username instead'),
                   ),
                 ],
               ),
