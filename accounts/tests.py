@@ -14,7 +14,7 @@ two accounts and asserts `.for_account(A)` returns only A's rows.
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from accounts.models import Account
 from core.models import Course, Player
@@ -280,10 +280,30 @@ class APIIsolationTests(TestCase):
         self.assertEqual(resp.status_code, 200)
 
 
+class PasswordLoginDeactivatedTests(TestCase):
+    """Password login is deactivated by default; phone-OTP is the sole path."""
+
+    def test_password_login_returns_403_by_default(self):
+        acct, _ = _make_account('Golden Glove')
+        User.objects.create_user(username='paul', password='aaaa1111', account=acct)
+        resp = APIClient().post(
+            '/api/auth/login/',
+            {'account_name': 'Golden Glove', 'username': 'paul',
+             'password': 'aaaa1111'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 403)
+
+
+@override_settings(PASSWORD_LOGIN_ENABLED=True)
 class LoginEndpointTests(TestCase):
     """
     /api/auth/login/ accepts (account_name, username, password) and
     returns a token only when all three match the same user row.
+
+    Password login is deactivated by default (phone-OTP is the sole path), so
+    these endpoint-logic tests force it enabled; see
+    PasswordLoginDeactivatedTests for the default-off behaviour.
     """
 
     @classmethod

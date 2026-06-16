@@ -272,6 +272,11 @@ OTP_BACKEND        = os.environ.get('OTP_BACKEND', 'local')
 # only in the App Store review notes; set them on Railway and rotate at will.
 REVIEW_BYPASS_PHONE = os.environ.get('REVIEW_BYPASS_PHONE', '')
 REVIEW_BYPASS_CODE  = os.environ.get('REVIEW_BYPASS_CODE', '')
+# Legacy account-name + username + password login. Deactivated by default now
+# that phone-OTP is the sole path; the LoginView returns 403 and the app no
+# longer offers it. Phone-OTP login is unaffected. Set
+# PASSWORD_LOGIN_ENABLED=true on Railway to temporarily re-enable (reversible).
+PASSWORD_LOGIN_ENABLED = os.environ.get('PASSWORD_LOGIN_ENABLED', 'false') == 'true'
 
 # PUSH_BACKEND selects how push notifications are delivered:
 #   "console" (default) — logs the payload, sends nothing (dev/CI).

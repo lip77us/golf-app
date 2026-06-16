@@ -880,6 +880,17 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Password login is deactivated — phone-OTP is the sole sign-in path.
+        # Reversible via PASSWORD_LOGIN_ENABLED=true (settings). Returns 403 so
+        # even older app builds that still show the password screen fail closed
+        # with a clear message rather than authenticating.
+        if not getattr(settings, 'PASSWORD_LOGIN_ENABLED', False):
+            return Response(
+                {'detail': 'Password sign-in is no longer supported. '
+                           'Please sign in with your phone number.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         account_name = request.data.get('account_name', '').strip()
         username     = request.data.get('username', '').strip()
         password     = request.data.get('password', '').strip()

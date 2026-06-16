@@ -150,21 +150,28 @@ class OtpFlowTests(TestCase):
             u2.save()
 
 
-class LegacyLoginIntactTests(TestCase):
-    """Phone login is additive; the password endpoint must still work."""
+class PasswordLoginDeactivatedTests(TestCase):
+    """Password login is deactivated by default (phone-OTP is the sole path);
+    reversible via PASSWORD_LOGIN_ENABLED."""
 
-    def test_password_login_still_works(self):
+    def _attempt(self):
         account = Account.objects.create(name='Golden Glove')
         User.objects.create_user(
             username='paul', password='secret123', account=account,
         )
-        client = APIClient()
-        resp = client.post(
+        return APIClient().post(
             reverse('api-login'),
             {'account_name': 'Golden Glove', 'username': 'paul',
              'password': 'secret123'},
             format='json',
         )
+
+    def test_deactivated_by_default(self):
+        self.assertEqual(self._attempt().status_code, 403)
+
+    @override_settings(PASSWORD_LOGIN_ENABLED=True)
+    def test_works_when_re_enabled(self):
+        resp = self._attempt()
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['token'])
 
