@@ -377,6 +377,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         rp.points531Summary != null) {
       futures.add(rp.loadPoints531(widget.foursomeId));
     }
+    if (games.contains('vegas') ||
+        configured.contains('vegas') ||
+        rp.vegasSummary != null) {
+      futures.add(rp.loadVegas(widget.foursomeId));
+    }
     // Stableford is round-scoped; refresh the authoritative per-hole points.
     if (games.contains('stableford') && rp.round != null) {
       futures.add(rp.loadStableford(rp.round!.id));
@@ -465,6 +470,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     }
     if (games.contains('points_531') && rp.points531Summary != null) {
       return (rp.points531Summary!.handicapMode, rp.points531Summary!.netPercent);
+    }
+    if (games.contains('vegas') && rp.vegasSummary != null) {
+      return (rp.vegasSummary!.handicapMode, rp.vegasSummary!.netPercent);
     }
     // Three-Person Match has its own per-game handicap mode (the user
     // picks it on the TPM setup screen).  Take precedence over Match
@@ -1827,6 +1835,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 // stale summary from a prior Sixes game must not bleed into
                 // P531 or other games and trigger the wrong SO algorithm.
                 sixesSummary:    games.contains('sixes')      ? rp.sixesSummary    : null,
+                vegasSummary:    games.contains('vegas')      ? rp.vegasSummary    : null,
                 tripleCupSummary: games.contains('triple_cup') ? rp.tripleCupSummary : null,
                 points531Summary: games.contains('points_531') ? rp.points531Summary : null,
                 matchPlayData:   rp.matchPlayData,
@@ -1904,6 +1913,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 skins:                   skins,
                 multiSkins:              games.contains('multi_skins')       ? rp.multiSkinsSummary         : null,
                 sixesSummary:            games.contains('sixes')             ? rp.sixesSummary              : null,
+                vegasSummary:            games.contains('vegas')             ? rp.vegasSummary              : null,
                 tripleCupSummary:        games.contains('triple_cup')        ? rp.tripleCupSummary          : null,
                 points531Summary:        games.contains('points_531')        ? rp.points531Summary           : null,
                 matchPlayData:           rp.matchPlayData,
@@ -1919,6 +1929,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 loadingSixes:            rp.loadingSixes,
                 loadingTripleCup:        rp.loadingTripleCup,
                 loadingPoints531:        rp.loadingPoints531,
+                loadingVegas:            rp.loadingVegas,
                 loadingMatchPlay:        rp.loadingMatchPlay,
                 loadingThreePersonMatch: rp.loadingThreePersonMatch,
                 onTapHole:               (h) => setState(() => _selectedHole = h),
@@ -2055,6 +2066,7 @@ class _HoleScoreCard extends StatelessWidget {
   final NassauSummary?          nassau;
   final SkinsSummary?           skins;
   final SixesSummary?           sixesSummary;
+  final VegasSummary?           vegasSummary;
   final TripleCupSummary?       tripleCupSummary;
   final Points531Summary?       points531Summary;
   final String                  handicapMode;
@@ -2104,6 +2116,7 @@ class _HoleScoreCard extends StatelessWidget {
     required this.nassau,
     required this.skins,
     this.sixesSummary,
+    this.vegasSummary,
     this.tripleCupSummary,
     this.points531Summary,
     this.matchPlayData,
@@ -2203,6 +2216,13 @@ class _HoleScoreCard extends StatelessWidget {
         if (seg.team1.playerIds.contains(m.player.id)) return GameColors.team1;
         if (seg.team2.playerIds.contains(m.player.id)) return GameColors.team2;
       }
+    }
+    // Las Vegas: fixed 2v2 teams → blue (team 1) / orange (team 2).
+    final vg = vegasSummary;
+    if (vg != null) {
+      final t = vg.teamOf(m.player.id);
+      if (t == 1) return GameColors.team1;
+      if (t == 2) return GameColors.team2;
     }
     return null;
   }
@@ -4069,6 +4089,7 @@ class _GameStatusSection extends StatelessWidget {
   final SkinsSummary?         skins;
   final MultiSkinsSummary?    multiSkins;
   final SixesSummary?         sixesSummary;
+  final VegasSummary?         vegasSummary;
   final TripleCupSummary?     tripleCupSummary;
   final Points531Summary?     points531Summary;
   final Map<String, dynamic>?       matchPlayData;
@@ -4087,6 +4108,7 @@ class _GameStatusSection extends StatelessWidget {
   final bool                        loadingSixes;
   final bool                        loadingTripleCup;
   final bool                        loadingPoints531;
+  final bool                        loadingVegas;
   final bool                        loadingMatchPlay;
   final bool                        loadingThreePersonMatch;
   final void Function(int hole)?    onTapHole;
@@ -4106,6 +4128,7 @@ class _GameStatusSection extends StatelessWidget {
     required this.skins,
     this.multiSkins,
     required this.sixesSummary,
+    this.vegasSummary,
     this.tripleCupSummary,
     this.points531Summary,
     required this.matchPlayData,
@@ -4121,6 +4144,7 @@ class _GameStatusSection extends StatelessWidget {
     this.loadingSixes      = false,
     this.loadingTripleCup  = false,
     required this.loadingPoints531,
+    this.loadingVegas      = false,
     required this.loadingMatchPlay,
     this.loadingThreePersonMatch = false,
     required this.onTapHole,
@@ -4230,6 +4254,23 @@ class _GameStatusSection extends StatelessWidget {
               onTapHole:   onTapHole,
             )
           else if (loadingPoints531)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          const SizedBox(height: 12),
+        ],
+
+        // Las Vegas — team totals + per-hole numbers grid.
+        if (games.contains('vegas')) ...[
+          if (vegasSummary != null)
+            _VegasStatusCard(
+              summary:     vegasSummary!,
+              currentHole: currentHole,
+            )
+          else if (loadingVegas)
             const Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
@@ -8822,6 +8863,120 @@ class _CupSinglesStatusCard extends StatelessWidget {
           const Divider(height: 22),
           // Per-match sections
           ...matchSections,
+        ]),
+      ),
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Las Vegas status card — team totals + per-hole numbers (shown in score entry)
+// ---------------------------------------------------------------------------
+
+class _VegasStatusCard extends StatelessWidget {
+  final VegasSummary summary;
+  final int currentHole;
+  const _VegasStatusCard({required this.summary, required this.currentHole});
+
+  String _money(double v) {
+    if (v == 0) return '—';
+    final s = v > 0 ? '+' : '−';
+    return '$s\$${v.abs().toStringAsFixed(2)}';
+  }
+
+  Widget _teamRow(BuildContext ctx, VegasTeamSummary t, Color color) {
+    final theme = Theme.of(ctx);
+    final names = t.players.map((p) => p.shortName).join(' & ');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(children: [
+        Container(width: 4, height: 20,
+            decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 8),
+        Expanded(child: Text(names,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: color, fontWeight: FontWeight.w600),
+            overflow: TextOverflow.ellipsis)),
+        Text('${t.points} pts',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(width: 10),
+        SizedBox(width: 64, child: Text(_money(t.money),
+            textAlign: TextAlign.right,
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: t.money > 0 ? GameColors.win
+                    : t.money < 0 ? GameColors.loss
+                    : theme.colorScheme.onSurfaceVariant))),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    VegasTeamSummary? team(int n) =>
+        summary.teams.where((t) => t.teamNumber == n).firstOrNull;
+    final t1 = team(1), t2 = team(2);
+    final decided = summary.holes.where((h) => h.winner != null).toList();
+
+    Color winColor(String? w) => w == 'team1' ? GameColors.team1
+        : w == 'team2' ? GameColors.team2
+        : theme.colorScheme.onSurfaceVariant;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Las Vegas', style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Text(summary.birdieMode == 'flip' ? 'Flip' : 'Multiply',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            if (summary.carryover) ...[
+              const SizedBox(width: 8),
+              Text('Carryover', style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ]),
+          const SizedBox(height: 6),
+          if (t1 != null) _teamRow(context, t1, GameColors.team1),
+          if (t2 != null) _teamRow(context, t2, GameColors.team2),
+          if (decided.isNotEmpty) ...[
+            const Divider(height: 18),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final h in decided)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: winColor(h.winner).withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                        color: h.hole == currentHole
+                            ? theme.colorScheme.primary
+                            : winColor(h.winner).withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    h.winner == 'halved'
+                        ? 'H${h.hole} ${h.team1Number}-${h.team2Number} ½'
+                        : 'H${h.hole} ${h.team1Number}-${h.team2Number} '
+                          '+${h.points}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: winColor(h.winner),
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()]),
+                  ),
+                ),
+            ]),
+          ],
         ]),
       ),
     );

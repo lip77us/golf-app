@@ -220,6 +220,10 @@ class _RoundScreenState extends State<RoundScreen> {
                         !fs.configuredGames.contains('nassau')) {
                       // Nassau needs team assignment + handicap config.
                       route = '/nassau-setup';
+                    } else if (fsGames.contains('vegas') &&
+                        !fs.configuredGames.contains('vegas')) {
+                      // Vegas needs team assignment + options.
+                      route = '/vegas-setup';
                     } else if (fsGames.contains('skins') &&
                         !fs.configuredGames.contains('skins')) {
                       // Skins needs handicap + carryover config.

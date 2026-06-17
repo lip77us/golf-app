@@ -1836,6 +1836,123 @@ class Points531Hole {
 
 /// Full summary for a Points 5-3-1 game — shape mirrors the Python
 /// points_531_summary() output.
+// ---------------------------------------------------------------------------
+// Las Vegas (2v2)
+// ---------------------------------------------------------------------------
+
+class VegasPlayer {
+  final int id;
+  final String name;
+  final String shortName;
+  const VegasPlayer({required this.id, required this.name, required this.shortName});
+  factory VegasPlayer.fromJson(Map<String, dynamic> j) => VegasPlayer(
+        id: j['player_id'] as int,
+        name: j['name'] as String? ?? '',
+        shortName: j['short_name'] as String? ?? '',
+      );
+}
+
+class VegasTeamSummary {
+  final int teamNumber;            // 1 or 2
+  final List<VegasPlayer> players;
+  final int points;                // total points won across the round
+  final double money;              // per-player money (point diff × bet_unit, capped)
+  const VegasTeamSummary({
+    required this.teamNumber,
+    required this.players,
+    required this.points,
+    required this.money,
+  });
+  factory VegasTeamSummary.fromJson(Map<String, dynamic> j) => VegasTeamSummary(
+        teamNumber: j['team_number'] as int,
+        players: (j['players'] as List? ?? [])
+            .map((p) => VegasPlayer.fromJson(p as Map<String, dynamic>))
+            .toList(),
+        points: j['points'] as int? ?? 0,
+        money: (j['money'] as num?)?.toDouble() ?? 0.0,
+      );
+  List<int> get playerIds => players.map((p) => p.id).toList();
+}
+
+class VegasHole {
+  final int hole;
+  final int? team1Number;          // effective numbers used to decide (post-flip)
+  final int? team2Number;
+  final String? winner;            // 'team1' | 'team2' | 'halved'
+  final int points;
+  final int multiplier;            // birdie multiplier applied (multiplier mode)
+  final int carry;                 // holes carried into this one
+  const VegasHole({
+    required this.hole,
+    this.team1Number,
+    this.team2Number,
+    this.winner,
+    required this.points,
+    required this.multiplier,
+    required this.carry,
+  });
+  factory VegasHole.fromJson(Map<String, dynamic> j) => VegasHole(
+        hole: j['hole'] as int,
+        team1Number: j['team1_number'] as int?,
+        team2Number: j['team2_number'] as int?,
+        winner: j['winner'] as String?,
+        points: j['points'] as int? ?? 0,
+        multiplier: j['multiplier'] as int? ?? 1,
+        carry: j['carry'] as int? ?? 0,
+      );
+}
+
+class VegasSummary {
+  final String status;             // pending | in_progress | complete
+  final String handicapMode;
+  final int    netPercent;
+  final bool   netMaxDoubleBogey;
+  final String birdieMode;         // 'flip' | 'multiplier'
+  final bool   carryover;
+  final List<VegasTeamSummary> teams;
+  final List<VegasHole> holes;
+  final double betUnit;
+
+  const VegasSummary({
+    required this.status,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.netMaxDoubleBogey,
+    required this.birdieMode,
+    required this.carryover,
+    required this.teams,
+    required this.holes,
+    required this.betUnit,
+  });
+
+  factory VegasSummary.fromJson(Map<String, dynamic> j) => VegasSummary(
+        status: j['status'] as String? ?? 'pending',
+        handicapMode: (j['handicap'] as Map?)?['mode'] as String? ?? 'net',
+        netPercent: (j['handicap'] as Map?)?['net_percent'] as int? ?? 100,
+        netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? true,
+        birdieMode: j['birdie_mode'] as String? ?? 'flip',
+        carryover: j['carryover'] as bool? ?? false,
+        teams: (j['teams'] as List? ?? [])
+            .map((t) => VegasTeamSummary.fromJson(t as Map<String, dynamic>))
+            .toList(),
+        holes: (j['holes'] as List? ?? [])
+            .map((h) => VegasHole.fromJson(h as Map<String, dynamic>))
+            .toList(),
+        betUnit: ((j['money'] as Map?)?['bet_unit'] as num?)?.toDouble() ?? 0.0,
+      );
+
+  bool get isStarted => teams.length == 2 &&
+      teams.every((t) => t.players.length == 2);
+
+  /// team color helper: 1 → team1, 2 → team2 (caller maps to GameColors).
+  int? teamOf(int playerId) {
+    for (final t in teams) {
+      if (t.playerIds.contains(playerId)) return t.teamNumber;
+    }
+    return null;
+  }
+}
+
 class Points531Summary {
   /// 'pending' | 'in_progress' | 'complete'.  Matches the MatchStatus
   /// values used by other games.

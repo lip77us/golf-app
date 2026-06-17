@@ -1253,6 +1253,39 @@ class ApiClient {
     return WolfSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  // ---- Las Vegas (2v2) ----
+
+  /// GET /api/foursomes/{id}/vegas/
+  Future<VegasSummary> getVegasSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/vegas/');
+    return VegasSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/vegas/setup/  — fix the two teams + options.
+  Future<VegasSummary> postVegasSetup(
+    int foursomeId, {
+    required List<int> team1PlayerIds,
+    required List<int> team2PlayerIds,
+    String handicapMode      = 'net',
+    int    netPercent        = 100,
+    bool   netMaxDoubleBogey = true,
+    String birdieMode        = 'flip',
+    bool   carryover         = false,
+    double? lossCap,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/vegas/setup/', {
+      'team1_player_ids'    : team1PlayerIds,
+      'team2_player_ids'    : team2PlayerIds,
+      'handicap_mode'       : handicapMode,
+      'net_percent'         : netPercent,
+      'net_max_double_bogey': netMaxDoubleBogey,
+      'birdie_mode'         : birdieMode,
+      'carryover'           : carryover,
+      'loss_cap'            : lossCap?.toStringAsFixed(2),
+    });
+    return VegasSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   /// POST /api/foursomes/{id}/wolf/order/
   ///
   /// Update only the rotation order (decisions/results survive).

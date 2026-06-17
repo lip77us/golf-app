@@ -85,6 +85,7 @@ class RoundProvider extends ChangeNotifier {
   Leaderboard?     _leaderboard;
   SixesSummary?    _sixesSummary;
   Points531Summary? _points531Summary;
+  VegasSummary?    _vegasSummary;
   SkinsSummary?    _skinsSummary;
   WolfSummary?     _wolfSummary;
   RabbitSummary?   _rabbitSummary;
@@ -108,6 +109,7 @@ class RoundProvider extends ChangeNotifier {
   bool    _loadingLeaderboard = false;
   bool    _loadingSixes       = false;
   bool    _loadingPoints531   = false;
+  bool    _loadingVegas       = false;
   bool    _loadingSkins       = false;
   bool    _loadingWolf        = false;
   bool    _loadingRabbit      = false;
@@ -133,6 +135,7 @@ class RoundProvider extends ChangeNotifier {
   Leaderboard?      get leaderboard        => _leaderboard;
   SixesSummary?     get sixesSummary       => _sixesSummary;
   Points531Summary? get points531Summary   => _points531Summary;
+  VegasSummary?     get vegasSummary        => _vegasSummary;
   SkinsSummary?     get skinsSummary       => _skinsSummary;
   WolfSummary?      get wolfSummary        => _wolfSummary;
   RabbitSummary?    get rabbitSummary      => _rabbitSummary;
@@ -155,6 +158,7 @@ class RoundProvider extends ChangeNotifier {
   bool              get loadingLeaderboard => _loadingLeaderboard;
   bool              get loadingSixes       => _loadingSixes;
   bool              get loadingPoints531   => _loadingPoints531;
+  bool              get loadingVegas       => _loadingVegas;
   bool              get loadingSkins       => _loadingSkins;
   bool              get loadingWolf        => _loadingWolf;
   bool              get loadingRabbit      => _loadingRabbit;
@@ -556,6 +560,21 @@ class RoundProvider extends ChangeNotifier {
   /// Load the Sixes segment summary for the active foursome.
   /// Non-fatal — a failure just leaves [sixesSummary] null; the screen
   /// still works for score entry using the cached scorecard.
+  Future<void> loadVegas(int foursomeId) async {
+    _loadingVegas = true;
+    notifyListeners();
+    try {
+      _vegasSummary = await _client.getVegasSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep whatever we had.
+    } catch (e) {
+      debugPrint('loadVegas error: $e');
+    } finally {
+      _loadingVegas = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> loadSixes(int foursomeId) async {
     _loadingSixes = true;
     notifyListeners();

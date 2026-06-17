@@ -252,6 +252,8 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
       route = '/points-531-setup';     // will redirect to /score-entry if already started
     } else if (round.activeGames.contains('skins')) {
       route = '/skins-setup';          // will redirect to /score-entry if already started
+    } else if (round.activeGames.contains('vegas')) {
+      route = '/vegas-setup';          // will redirect to /score-entry if already started
     } else if (round.activeGames.contains('nassau')) {
       route = '/nassau-setup';         // will redirect to /score-entry if already started
     } else if (round.activeGames.contains('wolf')) {

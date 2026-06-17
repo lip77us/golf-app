@@ -25,6 +25,7 @@ import 'screens/round_feed_screen.dart';
 import 'screens/scorecard_screen.dart';
 import 'screens/sixes_setup_screen.dart';
 import 'screens/points_531_setup_screen.dart';
+import 'screens/vegas_setup_screen.dart';
 import 'screens/points_531_screen.dart';
 import 'screens/skins_setup_screen.dart';
 import 'screens/skins_screen.dart';
@@ -365,6 +366,9 @@ class _GolfAppState extends State<GolfApp> {
       case '/points-531-setup':
         final foursomeId = settings.arguments as int;
         return page((_) => Points531SetupScreen(foursomeId: foursomeId));
+      case '/vegas-setup':
+        final foursomeId = settings.arguments as int;
+        return page((_) => VegasSetupScreen(foursomeId: foursomeId));
       case '/points-531':
         final foursomeId = settings.arguments as int;
         return page((_) => Points531Screen(foursomeId: foursomeId));

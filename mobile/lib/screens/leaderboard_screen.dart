@@ -596,6 +596,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _SixesGroupCard.new);
       case 'points_531':
         return _ByGroupView(data: data, builder: _Points531GroupCard.new);
+      case 'vegas':
+        return _ByGroupView(data: data, builder: _VegasGroupCard.new);
       case 'wolf':
         return _ByGroupView(data: data, builder: _WolfGroupCard.new);
       case 'rabbit':
@@ -8258,6 +8260,114 @@ class _MyFoursomeTabView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: cards,
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Las Vegas — one card per foursome (team totals + money + per-hole numbers).
+// ---------------------------------------------------------------------------
+
+class _VegasGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _VegasGroupCard({required this.group});
+
+  String _money(double v) {
+    if (v == 0) return '—';
+    final s = v > 0 ? '+' : '−';
+    return '$s\$${v.abs().toStringAsFixed(2)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final summary =
+        VegasSummary.fromJson((group['summary'] as Map).cast<String, dynamic>());
+
+    Color winColor(String? w) => w == 'team1' ? GameColors.team1
+        : w == 'team2' ? GameColors.team2
+        : theme.colorScheme.onSurfaceVariant;
+
+    Widget teamRow(VegasTeamSummary t, Color color) {
+      final names = t.players.map((p) => p.shortName).join(' & ');
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(children: [
+          Container(width: 4, height: 20,
+              decoration: BoxDecoration(
+                  color: color, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 8),
+          Expanded(child: Text(names,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: color, fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis)),
+          Text('${t.points} pts',
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(width: 10),
+          SizedBox(width: 64, child: Text(_money(t.money),
+              textAlign: TextAlign.right,
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: t.money > 0 ? GameColors.win
+                      : t.money < 0 ? GameColors.loss
+                      : theme.colorScheme.onSurfaceVariant))),
+        ]),
+      );
+    }
+
+    final t1 = summary.teams.where((t) => t.teamNumber == 1).firstOrNull;
+    final t2 = summary.teams.where((t) => t.teamNumber == 2).firstOrNull;
+    final decided = summary.holes.where((h) => h.winner != null).toList();
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Group ${group['group_number']}',
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Text(summary.birdieMode == 'flip' ? 'Flip' : 'Multiply',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            if (summary.carryover) ...[
+              const SizedBox(width: 8),
+              Text('Carryover', style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ]),
+          const SizedBox(height: 6),
+          if (t1 != null) teamRow(t1, GameColors.team1),
+          if (t2 != null) teamRow(t2, GameColors.team2),
+          if (decided.isNotEmpty) ...[
+            const Divider(height: 18),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final h in decided)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: winColor(h.winner).withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                        color: winColor(h.winner).withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    h.winner == 'halved'
+                        ? 'H${h.hole} ${h.team1Number}-${h.team2Number} ½'
+                        : 'H${h.hole} ${h.team1Number}-${h.team2Number} +${h.points}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: winColor(h.winner),
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()]),
+                  ),
+                ),
+            ]),
+          ],
+        ]),
+      ),
     );
   }
 }

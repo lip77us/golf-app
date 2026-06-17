@@ -15,6 +15,10 @@ class GameIds {
   static const String sixes      = 'sixes';
   static const String points531  = 'points_531';
   static const String nassau     = 'nassau';
+  /// Las Vegas — 2v2 team game; each team's two net scores form a number
+  /// (low=tens, high=ones), lower number wins by the difference.  Owns the
+  /// 2-digit scoring model, so it's mutually exclusive with the other games.
+  static const String vegas      = 'vegas';
   /// UI-only shortcut: an "18-Hole Match" — a Nassau with only the Overall bet.
   /// Translated to `nassau` (Overall-only) when the round is created.
   static const String match18    = 'match_18';
@@ -151,6 +155,17 @@ const List<GameMeta> kGameCatalog = [
     // calculations would conflict.
     excludes     : {GameIds.nassau, GameIds.points531,
                     GameIds.skins, GameIds.strokePlay, GameIds.stableford},
+  ),
+  GameMeta(
+    id           : GameIds.vegas,
+    displayName  : 'Las Vegas',
+    casual       : true,
+    exactPlayers : 4,
+    // Vegas owns the 2-digit team-number scoring model for the whole
+    // foursome, so it can't share the entry flow with another game.
+    excludes     : {GameIds.sixes, GameIds.nassau, GameIds.points531,
+                    GameIds.skins, GameIds.strokePlay, GameIds.stableford,
+                    GameIds.match18},
   ),
   GameMeta(
     id           : GameIds.points531,

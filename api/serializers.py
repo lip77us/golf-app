@@ -483,6 +483,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             ('skins_game',         'skins'),
             ('nassau_game',        'nassau'),
             ('points_531_game',    'points_531'),
+            ('vegas_game',         'vegas'),
             ('three_person_match', 'three_person_match'),
             ('wolf_game',          'wolf'),
             ('rabbit_game',        'rabbit'),

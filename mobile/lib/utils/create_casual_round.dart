@@ -55,6 +55,8 @@ class CasualRoundLaunch {
       return ('/sixes-setup', firstFs.id);
     case GameIds.points531:
       return ('/points-531-setup', firstFs.id);
+    case GameIds.vegas:
+      return ('/vegas-setup', firstFs.id);
     case GameIds.skins:
       return ('/skins-setup', firstFs.id);
     case GameIds.wolf:
