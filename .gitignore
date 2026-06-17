@@ -49,3 +49,6 @@ htmlcov/
 
 # Temp venv for running backend tests locally
 .venv-test/
+
+# Built website bundle for Cloudflare upload (regenerate via website/build-zip.sh)
+halved-site.zip
