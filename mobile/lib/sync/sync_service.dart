@@ -17,7 +17,6 @@
 ///   receives a reference to it so it can call [enqueue] and read [isOnline].
 
 import 'dart:async';
-import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import '../api/client.dart';
@@ -44,12 +43,18 @@ class SyncService extends ChangeNotifier {
 
   bool      _isOnline    = false; // pessimistic default; _init() sets the real value
   int       _pendingCount = 0;
+  int       _pendingMessageCount = 0;
   SyncState _state       = SyncState.idle;
 
   bool      get isOnline     => _isOnline;
   int       get pendingCount => _pendingCount;
   SyncState get state        => _state;
   bool      get hasPending   => _pendingCount > 0;
+
+  /// Outbound chat messages still queued locally (separate from the score
+  /// queue so the score badge keeps its meaning).
+  int  get pendingMessageCount => _pendingMessageCount;
+  bool get hasPendingMessages  => _pendingMessageCount > 0;
 
   // ── Internals ─────────────────────────────────────────────────────────────
 
@@ -104,7 +109,7 @@ class SyncService extends ChangeNotifier {
     // causes _isOnline to flip incorrectly. The HTTP call in drainQueue is
     // the only reliable connectivity test: success → _isOnline=true,
     // NetworkException → _isOnline=false.
-    if (_pendingCount > 0 && !_draining) {
+    if ((_pendingCount > 0 || _pendingMessageCount > 0) && !_draining) {
       drainQueue();
     }
   }
@@ -136,6 +141,25 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  /// Queue an outbound chat message and attempt an immediate send. Mirrors
+  /// [enqueue] for scores — returns instantly; [drainQueue] delivers it (and
+  /// retries on reconnect). Returns the local row id so the caller can render
+  /// an optimistic "sending…" bubble keyed to it.
+  Future<int> enqueueMessage({
+    required int roundId,
+    required String body,
+  }) async {
+    final id = await _db.enqueueMessage(roundId: roundId, body: body);
+    await _refreshCount();
+
+    if (_isOnline) {
+      drainQueue(); // fire-and-forget
+    } else {
+      _scheduleRetry();
+    }
+    return id;
+  }
+
   // ── Drain ─────────────────────────────────────────────────────────────────
 
   /// Attempt to submit all pending scores to the API, oldest first.
@@ -151,8 +175,9 @@ class SyncService extends ChangeNotifier {
     if (_draining) return;
     _draining = true;
 
-    final pending = await _db.allPending();
-    if (pending.isEmpty) {
+    final hadWork = (await _db.pendingCount()) > 0 ||
+        (await _db.pendingMessageCount()) > 0;
+    if (!hadWork) {
       _draining = false;
       return;
     }
@@ -160,8 +185,39 @@ class SyncService extends ChangeNotifier {
     _state = SyncState.syncing;
     notifyListeners();
 
-    bool networkFailed = false;
+    // Drain scores first (the round's primary data), then chat messages. Each
+    // returns true if it stopped on a transient failure (network / 5xx).
+    final scoresFailed   = await _drainScores();
+    final messagesFailed = await _drainMessages();
+    final networkFailed  = scoresFailed || messagesFailed;
 
+    await _refreshCount();
+
+    final anyPending = _pendingCount > 0 || _pendingMessageCount > 0;
+    _state = networkFailed
+        ? (anyPending ? SyncState.pending : SyncState.idle)
+        : SyncState.idle;
+
+    _draining = false;
+    notifyListeners();
+
+    if (!networkFailed && _isOnline && anyPending) {
+      // Items enqueued mid-drain — run another pass immediately.
+      drainQueue();
+    } else if (networkFailed && anyPending) {
+      // Drain failed — start the retry timer so we pick up when server returns.
+      _scheduleRetry();
+    } else {
+      // Both queues empty — stop the timer.
+      _retryTimer?.cancel();
+      _retryTimer = null;
+    }
+  }
+
+  /// Submit all pending scores, oldest first. Returns true if it stopped on a
+  /// transient failure (network / 5xx) with items still queued.
+  Future<bool> _drainScores() async {
+    final pending = await _db.allPending();
     for (final item in pending) {
       // No _isOnline guard here — we let the HTTP call determine real
       // connectivity. A successful call proves we're online; a
@@ -182,8 +238,7 @@ class SyncService extends ChangeNotifier {
         // the connectivity_plus interface-state report.
         await _db.incrementRetry(item.id);
         _isOnline = false;
-        networkFailed = true;
-        break;
+        return true;
       } on ApiException catch (e) {
         if (e.statusCode >= 500) {
           // Server-side error (5xx) — could be a transient bug; leave the item
@@ -193,8 +248,7 @@ class SyncService extends ChangeNotifier {
             'foursome=${item.foursomeId} hole=${item.holeNumber}: $e — will retry',
           );
           await _db.incrementRetry(item.id);
-          networkFailed = true; // treat like a transient failure: stop drain + schedule retry
-          break;
+          return true; // transient: stop drain + schedule retry
         }
         // Client-side error (4xx) — the score is malformed and the server will
         // never accept it; discard so it doesn't block the rest of the queue.
@@ -205,27 +259,40 @@ class SyncService extends ChangeNotifier {
         await _db.deletePending(item.id);
       }
     }
+    return false;
+  }
 
-    await _refreshCount();
-
-    _state = networkFailed
-        ? (_pendingCount > 0 ? SyncState.pending : SyncState.idle)
-        : SyncState.idle;
-
-    _draining = false;
-    notifyListeners();
-
-    if (!networkFailed && _isOnline && _pendingCount > 0) {
-      // Items enqueued mid-drain — run another pass immediately.
-      drainQueue();
-    } else if (networkFailed && _pendingCount > 0) {
-      // Drain failed — start the retry timer so we pick up when server returns.
-      _scheduleRetry();
-    } else {
-      // Queue empty — stop the timer.
-      _retryTimer?.cancel();
-      _retryTimer = null;
+  /// Post all pending chat messages, oldest first. Same retry policy as scores:
+  /// network/5xx → stop & retry; 4xx → discard. Returns true on transient stop.
+  Future<bool> _drainMessages() async {
+    final pending = await _db.allPendingMessages();
+    for (final item in pending) {
+      try {
+        await _client.postMessage(item.roundId, item.body);
+        await _db.deletePendingMessage(item.id);
+        _isOnline = true;
+      } on NetworkException {
+        await _db.incrementMessageRetry(item.id);
+        _isOnline = false;
+        return true;
+      } on ApiException catch (e) {
+        if (e.statusCode >= 500) {
+          debugPrint(
+            'SyncService: server 5xx posting message to '
+            'round=${item.roundId}: $e — will retry',
+          );
+          await _db.incrementMessageRetry(item.id);
+          return true;
+        }
+        // 4xx — the server rejected this message (empty/forbidden); discard so
+        // it doesn't block the queue forever.
+        debugPrint(
+          'SyncService: server rejected message to round=${item.roundId}: $e',
+        );
+        await _db.deletePendingMessage(item.id);
+      }
     }
+    return false;
   }
 
   /// Block until the queue is fully drained and the service is idle.
@@ -277,7 +344,8 @@ class SyncService extends ChangeNotifier {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   Future<void> _refreshCount() async {
-    _pendingCount = await _db.pendingCount();
+    _pendingCount        = await _db.pendingCount();
+    _pendingMessageCount = await _db.pendingMessageCount();
     notifyListeners();
   }
 
@@ -286,7 +354,7 @@ class SyncService extends ChangeNotifier {
   void _scheduleRetry() {
     _retryTimer?.cancel();
     _retryTimer = Timer.periodic(_retryInterval, (_) {
-      if (_pendingCount == 0) {
+      if (_pendingCount == 0 && _pendingMessageCount == 0) {
         _retryTimer?.cancel();
         _retryTimer = null;
       } else if (!_draining) {

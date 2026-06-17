@@ -40,7 +40,9 @@ from django.utils import timezone
 
 from accounts.models import Account
 from core.models import Course, HandicapMode, Player, PlayerSex, Tee
-from tournament.models import Foursome, FoursomeMembership, Round, Tournament
+from tournament.models import (
+    Foursome, FoursomeMembership, Round, Tournament, Watcher,
+)
 from scoring.models import HoleScore
 from rest_framework.authtoken.models import Token
 
@@ -323,11 +325,17 @@ class Command(BaseCommand):
         self.stdout.write(f"  Seeded {len(catalog)} shared-catalog courses.")
 
     def _seed_shared_round(self):
-        """Demo for Friends Phase 2a "Shared with me": a SEPARATE friend account
-        ('Saturday Crew') whose completed skins round includes the reviewer as a
-        login-less guest. The guest's formatted phone '(310) 555-0101' normalizes
-        to the reviewer User.phone (+13105550101), so this cross-account round
-        surfaces under the reviewer's "Shared with me"."""
+        """Cross-account Friends demos in a SEPARATE friend account ('Saturday
+        Crew'), all keyed to the reviewer's phone (+13105550101):
+
+          * PLAYING: an in-progress skins round that includes the reviewer as a
+            login-less guest ('Paul Avery', formatted phone '(310) 555-0101'
+            normalizes to the reviewer's User.phone). Because the reviewer is a
+            PLAYER, it surfaces in their OWN active Casual Rounds list (and,
+            since the guest is the designated scorer, under "Scoring" too).
+          * WATCHING: a completed skins round the reviewer was invited to WATCH
+            (a Watcher record) — surfaces read-only under "Shared with me".
+        """
         acct = Account.objects.create(name=FRIEND_ACCOUNT_NAME)
         course, tee = self._create_course(acct)
         reviewer_guest = Player.objects.create(
@@ -354,9 +362,22 @@ class Command(BaseCommand):
         FoursomeMembership.objects.filter(
             foursome__round=rnd, player=reviewer_guest,
         ).update(is_scorer=True)
+
+        # A separate COMPLETED round the reviewer only WATCHES (no foursome
+        # membership) — demonstrates the read-only "Shared with me" list. Played
+        # today so it's inside the age-off window.
+        watched = self._round(
+            acct, course, tee, 'complete', ['skins'], extras,
+            holes=9, bet_unit='5.00',
+            setup=lambda fs, ps: setup_skins(fs, carryover=True),
+            calc=calculate_skins,
+        )
+        Watcher.objects.create(
+            round=watched, phone='+13105550101', name='Paul Avery',
+        )
         self.stdout.write(
-            f"  Seeded '{FRIEND_ACCOUNT_NAME}' shared+scoring round for the "
-            f"reviewer (guest phone {reviewer_guest.phone})."
+            f"  Seeded '{FRIEND_ACCOUNT_NAME}': a playing+scoring round and a "
+            f"watch-only round for the reviewer (phone +13105550101)."
         )
 
     def _make_round(self, account, course, status, active_games, *,

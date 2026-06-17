@@ -23,6 +23,7 @@ import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/round_chat_button.dart';
 
 // ---------------------------------------------------------------------------
 // Handicap helpers (same rules as points_531_screen)
@@ -92,6 +93,12 @@ class _RabbitScreenState extends State<RabbitScreen> {
       }
       rp.loadRabbit(widget.foursomeId);
     });
+  }
+
+  Future<void> _refresh() async {
+    final rp = context.read<RoundProvider>();
+    await rp.loadScorecard(widget.foursomeId);
+    rp.loadRabbit(widget.foursomeId);
   }
 
   List<Membership> _realMembers(Round? round) {
@@ -271,18 +278,25 @@ class _RabbitScreenState extends State<RabbitScreen> {
               ),
             ),
           IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
+            tooltip: 'Refresh scores',
+            icon: const Icon(Icons.refresh),
+            onPressed: rp.round == null ? null : _refresh,
           ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
           IconButton(
             tooltip: 'Leaderboard',
             icon: const Icon(Icons.leaderboard_outlined),
             onPressed: rp.round == null ? null
                 : () => Navigator.of(context).pushNamed(
                     '/leaderboard', arguments: rp.round!.id),
+          ),
+          IconButton(
+            tooltip: 'Full scorecard',
+            icon: const Icon(Icons.table_chart_outlined),
+            onPressed: sc == null ? null
+                : () => Navigator.of(context).pushNamed('/scorecard',
+                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
           ),
         ],
       ),
@@ -342,7 +356,10 @@ class _RabbitScreenState extends State<RabbitScreen> {
 
     return Column(children: [
       Expanded(
-        child: SingleChildScrollView(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (summary != null)
@@ -384,6 +401,7 @@ class _RabbitScreenState extends State<RabbitScreen> {
                 onTapHole: (h) => setState(() => _selectedHole = h)),
             const SizedBox(height: 16),
           ]),
+        ),
         ),
       ),
     ]);

@@ -1,10 +1,11 @@
 """
 api/test_shared_play.py
 -----------------------
-Participant (not just designated scorer) access to shared multi-foursome rounds:
+Participant (not just designated scorer) access to shared rounds:
 
-  * `playing-for-me` lists tournaments / multi-group skins a friend added me to
-    (and excludes single-group casual rounds — those stay in Shared-with-me).
+  * `playing-for-me` lists any round a friend added me to as a PLAYER — single
+    foursome, multi-group skins, or tournament — so it shows in my active list.
+    (Non-playing watchers are excluded; they stay in Shared-with-me.)
   * opening a round (`<id>/join/`) mirrors the TD into my "My Golfers" roster and
     copies the course into my account, idempotently.
 """
@@ -58,7 +59,8 @@ class SharedPlayTests(TestCase):
         )
         _member(self.fs1, self.bob_a)
 
-        # A single-group casual round Bob is also in — should NOT appear.
+        # A single-group casual round Bob is also in — should ALSO appear now
+        # (a player expects every game they were added to in their active list).
         self.solo = Round.objects.create(
             account=self.acct_a, course=self.course, status='in_progress',
             active_games=['nassau'], created_by=self.td_player,
@@ -73,12 +75,12 @@ class SharedPlayTests(TestCase):
         self.b_client = APIClient(); self.b_client.force_authenticate(self.bob)
 
     # ---- discovery ----
-    def test_playing_for_me_lists_multi_group_round(self):
+    def test_playing_for_me_lists_rounds_im_a_player_in(self):
         resp = self.b_client.get(reverse('api-playing-for-me'))
         self.assertEqual(resp.status_code, 200)
         ids = {r['id'] for r in resp.data}
         self.assertIn(self.round.id, ids)          # multi-group skins → listed
-        self.assertNotIn(self.solo.id, ids)        # single group → excluded
+        self.assertIn(self.solo.id, ids)           # single group → now listed too
         row = next(r for r in resp.data if r['id'] == self.round.id)
         self.assertEqual(row['your_foursome_id'], self.fs1.id)
         self.assertFalse(row['is_tournament'])  # casual multi-group skins

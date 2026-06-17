@@ -19,6 +19,7 @@ import '../game_colors.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/round_chat_button.dart';
 
 class TripleCupScreen extends StatefulWidget {
   final int foursomeId;
@@ -51,6 +52,13 @@ class _TripleCupScreenState extends State<TripleCupScreen> {
       appBar: GolfAppBar(
         title: 'One-Round Triple Cup',
         actions: [
+          IconButton(
+            tooltip: 'Refresh scores',
+            icon: const Icon(Icons.refresh),
+            onPressed: _refresh,
+          ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
           if (summary != null) _HandicapBadge(summary: summary),
           const SizedBox(width: 8),
         ],

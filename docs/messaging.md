@@ -31,10 +31,29 @@ its watchers. (Per-foursome sub-threads are intentionally **not** built.)
   marker) and `POST /api/rounds/<id>/messages/read/` `{last_seen_id}`.
   `MessageSerializer` (id, kind, author_id/name/short, body, data, created_at).
   Tests: `api/test_messaging.py` (8, green).
-- **Slice 2 — mobile chat: NEXT.** Dart `Message`/thread models +
-  `client.getMessages(since)/postMessage/markRead`; a round feed screen (chat +
-  unread badge + compose), entry points (round screen / leaderboard / shared
-  round), outbound offline queue via `SyncService`.
+- **Slice 2 — mobile chat: IMPLEMENTED.** Dart `ChatMessage` /
+  `RoundMessagesResult` models (`mobile/lib/api/models.dart`) +
+  `client.getMessages(roundId, {since})` / `postMessage` / `markMessagesRead`.
+  `MessageProvider` (`mobile/lib/providers/message_provider.dart`,
+  registered in `main.dart`) drives one round's feed: cache-first load →
+  incremental `since=` catch-up → 12s poll while open; `send()` never fails
+  (queues via SyncService, shows an optimistic "sending…" bubble);
+  `markAllRead()` clears the badge. Outbound offline queue lives in
+  `SyncService` (`enqueueMessage` + `_drainMessages`, drained alongside scores
+  on reconnect; `pendingMessageCount`) backed by a new `pending_messages` table
+  + `cached_messages` inbound cache (LocalDatabase v1→v2 `onUpgrade`). UI:
+  `round_feed_screen.dart` (chat bubbles, centered event cards, compose box,
+  offline banner) reached via `RoundChatButton` (unread badge) in the round
+  screen + leaderboard + EVERY scoring/game screen app bar (score_entry plus
+  skins/sixes/points_531/wolf/rabbit/nassau/quota_nassau/pink_ball/match_play/
+  triple_cup/multi_skins) — the scorer lives on the scoring screen, so the badge
+  (the push-less chat notification) polls there every 25s; the shared-round view
+  opens the leaderboard, so watchers get it too. Scoring screens also gained a
+  refresh button + pull-to-refresh so a cross-account scorer who fell behind can
+  pull the owner's latest holes. Route `/round-feed`. Note: the unread badge counts
+  via the GET endpoint, which does NOT advance the read marker (only POST /
+  `markMessagesRead` does), so opening the badge doesn't clear unread until the
+  feed is actually viewed.
 - **Slice 3 — events: AFTER.** Emission hooks (birdie/skin/lead/withdrawal/
   round) call `messaging.post_event(...)` from the scoring recalc; event cards;
   per-category push via `services/push.py`.

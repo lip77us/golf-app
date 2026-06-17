@@ -31,6 +31,7 @@ import '../sync/sync_service.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/round_chat_button.dart';
 import '../widgets/team_splitter_4.dart';
 
 // ---------------------------------------------------------------------------
@@ -757,6 +758,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
 
   // ── Score helpers ────────────────────────────────────────────────────────────
 
+  /// Pull the latest scorecard + game summaries from the server and re-land on
+  /// the first unplayed hole. Lets a cross-account scorer who fell behind the
+  /// owner see the just-entered holes and jump to the hole actually in play.
+  /// Used by the app-bar refresh button and pull-to-refresh.
+  Future<void> _refresh() async {
+    final rp = context.read<RoundProvider>();
+    await rp.loadScorecard(widget.foursomeId);
+    if (!mounted) return;
+    final fresh = context.read<RoundProvider>();
+    _loadGameSummaries(fresh);
+    _jumpToFirstUnplayed(fresh);
+  }
+
   void _jumpToFirstUnplayed(RoundProvider rp) {
     final sc = rp.scorecard;
     if (sc == null) return;
@@ -1462,6 +1476,17 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 ),
               ),
             ),
+          // Pull the latest scores (e.g. when another scorer is ahead of you)
+          // and re-land on the current hole.
+          IconButton(
+            tooltip: 'Refresh scores',
+            icon: const Icon(Icons.refresh),
+            onPressed: rp.round == null ? null : _refresh,
+          ),
+          // Chat lives here because the scorer lives on this screen; the badge
+          // is the (push-less) notification that a message arrived.
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
           IconButton(
             tooltip: 'Leaderboard',
             icon: const Icon(Icons.leaderboard_outlined),
@@ -1785,7 +1810,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         ),
 
       Expanded(
-        child: SingleChildScrollView(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1916,6 +1944,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
               const SizedBox(height: 16),
             ],
           ),
+        ),
         ),
       ),
     ]);

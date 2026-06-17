@@ -11,6 +11,7 @@ import 'local/local_database.dart';
 import 'sync/sync_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/round_provider.dart';
+import 'providers/message_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/push_service.dart';
 import 'screens/stableford_setup_screen.dart';
@@ -20,6 +21,7 @@ import 'screens/profile_setup_screen.dart';
 import 'screens/onboarding_wizard.dart';
 import 'screens/tournament_list_screen.dart';
 import 'screens/round_screen.dart';
+import 'screens/round_feed_screen.dart';
 import 'screens/scorecard_screen.dart';
 import 'screens/sixes_screen.dart';
 import 'screens/sixes_setup_screen.dart';
@@ -177,6 +179,16 @@ class _GolfAppState extends State<GolfApp> {
             return prev;
           },
         ),
+
+        // MessageProvider: per-round chat/event feed (one round at a time).
+        ChangeNotifierProxyProvider2<AuthProvider, SyncService, MessageProvider>(
+          create: (ctx) => MessageProvider(
+            widget.auth.client,
+            widget.localDb,
+            ctx.read<SyncService>(),
+          ),
+          update: (_, auth, __, prev) => prev!..updateClient(auth.client),
+        ),
       ],
       child: MaterialApp(
         navigatorKey:         navigatorKey,
@@ -332,6 +344,12 @@ class _GolfAppState extends State<GolfApp> {
       case '/round':
         final roundId = settings.arguments as int;
         return page((_) => RoundScreen(roundId: roundId));
+      case '/round-feed':
+        // Arguments may be a plain int (roundId) or a Map with {roundId, title}.
+        final args = settings.arguments;
+        final roundId = args is Map ? args['roundId'] as int : args as int;
+        final title   = args is Map ? args['title'] as String? : null;
+        return page((_) => RoundFeedScreen(roundId: roundId, title: title));
       case '/scorecard':
         // Arguments may be a plain int (edit mode) or a Map with
         // {'foursomeId': int, 'readOnly': bool} (view mode).

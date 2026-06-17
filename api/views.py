@@ -1838,19 +1838,31 @@ class CasualRoundListView(APIView):
         return Response(ser.data)
 
 
+# How long a COMPLETED follow stays on "Shared with me" before it ages off.
+# Live (in-progress / pending) follows are always kept; a watcher doesn't care
+# about a game that finished a week ago, so completed ones drop after this many
+# days (measured from the round's play date).
+SHARED_WATCH_RETENTION_DAYS = 7
+
+
 class SharedRoundsView(APIView):
     """
     GET /api/rounds/shared-with-me/?status=in_progress|complete|pending
 
-    Read-only cross-account history (Friends Phase 2a): casual rounds in OTHER
-    accounts that include a player carrying the caller's VERIFIED phone number —
-    i.e. games a friend added you to in their own group.  Matched by normalized
-    phone (TD-typed Player.phone is free-text); no permanent link yet.  Tapping a
-    result opens the existing read-only leaderboard (LeaderboardView is already
-    fetchable by round id).
+    Read-only cross-account follows (Friends Phase 2a): casual rounds and
+    tournaments in OTHER accounts that the caller was invited to WATCH (a
+    Watcher record keyed by their VERIFIED phone).  Tapping a result opens the
+    existing read-only leaderboard.
+
+    NOTE: rounds you're a PLAYER in are intentionally NOT here — those live in
+    your own active list (see PlayingRoundsView) and move to its Completed tab
+    when closed.  "Shared with me" is purely for non-playing spectators, and
+    completed follows age off after SHARED_WATCH_RETENTION_DAYS so the list
+    doesn't grow without bound.
     """
     def get(self, request):
-        from accounts.phone import normalize
+        from datetime import timedelta
+        from django.utils import timezone
         from tournament.models import Watcher, Tournament
 
         my_phone = getattr(request.user, 'phone', None)  # E.164, or None (legacy)
@@ -1861,10 +1873,15 @@ class SharedRoundsView(APIView):
         def _status_ok(s):
             return status not in ('in_progress', 'complete', 'pending') or s == status
 
+        cutoff = timezone.now().date() - timedelta(days=SHARED_WATCH_RETENTION_DAYS)
+        def _recent_enough(s, d):
+            # Keep live follows; drop completed ones older than the window.
+            return s != 'complete' or (d is not None and d >= cutoff)
+
         results = []
         seen_rounds = set()
 
-        def _round_row(r, *, your_name=None):
+        def _round_row(r):
             return {
                 'id':            r.id,
                 'date':          r.date,
@@ -1873,39 +1890,11 @@ class SharedRoundsView(APIView):
                 'active_games':  r.active_games,
                 'group_label':   (r.created_by.name if r.created_by_id else None)
                                  or r.account.name,
-                'your_name':     your_name,
+                'your_name':     None,
                 'is_tournament': False,
             }
 
-        # 1. Casual rounds I'm a PLAYER in (read-only history).
-        matched_name = {}
-        for c in (
-            Player.objects.exclude(account=request.user.account)
-            .exclude(phone='').values('id', 'phone', 'name')
-        ):
-            if normalize(c['phone']) == my_phone:
-                matched_name[c['id']] = c['name']
-        if matched_name:
-            qs = (
-                Round.objects
-                .filter(tournament__isnull=True,
-                        foursomes__memberships__player_id__in=list(matched_name))
-                .exclude(account=request.user.account)
-                .select_related('course', 'account', 'created_by')
-                .prefetch_related('foursomes__memberships')
-                .distinct().order_by('-date', '-created_at')
-            )
-            if status in ('in_progress', 'complete', 'pending'):
-                qs = qs.filter(status=status)
-            for r in qs:
-                your_name = next(
-                    (matched_name[m.player_id]
-                     for fs in r.foursomes.all() for m in fs.memberships.all()
-                     if m.player_id in matched_name), None)
-                results.append(_round_row(r, your_name=your_name))
-                seen_rounds.add(r.id)
-
-        # 2. Casual rounds I'm a WATCHER of.
+        # 1. Casual rounds I'm a WATCHER of.
         watch_round_ids = list(
             Watcher.objects.filter(phone=my_phone, round__isnull=False)
             .values_list('round_id', flat=True))
@@ -1917,12 +1906,13 @@ class SharedRoundsView(APIView):
                 .order_by('-date', '-created_at')
             )
             for r in qs:
-                if r.id in seen_rounds or not _status_ok(r.status):
+                if (r.id in seen_rounds or not _status_ok(r.status)
+                        or not _recent_enough(r.status, r.date)):
                     continue
                 results.append(_round_row(r))
                 seen_rounds.add(r.id)
 
-        # 3. Tournaments I'm a WATCHER of (whole-event, read-only).
+        # 2. Tournaments I'm a WATCHER of (whole-event, read-only).
         watch_t_ids = list(
             Watcher.objects.filter(phone=my_phone, tournament__isnull=False)
             .values_list('tournament_id', flat=True))
@@ -1937,7 +1927,8 @@ class SharedRoundsView(APIView):
                 t_status = ('complete'
                             if rounds and all(rr.status == 'complete' for rr in rounds)
                             else 'in_progress')
-                if not _status_ok(t_status):
+                t_date = max((rr.date for rr in rounds if rr.date), default=None)
+                if not _status_ok(t_status) or not _recent_enough(t_status, t_date):
                     continue
                 results.append({
                     'id':            t.id,
@@ -2068,12 +2059,15 @@ class PlayingRoundsView(APIView):
     """
     GET /api/rounds/playing-for-me/
 
-    Multi-foursome rounds (tournaments or multi-group skins) in OTHER accounts
-    where a player carrying my VERIFIED phone is a member — i.e. games a TD/
-    friend added me to. Unlike `scoring-for-me` (designated scorers only), this
-    is ANY phone-matched participant: I can open the round to score MY group and
-    read the whole-field leaderboard, no scorer designation needed. Returns the
-    round + `your_foursome_id` so the app opens straight to my group.
+    Rounds in OTHER accounts where a player carrying my VERIFIED phone is a
+    member — i.e. games a TD/friend added me to as a PLAYER (single foursome,
+    multi-group skins, or tournament). Unlike `scoring-for-me` (designated
+    scorers only), this is ANY phone-matched participant: the round shows up in
+    my own active list so I can open it, follow my group, and read the
+    leaderboard. (Whether I can ENTER scores is still gated server-side by
+    scorer designation, so this never silently double-scores a shared group.)
+    Watchers are NOT here — non-playing spectators stay in `shared-with-me`.
+    Returns the round + `your_foursome_id` so the app opens straight to my group.
     """
     def get(self, request):
         from accounts.phone import normalize
@@ -2102,11 +2096,11 @@ class PlayingRoundsView(APIView):
             r = m.foursome.round
             if r.id in seen:
                 continue
-            # Scope to "tournaments and multi-group skins" — a single-group
-            # casual round a friend added me to stays in read-only Shared-with-me.
-            is_multi = (r.tournament_id is not None) or (r.foursomes.count() > 1)
-            if not is_multi:
-                continue
+            # Any round I'm a player in — single foursome, multi-group, or
+            # tournament — belongs in my active list (a player expects to see
+            # the game they were added to, not just follow it read-only). A
+            # non-playing watcher is excluded here (no FoursomeMembership) and
+            # still surfaces via shared-with-me.
             seen.add(r.id)
             t = r.tournament
             group_label = (
@@ -2200,8 +2194,30 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
         round=round_obj, tournament=tournament, phone=norm,
         defaults={'name': name, 'invited_by': inviter},
     )
+
+    # If the watcher is already on Halved, notify them IN-APP (push) — the
+    # inviter shouldn't have to send them a "download Halved" text. `is_on_app`
+    # is returned so the client can skip the download share for them.
+    from accounts.models import User as _User
+    target = _User.objects.filter(phone=norm).first()
+    is_on_app = target is not None
+    if created and target is not None:
+        try:
+            from services.push import send_push, tokens_for_users
+            toks = tokens_for_users([target], 'watch_invite')
+            if toks:
+                who  = inviter.name if inviter else 'Someone'
+                what = (round_obj.course.name if round_obj
+                        else (tournament.name if tournament else 'a round'))
+                send_push(toks, 'Invited to watch',
+                          f'{who} invited you to follow {what}.',
+                          {'type': 'watch_invite'})
+        except Exception:  # best-effort — never block the invite
+            import logging
+            logging.getLogger(__name__).exception('watch-invite push failed')
+
     return Response(
-        {'watcher_id': watcher.id, 'created': created,
+        {'watcher_id': watcher.id, 'created': created, 'is_on_app': is_on_app,
          'player_id': roster_player.id if roster_player else None},
         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
@@ -2495,6 +2511,8 @@ class RoundSetupView(APIView):
         # Notify followers a multi-group round has started (once; best-effort).
         from services.push import maybe_notify_round_started
         maybe_notify_round_started(round_obj)
+        from services.messaging_events import emit_round_started
+        emit_round_started(round_obj)
 
         if d['auto_setup_games']:
             _auto_setup_games(round_obj, foursomes)
@@ -2852,6 +2870,11 @@ class ScoreSubmitView(APIView):
 
         _recalculate_games(foursome)
 
+        # Slice 3: emit server events (birdies now; skins/matches next) — runs
+        # after recalc, fully best-effort (never blocks the score response).
+        from services.messaging_events import emit_score_events
+        emit_score_events(foursome, hole_number, scores)
+
         round_obj  = foursome.round
         lb_games   = _build_leaderboard(round_obj)
         return Response({
@@ -2900,6 +2923,8 @@ class RoundCompleteView(APIView):
             # Notify followers the multi-group round is final (once; best-effort).
             from services.push import maybe_notify_round_complete
             maybe_notify_round_complete(round_obj)
+            from services.messaging_events import emit_round_complete
+            emit_round_complete(round_obj)
 
         # Finalise cup points whenever this is called — partial-round
         # calls still want their group's points reflected on the live
@@ -3274,6 +3299,10 @@ class WithdrawPlayerView(APIView):
             )
 
         _recalculate_games(foursome)
+
+        from services.messaging_events import emit_withdrawal
+        emit_withdrawal(foursome, membership.player, after_hole,
+                        killed_next=kill_next)
 
         return Response({
             'foursome_id'        : foursome.id,

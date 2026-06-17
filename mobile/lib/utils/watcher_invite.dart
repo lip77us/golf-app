@@ -55,32 +55,41 @@ class _WatcherInviteSheet extends StatefulWidget {
 class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
   bool _busy = false;
 
-  Future<void> _post({int? playerId, String? phone, String? name}) async {
+  Future<Map<String, dynamic>> _post(
+      {int? playerId, String? phone, String? name}) async {
     final c = context.read<AuthProvider>().client;
     if (widget.roundId != null) {
-      await c.addRoundWatcher(widget.roundId!,
-          playerId: playerId, phone: phone, name: name);
-    } else {
-      await c.addTournamentWatcher(widget.tournamentId!,
+      return c.addRoundWatcher(widget.roundId!,
           playerId: playerId, phone: phone, name: name);
     }
+    return c.addTournamentWatcher(widget.tournamentId!,
+        playerId: playerId, phone: phone, name: name);
   }
 
-  /// Record the watcher, then share the app-download link so they can follow.
+  /// Record the watcher. If they're already on Halved, the server notifies them
+  /// in-app (push) — no download pitch; otherwise share the app link so they
+  /// can install and follow.
   Future<void> _invite({int? playerId, String? phone, String? name}) async {
     final auth      = context.read<AuthProvider>();
     final messenger = ScaffoldMessenger.of(context);
     final origin    = shareOriginFrom(context);
     final navigator = Navigator.of(context);
+    final who = (name?.trim().isNotEmpty == true) ? name! : 'Your watcher';
     setState(() => _busy = true);
     try {
-      await _post(playerId: playerId, phone: phone, name: name);
+      final res   = await _post(playerId: playerId, phone: phone, name: name);
+      final onApp = res['is_on_app'] == true;
       navigator.pop(); // close the sheet
-      await shareInvite(auth, messenger, origin: origin, inviteeName: name);
-      messenger.showSnackBar(SnackBar(
-        content: Text('${name?.trim().isNotEmpty == true ? name : 'Your watcher'}'
-            ' can now follow along — invite link shared.'),
-      ));
+      if (onApp) {
+        messenger.showSnackBar(SnackBar(
+          content: Text("$who is on Halved — they'll be notified in the app."),
+        ));
+      } else {
+        await shareInvite(auth, messenger, origin: origin, inviteeName: name);
+        messenger.showSnackBar(SnackBar(
+          content: Text('$who can now follow along — invite link shared.'),
+        ));
+      }
     } on ApiException catch (e) {
       if (mounted) setState(() => _busy = false);
       messenger.showSnackBar(SnackBar(content: Text(e.message)));

@@ -60,9 +60,36 @@ class PendingScore {
   }
 }
 
+/// One outbound chat message waiting to reach the server (offline queue).
+class PendingMessage {
+  final int      id;
+  final int      roundId;
+  final String   body;
+  final DateTime createdAt;
+  final int      retryCount;
+
+  const PendingMessage({
+    required this.id,
+    required this.roundId,
+    required this.body,
+    required this.createdAt,
+    required this.retryCount,
+  });
+
+  factory PendingMessage.fromRow(Map<String, dynamic> row) => PendingMessage(
+        id:         row['id']          as int,
+        roundId:    row['round_id']    as int,
+        body:       row['body']        as String,
+        createdAt:  DateTime.parse(row['created_at'] as String),
+        retryCount: row['retry_count'] as int,
+      );
+}
+
 class LocalDatabase {
   static const _dbName    = 'golf_app.db';
-  static const _dbVersion = 1;
+  // v2: added pending_messages (outbound chat queue) + cached_messages
+  //     (inbound feed cache for offline catch-up).
+  static const _dbVersion = 2;
 
   Database? _db;
 
@@ -83,7 +110,37 @@ class LocalDatabase {
       dbPath,
       version: _dbVersion,
       onCreate: _create,
+      onUpgrade: _upgrade,
     );
+  }
+
+  /// Schema migrations for existing installs. v1 → v2 adds the messaging tables.
+  Future<void> _upgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createMessageTables(db);
+    }
+  }
+
+  Future<void> _createMessageTables(Database db) async {
+    // Outbound chat messages saved locally but not yet confirmed by the server.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_messages (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        round_id    INTEGER NOT NULL,
+        body        TEXT    NOT NULL,
+        created_at  TEXT    NOT NULL,
+        retry_count INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    // Last-known-good message thread JSON per round (offline catch-up).
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cached_messages (
+        round_id  INTEGER PRIMARY KEY,
+        data_json TEXT    NOT NULL,
+        cached_at TEXT    NOT NULL
+      )
+    ''');
   }
 
   Future<void> _create(Database db, int version) async {
@@ -117,6 +174,9 @@ class LocalDatabase {
         cached_at TEXT    NOT NULL
       )
     ''');
+
+    // Messaging (v2): outbound queue + inbound feed cache.
+    await _createMessageTables(db);
   }
 
   // ── Pending queue — writes ────────────────────────────────────────────────
@@ -252,6 +312,91 @@ class LocalDatabase {
     return jsonDecode(rows.first['data_json'] as String) as Map<String, dynamic>;
   }
 
+  // ── Outbound message queue ────────────────────────────────────────────────
+
+  /// Queue a chat message for delivery. Returns the local row id (also used as
+  /// the stable key for the optimistic "sending…" bubble in the feed).
+  Future<int> enqueueMessage({
+    required int roundId,
+    required String body,
+  }) async {
+    final db = await _database;
+    return db.insert('pending_messages', {
+      'round_id':    roundId,
+      'body':        body,
+      'created_at':  DateTime.now().toIso8601String(),
+      'retry_count': 0,
+    });
+  }
+
+  Future<void> deletePendingMessage(int id) async {
+    final db = await _database;
+    await db.delete('pending_messages', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> incrementMessageRetry(int id) async {
+    final db = await _database;
+    await db.rawUpdate(
+      'UPDATE pending_messages SET retry_count = retry_count + 1 WHERE id = ?',
+      [id],
+    );
+  }
+
+  /// All queued outbound messages, oldest first (drained by SyncService).
+  Future<List<PendingMessage>> allPendingMessages() async {
+    final db   = await _database;
+    final rows = await db.query('pending_messages', orderBy: 'id ASC');
+    return rows.map(PendingMessage.fromRow).toList();
+  }
+
+  /// Queued outbound messages for one round, oldest first — overlaid in the
+  /// feed as optimistic "sending…" bubbles.
+  Future<List<PendingMessage>> pendingMessagesForRound(int roundId) async {
+    final db   = await _database;
+    final rows = await db.query(
+      'pending_messages',
+      where:     'round_id = ?',
+      whereArgs: [roundId],
+      orderBy:   'id ASC',
+    );
+    return rows.map(PendingMessage.fromRow).toList();
+  }
+
+  Future<int> pendingMessageCount() async {
+    final db     = await _database;
+    final result =
+        await db.rawQuery('SELECT COUNT(*) AS cnt FROM pending_messages');
+    return result.first['cnt'] as int? ?? 0;
+  }
+
+  // ── Message thread cache ──────────────────────────────────────────────────
+
+  /// Cache the full message list for a round (list of API message maps).
+  Future<void> cacheMessages(int roundId, List<Map<String, dynamic>> msgs) async {
+    final db = await _database;
+    await db.insert(
+      'cached_messages',
+      {
+        'round_id':  roundId,
+        'data_json': jsonEncode(msgs),
+        'cached_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>?> getCachedMessages(int roundId) async {
+    final db   = await _database;
+    final rows = await db.query(
+      'cached_messages',
+      where:     'round_id = ?',
+      whereArgs: [roundId],
+    );
+    if (rows.isEmpty) return null;
+    final list = jsonDecode(rows.first['data_json'] as String) as List;
+    return list.cast<Map<String, dynamic>>();
+  }
+
   // ── Housekeeping ──────────────────────────────────────────────────────────
 
   /// Wipe everything — used during sign-out so a different user
@@ -261,5 +406,7 @@ class LocalDatabase {
     await db.delete('pending_scores');
     await db.delete('cached_scorecards');
     await db.delete('cached_rounds');
+    await db.delete('pending_messages');
+    await db.delete('cached_messages');
   }
 }

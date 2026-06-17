@@ -514,6 +514,32 @@ class ApiClient {
         .toList();
   }
 
+  // ---- Round message feed (chat + server events) ----
+
+  /// Fetch the round's message thread. Pass [since] (the highest message id you
+  /// already have) for an incremental catch-up; omit/0 for the full thread.
+  /// Returns the page plus the caller's unread count and own player id.
+  Future<RoundMessagesResult> getMessages(int roundId, {int since = 0}) async {
+    final q = since > 0 ? '?since=$since' : '';
+    final data = await _get('/rounds/$roundId/messages/$q');
+    return RoundMessagesResult.fromJson((data as Map).cast<String, dynamic>());
+  }
+
+  /// Post a human chat message to the round thread. Returns the created message
+  /// (the server also auto-advances the poster's read marker).
+  Future<ChatMessage> postMessage(int roundId, String body) async {
+    final data = await _post('/rounds/$roundId/messages/', {'body': body});
+    return ChatMessage.fromJson((data as Map).cast<String, dynamic>());
+  }
+
+  /// Advance the caller's read marker to [lastSeenId]; returns the new unread
+  /// count.
+  Future<int> markMessagesRead(int roundId, int lastSeenId) async {
+    final data = await _post(
+        '/rounds/$roundId/messages/read/', {'last_seen_id': lastSeenId});
+    return (data as Map)['unread'] as int? ?? 0;
+  }
+
   /// Support staff only: resolve a round by watch token, /watch/ URL, or numeric
   /// id for READ-ONLY review. Returns a summary {round_id, account_name, …};
   /// the lookup is audited server-side. Throws on 403 (not support) / 404.
@@ -582,23 +608,28 @@ class ApiClient {
   }
 
   /// Invite a non-playing watcher to a round (by roster golfer or raw phone).
-  Future<void> addRoundWatcher(int roundId,
+  /// Returns the response, incl. `is_on_app` — true when the watcher already
+  /// has Halved (so the caller can skip the download-link share for them).
+  Future<Map<String, dynamic>> addRoundWatcher(int roundId,
       {int? playerId, String? phone, String? name}) async {
-    await _post('/rounds/$roundId/watchers/', {
+    final data = await _post('/rounds/$roundId/watchers/', {
       if (playerId != null) 'player_id': playerId,
       if (phone != null) 'phone': phone,
       if (name != null && name.isNotEmpty) 'name': name,
     });
+    return (data as Map).cast<String, dynamic>();
   }
 
-  /// Invite a non-playing watcher to a whole tournament.
-  Future<void> addTournamentWatcher(int tournamentId,
+  /// Invite a non-playing watcher to a whole tournament. Returns the response
+  /// (incl. `is_on_app`).
+  Future<Map<String, dynamic>> addTournamentWatcher(int tournamentId,
       {int? playerId, String? phone, String? name}) async {
-    await _post('/tournaments/$tournamentId/watchers/', {
+    final data = await _post('/tournaments/$tournamentId/watchers/', {
       if (playerId != null) 'player_id': playerId,
       if (phone != null) 'phone': phone,
       if (name != null && name.isNotEmpty) 'name': name,
     });
+    return (data as Map).cast<String, dynamic>();
   }
 
   /// TD designates (or clears) a foursome member as its scorer.

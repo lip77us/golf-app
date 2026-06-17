@@ -27,6 +27,7 @@ import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/round_chat_button.dart';
 
 // ---------------------------------------------------------------------------
 // Handicap helpers (same rules as points_531_screen)
@@ -116,6 +117,12 @@ class _WolfScreenState extends State<WolfScreen> {
       }
       rp.loadWolf(widget.foursomeId);
     });
+  }
+
+  Future<void> _refresh() async {
+    final rp = context.read<RoundProvider>();
+    await rp.loadScorecard(widget.foursomeId);
+    rp.loadWolf(widget.foursomeId);
   }
 
   // ── Player ordering ───────────────────────────────────────────────────────
@@ -421,11 +428,6 @@ class _WolfScreenState extends State<WolfScreen> {
       appBar: GolfAppBar(
         title: 'Wolf',
         actions: [
-          IconButton(
-            tooltip: 'Set Wolf rotation',
-            icon: const Icon(Icons.repeat),
-            onPressed: rp.wolfSummary == null ? null : _promptRotation,
-          ),
           if (sync.hasPending)
             Padding(
               padding: const EdgeInsets.only(right: 4),
@@ -446,6 +448,13 @@ class _WolfScreenState extends State<WolfScreen> {
                 ),
               ),
             ),
+          IconButton(
+            tooltip: 'Refresh scores',
+            icon: const Icon(Icons.refresh),
+            onPressed: rp.round == null ? null : _refresh,
+          ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
           // Standard order: Leaderboard then Scorecard (scorecard rightmost).
           IconButton(
             tooltip: 'Leaderboard',
@@ -462,6 +471,12 @@ class _WolfScreenState extends State<WolfScreen> {
                 ? null
                 : () => Navigator.of(context).pushNamed('/scorecard',
                     arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
+          ),
+          // Game-specific action last.
+          IconButton(
+            tooltip: 'Set Wolf rotation',
+            icon: const Icon(Icons.repeat),
+            onPressed: rp.wolfSummary == null ? null : _promptRotation,
           ),
         ],
       ),
@@ -518,7 +533,10 @@ class _WolfScreenState extends State<WolfScreen> {
 
     return Column(children: [
       Expanded(
-        child: SingleChildScrollView(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -575,6 +593,7 @@ class _WolfScreenState extends State<WolfScreen> {
               const SizedBox(height: 16),
             ],
           ),
+        ),
         ),
       ),
     ]);

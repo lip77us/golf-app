@@ -28,8 +28,12 @@ NOTIFICATION_CATEGORIES = {
     'round_start':    True,
     'skins':          True,
     'round_complete': True,
-    'lead_change':    True,   # Phase 2
-    'chat':           True,   # Phase 3 (trash talk)
+    'lead_change':    True,
+    'birdie':         True,   # gross birdie / eagle / albatross / ace
+    'withdrawal':     True,   # a player can't continue
+    'match_result':   True,   # Nassau nine / Sixes segment / cup match decided
+    'watch_invite':   True,   # someone invited you to watch their round/tournament
+    'chat':           True,   # human chat (currently unused — no chat push yet)
 }
 
 

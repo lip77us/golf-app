@@ -678,6 +678,94 @@ class ScoringRound {
       );
 }
 
+/// One message in a round's chat/event feed
+/// (GET/POST /api/rounds/<id>/messages/). Maps to the backend `Message`:
+/// a human `user` post or a server `event` announcement.
+class ChatMessage {
+  /// Server message id. For an outbound message still queued locally (not yet
+  /// confirmed by the server) this is a NEGATIVE synthetic id derived from the
+  /// local queue row, so optimistic bubbles sort after real ones and never
+  /// collide with server ids.
+  final int    id;
+  /// 'user' (human chat) or 'event' (server announcement).
+  final String kind;
+  final int?   authorId;
+  final String? authorName;
+  final String? authorShort;
+  final String body;
+  /// Event payload (type, hole, player, value …) — drives rich event rendering.
+  /// Empty for human chat.
+  final Map<String, dynamic> data;
+  final DateTime createdAt;
+  /// True for an optimistic local copy that hasn't been confirmed by the server
+  /// yet (still in the outbound SyncService queue). Rendered as "sending…".
+  final bool   pending;
+
+  const ChatMessage({
+    required this.id,
+    required this.kind,
+    this.authorId,
+    this.authorName,
+    this.authorShort,
+    required this.body,
+    this.data = const {},
+    required this.createdAt,
+    this.pending = false,
+  });
+
+  bool get isEvent => kind == 'event';
+
+  factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
+        id:          j['id'] as int,
+        kind:        j['kind'] as String? ?? 'user',
+        authorId:    j['author_id'] as int?,
+        authorName:  j['author_name'] as String?,
+        authorShort: j['author_short'] as String?,
+        body:        j['body'] as String? ?? '',
+        data:        (j['data'] as Map?)?.cast<String, dynamic>() ?? const {},
+        createdAt:   DateTime.tryParse(j['created_at'] as String? ?? '')
+                         ?.toLocal() ??
+                     DateTime.now(),
+        pending:     false,
+      );
+
+  /// JSON shape used to cache server messages locally (round it through
+  /// fromJson on read). Mirrors the API payload.
+  Map<String, dynamic> toCacheJson() => {
+        'id':           id,
+        'kind':         kind,
+        'author_id':    authorId,
+        'author_name':  authorName,
+        'author_short': authorShort,
+        'body':         body,
+        'data':         data,
+        'created_at':   createdAt.toUtc().toIso8601String(),
+      };
+}
+
+/// The GET /api/rounds/<id>/messages/ payload: the message page plus the
+/// caller's unread count and their own player id (to right-align own bubbles).
+class RoundMessagesResult {
+  final List<ChatMessage> messages;
+  final int unread;
+  final int? myPlayerId;
+
+  const RoundMessagesResult({
+    required this.messages,
+    required this.unread,
+    this.myPlayerId,
+  });
+
+  factory RoundMessagesResult.fromJson(Map<String, dynamic> j) =>
+      RoundMessagesResult(
+        messages: (j['messages'] as List? ?? [])
+            .map((m) => ChatMessage.fromJson(m as Map<String, dynamic>))
+            .toList(),
+        unread:     j['unread'] as int? ?? 0,
+        myPlayerId: j['my_player_id'] as int?,
+      );
+}
+
 class CasualRoundPlayer {
   final int    id;
   final String name;

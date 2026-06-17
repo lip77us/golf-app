@@ -134,6 +134,13 @@ const List<IconHelpEntry> _scoreEntryHelp = [
 
 const List<IconHelpEntry> _leaderboardHelp = [
   IconHelpEntry(
+    icon: Icons.sms_outlined,
+    title: 'Round chat',
+    body: 'Message everyone in this round — all groups plus any watchers — and '
+        'see live event updates (birdies, skins, lead changes). A red badge '
+        'shows unread messages.',
+  ),
+  IconHelpEntry(
     icon: Icons.visibility_outlined,
     title: 'Invite a watcher',
     body: "Invite someone who isn't playing to follow this round in the app — "

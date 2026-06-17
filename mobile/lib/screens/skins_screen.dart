@@ -21,6 +21,7 @@ import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/round_chat_button.dart';
 
 // ---------------------------------------------------------------------------
 // Handicap helpers — identical to points_531_screen.dart
@@ -97,6 +98,12 @@ class _SkinsScreenState extends State<SkinsScreen> {
       }
       rp.loadSkins(widget.foursomeId);
     });
+  }
+
+  Future<void> _refresh() async {
+    final rp = context.read<RoundProvider>();
+    await rp.loadScorecard(widget.foursomeId);
+    rp.loadSkins(widget.foursomeId);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -432,6 +439,13 @@ class _SkinsScreenState extends State<SkinsScreen> {
               ),
             ),
           IconButton(
+            tooltip: 'Refresh scores',
+            icon: const Icon(Icons.refresh),
+            onPressed: rp.round == null ? null : _refresh,
+          ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
+          IconButton(
             tooltip: 'Leaderboard',
             icon: const Icon(Icons.leaderboard_outlined),
             onPressed: rp.round == null
@@ -541,7 +555,10 @@ class _SkinsScreenState extends State<SkinsScreen> {
 
     return Column(children: [
       Expanded(
-        child: SingleChildScrollView(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,6 +602,7 @@ class _SkinsScreenState extends State<SkinsScreen> {
               const SizedBox(height: 16),
             ],
           ),
+        ),
         ),
       ),
     ]);

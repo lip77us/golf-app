@@ -24,6 +24,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/round_chat_button.dart';
 
 
 class PinkBallScreen extends StatefulWidget {
@@ -95,6 +96,13 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
     _matchPlayTimer?.cancel();
     _tpmTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final rp = context.read<RoundProvider>();
+    await rp.loadScorecard(widget.foursomeId);
+    if (_matchPlayActive) rp.loadMatchPlay(widget.foursomeId);
+    if (_threePersonMatchActive) rp.loadThreePersonMatch(widget.foursomeId);
   }
 
   Future<void> _initScreen() async {
@@ -527,17 +535,19 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
         title: 'Group $groupNum',
         actions: [
           IconButton(
-            icon: const Icon(Icons.bar_chart),
+            tooltip: 'Refresh scores',
+            icon: const Icon(Icons.refresh),
+            onPressed: rp.round == null ? null : _refresh,
+          ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
+          IconButton(
+            icon: const Icon(Icons.leaderboard_outlined),
             tooltip: 'Leaderboard',
             onPressed: round == null
                 ? null
                 : () => Navigator.of(context)
                     .pushNamed('/leaderboard', arguments: round.id),
-          ),
-          IconButton(
-            icon: const Icon(Icons.format_list_numbered),
-            tooltip: 'Set ball rotation',
-            onPressed: _promptSetOrder,
           ),
           IconButton(
             icon: const Icon(Icons.table_chart_outlined),
@@ -549,6 +559,12 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                 'readOnly': true,
               });
             },
+          ),
+          // Game-specific action last.
+          IconButton(
+            icon: const Icon(Icons.format_list_numbered),
+            tooltip: 'Set ball rotation',
+            onPressed: _promptSetOrder,
           ),
         ],
       ),
@@ -566,7 +582,10 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
         ),
 
         Expanded(
-          child: ListView(
+          child: RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             children: [
               // ── Carrier banner ────────────────────────────────────────
@@ -709,6 +728,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
               ],
 
             ],
+            ),
           ),
         ),
       ]),

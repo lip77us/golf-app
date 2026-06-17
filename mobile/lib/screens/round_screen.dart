@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
+import '../widgets/round_chat_button.dart';
 
 class RoundScreen extends StatefulWidget {
   final int roundId;
@@ -40,6 +41,8 @@ class _RoundScreenState extends State<RoundScreen> {
             ? const Text('Round')
             : Text('Round ${round.roundNumber}'),
         actions: [
+          if (round != null)
+            RoundChatButton(roundId: round.id, title: round.course.name),
           IconButton(
             icon: const Icon(Icons.bar_chart),
             tooltip: 'Leaderboard',

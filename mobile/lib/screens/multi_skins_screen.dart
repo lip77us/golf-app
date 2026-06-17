@@ -16,6 +16,7 @@ import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/round_chat_button.dart';
 
 class MultiSkinsScreen extends StatefulWidget {
   final int roundId;
@@ -44,11 +45,13 @@ class _MultiSkinsScreenState extends State<MultiSkinsScreen> {
         title: 'Multi-Group Skins',
         actions: [
           IconButton(
+            tooltip: 'Refresh scores',
             icon: const Icon(Icons.refresh),
             onPressed: rp.loadingMultiSkins
                 ? null
                 : () => rp.loadMultiSkins(widget.roundId),
           ),
+          RoundChatButton(roundId: widget.roundId),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Edit setup',

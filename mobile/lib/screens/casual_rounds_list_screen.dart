@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
@@ -10,7 +11,6 @@ import '../utils/shared_round.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
-import '../widgets/shared_round_card.dart';
 import 'casual_round_screen.dart';
 import 'player_list_screen.dart';
 
@@ -25,7 +25,7 @@ class CasualRoundsListScreen extends StatefulWidget {
 
 class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
   List<CasualRoundSummary>? _rounds;
-  /// Multi-group skins games in OTHER accounts a friend added me to.
+  /// Rounds in OTHER accounts a friend added me to as a player (any size).
   List<ScoringRound> _shared = [];
   bool    _loading      = true;
   String? _error;
@@ -49,8 +49,9 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
       final data   = await client.getCasualRounds(
         status: _showCompleted ? 'complete' : 'in_progress',
       );
-      // Multi-group skins a friend/TD added me to (cross-account). Best-effort:
-      // a failure here must not break my own rounds list.
+      // Rounds a friend/TD added me to as a player (cross-account), so they
+      // show in my active list. Best-effort: a failure here must not break my
+      // own rounds list.
       List<ScoringRound> shared = [];
       try {
         shared = (await client.getPlayingForMe())
@@ -338,95 +339,128 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
       );
     }
 
+    // One date-sorted list mixing my own rounds and ones a friend started and
+    // added me to — no sections; each card is flagged with who started it.
+    String fmtDate(String iso) {
+      final d = DateTime.tryParse(iso);
+      return d == null ? iso : DateFormat('MMM d, yyyy').format(d);
+    }
+    final items = <_RoundItem>[
+      for (final r in rounds)
+        _RoundItem(
+          sortDate:       DateTime.tryParse(r.date),
+          dateLabel:      fmtDate(r.date),
+          courseName:     r.courseName,
+          activeGames:    r.activeGames,
+          isCompleted:    r.status == 'complete',
+          currentHole:    r.currentHole,
+          startedByMe:    true,
+          startedByLabel: 'you',
+          people:         r.players.map((p) => p.name).join(', '),
+          onTap: () async { await _openRound(r); _load(); },
+          onDelete: (myId != null && r.createdByPlayerId == myId)
+              ? () => _confirmDelete(r)
+              : null,
+        ),
+      for (final r in shared)
+        _RoundItem(
+          sortDate:       DateTime.tryParse(r.date),
+          dateLabel:      fmtDate(r.date),
+          courseName:     r.courseName,
+          activeGames:    r.activeGames,
+          isCompleted:    r.status == 'complete',
+          currentHole:    null, // ScoringRound carries status, not hole progress
+          startedByMe:    false,
+          startedByLabel: r.groupLabel,
+          people:         '',
+          onTap: () async { await openSharedRound(context, r.id); _load(); },
+          onDelete: null,
+        ),
+    ]..sort((a, b) =>
+        (b.sortDate ?? DateTime(0)).compareTo(a.sortDate ?? DateTime(0)));
+
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
+      child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
-        children: [
-          if (shared.isNotEmpty) ...[
-            _sectionHeader(context, 'Shared with you'),
-            for (final r in shared)
-              SharedRoundCard(
-                round: r,
-                onTap: () async {
-                  await openSharedRound(context, r.id);
-                  _load();
-                },
-              ),
-            if (rounds.isNotEmpty) _sectionHeader(context, 'Your rounds'),
-          ],
-          for (final round in rounds)
-            _CasualRoundCard(
-              round:       round,
-              isCompleted: _showCompleted,
-              onTap: () async {
-                await _openRound(round);
-                _load();
-              },
-              onDelete: (myId != null && round.createdByPlayerId == myId)
-                  ? () => _confirmDelete(round)
-                  : null,
-            ),
-        ],
+        itemCount: items.length,
+        itemBuilder: (_, i) => _RoundCard(item: items[i]),
       ),
     );
   }
-
-  Widget _sectionHeader(BuildContext context, String label) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-      );
 }
 
 // ---------------------------------------------------------------------------
 // Card widget
 // ---------------------------------------------------------------------------
 
-class _CasualRoundCard extends StatelessWidget {
-  final CasualRoundSummary round;
-  final bool           isCompleted;
-  final VoidCallback   onTap;
-  final VoidCallback?  onDelete;
+/// A normalized row for the casual list, covering both my own rounds and rounds
+/// a friend started and added me to. [currentHole] is null for friend rounds
+/// (the shared payload carries status, not hole progress).
+class _RoundItem {
+  final DateTime?    sortDate;
+  final String       dateLabel;
+  final String       courseName;
+  final List<String> activeGames;
+  final bool         isCompleted;
+  final int?         currentHole;
+  final bool         startedByMe;
+  final String       startedByLabel; // "you", or the friend's name
+  final String       people;         // player names (own rounds) or ''
+  final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
-  const _CasualRoundCard({
-    required this.round,
+  const _RoundItem({
+    required this.sortDate,
+    required this.dateLabel,
+    required this.courseName,
+    required this.activeGames,
     required this.isCompleted,
+    required this.currentHole,
+    required this.startedByMe,
+    required this.startedByLabel,
+    required this.people,
     required this.onTap,
     this.onDelete,
   });
+}
+
+class _RoundCard extends StatelessWidget {
+  final _RoundItem item;
+  const _RoundCard({required this.item});
+
+  String _progressLabel() {
+    if (item.isCompleted) return 'Complete';
+    final h = item.currentHole;
+    if (h == null) return 'In progress';     // friend round — no hole count
+    if (h == 0)    return 'Not started';
+    if (h == 18)   return 'Hole 18';
+    return 'Through hole $h';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final gameLabels = item.activeGames.map(gameDisplayName).join(' • ');
 
-    final holeLabel = isCompleted
-        ? 'Complete'
-        : round.currentHole == 0
-            ? 'Not started'
-            : round.currentHole == 18
-                ? 'Hole 18'
-                : 'Through hole ${round.currentHole}';
-
-    final gameLabels = round.activeGames.map(_gameLabel).join(' • ');
-    final playerNames = round.players.map((p) => p.name).join(', ');
+    // The flag that replaced the section headers: who started this round.
+    final flagColor = item.startedByMe
+        ? theme.colorScheme.primary
+        : theme.colorScheme.tertiary;
+    final flagText = item.startedByMe
+        ? 'Started by you'
+        : 'Started by ${item.startedByLabel}';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
+        onTap: item.onTap,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Main content ──
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,21 +469,21 @@ class _CasualRoundCard extends StatelessWidget {
                     Row(children: [
                       Expanded(
                         child: Text(
-                          round.courseName,
+                          item.courseName,
                           style: theme.textTheme.titleSmall
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        round.date,
+                        item.dateLabel,
                         style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant),
                       ),
                     ]),
                     const SizedBox(height: 4),
 
-                    // Games + hole progress
+                    // Games + progress
                     Row(children: [
                       if (gameLabels.isNotEmpty) ...[
                         Icon(Icons.casino_outlined,
@@ -464,51 +498,82 @@ class _CasualRoundCard extends StatelessWidget {
                         const SizedBox(width: 12),
                       ],
                       Icon(
-                        isCompleted
+                        item.isCompleted
                             ? Icons.check_circle_outline
                             : Icons.flag_outlined,
                         size: 13,
-                        color: isCompleted
+                        color: item.isCompleted
                             ? Colors.green
                             : theme.colorScheme.onSurfaceVariant,
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        holeLabel,
+                        _progressLabel(),
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: isCompleted
+                          color: item.isCompleted
                               ? Colors.green
                               : theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ]),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
 
-                    // Players
-                    Row(children: [
-                      Icon(Icons.people_outline,
-                          size: 14,
-                          color: theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          playerNames.isEmpty ? '—' : playerNames,
-                          style: theme.textTheme.bodySmall,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    // Started-by flag (chip)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: flagColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    ]),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(
+                          item.startedByMe
+                              ? Icons.person_outline
+                              : Icons.group_outlined,
+                          size: 12, color: flagColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            flagText,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                color: flagColor,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ]),
+                    ),
+
+                    // Players (own rounds only)
+                    if (item.people.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        Icon(Icons.people_outline,
+                            size: 14,
+                            color: theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            item.people,
+                            style: theme.textTheme.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ]),
+                    ],
                   ],
                 ),
               ),
 
-              // ── Delete icon — only shown to the round creator ──
-              if (onDelete != null)
+              // Delete icon — only shown to the round creator.
+              if (item.onDelete != null)
                 IconButton(
                   icon: Icon(Icons.delete_outline,
                       color: theme.colorScheme.error),
                   tooltip: 'Delete round',
-                  onPressed: onDelete,
+                  onPressed: item.onDelete,
                   visualDensity: VisualDensity.compact,
                 ),
             ],
@@ -517,6 +582,4 @@ class _CasualRoundCard extends StatelessWidget {
       ),
     );
   }
-
-  String _gameLabel(String g) => gameDisplayName(g);
 }

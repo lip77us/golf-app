@@ -30,6 +30,7 @@ import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/round_chat_button.dart';
 import '../widgets/team_splitter_4.dart';
 
 // Top-level helper shared by _MatchGrid and _ExtraTeamPickerSheet.
@@ -254,6 +255,15 @@ class _SixesScreenState extends State<SixesScreen> {
   @override
   void dispose() {
     super.dispose();
+  }
+
+  /// Re-pull this screen's data (scorecard + sixes standings).  Mirrors
+  /// what initState loads; used by the AppBar refresh button and
+  /// pull-to-refresh.
+  Future<void> _refresh() async {
+    final rp = context.read<RoundProvider>();
+    await rp.loadScorecard(widget.foursomeId);
+    rp.loadSixes(widget.foursomeId);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -688,6 +698,8 @@ class _SixesScreenState extends State<SixesScreen> {
                 rp.loadSixes(widget.foursomeId);
               },
             ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
           IconButton(
             tooltip: 'Leaderboard',
             icon: const Icon(Icons.leaderboard_outlined),
@@ -839,7 +851,10 @@ class _SixesScreenState extends State<SixesScreen> {
         _ErrorBanner(message: rp.error!, onDismiss: rp.clearError),
 
       Expanded(
-        child: SingleChildScrollView(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -898,6 +913,7 @@ class _SixesScreenState extends State<SixesScreen> {
               const SizedBox(height: 16),
             ],
           ),
+        ),
         ),
       ),
     ]);

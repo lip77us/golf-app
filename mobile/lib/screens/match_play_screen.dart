@@ -25,7 +25,9 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
+import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/round_chat_button.dart';
 
 // Colours used for Player-1 and Player-2 holes across all match cards.
 // Calmer burgundy / slate (matches GolfTokens.teamRed / teamBlue and the
@@ -89,15 +91,18 @@ class _MatchPlayScreenState extends State<MatchPlayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final rp = context.watch<RoundProvider>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Match Play'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
+            tooltip: 'Refresh scores',
             onPressed: _load,
           ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
         ],
       ),
       body: _loading

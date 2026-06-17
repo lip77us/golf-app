@@ -96,6 +96,21 @@ class WatcherTests(TestCase):
             self.b_client.get(reverse('api-scorecard', args=[self.fs1.id]))
             .status_code, 404)
 
+    def test_is_on_app_flag(self):
+        # Wanda already has Halved (verified phone) → is_on_app True, so the
+        # client skips the download share and the server pings her in-app.
+        on = self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '(415) 555-7777', 'name': 'Wanda'}, format='json')
+        self.assertEqual(on.status_code, 201, on.data)
+        self.assertTrue(on.data['is_on_app'])
+        # A number with no Halved account → is_on_app False (download share).
+        off = self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '(415) 555-1111', 'name': 'Newbie'}, format='json')
+        self.assertEqual(off.status_code, 201, off.data)
+        self.assertFalse(off.data['is_on_app'])
+
     def test_tournament_watcher_sees_event(self):
         resp = self.td_client.post(
             reverse('api-tournament-watchers', args=[self.tournament.id]),

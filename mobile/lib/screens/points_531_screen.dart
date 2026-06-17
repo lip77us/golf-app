@@ -29,6 +29,7 @@ import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/round_chat_button.dart';
 
 // ---------------------------------------------------------------------------
 // Match-handicap helpers (duplicated from sixes_screen.dart to avoid coupling
@@ -118,6 +119,15 @@ class _Points531ScreenState extends State<Points531Screen> {
       }
       rp.loadPoints531(widget.foursomeId);
     });
+  }
+
+  /// Re-pull this screen's data (scorecard + Points 5-3-1 standings).
+  /// Mirrors what initState loads; used by the AppBar refresh button and
+  /// pull-to-refresh.
+  Future<void> _refresh() async {
+    final rp = context.read<RoundProvider>();
+    await rp.loadScorecard(widget.foursomeId);
+    rp.loadPoints531(widget.foursomeId);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -461,16 +471,13 @@ class _Points531ScreenState extends State<Points531Screen> {
                 ),
               ),
             ),
-          // Scorecard shortcut — full 18-hole / player grid.  Rotate phone
-          // to landscape for the comfortable full-course view.
           IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                      arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
+            tooltip: 'Refresh scores',
+            icon: const Icon(Icons.refresh),
+            onPressed: rp.round == null ? null : _refresh,
           ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
           // Leaderboard shortcut — round-level summary across every game.
           IconButton(
             tooltip: 'Leaderboard',
@@ -481,6 +488,16 @@ class _Points531ScreenState extends State<Points531Screen> {
                       '/leaderboard',
                       arguments: rp.round!.id,
                     ),
+          ),
+          // Scorecard shortcut — full 18-hole / player grid.  Rotate phone
+          // to landscape for the comfortable full-course view.
+          IconButton(
+            tooltip: 'Full scorecard',
+            icon: const Icon(Icons.table_chart_outlined),
+            onPressed: sc == null
+                ? null
+                : () => Navigator.of(context).pushNamed('/scorecard',
+                      arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
           ),
         ],
       ),
@@ -577,7 +594,10 @@ class _Points531ScreenState extends State<Points531Screen> {
 
     return Column(children: [
       Expanded(
-        child: SingleChildScrollView(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,6 +640,7 @@ class _Points531ScreenState extends State<Points531Screen> {
               const SizedBox(height: 16),
             ],
           ),
+        ),
         ),
       ),
     ]);

@@ -1,7 +1,8 @@
 /// shared_rounds_screen.dart
-/// "Shared with me" — read-only cross-account history. Lists rounds in other
-/// accounts that a friend added you to (matched by your verified phone).
-/// Tapping a round opens the existing read-only leaderboard.
+/// "Shared with me" — read-only cross-account follows. Lists rounds/tournaments
+/// in other accounts you were invited to WATCH (matched by your verified phone).
+/// Rounds you actually play in live in your own active list instead; completed
+/// follows age off after a week. Tapping a round opens the read-only leaderboard.
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -98,8 +99,9 @@ class _SharedRoundsScreenState extends State<SharedRoundsScreen> {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 32),
               child: Text(
-                'When a friend adds you to one of their rounds, it shows up '
-                'here so you can follow along.',
+                'When a friend invites you to watch one of their rounds, it '
+                'shows up here so you can follow along. Rounds you play in '
+                'appear in your own Casual Rounds list.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey),
               ),

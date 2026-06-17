@@ -23,6 +23,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/round_chat_button.dart';
 
 // ---------------------------------------------------------------------------
 // Handicap helpers (identical to points_531_screen.dart)
@@ -147,6 +148,12 @@ class _NassauScreenState extends State<NassauScreen> {
     _phantomPollTimer?.cancel();
     if (_syncWatcher != null) _syncRef?.removeListener(_syncWatcher!);
     super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final rp = context.read<RoundProvider>();
+    await rp.loadScorecard(widget.foursomeId);
+    rp.loadNassau(widget.foursomeId);
   }
 
   /// Start / stop the phantom polling timer based on whether a phantom is
@@ -534,6 +541,13 @@ class _NassauScreenState extends State<NassauScreen> {
               ),
             ),
           IconButton(
+            tooltip: 'Refresh scores',
+            icon: const Icon(Icons.refresh),
+            onPressed: rp.round == null ? null : _refresh,
+          ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
+          IconButton(
             tooltip: 'Leaderboard',
             icon: const Icon(Icons.leaderboard_outlined),
             onPressed: rp.round == null
@@ -721,9 +735,12 @@ class _NassauScreenState extends State<NassauScreen> {
         ),
 
       Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          child: Column(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Active hole card
@@ -799,6 +816,7 @@ class _NassauScreenState extends State<NassauScreen> {
 
               const SizedBox(height: 16),
             ],
+            ),
           ),
         ),
       ),

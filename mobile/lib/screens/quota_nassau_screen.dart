@@ -18,6 +18,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/round_chat_button.dart';
 
 // Gross Stableford: eagle=4, birdie=3, par=2, bogey=1, dbl+=0
 int _gsf(int gross, int par) => (2 + par - gross).clamp(0, 99);
@@ -66,6 +67,12 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
       }
       rp.loadQuotaNassau(widget.foursomeId);
     });
+  }
+
+  Future<void> _refresh() async {
+    final rp = context.read<RoundProvider>();
+    await rp.loadScorecard(widget.foursomeId);
+    rp.loadQuotaNassau(widget.foursomeId);
   }
 
   // ── Player helpers ─────────────────────────────────────────────────────────
@@ -386,6 +393,13 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
               ),
             ),
           IconButton(
+            tooltip: 'Refresh scores',
+            icon: const Icon(Icons.refresh),
+            onPressed: rp.round == null ? null : _refresh,
+          ),
+          if (rp.round != null)
+            RoundChatButton(roundId: rp.round!.id),
+          IconButton(
             tooltip: 'Leaderboard',
             icon: const Icon(Icons.leaderboard_outlined),
             onPressed: round == null
@@ -490,9 +504,12 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
       _QNTeamBanner(summary: summary),
 
       Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          child: Column(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _QNHoleScoreCard(
@@ -558,6 +575,7 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
 
               const SizedBox(height: 16),
             ],
+            ),
           ),
         ),
       ),

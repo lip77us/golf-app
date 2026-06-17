@@ -7,6 +7,7 @@ import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
+import '../widgets/round_chat_button.dart';
 import '../widgets/inline_message.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -147,6 +148,73 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     ));
   }
 
+  /// The leaderboard's secondary actions, folded behind a more_vert menu so the
+  /// header stays uncluttered on a narrow phone (the spectator link used to get
+  /// pushed off the edge once the chat icon was added).
+  Widget _buildOverflowMenu(
+    BuildContext context,
+    RoundProvider rp, {
+    required String? watchToken,
+    required bool isFinal,
+  }) {
+    return PopupMenuButton<String>(
+      tooltip: 'More',
+      icon: const Icon(Icons.more_vert),
+      onSelected: (value) {
+        switch (value) {
+          case 'invite':
+            inviteWatcher(context, roundId: widget.roundId);
+            break;
+          case 'share':
+            if (watchToken != null) _shareWatchLink(context, watchToken);
+            break;
+          case 'help':
+            showLeaderboardHelp(context);
+            break;
+          case 'reopen':
+            if (!rp.submitting) _confirmReopen(context);
+            break;
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(
+          value: 'invite',
+          child: ListTile(
+            leading: Icon(Icons.visibility_outlined),
+            title: Text('Invite a watcher'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        if (watchToken != null)
+          const PopupMenuItem(
+            value: 'share',
+            child: ListTile(
+              leading: Icon(Icons.share_outlined),
+              title: Text('Share spectator link'),
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        const PopupMenuItem(
+          value: 'help',
+          child: ListTile(
+            leading: Icon(Icons.help_outline),
+            title: Text('What do these buttons do?'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        if (isFinal)
+          const PopupMenuItem(
+            value: 'reopen',
+            child: ListTile(
+              leading: Icon(Icons.lock_open_outlined),
+              title: Text('Reopen round'),
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+      ],
+    );
+  }
+
   Future<void> _confirmReopen(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -200,6 +268,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     final isFinal = lb?.status == 'complete';
 
     final watchToken = rp.round?.watchToken;
+    final courseName = rp.round?.course.name;
 
     // Cross-account support read: this round belongs to a different account and
     // the viewer is support staff. Flag it so it's clear it's a read-only copy.
@@ -211,40 +280,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Leaderboard',
+        // Keep the header to a few direct icons + an overflow menu so it never
+        // crowds out the spectator link on a narrow phone (GolfAppBar guidance:
+        // 0–2 actions, fold the rest behind more_vert).
         actions: [
-          // Invite a non-playing watcher to follow this round in-app.
-          // Hidden in a support view — support is read-only and doesn't own it.
+          // Round chat / event feed. Hidden in a support view (read-only).
           if (!isSupportView)
-            IconButton(
-              tooltip: 'Invite a watcher',
-              icon: const Icon(Icons.visibility_outlined),
-              onPressed: () => inviteWatcher(context, roundId: widget.roundId),
-            ),
-          // Share the public spectator URL — supported for cup rounds
-          // and casual Skins / Multi-Skins / Low-Net rounds.
-          if (watchToken != null && !isSupportView)
-            IconButton(
-              tooltip: 'Share spectator link',
-              icon: const Icon(Icons.share_outlined),
-              onPressed: () => _shareWatchLink(context, watchToken),
-            ),
-          if (!isSupportView)
-            IconButton(
-              tooltip: 'What do these buttons do?',
-              icon: const Icon(Icons.help_outline),
-              onPressed: () => showLeaderboardHelp(context),
-            ),
+            RoundChatButton(roundId: widget.roundId, title: courseName),
           IconButton(
+            tooltip: 'Refresh',
             icon: const Icon(Icons.refresh),
             onPressed: () =>
                 context.read<RoundProvider>().loadLeaderboard(widget.roundId),
           ),
-          if (isFinal && !isSupportView)
-            IconButton(
-              tooltip: 'Reopen round',
-              icon: const Icon(Icons.lock_open_outlined),
-              onPressed: rp.submitting ? null : () => _confirmReopen(context),
-            ),
+          if (!isSupportView)
+            _buildOverflowMenu(context, rp,
+                watchToken: watchToken, isFinal: isFinal),
         ],
         bottom: (_tabController != null && _gameTabs.isNotEmpty)
             ? TabBar(
