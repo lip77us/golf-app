@@ -1186,14 +1186,17 @@ class SixesHoleResult {
 }
 
 class SixesTeamInfo {
-  final List<String> players; // player display names
+  final List<String> players;   // player display names
+  final List<int>    playerIds; // matching player ids (for team coloring)
   final String method;
 
-  const SixesTeamInfo({required this.players, required this.method});
+  const SixesTeamInfo(
+      {required this.players, this.playerIds = const [], required this.method});
 
   factory SixesTeamInfo.fromJson(Map<String, dynamic> j) => SixesTeamInfo(
-        players: List<String>.from(j['players'] as List? ?? []),
-        method:  j['method'] as String? ?? '',
+        players:   List<String>.from(j['players'] as List? ?? []),
+        playerIds: List<int>.from(j['player_ids'] as List? ?? []),
+        method:    j['method'] as String? ?? '',
       );
 
   bool get hasPlayers => players.isNotEmpty;

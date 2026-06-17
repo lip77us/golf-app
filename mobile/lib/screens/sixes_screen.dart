@@ -26,6 +26,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
+import '../game_colors.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
@@ -1058,6 +1059,31 @@ class _HoleScoreCard extends StatelessWidget {
     return strokesOnHole(_matchHandicapFor(m), h.strokeIndex);
   }
 
+  /// The segment that owns [hole] — extras own any overlapping holes; among
+  /// standard segments a later (shifted) one wins, mirroring the strokes logic.
+  SixesSegment? _segmentForHole(int hole) {
+    final segs = sixesSummary?.segments ?? const [];
+    for (final s in segs) {
+      if (s.isExtra && hole >= s.startHole && hole <= s.endHole) return s;
+    }
+    final standard = segs.where((s) => !s.isExtra).toList();
+    for (final s in standard.reversed) {
+      if (hole >= s.startHole && hole <= s.endHole) return s;
+    }
+    return null;
+  }
+
+  /// Team accent for a player on the current hole's segment (blue = team 1,
+  /// orange = team 2), so it's clear who's partnered this segment — the teams
+  /// rotate every 6 holes. Null until teams are set / segment unknown.
+  Color? _teamColorFor(int playerId) {
+    final seg = _segmentForHole(holeNumber);
+    if (seg == null) return null;
+    if (seg.team1.playerIds.contains(playerId)) return GameColors.team1;
+    if (seg.team2.playerIds.contains(playerId)) return GameColors.team2;
+    return null;
+  }
+
   _RunningTotal _running(int playerId) {
     // Find this member's record so we can derive effective strokes per hole
     // (the stored HoleScore.handicap_strokes reflects full 100% handicap and
@@ -1192,6 +1218,7 @@ class _HoleScoreCard extends StatelessWidget {
               strokes:        matchStrokes,
               matchHcapLabel: matchHcapLabel,
               showNet:        _mode == 'net',
+              teamColor:      _teamColorFor(m.player.id),
               // Tapping a scored non-hot row lets the user edit it.
               // Suppressed while teams are unset — we don't want the
               // edit modal popping up either.
@@ -1350,6 +1377,10 @@ class _PlayerScoreRow extends StatelessWidget {
   /// column is displayed (net total is meaningless there).
   final bool        showNet;
 
+  /// Team accent for this segment (blue = team 1, orange = team 2) so it's
+  /// clear who's partnered; null until teams are known.
+  final Color?      teamColor;
+
   const _PlayerScoreRow({
     required this.position,
     required this.member,
@@ -1361,6 +1392,7 @@ class _PlayerScoreRow extends StatelessWidget {
     this.matchHcapLabel,
     this.onTap,
     this.showNet = true,
+    this.teamColor,
   });
 
   @override
@@ -1398,6 +1430,19 @@ class _PlayerScoreRow extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
+        // Team accent bar — partners share a colour this segment (teams
+        // rotate every 6 holes), mirroring Wolf's per-hole team colours.
+        if (teamColor != null) ...[
+          Container(
+            width: 4,
+            height: 22,
+            decoration: BoxDecoration(
+              color: teamColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
         // Position + name (+ optional match handicap chip)
         Expanded(
           child: Row(children: [
@@ -1410,9 +1455,8 @@ class _PlayerScoreRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  // Sixes shows the team via the row's group/position
-                  // header; keep the name in default theme colour rather
-                  // than going green on the hot row.
+                  // Team colour makes partners obvious this segment.
+                  color: teamColor,
                 ),
               ),
             ),

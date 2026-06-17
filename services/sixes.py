@@ -910,12 +910,14 @@ def sixes_summary(foursome) -> dict:
             't1_points'  : seg_t1_pts,
             't2_points'  : seg_t2_pts,
             'team1'    : {
-                'players' : [p.name for p in t1.players.all()] if t1 else [],
-                'method'  : t1.team_select_method if t1 else '',
+                'players'    : [p.name for p in t1.players.all()] if t1 else [],
+                'player_ids' : [p.id for p in t1.players.all()] if t1 else [],
+                'method'     : t1.team_select_method if t1 else '',
             },
             'team2'    : {
-                'players' : [p.name for p in t2.players.all()] if t2 else [],
-                'method'  : t2.team_select_method if t2 else '',
+                'players'    : [p.name for p in t2.players.all()] if t2 else [],
+                'player_ids' : [p.id for p in t2.players.all()] if t2 else [],
+                'method'     : t2.team_select_method if t2 else '',
             },
             'holes'    : holes_out,
         })
