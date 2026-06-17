@@ -35,14 +35,13 @@ class TeamSplitter4 extends StatefulWidget {
     super.key,
     required this.players,
     required this.onChanged,
-    this.teamALabel = 'Red',
-    this.teamBLabel = 'Blue',
-    // Calmer burgundy / slate (matches GolfTokens.teamRed / teamBlue and
-    // kTripleCupTeam1Color / kTripleCupTeam2Color).  Per the May 2026
-    // design audit (D-04), team identity colors stay distinct from the
-    // loud Material reds reserved for errors and destructive actions.
-    this.teamAColor = const Color(0xFF8E2E2E),
-    this.teamBColor = const Color(0xFF1B4F8E),
+    this.teamALabel = 'Blue',
+    this.teamBLabel = 'Orange',
+    // Blue (team 1) / orange (team 2) — the GameColors team standard, so the
+    // setup splitter matches the in-play team colours (and never collides with
+    // the green/red/grey win-loss semantics). Team A becomes Django team 1.
+    this.teamAColor = const Color(0xFF1976D2),  // Colors.blue.shade700
+    this.teamBColor = const Color(0xFFEF6C00),  // Colors.orange.shade800
     this.reorderable = true,
   });
 

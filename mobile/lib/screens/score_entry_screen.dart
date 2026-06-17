@@ -2201,6 +2201,28 @@ class _HoleScoreCard extends StatelessWidget {
       if (n.team1.any((p) => p.playerId == m.player.id)) return GameColors.team1;
       if (n.team2.any((p) => p.playerId == m.player.id)) return GameColors.team2;
     }
+    // Sixes: tint by the current segment's team (partners rotate every 6 holes),
+    // so it's clear who's paired this segment — matching the Match grid colours.
+    final sx = sixesSummary;
+    if (sx != null) {
+      final seg = _sixesSegmentForHole(sx, hole);
+      if (seg != null) {
+        if (seg.team1.playerIds.contains(m.player.id)) return GameColors.team1;
+        if (seg.team2.playerIds.contains(m.player.id)) return GameColors.team2;
+      }
+    }
+    return null;
+  }
+
+  /// The Sixes segment that owns [hole] — extras own overlapping holes, and a
+  /// later (shifted) standard segment wins, mirroring the strokes logic.
+  SixesSegment? _sixesSegmentForHole(SixesSummary sx, int hole) {
+    for (final s in sx.segments) {
+      if (s.isExtra && hole >= s.startHole && hole <= s.endHole) return s;
+    }
+    for (final s in sx.segments.where((s) => !s.isExtra).toList().reversed) {
+      if (hole >= s.startHole && hole <= s.endHole) return s;
+    }
     return null;
   }
 
@@ -3490,13 +3512,23 @@ class _PlayerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Team-coloured row (matches Wolf): a faint team tint + a 4px coloured
+    // left edge whenever this player has a team colour (Sixes / Nassau / cup /
+    // match play), so partners are obvious at a glance. The team tint stays on
+    // even for the active row — the highlighted score box marks the input.
+    final teamTint = nameColor;
     final body = Container(
       decoration: BoxDecoration(
-        color: isHot
-            ? theme.colorScheme.primaryContainer.withOpacity(0.08)
-            : null,
+        color: teamTint != null
+            ? teamTint.withValues(alpha: 0.07)
+            : (isHot
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.08)
+                : null),
         border: Border(
           top: BorderSide(color: theme.colorScheme.outlineVariant),
+          left: teamTint != null
+              ? BorderSide(color: teamTint, width: 4)
+              : BorderSide.none,
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -6615,11 +6647,16 @@ class _SixesMatchGrid extends StatelessWidget {
           final p1InTeam2  = seg.team2.players.contains(p1Name);
           final topTeam    = p1InTeam2 ? seg.team2 : seg.team1;
           final bottomTeam = p1InTeam2 ? seg.team1 : seg.team2;
+          // Colour by the actual Django team so it matches the hole rows.
+          final topColor    = p1InTeam2 ? GameColors.team2 : GameColors.team1;
+          final bottomColor = p1InTeam2 ? GameColors.team1 : GameColors.team2;
           return _SixesSegmentCard(
             matchNumber:  matchNum,
             segment:      seg,
             team1Label:   _teamLabel(topTeam),
             team2Label:   _teamLabel(bottomTeam),
+            team1Color:   topColor,
+            team2Color:   bottomColor,
             teamsSwapped: p1InTeam2,
             currentHole:  currentHole,
           );
@@ -6634,6 +6671,8 @@ class _SixesSegmentCard extends StatelessWidget {
   final SixesSegment  segment;
   final String        team1Label;
   final String        team2Label;
+  final Color?        team1Color;
+  final Color?        team2Color;
   final bool          teamsSwapped;
   final int           currentHole;
 
@@ -6642,6 +6681,8 @@ class _SixesSegmentCard extends StatelessWidget {
     required this.segment,
     required this.team1Label,
     required this.team2Label,
+    this.team1Color,
+    this.team2Color,
     this.teamsSwapped = false,
     required this.currentHole,
   });
@@ -6710,6 +6751,7 @@ class _SixesSegmentCard extends StatelessWidget {
             ] else ...[
               Text(team1Label,
                   style: theme.textTheme.bodySmall?.copyWith(
+                    color: team1Color,
                     fontWeight: t1Leading ? FontWeight.bold : FontWeight.normal,
                   )),
               Padding(
@@ -6720,6 +6762,7 @@ class _SixesSegmentCard extends StatelessWidget {
               ),
               Text(team2Label,
                   style: theme.textTheme.bodySmall?.copyWith(
+                    color: team2Color,
                     fontWeight: t2Leading ? FontWeight.bold : FontWeight.normal,
                   )),
               const SizedBox(height: 6),
