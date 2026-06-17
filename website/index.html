@@ -274,10 +274,11 @@
   <div class="wrap">
     <div class="hero">
       <div>
-        <div class="badge"><span class="pulse"></span>Coming soon to the App Store</div>
+        <div class="badge"><span class="pulse"></span>Now on the App Store</div>
         <h1 class="hero-h">Stop keeping score <span class="accent">in your head.</span></h1>
         <p class="hero-sub">Halved is the smart scorecard for your group. It tracks every game on your round — Nassau, skins, presses, the whole tournament — applies handicaps automatically, and keeps the running stakes straight. Just enter your scores. We do the rest.</p>
         <div class="hero-cta">
+          <a href="https://apps.apple.com/app/id6768284628" class="js-ios-only" style="display:none"><button class="btn-primary">&#63743;&nbsp; Download on the App Store</button></a>
           <a href="#how"><button class="btn-primary">See how it works</button></a>
           <a href="mailto:info@halved.golf?subject=Halved"><button class="btn-ghost">Get in touch</button></a>
         </div>
@@ -465,7 +466,8 @@
     <div class="cta-band">
       <div class="glow g1" style="top:-200px;right:-100px"></div>
       <h2>Get your foursome on Halved.</h2>
-      <p>Coming soon to the Apple App Store. Have a question, or want to bring Halved to your club? We'd love to hear from you.</p>
+      <p>Now live on the Apple App Store. Have a question, or want to bring Halved to your club? We'd love to hear from you.</p>
+      <a href="https://apps.apple.com/app/id6768284628" class="js-ios-only" style="display:none;position:relative;z-index:2"><button class="btn-primary">&#63743;&nbsp; Download on the App Store</button></a>
       <a href="mailto:info@halved.golf?subject=Halved" style="position:relative;z-index:2"><button class="btn-primary">Get in touch</button></a>
     </div>
   </div>
@@ -509,6 +511,17 @@
 <script>
   var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){en.target.classList.add('in');io.unobserve(en.target);}});},{threshold:.12});
   document.querySelectorAll('.reveal').forEach(function(el,i){el.style.transitionDelay=(i%3)*0.08+'s';io.observe(el);});
+
+  // Show the "Download on the App Store" buttons only on iOS (iPhone/iPad/iPod),
+  // where tapping installs the app directly.
+  (function(){
+    var ua = navigator.userAgent || '';
+    var isIOS = /iP(hone|ad|od)/.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
+    if (isIOS) {
+      document.querySelectorAll('.js-ios-only').forEach(function(el){ el.style.display = ''; });
+    }
+  })();
 </script>
 </body>
 </html>
