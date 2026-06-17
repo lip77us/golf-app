@@ -1912,12 +1912,18 @@ class _MatchGrid extends StatelessWidget {
           final p1InTeam2 = seg.team2.players.contains(p1Name);
           final topTeam    = p1InTeam2 ? seg.team2 : seg.team1;
           final bottomTeam = p1InTeam2 ? seg.team1 : seg.team2;
+          // Colour by the actual Django team so it matches the hole-card rows
+          // (top = P1's team, which is Django team2 only in the swapped case).
+          final topColor    = p1InTeam2 ? GameColors.team2 : GameColors.team1;
+          final bottomColor = p1InTeam2 ? GameColors.team1 : GameColors.team2;
 
           return _SegmentCard(
             matchNumber:       matchNum,
             segment:           seg,
             team1Label:        _teamLabel(topTeam),
             team2Label:        _teamLabel(bottomTeam),
+            team1Color:        topColor,
+            team2Color:        bottomColor,
             teamsSwapped:      p1InTeam2,
             currentHole:       currentHole,
             foursomeId:        foursomeId,
@@ -1936,6 +1942,9 @@ class _SegmentCard extends StatelessWidget {
   final SixesSegment  segment;
   final String        team1Label;   // always P1's team (top row)
   final String        team2Label;   // always P1's opponents (bottom row)
+  /// Team accent colours matching the hole-card rows (blue / orange).
+  final Color?        team1Color;
+  final Color?        team2Color;
   /// True when the display order is reversed relative to Django team_number:
   /// team1Label holds Django team2's data, so margin signs are flipped.
   final bool          teamsSwapped;
@@ -1949,6 +1958,8 @@ class _SegmentCard extends StatelessWidget {
     required this.segment,
     required this.team1Label,
     required this.team2Label,
+    this.team1Color,
+    this.team2Color,
     this.teamsSwapped = false,
     required this.currentHole,
     required this.foursomeId,
@@ -2042,6 +2053,7 @@ class _SegmentCard extends StatelessWidget {
             ] else ...[
               Text(team1Label,
                   style: theme.textTheme.bodySmall?.copyWith(
+                    color: team1Color,
                     fontWeight:
                         team1Leading ? FontWeight.bold : FontWeight.normal,
                   )),
@@ -2053,6 +2065,7 @@ class _SegmentCard extends StatelessWidget {
               ),
               Text(team2Label,
                   style: theme.textTheme.bodySmall?.copyWith(
+                    color: team2Color,
                     fontWeight:
                         team2Leading ? FontWeight.bold : FontWeight.normal,
                   )),
