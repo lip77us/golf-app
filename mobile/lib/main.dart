@@ -23,7 +23,6 @@ import 'screens/tournament_list_screen.dart';
 import 'screens/round_screen.dart';
 import 'screens/round_feed_screen.dart';
 import 'screens/scorecard_screen.dart';
-import 'screens/sixes_screen.dart';
 import 'screens/sixes_setup_screen.dart';
 import 'screens/points_531_setup_screen.dart';
 import 'screens/points_531_screen.dart';
@@ -363,9 +362,6 @@ class _GolfAppState extends State<GolfApp> {
       case '/sixes-setup':
         final foursomeId = settings.arguments as int;
         return page((_) => SixesSetupScreen(foursomeId: foursomeId));
-      case '/sixes':
-        final foursomeId = settings.arguments as int;
-        return page((_) => SixesScreen(foursomeId: foursomeId));
       case '/points-531-setup':
         final foursomeId = settings.arguments as int;
         return page((_) => Points531SetupScreen(foursomeId: foursomeId));
