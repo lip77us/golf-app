@@ -26,7 +26,9 @@ class VegasSetupScreen extends StatefulWidget {
 }
 
 class _VegasSetupScreenState extends State<VegasSetupScreen> {
-  String _mode        = 'net';
+  // Casual default → Strokes-Off Low (the most-asked-for course setting); an
+  // existing game overwrites this from its persisted mode on load.
+  String _mode        = 'strokes_off';
   int    _netPercent  = 100;
   bool   _netMaxDbl   = true;
   String _birdieMode  = 'flip';

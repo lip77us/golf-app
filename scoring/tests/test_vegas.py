@@ -151,6 +151,28 @@ class VegasCapTests(VegasBase):
         self.assertEqual(h['points'], 1)
 
 
+class VegasStrokesOffTests(TestCase):
+    def test_low_plays_to_zero_others_get_strokes(self):
+        from ._helpers import submit_hole
+        tee = make_tee(make_course())
+        rnd = make_round(tee.course, active_games=['vegas'])
+        a = make_player('A', 0, short_name='A')
+        b = make_player('B', 0, short_name='B')
+        c = make_player('C', 0, short_name='C')
+        d = make_player('D', 18, short_name='D')   # 18 hcp → 1 stroke every hole
+        fs = make_foursome(rnd, [(a, 0), (b, 0), (c, 0), (d, 18)], tee=tee)
+        setup_vegas(fs, [a.id, b.id], [c.id, d.id],
+                    handicap_mode='strokes_off', net_max_double_bogey=False)
+        # Hole 1 par 4. Team2 D gets a stroke (SO 18): gross 5 → net 4.
+        submit_hole(fs, 1, [(a, 4), (b, 5), (c, 4), (d, 5)])
+        calculate_vegas(fs)
+        h = next(x for x in vegas_summary(fs)['holes'] if x['hole'] == 1)
+        # team1 = 45 ; team2 net = 4 & (5−1=4) → 44 → team2 wins by 1.
+        self.assertEqual((h['team1_number'], h['team2_number']), (45, 44))
+        self.assertEqual(h['winner'], 'team2')
+        self.assertEqual(h['points'], 1)
+
+
 class VegasSettlementTests(VegasBase):
     def test_per_player_money_is_point_differential(self):
         self._setup(birdie_mode='flip')

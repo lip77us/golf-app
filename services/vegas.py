@@ -237,9 +237,11 @@ def vegas_summary(foursome) -> dict:
     try:
         game = foursome.vegas_game
     except VegasGame.DoesNotExist:
+        # Empty/pending → mirror the mobile casual default (Strokes-Off Low) so
+        # the setup screen lands there for a fresh game.
         return {
             'status': 'pending',
-            'handicap': {'mode': HandicapMode.NET, 'net_percent': 100},
+            'handicap': {'mode': HandicapMode.STROKES_OFF, 'net_percent': 100},
             'net_max_double_bogey': True,
             'birdie_mode': 'flip',
             'carryover': False,

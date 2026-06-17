@@ -852,7 +852,8 @@ class VegasSetupSerializer(serializers.Serializer):
     are fixed at setup; both player-id lists must have exactly two entries.
     """
     handicap_mode = serializers.ChoiceField(
-                        choices=['net', 'gross', 'strokes_off'], default='net')
+                        choices=['net', 'gross', 'strokes_off'],
+                        default='strokes_off')
     net_percent   = serializers.IntegerField(
                         min_value=0, max_value=200, default=100)
     net_max_double_bogey = serializers.BooleanField(default=True)
