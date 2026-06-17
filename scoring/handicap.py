@@ -274,6 +274,7 @@ def build_score_index(
     net_percent: int = 100,
     segments=None,
     include_phantom: bool = False,
+    net_double_bogey: bool | None = None,
 ) -> dict:
     """
     Return {player_id: {hole_number: score}} for all hole scores on file
@@ -287,7 +288,15 @@ def build_score_index(
                       handicap_mode='net'.  Ignored for 'gross'.
     include_phantom : if False (default) phantom player scores are skipped,
                       matching the behavior of services/sixes.py today.
+    net_double_bogey: per-call override for the net-double-bogey cap. None
+                      (default) = use the round-level flag; True/False forces
+                      it on/off (lets a game carry its own cap policy, e.g.
+                      Vegas).
     """
+    # Resolve the cap once so every branch below shares one decision.
+    cap_enabled = (_net_double_bogey_cap_enabled(foursome)
+                   if net_double_bogey is None else net_double_bogey)
+
     base_qs = HoleScore.objects.filter(foursome=foursome)
     if not include_phantom:
         base_qs = base_qs.filter(player__is_phantom=False)
@@ -319,7 +328,6 @@ def build_score_index(
         rows = base_qs.exclude(gross_score=None).values(
             'player_id', 'hole_number', 'gross_score'
         )
-        cap_enabled = _net_double_bogey_cap_enabled(foursome)
         par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
         index = {}
         for r in rows:
@@ -339,7 +347,6 @@ def build_score_index(
         rows = base_qs.exclude(net_score=None).values(
             'player_id', 'hole_number', 'net_score'
         )
-        cap_enabled = _net_double_bogey_cap_enabled(foursome)
         par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
         index = {}
         for r in rows:
@@ -362,7 +369,6 @@ def build_score_index(
     rows = base_qs.exclude(gross_score=None).values(
         'player_id', 'hole_number', 'gross_score'
     )
-    cap_enabled = _net_double_bogey_cap_enabled(foursome)
     par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
     index = {}
     for r in rows:
@@ -421,7 +427,6 @@ def build_match_play_score_index(foursome, p1_id: int, p2_id: int) -> dict:
         .values('player_id', 'hole_number', 'gross_score')
     )
 
-    cap_enabled = _net_double_bogey_cap_enabled(foursome)
     par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
 
     index: dict = {}

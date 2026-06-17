@@ -82,7 +82,7 @@ from .serializers import (
     SixesSetupSerializer, CourseSerializer,
     Points531SetupSerializer, CasualRoundSummarySerializer,
     IrishRumbleSetupSerializer, LowNetSetupSerializer,
-    ThreePersonMatchSetupSerializer, MessageSerializer,
+    ThreePersonMatchSetupSerializer, MessageSerializer, VegasSetupSerializer,
 )
 
 
@@ -164,6 +164,10 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'points_531' in active_games:
         from services.points_531 import calculate_points_531
         calculate_points_531(foursome)
+
+    if 'vegas' in active_games:
+        from services.vegas import calculate_vegas
+        calculate_vegas(foursome)
 
     if 'wolf' in active_games:
         from services.wolf import calculate_wolf
@@ -734,6 +738,17 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
                  'summary': points_531_summary(fs)}
+                for fs in foursomes
+            ],
+        }
+
+    if 'vegas' in active_games:
+        from services.vegas import vegas_summary
+        games['vegas'] = {
+            'label'   : 'Las Vegas',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': vegas_summary(fs)}
                 for fs in foursomes
             ],
         }
@@ -4049,6 +4064,47 @@ class Points531ResultView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.points_531 import points_531_summary
         return Response(points_531_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Las Vegas
+# ---------------------------------------------------------------------------
+
+class VegasSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/vegas/setup/
+    Body: handicap_mode, net_percent, net_max_double_bogey, birdie_mode
+    ('flip'|'multiplier'), carryover, loss_cap, team1_player_ids[2],
+    team2_player_ids[2]. Idempotent; recalcs any scores already on file.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        ser = VegasSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.vegas import setup_vegas, calculate_vegas, vegas_summary
+        setup_vegas(
+            foursome,
+            team1_ids            = d['team1_player_ids'],
+            team2_ids            = d['team2_player_ids'],
+            handicap_mode        = d.get('handicap_mode', 'net'),
+            net_percent          = d.get('net_percent', 100),
+            net_max_double_bogey = d.get('net_max_double_bogey', True),
+            birdie_mode          = d.get('birdie_mode', 'flip'),
+            carryover            = d.get('carryover', False),
+            loss_cap             = d.get('loss_cap'),
+        )
+        calculate_vegas(foursome)
+        return Response(vegas_summary(foursome), status=status.HTTP_201_CREATED)
+
+
+class VegasResultView(APIView):
+    """GET /api/foursomes/{id}/vegas/"""
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.vegas import vegas_summary
+        return Response(vegas_summary(foursome))
 
 
 # ---------------------------------------------------------------------------

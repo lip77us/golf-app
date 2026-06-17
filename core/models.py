@@ -90,6 +90,12 @@ class GameType(models.TextChoices):
     # frees it.  Played as 1×18, 2×9, or 3×6 segments — whoever holds the
     # rabbit at the end of a segment wins that share of the pot.
     RABBIT          = 'rabbit',          'Rabbit'
+    # Las Vegas: a 2v2 game.  Each team forms a 2-digit number from its two
+    # net scores (low = tens, high = ones, each digit capped at 9); the lower
+    # number wins the hole and scores the difference.  A gross birdie either
+    # flips the opponents' digits or multiplies the points (per setup), and
+    # tied holes can carry.
+    VEGAS           = 'vegas',           'Las Vegas'
 
 
 class RoundStatus(models.TextChoices):

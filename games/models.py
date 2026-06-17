@@ -2370,3 +2370,119 @@ class TripleCupHoleResult(models.Model):
 
     def __str__(self):
         return f"Hole {self.hole_number} — {self.match}"
+
+
+# ---------------------------------------------------------------------------
+# LAS VEGAS (2v2 — team "number" per hole; lower number wins by the difference)
+# ---------------------------------------------------------------------------
+
+VEGAS_BIRDIE_MODE_CHOICES = (
+    ('flip',       'Flip opponents on birdie'),
+    ('multiplier', 'Multiply points on birdie'),
+)
+VEGAS_WINNER_CHOICES = (
+    ('team1',  'Team 1'),
+    ('team2',  'Team 2'),
+    ('halved', 'Halved'),
+)
+
+
+class VegasGame(models.Model):
+    """
+    The Las Vegas game for one Foursome — 2v2, teams fixed at setup.
+
+    Each hole, a team's "number" is its two NET scores with the low score as
+    the tens digit and the high as the ones (each digit capped at 9). The lower
+    number wins the hole and scores the *difference* of the two numbers.
+
+    birdie_mode (gross birdie or better, per the round's gross scores):
+      * flip       — any team's birdie reverses the OPPONENTS' digits (high→tens)
+                     before the hole is decided, so even a trailing team's birdie
+                     can swing it; both birdie → both flip.
+      * multiplier — the WINNING team's best ball multiplies the points:
+                     birdie ×2, eagle ×3, … (1 + under-par of its best ball),
+                     no stacking; the loser's birdie does nothing.
+
+    carryover (default off): a tied hole carries; the next decided hole scores
+    difference × (carried_holes + 1), times any birdie multiplier.
+
+    Settlement is 1-to-1 per player: each player's money = the running point
+    differential × bet_unit (winners +, losers −), clipped by the optional
+    per-side loss_cap (see services.wager.settle()). handicap_mode / net_percent
+    / net_max_double_bogey are stored per-game so the match owns its policy.
+    """
+    foursome            = models.OneToOneField(
+                            Foursome, on_delete=models.CASCADE,
+                            related_name='vegas_game',
+                        )
+    status              = models.CharField(
+                            max_length=20, choices=MatchStatus.choices,
+                            default=MatchStatus.PENDING,
+                        )
+    handicap_mode       = models.CharField(
+                            max_length=20, choices=HandicapMode.choices,
+                            default=HandicapMode.NET,
+                            help_text="How net scores (the digits) are derived.",
+                        )
+    net_percent         = models.PositiveSmallIntegerField(
+                            default=100,
+                            validators=[MinValueValidator(0), MaxValueValidator(200)],
+                            help_text="Percent of playing handicap applied when handicap_mode='net'.",
+                        )
+    net_max_double_bogey = models.BooleanField(
+                            default=True,
+                            help_text="Cap each net hole score at net double bogey (par + 2).",
+                        )
+    birdie_mode         = models.CharField(
+                            max_length=12, choices=VEGAS_BIRDIE_MODE_CHOICES,
+                            default='flip',
+                        )
+    carryover           = models.BooleanField(
+                            default=False,
+                            help_text="Tied holes carry; next win × (carried + 1).",
+                        )
+    loss_cap            = models.DecimalField(
+                            max_digits=8, decimal_places=2, null=True, blank=True,
+                            help_text="Optional per-side max loss (in points × bet_unit); null = uncapped.",
+                        )
+    created_at          = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Las Vegas — Group {self.foursome.group_number}"
+
+
+class VegasTeam(models.Model):
+    """One of the two Vegas teams. team_number is 1 or 2; players are fixed."""
+    game                = models.ForeignKey(
+                            VegasGame, on_delete=models.CASCADE, related_name='teams')
+    players             = models.ManyToManyField(Player, related_name='vegas_teams')
+    team_number         = models.PositiveSmallIntegerField()   # 1 or 2
+
+    def __str__(self):
+        return f"Team {self.team_number} — {self.game}"
+
+
+class VegasHoleResult(models.Model):
+    """
+    Per-hole Vegas result. team{1,2}_number are the EFFECTIVE numbers used to
+    decide the hole (i.e. after any flip). points/multiplier/carry_count record
+    how the winner's points were built.
+    """
+    game                = models.ForeignKey(
+                            VegasGame, on_delete=models.CASCADE, related_name='hole_results')
+    hole_number         = models.PositiveSmallIntegerField()
+    team1_number        = models.PositiveSmallIntegerField(null=True, blank=True)
+    team2_number        = models.PositiveSmallIntegerField(null=True, blank=True)
+    winner              = models.CharField(
+                            max_length=6, choices=VEGAS_WINNER_CHOICES,
+                            null=True, blank=True)
+    points              = models.PositiveSmallIntegerField(default=0)
+    multiplier          = models.PositiveSmallIntegerField(default=1)
+    carry_count         = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        return f"Hole {self.hole_number} — {self.game}"

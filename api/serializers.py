@@ -845,6 +845,37 @@ class Points531SetupSerializer(serializers.Serializer):
                     )
 
 
+class VegasSetupSerializer(serializers.Serializer):
+    """
+    Set up (or replace) the Las Vegas game for a foursome (2v2). The two teams
+    are fixed at setup; both player-id lists must have exactly two entries.
+    """
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'], default='net')
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100)
+    net_max_double_bogey = serializers.BooleanField(default=True)
+    birdie_mode   = serializers.ChoiceField(
+                        choices=['flip', 'multiplier'], default='flip')
+    carryover     = serializers.BooleanField(default=False)
+    loss_cap      = serializers.DecimalField(
+                        max_digits=8, decimal_places=2,
+                        required=False, allow_null=True, default=None,
+                        min_value=0,
+                        help_text="Optional per-player loss cap; null = uncapped.")
+    team1_player_ids = serializers.ListField(
+                        child=serializers.IntegerField(), min_length=2, max_length=2)
+    team2_player_ids = serializers.ListField(
+                        child=serializers.IntegerField(), min_length=2, max_length=2)
+
+    def validate(self, data):
+        overlap = set(data['team1_player_ids']) & set(data['team2_player_ids'])
+        if overlap:
+            raise serializers.ValidationError(
+                'A player cannot be on both Vegas teams.')
+        return data
+
+
 class ThreePersonMatchSetupSerializer(serializers.Serializer):
     """
     Set up (or replace) the Three-Person Match for a foursome.
