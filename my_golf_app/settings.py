@@ -365,10 +365,18 @@ LOGGING = {
             'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO'),
             'propagate': False,
         },
-        # Django request logs — keep at WARNING to avoid noise.
+        # Django framework logs — keep at WARNING to avoid noise.
         'django': {
             'handlers': ['console'],
             'level': 'WARNING',
+            'propagate': False,
+        },
+        # Per-request access log ("GET /api/... 200"). On in dev so HTTP
+        # traffic is visible while debugging; override with
+        # DJANGO_SERVER_LOG_LEVEL=WARNING to silence.
+        'django.server': {
+            'handlers': ['console'],
+            'level': os.environ.get('DJANGO_SERVER_LOG_LEVEL', 'INFO'),
             'propagate': False,
         },
     },
