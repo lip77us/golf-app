@@ -342,6 +342,14 @@ class _EventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final type = message.data['type'] as String?;
+
+    // The end-of-round gross recap renders as a small ranked table instead of
+    // one long sentence.
+    final players = message.data['players'];
+    if (type == 'score_report' && players is List && players.isNotEmpty) {
+      return _scoreReportCard(context, scheme, players);
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 24),
       child: Container(
@@ -366,6 +374,63 @@ class _EventCard extends StatelessWidget {
                     fontWeight: FontWeight.w500),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _scoreReportCard(
+      BuildContext context, ColorScheme scheme, List players) {
+    final onColor = scheme.onTertiaryContainer;
+    final dim = onColor.withValues(alpha: 0.7);
+
+    Widget row(Widget left, Widget right) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(children: [
+            Expanded(child: left),
+            right,
+          ]),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: scheme.tertiaryContainer.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              Icon(Icons.scoreboard_outlined, size: 16, color: onColor),
+              const SizedBox(width: 6),
+              Text('Final scores',
+                  style: TextStyle(
+                      color: onColor, fontWeight: FontWeight.w700, fontSize: 13)),
+              const Spacer(),
+              Text('front-back-total',
+                  style: TextStyle(color: dim, fontSize: 10)),
+            ]),
+            const SizedBox(height: 6),
+            for (final p in players)
+              row(
+                Text((p['name'] ?? '') as String,
+                    style: TextStyle(color: onColor, fontSize: 12.5),
+                    overflow: TextOverflow.ellipsis),
+                Text(
+                  p['withdrew'] == true
+                      ? 'WD'
+                      : '${p['front']}-${p['back']}-${p['total']}',
+                  style: TextStyle(
+                      color: p['withdrew'] == true ? dim : onColor,
+                      fontSize: 12.5,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
           ],
         ),
       ),
