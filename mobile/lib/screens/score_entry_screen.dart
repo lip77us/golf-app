@@ -28,6 +28,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../utils/match_handicap.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
@@ -59,14 +60,6 @@ int _effectiveHandicap({
       if (netPercent == 100) return playingHandicap;
       return (playingHandicap * netPercent / 100.0).round();
   }
-}
-
-int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
-  if (effectiveHandicap <= 0) return 0;
-  final full  = effectiveHandicap ~/ 18;
-  final rem   = effectiveHandicap %  18;
-  final extra = strokeIndex <= rem ? 1 : 0;
-  return full + extra;
 }
 
 /// Per-player, per-hole strokes for a Sixes Strokes-Off match.
@@ -1995,7 +1988,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         final low = players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b);
         so = player.playingHandicap - low;
       }
-      strokes = so > 0 ? _strokesOnHole(so, si) : 0;
+      strokes = so > 0 ? strokesOnHole(so, si) : 0;
     } else {
       final lowPlaying = hMode == 'strokes_off' && players.isNotEmpty
           ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
@@ -2019,7 +2012,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
           scorecard:   sc,
         );
       } else {
-        strokes = _strokesOnHole(effective, si);
+        strokes = strokesOnHole(effective, si);
       }
     }
 
@@ -2321,7 +2314,7 @@ class _HoleScoreCard extends StatelessWidget {
       if (opp == null) return 0;
       final so = m.playingHandicap - opp.playingHandicap;
       if (so <= 0) return 0;
-      return _strokesOnHole(so, si);
+      return strokesOnHole(so, si);
     }
     return 0;
   }
@@ -2354,13 +2347,13 @@ class _HoleScoreCard extends StatelessWidget {
       // Fallback: strokes off the lowest handicap in the foursome.
       final low = players.map((x) => x.playingHandicap).reduce((a, b) => a < b ? a : b);
       final so  = m.playingHandicap - low;
-      return so > 0 ? _strokesOnHole(so, mySi) : 0;
+      return so > 0 ? strokesOnHole(so, mySi) : 0;
     }
 
     if (handicapMode == 'net') {
       if (netPercent == 100 && entry != null) return entry.handicapStrokes;
       final effective = (m.playingHandicap * netPercent / 100.0).round();
-      return _strokesOnHole(effective, mySi);
+      return strokesOnHole(effective, mySi);
     }
     if (handicapMode == 'strokes_off') {
       // Match Play single-elim brackets compute SO vs the per-match
@@ -2391,7 +2384,7 @@ class _HoleScoreCard extends StatelessWidget {
         );
       }
       // Non-Sixes SO: 18-hole SI threshold.
-      return _strokesOnHole(so, mySi);
+      return strokesOnHole(so, mySi);
     }
     return 0;
   }
@@ -2452,7 +2445,7 @@ class _HoleScoreCard extends StatelessWidget {
     if (so == 0) return 0;
     final scaled = (so * netPercent / 100.0).round();
     if (scaled <= 0) return 0;
-    return _strokesOnHole(scaled, si);
+    return strokesOnHole(scaled, si);
   }
 
   _RunningTotal _running(int playerId) {
@@ -4847,7 +4840,7 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
     if (nassau.handicapMode == 'net') {
       if (nassau.netPercent == 100 && entry != null) return entry.handicapStrokes;
       final effective = (m.playingHandicap * nassau.netPercent / 100.0).round();
-      return _strokesOnHole(effective, mySi);
+      return strokesOnHole(effective, mySi);
     }
     if (nassau.handicapMode == 'strokes_off') {
       if (widget.players.isEmpty) return 0;
@@ -4858,7 +4851,7 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
       if (rawSo <= 0) return 0;
       final so = (rawSo * nassau.netPercent / 100.0).round();
       if (so <= 0) return 0;
-      return _strokesOnHole(so, mySi);
+      return strokesOnHole(so, mySi);
     }
     return 0;
   }
@@ -5328,7 +5321,7 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
       }
       final effective =
           (m.playingHandicap * widget.netPercent / 100.0).round();
-      return _strokesOnHole(effective, si);
+      return strokesOnHole(effective, si);
     }
     // strokes_off — anchored on the foursome low.
     if (widget.players.isEmpty) return 0;
@@ -5339,7 +5332,7 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
     if (rawSo <= 0) return 0;
     final so = (rawSo * widget.netPercent / 100.0).round();
     if (so <= 0) return 0;
-    return _strokesOnHole(so, si);
+    return strokesOnHole(so, si);
   }
 
   @override
@@ -7771,7 +7764,7 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
         return entry.handicapStrokes;
       }
       final effective = (m.playingHandicap * summary.netPercent / 100.0).round();
-      return _strokesOnHole(effective, mySi);
+      return strokesOnHole(effective, mySi);
     }
     if (summary.handicapMode == 'strokes_off') {
       if (players.isEmpty) return 0;
@@ -7780,7 +7773,7 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
       if (rawSo <= 0) return 0;
       final so = (rawSo * summary.netPercent / 100.0).round();
       if (so <= 0) return 0;
-      return _strokesOnHole(so, mySi);
+      return strokesOnHole(so, mySi);
     }
     return 0;
   }

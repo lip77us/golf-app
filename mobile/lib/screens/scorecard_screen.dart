@@ -4,6 +4,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../utils/match_handicap.dart';
 import '../utils/sixes_handicap.dart';
 import '../widgets/net_score_button.dart';
 
@@ -11,13 +12,6 @@ import '../widgets/net_score_button.dart';
 // Top-level helpers — identical to skins_screen.dart so we keep one source
 // of truth per utility.
 // ---------------------------------------------------------------------------
-
-int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
-  if (effectiveHandicap <= 0) return 0;
-  final full = effectiveHandicap ~/ 18;
-  final rem  = effectiveHandicap %  18;
-  return full + (strokeIndex <= rem ? 1 : 0);
-}
 
 /// Mirror of score_entry_screen.dart's _effectiveHandicap.  Drops the
 /// player's playing handicap into the right "effective" number for the
@@ -342,7 +336,7 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
   ///
   /// Special case: Sixes in Strokes-Off with the per_segment handicap
   /// allocation (the legacy default) spreads strokes across the 3
-  /// matches.  The naive round-wide formula in [_strokesOnHole] would
+  /// matches.  The naive round-wide formula in [strokesOnHole] would
   /// hand the player extra dots on holes that the segment-aware
   /// allocator skips — making the scorecard disagree with the entry
   /// screen and the backend.  Route through the shared sixes helper to
@@ -376,7 +370,7 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       );
     }
 
-    return _strokesOnHole(effective, si);
+    return strokesOnHole(effective, si);
   }
 
   _RunningTotal _running(int playerId, Scorecard sc) {

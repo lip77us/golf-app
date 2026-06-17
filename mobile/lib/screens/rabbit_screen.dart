@@ -24,38 +24,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
-
-// ---------------------------------------------------------------------------
-// Handicap helpers (same rules as points_531_screen)
-// ---------------------------------------------------------------------------
-
-int _effectiveMatchHandicap({
-  required String mode,
-  required int    netPercent,
-  required int    playingHandicap,
-  int?            lowestPlayingHandicap,
-}) {
-  switch (mode) {
-    case 'gross':
-      return 0;
-    case 'strokes_off':
-      if (lowestPlayingHandicap == null) return playingHandicap;
-      final off = playingHandicap - lowestPlayingHandicap;
-      return off < 0 ? 0 : off;
-    case 'net':
-    default:
-      if (netPercent == 100) return playingHandicap;
-      return (playingHandicap * netPercent / 100.0).round();
-  }
-}
-
-int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
-  if (effectiveHandicap <= 0) return 0;
-  final full  = effectiveHandicap ~/ 18;
-  final rem   = effectiveHandicap %  18;
-  final extra = strokeIndex <= rem ? 1 : 0;
-  return full + extra;
-}
+import '../utils/match_handicap.dart';
 
 String _fmtMoney(double v) {
   if (v == 0) return '—';
@@ -583,13 +552,13 @@ class _HoleScoreCard extends StatelessWidget {
     if (_mode == 'net') {
       if (_netPercent == 100 && entry != null) return entry.handicapStrokes;
       final eff = (m.playingHandicap * _netPercent / 100.0).round();
-      return _strokesOnHole(eff, mySi);
+      return strokesOnHole(eff, mySi);
     }
     final low = _lowPlaying;
     if (low == null) return 0;
     final so = m.playingHandicap - low;
     if (so <= 0) return 0;
-    return _strokesOnHole(so, mySi);
+    return strokesOnHole(so, mySi);
   }
 
   bool _isHolder(int playerId) =>
@@ -619,7 +588,7 @@ class _HoleScoreCard extends StatelessWidget {
               isHot:    isHot,
               strokes:  strokes,
               showHcap: _mode != 'gross',
-              hcap:     _effectiveMatchHandicap(
+              hcap:     effectiveMatchHandicap(
                 mode: _mode, netPercent: _netPercent,
                 playingHandicap: m.playingHandicap,
                 lowestPlayingHandicap: _lowPlaying),

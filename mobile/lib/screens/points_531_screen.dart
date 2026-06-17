@@ -26,57 +26,11 @@ import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../utils/match_handicap.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
-
-// ---------------------------------------------------------------------------
-// Match-handicap helpers (duplicated from sixes_screen.dart to avoid coupling
-// the two screens' private state during this transition; long-term we'll
-// lift these into a shared module once the entry-pattern spreads to more
-// games.)
-// ---------------------------------------------------------------------------
-
-/// Compute a player's effective handicap for the current Points 5-3-1
-/// match based on the match's handicap mode and net percentage.
-///
-///   net         : round(playingHandicap × netPercent / 100)
-///   gross       : 0 — no strokes given
-///   strokes_off : playingHandicap − lowestPlayingHandicap (low plays to 0)
-int _effectiveMatchHandicap({
-  required String mode,
-  required int    netPercent,
-  required int    playingHandicap,
-  int?            lowestPlayingHandicap,
-}) {
-  switch (mode) {
-    case 'gross':
-      return 0;
-    case 'strokes_off':
-      if (lowestPlayingHandicap == null) return playingHandicap;
-      final off = playingHandicap - lowestPlayingHandicap;
-      return off < 0 ? 0 : off;
-    case 'net':
-    default:
-      if (netPercent == 100) return playingHandicap;
-      return (playingHandicap * netPercent / 100.0).round();
-  }
-}
-
-/// Per-hole stroke allocation using the standard WHS rule.  For Points
-/// 5-3-1 we use this same allocation in every mode — unlike Sixes,
-/// there are no segments to spread Strokes-Off across, so SO simply
-/// means "low plays to 0" and everyone else allocates their SO count
-/// by stroke index, one stroke per hole where SI ≤ effectiveHandicap
-/// (and extra strokes wrap by 18 for the exotic case).
-int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
-  if (effectiveHandicap <= 0) return 0;
-  final full  = effectiveHandicap ~/ 18;
-  final rem   = effectiveHandicap %  18;
-  final extra = strokeIndex <= rem ? 1 : 0;
-  return full + extra;
-}
 
 String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
 
@@ -291,14 +245,14 @@ class _Points531ScreenState extends State<Points531Screen> {
     final lowPlaying  = mode == 'strokes_off' && players.isNotEmpty
         ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
         : null;
-    final effective = _effectiveMatchHandicap(
+    final effective = effectiveMatchHandicap(
       mode:                  mode,
       netPercent:            netPercent,
       playingHandicap:       player.playingHandicap,
       lowestPlayingHandicap: lowPlaying,
     );
     final si      = sc?.holeData(hole)?.strokeIndex ?? 18;
-    final strokes = _strokesOnHole(effective, si);
+    final strokes = strokesOnHole(effective, si);
 
     final score = await showModalBottomSheet<int>(
       context: ctx,
@@ -688,7 +642,7 @@ class _P531HoleScoreCard extends StatelessWidget {
         .reduce((a, b) => a < b ? a : b);
   }
 
-  int _matchHcapFor(Membership m) => _effectiveMatchHandicap(
+  int _matchHcapFor(Membership m) => effectiveMatchHandicap(
         mode:                  _mode,
         netPercent:            _netPercent,
         playingHandicap:       m.playingHandicap,
@@ -722,7 +676,7 @@ class _P531HoleScoreCard extends StatelessWidget {
       }
       // Custom percentage: re-derive with scaled handicap.
       final effective = (m.playingHandicap * _netPercent / 100.0).round();
-      return _strokesOnHole(effective, mySi);
+      return strokesOnHole(effective, mySi);
     }
 
     // Strokes-Off.  Low player plays to 0; everyone else gets
@@ -734,7 +688,7 @@ class _P531HoleScoreCard extends StatelessWidget {
       if (low == null) return 0;
       final so = m.playingHandicap - low;
       if (so <= 0) return 0;
-      return _strokesOnHole(so, mySi);
+      return strokesOnHole(so, mySi);
     }
 
     // Unknown mode — be safe.
@@ -1509,7 +1463,7 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
         return entry.handicapStrokes;
       }
       final effective = (m.playingHandicap * summary.netPercent / 100.0).round();
-      return _strokesOnHole(effective, mySi);
+      return strokesOnHole(effective, mySi);
     }
 
     if (summary.handicapMode == 'strokes_off') {
@@ -1517,7 +1471,7 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
       final low = players.map((p) => p.playingHandicap).reduce((a, b) => a < b ? a : b);
       final so  = m.playingHandicap - low;
       if (so <= 0) return 0;
-      return _strokesOnHole(so, mySi);
+      return strokesOnHole(so, mySi);
     }
 
     return 0;

@@ -22,37 +22,7 @@ import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
-
-// ---------------------------------------------------------------------------
-// Handicap helpers — identical to points_531_screen.dart
-// ---------------------------------------------------------------------------
-
-int _effectiveMatchHandicap({
-  required String mode,
-  required int    netPercent,
-  required int    playingHandicap,
-  int?            lowestPlayingHandicap,
-}) {
-  switch (mode) {
-    case 'gross':
-      return 0;
-    case 'strokes_off':
-      if (lowestPlayingHandicap == null) return playingHandicap;
-      final off = playingHandicap - lowestPlayingHandicap;
-      return off < 0 ? 0 : off;
-    case 'net':
-    default:
-      if (netPercent == 100) return playingHandicap;
-      return (playingHandicap * netPercent / 100.0).round();
-  }
-}
-
-int _strokesOnHole(int effectiveHandicap, int strokeIndex) {
-  if (effectiveHandicap <= 0) return 0;
-  final full  = effectiveHandicap ~/ 18;
-  final rem   = effectiveHandicap %  18;
-  return full + (strokeIndex <= rem ? 1 : 0);
-}
+import '../utils/match_handicap.dart';
 
 String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
 
@@ -234,14 +204,14 @@ class _SkinsScreenState extends State<SkinsScreen> {
     final lowPlaying = mode == 'strokes_off' && players.isNotEmpty
         ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
         : null;
-    final effective = _effectiveMatchHandicap(
+    final effective = effectiveMatchHandicap(
       mode:                  mode,
       netPercent:            netPercent,
       playingHandicap:       player.playingHandicap,
       lowestPlayingHandicap: lowPlaying,
     );
     final si      = sc?.holeData(hole)?.strokeIndex ?? 18;
-    final strokes = _strokesOnHole(effective, si);
+    final strokes = strokesOnHole(effective, si);
 
     final score = await showModalBottomSheet<int>(
       context: ctx,
@@ -654,7 +624,7 @@ class _SkinsHoleScoreCard extends StatelessWidget {
         .reduce((a, b) => a < b ? a : b);
   }
 
-  int _matchHcapFor(Membership m) => _effectiveMatchHandicap(
+  int _matchHcapFor(Membership m) => effectiveMatchHandicap(
         mode:                  _mode,
         netPercent:            _netPercent,
         playingHandicap:       m.playingHandicap,
@@ -672,7 +642,7 @@ class _SkinsHoleScoreCard extends StatelessWidget {
     if (_mode == 'net') {
       if (_netPercent == 100 && entry != null) return entry.handicapStrokes;
       final effective = (m.playingHandicap * _netPercent / 100.0).round();
-      return _strokesOnHole(effective, mySi);
+      return strokesOnHole(effective, mySi);
     }
 
     if (_mode == 'strokes_off') {
@@ -680,7 +650,7 @@ class _SkinsHoleScoreCard extends StatelessWidget {
       if (low == null) return 0;
       final so = m.playingHandicap - low;
       if (so <= 0) return 0;
-      return _strokesOnHole(so, mySi);
+      return strokesOnHole(so, mySi);
     }
 
     return 0;
