@@ -8443,56 +8443,103 @@ class _VegasGroupCard extends StatelessWidget {
                         ?.copyWith(color: GameColors.team2)),
             ]),
             const SizedBox(height: 5),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(children: [
-                for (final h in scored)
-                  Container(
-                    width: 34,
-                    margin: const EdgeInsets.only(right: 3),
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    decoration: BoxDecoration(
-                      color: winColor(h.winner).withValues(alpha: 0.07),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Column(children: [
-                      Text('${h.hole}',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant)),
-                      const SizedBox(height: 3),
-                      Text('${h.team1Number ?? '–'}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: GameColors.team1,
-                              fontWeight: h.winner == 'team1'
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures()
-                              ])),
-                      Text('${h.team2Number ?? '–'}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: GameColors.team2,
-                              fontWeight: h.winner == 'team2'
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures()
-                              ])),
-                      const SizedBox(height: 2),
-                      Text(h.winner == 'halved' ? '½' : '+${h.points}',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              color: winColor(h.winner),
-                              fontWeight: FontWeight.w700,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures()
-                              ])),
-                    ]),
-                  ),
-              ]),
-            ),
+            _VegasHoleGrid(holes: scored),
           ],
         ]),
       ),
+    );
+  }
+}
+
+/// Horizontally-scrollable per-hole Vegas grid that auto-scrolls to the latest
+/// hole, so a live round shows what just happened without manual scrolling.
+class _VegasHoleGrid extends StatefulWidget {
+  final List<VegasHole> holes;
+  const _VegasHoleGrid({required this.holes});
+
+  @override
+  State<_VegasHoleGrid> createState() => _VegasHoleGridState();
+}
+
+class _VegasHoleGridState extends State<_VegasHoleGrid> {
+  final _ctrl = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollToEnd();
+  }
+
+  @override
+  void didUpdateWidget(_VegasHoleGrid old) {
+    super.didUpdateWidget(old);
+    // New hole(s) came in on refresh → keep the latest in view.
+    if (old.holes.length != widget.holes.length) _scrollToEnd();
+  }
+
+  void _scrollToEnd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _ctrl.hasClients) {
+        _ctrl.jumpTo(_ctrl.position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Color winColor(String? w) => w == 'team1'
+        ? GameColors.team1
+        : w == 'team2'
+            ? GameColors.team2
+            : theme.colorScheme.onSurfaceVariant;
+    return SingleChildScrollView(
+      controller: _ctrl,
+      scrollDirection: Axis.horizontal,
+      child: Row(children: [
+        for (final h in widget.holes)
+          Container(
+            width: 34,
+            margin: const EdgeInsets.only(right: 3),
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: BoxDecoration(
+              color: winColor(h.winner).withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Column(children: [
+              Text('${h.hole}',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 3),
+              Text('${h.team1Number ?? '–'}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: GameColors.team1,
+                      fontWeight: h.winner == 'team1'
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      fontFeatures: const [FontFeature.tabularFigures()])),
+              Text('${h.team2Number ?? '–'}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: GameColors.team2,
+                      fontWeight: h.winner == 'team2'
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      fontFeatures: const [FontFeature.tabularFigures()])),
+              const SizedBox(height: 2),
+              Text(h.winner == 'halved' ? '½' : '+${h.points}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: winColor(h.winner),
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: const [FontFeature.tabularFigures()])),
+            ]),
+          ),
+      ]),
     );
   }
 }
