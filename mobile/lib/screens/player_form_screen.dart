@@ -260,6 +260,21 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
 
               const SizedBox(height: 16),
 
+              // ---- Phone ----
+              // Above email on purpose: the phone number is how a golfer links
+              // across accounts (auto-connect on signup, "On Halved", round
+              // sharing, the texted invite).
+              GolfTextField(
+                controller: _phoneCtrl,
+                keyboardType: TextInputType.phone,
+                label: 'Phone (optional)',
+                prefixIcon: Icons.phone_outlined,
+                helper: 'When this golfer joins Halved with this number, '
+                        'they automatically connect to this profile.',
+              ),
+
+              const SizedBox(height: 16),
+
               // ---- Email ----
               GolfTextField(
                 controller: _emailCtrl,
@@ -271,18 +286,6 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
                   final ok = RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v.trim());
                   return ok ? null : 'Enter a valid email';
                 },
-              ),
-
-              const SizedBox(height: 16),
-
-              // ---- Phone ----
-              GolfTextField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                label: 'Phone (optional)',
-                prefixIcon: Icons.phone_outlined,
-                helper: 'When this golfer joins Halved with this number, '
-                        'they automatically connect to this profile.',
               ),
 
               const SizedBox(height: 28),

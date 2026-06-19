@@ -23,6 +23,7 @@ import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../utils/create_casual_round.dart';
+import '../utils/golfer_invite.dart';
 import '../widgets/course_search_field.dart';
 import '../widgets/error_view.dart';
 import '../widgets/halved_mark.dart';
@@ -117,6 +118,7 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
       }
       if (_selected.length < 4) _selected.add(created.id);
     });
+    await maybeOfferRoundSmsInvite(context, created, courseName: _course?.name);
   }
 
   void _togglePlayer(int id, bool on) {

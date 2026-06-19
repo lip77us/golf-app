@@ -1,10 +1,11 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <rect x="0" y="0" width="1024" height="1024" fill="#0B1F1A"/>
 
-  <!-- Artwork shifted left so the H + flag composition is centred: content
-       bbox was x=288..956 (centre 622); translate -110 makes the side margins
-       equal (178 each). Matches the re-centred launcher PNG. -->
-  <g transform="translate(-110, 0)">
+  <!-- Artwork shifted left to balance the H + flag composition: content bbox was
+       x=288..956 (centre 622). A full -110 (equal 178px margins) read as too far
+       left, so we use half that: translate -55 leaves the mark a touch right of
+       centre. Matches the re-centred launcher PNG. -->
+  <g transform="translate(-55, 0)">
     <!-- HOLE BACK: mint cup with dark interior leaving a back rim -->
     <ellipse cx="702" cy="838" rx="120" ry="42" fill="#3BD89A"/>
     <ellipse cx="702" cy="828" rx="112" ry="36" fill="#0B1F1A"/>

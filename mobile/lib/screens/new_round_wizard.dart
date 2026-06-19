@@ -17,6 +17,7 @@ import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../utils/add_halved_golfer.dart';
+import '../utils/golfer_invite.dart';
 import '../widgets/course_search_field.dart';
 import '../widgets/payout_config_field.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
@@ -328,6 +329,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
     );
     _selectCreatedGolfer(created);
+    if (created != null && mounted) {
+      await maybeOfferRoundSmsInvite(context, created,
+          courseName: _selectedCourse?.name);
+    }
   }
 
   /// Add an existing Halved member (not yet in my roster) by phone number,

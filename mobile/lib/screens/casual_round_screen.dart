@@ -233,6 +233,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
     );
     _addCreatedGolfer(created);
+    if (created != null && mounted) {
+      await maybeOfferRoundSmsInvite(context, created,
+          courseName: _selectedCourse?.name);
+    }
   }
 
   /// Add an existing Halved member (not yet in my roster) by phone number.

@@ -136,6 +136,10 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
       MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
     );
     _addCreatedGolfer(created);
+    if (created != null && mounted) {
+      await maybeOfferRoundSmsInvite(context, created,
+          courseName: _round?.course.name);
+    }
   }
 
   /// Add an existing Halved member (not yet in my roster) by phone number.

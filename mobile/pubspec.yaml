@@ -36,6 +36,11 @@ dependencies:
   # their own phone → TCPA / App Store safe).
   share_plus: ^10.1.4
 
+  # Opens Messages with a pre-filled recipient + body (sms: deep link) so the
+  # user can one-tap an invite to a golfer they just added. Sent from their own
+  # phone → TCPA / App Store safe.
+  url_launcher: ^6.3.1
+
   # Renders the Halved brand mark (SVG) inline — e.g. the "On Halved"
   # connected-golfer badge.
   flutter_svg: ^2.0.16

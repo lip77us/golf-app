@@ -285,6 +285,39 @@ Tests: `accounts/test_otp.py` (normalization, request→verify happy paths,
 self-signup, wrong/expired/too-many-attempts, rate-limit, phone uniqueness, and
 legacy password login still works).
 
+### One-tap SMS invite for a just-added golfer — implemented (mobile only)
+When you inline-add a login-less golfer **with a phone number** during round
+setup, the app offers to open Messages with the recipient AND a seeded invite
+body pre-filled (one tap to send, from the user's own phone → TCPA / App Store
+safe). The text names the golfer + the round and carries the user's personal
+invite link (`/i/<code>/`); when the invitee installs Halved and verifies that
+number, the round surfaces in **their** Casual Rounds via the existing phone
+match (no backend change — chosen over a true per-round invite token/landing).
+- Dep: `url_launcher: ^6.3.1`; iOS `Info.plist` declares `sms`/`tel` in
+  `LSApplicationQueriesSchemes`.
+- `utils/golfer_invite.dart`: `maybeOfferRoundSmsInvite()` (the post-add prompt;
+  no-ops when the golfer has no phone or is already on Halved),
+  `sendGolferSmsInvite()` (fetches `getInvite().url`, builds the named/round-aware
+  body, launches `sms:<digits>?body=<%20-encoded>`), `_launchSmsInvite()`. The
+  body is built by hand (NOT `Uri(queryParameters:)`, which encodes spaces as
+  `+` that iOS Messages renders literally) — `Uri.encodeComponent` → `%20`.
+- The existing per-golfer **"Invite"** button (`inviteGolfer`) now opens Messages
+  pre-addressed when the golfer has a phone; the native share sheet stays the
+  fallback for the no-phone "Invite anyway" path.
+- Wired into ALL inline add-golfer flows: `casual_round_screen.dart`
+  (`_selectedCourse?.name`), `onboarding_wizard.dart` (the "Set up your first
+  round" flow — `_course?.name`), `setup_round_players_screen.dart`
+  (`_round?.course.name`), `new_round_wizard.dart` (`_selectedCourse?.name`).
+  (Each "add golfer" entry point needs its own call — there's no single shared
+  hook.)
+- `player_form_screen.dart`: phone field moved ABOVE email (phone is the
+  cross-account link — auto-connect, "On Halved", round sharing, texted invite).
+- iOS quirk to watch: the SMS **body** pre-fill uses the standard `?body=` form;
+  if a given iOS version ignores it, switch `?body=` → `&body=` in
+  `_launchSmsInvite`. Can't be tested in the simulator (no Messages app).
+- Deferred: a true round deep-link (per-round invite token + landing page showing
+  the actual round + post-signup deep-link into it).
+
 ---
 
 ## Shared course catalog + copy-on-add — implemented

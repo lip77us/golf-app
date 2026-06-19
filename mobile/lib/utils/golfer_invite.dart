@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
@@ -7,21 +8,20 @@ import '../screens/player_form_screen.dart';
 import '../widgets/app_drawer.dart'; // shareInvite, shareOriginFrom
 
 /// Invite a (not-on-app) golfer. If their golfer card already has a phone, opens
-/// the share sheet directly. If not, first prompts to add their number — because
-/// the invited golfer only auto-connects ("On Halved", scorer-eligible, shows in
-/// their own "Shared with me") when their card's phone matches the number they
-/// sign up with. "Invite anyway" sends the generic (blind) invite.
+/// Messages with the recipient + a ready-to-send invite pre-filled (one tap to
+/// send, from the user's own phone → TCPA / App Store safe). If not, first
+/// prompts to add their number — because the invited golfer only auto-connects
+/// ("On Halved", scorer-eligible, sees the round in their own Casual Rounds)
+/// when their card's phone matches the number they sign up with. "Invite anyway"
+/// sends the generic (blind) invite via the native share sheet.
 Future<void> inviteGolfer(BuildContext context, PlayerProfile golfer) async {
   final auth      = context.read<AuthProvider>();
   final messenger = ScaffoldMessenger.of(context);
   final origin    = shareOriginFrom(context);
   final navigator = Navigator.of(context);
 
-  Future<void> share(String name) =>
-      shareInvite(auth, messenger, origin: origin, inviteeName: name);
-
   if (golfer.phone.trim().isNotEmpty) {
-    await share(golfer.name);
+    await sendGolferSmsInvite(auth, messenger, golfer: golfer);
     return;
   }
 
@@ -51,13 +51,109 @@ Future<void> inviteGolfer(BuildContext context, PlayerProfile golfer) async {
   );
 
   if (choice == 'invite') {
-    await share(golfer.name);
+    // No phone on file → fall back to the native share sheet (generic invite).
+    await shareInvite(auth, messenger, origin: origin, inviteeName: golfer.name);
   } else if (choice == 'add') {
     final updated = await navigator.push<PlayerProfile>(
       MaterialPageRoute(builder: (_) => PlayerFormScreen(player: golfer)),
     );
     if (updated != null && updated.phone.trim().isNotEmpty) {
-      await share(updated.name);
+      await sendGolferSmsInvite(auth, messenger, golfer: updated);
     }
+  }
+}
+
+/// After inline-adding a golfer during round setup, offer to text them a
+/// pre-seeded invite. No-op when the golfer has no phone on file or is already
+/// on Halved (nothing to invite). When [courseName] is supplied it's woven into
+/// the message so the text names the round.
+Future<void> maybeOfferRoundSmsInvite(
+  BuildContext context,
+  PlayerProfile golfer, {
+  String? courseName,
+}) async {
+  if (golfer.phone.trim().isEmpty || golfer.isOnApp || !context.mounted) return;
+  final auth      = context.read<AuthProvider>();
+  final messenger = ScaffoldMessenger.of(context);
+
+  final send = await showDialog<bool>(
+    context: context,
+    builder: (dctx) => AlertDialog(
+      title: Text('Text ${golfer.name} an invite?'),
+      content: Text(
+        'Open Messages with a ready-to-send invite to ${golfer.name} '
+        '(${golfer.phone.trim()}). When they join Halved and verify this '
+        "number, they'll see this round in their Casual Rounds.",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dctx).pop(false),
+          child: const Text('Not now'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(dctx).pop(true),
+          icon: const Icon(Icons.sms_outlined),
+          label: const Text('Text invite'),
+        ),
+      ],
+    ),
+  );
+  if (send != true || !context.mounted) return;
+  await sendGolferSmsInvite(auth, messenger,
+      golfer: golfer, courseName: courseName);
+}
+
+/// Fetches the caller's personal invite link, builds a seeded invite message
+/// (named to [golfer], and mentioning the round when [courseName] is given),
+/// and opens Messages addressed to the golfer's phone with the body pre-filled.
+/// The link still downloads the app + drives the phone-match connection; when
+/// the golfer verifies this number they see the round in their Casual Rounds.
+Future<void> sendGolferSmsInvite(
+  AuthProvider auth,
+  ScaffoldMessengerState messenger, {
+  required PlayerProfile golfer,
+  String? courseName,
+}) async {
+  final String url;
+  try {
+    url = (await auth.client.getInvite()).url;
+  } catch (e) {
+    messenger.showSnackBar(
+      SnackBar(content: Text('Could not create your invite link: $e')),
+    );
+    return;
+  }
+
+  final first = golfer.name.trim().split(RegExp(r'\s+')).first;
+  final where = (courseName != null && courseName.trim().isNotEmpty)
+      ? 'our round at ${courseName.trim()}'
+      : 'our round';
+  final body =
+      'Hi $first! I added you to $where on Halved — the easiest way to track '
+      "our golf bets. Get the app and verify this number and you'll see our "
+      'round: $url';
+
+  final ok = await _launchSmsInvite(phone: golfer.phone, body: body);
+  if (!ok) {
+    messenger.showSnackBar(
+      SnackBar(content: Text("Couldn't open Messages. Invite link: $url")),
+    );
+  }
+}
+
+/// Opens the SMS composer pre-addressed to [phone] with [body] filled in.
+/// Builds the URI by hand (not Uri(queryParameters:), which encodes spaces as
+/// '+' that iOS Messages renders literally) — encodeComponent uses %20 so the
+/// body shows real spaces. Returns false if Messages couldn't be opened.
+Future<bool> _launchSmsInvite({
+  required String phone,
+  required String body,
+}) async {
+  final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+  final uri = Uri.parse('sms:$cleaned?body=${Uri.encodeComponent(body)}');
+  try {
+    return await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {
+    return false;
   }
 }
