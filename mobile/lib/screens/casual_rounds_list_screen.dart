@@ -317,9 +317,18 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
     final shared = _shared.where((r) {
       return _showCompleted ? r.status == 'complete' : r.status != 'complete';
     }).toList();
+    // Dedupe: if I'm both a player and a watcher of the same round, show it once
+    // as a PLAYED round (playing supersedes watching — no eyeball, opens to score
+    // entry). Build the played-id set from the full lists, not the tab-filtered
+    // ones, so the suppression holds regardless of tab.
+    final playedIds = <int>{
+      for (final r in (_rounds ?? [])) r.id,
+      for (final r in _shared) r.id,
+    };
     // Observed rounds follow the same tab rule: when the round completes it
     // drops off Active and shows under Completed, just like my own rounds.
     final observing = _observing.where((r) {
+      if (playedIds.contains(r.id)) return false;
       return _showCompleted ? r.status == 'complete' : r.status != 'complete';
     }).toList();
     if (rounds.isEmpty && shared.isEmpty && observing.isEmpty) {

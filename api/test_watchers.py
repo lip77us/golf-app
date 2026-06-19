@@ -186,6 +186,31 @@ class WatcherTests(TestCase):
         self.assertNotIn('Al', names)   # Al is playing in fs1 → not a candidate
         self.assertIn('Ryan', names)    # Ryan isn't a player in this round
 
+    def test_candidates_exclude_existing_watchers(self):
+        # Invite Wanda as a watcher; she lands in the host roster AND is now
+        # watching, so she must not be offered again as a candidate.
+        self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '(415) 555-7777', 'name': 'Wanda'}, format='json')
+        resp = self.td_client.get(
+            reverse('api-round-watcher-candidates', args=[self.round.id]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('Wanda', {p['name'] for p in resp.data})
+
+    def test_cannot_invite_current_player_as_watcher(self):
+        # A player in the round (matched by phone) can't be made a watcher —
+        # that would double-list the round (playing + observing).
+        pat = Player.objects.create(
+            account=self.acct_a, name='Pat', phone='(212) 555-9999',
+            handicap_index=Decimal('8.0'))
+        _member(self.fs1, pat)
+        resp = self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '(212) 555-9999', 'name': 'Pat'}, format='json')
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertFalse(Watcher.objects.filter(
+            round=self.round, phone='+12125559999').exists())
+
     def test_non_participant_cannot_invite(self):
         acct_c = Account.objects.create(name='Outsider')
         carl = User.objects.create_user(username='carl', account=acct_c)

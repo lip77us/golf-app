@@ -2205,6 +2205,21 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
         return Response({'detail': 'Enter a valid phone number.'},
                         status=status.HTTP_400_BAD_REQUEST)
 
+    # A current PLAYER can't also be a watcher — that would double-list the round
+    # (once as "playing", once as "observing"). Playing supersedes watching.
+    part_phones = set()
+    if round_obj is not None:
+        _, part_phones = _round_participant_keys(round_obj)
+    elif tournament is not None:
+        for r in tournament.rounds.all():
+            _, ph = _round_participant_keys(r)
+            part_phones |= ph
+    if norm in part_phones:
+        where = 'tournament' if tournament is not None else 'round'
+        return Response(
+            {'detail': f'{name} is already playing in this {where}.'},
+            status=status.HTTP_400_BAD_REQUEST)
+
     # Put the watcher in the inviter's roster (so they can be re-invited / seen).
     roster_player, _ = ensure_roster_player(request.user.account, phone_raw, name)
     inviter = getattr(request.user, 'player_profile', None)
@@ -2328,25 +2343,34 @@ class RoundWatcherCandidatesView(APIView):
     GET /api/rounds/<pk>/watcher-candidates/
 
     My Golfers eligible to invite as watchers of this round — excludes anyone
-    already playing in it.
+    already playing in it OR already watching it.
     """
     def get(self, request, pk):
+        from tournament.models import Watcher
         rnd = round_for_reader(request.user, pk)
         ids, phones = _round_participant_keys(rnd)
+        # Already-watching golfers shouldn't be offered again (Watcher.phone is
+        # stored normalized, same form as the participant phones).
+        phones |= set(
+            Watcher.objects.filter(round=rnd).values_list('phone', flat=True))
         return _watcher_candidates_response(request, ids, phones)
 
 
 class TournamentWatcherCandidatesView(APIView):
     """
-    GET /api/tournaments/<pk>/watcher-candidates/  (excludes players in any round)
+    GET /api/tournaments/<pk>/watcher-candidates/
+    Excludes players in any round AND existing watchers of the tournament.
     """
     def get(self, request, pk):
+        from tournament.models import Watcher
         t = tournament_for_reader(request.user, pk)
         ids, phones = set(), set()
         for r in t.rounds.all():
             i, ph = _round_participant_keys(r)
             ids |= i
             phones |= ph
+        phones |= set(
+            Watcher.objects.filter(tournament=t).values_list('phone', flat=True))
         return _watcher_candidates_response(request, ids, phones)
 
 
