@@ -70,6 +70,26 @@ def foursome_for_scorer(user, pk, *, base=None):
     raise Http404('No such foursome.')
 
 
+def foursome_for_reader(user, pk, *, base=None):
+    """Foursome if own-account OR a phone-matched member OR an invited watcher of
+    its round/tournament OR support. (READ — scorecard view; mirrors
+    `round_for_reader`, so spectators get the same read-only reach there.)"""
+    try:
+        return foursome_for_scorer(user, pk, base=base)
+    except Http404:
+        pass
+    from tournament.models import Foursome
+    qs = base if base is not None else (
+        Foursome.objects.select_related('round')
+        .prefetch_related('memberships__player')
+    )
+    fs = qs.filter(pk=pk).first()
+    if fs is not None and (_user_watches_round(user, fs.round)
+                           or getattr(user, 'is_support', False)):
+        return fs
+    raise Http404('No such foursome.')
+
+
 def round_for_scorer(user, pk, *, base=None):
     """Round if own-account OR the user scores any of its foursomes. (open to score)"""
     from tournament.models import Round

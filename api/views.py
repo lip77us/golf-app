@@ -59,7 +59,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from accounts import otp as otp_service
 from accounts.scoring_access import (
-    foursome_for_scorer, round_for_scorer, round_for_reader,
+    foursome_for_scorer, foursome_for_reader, round_for_scorer, round_for_reader,
     tournament_for_reader, round_for_participant,
 )
 from accounts.scoping import (
@@ -1708,9 +1708,10 @@ class RoundDetailView(APIView):
     )
 
     def get(self, request, pk):
-        # Own-account OR a designated scorer (so a cross-account scorer can open
-        # the round to enter scores). PATCH/DELETE below stay TD-only.
-        round_obj = round_for_scorer(request.user, pk, base=self._ROUND_QS)
+        # READ: own-account, a phone-matched participant/scorer, OR an invited
+        # watcher (so a spectator can open the read-only scorecard from the
+        # leaderboard). PATCH/DELETE below stay TD-only.
+        round_obj = round_for_reader(request.user, pk, base=self._ROUND_QS)
         return Response(
             RoundSerializer(round_obj, context={'request': request}).data,
         )
@@ -2725,7 +2726,10 @@ class FoursomeTeesView(APIView):
 
 class ScorecardView(APIView):
     def get(self, request, pk):
-        foursome = foursome_for_scorer(
+        # READ-only: admit watchers/spectators (and "Shared with me" participants)
+        # too, so the scorecard is reachable from the leaderboard, not just by a
+        # scorer mid-round.
+        foursome = foursome_for_reader(
             request.user, pk,
             base=Foursome.objects
                     .select_related('round__course')

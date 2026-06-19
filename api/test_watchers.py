@@ -91,10 +91,19 @@ class WatcherTests(TestCase):
         self.assertEqual(
             self.b_client.get(reverse('api-leaderboard', args=[self.round.id]))
             .status_code, 200)
-        # …but cannot score (not a player in any group).
+        # …reads the round + scorecard read-only (reachable from the
+        # leaderboard's Scorecard button)…
+        self.assertEqual(
+            self.b_client.get(reverse('api-round-detail', args=[self.round.id]))
+            .status_code, 200)
         self.assertEqual(
             self.b_client.get(reverse('api-scorecard', args=[self.fs1.id]))
-            .status_code, 404)
+            .status_code, 200)
+        # …but cannot SUBMIT scores (write stays scorer-only).
+        self.assertEqual(
+            self.b_client.post(
+                reverse('api-score-submit', args=[self.fs1.id]), {},
+                format='json').status_code, 404)
 
     def test_is_on_app_flag(self):
         # Wanda already has Halved (verified phone) → is_on_app True, so the
