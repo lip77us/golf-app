@@ -613,6 +613,19 @@ class _RoundCard extends StatelessWidget {
                 ),
               ),
 
+              // Watching indicator — a clear eyeball so a round I only observe
+              // is obviously distinct from one I play in (even one a friend
+              // started). Observed rounds never have a delete button.
+              if (item.isObserving)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, right: 6, left: 4),
+                  child: Tooltip(
+                    message: "You're watching this round",
+                    child: Icon(Icons.visibility,
+                        color: theme.colorScheme.secondary, size: 24),
+                  ),
+                ),
+
               // Delete icon — only shown to the round creator.
               if (item.onDelete != null)
                 IconButton(
