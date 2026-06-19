@@ -68,7 +68,10 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
         children: [
           SwitchListTile(
             title: const Text('Net Style Entry'),
@@ -116,21 +119,30 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => Navigator.of(context).pushNamed('/manage-courses'),
             ),
           ],
-          const Divider(height: 32),
-          ListTile(
-            leading: Icon(Icons.delete_forever, color: theme.colorScheme.error),
-            title: Text(
-              'Delete Account',
-              style: TextStyle(color: theme.colorScheme.error),
+        ],
             ),
-            subtitle: Text(
-              'Permanently delete your login. Past scores are kept '
-              'anonymously in other players\' round history.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+          ),
+          // Pinned to the bottom of the screen, away from the everyday
+          // preferences above so it's hard to hit by accident.
+          const Divider(height: 1),
+          SafeArea(
+            top: false,
+            child: ListTile(
+              leading:
+                  Icon(Icons.delete_forever, color: theme.colorScheme.error),
+              title: Text(
+                'Delete Account',
+                style: TextStyle(color: theme.colorScheme.error),
               ),
+              subtitle: Text(
+                'Permanently delete your login. Past scores are kept '
+                'anonymously in other players\' round history.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              onTap: () => _confirmAndDelete(context),
             ),
-            onTap: () => _confirmAndDelete(context),
           ),
         ],
       ),

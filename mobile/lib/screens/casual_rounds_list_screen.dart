@@ -27,6 +27,10 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
   List<CasualRoundSummary>? _rounds;
   /// Rounds in OTHER accounts a friend added me to as a player (any size).
   List<ScoringRound> _shared = [];
+  /// Casual rounds in OTHER accounts I was invited to WATCH (read-only). Shown
+  /// on this same list, flagged "Observing" so it's clear I'm watching, not
+  /// playing. (Replaces the old standalone "Shared with me" screen.)
+  List<SharedRoundSummary> _observing = [];
   bool    _loading      = true;
   String? _error;
   bool    _networkError = false;
@@ -59,6 +63,15 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
             .toList();
       } catch (_) {/* ignore — show own rounds regardless */}
 
+      // Casual rounds I was invited to WATCH (cross-account, read-only). Same
+      // best-effort treatment; status filtering happens per-tab below.
+      List<SharedRoundSummary> observing = [];
+      try {
+        observing = (await client.getSharedRounds())
+            .where((r) => !r.isTournament)
+            .toList();
+      } catch (_) {/* ignore — observed rounds are non-critical */}
+
       // Does the account have ANY casual round? If the current tab is non-empty
       // we already know; if it's empty, check the other status before concluding
       // the account is brand-new (so the onboarding CTA only shows for a truly
@@ -74,7 +87,12 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
         }
       }
       if (mounted) {
-        setState(() { _rounds = data; _shared = shared; _hasAnyRound = hasAny; });
+        setState(() {
+          _rounds = data;
+          _shared = shared;
+          _observing = observing;
+          _hasAnyRound = hasAny;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -299,7 +317,12 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
     final shared = _shared.where((r) {
       return _showCompleted ? r.status == 'complete' : r.status != 'complete';
     }).toList();
-    if (rounds.isEmpty && shared.isEmpty) {
+    // Observed rounds follow the same tab rule: when the round completes it
+    // drops off Active and shows under Completed, just like my own rounds.
+    final observing = _observing.where((r) {
+      return _showCompleted ? r.status == 'complete' : r.status != 'complete';
+    }).toList();
+    if (rounds.isEmpty && shared.isEmpty && observing.isEmpty) {
       final emptyMsg = _showCompleted
           ? 'No completed rounds yet.'
           : 'No rounds in progress.';
@@ -378,6 +401,21 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
           onTap: () async { await openSharedRound(context, r.id); _load(); },
           onDelete: null,
         ),
+      for (final r in observing)
+        _RoundItem(
+          sortDate:       DateTime.tryParse(r.date),
+          dateLabel:      fmtDate(r.date),
+          courseName:     r.courseName,
+          activeGames:    r.activeGames,
+          isCompleted:    r.status == 'complete',
+          currentHole:    null,
+          startedByMe:    false,
+          startedByLabel: r.groupLabel,
+          people:         '',
+          isObserving:    true,
+          onTap: () async { await openWatchedRound(context, r); _load(); },
+          onDelete: null,
+        ),
     ]..sort((a, b) =>
         (b.sortDate ?? DateTime(0)).compareTo(a.sortDate ?? DateTime(0)));
 
@@ -409,6 +447,8 @@ class _RoundItem {
   final bool         startedByMe;
   final String       startedByLabel; // "you", or the friend's name
   final String       people;         // player names (own rounds) or ''
+  /// True when I'm only WATCHING this round (read-only), not playing in it.
+  final bool         isObserving;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
 
@@ -422,6 +462,7 @@ class _RoundItem {
     required this.startedByMe,
     required this.startedByLabel,
     required this.people,
+    this.isObserving = false,
     required this.onTap,
     this.onDelete,
   });
@@ -445,13 +486,21 @@ class _RoundCard extends StatelessWidget {
     final theme = Theme.of(context);
     final gameLabels = item.activeGames.map(gameDisplayName).join(' • ');
 
-    // The flag that replaced the section headers: who started this round.
-    final flagColor = item.startedByMe
-        ? theme.colorScheme.primary
-        : theme.colorScheme.tertiary;
-    final flagText = item.startedByMe
-        ? 'Started by you'
-        : 'Started by ${item.startedByLabel}';
+    // The flag that replaced the section headers: who started this round, or —
+    // for a round I'm only watching — that I'm observing it (not playing).
+    final flagColor = item.isObserving
+        ? theme.colorScheme.secondary
+        : (item.startedByMe
+            ? theme.colorScheme.primary
+            : theme.colorScheme.tertiary);
+    final flagText = item.isObserving
+        ? 'Observing${item.startedByLabel.isEmpty ? '' : ' · ${item.startedByLabel}'}'
+        : (item.startedByMe
+            ? 'Started by you'
+            : 'Started by ${item.startedByLabel}');
+    final flagIcon = item.isObserving
+        ? Icons.visibility_outlined
+        : (item.startedByMe ? Icons.person_outline : Icons.group_outlined);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -529,12 +578,7 @@ class _RoundCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(
-                          item.startedByMe
-                              ? Icons.person_outline
-                              : Icons.group_outlined,
-                          size: 12, color: flagColor,
-                        ),
+                        Icon(flagIcon, size: 12, color: flagColor),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(

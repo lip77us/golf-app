@@ -157,14 +157,6 @@ class AppDrawer extends StatelessWidget {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.groups_2_outlined),
-                  title: const Text('Shared with me'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).pushNamed('/shared-rounds');
-                  },
-                ),
-                ListTile(
                   leading: const Icon(Icons.people_outline),
                   title: const Text('My Golfers'),
                   onTap: onPlayersTap,

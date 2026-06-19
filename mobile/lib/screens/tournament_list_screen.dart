@@ -29,6 +29,10 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
   List<Tournament>? _tournaments;
   /// Tournament rounds in OTHER accounts a friend/TD added me to.
   List<ScoringRound> _shared = [];
+  /// Tournaments in OTHER accounts I was invited to WATCH (read-only). Shown in
+  /// an "Observing" section so it's clear I'm watching, not playing. (Replaces
+  /// the old standalone "Shared with me" screen for tournaments.)
+  List<SharedRoundSummary> _observing = [];
   bool    _loading      = true;
   String? _error;
   bool    _networkError = false;
@@ -65,7 +69,21 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
             .where((r) => r.isTournament)
             .toList();
       } catch (_) {/* ignore — show my own tournaments regardless */}
-      if (mounted) setState(() { _tournaments = data; _shared = shared; });
+
+      // Tournaments I was invited to WATCH (cross-account, read-only).
+      List<SharedRoundSummary> observing = [];
+      try {
+        observing = (await client.getSharedRounds())
+            .where((r) => r.isTournament)
+            .toList();
+      } catch (_) {/* ignore — observed tournaments are non-critical */}
+      if (mounted) {
+        setState(() {
+          _tournaments = data;
+          _shared = shared;
+          _observing = observing;
+        });
+      }
 
       // First-load only: if the user has no active tournaments, drop them
       // straight onto the casual rounds list.  Use push (not replace) so the
@@ -347,6 +365,10 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     final shared = _shared.where((r) {
       return _showCompleted ? r.status == 'complete' : r.status != 'complete';
     }).toList();
+    // Tournaments I'm only watching — move to Completed when the event finishes.
+    final observing = _observing.where((r) {
+      return _showCompleted ? r.status == 'complete' : r.status != 'complete';
+    }).toList();
 
     return Column(children: [
       Padding(
@@ -372,7 +394,7 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         ),
       ),
       Expanded(
-        child: (filtered.isEmpty && shared.isEmpty)
+        child: (filtered.isEmpty && shared.isEmpty && observing.isEmpty)
             ? Center(child: Text(_showCompleted
                 ? 'No completed tournaments.'
                 : 'No active tournaments.'))
@@ -391,8 +413,15 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                             _load();
                           },
                         ),
-                      if (filtered.isNotEmpty) _sectionHeader('Your tournaments'),
                     ],
+                    if (observing.isNotEmpty) ...[
+                      _sectionHeader('Observing'),
+                      for (final r in observing)
+                        _observingTournamentCard(r),
+                    ],
+                    if ((shared.isNotEmpty || observing.isNotEmpty) &&
+                        filtered.isNotEmpty)
+                      _sectionHeader('Your tournaments'),
                     for (final t in filtered) _tournamentCard(t),
                   ],
                 ),
@@ -411,6 +440,37 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
               ),
         ),
       );
+
+  /// A tournament I'm only WATCHING (read-only). Tapping opens the read-only
+  /// leaderboard, never the score-entry round screen.
+  Widget _observingTournamentCard(SharedRoundSummary r) {
+    final theme = Theme.of(context);
+    final title = r.courseName.isEmpty ? r.groupLabel : r.courseName;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: theme.colorScheme.secondaryContainer,
+          foregroundColor: theme.colorScheme.onSecondaryContainer,
+          child: const Icon(Icons.visibility_outlined),
+        ),
+        title: Text(title,
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text('Observing · ${r.groupLabel}',
+            maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: r.status == 'in_progress'
+            ? const Chip(
+                label: Text('Live', style: TextStyle(fontSize: 11)),
+                visualDensity: VisualDensity.compact,
+              )
+            : const Icon(Icons.chevron_right),
+        onTap: () async {
+          await openWatchedRound(context, r);
+          _load();
+        },
+      ),
+    );
+  }
 
   Widget _tournamentCard(Tournament t) {
     return _TournamentCard(

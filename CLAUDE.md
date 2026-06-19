@@ -222,6 +222,30 @@ write-scoring slice where it's actually needed).
   tournament rounds, recycled-number safeguards, tightening LeaderboardView's
   open-by-id read.
 
+#### Observed rounds folded into the main lists (standalone "Shared with me" retired)
+The separate "Shared with me" drawer screen was removed; the rounds/tournaments
+you were invited to WATCH now appear inline on the **Casual Rounds** and
+**Tournaments** lists, flagged **"Observing"** (eye icon, `secondary` color) so
+it's clear you're watching, not playing. They sort/age by the same Active vs
+Completed tab rule as your own rounds — an observed round moves to Completed when
+it finishes (still subject to the server's `SHARED_WATCH_RETENTION_DAYS`=7 aging
+for completed watcher follows; live ones never age off).
+- Both lists already merged cross-account PLAYER rounds via `getPlayingForMe`
+  (`PlayingRoundsView`); this adds the WATCHER rounds via `getSharedRounds`
+  (`SharedRoundsView`), split by `isTournament` per screen.
+- `utils/shared_round.dart` `openWatchedRound(context, SharedRoundSummary)` —
+  joins best-effort then opens the **read-only leaderboard** (`/leaderboard` or
+  `TournamentLeaderboardScreen`), NOT the score-entry `/round` (that's
+  `openSharedRound`, for players/scorers). This watch-vs-play split is the whole
+  point of the flag.
+- Casual: `_RoundItem.isObserving` drives the flag in `_RoundCard`
+  (`casual_rounds_list_screen.dart`). Tournaments: an "Observing" section +
+  `_observingTournamentCard` (`tournament_list_screen.dart`).
+- Removed: `shared_rounds_screen.dart`, its `/shared-rounds` route + import
+  (`main.dart`), and the "Shared with me" drawer entry (`app_drawer.dart`).
+  Backend `SharedRoundsView` / `getSharedRounds()` are unchanged (just consumed
+  from the list screens now).
+
 ### Connected golfers roster — implemented
 "My Golfers" now shows which golfers have signed up ("On Halved"), unifying
 golfers=friends (a golfer is just a friend who hasn't signed up yet). Phone-
