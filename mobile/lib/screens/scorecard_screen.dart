@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
+import '../game_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
@@ -1020,11 +1021,7 @@ class _HoleScoreCard extends StatelessWidget {
             final Border boxBorder;
             if (hasScore) {
               final diff = (gross! - strokes) - par;
-              final Color c = diff < 0
-                  ? Colors.green.shade200
-                  : diff == 0
-                      ? Colors.grey.shade200
-                      : Colors.red.shade200;
+              final c = GameColors.scoreFill(diff, parFill: Colors.grey.shade200);
               boxBg    = c;
               boxBorder = Border.all(color: c);
             } else if (isHot) {
@@ -1173,12 +1170,10 @@ class _ScoreChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final net  = gross - strokes;
     final diff = net - par;
-    // Mirror the NetScoreButton fill colors exactly so the chip always
-    // matches what the player tapped to enter the score.
-    final Color bg;
-    if (diff < 0)       bg = Colors.green.shade200;   // birdie or better
-    else if (diff == 0) bg = Colors.grey.shade200;    // par (light bg for circle visibility)
-    else                bg = Colors.red.shade200;     // bogey or worse
+    // Mirror the NetScoreButton fill colors exactly (graduated: dark green/red
+    // for eagle+/double+, soft for birdie/bogey) so the chip always matches what
+    // the player tapped to enter the score.
+    final bg = GameColors.scoreFill(diff, parFill: Colors.grey.shade200);
 
     return Container(
       width: 44, height: 44,
@@ -1696,8 +1691,8 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
     if (isCurrent) bg = theme.colorScheme.primaryContainer.withOpacity(0.3);
     if (gross != null && net != null) {
       final diff = net - par;
-      if (diff < 0)      bg = Colors.green.shade200;
-      else if (diff > 0) bg = Colors.red.shade200;
+      // Par leaves the current-hole highlight intact; only birdie/bogey± tint.
+      if (diff != 0) bg = GameColors.scoreFill(diff);
     }
     if (isLocalOnly) bg = theme.colorScheme.tertiaryContainer.withOpacity(0.5);
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../game_colors.dart';
 import '../providers/settings_provider.dart';
 
 /// A tappable score button that communicates a golf score's relationship to
@@ -12,11 +13,11 @@ import '../providers/settings_provider.dart';
 ///
 /// Visual encoding (diff = score - baseline, where baseline is net par
 /// or gross par depending on the preference):
-///   diff <= -2  (eagle or better)  green fill, 2 concentric circles
-///   diff == -1  (birdie)           green fill, 1 circle
+///   diff <= -2  (eagle or better)  DARK green fill, 2 concentric circles
+///   diff == -1  (birdie)           soft green fill, 1 circle
 ///   diff ==  0  (par)              white fill, no shape
-///   diff ==  1  (bogey)            red   fill, 1 square
-///   diff >=  2  (double or worse)  red   fill, 2 concentric squares
+///   diff ==  1  (bogey)            soft red  fill, 1 square
+///   diff >=  2  (double or worse)  DARK red  fill, 2 concentric squares
 ///
 /// Selection is shown with a thicker primary-colored outer border so it
 /// never hides the par-vs-score shape inside.
@@ -60,18 +61,10 @@ class NetScoreButton extends StatelessWidget {
     final baseline      = netStyleEntry ? par + strokes : par;
     final netDiff       = score - baseline;
 
-    // Fill color driven purely by net diff.
-    //   under par  -> green  (single shade)
-    //   net par    -> white
-    //   over par   -> red    (single shade)
-    final Color fill;
-    if (netDiff < 0) {
-      fill = Colors.green.shade200;    // net birdie or better
-    } else if (netDiff == 0) {
-      fill = Colors.white;             // net par
-    } else {
-      fill = Colors.red.shade200;      // over net par
-    }
+    // Fill color driven purely by net diff. Graduated (shared with the
+    // scorecard): net eagle+ / double+ get the darker green / red; net birdie /
+    // bogey get a softer shade; net par is white.
+    final fill = GameColors.scoreFill(netDiff);
 
     // Shape style driven by net diff.
     final _ShapeStyle shape;
