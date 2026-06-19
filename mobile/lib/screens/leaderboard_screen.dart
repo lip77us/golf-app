@@ -148,6 +148,78 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     ));
   }
 
+  /// Open the round's full scorecard (read-only) from the leaderboard, so it's
+  /// reachable during AND after the round without going through score entry.
+  /// Single-foursome rounds open directly; multi-group rounds ask which group.
+  Future<void> _openScorecard() async {
+    final nav       = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final rp        = context.read<RoundProvider>();
+
+    var foursomes =
+        (rp.round?.id == widget.roundId) ? rp.round!.foursomes : const <Foursome>[];
+    if (foursomes.isEmpty) {
+      try {
+        foursomes = (await context
+                .read<AuthProvider>()
+                .client
+                .getRound(widget.roundId))
+            .foursomes;
+      } catch (_) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Could not open the scorecard. Try again.')));
+        return;
+      }
+    }
+    if (!mounted) return;
+    if (foursomes.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('No scorecard available for this round yet.')));
+      return;
+    }
+
+    final foursomeId = foursomes.length == 1
+        ? foursomes.first.id
+        : await _pickFoursome(foursomes);
+    if (foursomeId == null || !mounted) return;
+    nav.pushNamed('/scorecard',
+        arguments: {'foursomeId': foursomeId, 'readOnly': true});
+  }
+
+  /// Bottom sheet to choose which group's scorecard to open (multi-group rounds).
+  Future<int?> _pickFoursome(List<Foursome> foursomes) {
+    return showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text("Which group's scorecard?",
+                  style: Theme.of(ctx).textTheme.titleMedium),
+            ),
+          ),
+          for (final fs in foursomes)
+            ListTile(
+              leading: const Icon(Icons.groups_outlined),
+              title: Text('Group ${fs.groupNumber}'),
+              subtitle: Text(
+                fs.memberships
+                    .where((m) => !m.player.isPhantom)
+                    .map((m) => m.player.shortName)
+                    .join(', '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () => Navigator.of(ctx).pop(fs.id),
+            ),
+        ]),
+      ),
+    );
+  }
+
   /// The leaderboard's secondary actions, folded behind a more_vert menu so the
   /// header stays uncluttered on a narrow phone (the spectator link used to get
   /// pushed off the edge once the chat icon was added).
@@ -287,6 +359,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           // Round chat / event feed. Hidden in a support view (read-only).
           if (!isSupportView)
             RoundChatButton(roundId: widget.roundId, title: courseName),
+          // Full scorecard — always reachable here, during AND after the round
+          // (previously only inside the score-entry screen).
+          IconButton(
+            tooltip: 'Scorecard',
+            icon: const Icon(Icons.table_chart_outlined),
+            onPressed: _openScorecard,
+          ),
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(Icons.refresh),
