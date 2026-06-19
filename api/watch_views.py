@@ -567,6 +567,75 @@ def _render_casual_wolf(request, round_obj, token: str, tabs: list):
         'tabs':         tabs,
     })
 
+def _has_casual_vegas(round_obj) -> bool:
+    return 'vegas' in (round_obj.active_games or [])
+
+def _vegas_team(summary, n):
+    """{names, points, money} for team `n` (1|2) from a vegas_summary, or None."""
+    for t in summary.get('teams', []):
+        if t.get('team_number') == n:
+            names = ' & '.join(
+                (p.get('short_name') or p.get('name') or '')
+                for p in t.get('players', []))
+            return {'names': names or f'Team {n}',
+                    'points': t.get('points', 0), 'money': t.get('money', 0)}
+    return None
+
+def _vegas_biggest_hole(summary, bet_unit):
+    """The single hole with the largest point swing so far (excludes halves)."""
+    best = None
+    for h in summary.get('holes', []):
+        if h.get('winner') == 'halved' or not h.get('points'):
+            continue
+        if best is None or h['points'] > best['points']:
+            best = h
+    if best is None:
+        return None
+    wn = 1 if best.get('winner') == 'team1' else 2
+    t = _vegas_team(summary, wn)
+    return {
+        'hole':        best['hole'],
+        'team_number': wn,
+        'team_names':  t['names'] if t else f'Team {wn}',
+        'points':      best['points'],
+        'amount':      best['points'] * bet_unit,
+        'multiplier':  best.get('multiplier', 1),
+    }
+
+def _render_casual_vegas(request, round_obj, token: str, tabs: list):
+    """Las Vegas — 2v2 spectator view: each team's amount up/down + points,
+    holes played, and a highlight of the biggest single-hole swing so far."""
+    from services.vegas import vegas_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = []
+    for fs in foursomes:
+        s = vegas_summary(fs)
+        t1, t2 = _vegas_team(s, 1), _vegas_team(s, 2)
+        if not (t1 and t2):
+            continue  # pending / not set up
+        bet_unit = (s.get('money') or {}).get('bet_unit', 0) or 0
+        groups.append({
+            'group_number': fs.group_number,
+            'team1':        t1,
+            'team2':        t2,
+            'biggest':      _vegas_biggest_hole(s, bet_unit),
+            'holes_played': len(s.get('holes', [])),
+            'bet_unit':     bet_unit,
+        })
+    return render(request, 'watch/casual_vegas.html', {
+        'round':        round_obj,
+        'course_name':  round_obj.course.name,
+        'tournament':   round_obj.tournament,
+        'thru':         _round_thru(round_obj),
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
 def _has_casual_triple_cup(round_obj) -> bool:
     """Casual One-Round Triple Cup (round-level active game)."""
     return 'triple_cup' in (round_obj.active_games or [])
@@ -899,6 +968,12 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'key': 'wolf', 'label': 'Wolf',
             'url': f'{base}?view=wolf',
             'active': current == 'wolf',
+        })
+    if _has_casual_vegas(round_obj):
+        tabs.append({
+            'key': 'vegas', 'label': 'Las Vegas',
+            'url': f'{base}?view=vegas',
+            'active': current == 'vegas',
         })
     if _has_casual_match_play(round_obj):
         tabs.append({
@@ -1770,6 +1845,7 @@ _VIEW_DISPATCH = {
     'nassau':       _render_casual_nassau,
     'triple_cup':   _render_casual_triple_cup,
     'wolf':         _render_casual_wolf,
+    'vegas':        _render_casual_vegas,
     'match_play':   _render_casual_match_play,
     'sixes':        _render_casual_sixes,
     'red_ball':     _render_casual_red_ball,

@@ -1,0 +1,53 @@
+{% extends "watch/base.html" %}
+
+{% block title %}
+{% if tournament %}{{ tournament.name }} · {% endif %}Las Vegas
+{% endblock %}
+
+{% block body %}
+  <h1>{% if tournament %}{{ tournament.name }}{% else %}Las Vegas{% endif %}</h1>
+  <p class="sub">
+    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
+  </p>
+
+  {% for g in groups %}
+    <div class="card">
+      {% if groups|length > 1 %}
+        <div class="match-head" style="font-size:13px;color:var(--muted);">Group {{ g.group_number }}</div>
+      {% endif %}
+
+      <div class="scoreboard">
+        <div style="text-align:center;">
+          <div class="team-name t2-name">{{ g.team2.names }}</div>
+          <div class="team-pts t2-name">{% if g.team2.money > 0 %}+{% elif g.team2.money < 0 %}−{% endif %}${{ g.team2.money|floatformat:"-2"|cut:"-" }}</div>
+          <div class="detail">{{ g.team2.points }} pts</div>
+        </div>
+        <div class="dash">–</div>
+        <div style="text-align:center;">
+          <div class="team-name t1-name">{{ g.team1.names }}</div>
+          <div class="team-pts t1-name">{% if g.team1.money > 0 %}+{% elif g.team1.money < 0 %}−{% endif %}${{ g.team1.money|floatformat:"-2"|cut:"-" }}</div>
+          <div class="detail">{{ g.team1.points }} pts</div>
+        </div>
+      </div>
+
+      {% if g.biggest %}
+        <div style="margin-top:12px;padding:9px 11px;border-radius:8px;background:var(--halved);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;">★ Biggest hole</span>
+          <span style="font-size:14px;font-weight:600;">
+            #{{ g.biggest.hole }} ·
+            <span class="{% if g.biggest.team_number == 1 %}t1-name{% else %}t2-name{% endif %}">{{ g.biggest.team_names }}</span>
+            +{{ g.biggest.points }} pts{% if g.biggest.amount %} · ${{ g.biggest.amount|floatformat:"-2" }}{% endif %}{% if g.biggest.multiplier > 1 %} <span style="color:var(--muted);">(×{{ g.biggest.multiplier }})</span>{% endif %}
+          </span>
+        </div>
+      {% endif %}
+
+      <div class="meta-text" style="margin-top:10px;">
+        {% if g.bet_unit %}${{ g.bet_unit|floatformat:"-2" }}/pt · {% endif %}{{ g.holes_played }} hole{{ g.holes_played|pluralize }} scored
+      </div>
+    </div>
+  {% empty %}
+    <div class="card empty">Las Vegas isn’t set up for this round yet.</div>
+  {% endfor %}
+
+  <p class="teaser">Open Halved for the hole-by-hole Vegas numbers.</p>
+{% endblock %}
