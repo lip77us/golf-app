@@ -8318,7 +8318,29 @@ class _VegasGroupCard extends StatelessWidget {
 
     final t1 = summary.teams.where((t) => t.teamNumber == 1).firstOrNull;
     final t2 = summary.teams.where((t) => t.teamNumber == 2).firstOrNull;
-    final decided = summary.holes.where((h) => h.winner != null).toList();
+
+    // Replace the wall of per-hole bubbles with the genuinely useful stuff:
+    // how far along we are, the biggest single-hole swing, and the last hole.
+    final scored = summary.holes;
+    final thru = scored.isEmpty
+        ? 0
+        : scored.map((h) => h.hole).reduce((a, b) => a > b ? a : b);
+    VegasHole? big;
+    for (final h in scored) {
+      if (h.winner != 'team1' && h.winner != 'team2') continue;
+      if (big == null || h.points > big.points) big = h;
+    }
+    final last = scored.isEmpty
+        ? null
+        : scored.reduce((a, b) => a.hole >= b.hole ? a : b);
+
+    String namesFor(String? w) {
+      final t = w == 'team1' ? t1 : (w == 'team2' ? t2 : null);
+      return t == null ? '' : t.players.map((p) => p.shortName).join(' & ');
+    }
+    String dollars(double v) => v == v.roundToDouble()
+        ? '\$${v.toStringAsFixed(0)}'
+        : '\$${v.toStringAsFixed(2)}';
 
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
@@ -8329,6 +8351,12 @@ class _VegasGroupCard extends StatelessWidget {
             Text('Group ${group['group_number']}',
                 style: theme.textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.bold)),
+            if (thru > 0) ...[
+              const SizedBox(width: 8),
+              Text('Thru $thru',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            ],
             const Spacer(),
             Text(summary.birdieMode == 'flip' ? 'Flip' : 'Multiply',
                 style: theme.textTheme.labelSmall
@@ -8342,28 +8370,82 @@ class _VegasGroupCard extends StatelessWidget {
           const SizedBox(height: 6),
           if (t1 != null) teamRow(t1, GameColors.team1),
           if (t2 != null) teamRow(t2, GameColors.team2),
-          if (decided.isNotEmpty) ...[
+          if (big != null) ...[
             const Divider(height: 18),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final h in decided)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: winColor(h.winner).withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: winColor(h.winner).withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    h.winner == 'halved'
-                        ? 'H${h.hole} ${h.team1Number}-${h.team2Number} ½'
-                        : 'H${h.hole} ${h.team1Number}-${h.team2Number} +${h.points}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: winColor(h.winner),
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: const [FontFeature.tabularFigures()]),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: winColor(big.winner).withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+                border:
+                    Border.all(color: winColor(big.winner).withValues(alpha: 0.35)),
+              ),
+              child: Row(children: [
+                Icon(Icons.star_rounded, size: 18, color: winColor(big.winner)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('BIGGEST HOLE',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              fontSize: 10,
+                              letterSpacing: 0.5,
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.onSurfaceVariant)),
+                      const SizedBox(height: 1),
+                      Text.rich(
+                        TextSpan(style: theme.textTheme.bodySmall, children: [
+                          TextSpan(text: 'Hole ${big.hole}  ·  '),
+                          TextSpan(
+                              text: namesFor(big.winner),
+                              style: TextStyle(
+                                  color: winColor(big.winner),
+                                  fontWeight: FontWeight.bold)),
+                          TextSpan(
+                              text: '  +${big.points} pts',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                          if (big.points * summary.betUnit != 0)
+                            TextSpan(
+                                text:
+                                    '  ·  ${dollars(big.points * summary.betUnit)}'),
+                          if (big.multiplier > 1)
+                            TextSpan(
+                                text: '  (×${big.multiplier})',
+                                style: TextStyle(
+                                    color: theme.colorScheme.onSurfaceVariant)),
+                        ]),
+                      ),
+                    ],
                   ),
                 ),
+              ]),
+            ),
+          ],
+          if (last != null && (big == null || last.hole != big.hole)) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              Text('LAST',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      fontSize: 10,
+                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  last.winner == 'halved'
+                      ? 'Hole ${last.hole}  ·  Halved (${last.team1Number}-${last.team2Number})'
+                      : 'Hole ${last.hole}  ·  ${namesFor(last.winner)} +${last.points}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: last.winner == 'halved'
+                          ? theme.colorScheme.onSurfaceVariant
+                          : winColor(last.winner),
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
             ]),
           ],
         ]),
