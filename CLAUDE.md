@@ -377,6 +377,36 @@ location), catalog auto-refresh of copies, the same inline-add affordance in the
 tournament round path (`setup_round_players_screen.dart`), catalog admin UI
 (Django admin suffices).
 
+### Unified one-box course search — implemented
+Collapsed the previous visible two/three-level flow (own courses → catalog →
+"search the full database" button) into a SINGLE search box. The user types a
+course name and picks from one merged, deduped list; adding is transparent.
+Enabled by the GolfCourseAPI Pro plan ($10/mo, 10k queries/day) — the per-call
+cost that justified the old gating is no longer a constraint.
+- Backend: `CourseFindView` (`GET /api/courses/find/?q=`, `api/views.py`) merges
+  three sources into one list — the account's own courses (instant select), the
+  shared catalog (clone-on-add), and a live `search_courses()` GolfCourseAPI
+  call (imported with tees on selection). Dedup by `golf_api_id` then
+  `(name, city)`, preferring the cheapest add path (account > catalog > api).
+  Each row carries `source` + the id to add it (`course_id` / `catalog_id` /
+  `golf_api_id`). **The GolfCourseAPI call is best-effort** — wrapped in
+  try/except so a slow/down upstream still returns local results (picker never
+  breaks). No staff gate on search (any authenticated user). Tests:
+  `api/test_catalog.py::CourseFindMergeTests` (merge+dedup by source, API-failure
+  degrades to local, short-query empty).
+- Mobile: `CourseHit` model + `client.findCourses()` / `importApiCourse()`.
+  `widgets/course_search_field.dart` rewritten to call `findCourses` and branch
+  on tap (account → select cached CourseInfo; catalog → `addCatalogCourse`;
+  api → `importApiCourse`, immediate import, no tee-preview sheet per the
+  "just type and find it" decision). Removed the "Search the full course
+  database" button + the `CourseSearchScreen` fallback push. Flows everywhere
+  `CourseSearchField` is used (casual round, onboarding, new-round wizard).
+- Untouched: the standalone `CourseSearchScreen` (route `/course-search`,
+  reached from Manage Courses) stays as the admin full-DB import tool. Note:
+  `CourseImportView` (the selection-time import) still requires
+  `is_staff or is_account_admin` — fine because every phone signup is an account
+  admin; relax it if non-admin members ever need to import.
+
 ---
 
 ## App Store readiness

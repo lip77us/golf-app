@@ -158,3 +158,67 @@ class CatalogImportTests(TestCase):
         client_b = APIClient(); client_b.force_authenticate(user_b)
         resp_b = client_b.get(reverse('api-catalog-courses'), {'q': 'pebble'})
         self.assertFalse(resp_b.data['courses'][0]['already_in_account'])
+
+
+def _api_summary(course_id, club, city='Pebble Beach', state='CA'):
+    """Shape of services.golf_api_client.search_courses() results."""
+    return {
+        'id': course_id, 'club_name': club, 'course_name': club,
+        'city': city, 'state': state, 'country': 'United States',
+    }
+
+
+class CourseFindMergeTests(TestCase):
+    """Unified one-box search merges account + catalog + GolfCourseAPI, deduped."""
+
+    def setUp(self):
+        self.account, self.user = _admin('Find Acct', 'finder')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        # Already in the account (golf_api_id 99).
+        Course.objects.create(
+            account=self.account, name='Pebble Beach', golf_api_id='99',
+            city='Pebble Beach', state='CA',
+        )
+        # In the shared catalog but not this account (golf_api_id 200).
+        CatalogCourse.objects.create(
+            golf_api_id='200', name='Spyglass Hill', city='Pebble Beach', state='CA',
+        )
+
+    @patch('services.golf_api_client.search_courses')
+    def test_merges_and_dedupes_by_source(self, mock_search):
+        # API echoes the owned course (99) + the catalog course (200) + a new one (300).
+        mock_search.return_value = [
+            _api_summary(99, 'Pebble Beach'),
+            _api_summary(200, 'Spyglass Hill'),
+            _api_summary(300, 'Cypress Point'),
+        ]
+        resp = self.client.get(reverse('api-course-find'), {'q': 'Pebble'})
+        self.assertEqual(resp.status_code, 200, resp.data)
+        rows = resp.data['courses']
+        by_name = {r['name']: r for r in rows}
+
+        # Each course appears exactly once (no api dup of owned/catalog rows).
+        self.assertEqual(len(rows), 3, rows)
+        self.assertEqual(by_name['Pebble Beach']['source'], 'account')
+        self.assertTrue(by_name['Pebble Beach']['in_account'])
+        self.assertEqual(by_name['Spyglass Hill']['source'], 'catalog')
+        self.assertEqual(by_name['Spyglass Hill']['catalog_id'],
+                         CatalogCourse.objects.get(golf_api_id='200').id)
+        self.assertEqual(by_name['Cypress Point']['source'], 'api')
+        self.assertEqual(by_name['Cypress Point']['golf_api_id'], '300')
+
+    @patch('services.golf_api_client.search_courses')
+    def test_api_failure_degrades_to_local_results(self, mock_search):
+        mock_search.side_effect = RuntimeError('GolfCourseAPI down')
+        resp = self.client.get(reverse('api-course-find'), {'q': 'Pebble'})
+        self.assertEqual(resp.status_code, 200, resp.data)
+        names = {r['name'] for r in resp.data['courses']}
+        # Local account + catalog still returned despite the API error.
+        self.assertIn('Pebble Beach', names)
+        self.assertIn('Spyglass Hill', names)
+
+    def test_short_query_returns_empty(self):
+        resp = self.client.get(reverse('api-course-find'), {'q': 'P'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['courses'], [])

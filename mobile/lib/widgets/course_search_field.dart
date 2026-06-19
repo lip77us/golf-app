@@ -1,9 +1,10 @@
 /// widgets/course_search_field.dart
-/// Inline course picker: a search box that, as you type, shows matches from
-/// your own account courses AND the shared Core catalog right below it — no
-/// jump to a separate screen. A "Search the full course database" button falls
-/// back to the GolfCourseAPI import. Calls [onSelected] with the chosen course
-/// (cloning a catalog course into the account first when needed).
+/// One-box course picker: type a course name and pick it. As you type, a single
+/// merged list shows matches from your own courses, the shared catalog, and the
+/// full GolfCourseAPI database — no separate "search the full database" step.
+/// Tapping a result selects it, cloning a catalog course or importing an API
+/// course (with its tees) into the account first when needed. Calls [onSelected]
+/// with the resulting account-owned course.
 
 import 'dart:async';
 
@@ -12,30 +13,6 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
-import '../screens/course_search_screen.dart';
-
-class _Hit {
-  final String name;
-  final String location;
-  final int teeCount;
-  final CourseInfo? local; // already in the account
-  final CatalogCourse? catalog; // addable from the catalog
-
-  const _Hit._({
-    required this.name,
-    required this.location,
-    required this.teeCount,
-    this.local,
-    this.catalog,
-  });
-
-  factory _Hit.local(CourseInfo c) => _Hit._(
-        name: c.name, location: c.location, teeCount: c.tees.length, local: c);
-  factory _Hit.catalog(CatalogCourse c) => _Hit._(
-        name: c.name, location: c.location, teeCount: c.teeCount, catalog: c);
-
-  bool get added => local != null;
-}
 
 class CourseSearchField extends StatefulWidget {
   final CourseInfo? selected;
@@ -54,11 +31,12 @@ class CourseSearchField extends StatefulWidget {
 class _CourseSearchFieldState extends State<CourseSearchField> {
   final _ctrl = TextEditingController();
   Timer? _debounce;
+  int _searchSeq = 0; // guards against out-of-order async results
 
-  List<CourseInfo> _local = [];
-  List<_Hit> _hits = [];
+  List<CourseInfo> _local = []; // account courses, for resolving 'account' hits
+  List<CourseHit> _hits = [];
   bool _searching = false;
-  int? _addingId; // catalog id being cloned
+  String? _addingKey; // the hit currently being added/imported
   late bool _editing;
 
   @override
@@ -89,8 +67,11 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
     try {
       final c = await context.read<AuthProvider>().client.getCourses();
       if (mounted) setState(() => _local = c);
-    } catch (_) {/* degrade to catalog-only */}
+    } catch (_) {/* degrade — account hits fall back to a direct fetch */}
   }
+
+  String _keyOf(CourseHit h) =>
+      '${h.source}:${h.courseId ?? h.catalogId ?? h.golfApiId}';
 
   void _onChanged(String v) {
     _debounce?.cancel();
@@ -98,53 +79,61 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
       setState(() { _hits = []; _searching = false; });
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 300),
+    _debounce = Timer(const Duration(milliseconds: 350),
         () => _search(v.trim()));
   }
 
   Future<void> _search(String q) async {
+    final seq = ++_searchSeq;
     setState(() => _searching = true);
     try {
-      final catalog =
-          await context.read<AuthProvider>().client.searchCatalog(q);
-      if (!mounted) return;
-      final ql = q.toLowerCase();
-      final hits = <_Hit>[
-        for (final c in _local)
-          if (c.name.toLowerCase().contains(ql) ||
-              c.location.toLowerCase().contains(ql))
-            _Hit.local(c),
-        for (final c in catalog)
-          if (!c.alreadyInAccount) _Hit.catalog(c),
-      ]..sort((a, b) {
-          if (a.added != b.added) return a.added ? -1 : 1;
-          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-        });
+      final hits = await context.read<AuthProvider>().client.findCourses(q);
+      if (!mounted || seq != _searchSeq) return; // a newer search superseded us
       setState(() { _hits = hits; _searching = false; });
     } catch (_) {
-      if (mounted) setState(() => _searching = false);
+      if (mounted && seq == _searchSeq) setState(() => _searching = false);
     }
   }
 
-  Future<void> _select(_Hit h) async {
-    if (h.local != null) {
-      _commit(h.local!);
-      return;
-    }
-    final c = h.catalog!;
-    setState(() => _addingId = c.id);
+  Future<void> _select(CourseHit h) async {
+    final client = context.read<AuthProvider>().client;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _addingKey = _keyOf(h));
     try {
-      final course =
-          await context.read<AuthProvider>().client.addCatalogCourse(c.id);
-      _commit(course);
-    } catch (_) {
-      if (mounted) {
-        setState(() => _addingId = null);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add that course.')),
-        );
+      final CourseInfo course;
+      switch (h.source) {
+        case 'account':
+          course = _local.firstWhere(
+            (c) => c.id == h.courseId,
+            orElse: () => throw StateError('not loaded'),
+          );
+          break;
+        case 'catalog':
+          course = await client.addCatalogCourse(h.catalogId!);
+          break;
+        default: // 'api'
+          course = await client.importApiCourse(h.golfApiId);
       }
+      _commit(course);
+    } on StateError {
+      // Account course wasn't in the cached list — fetch it directly.
+      try {
+        final course = await client.getCourse(h.courseId!);
+        _commit(course);
+      } catch (_) {
+        _failAdd(messenger);
+      }
+    } catch (_) {
+      _failAdd(messenger);
     }
+  }
+
+  void _failAdd(ScaffoldMessengerState messenger) {
+    if (!mounted) return;
+    setState(() => _addingKey = null);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Could not add that course. Try again.')),
+    );
   }
 
   void _commit(CourseInfo c) {
@@ -153,20 +142,13 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
       setState(() {
         _editing = false;
         _hits = [];
-        _addingId = null;
+        _addingKey = null;
         _ctrl.clear();
       });
       FocusScope.of(context).unfocus();
     }
-  }
-
-  Future<void> _openApiImport() async {
-    await Navigator.of(context).push<void>(MaterialPageRoute(
-      builder: (_) => CourseSearchScreen(initialQuery: _ctrl.text.trim()),
-    ));
-    if (!mounted) return;
-    await _loadLocal();
-    if (_ctrl.text.trim().length >= 2) _search(_ctrl.text.trim());
+    // Keep the cache fresh so a freshly added course resolves instantly next time.
+    if (c.id != 0 && !_local.any((x) => x.id == c.id)) _loadLocal();
   }
 
   @override
@@ -195,7 +177,7 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
       );
     }
 
-    // Expanded: search box + inline results + full-database fallback.
+    // Expanded: one search box + one merged result list.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -204,7 +186,7 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
           onChanged: _onChanged,
           decoration: InputDecoration(
             labelText: 'Course',
-            hintText: 'Search by city or course',
+            hintText: 'Search by course or city',
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.search),
             suffixIcon: _searching
@@ -220,7 +202,7 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
         if (_hits.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 4),
-            constraints: const BoxConstraints(maxHeight: 260),
+            constraints: const BoxConstraints(maxHeight: 320),
             decoration: BoxDecoration(
               border: Border.all(color: theme.dividerColor),
               borderRadius: BorderRadius.circular(8),
@@ -234,12 +216,11 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
                 final h = _hits[i];
                 final sub = [
                   if (h.location.isNotEmpty) h.location,
-                  if (h.teeCount > 0)
+                  if (h.teeCount != null && h.teeCount! > 0)
                     '${h.teeCount} tee${h.teeCount == 1 ? '' : 's'}',
-                  if (h.added) 'In your courses',
+                  if (h.inAccount) 'In your courses',
                 ].join('  ·  ');
-                final busy =
-                    h.catalog != null && _addingId == h.catalog!.id;
+                final busy = _addingKey == _keyOf(h);
                 return ListTile(
                   dense: true,
                   title: Text(h.name),
@@ -248,11 +229,11 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
                       ? const SizedBox(
                           width: 18, height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2))
-                      : (h.added
+                      : (h.inAccount
                           ? const Icon(Icons.check_circle,
                               color: Colors.green, size: 20)
                           : const Icon(Icons.add_circle_outline, size: 20)),
-                  onTap: _addingId == null ? () => _select(h) : null,
+                  onTap: _addingKey == null ? () => _select(h) : null,
                 );
               },
             ),
@@ -260,17 +241,9 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
         if (_ctrl.text.trim().length >= 2 && !_searching && _hits.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text('No matches in your courses or the catalog.',
+            child: Text('No courses found. Try a different spelling or the city.',
                 style: theme.textTheme.bodySmall),
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: _openApiImport,
-            icon: const Icon(Icons.travel_explore),
-            label: const Text('Search the full course database'),
-          ),
-        ),
       ],
     );
   }

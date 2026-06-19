@@ -5803,6 +5803,111 @@ class CatalogCourseAddView(APIView):
         )
 
 
+class CourseFindView(APIView):
+    """
+    GET /api/courses/find/?q=<text>
+
+    Unified, one-box course search.  Merges three sources into a single deduped
+    list so the user just types a course name and picks — no visible "search the
+    catalog, then search the full database" steps:
+      1. the caller's own account courses (instant select, no add),
+      2. the shared catalog (clone-on-add, no GolfCourseAPI call),
+      3. a live GolfCourseAPI search (imported with its tees on selection).
+    Dedup is by golf_api_id, then by (name, city), preferring the cheapest add
+    path (account > catalog > api) so a course in more than one source appears
+    once.  The GolfCourseAPI call is BEST-EFFORT: if it errors or times out, the
+    local results still return — the picker never breaks on a slow upstream.
+
+    Each result carries `source` + the id the client needs to add it:
+      * source=account → course_id  (already owned; just select it)
+      * source=catalog → catalog_id (POST /catalog/courses/<id>/add/)
+      * source=api     → golf_api_id (POST /courses/import/)
+    """
+    def get(self, request):
+        from django.db.models import Q
+        from core.models import CatalogCourse, Course as CourseModel
+
+        q = (request.query_params.get('q') or '').strip()
+        if len(q) < 2:
+            return Response({'courses': []})
+
+        account = request.user.account
+        out = []
+        seen_api = set()    # golf_api_id strings already represented
+        seen_name = set()   # "name|city" lowercased — dedup across sources w/o a shared id
+
+        def name_key(name, city):
+            return f'{(name or "").strip().lower()}|{(city or "").strip().lower()}'
+
+        # 1. The caller's own courses — instant select.
+        own = (CourseModel.objects
+               .for_account(account)
+               .filter(Q(name__icontains=q) | Q(city__icontains=q))
+               .prefetch_related('tees')
+               .order_by('name')[:25])
+        for c in own:
+            out.append({
+                'source': 'account', 'name': c.name,
+                'city': c.city, 'state': c.state, 'country': c.country,
+                'course_id': c.id, 'catalog_id': None,
+                'golf_api_id': c.golf_api_id or '',
+                'in_account': True, 'tee_count': c.tees.count(),
+            })
+            if c.golf_api_id:
+                seen_api.add(str(c.golf_api_id))
+            seen_name.add(name_key(c.name, c.city))
+
+        # 2. Shared catalog — clone-on-add (free).
+        cat = (CatalogCourse.objects
+               .filter(Q(name__icontains=q) | Q(city__icontains=q))
+               .prefetch_related('tees')
+               .order_by('name')[:50])
+        for cc in cat:
+            if str(cc.golf_api_id) in seen_api:
+                continue
+            if name_key(cc.name, cc.city) in seen_name:
+                continue
+            out.append({
+                'source': 'catalog', 'name': cc.name,
+                'city': cc.city, 'state': cc.state, 'country': cc.country,
+                'course_id': None, 'catalog_id': cc.id,
+                'golf_api_id': cc.golf_api_id,
+                'in_account': False, 'tee_count': cc.tees.count(),
+            })
+            seen_api.add(str(cc.golf_api_id))
+            seen_name.add(name_key(cc.name, cc.city))
+
+        # 3. Live GolfCourseAPI — best-effort; imported on selection.
+        try:
+            from services.golf_api_client import search_courses
+            api_courses = search_courses(q)
+        except Exception:
+            import logging
+            import traceback
+            logging.getLogger(__name__).warning(
+                'CourseFind: GolfCourseAPI search failed; returning local '
+                'results only:\n%s', traceback.format_exc())
+            api_courses = []
+        for ac in api_courses:
+            aid = str(ac.get('id') or '').strip()
+            if not aid or aid in seen_api:
+                continue
+            name = _course_display_name(ac)
+            if name_key(name, ac.get('city')) in seen_name:
+                continue
+            out.append({
+                'source': 'api', 'name': name,
+                'city': ac.get('city', ''), 'state': ac.get('state', ''),
+                'country': ac.get('country', ''),
+                'course_id': None, 'catalog_id': None, 'golf_api_id': aid,
+                'in_account': False, 'tee_count': None,
+            })
+            seen_api.add(aid)
+            seen_name.add(name_key(name, ac.get('city')))
+
+        return Response({'courses': out[:60]})
+
+
 class PinkBallFoursomeOrderView(APIView):
     """
     POST /api/foursomes/{id}/pink-ball/order/

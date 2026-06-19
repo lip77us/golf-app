@@ -685,6 +685,27 @@ class ApiClient {
     return CourseInfo.fromJson(m['course'] as Map<String, dynamic>);
   }
 
+  /// Unified one-box course search: merges the account's own courses, the
+  /// shared catalog, and a live GolfCourseAPI search into one deduped list.
+  /// Best-effort on the API side — local results still return if it's down.
+  Future<List<CourseHit>> findCourses(String query) async {
+    final data = await _get(
+      '/courses/find/?q=${Uri.encodeComponent(query)}',
+    );
+    final list = (data as Map<String, dynamic>)['courses'] as List? ?? [];
+    return list
+        .map((c) => CourseHit.fromJson(c as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Import an api-sourced search hit (fetches its tees from GolfCourseAPI,
+  /// upserts the shared catalog, clones into the account) and return the
+  /// account's own CourseInfo.
+  Future<CourseInfo> importApiCourse(String golfApiId) async {
+    final res = await importCourse(int.parse(golfApiId));
+    return CourseInfo.fromJson(res['course'] as Map<String, dynamic>);
+  }
+
   Future<CourseInfo> getCourse(int id) async {
     final data = await _get('/courses/$id/');
     return CourseInfo.fromJson(data as Map<String, dynamic>);

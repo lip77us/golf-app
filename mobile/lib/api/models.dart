@@ -354,6 +354,53 @@ class CatalogCourse {
       );
 }
 
+/// One row in the unified one-box course search (GET /courses/find/), merging
+/// the account's own courses, the shared catalog, and a live GolfCourseAPI
+/// search. `source` decides how the client adds it on tap:
+///   * 'account' → already owned; select [courseId] directly.
+///   * 'catalog' → clone via addCatalogCourse([catalogId]).
+///   * 'api'     → import via importApiCourse([golfApiId]).
+class CourseHit {
+  final String source; // 'account' | 'catalog' | 'api'
+  final String name;
+  final String city;
+  final String state;
+  final String country;
+  final int? courseId; // source == account
+  final int? catalogId; // source == catalog
+  final String golfApiId; // source == api (also set on the others when known)
+  final bool inAccount;
+  final int? teeCount; // null when unknown (api results carry no tee count)
+
+  const CourseHit({
+    required this.source,
+    required this.name,
+    this.city = '',
+    this.state = '',
+    this.country = '',
+    this.courseId,
+    this.catalogId,
+    this.golfApiId = '',
+    this.inAccount = false,
+    this.teeCount,
+  });
+
+  String get location => [city, state].where((s) => s.isNotEmpty).join(', ');
+
+  factory CourseHit.fromJson(Map<String, dynamic> j) => CourseHit(
+        source: j['source'] as String? ?? 'api',
+        name: j['name'] as String? ?? '',
+        city: j['city'] as String? ?? '',
+        state: j['state'] as String? ?? '',
+        country: j['country'] as String? ?? '',
+        courseId: j['course_id'] as int?,
+        catalogId: j['catalog_id'] as int?,
+        golfApiId: j['golf_api_id'] as String? ?? '',
+        inAccount: j['in_account'] as bool? ?? false,
+        teeCount: j['tee_count'] as int?,
+      );
+}
+
 
 /// Compact tee shape nested inside CourseInfo for the manage-courses
 /// screen.  No `holes` payload — pull that via `getTees()` if you

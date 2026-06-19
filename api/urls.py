@@ -179,6 +179,9 @@ urlpatterns = [
     path('catalog/courses/',              views.CatalogCourseListView.as_view(), name='api-catalog-courses'),
     path('catalog/courses/<int:pk>/add/', views.CatalogCourseAddView.as_view(),  name='api-catalog-course-add'),
 
+    # ---- Unified one-box course search (own courses + catalog + GolfCourseAPI) ----
+    path('courses/find/',                 views.CourseFindView.as_view(),        name='api-course-find'),
+
     # ---- Course import from GolfCourseAPI ----
     path('courses/golf-api/search/',                   views.GolfApiSearchView.as_view(),        name='api-golf-api-search'),
     path('courses/golf-api/courses/<int:course_id>/',  views.GolfApiCourseDetailView.as_view(),  name='api-golf-api-course-detail'),
