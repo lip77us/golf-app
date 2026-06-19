@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../api/client.dart';
 import '../config.dart';
 import '../providers/auth_provider.dart';
+import '../providers/settings_provider.dart';
 
 /// Shared navigation drawer used by both Tournaments and Casual Rounds.
 /// Each host screen passes the callbacks for the entries it wants active;
@@ -28,6 +29,21 @@ class AppDrawer extends StatelessWidget {
     required this.onLogout,
     this.playerName,
   });
+
+  /// Whether to show the "Start your first round" onboarding entry. It ages off
+  /// once the wizard has been completed on this device, OR 15 days after the
+  /// account was opened (whichever first). A missing account-created date (older
+  /// auth payload) falls back to the wizard-completed flag alone.
+  bool _showFirstRoundEntry(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    if (settings.onboardingDone) return false;
+    final createdAt = context.watch<AuthProvider>().account?.createdAt;
+    if (createdAt != null &&
+        DateTime.now().difference(createdAt).inDays >= 15) {
+      return false;
+    }
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -139,23 +155,27 @@ class AppDrawer extends StatelessWidget {
                   );
                 }),
                 ListTile(
-                  leading: const Icon(Icons.emoji_events_outlined),
-                  title: const Text('Tournaments'),
-                  onTap: onTournamentsTap,
-                ),
-                ListTile(
                   leading: const Icon(Icons.sports_golf),
                   title: const Text('Casual Rounds'),
                   onTap: onCasualRoundsTap,
                 ),
                 ListTile(
-                  leading: const Icon(Icons.auto_awesome_outlined),
-                  title: const Text('Start your first round'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).pushNamed('/onboarding');
-                  },
+                  leading: const Icon(Icons.emoji_events_outlined),
+                  title: const Text('Tournaments'),
+                  onTap: onTournamentsTap,
                 ),
+                // "Start your first round" is an onboarding nudge that ages off:
+                // once the wizard has been completed on this device, or 15 days
+                // after the account was opened (whichever comes first).
+                if (_showFirstRoundEntry(context))
+                  ListTile(
+                    leading: const Icon(Icons.auto_awesome_outlined),
+                    title: const Text('Start your first round'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pushNamed('/onboarding');
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(Icons.people_outline),
                   title: const Text('My Golfers'),

@@ -939,6 +939,7 @@ class LoginView(APIView):
             'account': {
                 'id':   user.account_id,
                 'name': user.account.name,
+                'created_at': user.account.created_at,
             },
         }
         try:
@@ -1016,6 +1017,7 @@ class OtpVerifyView(APIView):
             'account': {
                 'id':   user.account_id,
                 'name': user.account.name,
+                'created_at': user.account.created_at,
             },
         }
         try:
@@ -1074,6 +1076,7 @@ class MeView(APIView):
             'account': {
                 'id':   request.user.account_id,
                 'name': request.user.account.name,
+                'created_at': request.user.account.created_at,
             },
         }
         try:

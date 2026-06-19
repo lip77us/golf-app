@@ -22,6 +22,7 @@ import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utils/create_casual_round.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/course_search_field.dart';
@@ -203,6 +204,8 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
       await rp.loadSkins(fsId);
 
       if (!mounted) return;
+      // Wizard completed (a round was created) → retire the onboarding entry.
+      context.read<SettingsProvider>().markOnboardingDone();
       Navigator.of(context)
           .pushReplacementNamed('/score-entry', arguments: fsId);
     } catch (e) {
@@ -225,6 +228,8 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
         activeGames: {game},
       );
       if (!mounted) return;
+      // Wizard completed (a round was created) → retire the onboarding entry.
+      context.read<SettingsProvider>().markOnboardingDone();
       Navigator.of(context).pushReplacementNamed(
         launch.effectiveRoute,
         arguments: launch.effectiveArgs,

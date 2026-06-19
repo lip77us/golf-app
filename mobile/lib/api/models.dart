@@ -26,12 +26,19 @@ extension BetUnitFormat on num {
 class AccountInfo {
   final int    id;
   final String name;
+  /// When the account (tenant) was created. Used to age off the "Start your
+  /// first round" onboarding entry 15 days in. Null if the auth response
+  /// predates this field.
+  final DateTime? createdAt;
 
-  const AccountInfo({required this.id, required this.name});
+  const AccountInfo({required this.id, required this.name, this.createdAt});
 
   factory AccountInfo.fromJson(Map<String, dynamic> j) => AccountInfo(
-        id:   j['id']   as int,
-        name: j['name'] as String,
+        id:        j['id']   as int,
+        name:      j['name'] as String,
+        createdAt: j['created_at'] == null
+            ? null
+            : DateTime.tryParse(j['created_at'] as String),
       );
 }
 

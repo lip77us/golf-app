@@ -11,11 +11,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsProvider extends ChangeNotifier {
   static const _netStyleEntryKey   = 'net_style_entry';
   static const _autoAdvanceHoleKey = 'auto_advance_hole';
+  static const _onboardingDoneKey  = 'onboarding_done';
   /// Prefix for one-time "help seen" flags, e.g. `help_seen_score_entry_icons`.
   static const _helpSeenPrefix     = 'help_seen_';
 
   bool _netStyleEntry   = true;
   bool _autoAdvanceHole = false;
+  bool _onboardingDone  = false;
   bool _loaded          = false;
 
   /// Keys of one-time help/onboarding nudges already shown on this device.
@@ -35,6 +37,11 @@ class SettingsProvider extends ChangeNotifier {
   /// verify the entries before progressing.
   bool get autoAdvanceHole => _autoAdvanceHole;
 
+  /// True once the user has completed the "Set up your first round" onboarding
+  /// wizard (created a round through it). Drives the drawer's onboarding entry,
+  /// which also ages off 15 days after the account was opened regardless.
+  bool get onboardingDone => _onboardingDone;
+
   bool get loaded => _loaded;
 
   /// True once the one-time help nudge keyed by [key] has been shown on this
@@ -52,6 +59,7 @@ class SettingsProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _netStyleEntry   = prefs.getBool(_netStyleEntryKey)   ?? true;
     _autoAdvanceHole = prefs.getBool(_autoAdvanceHoleKey) ?? false;
+    _onboardingDone  = prefs.getBool(_onboardingDoneKey)  ?? false;
     for (final k in prefs.getKeys()) {
       if (k.startsWith(_helpSeenPrefix) && (prefs.getBool(k) ?? false)) {
         _helpSeen.add(k.substring(_helpSeenPrefix.length));
@@ -75,5 +83,16 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_autoAdvanceHoleKey, value);
+  }
+
+  /// Record that the onboarding wizard was completed (a round was created
+  /// through it), permanently hiding the drawer's "Start your first round"
+  /// entry on this device.
+  Future<void> markOnboardingDone() async {
+    if (_onboardingDone) return;
+    _onboardingDone = true;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingDoneKey, true);
   }
 }
