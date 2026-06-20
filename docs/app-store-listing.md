@@ -13,10 +13,10 @@ globally unique. In-app name / home-screen CFBundleDisplayName stays "Halved".)
 Skins, Nassau & golf games
 
 ## Privacy Policy URL
-https://lip77us.github.io/halved-legal/privacy.html
+https://halved.golf/privacy
 
 ## Support URL (required on the version page)
-https://lip77us.github.io/halved-legal/support.html
+https://halved.golf/support
 
 ## Primary category
 Sports  (Secondary: optional, e.g. Utilities)
