@@ -82,35 +82,44 @@ class Command(BaseCommand):
         parser.add_argument('--catalog', action='store_true',
                             help='Also upsert into the shared course catalog.')
 
+    def _account_names(self):
+        return ', '.join(
+            Account.objects.order_by('name').values_list('name', flat=True)[:50])
+
     def _resolve_account(self, opts):
         if opts.get('account_id'):
             try:
                 return Account.objects.get(pk=opts['account_id'])
             except Account.DoesNotExist:
                 raise CommandError(f"No account with id {opts['account_id']}.")
-        if opts.get('account'):
-            try:
-                return Account.objects.get(name=opts['account'])
-            except Account.DoesNotExist:
-                names = ', '.join(
-                    Account.objects.order_by('name')
-                    .values_list('name', flat=True)[:50])
-                raise CommandError(
-                    f"No account named {opts['account']!r}. Accounts: {names}")
-        names = ', '.join(
-            Account.objects.order_by('name').values_list('name', flat=True)[:50])
-        raise CommandError(
-            'Pass --account "<name>" or --account-id <id>. Accounts: ' + names)
+        try:
+            return Account.objects.get(name=opts['account'])
+        except Account.DoesNotExist:
+            raise CommandError(
+                f"No account named {opts['account']!r}. "
+                f"Accounts: {self._account_names()}")
 
     @transaction.atomic
     def handle(self, *args, **opts):
-        acct = self._resolve_account(opts)
         name = opts['name']
+        want_account = bool(opts.get('account') or opts.get('account_id'))
+        want_catalog = opts['catalog']
+        if not (want_account or want_catalog):
+            raise CommandError(
+                'Nothing to do. Pass --catalog (shared catalog) and/or '
+                '--account "<name>". Accounts: ' + self._account_names())
 
         # Sanity-check the transcription before writing anything.
         assert sum(PARS) == 72, 'par total != 72'
         assert sorted(STROKE_INDEX) == list(range(1, 19)), 'stroke index not 1..18'
 
+        if want_catalog:
+            self._upsert_catalog(name)
+        if want_account:
+            self._upsert_account_course(self._resolve_account(opts), name)
+        self.stdout.write(self.style.SUCCESS('Done.'))
+
+    def _upsert_account_course(self, acct, name):
         course, created = Course.objects.get_or_create(
             account=acct, name=name,
             defaults={'city': CITY, 'state': STATE, 'country': COUNTRY},
@@ -135,14 +144,10 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"  {'+' if t_created else '~'} {tee_name} ({sex}) "
                 f"{rating}/{slope}  OUT {out} IN {inn} TOT {out + inn}")
-
-        if opts['catalog']:
-            self._upsert_catalog(name)
-
         verb = 'Created' if created else 'Updated'
-        self.stdout.write(self.style.SUCCESS(
-            f"{verb} '{name}' in account '{acct.name}' "
-            f"({len(TEES)} tees, par 72)."))
+        self.stdout.write(
+            f"  account '{acct.name}': {verb} '{name}' "
+            f"({len(TEES)} tees, par 72).")
 
     def _upsert_catalog(self, name):
         from services.catalog import upsert_catalog_course
