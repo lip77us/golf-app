@@ -25,7 +25,7 @@ from accounts.models import Account
 from core.models import Course, Tee
 
 
-COURSE_NAME = 'Corica Park — North'
+COURSE_NAME = 'Corica Park Gc — North'
 CITY, STATE, COUNTRY = 'Alameda', 'CA', 'USA'
 
 # Hole 1..18.
