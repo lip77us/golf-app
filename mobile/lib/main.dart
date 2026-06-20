@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'api/client.dart';
 import 'config.dart';
 
@@ -257,25 +258,37 @@ class _GolfAppState extends State<GolfApp> {
       if (_isVersionOutdated(Config.appVersion, minVersion)) {
         final ctx = navigatorKey.currentContext;
         if (ctx != null) {
+          // HARD block: non-dismissible, no way past it, and we never navigate
+          // into the app. The only action opens the App Store to update.
           await showDialog<void>(
             context: ctx,
             barrierDismissible: false,
-            builder: (dialogCtx) => AlertDialog(
-              title: const Text('Update Required'),
-              content: Text(
-                'This version of the app (${Config.appVersion}) is no longer '
-                'supported.\n\nPlease update to version $minVersion or later '
-                'to continue.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogCtx).pop(),
-                  child: const Text('OK'),
+            builder: (dialogCtx) => PopScope(
+              canPop: false,
+              child: AlertDialog(
+                title: const Text('Update Required'),
+                content: Text(
+                  'This version of the app (${Config.appVersion}) is no longer '
+                  'supported.\n\nPlease update to version $minVersion or later '
+                  'to continue.',
                 ),
-              ],
+                actions: [
+                  FilledButton.icon(
+                    onPressed: () => launchUrl(
+                      Uri.parse(Config.appStoreUrl),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.system_update),
+                    label: const Text('Update'),
+                  ),
+                ],
+              ),
             ),
           );
         }
+        // Outdated builds never proceed into the app (the dialog above blocks
+        // when a context exists; this guards the no-context edge too).
+        return;
       }
     } catch (_) {
       // Network unavailable or server error — proceed without blocking.

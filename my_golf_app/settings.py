@@ -315,14 +315,15 @@ INVITE_OG_IMAGE_URL = os.environ.get(
 # older clients — this will force users to update the app before they can
 # continue.  Leave CLIENT_MIN_VERSION at the last compatible release to
 # allow older clients to keep working.
-SERVER_VERSION    = os.environ.get('SERVER_VERSION', '2.0.0')
+SERVER_VERSION    = os.environ.get('SERVER_VERSION', '2.1.0')
 # Both env-overridable so a version change is a Railway env-var flip (no code
-# deploy).  CLIENT_MIN_VERSION stays at 1.1.0 (backward compatible) for the
-# 2.0.0 launch — the new build is additive, so 1.x apps keep working.  Flip it
-# to 2.0.0 on Railway ONLY AFTER 2.0.0 is live on the App Store, to force
-# stragglers onto the new build (setting it sooner bricks users with no
-# download available).
-CLIENT_MIN_VERSION = os.environ.get('CLIENT_MIN_VERSION', '1.1.0')
+# deploy).  Forced to 2.1.0: from 2.1.0 on the client's update gate is a HARD
+# block (no dismiss), so this truly locks older clients out — they must update.
+# Nobody is stranded: the only hard-blocked client is 2.1.0 itself (which passes
+# its own gate), and 2.0.0's gate is only a soft nag that points to the update.
+# NOTE: if Railway has a CLIENT_MIN_VERSION env var set (e.g. an old 1.1.0), the
+# env wins — set it to 2.1.0 (or clear it) so this default takes effect.
+CLIENT_MIN_VERSION = os.environ.get('CLIENT_MIN_VERSION', '2.1.0')
 
 # ---------------------------------------------------------------------------
 # Logging
