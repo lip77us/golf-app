@@ -45,6 +45,19 @@ WHAT YOU CAN TRY:
 - Tap "Start your first round" (drawer) to see the guided setup wizard.
 - Open a tournament from "Tournaments" for multi-foursome standings.
 
+NEW IN THIS VERSION (optional):
+- Las Vegas: start a casual round with 4 players and pick "Las Vegas" — the
+  Leaderboard shows each 2-player side's running total and a hole-by-hole grid.
+- Follow friends: the demo account is added to another group's rounds, so the
+  Casual Rounds / Tournaments lists show entries flagged "Observing" (watch-only,
+  eye icon) alongside rounds you play in. Tapping an "Observing" round opens a
+  read-only leaderboard + scorecard.
+- Course search: in round setup, tap the course field and type "Corica" to find
+  and add a course (the search merges your courses, a shared catalog, and a full
+  course database into one list).
+- Scorecard: open any round's Leaderboard and tap the scorecard icon (top right)
+  to view the full card — works during and after the round.
+
 ACCOUNT DELETION (Guideline 5.1.1(v)):
 In-app deletion is at Settings → Delete Account. To test it on a deletable
 account, sign in with demo number 3105550102 and the same code
