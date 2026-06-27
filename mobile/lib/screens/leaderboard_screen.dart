@@ -5625,8 +5625,8 @@ class _BandonCupLiveCard extends StatelessWidget {
                   segments: segments,
                   t1Colour: t1Colour, t2Colour: t2Colour,
                   t1Players: t1Players, t2Players: t2Players,
-                  // Red team on left: team2 is on left when t2 is redder
-                  leftIsTeam2: t2Colour.red >= t1Colour.red)
+                  // Team 1 always on the left (color follows the team).
+                  leftIsTeam2: false)
             else if (gameType == 'irish_rumble')
               _IRLiveRows(
                   segments: segments,
@@ -7712,30 +7712,31 @@ class _TripleCupOverviewView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Orange (team 2) left, Blue (team 1) right — app convention.
-              pill(t2Label, summary.team2Points, t2Color),
+              // Team 1 on the left, team 2 on the right — matches score entry
+              // and the cup tab (the color follows the team, not the order).
+              pill(t1Label, summary.team1Points, t1Color),
               Text('—',
                   style: theme.textTheme.headlineSmall
                       ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-              pill(t1Label, summary.team1Points, t1Color),
+              pill(t2Label, summary.team2Points, t2Color),
             ],
           ),
           if (t1Roster.isNotEmpty || t2Roster.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(children: [
               Expanded(
-                child: Text(t2Roster,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: t2Color,
-                        fontWeight: FontWeight.w600)),
-              ),
-              Expanded(
                 child: Text(t1Roster,
-                    textAlign: TextAlign.right,
                     style: TextStyle(
                         fontSize: 11,
                         color: t1Color,
+                        fontWeight: FontWeight.w600)),
+              ),
+              Expanded(
+                child: Text(t2Roster,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: t2Color,
                         fontWeight: FontWeight.w600)),
               ),
             ]),
@@ -7879,22 +7880,22 @@ class _TripleCupGroupCard extends StatelessWidget {
             Icon(Icons.chevron_right,
                 size: 16, color: theme.colorScheme.onSurfaceVariant),
             const Spacer(),
-            // Live cup score in team colors — Orange (team 2) left, Blue
-            // (team 1) right, per the app convention (blue renders second).
-            Text(fmt(t2Pts),
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: t2Color)),
-            Text(' – ',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurfaceVariant)),
+            // Live cup score — team 1 on the left, team 2 on the right
+            // (matches score entry / cup tab; color follows the team).
             Text(fmt(t1Pts),
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: t1Color)),
+            Text(' – ',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant)),
+            Text(fmt(t2Pts),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: t2Color)),
             Text(' of $possible',
                 style: TextStyle(
                     fontSize: 12,
@@ -7908,18 +7909,18 @@ class _TripleCupGroupCard extends StatelessWidget {
             const SizedBox(height: 4),
             Row(children: [
               Expanded(
-                child: Text(t2Roster,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: t2Color,
-                        fontWeight: FontWeight.w600)),
-              ),
-              Expanded(
                 child: Text(t1Roster,
-                    textAlign: TextAlign.right,
                     style: TextStyle(
                         fontSize: 11,
                         color: t1Color,
+                        fontWeight: FontWeight.w600)),
+              ),
+              Expanded(
+                child: Text(t2Roster,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: t2Color,
                         fontWeight: FontWeight.w600)),
               ),
             ]),

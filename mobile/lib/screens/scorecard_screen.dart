@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
-import '../game_colors.dart';
-import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/sixes_handicap.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/score_mark.dart';
 
 // ---------------------------------------------------------------------------
 // Top-level helpers — identical to skins_screen.dart so we keep one source
@@ -148,6 +147,14 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       if (games.contains('triple_cup') && rp.tripleCupSummary == null) {
         rp.loadTripleCup(widget.foursomeId);
       }
+      // Nassau / Quota Nassau: load so the scorecard can group players by
+      // team (matching the entry-screen order).
+      if (games.contains('nassau') && rp.nassauSummary == null) {
+        rp.loadNassau(widget.foursomeId);
+      }
+      if (games.contains('quota_nassau') && rp.quotaNassauSummary == null) {
+        rp.loadQuotaNassau(widget.foursomeId);
+      }
     });
   }
 
@@ -155,22 +162,92 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     final foursome = round?.foursomes
         .where((f) => f.id == widget.foursomeId)
         .firstOrNull;
-    if (foursome != null) return foursome.realPlayers;
-    if (sc.holes.isEmpty) return [];
-    return sc.holes.first.scores
-        .map((s) => Membership(
-              id: s.playerId,
-              player: PlayerProfile(
+    final List<Membership> members;
+    if (foursome != null) {
+      members = foursome.realPlayers;
+    } else if (sc.holes.isEmpty) {
+      return [];
+    } else {
+      members = sc.holes.first.scores
+          .map((s) => Membership(
                 id: s.playerId,
-                name: s.playerName,
-                handicapIndex: '0',
-                isPhantom: false,
-                email: '',
-              ),
-              courseHandicap: 0,
-              playingHandicap: s.handicapStrokes,
-            ))
-        .toList();
+                player: PlayerProfile(
+                  id: s.playerId,
+                  name: s.playerName,
+                  handicapIndex: '0',
+                  isPhantom: false,
+                  email: '',
+                ),
+                courseHandicap: 0,
+                playingHandicap: s.handicapStrokes,
+              ))
+          .toList();
+    }
+    return _orderForGame(members, sc);
+  }
+
+  /// Order players so the scorecard matches the score-entry screens:
+  ///   • Team games (Triple Cup, Nassau, Quota Nassau) → team blocks
+  ///     (team 1 then team 2, membership order within each).
+  ///   • Wolf → membership order (its entry order rotates per hole and
+  ///     can't be shown statically — left alone on purpose).
+  ///   • Everything else → longest tee first (hole-1 yardage), then
+  ///     membership order for ties (matches Skins / Points 5-3-1).
+  List<Membership> _orderForGame(List<Membership> members, Scorecard sc) {
+    final rp    = context.read<RoundProvider>();
+    final games = rp.round?.activeGames ?? const <String>[];
+
+    // Build a player_id → team_number map for the active team game.
+    Map<int, int>? teamOf;
+    if (games.contains('triple_cup') && rp.tripleCupSummary != null) {
+      teamOf = {};
+      for (final m in rp.tripleCupSummary!.matches) {
+        for (final p in m.players) {
+          if (!p.isPhantom) teamOf!.putIfAbsent(p.playerId, () => p.teamNumber);
+        }
+      }
+    } else if (games.contains('nassau') && rp.nassauSummary != null) {
+      final n = rp.nassauSummary!;
+      teamOf = {
+        for (final p in n.team1) p.playerId: 1,
+        for (final p in n.team2) p.playerId: 2,
+      };
+    } else if (games.contains('quota_nassau') && rp.quotaNassauSummary != null) {
+      teamOf = {};
+      for (final mt in rp.quotaNassauSummary!.matches) {
+        teamOf!.putIfAbsent(mt.player1.playerId, () => 1);
+        teamOf!.putIfAbsent(mt.player2.playerId, () => 2);
+      }
+    }
+
+    if (teamOf != null && teamOf.isNotEmpty) {
+      final ordered = <Membership>[];
+      for (final t in [1, 2]) {
+        for (final m in members) {
+          if (teamOf[m.player.id] == t) ordered.add(m);
+        }
+      }
+      for (final m in members) {
+        if (!ordered.any((o) => o.player.id == m.player.id)) ordered.add(m);
+      }
+      return ordered;
+    }
+
+    if (games.contains('wolf')) return members;
+
+    // Non-team games: longest tee first, membership order for ties.
+    final firstHole = sc.holeData(1);
+    int yards(int pid) => firstHole?.scoreFor(pid)?.yards ?? 0;
+    final idx = {
+      for (var i = 0; i < members.length; i++) members[i].player.id: i,
+    };
+    return List<Membership>.of(members)
+      ..sort((a, b) {
+        final d = yards(b.player.id).compareTo(yards(a.player.id));
+        return d != 0
+            ? d
+            : idx[a.player.id]!.compareTo(idx[b.player.id]!);
+      });
   }
 
   void _jumpToFirstUnplayed(RoundProvider rp) {
@@ -1070,15 +1147,11 @@ class _HoleScoreCard extends StatelessWidget {
             final hasScore = gross != null;
             final strokes  = strokesForHole(m);
 
-            // Score box coloring: net result when scored, hot highlight when empty+active.
+            // Empty box styling only — a scored cell renders a NetScoreButton
+            // (golf colors: red net-under-par, circle/square, no red fill).
             final Color? boxBg;
             final Border boxBorder;
-            if (hasScore) {
-              final diff = (gross! - strokes) - par;
-              final c = GameColors.scoreFill(diff, parFill: Colors.grey.shade200);
-              boxBg    = c;
-              boxBorder = Border.all(color: c);
-            } else if (isHot) {
+            if (isHot) {
               boxBg    = theme.colorScheme.primaryContainer.withOpacity(0.4);
               boxBorder = Border.all(
                   color: theme.colorScheme.primary, width: 2);
@@ -1156,35 +1229,37 @@ class _HoleScoreCard extends StatelessWidget {
                   onTap: hasScore && onEditTap != null
                       ? () => onEditTap!(m)
                       : null,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 40,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: boxBg,
-                      border: boxBorder,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Stack(
-                      children: [
-                        Center(
-                          child: gross != null
-                              ? Text(
-                                  '$gross',
-                                  style: theme.textTheme.titleSmall
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.bold),
-                                )
-                              : null,
-                        ),
-                        if (strokes > 0)
-                          Positioned(
-                            top: 1, right: 1,
-                            child: _StrokeDots(count: strokes),
+                  child: gross != null
+                      // Scored: NetScoreButton (golf colors + circle/square).
+                      ? Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            NetScoreButton(
+                              score:    gross,
+                              par:      par,
+                              strokes:  strokes,
+                              selected: false,
+                              width:    40,
+                              height:   36,
+                            ),
+                            if (strokes > 0)
+                              Positioned(
+                                top: 1, right: 1,
+                                child: _StrokeDots(count: strokes),
+                              ),
+                          ],
+                        )
+                      // Empty: plain box, hot highlight when active.
+                      : AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 40,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: boxBg,
+                            border: boxBorder,
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                      ],
-                    ),
-                  ),
+                        ),
                 ),
               ]),
             );
@@ -1204,38 +1279,6 @@ class _HoleScoreCard extends StatelessWidget {
 
           const SizedBox(height: 4),
         ],
-      ),
-    );
-  }
-}
-
-// ===========================================================================
-// Score chip — coloured circle showing the gross score
-// ===========================================================================
-
-class _ScoreChip extends StatelessWidget {
-  final int gross;
-  final int par;
-  final int strokes;
-
-  const _ScoreChip({required this.gross, required this.par, required this.strokes});
-
-  @override
-  Widget build(BuildContext context) {
-    final net  = gross - strokes;
-    final diff = net - par;
-    // Mirror the NetScoreButton fill colors exactly (graduated: dark green/red
-    // for eagle+/double+, soft for birdie/bogey) so the chip always matches what
-    // the player tapped to enter the score.
-    final bg = GameColors.scoreFill(diff, parFill: Colors.grey.shade200);
-
-    return Container(
-      width: 44, height: 44,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-      child: Text(
-        '$gross',
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
       ),
     );
   }
@@ -1735,19 +1778,15 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
     final saved       = holeData?.scoreFor(m.player.id);
     final pending     = widget.pendingScores[hole]?[m.player.id];
     final gross       = pending ?? saved?.grossScore;
-    final net         = pending == null ? saved?.netScore : null;
     final par         = holeData?.par ?? 4;
     final isCurrent   = hole == widget.currentHole;
     final isLocalOnly = pending != null;
     final strokes     = widget.strokesForHole(m, holeData);
 
+    // No red/green cell fill — the digit carries the golf color (red net
+    // under par, black at/over) + circle/square via scoreMark below.
     Color? bg;
     if (isCurrent) bg = theme.colorScheme.primaryContainer.withOpacity(0.3);
-    if (gross != null && net != null) {
-      final diff = net - par;
-      // Par leaves the current-hole highlight intact; only birdie/bogey± tint.
-      if (diff != 0) bg = GameColors.scoreFill(diff);
-    }
     if (isLocalOnly) bg = theme.colorScheme.tertiaryContainer.withOpacity(0.5);
 
     return TableCell(
@@ -1760,9 +1799,17 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(gross != null ? '$gross' : '—',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
+                  gross != null
+                      ? scoreMark(
+                          text: '$gross',
+                          diff: (gross - strokes) - par,
+                          baseStyle: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
+                          theme: theme,
+                        )
+                      : const Text('—',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14)),
                   if (isLocalOnly)
                     Icon(Icons.cloud_upload_outlined,
                         size: 8, color: theme.colorScheme.tertiary),

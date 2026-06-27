@@ -514,6 +514,18 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
             .where((m) => !m.player.isPhantom)
             .toList() ??
         [];
+    // Longest-tee-first (hole-1 yardage), then membership for ties — matches
+    // the scorecard and the other non-team games.  (The pink-ball rotation
+    // order is separate and unaffected.)
+    final pbFirstHole = sc.holeData(1);
+    int pbYards(int pid) => pbFirstHole?.scoreFor(pid)?.yards ?? 0;
+    final pbIdx = {
+      for (var i = 0; i < realMembers.length; i++) realMembers[i].player.id: i,
+    };
+    realMembers.sort((a, b) {
+      final d = pbYards(b.player.id).compareTo(pbYards(a.player.id));
+      return d != 0 ? d : pbIdx[a.player.id]!.compareTo(pbIdx[b.player.id]!);
+    });
     final phantomMember = foursome?.memberships
         .where((m) => m.player.isPhantom)
         .firstOrNull;

@@ -2184,6 +2184,14 @@ class TripleCupGame(models.Model):
                             validators=[MinValueValidator(2), MaxValueValidator(4)],
                             help_text="Real-player count at setup: 2, 3, or 4.",
                         )
+    foursomes_first     = models.BooleanField(
+                            default=False,
+                            help_text=(
+                                "Play the foursomes (alt-shot) segment on holes "
+                                "1-6 and fourball on 7-12.  Default False = "
+                                "fourball first.  Singles is always 13-18."
+                            ),
+                        )
     created_at          = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

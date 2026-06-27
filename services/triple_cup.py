@@ -495,6 +495,7 @@ def _build_match_plan(
     team2_ids: list[int],
     *,
     phantom_pid: int | None = None,
+    foursomes_first: bool = False,
 ) -> list[dict]:
     """
     Decide which matches to create for the given player IDs.
@@ -521,16 +522,25 @@ def _build_match_plan(
 
     plan = []
 
+    # Fourball / foursomes occupy holes 1-6 and 7-12; which comes first is
+    # configurable (singles is always 13-18).  match_number = play order.
+    if foursomes_first:
+        fb_no, fb_lo, fb_hi = 2, 7, 12
+        fo_no, fo_lo, fo_hi = 1, 1, 6
+    else:
+        fb_no, fb_lo, fb_hi = 1, 1, 6
+        fo_no, fo_lo, fo_hi = 2, 7, 12
+
     # ── 2v2 (canonical): 1 fourball + 1 foursomes + 2 singles ─────────────
     if n1 == 2 and n2 == 2:
         plan.append({
-            'match_number': 1, 'segment': 'fourball', 'label': 'Fourball',
-            'start_hole': 1, 'end_hole': 6,
+            'match_number': fb_no, 'segment': 'fourball', 'label': 'Fourball',
+            'start_hole': fb_lo, 'end_hole': fb_hi,
             'team1_ids': team1_ids, 'team2_ids': team2_ids,
         })
         plan.append({
-            'match_number': 2, 'segment': 'foursomes', 'label': 'Foursomes',
-            'start_hole': 7, 'end_hole': 12,
+            'match_number': fo_no, 'segment': 'foursomes', 'label': 'Foursomes',
+            'start_hole': fo_lo, 'end_hole': fo_hi,
             'team1_ids': team1_ids, 'team2_ids': team2_ids,
         })
         # Singles: pair top-of-list with top-of-list, bottom with bottom.
@@ -570,14 +580,14 @@ def _build_match_plan(
             fb_t1, fb_t2 = list(team1_ids), solo_with_phantom
 
         plan.append({
-            'match_number': 1, 'segment': 'fourball', 'label': 'Fourball',
-            'start_hole': 1, 'end_hole': 6,
+            'match_number': fb_no, 'segment': 'fourball', 'label': 'Fourball',
+            'start_hole': fb_lo, 'end_hole': fb_hi,
             'team1_ids': fb_t1, 'team2_ids': fb_t2,
         })
         # Foursomes: solo plays alone (no phantom partner); pair alternates.
         plan.append({
-            'match_number': 2, 'segment': 'foursomes', 'label': 'Foursomes',
-            'start_hole': 7, 'end_hole': 12,
+            'match_number': fo_no, 'segment': 'foursomes', 'label': 'Foursomes',
+            'start_hole': fo_lo, 'end_hole': fo_hi,
             'team1_ids': team1_ids, 'team2_ids': team2_ids,
         })
         # Singles: solo plays both opponents simultaneously (Phase D will
@@ -640,6 +650,7 @@ def setup_triple_cup(
     net_percent: int = 100,
     alt_shot_low_pct: int = 50,
     alt_shot_high_pct: int = 50,
+    foursomes_first: bool = False,
     foursomes_team1_first_tee: int | None = None,
     foursomes_team2_first_tee: int | None = None,
 ) -> TripleCupGame:
@@ -696,7 +707,10 @@ def setup_triple_cup(
         sorted_t1 = _sort_by_handicap(team1_ids, members_by_pid)
         sorted_t2 = _sort_by_handicap(team2_ids, members_by_pid)
 
-    plan = _build_match_plan(sorted_t1, sorted_t2, phantom_pid=phantom_pid)
+    plan = _build_match_plan(
+        sorted_t1, sorted_t2, phantom_pid=phantom_pid,
+        foursomes_first=foursomes_first,
+    )
 
     game = TripleCupGame.objects.create(
         foursome           = foursome,
@@ -706,6 +720,7 @@ def setup_triple_cup(
         alt_shot_low_pct   = max(0, min(100, int(alt_shot_low_pct))),
         alt_shot_high_pct  = max(0, min(100, int(alt_shot_high_pct))),
         group_size         = len(team1_ids) + len(team2_ids),
+        foursomes_first    = bool(foursomes_first),
     )
 
     for entry in plan:
@@ -723,23 +738,20 @@ def setup_triple_cup(
         t2 = TripleCupTeam.objects.create(match=m, team_number=2)
         t2.players.set(entry['team2_ids'])
 
-        # Foursomes: pick (or accept) which player on each team tees
-        # off first.  Casual rounds auto-default to the lower-
-        # handicap real player on the team — the casual wizard picks
-        # the team at setup time, so the auto-default keeps the flow
-        # zero-click.  CUP rounds intentionally leave this null when
-        # the admin didn't supply one — by convention the team
-        # decides who tees off when they actually reach hole 7, and
-        # the score-entry modal fires when first_tee is still null.
+        # Foursomes: pick (or accept) which player on each team tees off
+        # first.  Both casual AND cup now leave this null unless explicitly
+        # supplied — the team decides who tees off when they actually reach
+        # the foursomes segment, and the score-entry modal fires when
+        # first_tee is still null.  (An explicit requested player is still
+        # honoured for any caller that supplies one.)
         if m.segment == 'foursomes':
-            auto_default = not is_cup
             m.team1_first_tee_player_id = _resolve_first_tee(
                 entry['team1_ids'], foursomes_team1_first_tee, members_by_pid,
-                auto_default=auto_default,
+                auto_default=False,
             )
             m.team2_first_tee_player_id = _resolve_first_tee(
                 entry['team2_ids'], foursomes_team2_first_tee, members_by_pid,
-                auto_default=auto_default,
+                auto_default=False,
             )
             m.save(update_fields=[
                 'team1_first_tee_player', 'team2_first_tee_player',
@@ -1749,6 +1761,7 @@ def triple_cup_summary(foursome) -> dict | None:
     return {
         'status'     : game.status,
         'group_size' : game.group_size,
+        'foursomes_first': game.foursomes_first,
         'team1_colour': team1_colour,
         'team2_colour': team2_colour,
         'team1_name'  : team1_name,

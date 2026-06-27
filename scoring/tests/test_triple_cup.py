@@ -13,7 +13,7 @@ from django.test import TestCase
 
 from services.triple_cup import (
     setup_triple_cup, calculate_triple_cup, triple_cup_summary,
-    _alt_shot_team_combined,
+    _alt_shot_team_combined, _build_match_plan,
 )
 
 from ._helpers import (
@@ -540,3 +540,61 @@ class TripleCupFoursomesAltShotTests(TestCase):
         s = triple_cup_summary(self.fs)
         foursomes = next(m for m in s['matches'] if m['segment'] == 'foursomes')
         assert foursomes['result'] == 'halved', foursomes
+
+
+class TripleCupSegmentOrderPoCTests(TestCase):
+    """PoC for configurable Fourball/Foursomes order (foursomes_first flag).
+
+    _build_match_plan is a pure function, so we can verify the slot swap
+    without a DB.  Scoring on the swapped holes is covered by the
+    hole-agnostic test in scoring/tests/test_phantom.py.
+    """
+
+    def test_foursomes_first_swaps_segment_holes(self):
+        # 2v1: pair = [1, 2], solo = [99], phantom = 500.
+        plan = _build_match_plan([1, 2], [99], phantom_pid=500,
+                                 foursomes_first=True)
+        seg = {m['segment']: m for m in plan if m['segment'] != 'singles'}
+        fo, fb = seg['foursomes'], seg['fourball']
+        # Foursomes now FIRST (holes 1-6, match 1).
+        self.assertEqual(
+            (fo['start_hole'], fo['end_hole'], fo['match_number']), (1, 6, 1))
+        # Fourball SECOND (holes 7-12, match 2) — still carries the phantom.
+        self.assertEqual(
+            (fb['start_hole'], fb['end_hole'], fb['match_number']), (7, 12, 2))
+        self.assertIn(500, fb['team1_ids'] + fb['team2_ids'])
+        # Singles unchanged at 13-18.
+        singles = [m for m in plan if m['segment'] == 'singles']
+        self.assertTrue(all(m['start_hole'] == 13 and m['end_hole'] == 18
+                            for m in singles))
+
+    def test_default_is_fourball_first_unchanged(self):
+        plan = _build_match_plan([1, 2], [99], phantom_pid=500)
+        fb = next(m for m in plan if m['segment'] == 'fourball')
+        fo = next(m for m in plan if m['segment'] == 'foursomes')
+        self.assertEqual(
+            (fb['start_hole'], fb['end_hole'], fb['match_number']), (1, 6, 1))
+        self.assertEqual(
+            (fo['start_hole'], fo['end_hole'], fo['match_number']), (7, 12, 2))
+
+    def test_setup_2v2_foursomes_first_persists_and_swaps_holes(self):
+        # Full path: model field + setup_triple_cup + summary (2v2, no cup).
+        tee = make_tee()
+        round_ = make_round(tee.course, handicap_mode='gross')
+        fs = make_foursome(
+            round_, [('A', 0), ('B', 0), ('C', 0), ('D', 0)], tee=tee,
+        )
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        game = setup_triple_cup(
+            fs, team1_ids=[pid['A'], pid['B']], team2_ids=[pid['C'], pid['D']],
+            handicap_mode='gross', foursomes_first=True,
+        )
+        self.assertTrue(game.foursomes_first)
+        seg = {m.segment: m for m in game.matches.all()
+               if m.segment != 'singles'}
+        self.assertEqual(
+            (seg['foursomes'].start_hole, seg['foursomes'].end_hole), (1, 6))
+        self.assertEqual(
+            (seg['fourball'].start_hole, seg['fourball'].end_hole), (7, 12))
+        self.assertTrue(triple_cup_summary(fs)['foursomes_first'])

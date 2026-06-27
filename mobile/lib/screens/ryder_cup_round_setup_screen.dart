@@ -241,6 +241,14 @@ class _RyderCupRoundSetupScreenState
             ),
           ),
         ]),
+        const SizedBox(height: 6),
+        Text(
+          'Points are per decided match.  A Triple Cup group decides 4 '
+          'matches (fourball, foursomes, and two singles) — so each TC group '
+          'is worth 4× this value.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
         const SizedBox(height: 12),
         GolfTextField(
           controller: _notesCtrl,

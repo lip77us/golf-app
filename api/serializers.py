@@ -915,6 +915,7 @@ class TripleCupSetupSerializer(serializers.Serializer):
     alt_shot_high_pct  = serializers.IntegerField(
                             min_value=0, max_value=100, default=50,
                         )
+    foursomes_first    = serializers.BooleanField(default=False)
     foursomes_team1_first_tee = serializers.IntegerField(required=False, allow_null=True)
     foursomes_team2_first_tee = serializers.IntegerField(required=False, allow_null=True)
 

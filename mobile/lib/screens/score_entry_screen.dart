@@ -607,10 +607,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (nas == null) return members;
 
     final ordered = <Membership>[];
-    // T2 (red) first, T1 (blue) second — consistent with leaderboard convention
+    // T1 first, T2 second — stable team order (the orange/blue row colors show
+    // the teams, not the order).  Was T2/"most red" first, a leftover from
+    // before cup teams had pickable colors.
     for (final id in [
-      ...nas.team2.map((p) => p.playerId),
       ...nas.team1.map((p) => p.playerId),
+      ...nas.team2.map((p) => p.playerId),
     ]) {
       final m = members.where((m) => m.player.id == id).firstOrNull;
       if (m != null) ordered.add(m);

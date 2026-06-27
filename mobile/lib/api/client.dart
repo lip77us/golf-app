@@ -1151,6 +1151,7 @@ class ApiClient {
     int    netPercent               = 100,
     int    altShotLowPct            = 50,
     int    altShotHighPct           = 50,
+    bool   foursomesFirst           = false,
     int?   foursomesTeam1FirstTee,
     int?   foursomesTeam2FirstTee,
   }) async {
@@ -1161,6 +1162,7 @@ class ApiClient {
       'net_percent'                : netPercent,
       'alt_shot_low_pct'           : altShotLowPct,
       'alt_shot_high_pct'          : altShotHighPct,
+      'foursomes_first'            : foursomesFirst,
       if (foursomesTeam1FirstTee != null)
         'foursomes_team1_first_tee': foursomesTeam1FirstTee,
       if (foursomesTeam2FirstTee != null)

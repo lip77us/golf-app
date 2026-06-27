@@ -80,7 +80,23 @@ class _RabbitScreenState extends State<RabbitScreen> {
         .where((f) => f.id == widget.foursomeId)
         .firstOrNull;
     if (fs == null) return const [];
-    return fs.memberships.where((m) => !m.player.isPhantom).toList();
+    final members =
+        fs.memberships.where((m) => !m.player.isPhantom).toList();
+    // Longest-tee-first (hole-1 yardage), then membership order for ties —
+    // matches the scorecard and the other non-team games.
+    final sc = context.read<RoundProvider>().scorecard;
+    if (sc != null) {
+      final firstHole = sc.holeData(1);
+      int yards(int pid) => firstHole?.scoreFor(pid)?.yards ?? 0;
+      final idx = {
+        for (var i = 0; i < members.length; i++) members[i].player.id: i,
+      };
+      members.sort((a, b) {
+        final d = yards(b.player.id).compareTo(yards(a.player.id));
+        return d != 0 ? d : idx[a.player.id]!.compareTo(idx[b.player.id]!);
+      });
+    }
+    return members;
   }
 
   Map<int, int> _effectiveScores(Scorecard sc, int hole) {

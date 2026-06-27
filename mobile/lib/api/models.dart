@@ -1705,6 +1705,9 @@ class TripleCupSummary {
   final int netPercent;
   final int altShotLowPct;
   final int altShotHighPct;
+  /// Foursomes (alt-shot) plays holes 1-6 and fourball 7-12 when true;
+  /// false (default) = fourball first.  Singles is always 13-18.
+  final bool foursomesFirst;
   /// Cup TournamentTeam colour names (e.g. "Red", "Blue", "Green").
   /// Null on casual rounds (no cup teams).  Use [team1Color] /
   /// [team2Color] to resolve to actual Color values with a sensible
@@ -1736,6 +1739,7 @@ class TripleCupSummary {
     required this.netPercent,
     required this.altShotLowPct,
     required this.altShotHighPct,
+    this.foursomesFirst = false,
     this.team1ColourName,
     this.team2ColourName,
     this.team1Name,
@@ -1775,6 +1779,7 @@ class TripleCupSummary {
       netPercent:       hcap['net_percent']         as int?    ?? 100,
       altShotLowPct:    hcap['alt_shot_low_pct']    as int?    ?? 50,
       altShotHighPct:   hcap['alt_shot_high_pct']   as int?    ?? 50,
+      foursomesFirst:   j['foursomes_first'] as bool? ?? false,
       team1ColourName: j['team1_colour'] as String?,
       team2ColourName: j['team2_colour'] as String?,
       team1Name:       j['team1_name']   as String?,

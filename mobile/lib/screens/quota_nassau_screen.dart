@@ -88,29 +88,36 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
     final members    = foursome.realPlayers;
     if (summary == null || summary.matches.isEmpty) return members;
 
+    // Team blocks: all team-1 players (match.player1) then all team-2
+    // (match.player2) — the orange/blue row colors show the teams, so no
+    // interleaving.  The phantom goes LAST.
     final ordered = <Membership>[];
-    // Interleave by match pair: T1 player then T2 player for each match.
-    // This ensures phantom's direct opponent (T1 of phantom's match) is
-    // immediately above the phantom row.
-    for (final m in summary.matches) {
-      final mem1 = allMembers
-          .where((x) => x.player.id == m.player1.playerId)
-          .firstOrNull;
-      if (mem1 != null && !ordered.any((o) => o.player.id == mem1.player.id)) {
-        ordered.add(mem1);
-      }
-      final mem2 = allMembers
-          .where((x) => x.player.id == m.player2.playerId)
-          .firstOrNull;
-      if (mem2 != null && !ordered.any((o) => o.player.id == mem2.player.id)) {
-        ordered.add(mem2);
+    void addReal(int id) {
+      final m = allMembers.where((x) => x.player.id == id).firstOrNull;
+      if (m != null &&
+          !m.player.isPhantom &&
+          !ordered.any((o) => o.player.id == m.player.id)) {
+        ordered.add(m);
       }
     }
-    // Any real players not yet in the list
+    for (final m in summary.matches) {
+      addReal(m.player1.playerId);
+    }
+    for (final m in summary.matches) {
+      addReal(m.player2.playerId);
+    }
+    // Any real players not in a match.
     for (final mem in members) {
       if (!ordered.any((o) => o.player.id == mem.player.id)) {
         ordered.add(mem);
       }
+    }
+    // Phantom last.
+    final phantom =
+        allMembers.where((x) => x.player.isPhantom).firstOrNull;
+    if (phantom != null &&
+        !ordered.any((o) => o.player.id == phantom.player.id)) {
+      ordered.add(phantom);
     }
     return ordered;
   }

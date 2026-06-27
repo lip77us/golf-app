@@ -127,6 +127,16 @@ class FourballPerHoleDonorSOTests(SimpleTestCase):
         self.assertEqual(s[self.PHANTOM][1], 0)
         self.assertEqual(s[self.PHANTOM][2], 1)
 
+    def test_hole_agnostic_for_foursomes_first_7_to_12(self):
+        # PoC: foursomes-first puts the fourball segment on holes 7-12. The
+        # per-hole donor SO is driven by fourball_holes (derived from the
+        # match), so it behaves identically there — nothing assumes 1-6.
+        # Single donor hcp 2 (below real low 6) → low 2; SI == hole number.
+        s = self._strokes([201], {'201': 2}, holes=[7, 11])
+        self.assertEqual(s[self.SOLO][7], 1)     # SO 8, SI 7 → stroke
+        self.assertEqual(s[self.SOLO][11], 0)    # SO 8, SI 11 → none
+        self.assertEqual(s[self.PHANTOM][7], 0)  # donor is the low → 0
+
 
 class CupFourballDonorSOParityTests(SimpleTestCase):
     """The cup-Nassau Four Ball helper must produce the SAME per-hole strokes

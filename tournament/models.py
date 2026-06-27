@@ -667,6 +667,10 @@ class RyderCupMatchPoints(models.Model):
         ('front9',  'Front 9'),
         ('back9',   'Back 9'),
         ('overall', 'Overall 18'),
+        # Triple Cup — 4 matches per group.
+        ('fourball',  'Fourball'),
+        ('foursomes', 'Foursomes'),
+        ('singles',   'Singles'),
     ]
 
     round_config         = models.ForeignKey(

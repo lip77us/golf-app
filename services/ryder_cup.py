@@ -246,6 +246,31 @@ def _extract_foursome_points(
                     team2_points = t2p,
                 ))
 
+    # ── Triple Cup (4 matches: fourball + foursomes + 2 singles) ───────────
+    # One cup-points row per TC match, mirroring cup_round_live_summary so the
+    # stored standings match the live cup scorecard.  point_value is PER MATCH
+    # — a TC group decides 4 matches.
+    elif gtype == GameType.TRIPLE_CUP:
+        from services.triple_cup import triple_cup_summary
+        try:
+            tcs = triple_cup_summary(foursome) or {}
+        except Exception:
+            tcs = {}
+        for tcm in tcs.get('matches', []):
+            result   = tcm.get('result')   # 'team1'|'team2'|'halved'|None
+            t1p, t2p = _pts(result, pv, mul)
+            rows.append(RyderCupMatchPoints(
+                round_config = fs_config.round_config,
+                team1        = t1,
+                team2        = t2,
+                foursome     = foursome,
+                segment      = tcm.get('segment') or 'overall',
+                game_type    = gtype,
+                result       = result,
+                team1_points = t1p,
+                team2_points = t2p,
+            ))
+
     return rows
 
 

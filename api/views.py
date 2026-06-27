@@ -4498,6 +4498,7 @@ class TripleCupSetupView(APIView):
                 net_percent                = d.get('net_percent', 100),
                 alt_shot_low_pct           = d.get('alt_shot_low_pct', 50),
                 alt_shot_high_pct          = d.get('alt_shot_high_pct', 50),
+                foursomes_first            = d.get('foursomes_first', False),
                 foursomes_team1_first_tee  = d.get('foursomes_team1_first_tee'),
                 foursomes_team2_first_tee  = d.get('foursomes_team2_first_tee'),
             )

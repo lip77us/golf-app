@@ -798,6 +798,7 @@ class RoundProvider extends ChangeNotifier {
     int    netPercent               = 100,
     int    altShotLowPct            = 50,
     int    altShotHighPct           = 50,
+    bool   foursomesFirst           = false,
     int?   foursomesTeam1FirstTee,
     int?   foursomesTeam2FirstTee,
   }) async {
@@ -813,6 +814,7 @@ class RoundProvider extends ChangeNotifier {
         netPercent:                netPercent,
         altShotLowPct:             altShotLowPct,
         altShotHighPct:            altShotHighPct,
+        foursomesFirst:            foursomesFirst,
         foursomesTeam1FirstTee:    foursomesTeam1FirstTee,
         foursomesTeam2FirstTee:    foursomesTeam2FirstTee,
       );

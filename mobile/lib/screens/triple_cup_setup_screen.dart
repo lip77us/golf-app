@@ -44,10 +44,9 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
   int    _netPercent       = 100;
   int    _altLowPct        = 50;
   int    _altHighPct       = 50;
-  /// Foursomes alt-shot first tee-off player IDs per team.  Null
-  /// means "use the backend default" (lowest handicap on the team).
-  int?   _t1FirstTee;
-  int?   _t2FirstTee;
+  /// false = Fourball first (1-6) then Foursomes (7-12); true swaps them.
+  /// Singles is always 13-18.
+  bool   _foursomesFirst   = false;
 
   /// playerId → team number (1 or 2)
   final Map<int, int> _teamMap = {};
@@ -181,6 +180,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
         _netPercent    = existing.netPercent;
         _altLowPct     = existing.altShotLowPct;
         _altHighPct    = existing.altShotHighPct;
+        _foursomesFirst = existing.foursomesFirst;
         // The summary's team info has names but no player IDs, so we
         // default-split instead of trying to reconstruct.  The user
         // can re-pick teams in the UI before re-starting.
@@ -230,8 +230,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
         netPercent:                _netPercent,
         altShotLowPct:             _altLowPct,
         altShotHighPct:            _altHighPct,
-        foursomesTeam1FirstTee:    _t1FirstTee,
-        foursomesTeam2FirstTee:    _t2FirstTee,
+        foursomesFirst:            _foursomesFirst,
       );
 
       if (!mounted) return;
@@ -434,6 +433,33 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
             const SizedBox(height: 16),
 
+            // ── Segment order ────────────────────────────────────────
+            SectionCard(
+              title: 'Segment order',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _foursomesFirst
+                        ? 'Foursomes 1–6  ·  Fourball 7–12  ·  Singles 13–18'
+                        : 'Fourball 1–6  ·  Foursomes 7–12  ·  Singles 13–18',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Play Foursomes first'),
+                    subtitle: const Text(
+                        'Swap the first two segments — alt-shot on 1–6.'),
+                    value: _foursomesFirst,
+                    onChanged: (v) => setState(() => _foursomesFirst = v),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // ── Alt-shot allowance ───────────────────────────────────
             SectionCard(
               title: 'Foursomes (alt-shot) handicap',
@@ -442,7 +468,8 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                 children: [
                   Text(
                     'Combined team handicap for the alt-shot segment '
-                    '(holes 7–12).  USGA default is 50% low + 50% high.',
+                    '(holes ${_foursomesFirst ? '1–6' : '7–12'}).  '
+                    'USGA default is 50% low + 50% high.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
@@ -460,23 +487,9 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
             const SizedBox(height: 16),
 
-            // ── Foursomes tee-off (2v2 only) ─────────────────────────
-            if (members.length == 4) ...[
-              SectionCard(
-                title: 'Foursomes (alt-shot) tee-off',
-                child: _ForsomesTeeOffPicker(
-                  members:      members,
-                  teamMap:      _teamMap,
-                  team1FirstTee: _t1FirstTee,
-                  team2FirstTee: _t2FirstTee,
-                  onChanged: (t1, t2) => setState(() {
-                    _t1FirstTee = t1;
-                    _t2FirstTee = t2;
-                  }),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+            // Foursomes alt-shot tee-off is no longer chosen here — the
+            // score-entry screen asks the team who tees off first right when
+            // the foursomes segment begins.
 
             // ── Phantom donor note (only for 2v1) ────────────────────
             if (_is2v1)
@@ -608,105 +621,6 @@ class _ColoredTeamChip extends StatelessWidget {
             fontSize: 11,
             fontWeight: FontWeight.bold,
           )),
-    );
-  }
-}
-
-/// Picker for which player on each team tees off the first foursomes
-/// hole.  The partner takes the next hole; alternation continues
-/// through the segment.  Defaults (and falls back) to the lower-
-/// handicap player on each team.
-class _ForsomesTeeOffPicker extends StatelessWidget {
-  final List<Membership> members;
-  final Map<int, int>    teamMap;
-  final int?             team1FirstTee;
-  final int?             team2FirstTee;
-  final void Function(int? t1, int? t2) onChanged;
-
-  const _ForsomesTeeOffPicker({
-    required this.members,
-    required this.teamMap,
-    required this.team1FirstTee,
-    required this.team2FirstTee,
-    required this.onChanged,
-  });
-
-  List<Membership> _teamMembers(int team) =>
-      members.where((m) => (teamMap[m.player.id] ?? 0) == team).toList();
-
-  int? _defaultFor(List<Membership> team) {
-    if (team.length < 2) return null;
-    final sorted = List<Membership>.from(team)
-      ..sort((a, b) => a.playingHandicap.compareTo(b.playingHandicap));
-    return sorted.first.player.id;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final t1   = _teamMembers(1);
-    final t2   = _teamMembers(2);
-    if (t1.length < 2 || t2.length < 2) {
-      return Text(
-        'Pick 2 players for each team to set tee-off order.',
-        style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant),
-      );
-    }
-    final t1Selected = team1FirstTee ?? _defaultFor(t1);
-    final t2Selected = team2FirstTee ?? _defaultFor(t2);
-
-    Widget pickerRow(
-      String teamLabel,
-      Color teamColor,
-      List<Membership> team,
-      int? selected,
-      void Function(int id) onPick,
-    ) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(children: [
-          SizedBox(
-            width: 56,
-            child: Text(teamLabel,
-                style: TextStyle(
-                    color: teamColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12)),
-          ),
-          Expanded(
-            child: SegmentedButton<int>(
-              segments: team.map((m) => ButtonSegment<int>(
-                    value: m.player.id,
-                    label: Text(m.player.displayShort),
-                  )).toList(),
-              selected: selected == null ? <int>{} : {selected},
-              emptySelectionAllowed: true,
-              onSelectionChanged: (s) =>
-                  s.isEmpty ? null : onPick(s.first),
-              style: SegmentedButton.styleFrom(
-                  visualDensity: VisualDensity.compact),
-            ),
-          ),
-        ]),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Who tees off hole 7 for each team?  Partners alternate '
-          'through the 6 alt-shot holes (7–12).',
-          style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 12),
-        pickerRow('Blue',  kTripleCupTeam1Color, t1, t1Selected,
-            (id) => onChanged(id, team2FirstTee ?? _defaultFor(t2))),
-        pickerRow('Orange', kTripleCupTeam2Color, t2, t2Selected,
-            (id) => onChanged(team1FirstTee ?? _defaultFor(t1), id)),
-      ],
     );
   }
 }
