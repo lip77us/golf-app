@@ -1,26 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../game_colors.dart';
 import '../providers/settings_provider.dart';
+import '../utils/golf_colors.dart';
 
-/// A tappable score button that communicates a golf score's relationship to
-/// par.  When the user's Net Style Entry preference is on (the default),
-/// shapes and colors are driven by NET par (par + the player's strokes on
-/// the hole); the white "no shape" square then matches the stroke dots on
-/// the scorecard.  When the preference is off, the same encoding is driven
-/// by GROSS par instead.
+/// A tappable score button using golf-scorecard notation.  When the user's Net
+/// Style Entry preference is on (the default), the shape/colour are driven by
+/// NET par (par + the player's strokes on the hole); when off, by GROSS par.
 ///
-/// Visual encoding (diff = score - baseline, where baseline is net par
-/// or gross par depending on the preference):
-///   diff <= -2  (eagle or better)  DARK green fill, 2 concentric circles
-///   diff == -1  (birdie)           soft green fill, 1 circle
-///   diff ==  0  (par)              white fill, no shape
-///   diff ==  1  (bogey)            soft red  fill, 1 square
-///   diff >=  2  (double or worse)  DARK red  fill, 2 concentric squares
+/// Visual encoding (diff = score - baseline):
+///   under par → RED digit in a circle   (double circle for eagle or better)
+///   par       → black digit, white box, no shape  (plain scorecard look)
+///   over par  → black digit in a square  (double square for double-bogey+)
 ///
-/// Selection is shown with a thicker primary-colored outer border so it
-/// never hides the par-vs-score shape inside.
+/// The colour is on the digit (and the circle/square outline), not a fill — the
+/// background stays white.  Selection is a thicker primary-coloured outer border.
 class NetScoreButton extends StatelessWidget {
   /// The score displayed on this button (1-based — never 0).
   final int score;
@@ -59,26 +53,25 @@ class NetScoreButton extends StatelessWidget {
     final netStyleEntry =
         context.watch<SettingsProvider>().netStyleEntry;
     final baseline      = netStyleEntry ? par + strokes : par;
-    final netDiff       = score - baseline;
+    final diff          = score - baseline;
 
-    // Fill color driven purely by net diff. Graduated (shared with the
-    // scorecard): net eagle+ / double+ get the darker green / red; net birdie /
-    // bogey get a softer shade; net par is white.
-    final fill = GameColors.scoreFill(netDiff);
-
-    // Shape style driven by net diff.
+    // Shape style driven by diff (net or gross per the preference).
     final _ShapeStyle shape;
-    if (netDiff <= -2) {
+    if (diff <= -2) {
       shape = _ShapeStyle.doubleCircle;
-    } else if (netDiff == -1) {
+    } else if (diff == -1) {
       shape = _ShapeStyle.singleCircle;
-    } else if (netDiff == 0) {
+    } else if (diff == 0) {
       shape = _ShapeStyle.none;
-    } else if (netDiff == 1) {
+    } else if (diff == 1) {
       shape = _ShapeStyle.singleSquare;
     } else {
       shape = _ShapeStyle.doubleSquare;
     }
+
+    // Golf convention: under par = red, par/over = black.  Colour goes on the
+    // digit + outline; the background stays white.
+    final color = diff < 0 ? underParColor : Colors.black87;
 
     final button = SizedBox(
       width: width,
@@ -93,7 +86,7 @@ class NetScoreButton extends StatelessWidget {
               : null,
         ),
         padding: const EdgeInsets.all(2),
-        child: _decorated(shape, fill),
+        child: _decorated(shape, color),
       ),
     );
 
@@ -101,16 +94,16 @@ class NetScoreButton extends StatelessWidget {
     return GestureDetector(onTap: onTap, child: button);
   }
 
-  Widget _decorated(_ShapeStyle shape, Color fill) {
-    const borderColor = Colors.black87;
-    const lineWidth   = 1.2;
+  Widget _decorated(_ShapeStyle shape, Color color) {
+    const lineWidth = 1.3;
+    const fill      = Colors.white;
 
     final text = Text(
       '$score',
-      style: const TextStyle(
+      style: TextStyle(
         fontWeight: FontWeight.bold,
         fontSize: 16,
-        color: Colors.black87,
+        color: color,
       ),
     );
 
@@ -130,7 +123,7 @@ class NetScoreButton extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: fill,
-            border: Border.all(color: borderColor, width: lineWidth),
+            border: Border.all(color: color, width: lineWidth),
           ),
           alignment: Alignment.center,
           child: text,
@@ -140,14 +133,14 @@ class NetScoreButton extends StatelessWidget {
         return Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: borderColor, width: lineWidth),
+            border: Border.all(color: color, width: lineWidth),
           ),
           padding: const EdgeInsets.all(2),
           child: Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: fill,
-              border: Border.all(color: borderColor, width: lineWidth),
+              border: Border.all(color: color, width: lineWidth),
             ),
             alignment: Alignment.center,
             child: text,
@@ -158,7 +151,7 @@ class NetScoreButton extends StatelessWidget {
         return Container(
           decoration: BoxDecoration(
             color: fill,
-            border: Border.all(color: borderColor, width: lineWidth),
+            border: Border.all(color: color, width: lineWidth),
           ),
           alignment: Alignment.center,
           child: text,
@@ -167,13 +160,13 @@ class NetScoreButton extends StatelessWidget {
       case _ShapeStyle.doubleSquare:
         return Container(
           decoration: BoxDecoration(
-            border: Border.all(color: borderColor, width: lineWidth),
+            border: Border.all(color: color, width: lineWidth),
           ),
           padding: const EdgeInsets.all(2),
           child: Container(
             decoration: BoxDecoration(
               color: fill,
-              border: Border.all(color: borderColor, width: lineWidth),
+              border: Border.all(color: color, width: lineWidth),
             ),
             alignment: Alignment.center,
             child: text,

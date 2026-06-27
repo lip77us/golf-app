@@ -13,9 +13,12 @@ from django.test import TestCase
 
 from services.triple_cup import (
     setup_triple_cup, calculate_triple_cup, triple_cup_summary,
+    _alt_shot_team_combined,
 )
 
-from ._helpers import make_foursome, make_round, make_tee, submit_hole
+from ._helpers import (
+    make_foursome, make_round, make_tee, make_player, submit_hole,
+)
 
 
 def _score_hole(fs, pid, hole, par, scores):
@@ -302,11 +305,11 @@ class TripleCupFoursomesTeamSODisplayTests(TestCase):
     def test_foursomes_so_field_reflects_team_alt_shot_differential(self):
         tee = make_tee()
         round_ = make_round(tee.course, handicap_mode='strokes_off')
-        # T1 = Ryan(0) + Bob(9) → combined 50/50 = round(4.5) = 4
-        # T2 = Gary(9) + Glenn(5) → combined 50/50 = round(7) = 7
-        # Team-vs-team: T1 (low) = 0, T2 (high) = 7 − 4 = 3
-        # (Earlier hand-math said 4, but with banker's rounding
-        # round(4.5)→4 in Python so the differential is 3.)
+        # Combined = weighted-average of the UNROUNDED course handicaps
+        # (here CH == index since slope 113 / CR == par), rounded ONCE, 0.5 up.
+        # T1 = Ryan(0) + Bob(9) → 50/50 = 4.5 → round-half-up → 5
+        # T2 = Gary(9) + Glenn(5) → 50/50 = 7.0 → 7
+        # Team-vs-team: T1 (low) = 0, T2 (high) = 7 − 5 = 2
         fs = make_foursome(
             round_,
             [('Ryan', 0), ('Bob', 9), ('Gary', 9), ('Glenn', 5)],
@@ -334,7 +337,41 @@ class TripleCupFoursomesTeamSODisplayTests(TestCase):
         red, blue = so_by_pid[pid['Ryan']], so_by_pid[pid['Gary']]
         assert red == 0 and blue > 0, (red, blue)
         # And the differential equals high_combined − low_combined.
-        assert blue == 3, (red, blue)
+        assert blue == 2, (red, blue)
+
+    def test_alt_shot_averages_indexes_not_course_handicaps(self):
+        # Real course (slope 130 / CR 71.6 / par 70) → course handicap != index,
+        # so averaging the INDEXES then deriving the CH differs from averaging
+        # the two already-rounded integer course handicaps.
+        tee = make_tee(slope=130, course_rating=71.6, par=70)
+        round_ = make_round(tee.course, handicap_mode='strokes_off')
+        pa = make_player('A', 21)   # CH 26
+        pb = make_player('B', 15)   # CH 19
+        ps = make_player('S', 20)   # CH 25
+        pf = make_player('F', 5)
+        fs = make_foursome(
+            round_, [(pa, 26), (pb, 19), (ps, 25), (pf, 8)], tee=tee,
+        )
+        setup_triple_cup(
+            fs, team1_ids=[pa.id, pb.id], team2_ids=[ps.id, pf.id],
+            handicap_mode='strokes_off',
+            alt_shot_low_pct=50, alt_shot_high_pct=50,
+        )
+        from games.models import TripleCupGame
+        g = TripleCupGame.objects.get(foursome=fs)
+        mbp = {m.player_id: m
+               for m in fs.memberships.select_related('player', 'tee')}
+
+        # Pair: index avg (21+15)/2 = 18 → 18*130/113 + 1.6 = 22.31 → 22.
+        # (Course-hcp average would be (26+19)/2 = 22.5 → 23.)
+        self.assertEqual(_alt_shot_team_combined(g, [pa.id, pb.id], mbp)[0], 22)
+
+        # net% comes off BOTH the pair and the solo, rounded 0.5 up.
+        g.net_percent = 90
+        # pair: 22.31 * 0.9 = 20.08 → 20
+        self.assertEqual(_alt_shot_team_combined(g, [pa.id, pb.id], mbp)[0], 20)
+        # solo: own CH 25 * 0.9 = 22.5 → round-half-up → 23
+        self.assertEqual(_alt_shot_team_combined(g, [ps.id], mbp)[0], 23)
 
 
 class TripleCupStrokesOffTests(TestCase):

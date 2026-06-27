@@ -414,6 +414,8 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
         _pendingScores[m.player.id] = score;
       }
     });
+    // Commit a past-hole correction immediately — no separate Save needed.
+    if (score != -1) await _save(advance: false);
   }
 
   // ── Score submission ──────────────────────────────────────────────────────

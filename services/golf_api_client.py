@@ -161,6 +161,19 @@ def fetch_course(course_id) -> dict:
 # Adapters — update here if the API uses different field names
 # ---------------------------------------------------------------------------
 
+def _opt_int(value):
+    """int(value), or None when the value is missing/blank/non-numeric.
+
+    Used so the adapter doesn't FABRICATE per-hole data the upstream omitted —
+    a missing handicap/par becomes a sentinel the quality gate can reject,
+    rather than a plausible-looking default that silently corrupts scoring.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _adapt_course_summary(raw: dict) -> dict:
     loc = raw.get('location') or {}
     return {
@@ -212,9 +225,15 @@ def _adapt_tee(raw: dict, sex: str) -> dict:
 
 def _adapt_hole(raw: dict, number: int) -> dict:
     yards_raw = raw.get('yardage')
+    # Do NOT invent a stroke index / par when the API omits it.  A sentinel 0
+    # makes the import quality gate (services/course_quality.py) reject the
+    # course instead of silently collapsing every hole to SI 18 (which breaks
+    # per-hole handicap allocation) or par 4.
+    si  = _opt_int(raw.get('handicap'))           # API uses 'handicap' for SI
+    par = _opt_int(raw.get('par'))
     return {
-        'number'      : number,                                    # inferred from position
-        'par'         : int(raw.get('par', 4)),
-        'stroke_index': int(raw.get('handicap') or 18),           # API uses 'handicap'
+        'number'      : number,                   # inferred from position
+        'par'         : par if par is not None else 0,
+        'stroke_index': si if si is not None else 0,
         'yards'       : int(yards_raw) if yards_raw else None,
     }

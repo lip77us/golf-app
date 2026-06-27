@@ -1228,9 +1228,17 @@ class PlayerDetailView(APIView):
         player = account_get_or_404(
             Player, request.user.account, pk=pk, is_phantom=False,
         )
+        before_index = player.handicap_index
         ser = PlayerSerializer(player, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         player = ser.save()
+        # Editing a CANONICAL profile (a real account member, Player.user set)
+        # propagates the new index to friends' login-less copies; editing a
+        # friend's copy (no linked user) stays local.
+        if (player.user_id is not None
+                and 'handicap_index' in request.data
+                and player.handicap_index != before_index):
+            propagate_canonical_index(player)
         return Response(
             PlayerSerializer(player, context=_on_app_context([player])).data)
 
@@ -1320,9 +1328,11 @@ class CourseDetailView(APIView):
 
 class TeeListView(APIView):
     def get(self, request):
-        tees = account_qs(Tee, request.user.account).order_by(
-            'course__name', 'tee_name',
-        )
+        # Current revisions only — retired (superseded) tees stay reachable by
+        # id for the rounds that used them, but aren't offered for new setups.
+        tees = account_qs(Tee, request.user.account).filter(
+            superseded_by__isnull=True,
+        ).order_by('course__name', 'tee_name')
         return Response(TeeSerializer(tees, many=True).data)
 
 
@@ -2299,25 +2309,51 @@ def _round_participant_keys(rnd):
 
 
 def _on_app_context(players):
-    """Serializer context for a set of golfers: which are On Halved + each
-    connected golfer's authoritative (self-maintained) index, keyed by
-    normalized phone."""
+    """Serializer context for a set of golfers: which are On Halved (their
+    normalized phone matches a registered user's verified phone)."""
     from accounts.phone import normalize
     from django.contrib.auth import get_user_model
 
     normalized = {normalize(p.phone) for p in players if p.phone}
     normalized.discard(None)
-    on_app_phones, authoritative = set(), {}
+    on_app_phones = set()
     if normalized:
-        for u in (get_user_model().objects.filter(phone__in=normalized)
-                  .select_related('player_profile')):
-            on_app_phones.add(u.phone)
-            prof = getattr(u, 'player_profile', None)
-            # 0/unset index = "not provided" → leave it out so display falls
-            # back to the local value.
-            if prof is not None and prof.handicap_index != 0:
-                authoritative[u.phone] = str(prof.handicap_index)
-    return {'on_app_phones': on_app_phones, 'authoritative_index': authoritative}
+        on_app_phones = set(
+            get_user_model().objects
+            .filter(phone__in=normalized)
+            .values_list('phone', flat=True)
+        )
+    return {'on_app_phones': on_app_phones}
+
+
+def propagate_canonical_index(canonical):
+    """Push a registered golfer's OWN profile index out to the login-less
+    copies of them that friends added in other accounts (matched by normalized
+    phone).  This is the write-time half of the handicap model: a golfer's copy
+    is always locally editable, but when the golfer updates their OWN index it
+    overwrites their friends' copies.  Friends may re-edit afterwards; the next
+    self-edit overwrites again.  Returns the number of copies updated.
+
+    `canonical` must be a real account member's profile (Player.user set).
+    Phone is free-text per copy, so we normalize-match in Python; the guest-copy
+    set is small, but a normalized-phone column would let this filter in SQL.
+    """
+    from accounts.phone import normalize
+    n = normalize(canonical.phone)
+    if not n:
+        return 0
+    copies = []
+    for p in (Player.objects
+              .filter(user__isnull=True, is_phantom=False)
+              .exclude(pk=canonical.pk)
+              .exclude(phone='')
+              .only('id', 'phone', 'handicap_index')):
+        if normalize(p.phone) == n and p.handicap_index != canonical.handicap_index:
+            p.handicap_index = canonical.handicap_index
+            copies.append(p)
+    if copies:
+        Player.objects.bulk_update(copies, ['handicap_index'])
+    return len(copies)
 
 
 def _watcher_candidates_response(request, exclude_ids, exclude_phones):
@@ -2644,7 +2680,7 @@ class FoursomeTeesView(APIView):
         from .serializers import TeeSerializer
         tees = (
             Tee.objects
-            .filter(course=foursome.round.course)
+            .filter(course=foursome.round.course, superseded_by__isnull=True)
             .select_related('course')
             .order_by('sort_priority', 'tee_name')
         )
@@ -5708,6 +5744,24 @@ class CourseImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Quality gate — reject courses with broken hole data (e.g. all-18
+        # stroke indexes) BEFORE they poison the shared catalog and every
+        # account that later copies from it.  Runs before any DB write.
+        from services.course_quality import (
+            assert_course_quality, CourseQualityError,
+        )
+        try:
+            assert_course_quality(api_course)
+        except CourseQualityError as exc:
+            return Response(
+                {
+                    'detail': 'This course has invalid hole data and was not '
+                              'imported.',
+                    'problems': exc.problems,
+                },
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
         from core.models import Course as CourseModel, Tee as TeeModel
         from services.catalog import (
             upsert_catalog_course, clone_catalog_to_account,
@@ -5882,7 +5936,9 @@ class CourseFindView(APIView):
                 'city': c.city, 'state': c.state, 'country': c.country,
                 'course_id': c.id, 'catalog_id': None,
                 'golf_api_id': c.golf_api_id or '',
-                'in_account': True, 'tee_count': c.tees.count(),
+                'in_account': True,
+                # Current revisions only (uses the prefetched list, no extra query).
+                'tee_count': sum(1 for t in c.tees.all() if t.is_current),
             })
             if c.golf_api_id:
                 seen_api.add(str(c.golf_api_id))
@@ -6920,7 +6976,9 @@ class RyderCupRoundResultView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        # Cross-account read: shared-round participants/watchers load the cup
+        # config too (mirror CupRoundLiveView / LeaderboardView).
+        round_obj = round_for_reader(request.user, pk)
         try:
             rc = round_obj.ryder_cup_config
         except RyderCupRoundConfig.DoesNotExist:
@@ -6942,7 +7000,9 @@ class CupRoundLiveView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        # Cross-account read: a participant/watcher in another account (shared
+        # round) must be able to load cup standings — mirror LeaderboardView.
+        round_obj = round_for_reader(request.user, pk)
         from services.cup_standings import cup_round_live_summary
         summary = cup_round_live_summary(round_obj)
         if summary is None:

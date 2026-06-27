@@ -12,6 +12,8 @@ import '../widgets/inline_message.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../utils/watcher_invite.dart';
+import '../utils/golf_colors.dart';
+import '../widgets/score_mark.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 
@@ -536,7 +538,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               }
               return RefreshIndicator(
                 onRefresh: () => rp.loadLeaderboard(widget.roundId),
-                child: _GameView(gameKey: gameKey, game: game),
+                child: _GameView(
+                  gameKey: gameKey,
+                  game: game,
+                  // Score-entry (membership) order, when the round is loaded.
+                  playerOrder: (rp.round?.id == widget.roundId)
+                      ? [
+                          for (final fs in rp.round!.foursomes)
+                            for (final m in fs.realPlayers) m.player.id,
+                        ]
+                      : const <int>[],
+                ),
               );
             }).toList(),
           ),
@@ -647,8 +659,12 @@ bool _groupContainsPlayer(Map group, int playerId) {
 class _GameView extends StatelessWidget {
   final String gameKey;
   final LeaderboardGame game;
+  // Player ids in score-entry (foursome membership) order; used to order the
+  // Low Net rows the same way as the score screen.  Empty = keep net-rank order.
+  final List<int> playerOrder;
 
-  const _GameView({required this.gameKey, required this.game});
+  const _GameView(
+      {required this.gameKey, required this.game, this.playerOrder = const []});
 
   @override
   Widget build(BuildContext context) {
@@ -660,7 +676,7 @@ class _GameView extends StatelessWidget {
       case 'pink_ball':
         return _RedBallView(data: data);
       case 'low_net_round':
-        return _LowNetView(data: data);
+        return _LowNetView(data: data, playerOrder: playerOrder);
       case 'skins':
         return _ByGroupView(data: data, builder: _SkinsGroupCard.new);
       case 'triple_cup':
@@ -820,11 +836,6 @@ class _RedBallView extends StatelessWidget {
     return ntp < 0 ? '$ntp' : '+$ntp';
   }
 
-  static Color _ntpColor(int? ntp, ThemeData theme) {
-    if (ntp == null || ntp == 0) return theme.colorScheme.onSurface;
-    return ntp < 0 ? Colors.green.shade700 : theme.colorScheme.error;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme     = Theme.of(context);
@@ -945,7 +956,8 @@ class _RedBallView extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: _ntpColor(netToPar, theme),
+                        // Golf convention: under par red, even/over black.
+                        color: toParColor(netToPar) ?? theme.colorScheme.onSurface,
                       ),
                     ),
                   if (perPersonPayout > 0) ...[
@@ -977,15 +989,32 @@ class _RedBallView extends StatelessWidget {
 
 class _LowNetView extends StatefulWidget {
   final Map<String, dynamic> data;
-  const _LowNetView({required this.data});
+  final List<int> playerOrder;
+  const _LowNetView({required this.data, this.playerOrder = const []});
 
   @override
   State<_LowNetView> createState() => _LowNetViewState();
 }
 
 class _LowNetViewState extends State<_LowNetView> {
-  // Tracks which player rows are expanded (by '$rank:$name' key).
-  final Set<String> _expanded = {};
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-scroll to the right so the latest holes (current play) are visible.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   static String _ntpLabel(int? ntp) {
     if (ntp == null) return '—';
@@ -993,304 +1022,336 @@ class _LowNetViewState extends State<_LowNetView> {
     return ntp < 0 ? '$ntp' : '+$ntp';
   }
 
-  static Color? _ntpColor(int? ntp, ThemeData theme) {
-    if (ntp == null || ntp == 0) return null;
-    return ntp < 0 ? Colors.green.shade700 : theme.colorScheme.error;
-  }
+  // Score colours (under par = red, par/over = default) live in
+  // utils/golf_colors.dart — scoreColor() / toParColor() — so the convention is
+  // shared and changed in one place.
 
-  /// Compact 9-hole scorecard grid.
-  /// [holes] is the full 18-hole list from the API; [isFront] selects 1-9 vs 10-18.
-  Widget _nineGrid(BuildContext context, List holes,
-      {required bool isFront, required bool showNet}) {
-    final theme = Theme.of(context);
-
-    // Column widths: hole, par, gross, net
-    const double cHole = 26, cPar = 24, cGross = 28, cNet = 28;
-
-    final headerStyle = theme.textTheme.labelSmall!.copyWith(
-      fontWeight: FontWeight.bold,
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    const cellStyle = TextStyle(fontSize: 11);
-
-    Widget cell(double w, Widget child) =>
-        SizedBox(width: w, child: Center(child: child));
-
-    Widget gridRow({
-      required String hole,
-      required String par,
-      required String gross,
-      String? net,
-      Color? grossColor,
-      Color? netColor,
-      bool bold = false,
-    }) {
-      final style = bold
-          ? cellStyle.copyWith(fontWeight: FontWeight.bold)
-          : cellStyle;
-      return Row(children: [
-        cell(cHole,  Text(hole,  style: style)),
-        cell(cPar,   Text(par,   style: style)),
-        cell(cGross, Text(gross, style: style.copyWith(color: grossColor))),
-        if (showNet && net != null)
-          cell(cNet, Text(net,   style: style.copyWith(color: netColor))),
-      ]);
-    }
-
-    final segment = holes
-        .where((h) {
-          final n = (h as Map)['hole'] as int? ?? 0;
-          return isFront ? n <= 9 : n > 9;
-        })
-        .cast<Map>()
-        .toList();
-
-    int totPar = 0, totGross = 0, totNet = 0;
-    for (final h in segment) {
-      totPar   += (h['par']    as int? ?? 0);
-      totGross += (h['gross']  as int? ?? 0);
-      totNet   += (h['capped'] as int? ?? 0);
-    }
-    final totNtp = segment.isEmpty ? null : totNet - totPar;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section label
-        Text(
-          isFront ? 'Front 9' : 'Back 9',
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.primary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        // Header
-        Row(children: [
-          cell(cHole,  Text('Hole', style: headerStyle)),
-          cell(cPar,   Text('Par',  style: headerStyle)),
-          cell(cGross, Text('Grs',  style: headerStyle)),
-          if (showNet) cell(cNet, Text('Net', style: headerStyle)),
-        ]),
-        const Divider(height: 5, thickness: 0.5),
-        // Per-hole rows
-        ...segment.map((h) {
-          final hNum   = h['hole']   as int? ?? 0;
-          final par    = h['par']    as int? ?? 0;
-          final gross  = h['gross']  as int? ?? 0;
-          final capped = h['capped'] as int? ?? 0;
-          final gDiff  = gross  - par;
-          final nDiff  = capped - par;
-          return gridRow(
-            hole:       '$hNum',
-            par:        '$par',
-            gross:      '$gross',
-            net:        '$capped',
-            grossColor: gDiff < 0 ? Colors.green.shade700
-                      : gDiff > 0 ? theme.colorScheme.error : null,
-            netColor:   nDiff < 0 ? Colors.green.shade700
-                      : nDiff > 0 ? theme.colorScheme.error : null,
-          );
-        }),
-        const Divider(height: 6, thickness: 0.5),
-        // Totals
-        gridRow(
-          hole:     isFront ? 'Out' : 'In',
-          par:      '$totPar',
-          gross:    '$totGross',
-          net:      _ntpLabel(totNtp),
-          netColor: _ntpColor(totNtp, theme),
-          bold:     true,
-        ),
-      ],
+  /// One hole cell: GROSS score with handicap-stroke dots in the corner —
+  /// mirrors the score-entry stroke-play grid so the user reads the raw score
+  /// and the strokes and can figure the net.  The number is COLOURED by net vs
+  /// par (under = green, over = red) — the part not shown on the score screen.
+  static Widget _scoreCell(
+      ThemeData theme, Map h, bool showNet, TextStyle cellStyle) {
+    final gross    = h['gross'] as int?;
+    final par      = h['par'] as int?;
+    // Gross digit coloured by NET (or gross) vs par, with circle/square
+    // scorecard notation.  No stroke dots — the shape carries the result.
+    final colourBy = showNet ? ((h['capped'] ?? h['net']) as int?) : gross;
+    return scoreMark(
+      text: gross == null ? '–' : '$gross',
+      diff: (colourBy != null && par != null) ? colourBy - par : null,
+      baseStyle: cellStyle.copyWith(fontWeight: FontWeight.w600),
+      theme: theme,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme      = Theme.of(context);
-    final results    = (widget.data['results'] as List? ?? []);
-    final entryFee   = (widget.data['entry_fee'] as num?)?.toDouble() ?? 0.0;
-    final payouts    = (widget.data['payouts'] as List? ?? []);
-    final hmode      = widget.data['handicap_mode']?.toString() ?? 'net';
-    final npct       = widget.data['net_percent'] as int? ?? 100;
-    final showNet    = hmode != 'gross';
+    final theme   = Theme.of(context);
+    final results = [...(widget.data['results'] as List? ?? [])];
+    // Order rows like the score-entry screen (foursome membership order) when
+    // we know it; otherwise keep the server's net-rank order.  Players not in
+    // the order list fall to the end, stably.
+    final order = widget.playerOrder;
+    if (order.isNotEmpty) {
+      int idx(dynamic r) {
+        final pid = (r as Map)['player_id'] as int?;
+        final i = pid == null ? -1 : order.indexOf(pid);
+        return i < 0 ? 1 << 30 : i;
+      }
+      results.sort((a, b) => idx(a).compareTo(idx(b)));
+    }
+    final entryFee= (widget.data['entry_fee'] as num?)?.toDouble() ?? 0.0;
+    final payouts = (widget.data['payouts'] as List? ?? []);
+    final hmode   = widget.data['handicap_mode']?.toString() ?? 'net';
+    final npct    = widget.data['net_percent'] as int? ?? 100;
+    final showNet = hmode != 'gross';
 
     final modeLabel = hmode == 'gross' ? 'Gross'
         : hmode == 'strokes_off' ? 'Strokes Off'
         : npct == 100 ? 'Full Net'
         : 'Net $npct%';
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        // Info chips — wrap so they never overflow the row.
-        Wrap(spacing: 8, runSpacing: 4, children: [
-          Chip(
-            label: Text(modeLabel, style: const TextStyle(fontSize: 11)),
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-          ),
-          if (entryFee > 0)
-            Chip(
-              label: Text('Entry \$${entryFee.formatBet()}',
-                  style: const TextStyle(fontSize: 11)),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-            ),
-          if (payouts.isNotEmpty)
-            Chip(
-              label: Text(
-                  payouts.length == 1
-                      ? 'Winner takes all'
-                      : '${payouts.length} places paid',
-                  style: const TextStyle(fontSize: 11)),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-            ),
-        ]),
+    final chips = Wrap(spacing: 8, runSpacing: 4, children: [
+      Chip(
+        label: Text(modeLabel, style: const TextStyle(fontSize: 11)),
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+      ),
+      if (entryFee > 0)
+        Chip(
+          label: Text('Entry \$${entryFee.formatBet()}',
+              style: const TextStyle(fontSize: 11)),
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+        ),
+      if (payouts.isNotEmpty)
+        Chip(
+          label: Text(
+              payouts.length == 1
+                  ? 'Winner takes all'
+                  : '${payouts.length} places paid',
+              style: const TextStyle(fontSize: 11)),
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+        ),
+    ]);
+
+    if (results.isEmpty) {
+      return ListView(padding: const EdgeInsets.all(16), children: [
+        chips,
+        const SizedBox(height: 24),
+        const Center(child: Text('No scores yet.')),
+      ]);
+    }
+
+    // Par per hole — union across players so any hole anyone played gets a column.
+    final parByHole = <int, int>{};
+    for (final r in results) {
+      for (final h in ((r as Map)['holes'] as List? ?? [])) {
+        final m = h as Map;
+        final n = m['hole'] as int?;
+        final p = m['par'] as int?;
+        if (n != null && p != null) parByHole[n] = p;
+      }
+    }
+    final holeNums = parByHole.keys.toList()..sort();
+
+    // No per-hole data yet → simple standings list.
+    if (holeNums.isEmpty) {
+      return ListView(padding: const EdgeInsets.all(16), children: [
+        chips,
         const SizedBox(height: 8),
+        ...results.map((r) => _standingsRow(theme, r as Map<String, dynamic>)),
+      ]);
+    }
 
-        // Player rows
-        ...results.map((r) {
-          final row         = r as Map<String, dynamic>;
-          final rank        = row['rank']         as int?  ?? 0;
-          final name        = row['name']?.toString()      ?? '—';
-          final netToPar    = row['net_to_par']   as int?;
-          final holesPlayed = row['holes_played'] as int?  ?? 0;
-          final foursomeId  = row['foursome_id']  as int?;
-          final payout      = (row['payout'] as num?)?.toDouble();
-          final holesList   = (row['holes'] as List? ?? []);
-          final key         = '$rank:$name';
-          final isExpanded  = _expanded.contains(key);
-          final parLabel    = _ntpLabel(netToPar);
-          final parColor    = _ntpColor(netToPar, theme);
+    // ── One row per player; holes are columns (scroll horizontally). The
+    //    player column (rank/name/total) stays pinned so you can scan a hole
+    //    across everyone at once. ──
+    const double nameW = 132, holeW = 30, headH = 22, parH = 20, rowH = 38;
+    final headerStyle = theme.textTheme.labelSmall!.copyWith(
+        fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
+    final parStyle = theme.textTheme.labelSmall!
+        .copyWith(color: theme.colorScheme.onSurfaceVariant);
+    const cellStyle = TextStyle(fontSize: 12);
+    final divider = BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5);
+    // Dark line under the Par row, separating the header from the data.
+    final headSep = BorderSide(color: theme.colorScheme.outline, width: 1.4);
 
-          return Card(
-            margin: const EdgeInsets.only(bottom: 6),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                // ── Summary row (always visible, tappable) ──────────────────
-                InkWell(
-                  onTap: holesList.isNotEmpty
-                      ? () => setState(() {
-                            if (isExpanded) _expanded.remove(key);
-                            else            _expanded.add(key);
-                          })
-                      : null,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundColor: rank == 1
-                              ? Colors.amber
-                              : rank == 2
-                                  ? Colors.grey.shade400
-                                  : rank == 3
-                                      ? const Color(0xFFcd7f32)
-                                      : theme.colorScheme.surfaceContainerHighest,
-                          child: Text('$rank',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: rank <= 3 ? Colors.white : null,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(name,
-                                  style: theme.textTheme.bodyMedium
-                                      ?.copyWith(fontWeight: FontWeight.w600)),
-                              Text(
-                                holesPlayed == 18
-                                    ? 'F'
-                                    : holesPlayed > 0
-                                        ? 'Thru $holesPlayed'
-                                        : 'No scores',
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(parLabel,
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: parColor)),
-                            if (payout != null)
-                              Text('\$${payout.formatBet()}',
-                                  style: theme.textTheme.bodySmall
-                                      ?.copyWith(color: Colors.green.shade700)),
-                          ],
-                        ),
-                        const SizedBox(width: 4),
-                        if (holesList.isNotEmpty)
-                          Icon(
-                            isExpanded ? Icons.expand_less : Icons.expand_more,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          )
-                        else if (foursomeId != null)
-                          IconButton(
-                            icon: const Icon(Icons.table_chart_outlined, size: 20),
-                            tooltip: 'View scorecard',
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            onPressed: () {
-                              context.read<RoundProvider>().loadScorecard(foursomeId);
-                              Navigator.of(context).pushNamed('/scorecard',
-                                  arguments: {
-                                    'foursomeId': foursomeId,
-                                    'readOnly': true,
-                                  });
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
+    Widget box(double w, double h, Widget child,
+        {Alignment align = Alignment.center,
+        EdgeInsets? pad,
+        bool border = false,
+        BorderSide? bottomSide}) {
+      final side = bottomSide ?? (border ? divider : null);
+      return Container(
+        width: w, height: h, alignment: align, padding: pad,
+        decoration:
+            side != null ? BoxDecoration(border: Border(bottom: side)) : null,
+        child: child,
+      );
+    }
+
+    // Pinned left column: header, par label, then rank + name (+ payout) + total.
+    final frozen = <Widget>[
+      box(nameW, headH, Text('Hole', style: headerStyle),
+          align: Alignment.centerLeft, pad: const EdgeInsets.only(left: 4)),
+      box(nameW, parH, Text('Par', style: parStyle),
+          align: Alignment.centerLeft, pad: const EdgeInsets.only(left: 4),
+          bottomSide: headSep),
+      for (final r in results)
+        () {
+          final row = r as Map<String, dynamic>;
+          final rank = row['rank'] as int? ?? 0;
+          final name = row['name']?.toString() ?? '—';
+          final ntp = row['net_to_par'] as int?;
+          final payout = (row['payout'] as num?)?.toDouble();
+          return box(nameW, rowH,
+            Row(children: [
+              SizedBox(
+                  width: 16,
+                  child: Text('$rank',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold))),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600)),
+                    if (payout != null)
+                      Text('\$${payout.formatBet()}',
+                          style: TextStyle(
+                              fontSize: 9, color: Colors.green.shade700)),
+                  ],
                 ),
+              ),
+              Text(_ntpLabel(ntp),
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: toParColor(ntp))),
+              // Match the gap on the other side of the divider (margin: 6) so
+              // the net score isn't tight against the border line.
+              const SizedBox(width: 6),
+            ]),
+            align: Alignment.centerLeft, border: true);
+        }(),
+    ];
 
-                // ── Expandable scorecard ────────────────────────────────────
-                if (isExpanded && holesList.isNotEmpty)
-                  Container(
-                    color: theme.colorScheme.surfaceContainerLowest,
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                    child: Column(
-                      children: [
-                        const Divider(height: 1),
-                        const SizedBox(height: 10),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _nineGrid(context, holesList,
-                                  isFront: true, showNet: showNet),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _nineGrid(context, holesList,
-                                  isFront: false, showNet: showNet),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
+    // Totals: gross Out (1-9) appears once hole 9 is reached; In, Gross (total)
+    // and Net appear once hole 18 is reached.
+    const double totW = 36;
+    final frontHoles = holeNums.where((n) => n <= 9).toList();
+    final backHoles  = holeNums.where((n) => n > 9).toList();
+    final showOut = holeNums.contains(9);
+    final showEnd = holeNums.contains(18);
+    final outPar = frontHoles.fold<int>(0, (s, n) => s + (parByHole[n] ?? 0));
+    final inPar  = backHoles.fold<int>(0, (s, n) => s + (parByHole[n] ?? 0));
+    final totalPar = outPar + inPar;
+
+    // Scrollable columns, in scorecard order: front holes, Out (after 9), back
+    // holes, then In / Gross / Net (after 18).  Par row has a dark line under it.
+    final headerRow = Row(children: [
+      for (final n in frontHoles) box(holeW, headH, Text('$n', style: headerStyle)),
+      if (showOut) box(totW, headH, Text('Out', style: headerStyle)),
+      for (final n in backHoles) box(holeW, headH, Text('$n', style: headerStyle)),
+      if (showEnd) ...[
+        box(totW, headH, Text('In', style: headerStyle)),
+        box(totW, headH, Text('Gross', style: headerStyle)),
+        box(totW, headH, Text('Net', style: headerStyle)),
       ],
+    ]);
+    final parRow = Row(children: [
+      for (final n in frontHoles)
+        box(holeW, parH, Text('${parByHole[n]}', style: parStyle),
+            bottomSide: headSep),
+      if (showOut)
+        box(totW, parH, Text('$outPar', style: parStyle), bottomSide: headSep),
+      for (final n in backHoles)
+        box(holeW, parH, Text('${parByHole[n]}', style: parStyle),
+            bottomSide: headSep),
+      if (showEnd) ...[
+        box(totW, parH, Text('$inPar', style: parStyle), bottomSide: headSep),
+        box(totW, parH, Text('$totalPar', style: parStyle), bottomSide: headSep),
+        box(totW, parH, const SizedBox(), bottomSide: headSep),
+      ],
+    ]);
+    final playerRows = <Widget>[
+      for (final r in results)
+        () {
+          final row = r as Map<String, dynamic>;
+          final hm = <int, Map>{};
+          for (final h in (row['holes'] as List? ?? [])) {
+            final m = h as Map;
+            final n = m['hole'] as int?;
+            if (n != null) hm[n] = m;
+          }
+          int grossSum(List<int> hs) => hs.fold<int>(
+              0, (s, n) => s + ((hm[n]?['gross'] as int?) ?? 0));
+          final netTotal = row['total_net'] as int?;
+          final ntp = row['net_to_par'] as int?;
+          Widget holeCell(int n) => box(holeW, rowH,
+              hm[n] == null
+                  ? Text('–',
+                      style: cellStyle.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant))
+                  : _scoreCell(theme, hm[n]!, showNet, cellStyle),
+              border: true);
+          Widget totCell(String text, {bool bold = false, Color? color}) =>
+              box(totW, rowH,
+                  Text(text,
+                      style: cellStyle.copyWith(
+                          fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+                          color: color)),
+                  border: true);
+          return Row(children: [
+            for (final n in frontHoles) holeCell(n),
+            if (showOut) totCell('${grossSum(frontHoles)}'),
+            for (final n in backHoles) holeCell(n),
+            if (showEnd) ...[
+              totCell('${grossSum(backHoles)}'),
+              totCell('${grossSum(holeNums)}'),
+              totCell('${netTotal ?? ''}',
+                  bold: true, color: toParColor(ntp)),
+            ],
+          ]);
+        }(),
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        chips,
+        const SizedBox(height: 10),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Pinned net-score column, with a stronger divider before the holes.
+            Container(
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: theme.colorScheme.outline, width: 2),
+                ),
+              ),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: frozen),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [headerRow, parRow, ...playerRows],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          showNet
+              ? 'Gross per hole. Red/circle = under net par; square = over.'
+              : 'Gross per hole. Red/circle = under par; square = over.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+
+  Widget _standingsRow(ThemeData theme, Map<String, dynamic> row) {
+    final rank = row['rank'] as int? ?? 0;
+    final name = row['name']?.toString() ?? '—';
+    final ntp = row['net_to_par'] as int?;
+    final payout = (row['payout'] as num?)?.toDouble();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(children: [
+        SizedBox(
+            width: 24,
+            child: Text('$rank',
+                style: const TextStyle(fontWeight: FontWeight.bold))),
+        Expanded(child: Text(name)),
+        if (payout != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text('\$${payout.formatBet()}',
+                style: TextStyle(color: Colors.green.shade700)),
+          ),
+        Text(_ntpLabel(ntp),
+            style: TextStyle(
+                fontWeight: FontWeight.bold, color: toParColor(ntp))),
+      ]),
     );
   }
 }
@@ -1305,11 +1366,6 @@ class _IrishRumbleView extends StatelessWidget {
     if (ntp == null) return '—';
     if (ntp == 0)   return 'E';
     return ntp < 0 ? '$ntp' : '+$ntp';
-  }
-
-  static Color? _ntpColor(int? ntp, ThemeData theme) {
-    if (ntp == null || ntp == 0) return null;
-    return ntp < 0 ? Colors.green.shade700 : theme.colorScheme.error;
   }
 
   @override
@@ -1453,7 +1509,8 @@ class _IrishRumbleView extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: _ntpColor(ntp, theme),
+                      // Golf convention: under par red, even/over default.
+                      color: toParColor(ntp),
                     ),
                   ),
                   if (pool > 0) ...[
@@ -1773,10 +1830,8 @@ class _IRLeaderboardScorecard extends StatelessWidget {
         );
 
     final totalVal = runningTotals[18];
-    final totalColor = totalVal == null ? null
-        : totalVal < 0 ? Colors.green.shade700
-        : totalVal > 0 ? theme.colorScheme.error
-        : null;
+    // Golf convention: under par red, even/over default.
+    final totalColor = toParColor(totalVal);
 
     return Card(
       elevation: 0,
@@ -1873,8 +1928,7 @@ class _IRLeaderboardScorecard extends StatelessWidget {
                             ? theme.colorScheme.onSurfaceVariant.withOpacity(0.4)
                             : !counts
                                 ? theme.colorScheme.onSurfaceVariant
-                                : ntp < 0 ? Colors.green.shade700
-                                : ntp > 0 ? Colors.red.shade700
+                                : ntp < 0 ? underParColor
                                 : theme.colorScheme.onSurface;
                         return cell(
                           Text(ntp != null ? _fmt(ntp) : '·',
@@ -7608,6 +7662,21 @@ class _TripleCupOverviewView extends StatelessWidget {
     final t1Label = nameOr(raw['team1_name'] as String?, 'Blue');
     final t2Label = nameOr(raw['team2_name'] as String?, 'Orange');
 
+    // Full player names per team (deduped across segments) — shown once so a
+    // watcher knows who the short labels in each match refer to.
+    List<String> roster(int teamNum) {
+      final seen = <String>{};
+      final out = <String>[];
+      for (final m in summary.matches) {
+        for (final n in (teamNum == 1 ? m.team1.players : m.team2.players)) {
+          if (n.trim().isNotEmpty && seen.add(n.trim())) out.add(n.trim());
+        }
+      }
+      return out;
+    }
+    final t1Roster = roster(1).join(', ');
+    final t2Roster = roster(2).join(', ');
+
     String fmt(double p) =>
         p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
 
@@ -7651,6 +7720,26 @@ class _TripleCupOverviewView extends StatelessWidget {
               pill(t1Label, summary.team1Points, t1Color),
             ],
           ),
+          if (t1Roster.isNotEmpty || t2Roster.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: Text(t2Roster,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: t2Color,
+                        fontWeight: FontWeight.w600)),
+              ),
+              Expanded(
+                child: Text(t1Roster,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: t1Color,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ],
           const SizedBox(height: 12),
           // One box per match — live score as it progresses.
           for (final m in summary.matches)
@@ -7755,6 +7844,21 @@ class _TripleCupGroupCard extends StatelessWidget {
     final t1Initial = initialFrom(summary['team1_name'] as String?, 'B');
     final t2Initial = initialFrom(summary['team2_name'] as String?, 'O');
 
+    // Full player names per team (deduped across segments), shown once.
+    List<String> roster(int teamNum) {
+      final seen = <String>{};
+      final out = <String>[];
+      for (final m in matches) {
+        final team = (m['team$teamNum'] as Map?) ?? const {};
+        for (final n in ((team['players'] as List?)?.cast<String>() ?? const [])) {
+          if (n.trim().isNotEmpty && seen.add(n.trim())) out.add(n.trim());
+        }
+      }
+      return out;
+    }
+    final t1Roster = roster(1).join(', ');
+    final t2Roster = roster(2).join(', ');
+
     String fmt(double p) =>
         p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
 
@@ -7800,6 +7904,26 @@ class _TripleCupGroupCard extends StatelessWidget {
           Text('Triple Cup',
               style: TextStyle(
                   fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+          if (t1Roster.isNotEmpty || t2Roster.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(children: [
+              Expanded(
+                child: Text(t2Roster,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: t2Color,
+                        fontWeight: FontWeight.w600)),
+              ),
+              Expanded(
+                child: Text(t1Roster,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: t1Color,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ],
           const Divider(height: 14),
           ...matches.map((m) {
             final label   = m['label']?.toString() ?? '';
@@ -7810,6 +7934,14 @@ class _TripleCupGroupCard extends StatelessWidget {
                     ?.cast<String>().join(' & ') ?? '';
             final result  = m['result']?.toString();
             final winLabel = m['winner_label']?.toString() ?? '—';
+            // Right-justified winner indicator: name the winning side by its
+            // short names (clearer for a watcher than "Team 1/Team 2"); keep
+            // the live status / "Halved" when not decided team1/team2.
+            final winnerDisplay = result == 'team1'
+                ? t1Names
+                : result == 'team2'
+                    ? t2Names
+                    : winLabel;
             final color = result == 'team1'
                 ? t1Color
                 : result == 'team2'
@@ -7894,7 +8026,7 @@ class _TripleCupGroupCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Text(winLabel,
+                    Text(winnerDisplay,
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,

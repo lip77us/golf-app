@@ -142,6 +142,12 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       if (games.contains('rabbit') && rp.rabbitSummary == null) {
         rp.loadRabbit(widget.foursomeId);
       }
+      // Triple Cup: load the summary so the scorecard's per-hole strokes come
+      // from the backend's segment rules (alt-shot team average, fourball
+      // donor low, singles per-pair) — matching the score-entry screen.
+      if (games.contains('triple_cup') && rp.tripleCupSummary == null) {
+        rp.loadTripleCup(widget.foursomeId);
+      }
     });
   }
 
@@ -246,6 +252,12 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     if (games.contains('rabbit') && rp.rabbitSummary != null) {
       return (rp.rabbitSummary!.handicapMode, rp.rabbitSummary!.netPercent);
     }
+    // Triple Cup keeps its mode in its own summary (often Strokes-Off); without
+    // this the scorecard fell back to the round's mode and showed full-net dots.
+    if (games.contains('triple_cup') && rp.tripleCupSummary != null) {
+      return (rp.tripleCupSummary!.handicapMode,
+              rp.tripleCupSummary!.netPercent);
+    }
     return (rp.round?.handicapMode ?? 'net', rp.round?.netPercent ?? 100);
   }
 
@@ -342,9 +354,31 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
   /// allocator skips — making the scorecard disagree with the entry
   /// screen and the backend.  Route through the shared sixes helper to
   /// keep all three in lock-step.
+  /// Triple Cup: the backend's authoritative per-segment strokes for
+  /// [playerId] on [hole] — alt-shot shows the team's averaged value on BOTH
+  /// partners, fourball uses the per-hole donor low, singles per-pair.  Null
+  /// when not a TC round, the summary isn't loaded, or the hole isn't in a
+  /// match (falls through to the generic strokes-off-low path).
+  int? _tripleCupStrokes(int playerId, int hole, RoundProvider rp) {
+    final tc = rp.tripleCupSummary;
+    if (tc == null) return null;
+    for (final mt in tc.matches) {
+      if (hole < mt.startHole || hole > mt.endHole) continue;
+      for (final p in mt.players) {
+        if (p.playerId == playerId) return p.strokesByHole[hole] ?? 0;
+      }
+    }
+    return null;
+  }
+
   int _strokesForHole(Membership m, ScorecardHole? h) {
     if (h == null) return 0;
     final rp = context.read<RoundProvider>();
+    // Triple Cup: trust the backend's per-segment strokes so the scorecard
+    // matches the score entry (esp. alt-shot, where both partners share the
+    // team's averaged value rather than each computing strokes-off-low).
+    final tcStrokes = _tripleCupStrokes(m.player.id, h.holeNumber, rp);
+    if (tcStrokes != null) return tcStrokes;
     final effective = _effectiveHcapFor(m, rp);
     if (effective <= 0) return 0;
     // Per-player SI is preferred — falls back to the shared hole SI.
@@ -424,6 +458,26 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       } else {
         _pending.putIfAbsent(hole, () => {})[player.player.id] = score;
       }
+    });
+    if (score == -1) return;
+    // Commit a past-hole correction immediately — no save+advance needed.
+    final rp = context.read<RoundProvider>();
+    final ok = await rp.submitHole(
+      foursomeId: widget.foursomeId,
+      holeNumber: hole,
+      scores:     [{'player_id': player.player.id, 'gross_score': score}],
+    );
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+        content: Text(rp.error ?? 'Failed to save hole.'),
+        backgroundColor: Theme.of(ctx).colorScheme.error,
+      ));
+      return;
+    }
+    setState(() {
+      _pending[hole]?.remove(player.player.id);
+      if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
     });
   }
 

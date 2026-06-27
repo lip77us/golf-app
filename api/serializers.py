@@ -52,20 +52,10 @@ class PlayerSerializer(serializers.ModelSerializer):
     # only when the list view supplies `on_app_phones` in context; defaults
     # False for single-player uses (login/me).
     is_on_app = serializers.SerializerMethodField()
-    # The authoritative index to DISPLAY: a connected (On Halved) golfer's
-    # self-maintained index follows them; otherwise the local value. Computed
-    # only when the list view supplies `authoritative_index` in context.
-    effective_handicap_index = serializers.SerializerMethodField()
-    # True when the displayed index comes from the golfer's OWN profile (they've
-    # set a real index) — so a friend's copy is read-only. False when it falls
-    # back to the local value (login-less, or owner hasn't set one yet) — then
-    # the friend can still edit it.
-    handicap_is_authoritative = serializers.SerializerMethodField()
 
     class Meta:
         model  = Player
         fields = ['id', 'name', 'short_name', 'handicap_index',
-                  'effective_handicap_index', 'handicap_is_authoritative',
                   'is_phantom', 'email', 'phone', 'sex', 'user_id', 'is_on_app']
         read_only_fields = ['id']
 
@@ -76,29 +66,6 @@ class PlayerSerializer(serializers.ModelSerializer):
             return False
         n = normalize(obj.phone)
         return bool(n and n in phones)
-
-    def get_effective_handicap_index(self, obj) -> str:
-        from accounts.phone import normalize
-        amap = self.context.get('authoritative_index')
-        if amap and obj.phone:
-            n = normalize(obj.phone)
-            if n and n in amap:
-                return amap[n]
-        return str(obj.handicap_index)
-
-    def get_handicap_is_authoritative(self, obj) -> bool:
-        from accounts.phone import normalize
-        amap = self.context.get('authoritative_index')
-        if amap and obj.phone:
-            n = normalize(obj.phone)
-            return bool(n and n in amap)
-        return False
-        # short_name is writeable but optional — the Player.save() override
-        # auto-fills it from initials when blank, so the mobile form can
-        # either send a value or leave it out entirely.
-        extra_kwargs = {
-            'short_name': {'required': False, 'allow_blank': True},
-        }
 
     def validate_user_id(self, value):
         """
@@ -285,14 +252,21 @@ class CourseSerializer(serializers.ModelSerializer):
     fetch.  Holes are intentionally omitted from this shape — pull
     them via GET /tees/ when actually scoring a round.
     """
-    tees = CourseTeeSummarySerializer(many=True, read_only=True)
+    tees = serializers.SerializerMethodField()
 
     class Meta:
         model  = Course
         fields = ['id', 'name', 'golf_api_id',
                   'city', 'state', 'country', 'latitude', 'longitude',
                   'created_at', 'tees']
-        read_only_fields = ['id', 'golf_api_id', 'created_at', 'tees']
+        read_only_fields = ['id', 'golf_api_id', 'created_at']
+
+    def get_tees(self, obj):
+        # Current revisions only — retired (superseded) tees are historical and
+        # not shown as manageable rows.
+        qs = (obj.tees.filter(superseded_by__isnull=True)
+              .order_by('sort_priority', 'tee_name'))
+        return CourseTeeSummarySerializer(qs, many=True).data
 
 
 class CatalogCourseSerializer(serializers.ModelSerializer):

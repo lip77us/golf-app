@@ -412,6 +412,7 @@ def apply_single_tee(course, *, tee_name: str, slope: int,
     """
     from django.db import transaction
     from core.models import Tee
+    from services.tee_revisions import update_tee_geometry
 
     tee_name = tee_name.strip()
     if not tee_name:
@@ -422,9 +423,11 @@ def apply_single_tee(course, *, tee_name: str, slope: int,
     par_total = sum(h['par'] for h in holes)
 
     with transaction.atomic():
+        # Match among CURRENT tees only — a retired (superseded) revision must
+        # not be re-rated or re-matched.
         existing = next(
             (t for t in course.tees.all()
-             if t.tee_name.casefold() == tee_name.casefold()),
+             if t.is_current and t.tee_name.casefold() == tee_name.casefold()),
             None,
         )
         attrs = dict(
@@ -436,21 +439,20 @@ def apply_single_tee(course, *, tee_name: str, slope: int,
             holes         = holes,
         )
         if existing is None:
-            # New tee — assign a sort_priority just past the highest
-            # existing one so it lands at the bottom of the list.
-            max_priority = course.tees.aggregate(
-                m=models.Max('sort_priority'),
-            )['m'] or 0
+            # New tee — assign a sort_priority just past the highest current
+            # one so it lands at the bottom of the list.
+            max_priority = course.tees.filter(
+                superseded_by__isnull=True,
+            ).aggregate(m=models.Max('sort_priority'))['m'] or 0
             tee = Tee.objects.create(
                 course=course,
                 sort_priority=max_priority + 10,
                 **attrs,
             )
         else:
-            for field, value in attrs.items():
-                setattr(existing, field, value)
-            existing.save()
-            tee = existing
+            # Copy-on-write: supersedes the row (preserving played rounds) when
+            # the holes changed and it's been used; otherwise updates in place.
+            tee = update_tee_geometry(existing, attrs)
 
     return tee
 
@@ -480,6 +482,7 @@ def apply_parse(account, parsed: dict[str, Any], *,
     """
     from django.db import transaction
     from core.models import Course, Tee
+    from services.tee_revisions import update_tee_geometry
 
     if bool(course_name) == bool(replace_course):
         raise ValueError(
@@ -506,7 +509,8 @@ def apply_parse(account, parsed: dict[str, Any], *,
             course = replace_course
 
         existing_by_name = {
-            t.tee_name.casefold(): t for t in course.tees.all()
+            t.tee_name.casefold(): t
+            for t in course.tees.all() if t.is_current
         }
 
         for priority, spec in enumerate(parsed['tees'], start=10):
@@ -532,8 +536,7 @@ def apply_parse(account, parsed: dict[str, Any], *,
             if existing is None:
                 Tee.objects.create(course=course, **attrs)
             else:
-                for field, value in attrs.items():
-                    setattr(existing, field, value)
-                existing.save()
+                # Copy-on-write: preserves any round already played on this tee.
+                update_tee_geometry(existing, attrs)
 
         return course

@@ -25,6 +25,7 @@ import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
+import '../utils/round_complete.dart';
 
 String _fmtMoney(double v) {
   if (v == 0) return '—';
@@ -49,6 +50,10 @@ class _RabbitScreenState extends State<RabbitScreen> {
   int  _selectedHole    = 1;
   bool _prevHadPending  = false;
   bool _initialJumpDone = false;
+  // When the user taps an already-scored player to correct a past hole, this
+  // holds their id so the inline picker re-opens for that row (there's no
+  // hot-spot on a completed hole).  Cleared on navigation and after saving.
+  int? _editingPlayerId;
 
   @override
   void initState() {
@@ -120,7 +125,16 @@ class _RabbitScreenState extends State<RabbitScreen> {
     final wasAllScored =
         sc != null && _allScored(players, _effectiveScores(sc, hole));
     _selectScore(m, score, hole);
-    if (sc == null || score <= 0 || wasAllScored) return;
+    if (sc == null || score <= 0) return;
+    if (wasAllScored) {
+      // Editing an already-complete (past) hole: there's no save+advance step
+      // for a correction, so persist it immediately — otherwise the change is
+      // lost the moment the user navigates to another hole.  Auto-advance
+      // deliberately does not fire on an edit.
+      setState(() => _editingPlayerId = null);
+      _saveHole(ctx, hole, players);
+      return;
+    }
     if (!context.read<SettingsProvider>().autoAdvanceHole) return;
     if (!_allScored(players, _effectiveScores(sc, hole))) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -149,27 +163,44 @@ class _RabbitScreenState extends State<RabbitScreen> {
     setState(() => _selectedHole = 18);
   }
 
-  void _advance() { if (_selectedHole < 18) setState(() => _selectedHole++); }
-  void _retreat() { if (_selectedHole > 1)  setState(() => _selectedHole--); }
+  void _advance() {
+    if (_selectedHole < 18) setState(() { _selectedHole++; _editingPlayerId = null; });
+  }
+  void _retreat() {
+    if (_selectedHole > 1)  setState(() { _selectedHole--; _editingPlayerId = null; });
+  }
 
-  Future<void> _saveAndAdvance(BuildContext ctx, List<Membership> players) async {
-    final edits = _pending[_selectedHole];
-    if (edits == null || edits.isEmpty) { _advance(); return; }
+  /// Persist whatever is pending for [hole] without changing the selected hole.
+  /// Used both by the save+advance button and by inline edits to past holes.
+  Future<void> _saveHole(
+      BuildContext ctx, int hole, List<Membership> players) async {
+    final edits = _pending[hole];
+    if (edits == null || edits.isEmpty) return;
     final scores = edits.entries
         .map((e) => {'player_id': e.key, 'gross_score': e.value})
         .toList();
     final rp = context.read<RoundProvider>();
     final ok = await rp.submitHole(
-      foursomeId: widget.foursomeId, holeNumber: _selectedHole, scores: scores);
+      foursomeId: widget.foursomeId, holeNumber: hole, scores: scores);
     if (!mounted) return;
     if (!ok) { _snack(ctx, rp.error ?? 'Failed to save hole.',
-        () => _saveAndAdvance(ctx, players)); return; }
-    setState(() { _pending.remove(_selectedHole); });
+        () => _saveHole(ctx, hole, players)); return; }
+    setState(() { _pending.remove(hole); });
     rp.loadRabbit(widget.foursomeId);
+  }
+
+  Future<void> _saveAndAdvance(BuildContext ctx, List<Membership> players) async {
+    final hole = _selectedHole;
+    if (_pending[hole]?.isNotEmpty ?? false) {
+      await _saveHole(ctx, hole, players);
+      if (!mounted || _pending.containsKey(hole)) return;   // save failed
+    }
     _advance();
   }
 
   Future<void> _finishRound(BuildContext ctx, List<Membership> players) async {
+    if (!await confirmCompleteRound(ctx)) return;
+    if (!mounted) return;
     final rp = context.read<RoundProvider>();
     final sync = context.read<SyncService>();
     final roundId = rp.round?.id;
@@ -187,8 +218,17 @@ class _RabbitScreenState extends State<RabbitScreen> {
     }
     await sync.waitUntilIdle();
     if (!mounted) return;
-    rp.loadRabbit(widget.foursomeId);
     if (roundId != null) {
+      // Mark the round complete (locks scores, moves it to the Completed
+      // list).  Without this the round stays in_progress and is stuck in the
+      // active list even after "Done".
+      final lb = await rp.completeRound(roundId);
+      if (!mounted) return;
+      if (lb == null) {
+        _snack(ctx, rp.error ?? 'Could not complete round.',
+            () => _finishRound(ctx, players));
+        return;
+      }
       Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
@@ -352,7 +392,10 @@ class _RabbitScreenState extends State<RabbitScreen> {
               summary:    summary,
               holeInfo:   holeInfo,
               holderId:   rabHolderId,
+              editingPlayerId: _editingPlayerId,
               onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
+              onEditTap: (m) => setState(() => _editingPlayerId =
+                  _editingPlayerId == m.player.id ? null : m.player.id),
             ),
             if (holeInfo != null && holeInfo.isScored) ...[
               const SizedBox(height: 10),
@@ -367,7 +410,9 @@ class _RabbitScreenState extends State<RabbitScreen> {
               _RabbitGrid(
                 summary: summary, players: players, scorecard: sc,
                 currentHole: _selectedHole,
-                onTapHole: (h) => setState(() => _selectedHole = h)),
+                onTapHole: (h) => setState(() {
+                  _selectedHole = h; _editingPlayerId = null;
+                })),
             const SizedBox(height: 16),
           ]),
         ),
@@ -522,7 +567,9 @@ class _HoleScoreCard extends StatelessWidget {
   final RabbitSummary?   summary;
   final RabbitHole?      holeInfo;
   final int?             holderId;   // rabbit holder for the selected segment
+  final int?             editingPlayerId;  // scored row the user tapped to fix
   final void Function(Membership, int) onScoreSelected;
+  final void Function(Membership) onEditTap;
 
   const _HoleScoreCard({
     required this.holeData,
@@ -534,7 +581,9 @@ class _HoleScoreCard extends StatelessWidget {
     required this.summary,
     required this.holeInfo,
     required this.holderId,
+    required this.editingPlayerId,
     required this.onScoreSelected,
+    required this.onEditTap,
   });
 
   String get _mode       => summary?.handicapMode ?? 'net';
@@ -580,6 +629,11 @@ class _HoleScoreCard extends StatelessWidget {
           final m   = entry.value;
           final gross = scores[m.player.id];
           final isHot = idx == hotSpotIdx;
+          final isEditing = editingPlayerId == m.player.id;
+          // A scored row that isn't the live hot-spot can be tapped to correct
+          // it — that re-opens the inline picker (a completed hole has no
+          // hot-spot, so without this there'd be no way to edit a past hole).
+          final editable = gross != null && !isHot;
           final strokes = _strokesForHole(m, holeData);
           return [
             _PlayerRow(
@@ -593,8 +647,11 @@ class _HoleScoreCard extends StatelessWidget {
                 playingHandicap: m.playingHandicap,
                 lowestPlayingHandicap: _lowPlaying),
               isHolder: _isHolder(m.player.id),
+              editable: editable,
+              isEditing: isEditing,
+              onTap: editable ? () => onEditTap(m) : null,
             ),
-            if (isHot)
+            if (isHot || isEditing)
               _InlinePicker(
                 par: par, strokes: strokes, currentScore: gross,
                 onScoreSelected: (s) => onScoreSelected(m, s)),
@@ -613,6 +670,9 @@ class _PlayerRow extends StatelessWidget {
   final bool       showHcap;
   final int        hcap;
   final bool       isHolder;
+  final bool       editable;   // tap to correct an already-scored past hole
+  final bool       isEditing;  // its inline picker is currently open
+  final VoidCallback? onTap;
 
   const _PlayerRow({
     required this.member,
@@ -622,18 +682,21 @@ class _PlayerRow extends StatelessWidget {
     required this.showHcap,
     required this.hcap,
     required this.isHolder,
+    this.editable = false,
+    this.isEditing = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final boxBg = isHot
+    final boxBg = (isHot || isEditing)
         ? theme.colorScheme.primaryContainer.withOpacity(0.4) : Colors.transparent;
-    final boxBorder = isHot
+    final boxBorder = (isHot || isEditing)
         ? Border.all(color: theme.colorScheme.primary, width: 2)
         : Border.all(color: theme.colorScheme.outline);
 
-    return Container(
+    final row = Container(
       decoration: BoxDecoration(
         color: isHolder ? theme.colorScheme.primary.withOpacity(0.06) : null,
         border: Border(
@@ -678,7 +741,12 @@ class _PlayerRow extends StatelessWidget {
             ],
           ]),
         ),
-        const SizedBox(width: 8),
+        if (editable && !isEditing) ...[
+          Icon(Icons.edit, size: 14,
+              color: theme.colorScheme.primary.withOpacity(0.7)),
+          const SizedBox(width: 6),
+        ] else
+          const SizedBox(width: 8),
         Container(
           width: 40, height: 36,
           decoration: BoxDecoration(
@@ -695,6 +763,9 @@ class _PlayerRow extends StatelessWidget {
         ),
       ]),
     );
+
+    if (onTap == null) return row;
+    return InkWell(onTap: onTap, child: row);
   }
 }
 

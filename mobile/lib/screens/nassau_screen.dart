@@ -25,6 +25,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
+import '../utils/round_complete.dart';
 
 String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
 
@@ -342,6 +343,8 @@ class _NassauScreenState extends State<NassauScreen> {
             score;
       }
     });
+    // Commit a past-hole correction immediately — no save+advance needed.
+    if (score != -1) await _saveAndAdvance(ctx, players, par, advance: false);
   }
 
   void _advance() {
@@ -355,11 +358,12 @@ class _NassauScreenState extends State<NassauScreen> {
   Future<void> _saveAndAdvance(
     BuildContext ctx,
     List<Membership> players,
-    int par,
-  ) async {
+    int par, {
+    bool advance = true,
+  }) async {
     final edits = _pending[_selectedHole];
     if (edits == null || edits.isEmpty) {
-      _advance();
+      if (advance) _advance();
       return;
     }
     final scores = edits.entries
@@ -380,14 +384,14 @@ class _NassauScreenState extends State<NassauScreen> {
         action: SnackBarAction(
           label: 'Retry',
           textColor: Theme.of(ctx).colorScheme.onError,
-          onPressed: () => _saveAndAdvance(ctx, players, par),
+          onPressed: () => _saveAndAdvance(ctx, players, par, advance: advance),
         ),
       ));
       return;
     }
     setState(() { _pending.remove(_selectedHole); });
     rp.loadNassau(widget.foursomeId);
-    _advance();
+    if (advance) _advance();
   }
 
   Future<void> _finishRound(
@@ -395,6 +399,8 @@ class _NassauScreenState extends State<NassauScreen> {
     List<Membership> players,
     int par,
   ) async {
+    if (!await confirmCompleteRound(ctx)) return;
+    if (!mounted) return;
     final rp      = context.read<RoundProvider>();
     final sync    = context.read<SyncService>();
     final roundId = rp.round?.id;
@@ -427,8 +433,18 @@ class _NassauScreenState extends State<NassauScreen> {
 
     await sync.waitUntilIdle();
     if (!mounted) return;
-    rp.loadNassau(widget.foursomeId);
     if (roundId != null) {
+      // Mark the round complete so it leaves the active list (without this
+      // "Done" only opened the leaderboard and the round stayed in_progress).
+      final lb = await rp.completeRound(roundId);
+      if (!mounted) return;
+      if (lb == null) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text(rp.error ?? 'Could not complete round.'),
+          backgroundColor: Theme.of(ctx).colorScheme.error,
+        ));
+        return;
+      }
       Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
@@ -1960,12 +1976,15 @@ class _PhantomInfoStrip extends StatelessWidget {
         ? phantomInfo.phantomPlayingHcp
         : null;
 
-    // Group holes by donor name for a compact rotation summary
+    // Group holes by donor short name for a compact rotation summary; the SO
+    // is per-donor (donor index − real low), so cache it alongside.
     final Map<String, List<int>> byDonor = {};
+    final Map<String, int>       donorSo = {};
     for (int h = 1; h <= 18; h++) {
       final donor = phantomInfo.donorForHole(h);
       if (donor == null) continue;
-      byDonor.putIfAbsent(donor.playerName, () => []).add(h);
+      byDonor.putIfAbsent(donor.shortName, () => []).add(h);
+      donorSo[donor.shortName] = donor.so;
     }
 
     return Container(
@@ -2039,6 +2058,14 @@ class _PhantomInfoStrip extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
+                        if ((donorSo[name] ?? 0) > 0)
+                          TextSpan(
+                            text: '  SO ${donorSo[name]}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         TextSpan(
                           text: '  holes ${holes.join(', ')}',
                           style: theme.textTheme.bodySmall?.copyWith(

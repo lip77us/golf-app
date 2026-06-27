@@ -237,8 +237,11 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
     final nav = Navigator.of(context);
     final fsId = round.foursomeId;
 
-    // Completed rounds → round overview (shows leaderboard button etc.)
-    if (round.status == 'complete' || fsId == null) {
+    // Completed rounds → round overview (shows leaderboard button etc.).
+    // Not-yet-started rounds → also the overview, so the user can review and
+    // edit the setup (tees, players, game config) instead of jumping straight
+    // into scoring.  currentHole == 0 means no scores have been entered yet.
+    if (round.status == 'complete' || fsId == null || round.currentHole == 0) {
       await nav.pushNamed('/round', arguments: round.id);
       return;
     }

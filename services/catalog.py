@@ -143,13 +143,36 @@ def clone_catalog_to_account(catalog_course, account, *, replace_tees: bool = Fa
             'name', 'city', 'state', 'country', 'latitude', 'longitude',
         ])
 
-    if created or replace_tees:
-        if not created:
-            course.tees.all().delete()  # may raise ProtectedError if tees are in use
+    if created:
         for ct in catalog_course.tees.all():
             Tee.objects.create(
                 course=course, tee_name=ct.tee_name, slope=ct.slope,
                 course_rating=ct.course_rating, par=ct.par, sex=ct.sex,
                 sort_priority=ct.default_sort_priority, holes=ct.holes,
             )
+    elif replace_tees:
+        # Refresh tees via copy-on-write: a tee that's been played is RETIRED
+        # and replaced (so old rounds keep their hole data) rather than deleted
+        # in place — which previously raised ProtectedError.  Local
+        # sort_priority is preserved (we don't pass it to the update).  Match
+        # current account tees to catalog tees by (name, sex).
+        from services.tee_revisions import update_tee_geometry
+        current_by_key = {
+            (t.tee_name.casefold(), t.sex): t
+            for t in course.tees.filter(superseded_by__isnull=True)
+        }
+        for ct in catalog_course.tees.all():
+            attrs = dict(
+                tee_name=ct.tee_name, slope=ct.slope,
+                course_rating=ct.course_rating, par=ct.par, sex=ct.sex,
+                holes=ct.holes,
+            )
+            existing = current_by_key.get((ct.tee_name.casefold(), ct.sex))
+            if existing is None:
+                Tee.objects.create(
+                    course=course, sort_priority=ct.default_sort_priority,
+                    **attrs,
+                )
+            else:
+                update_tee_geometry(existing, attrs)
     return course, created

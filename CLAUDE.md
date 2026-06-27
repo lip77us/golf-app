@@ -269,6 +269,35 @@ sign up with that number → badge appears; same match as Phase 2a).
   the 4 login golfers show "On Halved" and the 8 others show as invitable.
 - Prerequisite for delegated cross-account scoring (below).
 
+#### Handicap index: locally-editable + propagate-on-self-edit
+The handicap model is **push, not read-time override** (replaced the old
+"authoritative index" that locked a friend's copy):
+- Every account keeps its OWN editable copy of a golfer's index — a friend can
+  ALWAYS change their copy. `Player.effective_handicap_index()` just returns the
+  local `handicap_index` (scoring uses the local value, snapshotted into
+  `FoursomeMembership` at setup as before).
+- When a golfer edits their OWN profile index, it PROPAGATES to friends'
+  login-less copies (matched by normalized phone), overwriting them; the friend
+  may re-edit, and the next self-edit overwrites again. `PlayerDetailView.patch`
+  calls `propagate_canonical_index(player)` when the edited player is a canonical
+  profile (`Player.user` set) and `handicap_index` changed. A friend editing a
+  copy (no linked user) stays local.
+- The obsolete `effective_handicap_index` / `handicap_is_authoritative` fields
+  were REMOVED end-to-end: gone from `PlayerSerializer` (incl. a stray dead
+  `extra_kwargs` block that lived inside the old `get_*` method), and from the
+  mobile `PlayerProfile` (`effectiveHandicapIndex`/`handicapIsAuthoritative`
+  fields + the `_handicapLocked` read-only logic in `player_form_screen`).
+  `PlayerProfile.displayHandicap` now just returns the local `handicapIndex`.
+  `_on_app_context` no longer computes the authoritative map. (Removing the API
+  fields is safe for the shipped 2.1.0 client — its `fromJson` defaults the
+  missing keys to `''`/`false`, which degrade to exactly the new behavior.)
+  The model method `Player.effective_handicap_index()` stays (returns local;
+  used by `course_handicap`).
+- Tests: `api/test_handicap_propagation.py` (local copy used for display +
+  course handicap; friend edit stays local; owner edit propagates + overwrites a
+  friend's local change; only phone-matches touched). Replaced the old
+  `test_handicap_authoritative.py`.
+
 ### Friends Phase 2b — delegated cross-account scoring (BACKEND done) — implemented
 A TD designates an on-app golfer in a foursome as its **scorer**; that user (in
 their OWN account) enters scores for the whole foursome and reads the whole-field
@@ -430,6 +459,85 @@ cost that justified the old gating is no longer a constraint.
   `CourseImportView` (the selection-time import) still requires
   `is_staff or is_account_admin` — fine because every phone signup is an account
   admin; relax it if non-admin members ever need to import.
+
+### Import quality gate — implemented
+Rejects courses with broken hole data BEFORE they enter the shared catalog (and
+poison every account that later copies from them). Motivated by a real defect: a
+GolfCourseAPI course came in with **all 18 stroke indexes = 18**, which silently
+breaks net scoring (every hole allocates handicap strokes identically).
+- **Root cause:** `services/golf_api_client.py` `_adapt_hole` used
+  `int(raw.get('handicap') or 18)` — a missing per-hole handicap collapsed to SI
+  18 for every hole. Fixed: `_adapt_hole` no longer FABRICATES; missing
+  handicap/par become a **0 sentinel** (via new `_opt_int`) that the gate
+  reports explicitly, instead of a plausible-looking default that corrupts
+  scoring. (Par got the same treatment — was silently defaulting to 4.)
+- **Gate:** `services/course_quality.py` `assert_course_quality(api_course)`
+  (operates on the ADAPTED dict — the shape `fetch_course()` returns /
+  `upsert_catalog_course()` consumes). Hard-rejects a tee that CLAIMS per-hole
+  data but gets it wrong — **stroke index must be a permutation of 1..18** (each
+  once: catches all-18, duplicates, gaps, out-of-range), par 3-6 per hole,
+  plausible total par, contiguous hole numbers. A **0-hole tee is a soft warning,
+  not an error** (slope/rating-only tees stay usable for gross games — no
+  regression). Raises `CourseQualityError(problems=[...])` on hard defects;
+  returns soft warnings otherwise. `validate_tee_holes(holes)` is the per-tee
+  unit.
+- **Wiring:** `CourseImportView` (the single API→catalog entry point — only
+  caller of `upsert_catalog_course`; the unified-search "api" branch routes
+  through it too) runs the gate after the name check and **before any DB write**,
+  returning **422** `{detail, problems:[...]}` on failure. The view's
+  `@transaction.atomic` guarantees nothing leaks into the catalog or account.
+- **Parity:** the manual paste path (`services/course_paste.py`) already had the
+  equivalent SI-permutation check — this brings the API path up to it. (Two
+  implementations; DRY-ing into one shared check is a cheap future cleanup.)
+- Tests: `api/test_course_quality.py` (validator units, adapter-sentinel,
+  view 422 + asserts zero rows written, good import still 201). 
+- **Decision:** reject (not gross-only import) a course with no SI data — the
+  user can paste a corrected card. A "gross-only" import toggle is deferred.
+- **Not gated:** the `seed_catalog_from_courses` backfill (migrates existing
+  local data) — revisit if needed.
+
+### Copy-on-write tees (round-history freeze) — implemented
+Makes an account `Tee` IMMUTABLE once a round references it, so a completed
+round's scorecard stays frozen against the exact hole data (par + stroke index)
+it was played on. **Why this was needed:** every scoring service reads par/SI
+LIVE from `membership.tee.holes` (points_531, skins, nassau, sixes, …), and the
+re-rate / re-import paths mutated tees IN PLACE — so a course correction silently
+rewrote the net scores + handicap allocations of every past round on that tee.
+([api/views.py] even had a comment claiming pk-preservation protected history;
+it preserved the FK, not the geometry.) This is the prerequisite that makes
+catalog→account propagation safe.
+- **Model:** `Tee.superseded_by` (self-FK, `SET_NULL`, `related_name='supersedes'`;
+  **null == current revision**) + `Tee.is_current` property. Migration
+  `core/0007`. No data migration — existing rows default to null (current).
+  Chosen over a separate `is_current` boolean to keep a single source of truth +
+  free lineage ("old rounds point to a previous rev").
+- **The choke point:** `services/tee_revisions.py` `update_tee_geometry(tee,
+  attrs)` — if the new holes differ AND the tee is referenced by any
+  `FoursomeMembership`, it RETIRES the old row (sets `superseded_by`) and creates
+  a NEW current revision (carrying local `sort_priority` unless overridden);
+  old rounds keep pointing at the old immutable row, new rounds pick up the
+  re-rate. Unreferenced or holes-unchanged → updates IN PLACE (no revision
+  churn for courses nobody has played).
+- **Write sites rewired through it:** `services/course_paste.py`
+  (`apply_single_tee`, `apply_parse` — match CURRENT tees only) and
+  `services/catalog.py` `clone_catalog_to_account(replace_tees=True)`. The
+  catalog refresh now supersedes-by-`(name, sex)` instead of
+  `course.tees.all().delete()` — which **fixes the `ProtectedError`** a re-import
+  of a played course used to raise, and preserves local `sort_priority`.
+- **Select sites filtered to current** (`superseded_by__isnull=True`):
+  `TeeListView`, the tee-box editor GET (`FoursomeTeesView`), `CourseSerializer.tees`
+  (now a method field; Manage Courses), and `CourseFindView` `tee_count`.
+  **Left unfiltered on purpose:** `TeeDetailView` (by-id — old rounds fetch their
+  retired tee) and `MembershipSerializer.tee` (embeds the played tee + holes, so
+  the score screen renders an old round from the frozen revision). All
+  `getTees()` consumers are setup screens, so they correctly see current only.
+- Tests: `api/test_tee_revisions.py` (in-place vs supersede, frozen membership
+  holes, unchanged-holes no-churn, serializer excludes retired, catalog re-import
+  supersedes + preserves local priority). Full `api`+`scoring` suites green (257).
+- **Next (Part B of the original plan — propagation):** `CatalogCourse.data_version`
+  + `Course.catalog_synced_version` + a lazy sync that supersedes account tees
+  from the catalog. Now SAFE to build on top of this. (Not the import-quality
+  "B" above — that's already done; this is the propagation slice.)
 
 ---
 

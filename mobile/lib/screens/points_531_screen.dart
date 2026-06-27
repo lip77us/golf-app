@@ -27,6 +27,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
+import '../utils/round_complete.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
@@ -275,6 +276,8 @@ class _Points531ScreenState extends State<Points531Screen> {
         _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
       }
     });
+    // Commit a past-hole correction immediately — no save+advance needed.
+    if (score != -1) await _saveAndAdvance(ctx, players, par, advance: false);
   }
 
   void _advance() {
@@ -288,11 +291,12 @@ class _Points531ScreenState extends State<Points531Screen> {
   Future<void> _saveAndAdvance(
     BuildContext ctx,
     List<Membership> players,
-    int par,
-  ) async {
+    int par, {
+    bool advance = true,
+  }) async {
     final edits = _pending[_selectedHole];
     if (edits == null || edits.isEmpty) {
-      _advance();
+      if (advance) _advance();
       return;
     }
     final scores = edits.entries
@@ -313,14 +317,14 @@ class _Points531ScreenState extends State<Points531Screen> {
         action: SnackBarAction(
           label: 'Retry',
           textColor: Theme.of(ctx).colorScheme.onError,
-          onPressed: () => _saveAndAdvance(ctx, players, par),
+          onPressed: () => _saveAndAdvance(ctx, players, par, advance: advance),
         ),
       ));
       return;
     }
     setState(() { _pending.remove(_selectedHole); });
     rp.loadPoints531(widget.foursomeId);
-    _advance();
+    if (advance) _advance();
   }
 
   Future<void> _finishRound(
@@ -328,6 +332,8 @@ class _Points531ScreenState extends State<Points531Screen> {
     List<Membership> players,
     int par,
   ) async {
+    if (!await confirmCompleteRound(ctx)) return;
+    if (!mounted) return;
     final rp      = context.read<RoundProvider>();
     final sync    = context.read<SyncService>();
     final roundId = rp.round?.id;
@@ -362,8 +368,18 @@ class _Points531ScreenState extends State<Points531Screen> {
     // certainly run before we navigate to the leaderboard.
     await sync.waitUntilIdle();
     if (!mounted) return;
-    rp.loadPoints531(widget.foursomeId);
     if (roundId != null) {
+      // Mark the round complete so it leaves the active list (without this
+      // "Done" only opened the leaderboard and the round stayed in_progress).
+      final lb = await rp.completeRound(roundId);
+      if (!mounted) return;
+      if (lb == null) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text(rp.error ?? 'Could not complete round.'),
+          backgroundColor: Theme.of(ctx).colorScheme.error,
+        ));
+        return;
+      }
       Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }

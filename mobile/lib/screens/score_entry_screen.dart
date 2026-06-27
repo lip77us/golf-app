@@ -29,6 +29,9 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
+import '../utils/round_complete.dart';
+import '../utils/golf_colors.dart';
+import '../widgets/score_mark.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
@@ -1121,32 +1124,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     // playing partners.
     final foursomeCount = rp.round?.foursomes.length ?? 1;
     final isMultiGroup = foursomeCount > 1;
-    final dialogBody = isMultiGroup
-        ? 'This will lock your group\'s scores. The round will be '
-            'marked complete once every other group also finishes. '
-            'You can still view live results in the meantime.'
-        : 'This will mark the round as finished and lock all scores. '
-            'You can still view the final results afterwards, and the '
-            'round can be reopened from the leaderboard if needed.';
 
-    final confirmed = await showDialog<bool>(
-      context: ctx,
-      builder: (dctx) => AlertDialog(
-        title: Text(isMultiGroup ? 'Finish Your Group?' : 'Complete Round?'),
-        content: Text(dialogBody),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dctx).pop(true),
-            child: Text(isMultiGroup ? 'Finish Group' : 'Complete Round'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+    if (!await confirmCompleteRound(ctx, isMultiGroup: isMultiGroup)) return;
+    if (!mounted) return;
 
     // Save any still-pending current-hole edits first.
     final saved = await _saveCurrentHole(ctx, players, par);
@@ -2047,6 +2027,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
       }
     });
+    // Commit a past-hole correction immediately (save without advancing) — no
+    // separate save+advance step needed for an edit.
+    if (score != -1) await _saveCurrentHole(ctx, players, par);
   }
 }
 
@@ -2527,7 +2510,7 @@ class _HoleScoreCard extends StatelessWidget {
             playerId: -1, name: '', shortName: '', teamNumber: 0),
       );
       if (entry.playerId == -1) continue;
-      return entry.strokesOff;   // null in NET/GROSS mode, int in SO
+      return entry.soForHole(hole);   // per-hole SO (fourball donor), else per-match
     }
     return null;
   }
@@ -2556,7 +2539,7 @@ class _HoleScoreCard extends StatelessWidget {
       );
       if (entry.playerId == -1) continue;
       out.add((
-        strokesOff:    entry.strokesOff,
+        strokesOff:    entry.soForHole(hole),   // per-hole SO for fourball donor
         strokesOnHole: entry.strokesByHole[hole] ?? 0,
       ));
     }
@@ -2924,6 +2907,7 @@ class _HoleScoreCard extends StatelessWidget {
               && _phantomBelongsOnHole(holeNumber))
             Builder(builder: (_) {
               Color? phantomTeamColor;
+              int?   phantomTeamNumber;
               if (tripleCupSummary != null) {
                 final phantomPid = phantomMembership!.player.id;
                 for (final m in tripleCupSummary!.matches) {
@@ -2935,10 +2919,12 @@ class _HoleScoreCard extends StatelessWidget {
                   );
                   if (onT1) {
                     phantomTeamColor = tripleCupSummary!.team1Color;
+                    phantomTeamNumber = 1;
                     break;
                   }
                   if (onT2) {
                     phantomTeamColor = tripleCupSummary!.team2Color;
+                    phantomTeamNumber = 2;
                     break;
                   }
                 }
@@ -2951,6 +2937,11 @@ class _HoleScoreCard extends StatelessWidget {
                 players:           players,
                 tcPhantom:         tripleCupSummary?.phantom,
                 phantomTeamColor:  phantomTeamColor,
+                phantomTeamNumber: phantomTeamNumber,
+                par:               par,
+                donorStrokesThisHole:
+                    _tripleCupExpectedStrokes(
+                        phantomMembership!.player.id, holeNumber) ?? 0,
               );
             }),
         ],
@@ -3159,6 +3150,15 @@ class _PhantomPlayerRow extends StatelessWidget {
   /// dimmed so the phantom reads as part of its team but still clearly
   /// "auto-scored, don't touch."  Null falls back to neutral ghost.
   final Color?            phantomTeamColor;
+  /// The phantom's strokes on this hole (backend-computed, per-hole donor).
+  /// Drives the "•" dots in the mirrored hcap bubble.
+  final int               donorStrokesThisHole;
+  /// Phantom's cup team number (1/2) — drives the "T1"/"T2" badge that
+  /// replaces the person icon so the row matches the real players. Null
+  /// for non-TC phantoms (keeps the neutral icon).
+  final int?              phantomTeamNumber;
+  /// Hole par — colors the score box by net-to-par (golf convention).
+  final int?              par;
 
   const _PhantomPlayerRow({
     required this.phantom,
@@ -3168,6 +3168,9 @@ class _PhantomPlayerRow extends StatelessWidget {
     this.phantomInit,
     this.tcPhantom,
     this.phantomTeamColor,
+    this.donorStrokesThisHole = 0,
+    this.phantomTeamNumber,
+    this.par,
   });
 
   @override
@@ -3190,39 +3193,94 @@ class _PhantomPlayerRow extends StatelessWidget {
     // placeholder when the donor hasn't yet posted that hole.
     if (tcPhantom != null) {
       final donor       = tcPhantom!.donorForHole(holeNumber);
-      final donorName   = donor?.playerName ?? 'donor';
+      final donorName   = donor?.playerName ?? 'donor';   // full name in subtitle
+      final donorSo     = tcPhantom!.soForHole(holeNumber);
       final hasScore    = donor?.hasScore ?? false;
-      // Phantom's HoleScore.gross_score is donor's full net (per D1 in
-      // scoring/phantom.py).  Reading from `scores` gives us the value
-      // already net of donor's full handicap — display as-is.
-      final phantomNet  = scores[phantom.player.id];
-      final title       = 'Phantom ($donorName)';
-      final subtitle    = hasScore
-          ? 'Net from $donorName'
+      // Phantom's HoleScore.gross_score now carries the donor's raw GROSS
+      // (the per-hole donor strokes-off is applied by the scoring layer), so
+      // it displays like the other 3 players — gross digit + an SO badge.
+      final phantomGross = scores[phantom.player.id];
+      const title        = 'Phantom';
+      final subtitle     = hasScore
+          ? 'Gross from $donorName'
           : 'Waiting for $donorName…';
 
       return Container(
         decoration: BoxDecoration(
+          // Team-color tint to match the real player rows (faint fill + a
+          // 4px left edge in the team color).
+          color: phantomTeamColor != null
+              ? phantomTeamColor!.withValues(alpha: 0.07)
+              : null,
           border: Border(
             top: BorderSide(color: theme.colorScheme.outlineVariant),
+            left: phantomTeamColor != null
+                ? BorderSide(color: phantomTeamColor!, width: 4)
+                : BorderSide.none,
           ),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            Icon(Icons.person_outline, size: 18, color: tint),
-            const SizedBox(width: 8),
+            // Team badge (T1/T2) — matches the real player rows; falls back
+            // to the neutral person icon for non-TC phantoms.
+            if (phantomTeamNumber != null && phantomTeamColor != null) ...[
+              Container(
+                width: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: phantomTeamColor!.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'T$phantomTeamNumber',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: phantomTeamColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ] else ...[
+              Icon(Icons.person_outline, size: 18, color: tint),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: tint,
-                      fontStyle: FontStyle.italic,
+                  Row(children: [
+                    Text(
+                      title,   // "Phantom" — bold to match the player rows
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: tint,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    // The "-N •" hcap bubble sits next to "Phantom", mirroring
+                    // the players' badge beside their short name.
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.secondaryContainer
+                            .withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: theme.colorScheme.outlineVariant),
+                      ),
+                      child: Text(
+                        '-$donorSo'
+                        '${donorStrokesThisHole > 0 ? ' ${'•' * donorStrokesThisHole}' : ''}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSecondaryContainer,
+                        ),
+                      ),
+                    ),
+                  ]),
                   Text(
                     subtitle,
                     style: theme.textTheme.bodySmall?.copyWith(color: tint),
@@ -3230,29 +3288,45 @@ class _PhantomPlayerRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (phantomNet != null && hasScore)
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: tint.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: tint.withValues(alpha: 0.4)),
-                ),
-                child: Text(
-                  '$phantomNet',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: tint,
-                    fontStyle: FontStyle.italic,
-                    fontWeight: FontWeight.w600,
+            if (phantomGross != null && hasScore)
+              // Identical NetScoreButton to the real players so the phantom's
+              // box matches its partner exactly — same size, golf colors
+              // (red net-under-par), circle/square, no red fill.
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  NetScoreButton(
+                    score:    phantomGross,
+                    par:      par ?? 4,
+                    strokes:  donorStrokesThisHole,
+                    selected: false,
+                    width:    40,
+                    height:   36,
                   ),
-                ),
+                  if (donorStrokesThisHole > 0)
+                    Positioned(
+                      top: 2, right: 2,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(
+                          donorStrokesThisHole.clamp(0, 2),
+                          (i) => Container(
+                            width: 4, height: 4,
+                            margin: const EdgeInsets.only(left: 1),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               )
             else
               SizedBox(
                 width: 40,
-                height: 32,
+                height: 36,
                 child: Center(
                   child: Text(
                     '…',
@@ -4729,9 +4803,7 @@ class _IrishRumbleScorecardGridState
                         } else if (!counts) {
                           textColor = theme.colorScheme.onSurfaceVariant;
                         } else if (ntp < 0) {
-                          textColor = Colors.green.shade700;
-                        } else if (ntp > 0) {
-                          textColor = Colors.red.shade700;
+                          textColor = underParColor; // golf: under par red
                         } else {
                           textColor = theme.colorScheme.onSurface;
                         }
@@ -4777,9 +4849,7 @@ class _IrishRumbleScorecardGridState
                       if (tot == null) {
                         textColor = theme.colorScheme.onSurfaceVariant.withOpacity(0.4);
                       } else if (tot < 0) {
-                        textColor = Colors.green.shade700;
-                      } else if (tot > 0) {
-                        textColor = Colors.red.shade700;
+                        textColor = underParColor; // golf: under par red
                       } else {
                         textColor = theme.colorScheme.onSurface;
                       }
@@ -5187,6 +5257,10 @@ class _GridPlayerRow extends StatelessWidget {
   /// Used by Nassau to tint names with their team color (blue / red).
   final Color?       nameColor;
 
+  /// When true, colour each digit by net/gross vs par and add circle/square
+  /// scorecard notation.  Off by default (e.g. Nassau keeps plain digits).
+  final bool         scoreMarks;
+
   const _GridPlayerRow({
     required this.member,
     required this.scorecard,
@@ -5198,6 +5272,7 @@ class _GridPlayerRow extends StatelessWidget {
     required this.rowH,
     required this.strokesOnHole,
     this.nameColor,
+    this.scoreMarks = false,
   });
 
   @override
@@ -5236,18 +5311,26 @@ class _GridPlayerRow extends StatelessWidget {
             child: Stack(children: [
               Center(
                 child: Builder(builder: (_) {
-                  final gross = scorecard.holeData(h)
-                      ?.scoreFor(member.player.id)
-                      ?.grossScore;
-                  return Text(
-                    gross == null ? '–' : '$gross',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: gross == null
-                          ? theme.colorScheme.onSurfaceVariant
-                          : null,
-                    ),
+                  final hd = scorecard.holeData(h);
+                  final gross = hd?.scoreFor(member.player.id)?.grossScore;
+                  final baseStyle = theme.textTheme.bodySmall!.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: gross == null
+                        ? theme.colorScheme.onSurfaceVariant
+                        : null,
                   );
+                  if (gross == null) return Text('–', style: baseStyle);
+                  if (!scoreMarks) return Text('$gross', style: baseStyle);
+                  // Colour + circle/square by net (or gross) vs par.  Strokes
+                  // are 0 in gross mode, so this handles both settings.
+                  final par = hd?.par;
+                  final diff =
+                      par == null ? null : (gross - strokesOnHole(h)) - par;
+                  return scoreMark(
+                      text: '$gross',
+                      diff: diff,
+                      baseStyle: baseStyle,
+                      theme: theme);
                 }),
               ),
               Positioned(
@@ -5497,6 +5580,7 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
                       cellW:         _cellW,
                       rowH:          _rowH,
                       strokesOnHole: (h) => _strokesOnHoleFor(m, h),
+                      scoreMarks:    true,
                     ),
                 ],
               ),

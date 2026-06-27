@@ -138,12 +138,17 @@ class CrossFoursomeRotation(PhantomAlgorithm):
 
     config schema:
         {
-          "rotation": [player_id, player_id, ...],   # donor player IDs
-          "donor_names": {str(player_id): name, ...} # cached for display
+          "rotation": [player_id, player_id, ...],      # donor player IDs
+          "donor_names": {str(player_id): name, ...},   # cached for display
+          "donor_handicaps": {str(player_id): hcp, ...} # for per-hole SO recompute
         }
 
     Hole assignment: rotation[(hole - 1) % len(rotation)]
-    Handicap: round(average of donor playing handicaps, supplied at init time)
+    Per-hole SO (redesign, in progress): each fourball hole is scored as a real
+    4-some that includes that hole's donor, so the donor's own playing handicap
+    (donor_handicaps) drives the recompute — NOT a round-fixed value.  The
+    headline `playing_handicap` field (compute_playing_handicap) is a separate
+    display concern, settled in a later step; do not couple SO to it.
     """
 
     algorithm_id    = 'cross_foursome_rotation'
@@ -202,6 +207,18 @@ class CrossFoursomeRotation(PhantomAlgorithm):
         if pid is None:
             return None
         return config.get('donor_names', {}).get(str(pid))
+
+    def donor_handicap(self, hole: int, config: dict) -> 'int | None':
+        """Playing handicap of the donor assigned to *hole*.  Drives the
+        per-hole strokes-off recompute (the hole is scored as a real 4-some
+        that includes this donor).  Returns None when no donor/handicap is
+        configured for the hole.  JSON keys are strings; tolerate ints too."""
+        pid = self.get_source_player_id(hole, config)
+        if pid is None:
+            return None
+        hcaps = config.get('donor_handicaps', {})
+        val = hcaps.get(str(pid))
+        return val if val is not None else hcaps.get(pid)
 
 
 # ---------------------------------------------------------------------------
@@ -294,9 +311,10 @@ class PhantomScoreProvider:
 
         if self.is_cross_foursome:
             # Donor players are in OTHER foursomes of the same round.
-            # We translate donor gross → donor FULL net (gross −
-            # donor_membership.handicap_strokes_on_hole(SI_at_donor's_tee))
-            # so the phantom contribution matches what propagate writes.
+            # Return the donor's RAW GROSS — the per-hole donor strokes-off is
+            # applied by the scoring layer, and propagate_phantom_score stores
+            # gross too.  (Was donor FULL net, which double-counted strokes and
+            # made the score card show net instead of gross.)
             donor_ids = self._config.get('rotation', [])
             if not donor_ids:
                 return {}
@@ -324,12 +342,10 @@ class PhantomScoreProvider:
                 dm = donor_ms.get(r['player_id'])
                 if dm is None or dm.tee_id is None:
                     continue
-                si = dm.tee.hole(r['hole_number']).get('stroke_index', 18)
-                donor_net = r['gross_score'] - dm.handicap_strokes_on_hole(si)
                 qs.append({
                     'player_id'  : r['player_id'],
                     'hole_number': r['hole_number'],
-                    'gross_score': donor_net,   # donor's full net stored as "gross"
+                    'gross_score': r['gross_score'],   # donor's RAW gross
                 })
         else:
             # Intra-foursome rotation
@@ -369,19 +385,43 @@ class PhantomScoreProvider:
             for h in range(1, 19)
         }
 
-    def donor_status_by_hole(self) -> dict:
+    def donor_status_by_hole(self, net_percent: int = 100) -> dict:
         """
         For cross_foursome_rotation only.
-        Return {hole_number: {'player_id': int, 'player_name': str, 'has_score': bool}}
-        for holes 1-18.  Returns {} for intra-foursome phantoms.
+        Return {hole_number: {'player_id', 'player_name', 'short_name',
+        'has_score', 'so'}} for holes 1-18.  Returns {} for intra-foursome
+        phantoms.
+
+        'so' is the phantom's per-hole strokes-off VALUE — the donor plays AS
+        a member of the hole's 4-some, so its low is min(real low, donor index)
+        and the phantom's SO collapses to max(0, donor index − real low) ×
+        net_percent.  This recalculates per hole because the donor rotates.
         """
         self._load()
         if not self.is_cross_foursome or not self._phantom_membership:
             return {}
 
         from scoring.models import HoleScore
-        donor_ids = self._config.get('rotation', [])
+        from tournament.models import FoursomeMembership
+        from core.models import Player
+        donor_ids   = self._config.get('rotation', [])
         donor_names = self._config.get('donor_names', {})
+        donor_hcaps = self._config.get('donor_handicaps', {})
+
+        # Donor short names (config caches full names only).
+        shorts = dict(
+            Player.objects.filter(id__in=donor_ids)
+            .values_list('id', 'short_name')
+        )
+
+        # Real-player low in the receiving foursome (the SO reference).
+        real_hcps = [
+            h for h in FoursomeMembership.objects
+            .filter(foursome=self._foursome, player__is_phantom=False)
+            .values_list('playing_handicap', flat=True)
+            if h is not None
+        ]
+        real_low = min(real_hcps) if real_hcps else 0
 
         # Fetch which (donor, hole) pairs have scores
         scored_pairs = set(
@@ -401,10 +441,16 @@ class PhantomScoreProvider:
             if pid is None:
                 continue
             name = donor_names.get(str(pid), f'Player {pid}')
+            donor_hcp = donor_hcaps.get(str(pid), donor_hcaps.get(pid))
+            so = 0
+            if donor_hcp is not None:
+                so = max(0, round((donor_hcp - real_low) * net_percent / 100))
             status[hole] = {
                 'player_id'  : pid,
                 'player_name': name,
+                'short_name' : shorts.get(pid) or name,
                 'has_score'  : (pid, hole) in scored_pairs,
+                'so'         : so,
             }
         return status
 
@@ -440,10 +486,12 @@ def propagate_phantom_score(round_obj, hole_number: int,
         .select_related('player', 'tee', 'foursome')
     )
 
-    # Donor's own membership — we need their playing_handicap and
-    # their tee's SI for this hole to compute the donor's full NET
-    # score, which is what the phantom contributes.  Phantom no
-    # longer carries donor's gross.
+    # Donor's own membership — only needed to confirm the donor exists with
+    # a tee before copying their score.  The phantom carries the donor's raw
+    # GROSS (NOT a pre-netted value): the per-hole donor strokes-off is
+    # applied later by the scoring layer (low = min(real low, donor index)),
+    # so storing net here would double-count.  Storing gross also lets the
+    # phantom row display like the other players on the score-entry screen.
     donor_m = (
         FoursomeMembership.objects
         .filter(foursome__round=round_obj, player_id=donor_player_id)
@@ -452,9 +500,6 @@ def propagate_phantom_score(round_obj, hole_number: int,
     )
     if donor_m is None or donor_m.tee_id is None:
         return
-    donor_si = donor_m.tee.hole(hole_number).get('stroke_index', 18)
-    donor_strokes = donor_m.handicap_strokes_on_hole(donor_si)
-    donor_net     = gross_score - donor_strokes
 
     for pm in phantom_memberships:
         config = pm.phantom_config or {}
@@ -469,25 +514,26 @@ def propagate_phantom_score(round_obj, hole_number: int,
         if assigned_donor != donor_player_id:
             continue  # another donor handles this hole
 
-        # Phantom is scratch (playing_handicap = 0), and its stored
-        # "gross" carries the donor's full NET so phantom's net comes
-        # out equal to donor's net naturally (gross − 0 strokes).
+        # Phantom carries the donor's raw GROSS; strokes-off is recomputed
+        # per hole by the scoring layer.
         hs, _ = HoleScore.objects.get_or_create(
             foursome    = pm.foursome,
             player      = pm.player,
             hole_number = hole_number,
             defaults    = {'handicap_strokes': 0},
         )
-        hs.gross_score      = donor_net
+        hs.gross_score      = gross_score
         hs.handicap_strokes = 0
         hs.save()
 
 
-def build_phantom_info(foursome) -> 'dict | None':
+def build_phantom_info(foursome, net_percent: int = 100) -> 'dict | None':
     """
     Return cross-foursome phantom donor status for *foursome*, or None
     if there isn't one.  Shared by nassau / triple_cup summaries so
     the mobile + watch surfaces all see the same {by_hole} shape.
+
+    net_percent scales the per-hole SO badge (max(0, donor − real low)).
 
     Shape:
     {
@@ -558,7 +604,7 @@ def build_phantom_info(foursome) -> 'dict | None':
             'algorithm'           : CROSS_FOURSOME_ALGORITHM_ID,
             'by_hole'             : {
                 str(h): v
-                for h, v in provider.donor_status_by_hole().items()
+                for h, v in provider.donor_status_by_hole(net_percent).items()
             },
         }
     except Exception:
@@ -726,6 +772,11 @@ def setup_cross_foursome_phantom(foursome, phantom_team, round_obj) -> bool:
     donor_hcaps = [m.playing_handicap for m in donor_memberships]
 
     config = algo.initial_config_with_names(donor_id_name_pairs)
+    # Per-donor handicaps drive the per-hole strokes-off recompute (each
+    # fourball hole is scored as a real 4-some including that hole's donor).
+    config['donor_handicaps'] = {
+        str(m.player_id): m.playing_handicap for m in donor_memberships
+    }
     playing_hcp = algo.compute_playing_handicap(config, donor_hcaps)
 
     phantom_m.phantom_algorithm  = CROSS_FOURSOME_ALGORITHM_ID

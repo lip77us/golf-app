@@ -111,7 +111,10 @@ def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
     no stroke_index column).
 
     For Four Ball phantoms (cross_foursome_rotation algorithm), the phantom
-    IS included so their donated scores count towards best-ball.
+    IS included so their donated scores count towards best-ball, and each hole
+    is scored as a real 4-some that includes THAT hole's rotating donor — the
+    low (and everyone's strokes) recompute hole-by-hole.  See
+    services/triple_cup._whs_so_net_index for the matching implementation.
     """
     # Determine whether this foursome has a cross-foursome phantom
     from scoring.phantom import CROSS_FOURSOME_ALGORITHM_ID
@@ -130,29 +133,38 @@ def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
         include_phantom=has_cross_phantom,
     )
 
-    # Build membership list: always exclude phantom, then add it back for
-    # cross-foursome so it participates in the strokes-off calculation.
     real_memberships = list(
         foursome.memberships
         .select_related('player', 'tee')
         .filter(player__is_phantom=False)
     )
+    phantom_m = None
     if has_cross_phantom:
         phantom_m = foursome.memberships.filter(
             player__is_phantom=True
         ).select_related('player', 'tee').first()
-        memberships = real_memberships + ([phantom_m] if phantom_m else [])
-    else:
-        memberships = real_memberships
 
-    if not memberships:
+    if not real_memberships and phantom_m is None:
         return score_index
 
-    phcps = [m.playing_handicap for m in memberships
+    # Cross-foursome phantom (Four Ball): per-hole donor strokes-off.  The
+    # phantom plays AS that hole's donor, so low = min(real low, donor index)
+    # is recomputed each hole and EVERY player (incl. the phantom at the
+    # donor's index) gets (index − low) strokes.
+    if has_cross_phantom and phantom_m is not None:
+        _apply_per_hole_donor_so(
+            score_index, real_memberships, phantom_m, net_percent,
+        )
+        return score_index
+
+    # ----- Standard strokes-off-low (no cross-foursome phantom) -----------
+    # Lowest playing handicap plays to 0; everyone else gets (own − low)
+    # strokes allocated by SI (full laps + remainder for very high deltas).
+    phcps = [m.playing_handicap for m in real_memberships
              if m.playing_handicap is not None]
     low = min(phcps) if phcps else 0
 
-    for m in memberships:
+    for m in real_memberships:
         if m.tee_id is None:
             continue
         so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
@@ -173,6 +185,62 @@ def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
                 per_player[hole_num] = score - strokes
 
     return score_index
+
+
+def _apply_per_hole_donor_so(score_index, real_memberships, phantom_m,
+                             net_percent: int) -> None:
+    """Mutate *score_index* in place for a cross-foursome Four Ball phantom:
+    recompute strokes-off treating the phantom as the rotating donor on each
+    hole.  On hole h the 4-some is {real players, that hole's donor}; low =
+    min(real low, donor index); every player gets (index − low) strokes by SI.
+
+    Mirrors services/triple_cup._whs_so_net_index (kept in lock-step; a shared
+    helper is the obvious future DRY).  Caps at two laps like that one — fine
+    for any realistic handicap delta.
+    """
+    from scoring.phantom import get_algorithm
+    algo = get_algorithm(phantom_m.phantom_algorithm)
+    cfg  = phantom_m.phantom_config or {}
+
+    real_hcps = [m.playing_handicap for m in real_memberships
+                 if m.playing_handicap is not None]
+    low_real = min(real_hcps) if real_hcps else 0
+
+    def _strokes(eff_hcp, low, si):
+        so = round(max(0, eff_hcp - low) * net_percent / 100)
+        if si <= so:
+            return 1 + (1 if si + 18 <= so else 0)
+        return 0
+
+    # Real players — per-hole low driven by that hole's donor index.
+    for m in real_memberships:
+        if m.tee_id is None:
+            continue
+        per_player = score_index.get(m.player_id)
+        if not per_player:
+            continue
+        base_hcp = m.playing_handicap or 0
+        for hole_num, score in list(per_player.items()):
+            donor_hcp = algo.donor_handicap(hole_num, cfg)
+            low = min(low_real, donor_hcp) if donor_hcp is not None else low_real
+            si  = m.tee.hole(hole_num).get('stroke_index', 18)
+            strokes = _strokes(base_hcp, low, si)
+            if strokes:
+                per_player[hole_num] = score - strokes
+
+    # Phantom — plays AS the donor (its gross IS the donor's gross).
+    if phantom_m.tee_id is not None:
+        per_player = score_index.get(phantom_m.player_id)
+        if per_player:
+            for hole_num, score in list(per_player.items()):
+                donor_hcp = algo.donor_handicap(hole_num, cfg)
+                if donor_hcp is None:
+                    continue
+                low = min(low_real, donor_hcp)
+                si  = phantom_m.tee.hole(hole_num).get('stroke_index', 18)
+                strokes = _strokes(donor_hcp, low, si)
+                if strokes:
+                    per_player[hole_num] = score - strokes
 
 
 def _is_cup_nassau(foursome) -> bool:
@@ -810,11 +878,11 @@ def _team_colour(foursome, team_num: int) -> str:
         return 'Red' if team_num == 1 else 'Blue'
 
 
-def _build_phantom_info(foursome) -> 'dict | None':
+def _build_phantom_info(foursome, net_percent: int = 100) -> 'dict | None':
     """Thin wrapper around the shared helper — kept so existing
     in-module callers don't need to change.  Identical output."""
     from scoring.phantom import build_phantom_info
-    return build_phantom_info(foursome)
+    return build_phantom_info(foursome, net_percent)
 
 
 # ---------------------------------------------------------------------------
@@ -1234,7 +1302,7 @@ def nassau_summary(foursome) -> dict | None:
         'holes'               : holes_out,
         'can_press'           : can_press,
         'press_available_nine': press_available_nine,
-        'phantom'             : _build_phantom_info(foursome),
+        'phantom'             : _build_phantom_info(foursome, game.net_percent),
         'team1_colour'        : _team_colour(foursome, 1),
         'team2_colour'        : _team_colour(foursome, 2),
     }

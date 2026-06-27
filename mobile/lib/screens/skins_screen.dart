@@ -23,6 +23,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
+import '../utils/round_complete.dart';
 
 String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
 
@@ -234,6 +235,8 @@ class _SkinsScreenState extends State<SkinsScreen> {
         _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
       }
     });
+    // Commit a past-hole correction immediately — no save+advance needed.
+    if (score != -1) await _saveAndAdvance(ctx, players, par, advance: false);
   }
 
   void _advance() {
@@ -247,12 +250,13 @@ class _SkinsScreenState extends State<SkinsScreen> {
   Future<void> _saveAndAdvance(
     BuildContext ctx,
     List<Membership> players,
-    int par,
-  ) async {
+    int par, {
+    bool advance = true,
+  }) async {
     final edits = _pending[_selectedHole];
     if (edits == null || edits.isEmpty) {
       await _saveJunkIfNeeded(ctx);
-      _advance();
+      if (advance) _advance();
       return;
     }
     final scores = edits.entries
@@ -273,7 +277,7 @@ class _SkinsScreenState extends State<SkinsScreen> {
         action: SnackBarAction(
           label: 'Retry',
           textColor: Theme.of(ctx).colorScheme.onError,
-          onPressed: () => _saveAndAdvance(ctx, players, par),
+          onPressed: () => _saveAndAdvance(ctx, players, par, advance: advance),
         ),
       ));
       return;
@@ -282,7 +286,7 @@ class _SkinsScreenState extends State<SkinsScreen> {
     await _saveJunkIfNeeded(ctx);
     if (!mounted) return;
     rp.loadSkins(widget.foursomeId);
-    _advance();
+    if (advance) _advance();
   }
 
   Future<void> _saveJunkIfNeeded(BuildContext ctx) async {
@@ -314,6 +318,8 @@ class _SkinsScreenState extends State<SkinsScreen> {
     List<Membership> players,
     int par,
   ) async {
+    if (!await confirmCompleteRound(ctx)) return;
+    if (!mounted) return;
     final rp      = context.read<RoundProvider>();
     final sync    = context.read<SyncService>();
     final roundId = rp.round?.id;
@@ -348,8 +354,18 @@ class _SkinsScreenState extends State<SkinsScreen> {
 
     await sync.waitUntilIdle();
     if (!mounted) return;
-    rp.loadSkins(widget.foursomeId);
     if (roundId != null) {
+      // Mark the round complete so it leaves the active list (without this
+      // "Done" only opened the leaderboard and the round stayed in_progress).
+      final lb = await rp.completeRound(roundId);
+      if (!mounted) return;
+      if (lb == null) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text(rp.error ?? 'Could not complete round.'),
+          backgroundColor: Theme.of(ctx).colorScheme.error,
+        ));
+        return;
+      }
       Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }

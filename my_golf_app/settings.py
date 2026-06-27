@@ -372,12 +372,12 @@ LOGGING = {
             'level': 'WARNING',
             'propagate': False,
         },
-        # Per-request access log ("GET /api/... 200"). On in dev so HTTP
-        # traffic is visible while debugging; override with
-        # DJANGO_SERVER_LOG_LEVEL=WARNING to silence.
+        # Per-request access log ("GET /api/... 200"). Off by default to keep
+        # the terminal quiet; set DJANGO_SERVER_LOG_LEVEL=INFO to see HTTP
+        # traffic while debugging. At WARNING, 4xx/5xx access lines still show.
         'django.server': {
             'handlers': ['console'],
-            'level': os.environ.get('DJANGO_SERVER_LOG_LEVEL', 'INFO'),
+            'level': os.environ.get('DJANGO_SERVER_LOG_LEVEL', 'WARNING'),
             'propagate': False,
         },
     },

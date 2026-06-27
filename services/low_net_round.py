@@ -305,6 +305,7 @@ def low_net_round_summary(round_obj) -> dict:
         'results'      : [
             {
                 'rank'        : s['rank'],
+                'player_id'   : s['player_id'],
                 'name'        : s['player_name'],
                 'total_net'   : s['net_total'],
                 'net_to_par'  : s['net_to_par'],

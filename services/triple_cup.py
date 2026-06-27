@@ -37,6 +37,8 @@ arithmetically from the tee's par instead of relying on a Player row.
 
 from __future__ import annotations
 
+import math
+
 from django.db import transaction
 
 from core.models import HandicapMode, MatchStatus
@@ -104,25 +106,48 @@ def _whs_so_net_index(
     gets a stroke, with a second cycle for SO > 18).  Net = gross −
     strokes.  Foursome low plays scratch.
 
-    Segment-scoped low when a phantom exists (2v1):
-      • On *fourball_holes* (the holes where the phantom partners with
-        the solo player), the foursome low is the PHANTOM at scratch
-        (playing_handicap = 0).  Every real player ends up at full HC,
-        which is what makes the scratch-phantom design work — the SO
-        baseline collapses for that segment only.
-      • On every other hole, the low is the lowest REAL player.
+    Cross-foursome donor phantom (2v1, the redesign): on each *fourball_holes*
+    hole the phantom plays AS that hole's rotating donor, so the hole is scored
+    as a real 4-some {solo, that hole's donor, opp1, opp2}.  The low is
+    recomputed per hole as min(real low, donor index) and EVERY player —
+    including the phantom (at the donor's index) — gets (index − low) strokes.
+    Consequence: when a donor is the lowest, the real players pick up an extra
+    stroke on that hole.
+
+    Other phantom modes (net_par synthesis, or a pre-redesign config with no
+    per-donor handicaps): the legacy scratch-phantom collapse — on fourball
+    holes the phantom is the low (0) and every real player plays to full HC.
+
+    Non-phantom (4-player) groups: low is the lowest REAL player on every hole.
     """
     real_hcps = [m.playing_handicap for m in members_by_pid.values()
                  if m.playing_handicap is not None and not m.player.is_phantom]
     low_real = min(real_hcps) if real_hcps else 0
 
-    # Phantom-as-low only kicks in when (a) a phantom exists in the
-    # foursome AND (b) the caller told us which holes are the fourball
-    # segment.  Without those, fall back to the real-player low for
-    # every hole — preserves 4-player TC behavior unchanged.
-    has_phantom    = any(m.player.is_phantom for m in members_by_pid.values())
-    fb_holes_set   = fourball_holes or set()
-    use_phantom_lo = has_phantom and bool(fb_holes_set)
+    has_phantom  = any(m.player.is_phantom for m in members_by_pid.values())
+    fb_holes_set = fourball_holes or set()
+
+    # Pull this hole's donor index for a cross-foursome phantom so the low
+    # (and everyone's strokes) recompute hole-by-hole.  Falls back to the
+    # legacy scratch collapse when there's no per-donor data (net_par phantom
+    # or a config minted before the redesign).
+    donor_hcp_by_hole: dict = {}
+    phantom_pid = None
+    if has_phantom and fb_holes_set:
+        phantom_m = next((m for m in members_by_pid.values()
+                          if m.player.is_phantom), None)
+        if phantom_m is not None:
+            phantom_pid = phantom_m.player_id
+            if phantom_m.phantom_algorithm == CROSS_FOURSOME_ALGORITHM_ID:
+                from scoring.phantom import get_algorithm
+                algo = get_algorithm(phantom_m.phantom_algorithm)
+                cfg  = phantom_m.phantom_config or {}
+                for h in fb_holes_set:
+                    dh = algo.donor_handicap(h, cfg)
+                    if dh is not None:
+                        donor_hcp_by_hole[h] = dh
+
+    use_scratch_phantom = has_phantom and bool(fb_holes_set) and not donor_hcp_by_hole
 
     out: dict = {}
     for pid, holes in gross_index.items():
@@ -131,13 +156,20 @@ def _whs_so_net_index(
             continue
         if m.player.is_phantom and not include_phantom:
             continue
-        hcp = m.playing_handicap or 0
+        base_hcp = m.playing_handicap or 0
         for hole, gross in holes.items():
-            # Pick the SO baseline for this hole.
-            if use_phantom_lo and hole in fb_holes_set:
-                low = 0   # phantom is scratch → real players play to full HC
+            in_fb = hole in fb_holes_set
+            # Pick the SO baseline + this player's index for this hole.
+            if in_fb and hole in donor_hcp_by_hole:
+                donor_hcp = donor_hcp_by_hole[hole]
+                low = min(low_real, donor_hcp)
+                hcp = donor_hcp if pid == phantom_pid else base_hcp
+            elif in_fb and use_scratch_phantom:
+                low = 0   # legacy: phantom scratch → real players play full HC
+                hcp = base_hcp
             else:
                 low = low_real
+                hcp = base_hcp
             so = max(0, hcp - low)
             if game.net_percent != 100:
                 so = int(round(so * game.net_percent / 100.0))
@@ -166,14 +198,22 @@ def _so_baseline_for_match(
         hcps = [m.playing_handicap for m in pair
                 if m is not None and m.playing_handicap is not None]
         return min(hcps) if hcps else None
-    # 2v1 fourball — phantom-as-low collapses the SO baseline to scratch
-    # for that segment only.  Mirrors the per-hole scoring rule in
-    # _whs_so_net_index so the leaderboard SO badge matches the strokes
-    # the scorer is actually applying.
+    # 2v1 fourball phantom baseline:
+    #   • net_par (non-donor) phantom is scratch → baseline 0 (real players
+    #     carry full HC, matching the scratch dots).
+    #   • cross-foursome DONOR phantom uses the per-hole donor low; its
+    #     per-segment representative badge is the real foursome low, so fall
+    #     through.  (Exact dots are per-hole in _strokes_by_hole_for_match;
+    #     on a hole where the donor is below the real low the dots can exceed
+    #     this badge by one.)
     if match.segment == 'fourball' and any(
         m.player.is_phantom for m in members_by_pid.values()
     ):
-        return 0
+        phantom_m = next((m for m in members_by_pid.values()
+                          if m.player.is_phantom), None)
+        if (phantom_m is None
+                or phantom_m.phantom_algorithm != CROSS_FOURSOME_ALGORITHM_ID):
+            return 0
     low_pid = _foursome_low_pid(members_by_pid)
     if low_pid is None:
         return None
@@ -638,13 +678,23 @@ def setup_triple_cup(
     if is_2v1:
         phantom_pid = _ensure_phantom_for_2v1(foursome, team1_ids, team2_ids)
 
-    # Sort each team by playing handicap (low first) so the singles
-    # pairings always go low-of-Red vs low-of-Blue and high-of-Red
-    # vs high-of-Blue — the standard cup match-up, regardless of how
-    # the user dragged the rows in the setup picker.
     members_by_pid = _membership_by_pid(foursome)
-    sorted_t1 = _sort_by_handicap(team1_ids, members_by_pid)
-    sorted_t2 = _sort_by_handicap(team2_ids, members_by_pid)
+    if is_2v1:
+        # 2v1: the solo plays each pair member, so there's no low/high pairing
+        # to preserve — order each side by the foursome's ON-SCREEN order
+        # (membership order) so Singles 1/2, and the solo's twin SO badges,
+        # line up top→bottom with the score-entry rows.
+        order = [m.player_id for m in foursome.memberships.all()]
+        rank = {pid: i for i, pid in enumerate(order)}
+        keyf = lambda pid: rank.get(pid, len(order))   # noqa: E731
+        sorted_t1 = sorted(team1_ids, key=keyf)
+        sorted_t2 = sorted(team2_ids, key=keyf)
+    else:
+        # 2v2 / 1v1: sort by playing handicap (low first) so the singles
+        # pairings go low-of-Red vs low-of-Blue and high vs high — the
+        # standard cup match-up, regardless of how the rows were dragged.
+        sorted_t1 = _sort_by_handicap(team1_ids, members_by_pid)
+        sorted_t2 = _sort_by_handicap(team2_ids, members_by_pid)
 
     plan = _build_match_plan(sorted_t1, sorted_t2, phantom_pid=phantom_pid)
 
@@ -754,31 +804,38 @@ def _alt_shot_team_combined(
     team_player_ids: list[int],
     members_by_pid: dict,
 ) -> tuple[int, object | None]:
-    """Combined alt-shot handicap for a team after net_percent scaling.
-    Returns (combined_handicap, tee_or_None).  Solo side (one real
-    player) uses that player's handicap directly."""
-    hcps = []
-    tees = []
-    for pid in team_player_ids:
-        m = members_by_pid.get(pid)
-        if m is None or m.tee_id is None:
-            continue
-        hcps.append(m.playing_handicap or 0)
-        tees.append(m.tee)
-    if not hcps:
-        return 0, None
+    """Combined alt-shot handicap for a team (course-handicap units), with
+    net_percent applied and a SINGLE round at the end (0.5 → up).
 
-    if len(hcps) == 1:
-        combined = hcps[0]
+    Pair side weights each player's UNROUNDED course handicap
+    (index × slope/113 + course_rating − par) by alt_shot_low/high_pct — so the
+    result isn't stuck on the .5 you land on half the time when you average two
+    already-rounded integer course handicaps.  Solo side uses that player's own
+    course handicap.  net_percent (the SO allowance) comes off the combined
+    value in BOTH cases.
+    """
+    def _raw_ch(m) -> float:
+        t = m.tee
+        idx = float(m.player.effective_handicap_index() or 0)
+        return (idx * float(t.slope) / 113.0
+                + float(t.course_rating) - float(t.par))
+
+    members = [m for m in (members_by_pid.get(p) for p in team_player_ids)
+               if m is not None and m.tee_id is not None]
+    if not members:
+        return 0, None
+    tee = members[0].tee
+
+    if len(members) == 1:
+        # Solo — net% off their own course handicap.
+        combined = (members[0].playing_handicap or 0) * game.net_percent / 100.0
     else:
-        lo, hi = min(hcps), max(hcps)
-        combined = int(round(
-            lo * game.alt_shot_low_pct  / 100.0
-          + hi * game.alt_shot_high_pct / 100.0
-        ))
-    if game.net_percent != 100:
-        combined = int(round(combined * game.net_percent / 100.0))
-    return combined, tees[0]
+        # Pair — weight the unrounded course handicaps, then net%.
+        raws = sorted(_raw_ch(m) for m in members)
+        weighted = (raws[0] * game.alt_shot_low_pct
+                    + raws[-1] * game.alt_shot_high_pct) / 100.0
+        combined = weighted * game.net_percent / 100.0
+    return math.floor(combined + 0.5), tee   # round half UP
 
 
 def _allocate_whs(strokes: int, hole_range, tee) -> dict[int, int]:
@@ -799,6 +856,47 @@ def _allocate_whs(strokes: int, hole_range, tee) -> dict[int, int]:
         si = tee.hole(h).get('stroke_index', 18)
         if si <= strokes:
             out[h] = 1 + (1 if si + 18 <= strokes else 0)
+    return out
+
+
+def _fourball_donor_so_by_hole(
+    match, t1_pids, t2_pids, members_by_pid, game,
+) -> dict[int, dict[int, int]]:
+    """{player_id: {hole: SO}} for a 2v1 cross-foursome fourball — the per-hole
+    strokes-off VALUE (player index − the hole's donor-inclusive low), so the
+    "-N" badge matches the per-hole donor dots.  Empty when not applicable
+    (non-fourball, no cross-foursome phantom, or non-SO mode)."""
+    if (match.segment != 'fourball'
+            or game.handicap_mode != HandicapMode.STROKES_OFF):
+        return {}
+    phantom_m = next((m for m in members_by_pid.values()
+                      if m.player.is_phantom), None)
+    if (phantom_m is None
+            or phantom_m.phantom_algorithm != CROSS_FOURSOME_ALGORITHM_ID):
+        return {}
+    from scoring.phantom import get_algorithm
+    algo = get_algorithm(phantom_m.phantom_algorithm)
+    cfg  = phantom_m.phantom_config or {}
+    real_hcps = [m.playing_handicap for m in members_by_pid.values()
+                 if m.playing_handicap is not None and not m.player.is_phantom]
+    low_real = min(real_hcps) if real_hcps else 0
+    out: dict = {}
+    for pid in list(t1_pids) + list(t2_pids):
+        m = members_by_pid.get(pid)
+        if m is None:
+            continue
+        is_ph = m.player.is_phantom
+        for h in range(match.start_hole, match.end_hole + 1):
+            donor_hcp = algo.donor_handicap(h, cfg)
+            if donor_hcp is None:
+                low, hcp = low_real, (m.playing_handicap or 0)
+            else:
+                low = min(low_real, donor_hcp)
+                hcp = donor_hcp if is_ph else (m.playing_handicap or 0)
+            so = max(0, hcp - low)
+            if game.net_percent != 100:
+                so = int(round(so * game.net_percent / 100.0))
+            out.setdefault(pid, {})[h] = so
     return out
 
 
@@ -852,6 +950,45 @@ def _expected_strokes_per_match(
 
     pair_pids = list(t1_pids) + list(t2_pids)
 
+    # 2v1 fourball with a cross-foursome donor phantom — per-hole donor
+    # strokes-off (mirrors _whs_so_net_index).  Each hole is scored as a real
+    # 4-some incl. that hole's donor, so the low (and everyone's dots)
+    # recompute hole-by-hole and the phantom's dots use the donor's index.
+    # Returns directly because the baseline isn't constant across the segment.
+    if (match.segment == 'fourball'
+            and game.handicap_mode == HandicapMode.STROKES_OFF):
+        phantom_m = next((m for m in members_by_pid.values()
+                          if m.player.is_phantom), None)
+        if (phantom_m is not None
+                and phantom_m.phantom_algorithm == CROSS_FOURSOME_ALGORITHM_ID):
+            from scoring.phantom import get_algorithm
+            algo = get_algorithm(phantom_m.phantom_algorithm)
+            cfg  = phantom_m.phantom_config or {}
+            real_hcps = [m.playing_handicap for m in members_by_pid.values()
+                         if m.playing_handicap is not None
+                         and not m.player.is_phantom]
+            low_real = min(real_hcps) if real_hcps else 0
+            for pid in pair_pids:
+                m = members_by_pid.get(pid)
+                if m is None or m.tee_id is None:
+                    continue
+                is_ph = m.player.is_phantom
+                for h in seg_range:
+                    donor_hcp = algo.donor_handicap(h, cfg)
+                    if donor_hcp is None:
+                        low, hcp = low_real, (m.playing_handicap or 0)
+                    else:
+                        low = min(low_real, donor_hcp)
+                        hcp = donor_hcp if is_ph else (m.playing_handicap or 0)
+                    so = max(0, hcp - low)
+                    if game.net_percent != 100:
+                        so = int(round(so * game.net_percent / 100.0))
+                    si = m.tee.hole(h).get('stroke_index', 18)
+                    result[pid][h] = (
+                        1 + (1 if si + 18 <= so else 0) if si <= so else 0
+                    )
+            return result
+
     # Pick the per-player baseline.  SO mode uses the foursome low
     # for most matches; a singles match without the foursome low
     # resets to its own per-pair low.  NET mode uses 0 (i.e. each
@@ -866,14 +1003,8 @@ def _expected_strokes_per_match(
         elif match.segment == 'fourball' and any(
             m.player.is_phantom for m in members_by_pid.values()
         ):
-            # 2v1 fourball — phantom (scratch, HC 0) IS the foursome
-            # low for this segment, so the per-player stroke dots use
-            # 0 as the baseline.  Matches the SO badge in
-            # _so_baseline_for_match + the per-hole net rule in
-            # _whs_so_net_index.  Without this, dots came out short:
-            # the badge said "SO 12" but only 8 dots showed because
-            # the dot allocator was still using the lowest real
-            # player's HC as the baseline.
+            # 2v1 fourball with a NON-donor phantom (net_par synthesis) —
+            # the scratch phantom is the low, so real players carry full HC.
             baseline = 0
         else:
             real_hcps = [m.playing_handicap
@@ -1490,6 +1621,12 @@ def triple_cup_summary(foursome) -> dict | None:
                     match, team1_pids, team2_pids, members_by_pid,
                     pair_indexes,
                 )
+        # Per-hole SO for the cross-foursome fourball (donor-inclusive low),
+        # so the "-N" badge tracks the rotating donor hole-by-hole instead of
+        # a single per-segment value.  Empty for every other match.
+        so_by_hole_map = _fourball_donor_so_by_hole(
+            match, team1_pids, team2_pids, members_by_pid, game,
+        )
         players_out = []
         for team_num, pids in ((1, team1_pids), (2, team2_pids)):
             for pid in pids:
@@ -1515,6 +1652,10 @@ def triple_cup_summary(foursome) -> dict | None:
                     # here so they show the right count even before
                     # any score is entered.
                     'strokes_by_hole'  : expected.get(pid, {}),
+                    # {hole: SO} — non-empty only for the cross-foursome
+                    # fourball; lets the badge show the per-hole SO that
+                    # matches the dots.  Falls back to strokes_off otherwise.
+                    'so_by_hole'       : so_by_hole_map.get(pid, {}),
                 })
 
         matches_out.append({
@@ -1603,7 +1744,7 @@ def triple_cup_summary(foursome) -> dict | None:
     # a "Waiting for Glenn..." placeholder when the donor hasn't
     # posted that hole yet.  Same shape nassau exposes.
     from scoring.phantom import build_phantom_info
-    phantom_info = build_phantom_info(foursome)
+    phantom_info = build_phantom_info(foursome, game.net_percent)
 
     return {
         'status'     : game.status,

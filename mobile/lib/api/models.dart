@@ -213,13 +213,6 @@ class PlayerProfile {
   /// payloads fall back to a computed initials string via [displayShort].
   final String shortName;
   final String handicapIndex;
-  /// The index to DISPLAY: for a connected (On Halved) golfer this is their
-  /// self-maintained index from their own profile; otherwise == handicapIndex.
-  /// Only populated by GET /api/players/ (and watcher-candidates).
-  final String effectiveHandicapIndex;
-  /// True when the displayed index is the golfer's OWN (they set a real value)
-  /// — a friend's copy is then read-only. False when it falls back to local.
-  final bool handicapIsAuthoritative;
   final bool isPhantom;
   final String email;
   final String phone;
@@ -241,8 +234,6 @@ class PlayerProfile {
     required this.name,
     this.shortName = '',
     required this.handicapIndex,
-    this.effectiveHandicapIndex = '',
-    this.handicapIsAuthoritative = false,
     required this.isPhantom,
     required this.email,
     this.phone = '',
@@ -256,10 +247,6 @@ class PlayerProfile {
         name: j['name'] as String,
         shortName: (j['short_name'] as String?) ?? '',
         handicapIndex: j['handicap_index']?.toString() ?? '0.0',
-        effectiveHandicapIndex:
-            j['effective_handicap_index']?.toString() ?? '',
-        handicapIsAuthoritative:
-            j['handicap_is_authoritative'] as bool? ?? false,
         isPhantom: j['is_phantom'] as bool? ?? false,
         email: j['email'] as String? ?? '',
         phone: j['phone'] as String? ?? '',
@@ -285,10 +272,9 @@ class PlayerProfile {
   String get displayShort =>
       shortName.isNotEmpty ? shortName : computeInitials(name);
 
-  /// Index to show in the UI — a connected golfer's authoritative index when
-  /// the list endpoint supplied it, else the local value.
-  String get displayHandicap =>
-      effectiveHandicapIndex.isNotEmpty ? effectiveHandicapIndex : handicapIndex;
+  /// Index to show in the UI — this account's own (editable) copy.  A connected
+  /// golfer's index is kept current by server-side propagation on self-edit.
+  String get displayHandicap => handicapIndex;
 }
 
 class CourseInfo {
@@ -1519,6 +1505,11 @@ class TripleCupMatchPlayer {
   /// and singles use the per-player path.  Read by both the
   /// score-entry top-card dots and the leaderboard detail grid.
   final Map<int, int> strokesByHole;
+  /// {hole: SO} — per-hole strokes-off VALUE, non-empty only for the
+  /// cross-foursome fourball (where the donor-inclusive low changes the SO
+  /// hole-by-hole).  The "-N" badge prefers this over [strokesOff] so it
+  /// tracks the rotating donor and matches the dots.
+  final Map<int, int> soByHole;
 
   const TripleCupMatchPlayer({
     required this.playerId,
@@ -1529,19 +1520,24 @@ class TripleCupMatchPlayer {
     this.playingHandicap,
     this.strokesOff,
     this.strokesByHole = const {},
+    this.soByHole = const {},
   });
 
+  /// The SO to show for [hole] — per-hole when available, else the
+  /// per-match [strokesOff].
+  int? soForHole(int hole) => soByHole[hole] ?? strokesOff;
+
   factory TripleCupMatchPlayer.fromJson(Map<String, dynamic> j) {
-    final raw = j['strokes_by_hole'] as Map?;
-    final byHole = <int, int>{};
-    if (raw != null) {
-      raw.forEach((k, v) {
-        final hole = int.tryParse(k.toString());
-        final strokes = v is int
-            ? v
-            : int.tryParse(v.toString()) ?? 0;
-        if (hole != null) byHole[hole] = strokes;
-      });
+    Map<int, int> parseHoleMap(dynamic raw) {
+      final out = <int, int>{};
+      if (raw is Map) {
+        raw.forEach((k, v) {
+          final hole = int.tryParse(k.toString());
+          final n = v is int ? v : int.tryParse(v.toString()) ?? 0;
+          if (hole != null) out[hole] = n;
+        });
+      }
+      return out;
     }
     return TripleCupMatchPlayer(
       playerId:        j['player_id']        as int,
@@ -1551,7 +1547,8 @@ class TripleCupMatchPlayer {
       isPhantom:       j['is_phantom']       as bool? ?? false,
       playingHandicap: j['playing_handicap'] as int?,
       strokesOff:      j['strokes_off']      as int?,
-      strokesByHole:   byHole,
+      strokesByHole:   parseHoleMap(j['strokes_by_hole']),
+      soByHole:        parseHoleMap(j['so_by_hole']),
     );
   }
 }
@@ -3183,19 +3180,25 @@ class NassauSummary {
 class NassauPhantomDonorHole {
   final int    playerId;
   final String playerName;
+  final String shortName;
   final bool   hasScore;
+  final int    so;          // phantom's strokes-off VALUE this hole (donor − real low)
 
   const NassauPhantomDonorHole({
     required this.playerId,
     required this.playerName,
+    required this.shortName,
     required this.hasScore,
+    required this.so,
   });
 
   factory NassauPhantomDonorHole.fromJson(Map<String, dynamic> j) =>
       NassauPhantomDonorHole(
         playerId:   j['player_id']   as int,
         playerName: j['player_name'] as String? ?? '',
+        shortName:  j['short_name']  as String? ?? (j['player_name'] as String? ?? ''),
         hasScore:   j['has_score']   as bool?   ?? false,
+        so:         j['so']          as int?    ?? 0,
       );
 }
 
@@ -3233,6 +3236,12 @@ class NassauPhantomInfo {
 
   /// Name of the donor player for [hole].
   String donorNameForHole(int hole) => byHole[hole]?.playerName ?? 'Donor';
+
+  /// Short name of the donor player for [hole].
+  String donorShortForHole(int hole) => byHole[hole]?.shortName ?? 'Donor';
+
+  /// The phantom's strokes-off value for [hole] (recomputed per donor).
+  int soForHole(int hole) => byHole[hole]?.so ?? 0;
 }
 
 // ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
+import '../utils/round_complete.dart';
 
 // Gross Stableford: eagle=4, birdie=3, par=2, bogey=1, dbl+=0
 int _gsf(int gross, int par) => (2 + par - gross).clamp(0, 99);
@@ -246,11 +247,12 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
   Future<void> _saveAndAdvance(
     BuildContext ctx,
     List<Membership> players,
-    int par,
-  ) async {
+    int par, {
+    bool advance = true,
+  }) async {
     final edits = _pending[_selectedHole];
     if (edits == null || edits.isEmpty) {
-      _advance();
+      if (advance) _advance();
       return;
     }
     final scores = edits.entries
@@ -270,14 +272,14 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
         action: SnackBarAction(
           label: 'Retry',
           textColor: Theme.of(ctx).colorScheme.onError,
-          onPressed: () => _saveAndAdvance(ctx, players, par),
+          onPressed: () => _saveAndAdvance(ctx, players, par, advance: advance),
         ),
       ));
       return;
     }
     setState(() => _pending.remove(_selectedHole));
     rp.loadQuotaNassau(widget.foursomeId);
-    _advance();
+    if (advance) _advance();
   }
 
   Future<void> _finishRound(
@@ -285,6 +287,8 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
     List<Membership> players,
     int par,
   ) async {
+    if (!await confirmCompleteRound(ctx)) return;
+    if (!mounted) return;
     final rp     = context.read<RoundProvider>();
     final sync   = context.read<SyncService>();
     final roundId = rp.round?.id;
@@ -317,8 +321,18 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
 
     await sync.waitUntilIdle();
     if (!mounted) return;
-    rp.loadQuotaNassau(widget.foursomeId);
     if (roundId != null) {
+      // Mark the round complete so it leaves the active list (without this
+      // "Done" only opened the leaderboard and the round stayed in_progress).
+      final lb = await rp.completeRound(roundId);
+      if (!mounted) return;
+      if (lb == null) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text(rp.error ?? 'Could not complete round.'),
+          backgroundColor: Theme.of(ctx).colorScheme.error,
+        ));
+        return;
+      }
       Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
@@ -525,6 +539,14 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
                   final hole = _selectedHole;
                   final wasAllScored = _allScored(players, scores);
                   _selectScore(m, score, hole);
+                  // Editing an already-complete (past) hole: commit the
+                  // correction immediately so it isn't lost on navigation —
+                  // no separate save+advance step for an edit.
+                  if (wasAllScored && score > 0) {
+                    setState(() => _hotPlayerOverride = null);
+                    _saveAndAdvance(ctx, players, par, advance: false);
+                    return;
+                  }
                   // Auto-save+advance once the final player on this hole
                   // gets a positive score.  Gated by the Auto-advance
                   // setting; when off, stay on the hole so the scorer can

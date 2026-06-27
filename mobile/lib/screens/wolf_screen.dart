@@ -25,6 +25,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
+import '../utils/round_complete.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
@@ -67,6 +68,9 @@ class _WolfScreenState extends State<WolfScreen> {
   bool _prevHadPending  = false;
   bool _initialJumpDone = false;
   bool _decisionBusy    = false;
+  // Set when the user taps an already-scored player to correct a past hole, so
+  // the inline picker re-opens for that row (a completed hole has no hot-spot).
+  int? _editingPlayerId;
   bool _sheetOpen       = false;
   bool _ready           = false;   // true once the initial hole-jump settled
 
@@ -168,7 +172,15 @@ class _WolfScreenState extends State<WolfScreen> {
     final wasAllScored =
         sc != null && _allScored(players, _effectiveScores(sc, hole));
     _selectScore(m, score, hole);
-    if (sc == null || score <= 0 || wasAllScored) return;
+    if (sc == null || score <= 0) return;
+    if (wasAllScored) {
+      // Editing an already-complete (past) hole: there's no save+advance step
+      // for a correction, so persist it immediately — otherwise the change is
+      // lost the moment the user navigates to another hole.
+      setState(() => _editingPlayerId = null);
+      _saveHole(ctx, hole, players);
+      return;
+    }
     if (!context.read<SettingsProvider>().autoAdvanceHole) return;
     if (!_allScored(players, _effectiveScores(sc, hole))) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -197,8 +209,12 @@ class _WolfScreenState extends State<WolfScreen> {
     setState(() { _selectedHole = 18; _ready = true; });
   }
 
-  void _advance() { if (_selectedHole < 18) setState(() => _selectedHole++); }
-  void _retreat() { if (_selectedHole > 1)  setState(() => _selectedHole--); }
+  void _advance() {
+    if (_selectedHole < 18) setState(() { _selectedHole++; _editingPlayerId = null; });
+  }
+  void _retreat() {
+    if (_selectedHole > 1)  setState(() { _selectedHole--; _editingPlayerId = null; });
+  }
 
   // ── Wolf decision ─────────────────────────────────────────────────────────
 
@@ -298,32 +314,44 @@ class _WolfScreenState extends State<WolfScreen> {
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
-  Future<void> _saveAndAdvance(
-      BuildContext ctx, List<Membership> players) async {
-    final edits = _pending[_selectedHole];
-    if (edits == null || edits.isEmpty) { _advance(); return; }
+  /// Persist whatever is pending for [hole] without changing the selected hole.
+  /// Used by both the save+advance button and inline edits to past holes.
+  Future<void> _saveHole(
+      BuildContext ctx, int hole, List<Membership> players) async {
+    final edits = _pending[hole];
+    if (edits == null || edits.isEmpty) return;
     final scores = edits.entries
         .map((e) => {'player_id': e.key, 'gross_score': e.value})
         .toList();
-
     final rp = context.read<RoundProvider>();
     final ok = await rp.submitHole(
       foursomeId: widget.foursomeId,
-      holeNumber: _selectedHole,
+      holeNumber: hole,
       scores:     scores,
     );
     if (!mounted) return;
     if (!ok) {
       _snack(ctx, rp.error ?? 'Failed to save hole.',
-          () => _saveAndAdvance(ctx, players));
+          () => _saveHole(ctx, hole, players));
       return;
     }
-    setState(() { _pending.remove(_selectedHole); });
+    setState(() { _pending.remove(hole); });
     rp.loadWolf(widget.foursomeId);
+  }
+
+  Future<void> _saveAndAdvance(
+      BuildContext ctx, List<Membership> players) async {
+    final hole = _selectedHole;
+    if (_pending[hole]?.isNotEmpty ?? false) {
+      await _saveHole(ctx, hole, players);
+      if (!mounted || _pending.containsKey(hole)) return;   // save failed
+    }
     _advance();
   }
 
   Future<void> _finishRound(BuildContext ctx, List<Membership> players) async {
+    if (!await confirmCompleteRound(ctx)) return;
+    if (!mounted) return;
     final rp      = context.read<RoundProvider>();
     final sync    = context.read<SyncService>();
     final roundId = rp.round?.id;
@@ -349,8 +377,16 @@ class _WolfScreenState extends State<WolfScreen> {
 
     await sync.waitUntilIdle();
     if (!mounted) return;
-    rp.loadWolf(widget.foursomeId);
     if (roundId != null) {
+      // Mark the round complete so it leaves the active list (without this
+      // "Done" only opens the leaderboard and the round stays in_progress).
+      final lb = await rp.completeRound(roundId);
+      if (!mounted) return;
+      if (lb == null) {
+        _snack(ctx, rp.error ?? 'Could not complete round.',
+            () => _finishRound(ctx, players));
+        return;
+      }
       Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }
@@ -541,8 +577,11 @@ class _WolfScreenState extends State<WolfScreen> {
                 summary:    summary,
                 holeInfo:   holeInfo,
                 decided:    holeInfo?.isDecided ?? false,
+                editingPlayerId: _editingPlayerId,
                 onTapDecide: () => _openDecisionSheet(_selectedHole),
                 onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
+                onEditTap: (m) => setState(() => _editingPlayerId =
+                    _editingPlayerId == m.player.id ? null : m.player.id),
               ),
               if (holeInfo != null && holeInfo.isScored) ...[
                 const SizedBox(height: 12),
@@ -557,7 +596,9 @@ class _WolfScreenState extends State<WolfScreen> {
                   players:     _realMembers(rp.round),
                   scorecard:   sc,
                   currentHole: _selectedHole,
-                  onTapHole:   (h) => setState(() => _selectedHole = h),
+                  onTapHole:   (h) => setState(() {
+                    _selectedHole = h; _editingPlayerId = null;
+                  }),
                 ),
               const SizedBox(height: 16),
             ],
@@ -1023,8 +1064,10 @@ class _HoleScoreCard extends StatelessWidget {
   final WolfSummary?     summary;
   final WolfHole?        holeInfo;
   final bool             decided;
+  final int?             editingPlayerId;   // scored row tapped for correction
   final VoidCallback     onTapDecide;
   final void Function(Membership, int) onScoreSelected;
+  final void Function(Membership) onEditTap;
 
   const _HoleScoreCard({
     required this.holeData,
@@ -1037,8 +1080,10 @@ class _HoleScoreCard extends StatelessWidget {
     required this.summary,
     required this.holeInfo,
     required this.decided,
+    required this.editingPlayerId,
     required this.onTapDecide,
     required this.onScoreSelected,
+    required this.onEditTap,
   });
 
   String get _mode       => summary?.handicapMode ?? 'net';
@@ -1148,6 +1193,11 @@ class _HoleScoreCard extends StatelessWidget {
             final m   = entry.value;
             final gross = scores[m.player.id];
             final isHot = idx == effHot;
+            final isEditing = editingPlayerId == m.player.id;
+            // A scored row that isn't the live hot-spot can be tapped to fix
+            // it — a completed hole has no hot-spot, so without this there'd be
+            // no way to edit a past hole.
+            final editable = gross != null && !isHot;
             final strokes = _strokesForHole(m, holeData);
             final role = _roleFor(m.player.id);
 
@@ -1164,8 +1214,11 @@ class _HoleScoreCard extends StatelessWidget {
                   lowestPlayingHandicap: _lowPlaying),
                 role:      role,
                 dimmed:    !decided,
+                editable:  editable,
+                isEditing: isEditing,
+                onTap:     editable ? () => onEditTap(m) : null,
               ),
-              if (isHot)
+              if (isHot || isEditing)
                 _InlinePicker(
                   par:          par,
                   strokes:      strokes,
@@ -1189,6 +1242,9 @@ class _PlayerRow extends StatelessWidget {
   final int        hcap;
   final String?    role;   // wolf | partner | opponent
   final bool       dimmed; // greyed while awaiting the Wolf's decision
+  final bool       editable;   // tap to correct an already-scored past hole
+  final bool       isEditing;  // its inline picker is currently open
+  final VoidCallback? onTap;
 
   const _PlayerRow({
     required this.member,
@@ -1199,21 +1255,24 @@ class _PlayerRow extends StatelessWidget {
     required this.hcap,
     required this.role,
     this.dimmed = false,
+    this.editable = false,
+    this.isEditing = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final teamColor = _wolfTeamColor(role);
-    final boxBg = isHot
+    final boxBg = (isHot || isEditing)
         ? theme.colorScheme.primaryContainer.withOpacity(0.4)
         : Colors.transparent;
-    final boxBorder = isHot
+    final boxBorder = (isHot || isEditing)
         ? Border.all(color: theme.colorScheme.primary, width: 2)
         : Border.all(color: teamColor ?? theme.colorScheme.outline,
             width: teamColor != null ? 1.5 : 1);
 
-    return Opacity(
+    final inner = Opacity(
       opacity: dimmed ? 0.45 : 1.0,
       child: Container(
       decoration: BoxDecoration(
@@ -1275,7 +1334,12 @@ class _PlayerRow extends StatelessWidget {
             ],
           ]),
         ),
-        const SizedBox(width: 8),
+        if (editable && !isEditing) ...[
+          Icon(Icons.edit, size: 14,
+              color: theme.colorScheme.primary.withOpacity(0.7)),
+          const SizedBox(width: 6),
+        ] else
+          const SizedBox(width: 8),
         Container(
           width: 40, height: 36,
           decoration: BoxDecoration(
@@ -1292,6 +1356,9 @@ class _PlayerRow extends StatelessWidget {
         ),
       ]),
     ));
+
+    if (onTap == null) return inner;
+    return InkWell(onTap: onTap, child: inner);
   }
 }
 

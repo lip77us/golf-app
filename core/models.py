@@ -212,37 +212,21 @@ class Player(models.Model):
     objects         = AccountScopedManager()
 
     def effective_handicap_index(self):
-        """The authoritative WHS index to use for this golfer.
+        """The handicap index to use for this golfer's scoring.
 
-        For a golfer who's "On Halved" — their phone matches a registered user
-        who maintains their OWN profile — return THAT profile's index so a
-        friend's copy follows the golfer's self-maintained handicap. Otherwise
-        (login-less guests, or no match) fall back to the locally-stored value.
+        Simply the locally-stored value: every account keeps its OWN editable
+        copy of a golfer's index.  A registered golfer's own index is kept in
+        sync across their friends' copies by PROPAGATION on edit (a push when
+        they change their own profile), not by a read-time override — see
+        api.views.propagate_canonical_index.
         """
-        if not self.phone:
-            return self.handicap_index
-        from accounts.phone import normalize
-        from django.contrib.auth import get_user_model
-        n = normalize(self.phone)
-        if not n:
-            return self.handicap_index
-        u = (get_user_model().objects.filter(phone=n)
-             .select_related('player_profile').first())
-        if u is not None:
-            prof = getattr(u, 'player_profile', None)
-            # prof.id != self.id guards the golfer's own profile (no self-loop).
-            # A 0/unset owner index means "not provided yet" — fall back to the
-            # locally-typed value rather than overriding it with a default 0.
-            if prof is not None and prof.id != self.id and prof.handicap_index != 0:
-                return prof.handicap_index
         return self.handicap_index
 
     def course_handicap(self, tee):
         """
         Calculate course handicap for a given Tee.
-        Returns an integer per WHS rules. Uses the golfer's authoritative index
-        (see effective_handicap_index) so a connected golfer's self-maintained
-        handicap is what gets applied at round setup.
+        Returns an integer per WHS rules, using this golfer's locally-stored
+        index (kept current for connected golfers via index propagation).
         """
         ch = float(self.effective_handicap_index()) * (float(tee.slope) / 113.0) + (float(tee.course_rating) - float(tee.par))
         return round(ch)
@@ -351,6 +335,25 @@ class Tee(models.Model):
                         help_text="Lower = more default. Used to pick the "
                                   "default tee for a player of a given sex.",
                     )
+    # Copy-on-write revisioning.  A Tee row is IMMUTABLE once a round
+    # references it (FoursomeMembership.tee is PROTECT): when its hole geometry
+    # is re-rated / re-imported, the old row is RETIRED — this FK points at its
+    # replacement — and a new current row is created.  So completed rounds keep
+    # the exact par + stroke-index data they were scored against (every scoring
+    # service reads those LIVE from tee.holes), while new rounds pick up the
+    # re-rate.  null == current revision.  See services/tee_revisions.py.
+    superseded_by   = models.ForeignKey(
+                        'self', null=True, blank=True,
+                        on_delete=models.SET_NULL,
+                        related_name='supersedes',
+                        help_text="Replacement row when this tee was re-rated; "
+                                  "null means this is the current revision.",
+                    )
+
+    @property
+    def is_current(self):
+        """True when this is the live revision (nothing has superseded it)."""
+        return self.superseded_by_id is None
 
     def hole(self, number):
         """Return the hole dict for a given hole number (1-based)."""
