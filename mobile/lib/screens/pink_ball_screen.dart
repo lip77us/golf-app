@@ -342,6 +342,24 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
 
   int get _holeNumber => _holeIndex + 1;
 
+  /// True once any score has been entered (pending or saved) — gates the
+  /// app-bar Exit (✕) on a single-foursome casual round.
+  bool get _hasAnyScore {
+    if (_pendingScores.values.any((v) => v != null)) return true;
+    final rp = context.read<RoundProvider>();
+    final sc = rp.scorecard;
+    if (sc != null) {
+      for (final h in sc.holes) {
+        if (h.scores.any((s) => s.grossScore != null)) return true;
+      }
+    }
+    return rp.round?.foursomes
+            .where((f) => f.id == widget.foursomeId)
+            .firstOrNull
+            ?.hasAnyScore ??
+        false;
+  }
+
   /// Returns balls_to_count for the current hole from the Irish Rumble segments,
   /// or null if Irish Rumble is not active or no segment covers this hole.
   int? get _irishBallsToCount {
@@ -544,9 +562,25 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
     final complete = hole != null && _holeIsComplete(hole, realMembers);
     final groupNum = foursome?.groupNumber ?? 0;
 
+    // On a single-foursome casual round, once a score is entered swap the back
+    // arrow for an explicit ✕ Exit (back is easily mistaken for "previous hole")
+    // that returns to the casual rounds list.
+    final isCasualSingle = (rp.round?.isCasual ?? false) &&
+        (rp.round?.foursomes.length ?? 1) == 1;
+    final showExit = isCasualSingle && _hasAnyScore;
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Group $groupNum',
+        automaticallyImplyLeading: !showExit,
+        leading: showExit
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Exit to rounds',
+                onPressed: () => Navigator.of(context).popUntil(
+                    (r) => r.settings.name == '/casual-rounds' || r.isFirst),
+              )
+            : null,
         actions: [
           IconButton(
             tooltip: 'Refresh scores',
@@ -1696,7 +1730,7 @@ class _PinkBallMatchPlayCard extends StatelessWidget {
                 Icon(Icons.sports_tennis,
                     size: 16, color: theme.colorScheme.primary),
                 const SizedBox(width: 6),
-                Text('Match Play',
+                Text('Mini Singles Bracket',
                     style: theme.textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
                 const Spacer(),

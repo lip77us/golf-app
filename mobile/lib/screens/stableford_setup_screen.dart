@@ -31,7 +31,18 @@ const _kPresets = <String, Map<String, int>>{
 
 class StablefordSetupScreen extends StatefulWidget {
   final int roundId;
-  const StablefordSetupScreen({super.key, required this.roundId});
+
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to score entry), and
+  /// returns to the /round launch page on save instead of jumping to scoring.
+  final bool returnToHub;
+
+  const StablefordSetupScreen({
+    super.key,
+    required this.roundId,
+    this.returnToHub = false,
+  });
 
   @override
   State<StablefordSetupScreen> createState() => _StablefordSetupScreenState();
@@ -63,6 +74,8 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
 
   bool _loading = true;
   bool _saving  = false;
+  /// True when editing an already-configured game (drives Save label + title).
+  bool _editing = false;
   Object? _error;
 
   @override
@@ -130,6 +143,10 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
           _points[b]!.text = '${cfg['pts_$b'] ?? _kPresets['Standard']![b]}';
         }
         final payouts = (cfg['payouts'] as List? ?? []);
+        // A configured Stableford game persists a payout structure; a fresh
+        // round comes back with none. Non-empty payouts is the "already set
+        // up" tell → enter edit mode (Save Configuration / "Edit Stableford").
+        _editing = payouts.isNotEmpty;
         if (payouts.isEmpty) {
           // Fresh round → default to winner-take-all so the pool is visibly
           // allocated; the user bumps places / re-suggests from there.
@@ -185,6 +202,9 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   Future<void> _save() async {
     setState(() { _saving = true; _error = null; });
     try {
+      // Capture the provider before any await so we don't touch context
+      // across the async gap in the returnToHub branch below.
+      final rp = context.read<RoundProvider>();
       final payouts = <Map<String, dynamic>>[
         for (var i = 0; i < _numPayouts; i++)
           {'place': i + 1,
@@ -206,11 +226,21 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
           for (final b in _kBuckets) b: int.tryParse(_points[b]!.text.trim()) ?? 0,
         },
       );
+      if (widget.returnToHub) {
+        // Round creation / "Edit Configuration": return to the launch page
+        // sitting below us. Reload the round first so the hub reflects the
+        // freshly-saved game, then pop — popping (rather than pushing) keeps a
+        // single hub on the stack.
+        await rp.loadRound(widget.roundId);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        return;
+      }
       if (!mounted) return;
       // Jump straight to scoring, like the per-foursome games (5-3-1, Sixes…),
       // so the flow is consistent — there's no reconfigure step to come back
       // for. Stableford is round-level; a casual round has one foursome.
-      final fs = context.read<RoundProvider>().round?.foursomes;
+      final fs = rp.round?.foursomes;
       if (fs != null && fs.isNotEmpty) {
         Navigator.of(context)
             .pushReplacementNamed('/score-entry', arguments: fs.first.id);
@@ -226,7 +256,9 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(
-          _step == 0 ? 'Stableford · Scoring' : 'Stableford · Payout')),
+          _editing
+              ? 'Edit Stableford'
+              : (_step == 0 ? 'Stableford · Scoring' : 'Stableford · Payout'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : (_error != null && !_saving)
@@ -263,8 +295,8 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
                 ? const SizedBox(width: 20, height: 20,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
-                : const Text('Save Setup',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                : Text(_editing ? 'Save Configuration' : 'Save Setup',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
       ]),
     );

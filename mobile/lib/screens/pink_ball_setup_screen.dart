@@ -295,7 +295,7 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
 
                         GolfTextField(
                           controller: _colorCtrl,
-                          label: 'Ball Colour',
+                          label: 'Ball Color',
                           hint: 'e.g. Pink, Red, Yellow',
                           textCapitalization: TextCapitalization.words,
                         ),

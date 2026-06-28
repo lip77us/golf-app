@@ -48,6 +48,8 @@ class _TripleCupScreenState extends State<TripleCupScreen> {
     final summary = rp.tripleCupSummary;
     final loading = rp.loadingTripleCup;
 
+    // This is the cup-standings view (reached from the leaderboard), not a
+    // score-entry screen — keep the standard back arrow.
     return Scaffold(
       appBar: GolfAppBar(
         title: 'One-Round Triple Cup',

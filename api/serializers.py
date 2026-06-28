@@ -461,6 +461,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             ('three_person_match', 'three_person_match'),
             ('wolf_game',          'wolf'),
             ('rabbit_game',        'rabbit'),
+            ('triple_cup_game',    'triple_cup'),
         ]:
             try:
                 getattr(obj, attr)
@@ -507,6 +508,14 @@ class RoundSerializer(serializers.ModelSerializer):
     foursomes      = FoursomeSerializer(many=True, read_only=True)
     is_cup_round   = serializers.SerializerMethodField()
     ir_balls_config = serializers.SerializerMethodField()
+    # True for a standalone casual round (no parent tournament).  The mobile
+    # app uses this to label the round hub by its game (not "Round N", a
+    # tournament-only concept) and to offer an Exit-to-home action.
+    is_casual      = serializers.SerializerMethodField()
+    # Scoring-completeness signals for the "Complete Round" guard — so the app
+    # can warn before finishing a round that still has unscored holes.
+    all_holes_scored = serializers.SerializerMethodField()
+    holes_remaining  = serializers.SerializerMethodField()
     # True only for the round's TD/organizer (round is in the viewer's account
     # AND they're an admin). A cross-account designated scorer gets False, so the
     # app hides TD config (set scorer, configure games, move players, the
@@ -527,6 +536,32 @@ class RoundSerializer(serializers.ModelSerializer):
         """True when this round has a Ryder Cup config (was set up via CupRoundSetupScreen)."""
         return hasattr(obj, 'ryder_cup_config')
 
+    def get_is_casual(self, obj) -> bool:
+        """True for a standalone casual round (no parent tournament)."""
+        return obj.tournament_id is None
+
+    def get_all_holes_scored(self, obj) -> bool:
+        """True when every foursome has a score on every hole it's expected to
+        play (same rule the Complete Round endpoint uses to unblock)."""
+        from .views import RoundCompleteView
+        return RoundCompleteView._all_foursomes_done(obj)
+
+    def get_holes_remaining(self, obj) -> int:
+        """Total count of expected-but-unscored holes across all foursomes
+        (0 when the round is fully scored).  Drives the Complete Round warning."""
+        from .views import RoundCompleteView
+        from scoring.models import HoleScore
+        total = 0
+        for fs in obj.foursomes.all():
+            expected = RoundCompleteView._expected_holes(fs)
+            scored = set(
+                HoleScore.objects
+                .filter(foursome=fs, gross_score__isnull=False)
+                .values_list('hole_number', flat=True)
+            )
+            total += len(expected - scored)
+        return total
+
     def get_ir_balls_config(self, obj):
         """
         Irish Rumble balls-per-segment config — list of
@@ -546,6 +581,7 @@ class RoundSerializer(serializers.ModelSerializer):
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'scramble_config', 'notes', 'foursomes',
             'is_cup_round', 'ir_balls_config', 'can_manage',
+            'is_casual', 'all_holes_scored', 'holes_remaining',
             # Public spectator URL token — used by mobile's "Share Watch
             # Link" button to construct /watch/<token>/.
             'watch_token',

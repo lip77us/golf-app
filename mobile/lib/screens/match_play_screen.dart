@@ -24,18 +24,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/client.dart';
+import '../game_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/round_chat_button.dart';
 
 // Colours used for Player-1 and Player-2 holes across all match cards.
-// Calmer burgundy / slate (matches GolfTokens.teamRed / teamBlue and the
-// score-entry name colours).  Per the May 2026 design audit (D-04), team
-// identity uses the calmer palette so loud reds stay reserved for errors
-// and destructive actions.
-const _kP1Color = Color(0xFF8E2E2E); // calm burgundy
-const _kP2Color = Color(0xFF1B4F8E); // slate navy
+// Matches the score-entry name colours (GameColors.team1 / team2) so a player
+// reads in the same colour on the leaderboard as in score entry.
+final _kP1Color = GameColors.team1; // blue
+final _kP2Color = GameColors.team2; // orange
 
 class MatchPlayScreen extends StatefulWidget {
   final int foursomeId;
@@ -87,14 +86,41 @@ class _MatchPlayScreenState extends State<MatchPlayScreen> {
     return null;
   }
 
+  /// True once any score has been entered for this foursome — gates the
+  /// app-bar Exit (✕) on a single-foursome casual round. This screen reads its
+  /// data from a raw summary map (no `_pending` map / scorecard), so the signal
+  /// comes from the foursome's `hasAnyScore` flag.
+  bool get _hasAnyScore {
+    final rp = context.read<RoundProvider>();
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    return fs?.hasAnyScore ?? false;
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final rp = context.watch<RoundProvider>();
+    // On a single-foursome casual round, once a score is entered swap the back
+    // arrow for an explicit ✕ Exit (back is easily mistaken for "previous hole")
+    // that returns to the casual rounds list.
+    final isCasualSingle = (rp.round?.isCasual ?? false) &&
+        (rp.round?.foursomes.length ?? 1) == 1;
+    final showExit = isCasualSingle && _hasAnyScore;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Match Play'),
+        automaticallyImplyLeading: !showExit,
+        leading: showExit
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Exit to rounds',
+                onPressed: () => Navigator.of(context).popUntil(
+                    (r) => r.settings.name == '/casual-rounds' || r.isFirst),
+              )
+            : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

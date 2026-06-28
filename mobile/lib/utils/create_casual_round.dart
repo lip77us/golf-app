@@ -50,38 +50,44 @@ class CasualRoundLaunch {
   Foursome? firstFs,
 ) {
   if (activeGames.length != 1 || firstFs == null) return (null, null);
+  // returnToHub: after configuring, land on the /round launch page (Enter
+  // Scores / Edit Tee Boxes / Edit Configuration) instead of jumping straight
+  // into score entry.  Per-foursome games key off the foursome id, round-level
+  // games off the round id.
+  Object fsArg() => {'id': firstFs.id, 'returnToHub': true};
+  Object roundArg() => {'id': round.id, 'returnToHub': true};
   switch (activeGames.first) {
     case GameIds.sixes:
-      return ('/sixes-setup', firstFs.id);
+      return ('/sixes-setup', fsArg());
     case GameIds.points531:
-      return ('/points-531-setup', firstFs.id);
+      return ('/points-531-setup', fsArg());
     case GameIds.vegas:
-      return ('/vegas-setup', firstFs.id);
+      return ('/vegas-setup', fsArg());
     case GameIds.skins:
-      return ('/skins-setup', firstFs.id);
+      return ('/skins-setup', fsArg());
     case GameIds.wolf:
-      return ('/wolf-setup', firstFs.id);
+      return ('/wolf-setup', fsArg());
     case GameIds.rabbit:
-      return ('/rabbit-setup', firstFs.id);
+      return ('/rabbit-setup', fsArg());
     case GameIds.tripleCup:
-      return ('/triple-cup-setup', firstFs.id);
+      return ('/triple-cup-setup', fsArg());
     case GameIds.multiSkins:
-      return ('/multi-skins-setup', round.id);
+      return ('/multi-skins-setup', roundArg());
     case GameIds.nassau:
-      return ('/nassau-setup', firstFs.id);
+      return ('/nassau-setup', fsArg());
     case GameIds.match18:
-      return ('/nassau-setup-18', firstFs.id); // Overall-only Nassau
+      return ('/nassau-setup-18', fsArg()); // Overall-only Nassau
     case GameIds.strokePlay:
-      return ('/low-net-setup', round.id);
+      return ('/low-net-setup', roundArg());
     case GameIds.stableford:
-      return ('/stableford-setup', round.id);
+      return ('/stableford-setup', roundArg());
     case GameIds.matchPlay:
       // Match Play auto-dispatches by foursome size: 3 → Three-Person Match,
       // 4 → single-elimination bracket.
       final realCount = firstFs.realPlayers.length;
       return (
         realCount == 3 ? '/three-person-match-setup' : '/match-play-setup',
-        firstFs.id,
+        fsArg(),
       );
     default:
       return (null, null);

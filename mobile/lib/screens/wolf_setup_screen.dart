@@ -30,7 +30,17 @@ import '../widgets/handicap_mode_selector.dart';
 class WolfSetupScreen extends StatefulWidget {
   final int foursomeId;
 
-  const WolfSetupScreen({super.key, required this.foursomeId});
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to score entry), and
+  /// returns to the /round launch page on save instead of jumping to scoring.
+  final bool returnToHub;
+
+  const WolfSetupScreen({
+    super.key,
+    required this.foursomeId,
+    this.returnToHub = false,
+  });
 
   @override
   State<WolfSetupScreen> createState() => _WolfSetupScreenState();
@@ -64,6 +74,8 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
 
   bool   _loading  = true;
   bool   _starting = false;
+  /// True when editing an already-configured game (drives Save vs Start label).
+  bool   _editing  = false;
   Object? _error;
 
   WolfSummary? _summary;
@@ -96,14 +108,23 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
       // and it covers the pending state (configured but no hole fully
       // resolved yet), which `status` alone can't distinguish from "no
       // game".
-      if (_summary!.wolfOrder.isNotEmpty) {
+      final configured = _summary!.wolfOrder.isNotEmpty;
+
+      // Normal flow: an already-set-up game jumps straight to the play screen.
+      // In edit mode (returnToHub — round creation / "Edit Configuration")
+      // stay on the form so the user can change settings.
+      if (configured && !widget.returnToHub) {
         Navigator.of(context).pushReplacementNamed(
           '/wolf', arguments: widget.foursomeId);
         return;
       }
 
       setState(() {
-        if (_summary!.status != 'pending') {
+        // Adopt saved settings when the game has been configured (a non-empty
+        // wolf order is the tell — covers the pending-with-config edit case);
+        // a brand-new game keeps the casual defaults above.
+        if (configured || _summary!.status != 'pending') {
+          if (configured) _editing = true;
           _mode          = _summary!.handicapMode;
           _netPercent    = _summary!.netPercent;
           _lonePoints    = _summary!.loneWolfPoints;
@@ -190,9 +211,17 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
       );
       rp.setWolfSummary(summary);
 
-      if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(
-        '/wolf', arguments: widget.foursomeId);
+      if (widget.returnToHub) {
+        // Round creation / "Edit Configuration": reload the round so the hub
+        // reflects the freshly-saved game, then pop back to the launch page.
+        await rp.loadRound(rp.round!.id);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      } else {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed(
+          '/wolf', arguments: widget.foursomeId);
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e; _starting = false; });
     }
@@ -203,10 +232,13 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
       _betCtrlInitialized = true;
+      final b = rp.round!.betUnit;
+      _betCtrl.text = b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+      _stakeOk = double.tryParse(_betCtrl.text) != null;
     }
 
     return Scaffold(
-      appBar: const GolfAppBar(title: 'Wolf Setup'),
+      appBar: GolfAppBar(title: _editing ? 'Edit Wolf' : 'Wolf Setup'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -231,8 +263,8 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
                                   width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
-                              : const Text('Start Game',
-                                  style: TextStyle(
+                              : Text(_editing ? 'Save Configuration' : 'Start Game',
+                                  style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold)),
                         ),

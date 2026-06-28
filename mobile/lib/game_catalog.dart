@@ -249,7 +249,7 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id           : GameIds.matchPlay,
-    displayName  : 'Match Play',
+    displayName  : 'Mini Singles Bracket',
     // Single user-facing pick that auto-dispatches per foursome:
     //   4-player groups → single-elimination bracket (two semis on
     //                     holes 1–9, Final + 3rd-place on holes 10–18).

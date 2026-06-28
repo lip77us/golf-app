@@ -700,7 +700,7 @@ def _build_leaderboard(round_obj: Round) -> dict:
                     })
 
         if mp_groups:
-            games['match_play'] = {'label': 'Match Play', 'by_group': mp_groups}
+            games['match_play'] = {'label': 'Mini Singles Bracket', 'by_group': mp_groups}
         if singles_nassau_groups:
             games['cup_singles'] = {'label': 'Singles', 'by_group': singles_nassau_groups}
         if singles_18_groups:
@@ -1628,7 +1628,7 @@ class TournamentLeaderboardView(APIView):
                     except Exception:
                         pass  # foursome has no match play bracket yet
             games['match_play'] = {
-                'label'   : 'Match Play',
+                'label'   : 'Mini Singles Bracket',
                 'brackets': brackets,
             }
 
@@ -4342,8 +4342,16 @@ class WolfOrderView(APIView):
                 {'detail': 'Wolf game not set up for this foursome.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        from services.wolf import set_wolf_order, wolf_summary
-        set_wolf_order(foursome, ser.validated_data['wolf_order'])
+        from services.wolf import (
+            set_wolf_order, wolf_summary, WolfOrderLocked,
+        )
+        try:
+            set_wolf_order(foursome, ser.validated_data['wolf_order'])
+        except WolfOrderLocked as e:
+            return Response(
+                {'detail': e.message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(wolf_summary(foursome))
 
 

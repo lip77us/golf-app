@@ -1758,10 +1758,41 @@ def triple_cup_summary(foursome) -> dict | None:
     from scoring.phantom import build_phantom_info
     phantom_info = build_phantom_info(foursome, game.net_percent)
 
+    # Ordered real-player rosters per side, so the setup screen can restore the
+    # user's team picks on re-edit.  Singles matches define the within-team
+    # order (the pairing); fall back to the fourball roster for anyone not in a
+    # singles match.  Phantoms (2v1 cup) are excluded.
+    real_pids = set(
+        foursome.memberships.filter(player__is_phantom=False)
+        .values_list('player_id', flat=True)
+    )
+
+    def _ordered_side(team_number, fallback):
+        out: list[int] = []
+        for m in matches:
+            if m.segment != 'singles':
+                continue
+            t = next((x for x in m.teams.all()
+                      if x.team_number == team_number), None)
+            if t is None:
+                continue
+            for pid in t.players.values_list('id', flat=True):
+                if pid in real_pids and pid not in out:
+                    out.append(pid)
+        for pid in fallback:
+            if pid in real_pids and pid not in out:
+                out.append(pid)
+        return out
+
+    team1_ids = _ordered_side(1, cup_red_pids)
+    team2_ids = _ordered_side(2, cup_blue_pids)
+
     return {
         'status'     : game.status,
         'group_size' : game.group_size,
         'foursomes_first': game.foursomes_first,
+        'team1_ids'  : team1_ids,
+        'team2_ids'  : team2_ids,
         'team1_colour': team1_colour,
         'team2_colour': team2_colour,
         'team1_name'  : team1_name,

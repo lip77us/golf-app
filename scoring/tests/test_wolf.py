@@ -269,3 +269,49 @@ class WolfTests(TestCase):
         from decimal import Decimal
         game = self._setup(loss_cap=Decimal('-5'))
         assert game.loss_cap is None
+
+    # ── Rotation lock after a hole is played ───────────────────────────────────
+
+    def test_set_order_blocks_changing_a_played_position(self):
+        """Once hole 1 is played, position 0 (its Wolf) can't be reordered —
+        otherwise the past hole's Wolf would silently change."""
+        from services.wolf import set_wolf_order, WolfOrderLocked
+        self._setup()  # order: Alice, Bob, Carol, Dave
+        self._decide(1, 'lone')
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 3), (self.pid['Bob'], 5),
+                                  (self.pid['Carol'], 5), (self.pid['Dave'], 5)])
+        calculate_wolf(self.fs)
+        # Swapping position 0 (Alice↔Bob) is rejected.
+        with self.assertRaises(WolfOrderLocked):
+            set_wolf_order(self.fs, self._order('Bob', 'Alice', 'Carol', 'Dave'))
+        # The stored order is unchanged.
+        self.fs.wolf_game.refresh_from_db()
+        assert self.fs.wolf_game.wolf_order == self._order(
+            'Alice', 'Bob', 'Carol', 'Dave')
+
+    def test_set_order_allows_reordering_unplayed_positions(self):
+        """After hole 1, the not-yet-played positions (Carol/Dave here) may
+        still be swapped."""
+        from services.wolf import set_wolf_order
+        self._setup()
+        self._decide(1, 'lone')
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 3), (self.pid['Bob'], 5),
+                                  (self.pid['Carol'], 5), (self.pid['Dave'], 5)])
+        calculate_wolf(self.fs)
+        # Swap positions 2 & 3 (unplayed) — allowed.
+        set_wolf_order(self.fs, self._order('Alice', 'Bob', 'Dave', 'Carol'))
+        self.fs.wolf_game.refresh_from_db()
+        assert self.fs.wolf_game.wolf_order == self._order(
+            'Alice', 'Bob', 'Dave', 'Carol')
+
+    def test_locked_positions_in_summary(self):
+        """The summary reports the played positions so the UI can lock them."""
+        self._setup()
+        self._decide(1, 'lone')
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 3), (self.pid['Bob'], 5),
+                                  (self.pid['Carol'], 5), (self.pid['Dave'], 5)])
+        self._decide(2, 'lone')
+        submit_hole(self.fs, 2, [(self.pid['Alice'], 5), (self.pid['Bob'], 3),
+                                  (self.pid['Carol'], 5), (self.pid['Dave'], 5)])
+        calculate_wolf(self.fs)
+        assert wolf_summary(self.fs)['locked_positions'] == [0, 1]

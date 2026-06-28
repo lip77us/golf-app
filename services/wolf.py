@@ -74,6 +74,15 @@ from scoring.models import HoleScore
 _CENT = Decimal('0.01')
 
 
+class WolfOrderLocked(Exception):
+    """Raised when a rotation change would alter the Wolf on an already-played
+    hole.  Carries a user-facing ``message``."""
+
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
+
+
 def _q(x) -> Decimal:
     """Quantize to cents, rounding half-up."""
     return Decimal(x).quantize(_CENT, rounding=ROUND_HALF_UP)
@@ -136,10 +145,53 @@ def setup_wolf(
     return game
 
 
+def _played_holes(foursome, game) -> set:
+    """Hole numbers that are locked in — the Wolf has made a decision OR a gross
+    score is posted.  The rotation positions these map to must not change, or a
+    past hole's Wolf would be silently reassigned."""
+    played = set(
+        game.decisions
+        .exclude(decision=WolfHoleDecision.PENDING)
+        .values_list('hole_number', flat=True)
+    )
+    played.update(
+        HoleScore.objects
+        .filter(foursome=foursome, gross_score__isnull=False)
+        .values_list('hole_number', flat=True)
+    )
+    return played
+
+
+def locked_wolf_positions(foursome) -> set:
+    """Rotation positions (0-based) whose Wolf is fixed because the hole that
+    uses them (hole = position + 1, + n, …) has already been played."""
+    game = foursome.wolf_game
+    order = _clean_order(foursome, game.wolf_order)
+    n = len(order)
+    if n == 0:
+        return set()
+    return {(h - 1) % n for h in _played_holes(foursome, game)}
+
+
 def set_wolf_order(foursome, wolf_order: list) -> 'WolfGame':
-    """Update just the rotation order without wiping decisions/results."""
+    """Update just the rotation order without wiping decisions/results.
+
+    Refuses to change a rotation position whose hole has already been played
+    (scored or decided): changing it would silently rewrite that past hole's
+    Wolf.  Reorder only the not-yet-played positions, or reset the Wolf game to
+    fix a wrong Wolf.  Raises [WolfOrderLocked] on a disallowed change."""
     game = foursome.wolf_game  # raises WolfGame.DoesNotExist if absent
-    game.wolf_order = _clean_order(foursome, wolf_order)
+    current = _clean_order(foursome, game.wolf_order)
+    new     = _clean_order(foursome, wolf_order)
+    locked  = locked_wolf_positions(foursome)
+    for pos in sorted(locked):
+        if pos < len(current) and pos < len(new) and current[pos] != new[pos]:
+            raise WolfOrderLocked(
+                f"Hole {pos + 1} has already been played, so its Wolf can't be "
+                "changed. You can still reorder the later positions, or reset "
+                "the Wolf game to start over."
+            )
+    game.wolf_order = new
     game.save(update_fields=['wolf_order'])
     calculate_wolf(foursome)
     return game
@@ -541,6 +593,7 @@ def wolf_summary(foursome) -> dict:
                            'last_place_wolf_1718': True,
                            'require_lone_or_blind': False},
             'wolf_order': [],
+            'locked_positions': [],
             'players'   : [],
             'holes'     : [],
             'money'     : {'bet_unit': bet_unit, 'loss_cap': None},
@@ -714,6 +767,10 @@ def wolf_summary(foursome) -> dict:
             'require_lone_or_blind': game.require_lone_or_blind,
         },
         'wolf_order': order,
+        # Rotation positions (0-based) frozen because their hole has been
+        # played — the mobile reorder sheet locks these so a past Wolf can't
+        # be changed.
+        'locked_positions': sorted(locked_wolf_positions(foursome)),
         'players'   : players_out,
         'holes'     : holes_out,
         'money'     : {

@@ -587,7 +587,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       // "Low Net" — a Stableford Championship round should read "Stableford".
       final ta = lb?.tournamentActiveGames ?? const <String>[];
       if (ta.contains('stableford_championship')) return 'Stableford';
-      if (ta.contains('match_play') && !ta.contains('low_net')) return 'Match Play';
+      if (ta.contains('match_play') && !ta.contains('low_net')) return 'Mini Singles Bracket';
       return 'Stroke Play';
     }
     return gameDisplayName(g);
@@ -4924,7 +4924,7 @@ class _MatchPlayGroupCard extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text(
-              'Match Play bracket not set up for this group.\n'
+              'Mini Singles Bracket not set up for this group.\n'
               'Use the Game Setup card on the round screen.',
               style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),

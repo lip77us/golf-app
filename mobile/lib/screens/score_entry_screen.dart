@@ -893,25 +893,34 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     return false;
   }
 
-  /// True when every real player has a gross score on every hole 1–18,
-  /// considering both saved scores and locally-pending edits.
-  bool _allHolesScored(Scorecard sc, List<Membership> players) {
+  /// Number of holes (1–18) not yet fully scored — used by the soft-gate
+  /// "Finish early?" warning when completing before the 18th.
+  int _unscoredHoleCount(Scorecard sc, List<Membership> players) {
+    int n = 0;
     for (int h = 1; h <= 18; h++) {
-      final scores = _effectiveScores(sc, h);
-      if (!_allScored(players, scores, h)) return false;
+      if (!_allScored(players, _effectiveScores(sc, h), h)) n++;
     }
-    return true;
+    return n;
   }
 
-  /// First hole number that is missing at least one score, or null if all
-  /// 18 holes are fully scored.  Used for the "jump to first missing"
-  /// navigation on the Complete Round confirmation.
-  int? _firstMissingHole(Scorecard sc, List<Membership> players) {
-    for (int h = 1; h <= 18; h++) {
-      final scores = _effectiveScores(sc, h);
-      if (!_allScored(players, scores, h)) return h;
+  /// True once any score has been entered (saved or pending) — gates the
+  /// app-bar Exit (✕) on casual rounds: before any score, the back arrow
+  /// returns to the launch page (to edit config/tees); after, ✕ exits.
+  bool get _hasAnyScore {
+    if (_pending.isNotEmpty || _pendingJunk.isNotEmpty) return true;
+    final rp = context.read<RoundProvider>();
+    // Saved scores in the loaded scorecard — reflects a just-saved hole even
+    // before the round detail (foursome.hasAnyScore) reloads.
+    final sc = rp.scorecard;
+    if (sc != null) {
+      for (int h = 1; h <= 18; h++) {
+        if (_effectiveScores(sc, h).isNotEmpty) return true;
+      }
     }
-    return null;
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    return fs?.hasAnyScore ?? false;
   }
 
   static Map<int, Map<int, int>> _mergePending(
@@ -1127,7 +1136,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     final foursomeCount = rp.round?.foursomes.length ?? 1;
     final isMultiGroup = foursomeCount > 1;
 
-    if (!await confirmCompleteRound(ctx, isMultiGroup: isMultiGroup)) return;
+    // Soft gate: if holes are still blank (finishing early — e.g. a match
+    // decided before the 18th), warn but allow.  0 unscored → normal copy.
+    final sc = rp.scorecard;
+    final unscored = sc == null ? 0 : _unscoredHoleCount(sc, players);
+
+    if (!await confirmCompleteRound(
+      ctx,
+      isMultiGroup: isMultiGroup,
+      unscoredHoles: unscored,
+    )) return;
     if (!mounted) return;
 
     // Save any still-pending current-hole edits first.
@@ -1430,8 +1448,27 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       });
     }
 
+    // On a single-foursome casual round, once any score is entered the launch
+    // page (hub) is no longer reachable and the app-bar arrow is easily
+    // mistaken for "previous hole" (which is the bottom-left button).  Swap it
+    // for an explicit ✕ Exit that returns to the casual rounds list.  Before
+    // any score, keep the back arrow so the hub (config/tee edits) stays one
+    // tap away.
+    final isCasualSingle = (rp.round?.isCasual ?? false) &&
+        (rp.round?.foursomes.length ?? 1) == 1;
+    final showExit = isCasualSingle && _hasAnyScore;
+
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !showExit,
+        leading: showExit
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Exit to rounds',
+                onPressed: () => Navigator.of(context).popUntil(
+                  (r) => r.settings.name == '/casual-rounds' || r.isFirst),
+              )
+            : null,
         title: Text(
           _appBarTitle(games, nas, skins),
           style: const TextStyle(fontSize: 15),
@@ -1486,10 +1523,50 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 : () => Navigator.of(context).pushNamed('/scorecard',
                     arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
           ),
-          IconButton(
-            tooltip: 'What do these buttons do?',
-            icon: const Icon(Icons.help_outline),
-            onPressed: () => showScoreEntryHelp(context),
+          // Overflow: low-frequency actions — finishing the round early (soft
+          // gate) and the icon-legend help sheet.
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_vert),
+            onSelected: (v) {
+              switch (v) {
+                case 'finish':
+                  if (sc == null) return;
+                  final players = _orderedPlayers(
+                    sc, rp.round, nas,
+                    tripleCup: games.contains('triple_cup')
+                        ? rp.tripleCupSummary
+                        : null,
+                  );
+                  final par = sc.holeData(_selectedHole)?.par ?? 4;
+                  _completeRound(context, players, par);
+                  break;
+                case 'help':
+                  showScoreEntryHelp(context);
+                  break;
+              }
+            },
+            itemBuilder: (_) => [
+              if (!isComplete && sc != null)
+                const PopupMenuItem(
+                  value: 'finish',
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.flag_outlined),
+                    title: Text('Finish round'),
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'help',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.help_outline),
+                  title: Text('What do these buttons do?'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1596,7 +1673,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
               ]),
             );
           }),
-          // Hole navigation / completion
+          // Hole navigation / completion.  (Finishing the round early lives in
+          // the app-bar overflow menu — it's a rare action and doesn't earn a
+          // permanent slot down here.)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Row(children: [
@@ -1686,33 +1765,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       );
     }
 
-    final allHolesDone = _allHolesScored(sc, players);
-    final missingHole  = _firstMissingHole(sc, players);
-
     // Complete Round is a primary terminal action — use the default
     // brand-green FilledButton style, not the tertiary teal override that
     // made this button look one-off (D-01 in the May 2026 design audit).
+    // Soft gate: always enabled (when not submitting); _completeRound warns
+    // via the "Finish early?" dialog if any holes are still blank.
     return FilledButton.icon(
-      onPressed: (allHolesDone && !rp.submitting)
-          ? () => _completeRound(ctx, players, par)
-          : (missingHole != null && !rp.submitting)
-              ? () {
-                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                    content: Text('Hole $missingHole still has missing scores.'),
-                    action: SnackBarAction(
-                      label: 'Go to hole $missingHole',
-                      // The SnackBar outlives this screen — it's anchored
-                      // to the root ScaffoldMessenger, so a user can tap
-                      // the action after navigating away and a bare
-                      // setState() will throw "called after dispose()".
-                      onPressed: () {
-                        if (!mounted) return;
-                        setState(() => _selectedHole = missingHole);
-                      },
-                    ),
-                  ));
-                }
-              : null,
+      onPressed: rp.submitting ? null : () => _completeRound(ctx, players, par),
       icon: rp.submitting
           ? const SizedBox(
               width: 16, height: 16,
@@ -1820,7 +1879,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 vegasSummary:    games.contains('vegas')      ? rp.vegasSummary    : null,
                 tripleCupSummary: games.contains('triple_cup') ? rp.tripleCupSummary : null,
                 points531Summary: games.contains('points_531') ? rp.points531Summary : null,
-                matchPlayData:   rp.matchPlayData,
+                // Gate on match play / cup singles being active so stale
+                // bracket data can't tint a non-match-play (e.g. stroke-play)
+                // round's player rows.
+                matchPlayData:   (games.contains('match_play') ||
+                        games.contains('singles_nassau') ||
+                        games.contains('singles_18'))
+                    ? rp.matchPlayData : null,
                 isCupSingles:    games.contains('singles_nassau') || games.contains('singles_18'),
                 handicapMode:    hMode,
                 netPercent:      hPct,
@@ -1898,7 +1963,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 vegasSummary:            games.contains('vegas')             ? rp.vegasSummary              : null,
                 tripleCupSummary:        games.contains('triple_cup')        ? rp.tripleCupSummary          : null,
                 points531Summary:        games.contains('points_531')        ? rp.points531Summary           : null,
-                matchPlayData:           rp.matchPlayData,
+                // Gate on match play / cup singles being active so stale
+                // bracket data can't tint a non-match-play round's rows.
+                matchPlayData:           (games.contains('match_play') ||
+                        games.contains('singles_nassau') ||
+                        games.contains('singles_18'))
+                    ? rp.matchPlayData : null,
                 threePersonMatchSummary: games.contains('three_person_match') ? rp.threePersonMatchSummary   : null,
                 foursomeId:              widget.foursomeId,
                 roundId:                 rp.round?.id,
@@ -3049,18 +3119,16 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
             ),
 
             row(
-              Container(
-                width: 28, height: 28,
-                decoration: BoxDecoration(
-                  color: Colors.green.shade100,
-                  border: Border.all(color: Colors.green.shade700),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                alignment: Alignment.center,
-                child: const Text('3', style: TextStyle(fontWeight: FontWeight.bold)),
+              const NetScoreButton(
+                score: 3, par: 4, strokes: 0,
+                selected: false, width: 30, height: 30,
               ),
-              'Score box colour',
-              'Green = under net par, grey = net par, red = over net par.  Circle / square shapes follow standard scorecard convention (birdie / bogey, etc.).',
+              'Score box color',
+              'Standard scorecard notation, net to par (or gross if Net-style '
+                  'entry is off).  Under par is red — a circle for birdie, a '
+                  'double circle for eagle or better.  Par is plain black.  Over '
+                  'par is a square — bogey, or a double square for double bogey '
+                  'or worse.',
             ),
 
             if (hasSkins) ...[
@@ -6519,11 +6587,9 @@ class _MatchPlayStatusBar extends StatelessWidget {
     return '$leader ${margin.abs()}Up';
   }
 
-  // Light tints of the player1 (burgundy) / player2 (slate) name colours.
-  // Used for chip backgrounds so a "Paul 1Up" chip reads in the same
-  // colour as Paul's name in the score-entry row above.
-  static const _kChipP1Tint = Color(0xFFF1DCDC); // pale burgundy
-  static const _kChipP2Tint = Color(0xFFD9E2F0); // pale slate
+  // Light tints of the player1 (blue) / player2 (orange) name colours, so a
+  // "Paul 1Up" chip reads in the same colour as Paul's name in the
+  // score-entry row above (GameColors.team1 / team2).
 
   Color _chipBg(Map<String, dynamic> match, ThemeData theme) {
     final status   = match['status'] as String;
@@ -6533,11 +6599,9 @@ class _MatchPlayStatusBar extends StatelessWidget {
 
     if (status == 'complete') {
       if (result == 'halved') return Colors.grey.shade200;
-      // Winner-tinted: match player1's burgundy when player1 won,
-      // player2's slate when player2 won.  Stays consistent with the
-      // name colour in the score-entry row.
-      if (result == 'player1') return _kChipP1Tint;
-      if (result == 'player2') return _kChipP2Tint;
+      // Winner-tinted to match the player's name colour in the score-entry row.
+      if (result == 'player1') return GameColors.team1Bg;
+      if (result == 'player2') return GameColors.team2Bg;
       return Colors.grey.shade200;
     }
     if (holes.isEmpty) return theme.colorScheme.surfaceContainer;
@@ -6548,7 +6612,7 @@ class _MatchPlayStatusBar extends StatelessWidget {
 
     if (round == 1 && holeNum > 9) return Colors.amber.shade100; // sudden death
     if (margin == 0)  return theme.colorScheme.surfaceContainer;
-    return margin > 0 ? _kChipP1Tint : _kChipP2Tint;
+    return margin > 0 ? GameColors.team1Bg : GameColors.team2Bg;
   }
 
   @override
@@ -7272,7 +7336,7 @@ class _MatchPlayStatusCard extends StatelessWidget {
                 Icon(Icons.sports_tennis,
                     size: 16, color: theme.colorScheme.primary),
                 const SizedBox(width: 6),
-                Text('Match Play',
+                Text('Mini Singles Bracket',
                     style: theme.textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
                 const Spacer(),

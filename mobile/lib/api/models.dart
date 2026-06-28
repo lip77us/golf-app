@@ -972,6 +972,13 @@ class Round {
   /// and they're an admin). A cross-account designated scorer gets false, so
   /// the app hides TD config and shows only score entry + tee editing.
   final bool canManage;
+  /// True for a standalone casual round (no parent tournament).  Drives the
+  /// game-name title + Exit action on the round hub.
+  final bool isCasual;
+  /// True when every foursome has scored every hole it's expected to play.
+  final bool allHolesScored;
+  /// Count of expected-but-unscored holes across all foursomes (0 = done).
+  final int holesRemaining;
 
   const Round({
     required this.id,
@@ -989,6 +996,9 @@ class Round {
     this.irBallsConfig = const [],
     this.watchToken,
     this.canManage     = false,
+    this.isCasual       = false,
+    this.allHolesScored = false,
+    this.holesRemaining = 0,
   });
 
   factory Round.fromJson(Map<String, dynamic> j) => Round(
@@ -1005,6 +1015,9 @@ class Round {
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
         watchToken:   j['watch_token']   as String?,
         canManage:    j['can_manage']    as bool?   ?? false,
+        isCasual:       j['is_casual']        as bool? ?? false,
+        allHolesScored: j['all_holes_scored'] as bool? ?? false,
+        holesRemaining: j['holes_remaining']  as int?  ?? 0,
         irBallsConfig: (j['ir_balls_config'] as List? ?? [])
             .map((s) => Map<String, dynamic>.from(s as Map))
             .toList(),
@@ -1641,12 +1654,15 @@ class TripleCupMatch {
   /// For the current hole inside this foursomes match, return the
   /// player ID whose turn it is to play on *team*.  Mirrors the
   /// backend's TripleCupMatch.active_player_id.  Returns null when
-  /// not a foursomes match, when no first-tee player is set, or
-  /// when the hole is outside the match's range.
+  /// not a foursomes match or the hole is outside the match's range.
+  ///
+  /// When the team hasn't explicitly picked who tees off first
+  /// (team*FirstTeeId == null), we DEFAULT to the first listed player so
+  /// alt-shot still shows exactly one active player per team (instead of
+  /// leaving all 4 boxes active).  The tee-off picker still lets the user
+  /// choose, which overrides this default.
   int? activePlayerId(int teamNumber, int holeNumber) {
     if (segment != 'foursomes') return null;
-    final first = teamNumber == 1 ? team1FirstTeeId : team2FirstTeeId;
-    if (first == null) return null;
     if (holeNumber < startHole || holeNumber > endHole) return null;
     final teamPlayers = players
         .where((p) => p.teamNumber == teamNumber && !p.isPhantom)
@@ -1656,7 +1672,10 @@ class TripleCupMatch {
       // Solo side has no alternation — the lone real player is always active.
       return teamPlayers.isEmpty ? null : teamPlayers.first;
     }
-    if (!teamPlayers.contains(first)) return null;
+    final raw = teamNumber == 1 ? team1FirstTeeId : team2FirstTeeId;
+    final first = (raw != null && teamPlayers.contains(raw))
+        ? raw
+        : teamPlayers.first;
     final position = holeNumber - startHole;
     if (position % 2 == 0) return first;
     return teamPlayers.firstWhere((p) => p != first);
@@ -1717,6 +1736,10 @@ class TripleCupSummary {
   /// Cup TournamentTeam names — handy for headers in cup mode.
   final String? team1Name;
   final String? team2Name;
+  /// Ordered real-player ids on each side — used to restore the team picks
+  /// when re-editing the configuration.
+  final List<int> team1Ids;
+  final List<int> team2Ids;
   final List<TripleCupMatch> matches;
   final int team1Wins;
   final int team2Wins;
@@ -1744,6 +1767,8 @@ class TripleCupSummary {
     this.team2ColourName,
     this.team1Name,
     this.team2Name,
+    this.team1Ids = const [],
+    this.team2Ids = const [],
     required this.matches,
     required this.team1Wins,
     required this.team2Wins,
@@ -1784,6 +1809,8 @@ class TripleCupSummary {
       team2ColourName: j['team2_colour'] as String?,
       team1Name:       j['team1_name']   as String?,
       team2Name:       j['team2_name']   as String?,
+      team1Ids: (j['team1_ids'] as List? ?? []).map((e) => e as int).toList(),
+      team2Ids: (j['team2_ids'] as List? ?? []).map((e) => e as int).toList(),
       matches: (j['matches'] as List? ?? [])
           .map((m) => TripleCupMatch.fromJson(m as Map<String, dynamic>))
           .toList(),
@@ -2362,6 +2389,9 @@ class WolfSummary {
   final bool   lastPlaceWolf1718;
   final bool   requireLoneOrBlind;
   final List<int>             wolfOrder;
+  /// Rotation positions (0-based) frozen because their hole has been played —
+  /// the reorder sheet locks these so a past Wolf can't be changed.
+  final List<int>             lockedPositions;
   final List<WolfPlayerTotal> players;
   final List<WolfHole>        holes;
   final double betUnit;
@@ -2379,6 +2409,7 @@ class WolfSummary {
     required this.lastPlaceWolf1718,
     required this.requireLoneOrBlind,
     required this.wolfOrder,
+    this.lockedPositions = const [],
     required this.players,
     required this.holes,
     required this.betUnit,
@@ -2413,6 +2444,8 @@ class WolfSummary {
       lastPlaceWolf1718:  pts['last_place_wolf_1718']  as bool? ?? true,
       requireLoneOrBlind: pts['require_lone_or_blind'] as bool? ?? false,
       wolfOrder: (j['wolf_order'] as List? ?? [])
+          .map((e) => e as int).toList(),
+      lockedPositions: (j['locked_positions'] as List? ?? [])
           .map((e) => e as int).toList(),
       players: (j['players'] as List? ?? [])
           .map((p) => WolfPlayerTotal.fromJson(p as Map<String, dynamic>))

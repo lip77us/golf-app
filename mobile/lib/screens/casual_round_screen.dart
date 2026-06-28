@@ -393,10 +393,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(
-        launch.effectiveRoute,
-        arguments: launch.effectiveArgs,
-      );
+      // Land on the /round launch page (Enter Scores / Edit Tee Boxes / Edit
+      // Configuration).  For a single game that still needs configuring, push
+      // its setup screen ON TOP of the hub (returnToHub mode) so saving setup
+      // pops back to this same hub — one launch page, no duplicate on the stack.
+      final nav = Navigator.of(context);
+      nav.pushReplacementNamed('/round', arguments: launch.round.id);
+      if (launch.route != null) {
+        nav.pushNamed(launch.route!, arguments: launch.effectiveArgs);
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e; _creating = false; });
     }
@@ -574,8 +579,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         // Per D-06: the logged-in user's checkbox is
                         // *locked*, not disabled.  Use the active brand-
@@ -597,6 +603,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Line 1: name + badge.  The name gets the full
+                              // row width (selectors live on line 2) so it never
+                              // overflows on a narrow phone.
                               Row(children: [
                                 Flexible(
                                   child: Text(
@@ -613,17 +622,20 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                                 ] else if (!isLockedIn) ...[
                                   const SizedBox(width: 6),
                                   // Invite a golfer who isn't on the app yet.
+                                  // Plain tappable icon (not IconButton) so its
+                                  // footprint matches the Halved mark and rows
+                                  // stay the same height.
                                   Builder(
-                                    builder: (btnCtx) => IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                      tooltip: 'Invite ${player.name}',
-                                      icon: const Icon(
-                                          Icons.person_add_alt_1_outlined,
-                                          size: 18),
-                                      onPressed: () =>
-                                          inviteGolfer(btnCtx, player),
+                                    builder: (btnCtx) => Tooltip(
+                                      message: 'Invite ${player.name}',
+                                      child: InkResponse(
+                                        onTap: () =>
+                                            inviteGolfer(btnCtx, player),
+                                        child: Icon(
+                                            Icons.person_add_alt_1_outlined,
+                                            size: 18,
+                                            color: scheme.primary),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -637,66 +649,81 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                                         style: TextStyle(fontSize: 11)),
                                     padding: EdgeInsets.zero,
                                     visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                     backgroundColor: scheme.secondaryContainer,
                                   ),
                                 ],
                               ]),
-                              Text('Hcp: ${player.handicapIndex}', style: Theme.of(context).textTheme.bodySmall),
+                              // Line 2: handicap, plus the tee (and group)
+                              // selectors when this player is selected — on the
+                              // same line as the handicap to keep the card tight.
+                              if (isSelected)
+                                Row(children: [
+                                  Text('Hcp: ${player.handicapIndex}',
+                                      style: Theme.of(context)
+                                          .textTheme.bodySmall),
+                                  const SizedBox(width: 12),
+                                  if (_multiGroup) ...[
+                                    DropdownButton<int>(
+                                      value: _playerGroups[player.id] ?? 1,
+                                      isDense: true,
+                                      hint: const Text('Group'),
+                                      items: [
+                                        for (int g = 1;
+                                            g <= _maxGroupOption; g++)
+                                          DropdownMenuItem(
+                                            value: g,
+                                            child: Text('G$g'),
+                                          ),
+                                      ],
+                                      onChanged: (g) {
+                                        if (g != null) {
+                                          setState(() =>
+                                              _playerGroups[player.id] = g);
+                                        }
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  Expanded(
+                                    child: Builder(builder: (_) {
+                                      // Dropdown only shows tees this player can
+                                      // legitimately play: matching sex + any
+                                      // unisex tees, sorted by priority.
+                                      final playerTees = _teesForPlayer(player);
+                                      final effectiveValue = playerTees
+                                              .any((t) => t.id == playerTeeId)
+                                          ? playerTeeId
+                                          : null;
+                                      return DropdownButton<int>(
+                                        value: effectiveValue,
+                                        hint: const Text('Tee'),
+                                        isDense: true,
+                                        isExpanded: true,
+                                        items: playerTees
+                                            .map((t) => DropdownMenuItem(
+                                                  value: t.id,
+                                                  child: Text(t.teeName),
+                                                ))
+                                            .toList(),
+                                        onChanged: (teeId) {
+                                          if (teeId != null) {
+                                            setState(() => _playerTees[
+                                                player.id] = teeId);
+                                          }
+                                        },
+                                      );
+                                    }),
+                                  ),
+                                ])
+                              else
+                                Text('Hcp: ${player.handicapIndex}',
+                                    style: Theme.of(context)
+                                        .textTheme.bodySmall),
                             ],
                           ),
                         ),
-                        if (isSelected) ...[
-                          if (_multiGroup)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: DropdownButton<int>(
-                                value: _playerGroups[player.id] ?? 1,
-                                hint: const Text('Group'),
-                                items: [
-                                  for (int g = 1; g <= _maxGroupOption; g++)
-                                    DropdownMenuItem(
-                                      value: g,
-                                      child: Text('G$g'),
-                                    ),
-                                ],
-                                onChanged: (g) {
-                                  if (g != null) {
-                                    setState(() => _playerGroups[player.id] = g);
-                                  }
-                                },
-                              ),
-                            ),
-                          Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: Builder(builder: (_) {
-                              // Dropdown only shows tees this player can
-                              // legitimately play: matching sex + any
-                              // unisex tees at the course, sorted by
-                              // priority so the default is first.
-                              final playerTees = _teesForPlayer(player);
-                              // If the stored value is 0 or not in the
-                              // filtered list, show the hint instead of
-                              // forcing Flutter to render a missing value.
-                              final effectiveValue =
-                                  playerTees.any((t) => t.id == playerTeeId)
-                                      ? playerTeeId
-                                      : null;
-                              return DropdownButton<int>(
-                                value: effectiveValue,
-                                hint: const Text('Tee'),
-                                items: playerTees.map((t) => DropdownMenuItem(
-                                  value: t.id,
-                                  child: Text(t.teeName),
-                                )).toList(),
-                                onChanged: (teeId) {
-                                  if (teeId != null) {
-                                    setState(() => _playerTees[player.id] = teeId);
-                                  }
-                                },
-                              );
-                            }),
-                          ),
-                        ],
                       ],
                     ),
                   ),

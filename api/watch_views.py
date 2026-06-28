@@ -977,7 +977,7 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
         })
     if _has_casual_match_play(round_obj):
         tabs.append({
-            'key': 'match_play', 'label': 'Match Play',
+            'key': 'match_play', 'label': 'Mini Singles Bracket',
             'url': f'{base}?view=match_play',
             'active': current == 'match_play',
         })

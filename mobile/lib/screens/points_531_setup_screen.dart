@@ -30,7 +30,17 @@ import '../widgets/handicap_mode_selector.dart';
 class Points531SetupScreen extends StatefulWidget {
   final int foursomeId;
 
-  const Points531SetupScreen({super.key, required this.foursomeId});
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to score entry), and
+  /// returns to the /round launch page on save instead of jumping to scoring.
+  final bool returnToHub;
+
+  const Points531SetupScreen({
+    super.key,
+    required this.foursomeId,
+    this.returnToHub = false,
+  });
 
   @override
   State<Points531SetupScreen> createState() => _Points531SetupScreenState();
@@ -49,11 +59,11 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
   bool _stakeOk = false;
   bool _betCtrlInitialized = false;
 
-  /// Optional per-player loss cap.  **On by default** — the safer choice,
-  /// and it reinforces that the stake is per-point (a pool game wouldn't
-  /// need one). Pre-filled with the 36 × stake worst case; the player can
-  /// lower it. Uncapped is equivalent to 36 × bet_unit, the 5-3-1 max.
-  bool _capEnabled = true;
+  /// Optional per-player loss cap.  **Off by default** — uncapped, where the
+  /// worst case is 36 × the stake (surfaced in the card so the player can
+  /// decide whether to cap below it).  Turning it on pre-fills that 36 × stake
+  /// max, which the player can then lower.  Entering a stake never enables it.
+  bool _capEnabled = false;
   /// True once the player types their own cap, so auto-sync stops
   /// overwriting it when the stake changes.
   bool _capEdited = false;
@@ -65,6 +75,8 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
 
   bool   _loading   = true;
   bool   _starting  = false;
+  /// True when editing an already-configured game (drives Save vs Start label).
+  bool   _editing   = false;
   Object? _error;
 
   Points531Summary? _summary;
@@ -106,8 +118,17 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
       _summary = await client.getPoints531Summary(widget.foursomeId);
       if (!mounted) return;
 
-      // Game already started — jump straight to the entry screen.
-      if (_summary!.status == 'in_progress') {
+      // A configured game reports its players even before any hole is scored
+      // (the backend sends status 'pending' both when no game exists AND when
+      // one exists but is unscored — a non-empty players list is the
+      // "already set up" tell).
+      final configured =
+          _summary!.status == 'in_progress' || _summary!.players.isNotEmpty;
+
+      // Normal flow: an already-set-up game jumps straight to score entry.
+      // In edit mode (returnToHub — round creation / "Edit Configuration")
+      // stay on the form so the user can change settings.
+      if (configured && !widget.returnToHub) {
         Navigator.of(context).pushReplacementNamed(
           '/score-entry',
           arguments: widget.foursomeId,
@@ -116,12 +137,12 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
       }
 
       setState(() {
-        // For 'pending' state (no game yet) the backend returns its own
-        // empty defaults; keep the frontend's casual default (Strokes-Off
-        // Low) instead so the user lands on the same starting state as
-        // every other casual-game setup screen.  Only adopt the backend
-        // values once a game actually exists.
-        if (_summary!.status != 'pending') {
+        // For a brand-new game (no players yet) keep the frontend's casual
+        // default (Strokes-Off Low) so the user lands on the same starting
+        // state as every other casual-game setup screen.  Once a game
+        // exists, adopt its saved settings so editing starts from them.
+        if (configured) {
+          _editing    = true;
           _mode       = _summary!.handicapMode;
           _netPercent = _summary!.netPercent;
           // Adopt the saved cap state (null = the user chose uncapped).
@@ -183,11 +204,20 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
       // the local foursome is stale right after setup).
       await rp.loadPoints531(widget.foursomeId);
 
-      if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(
-        '/score-entry',
-        arguments: widget.foursomeId,
-      );
+      if (widget.returnToHub) {
+        // Round creation / "Edit Configuration": reload the round so the
+        // launch page reflects the freshly-saved game, then pop back to it
+        // (rather than pushing a new /round) so a single hub stays on stack.
+        await rp.loadRound(rp.round!.id);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      } else {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed(
+          '/score-entry',
+          arguments: widget.foursomeId,
+        );
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e; _starting = false; });
     }
@@ -199,10 +229,14 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
     // One-time seed of the bet controller once the round is available.
     if (!_betCtrlInitialized && rp.round != null) {
       _betCtrlInitialized = true;
+      final b = rp.round!.betUnit;
+      _betCtrl.text = b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+      _stakeOk = double.tryParse(_betCtrl.text) != null;
     }
 
     return Scaffold(
-      appBar: const GolfAppBar(title: 'Points 5-3-1 Setup'),
+      appBar: GolfAppBar(
+          title: _editing ? 'Edit Points 5-3-1' : 'Points 5-3-1 Setup'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -231,8 +265,9 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
                                   width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
-                              : const Text('Start Game',
-                                  style: TextStyle(
+                              : Text(
+                                  _editing ? 'Save Configuration' : 'Start Game',
+                                  style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold)),
                         ),
@@ -443,7 +478,11 @@ class _LossCapCard extends StatelessWidget {
             subtitle: Text(
               enabled
                   ? 'Nobody loses more than the amount below.'
-                  : 'Off — the most you can lose is 36 × the stake.',
+                  : (suggested > 0
+                      ? 'Off — worst case at this stake is '
+                        '\$${suggested.toStringAsFixed(0)} (36 × stake). '
+                        'Turn on to cap below that.'
+                      : 'Off — the most you can lose is 36 × the stake.'),
               style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant),
             ),

@@ -552,7 +552,18 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
 
 class LowNetSetupScreen extends StatefulWidget {
   final int roundId;
-  const LowNetSetupScreen({super.key, required this.roundId});
+
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to score entry), and
+  /// returns to the /round launch page on save instead of jumping to scoring.
+  final bool returnToHub;
+
+  const LowNetSetupScreen({
+    super.key,
+    required this.roundId,
+    this.returnToHub = false,
+  });
 
   @override
   State<LowNetSetupScreen> createState() => _LowNetSetupScreenState();
@@ -579,6 +590,8 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   bool    _saving            = false;
   Object? _error;
   bool    _configured        = false;
+  /// True when editing an already-configured game (drives Save label + title).
+  bool    _editing           = false;
   bool    _isTournamentRound = false;
 
   @override
@@ -653,6 +666,9 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
 
       setState(() {
         _configured        = cfg['configured'] as bool? ?? false;
+        // A configured game means we're editing saved settings → drives the
+        // "Save Configuration" label + "Edit Stroke Play" title.
+        _editing           = _configured;
         _isTournamentRound = cfg['is_tournament_round'] as bool? ?? false;
         // For tournament rounds the mode is locked at the round level;
         // fall back to the stored game config value for casual rounds.
@@ -736,6 +752,9 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
     setState(() { _saving = true; _error = null; });
     try {
       final client   = context.read<AuthProvider>().client;
+      // Capture the provider before any await so we don't touch context
+      // across the async gap in the returnToHub branch below.
+      final rp       = context.read<RoundProvider>();
       final entryFee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
       final payouts  = <Map<String, dynamic>>[];
       for (int i = 0; i < _payoutCtrls.length; i++) {
@@ -750,6 +769,16 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
         payouts:           payouts,
         excludedPlayerIds: _excludedIds.toList(),
       );
+      if (widget.returnToHub) {
+        // Round creation / "Edit Configuration": return to the launch page
+        // sitting below us. Reload the round first so the hub reflects the
+        // freshly-saved game, then pop — popping (rather than pushing) keeps a
+        // single hub on the stack.
+        await rp.loadRound(widget.roundId);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        return;
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -760,7 +789,8 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Stroke Play — Setup')),
+      appBar: AppBar(
+          title: Text(_editing ? 'Edit Stroke Play' : 'Stroke Play — Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null && !_loading && !_saving
@@ -790,7 +820,7 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
                               : Text(
-                                  _configured ? 'Save Changes' : 'Save Setup',
+                                  _editing ? 'Save Configuration' : 'Save Setup',
                                   style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold),
@@ -1048,21 +1078,25 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 8),
-                // Place selector: 0–5
-                // Use a Row of ToggleButtons so each segment gets equal
-                // flex and the widget never overflows on narrow screens.
+                // Place selector: 0 … player count.  Paying more places than
+                // there are players makes no sense, so cap at the field size
+                // (casual is at most 4); fall back to 4 until the count loads.
                 LayoutBuilder(builder: (context, constraints) {
-                  final segW = ((constraints.maxWidth - 7) / 6).floorToDouble();
+                  final maxPlaces = _numPlayers > 0
+                      ? (_numPlayers > 5 ? 5 : _numPlayers)
+                      : 4;
+                  final segCount  = maxPlaces + 1;          // 0 … maxPlaces
+                  final segW = ((constraints.maxWidth - (segCount - 1))
+                          / segCount)
+                      .floorToDouble();
                   return ToggleButtons(
                     borderRadius: BorderRadius.circular(8),
                     constraints: BoxConstraints.tightFor(
                         width: segW, height: 40),
-                    isSelected: List.generate(6, (i) => i == _payoutPlaces),
+                    isSelected:
+                        List.generate(segCount, (i) => i == _payoutPlaces),
                     onPressed: _setPayoutPlaces,
-                    children: const [
-                      Text('0'), Text('1'), Text('2'),
-                      Text('3'), Text('4'), Text('5'),
-                    ],
+                    children: List.generate(segCount, (i) => Text('$i')),
                   );
                 }),
 

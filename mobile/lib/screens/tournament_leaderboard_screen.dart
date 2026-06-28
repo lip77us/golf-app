@@ -92,7 +92,7 @@ class _TournamentLeaderboardScreenState
   static const _labels = {
     'low_net'   : 'Stroke Play',
     'stableford_championship': 'Stableford',
-    'match_play': 'Match Play',
+    'match_play': 'Mini Singles Bracket',
   };
 
   @override
@@ -150,7 +150,7 @@ class _TournamentLeaderboardScreenState
     if (_tabs.isEmpty || _tabCtrl == null) {
       return const Center(
         child: Text('No championship games configured.\n'
-            'Select Stroke Play or Match Play when creating the tournament.',
+            'Select Stroke Play or Mini Singles Bracket when creating the tournament.',
             textAlign: TextAlign.center),
       );
     }
@@ -782,8 +782,8 @@ class _MatchPlayChampView extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(32),
           child: Text(
-            'No match play brackets found.\n'
-            'Set up Match Play for each foursome to see results here.',
+            'No Mini Singles Brackets found.\n'
+            'Set up a Mini Singles Bracket for each foursome to see results here.',
             textAlign: TextAlign.center,
           ),
         ),
@@ -1031,7 +1031,7 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
   static const _labels = {
     'low_net'   : 'Stroke Play',
     'stableford_championship': 'Stableford',
-    'match_play': 'Match Play',
+    'match_play': 'Mini Singles Bracket',
   };
 
   @override

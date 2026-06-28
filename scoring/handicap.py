@@ -427,7 +427,10 @@ def build_match_play_score_index(foursome, p1_id: int, p2_id: int) -> dict:
         .values('player_id', 'hole_number', 'gross_score')
     )
 
-    par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
+    # Match play decides each hole on the ACTUAL net score (the hole is played
+    # out or conceded), so the stroke-play net-double-bogey cap does NOT apply.
+    cap_enabled = False
+    par_by_hole = {}
 
     index: dict = {}
     for r in rows:

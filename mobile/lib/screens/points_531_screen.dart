@@ -184,6 +184,23 @@ class _Points531ScreenState extends State<Points531Screen> {
   bool _allScored(List<Membership> players, Map<int, int> scores) =>
       players.every((m) => scores.containsKey(m.player.id));
 
+  /// True once any score has been entered (saved or pending) — gates the
+  /// app-bar Exit (✕) on a single-foursome casual round.
+  bool get _hasAnyScore {
+    if (_pending.isNotEmpty) return true;
+    final rp = context.read<RoundProvider>();
+    final sc = rp.scorecard;
+    if (sc != null) {
+      for (int h = 1; h <= 18; h++) {
+        if (_effectiveScores(sc, h).isNotEmpty) return true;
+      }
+    }
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    return fs?.hasAnyScore ?? false;
+  }
+
   static Map<int, Map<int, int>> _mergePending(
     Map<int, Map<int, int>> dbPending,
     Map<int, Map<int, int>> uiEdits,
@@ -417,9 +434,25 @@ class _Points531ScreenState extends State<Points531Screen> {
     }
     _prevHadPending = nowHasPending;
 
+    // On a single-foursome casual round, once a score is entered swap the back
+    // arrow for an explicit ✕ Exit (back is easily mistaken for "previous hole")
+    // that returns to the casual rounds list.
+    final isCasualSingle = (rp.round?.isCasual ?? false) &&
+        (rp.round?.foursomes.length ?? 1) == 1;
+    final showExit = isCasualSingle && _hasAnyScore;
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Points 5-3-1',
+        automaticallyImplyLeading: !showExit,
+        leading: showExit
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Exit to rounds',
+                onPressed: () => Navigator.of(context).popUntil(
+                    (r) => r.settings.name == '/casual-rounds' || r.isFirst),
+              )
+            : null,
         actions: [
           if (sync.hasPending)
             Padding(

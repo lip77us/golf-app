@@ -591,6 +591,9 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                             value    : (tee != null && playerTeeOptions.contains(tee))
                                 ? tee : null,
                             isDense  : true,
+                            // Fill the column + ellipsize so a long tee name
+                            // can't overflow the row on a narrow phone.
+                            isExpanded: true,
                             underline: const SizedBox.shrink(),
                             hint     : Text('Pick tee',
                                 style: theme.textTheme.bodySmall?.copyWith(

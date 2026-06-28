@@ -27,7 +27,17 @@ import '../widgets/section_card.dart';
 
 class ThreePersonMatchSetupScreen extends StatefulWidget {
   final int foursomeId;
-  const ThreePersonMatchSetupScreen({super.key, required this.foursomeId});
+
+  /// When true, this screen was opened from round creation: after saving the
+  /// match it returns to the /round launch page instead of jumping into
+  /// scoring, and it won't auto-redirect to score entry during setup.
+  final bool returnToHub;
+
+  const ThreePersonMatchSetupScreen({
+    super.key,
+    required this.foursomeId,
+    this.returnToHub = false,
+  });
 
   @override
   State<ThreePersonMatchSetupScreen> createState() =>
@@ -113,8 +123,10 @@ class _ThreePersonMatchSetupScreenState
       _summary = await client.getThreePersonMatch(widget.foursomeId);
       if (!mounted) return;
 
-      // Already in progress — skip setup.
-      if (_summary!.status != 'pending') {
+      // Already in progress — skip setup.  In round-creation (returnToHub)
+      // stay on the form so the user can return to the launch page instead
+      // of being bounced into score entry.
+      if (_summary!.status != 'pending' && !widget.returnToHub) {
         Navigator.of(context).pushReplacementNamed(
             '/score-entry', arguments: widget.foursomeId);
         return;
@@ -197,16 +209,18 @@ class _ThreePersonMatchSetupScreenState
 
       if (!mounted) return;
       if (ok) {
-        // Reload round so configuredGames is up to date for the caller.
+        // Reload round so configuredGames / the /round launch page is up to
+        // date for the caller.
         await rp.loadRound(rp.round!.id);
         if (!mounted) return;
         // Pop back to whoever pushed us (round screen, wizard Step 6,
         // tournament list) rather than jumping straight into score
         // entry — matches the Match Play setup behaviour and saves
         // the user from backing through several screens to return
-        // to the main menu.  Pop with `true` so wizard Step 6 can
-        // flip the per-foursome "configured" icon to a flag.
-        Navigator.of(context).pop(true);
+        // to the main menu.  In round-creation (returnToHub) pop with no
+        // result back to the /round launch page; otherwise pop with `true`
+        // so wizard Step 6 can flip the per-foursome "configured" icon.
+        Navigator.of(context).pop(widget.returnToHub ? null : true);
       } else {
         setState(() { _saving = false; _error = rp.error; });
       }

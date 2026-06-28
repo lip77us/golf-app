@@ -230,10 +230,13 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
       if (!mounted) return;
       // Wizard completed (a round was created) → retire the onboarding entry.
       context.read<SettingsProvider>().markOnboardingDone();
-      Navigator.of(context).pushReplacementNamed(
-        launch.effectiveRoute,
-        arguments: launch.effectiveArgs,
-      );
+      // Land on the /round launch page; push the game's setup screen on top
+      // (returnToHub mode) so saving setup pops back to the same hub.
+      final nav = Navigator.of(context);
+      nav.pushReplacementNamed('/round', arguments: launch.round.id);
+      if (launch.route != null) {
+        nav.pushNamed(launch.route!, arguments: launch.effectiveArgs);
+      }
     } catch (e) {
       if (mounted) setState(() { _busy = false; _error = e; });
     }

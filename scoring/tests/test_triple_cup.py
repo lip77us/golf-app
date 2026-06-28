@@ -61,6 +61,16 @@ class TripleCup2v2Tests(TestCase):
             (1, 6), (7, 12), (13, 18), (13, 18),
         ]
 
+    def test_summary_exposes_team_ids(self):
+        """The summary reports the ordered per-side player ids so the setup
+        screen can restore the team picks on re-edit."""
+        self._setup()
+        summary = triple_cup_summary(self.fs)
+        assert summary['team1_ids'] == [self.pid['T1A'], self.pid['T1B']], \
+            summary['team1_ids']
+        assert summary['team2_ids'] == [self.pid['T2A'], self.pid['T2B']], \
+            summary['team2_ids']
+
     def test_fourball_best_ball(self):
         """T1A scores par every hole, T1B scores bogey; T2A/T2B both par.
         Team1's best ball each hole = par; Team2's best = par.  Should

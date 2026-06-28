@@ -41,6 +41,12 @@ dependencies:
   # phone → TCPA / App Store safe.
   url_launcher: ^6.3.1
 
+  # In-app SMS composer (MFMessageComposeViewController on iOS). Used for golfer
+  # invites so the Messages compose UI appears as a sheet OVER Halved and
+  # dismisses back to the app automatically on send/cancel — no app switch, no
+  # "Halved" top-left back tap (unlike the url_launcher sms: external launch).
+  flutter_sms: ^3.0.1
+
   # Renders the Halved brand mark (SVG) inline — e.g. the "On Halved"
   # connected-golfer badge.
   flutter_svg: ^2.0.16

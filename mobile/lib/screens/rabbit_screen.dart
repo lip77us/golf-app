@@ -21,6 +21,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
@@ -108,6 +109,23 @@ class _RabbitScreenState extends State<RabbitScreen> {
       }
     }
     return {...saved, ...(_pending[hole] ?? {})};
+  }
+
+  /// True once any score has been entered (saved or pending) — gates the
+  /// app-bar Exit (✕) on a single-foursome casual round.
+  bool get _hasAnyScore {
+    if (_pending.isNotEmpty) return true;
+    final rp = context.read<RoundProvider>();
+    final sc = rp.scorecard;
+    if (sc != null) {
+      for (int h = 1; h <= 18; h++) {
+        if (_effectiveScores(sc, h).isNotEmpty) return true;
+      }
+    }
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    return fs?.hasAnyScore ?? false;
   }
 
   int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
@@ -215,9 +233,18 @@ class _RabbitScreenState extends State<RabbitScreen> {
   }
 
   Future<void> _finishRound(BuildContext ctx, List<Membership> players) async {
-    if (!await confirmCompleteRound(ctx)) return;
-    if (!mounted) return;
     final rp = context.read<RoundProvider>();
+    // Soft gate: warn if finishing early (holes still unscored), consistent
+    // with the other score screens.
+    final sc = rp.scorecard;
+    int unscored = 0;
+    if (sc != null) {
+      for (int h = 1; h <= 18; h++) {
+        if (_effectiveScores(sc, h).isEmpty) unscored++;
+      }
+    }
+    if (!await confirmCompleteRound(ctx, unscoredHoles: unscored)) return;
+    if (!mounted) return;
     final sync = context.read<SyncService>();
     final roundId = rp.round?.id;
     final pendingForHole = _pending[_selectedHole];
@@ -280,9 +307,25 @@ class _RabbitScreenState extends State<RabbitScreen> {
     }
     _prevHadPending = nowHasPending;
 
+    // On a single-foursome casual round, once a score is entered swap the back
+    // arrow for an explicit ✕ Exit (back is easily mistaken for "previous hole")
+    // that returns to the casual rounds list.
+    final isCasualSingle = (rp.round?.isCasual ?? false) &&
+        (rp.round?.foursomes.length ?? 1) == 1;
+    final showExit = isCasualSingle && _hasAnyScore;
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Rabbit',
+        automaticallyImplyLeading: !showExit,
+        leading: showExit
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Exit to rounds',
+                onPressed: () => Navigator.of(context).popUntil(
+                    (r) => r.settings.name == '/casual-rounds' || r.isFirst),
+              )
+            : null,
         actions: [
           if (sync.hasPending)
             Padding(
@@ -322,6 +365,42 @@ class _RabbitScreenState extends State<RabbitScreen> {
             onPressed: sc == null ? null
                 : () => Navigator.of(context).pushNamed('/scorecard',
                     arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
+          ),
+          // Overflow: end the round early (soft gate) + the icon-legend help.
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_vert),
+            onSelected: (v) {
+              switch (v) {
+                case 'end':
+                  _finishRound(context, _realMembers(rp.round));
+                  break;
+                case 'help':
+                  showScoreEntryHelp(context);
+                  break;
+              }
+            },
+            itemBuilder: (_) => [
+              if (!isComplete)
+                const PopupMenuItem(
+                  value: 'end',
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.flag_outlined),
+                    title: Text('End round'),
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'help',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.help_outline),
+                  title: Text('What do these buttons do?'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -396,7 +475,8 @@ class _RabbitScreenState extends State<RabbitScreen> {
                 numSegments: summary.numSegments,
               ),
             const SizedBox(height: 12),
-            _HoleHeader(holeNumber: _selectedHole, holeData: holeData),
+            _HoleHeader(holeNumber: _selectedHole, holeData: holeData,
+                onHelp: () => _showRabbitLegend(context)),
             const SizedBox(height: 12),
             _HoleScoreCard(
               holeData:   holeData,
@@ -435,6 +515,68 @@ class _RabbitScreenState extends State<RabbitScreen> {
         ),
       ),
     ]);
+  }
+
+  /// Per-hole row legend ("?" in the hole header) — explains the Rabbit row
+  /// markings, matching the legend the other score screens offer.
+  void _showRabbitLegend(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget row(Widget lead, String title, String body) => Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(width: 28, child: Center(child: lead)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(body,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              ]),
+            ),
+          ]),
+        );
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Rabbit row guide',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            row(Icon(Icons.directions_run, size: 20, color: theme.colorScheme.primary),
+                'Rabbit holder',
+                'The runner marks who currently holds the rabbit (their row is tinted with a colored left edge). Win a hole outright to grab it; lose one and it’s loose again.'),
+            row(Text('-8 •', style: theme.textTheme.labelMedium
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+                'Handicap',
+                'The playing handicap used for this game; each dot is a stroke received on this hole.'),
+            row(Container(width: 22, height: 20,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: theme.colorScheme.outline),
+                    borderRadius: BorderRadius.circular(4)),
+                  child: const Center(child: Text('4',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+                'Score box',
+                'Tap a player’s box to enter their gross score. Tap an already-scored row to correct it.'),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Got it'),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   Widget _buildBottomNav(BuildContext ctx, RoundProvider rp, Scorecard sc) {
@@ -543,7 +685,13 @@ class _RabbitBanner extends StatelessWidget {
 class _HoleHeader extends StatelessWidget {
   final int holeNumber;
   final ScorecardHole? holeData;
-  const _HoleHeader({required this.holeNumber, required this.holeData});
+  /// Opens the per-hole row legend ("?"), matching the other score screens.
+  final VoidCallback? onHelp;
+  const _HoleHeader({
+    required this.holeNumber,
+    required this.holeData,
+    this.onHelp,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -553,18 +701,41 @@ class _HoleHeader extends StatelessWidget {
         : 'Par ${h.par}'
           '${h.yards != null ? '  ·  ${h.yards} yds' : ''}'
           '  ·  SI ${h.strokeIndex}';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(children: [
-        Text('Hole $holeNumber',
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-        if (sub.isNotEmpty) Text(sub, style: theme.textTheme.bodySmall),
-      ]),
+    return Stack(
+      children: [
+        Container(
+          width: double.infinity,
+          // Horizontal padding keeps the centred title clear of the "?".
+          padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(children: [
+            Text('Hole $holeNumber',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            if (sub.isNotEmpty)
+              Text(sub, textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall),
+          ]),
+        ),
+        if (onHelp != null)
+          Positioned(
+            top: 2,
+            right: 2,
+            child: IconButton(
+              tooltip: 'What do these mean?',
+              icon: Icon(Icons.help_outline,
+                  size: 22, color: theme.colorScheme.primary),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              onPressed: onHelp,
+            ),
+          ),
+      ],
     );
   }
 }
@@ -663,7 +834,6 @@ class _HoleScoreCard extends StatelessWidget {
                 playingHandicap: m.playingHandicap,
                 lowestPlayingHandicap: _lowPlaying),
               isHolder: _isHolder(m.player.id),
-              editable: editable,
               isEditing: isEditing,
               onTap: editable ? () => onEditTap(m) : null,
             ),
@@ -686,7 +856,6 @@ class _PlayerRow extends StatelessWidget {
   final bool       showHcap;
   final int        hcap;
   final bool       isHolder;
-  final bool       editable;   // tap to correct an already-scored past hole
   final bool       isEditing;  // its inline picker is currently open
   final VoidCallback? onTap;
 
@@ -698,7 +867,6 @@ class _PlayerRow extends StatelessWidget {
     required this.showHcap,
     required this.hcap,
     required this.isHolder,
-    this.editable = false,
     this.isEditing = false,
     this.onTap,
   });
@@ -757,12 +925,9 @@ class _PlayerRow extends StatelessWidget {
             ],
           ]),
         ),
-        if (editable && !isEditing) ...[
-          Icon(Icons.edit, size: 14,
-              color: theme.colorScheme.primary.withOpacity(0.7)),
-          const SizedBox(width: 6),
-        ] else
-          const SizedBox(width: 8),
+        // Tapping a scored row opens its inline editor (no pencil affordance —
+        // consistent with the other score screens).
+        const SizedBox(width: 8),
         Container(
           width: 40, height: 36,
           decoration: BoxDecoration(

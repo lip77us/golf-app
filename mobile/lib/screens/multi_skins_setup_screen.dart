@@ -22,7 +22,18 @@ import '../widgets/inline_message.dart';
 
 class MultiSkinsSetupScreen extends StatefulWidget {
   final int roundId;
-  const MultiSkinsSetupScreen({super.key, required this.roundId});
+
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to the game screen), and
+  /// returns to the /round launch page on save instead of jumping to the game.
+  final bool returnToHub;
+
+  const MultiSkinsSetupScreen({
+    super.key,
+    required this.roundId,
+    this.returnToHub = false,
+  });
 
   @override
   State<MultiSkinsSetupScreen> createState() => _MultiSkinsSetupScreenState();
@@ -45,6 +56,8 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
 
   bool    _loading  = true;
   bool    _starting = false;
+  /// True when editing an already-configured game (drives Save vs Start label).
+  bool    _editing  = false;
   Object? _error;
 
   MultiSkinsSummary? _summary;
@@ -68,6 +81,13 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
       _summary = await client.getMultiSkinsSummary(widget.roundId);
       if (!mounted) return;
 
+      // A configured game reports its players even before any hole is scored
+      // (status 'pending' is sent both when no game exists AND when one exists
+      // but is unscored — a non-empty players list is the "already set up"
+      // tell).
+      final configured =
+          _summary!.status == 'in_progress' || _summary!.players.isNotEmpty;
+
       // Pre-populate roster from existing game, or default to all real
       // players in the round.
       final existingIds = _summary!.players.map((p) => p.playerId).toSet();
@@ -77,6 +97,7 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
       }
 
       setState(() {
+        if (configured) _editing = true;
         _mode       = _summary!.handicapMode;
         _netPercent = _summary!.netPercent;
         if (!_betCtrlInitialized) {
@@ -141,10 +162,21 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
       await rp.loadRound(widget.roundId);
       await rp.loadMultiSkins(widget.roundId);
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(
-        '/multi-skins',
-        arguments: widget.roundId,
-      );
+
+      if (widget.returnToHub) {
+        // Round creation / "Edit Configuration": return to the launch page
+        // sitting below us.  The round was reloaded above so the hub reflects
+        // the freshly-saved game; pop (rather than pushing a new /multi-skins)
+        // to keep a single hub on the stack.
+        await context.read<RoundProvider>().loadRound(widget.roundId);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      } else {
+        Navigator.of(context).pushReplacementNamed(
+          '/multi-skins',
+          arguments: widget.roundId,
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -175,7 +207,10 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                           ?? const <Foursome>[];
 
     return Scaffold(
-      appBar: const GolfAppBar(title: 'Multi-Group Skins Setup'),
+      appBar: GolfAppBar(
+          title: _editing
+              ? 'Edit Multi-Group Skins'
+              : 'Multi-Group Skins Setup'),
       body: Column(children: [
         Expanded(
           child: ListView(
@@ -277,8 +312,8 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                           height: 20, width: 20,
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white))
-                      : Text(_summary?.status == 'in_progress'
-                          ? 'Save Changes'
+                      : Text(_editing
+                          ? 'Save Configuration'
                           : 'Start Multi-Group Skins',
                           style: const TextStyle(
                               fontSize: 16, fontWeight: FontWeight.bold)),

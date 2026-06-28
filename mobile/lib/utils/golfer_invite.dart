@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_sms/flutter_sms.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
@@ -141,18 +141,23 @@ Future<void> sendGolferSmsInvite(
   }
 }
 
-/// Opens the SMS composer pre-addressed to [phone] with [body] filled in.
-/// Builds the URI by hand (not Uri(queryParameters:), which encodes spaces as
-/// '+' that iOS Messages renders literally) — encodeComponent uses %20 so the
-/// body shows real spaces. Returns false if Messages couldn't be opened.
+/// Presents the native in-app message composer pre-addressed to [phone] with
+/// [body] filled in. On iOS this is MFMessageComposeViewController — a sheet
+/// shown OVER Halved; the user taps Send (or Cancel) themselves and is returned
+/// to Halved automatically when the sheet dismisses (no app switch, no "Halved"
+/// top-left back tap). The body is passed natively, so no URL-encoding hack is
+/// needed. Returns false if the device can't send SMS (e.g. simulator, an iPad
+/// without Messages) or the composer failed to open — callers then fall back to
+/// surfacing the invite link.
 Future<bool> _launchSmsInvite({
   required String phone,
   required String body,
 }) async {
   final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-  final uri = Uri.parse('sms:$cleaned?body=${Uri.encodeComponent(body)}');
   try {
-    return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!await canSendSMS()) return false;
+    await sendSMS(message: body, recipients: [cleaned]);
+    return true;
   } catch (_) {
     return false;
   }

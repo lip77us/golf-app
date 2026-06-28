@@ -1944,12 +1944,12 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
         const SizedBox(height: 24),
 
         // Team colours
-        Text('Team Colours',
+        Text('Team Colors',
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         Text(
-          'Pick a colour for each team — used throughout the score-entry '
+          'Pick a color for each team — used throughout the score-entry '
           'and leaderboard screens.  Defaults to Red / Blue / Green / '
           'Yellow; swap for Orange / Black / Purple to suit your event.',
           style: theme.textTheme.bodySmall
@@ -2929,7 +2929,7 @@ class _Step4GamesState extends State<_Step4Games> {
 
         // ── Match Play Buy-In (shown first when tournament includes match play) ──
         if (widget.hasTournamentMatchPlay) ...[
-          Text('Match Play Buy-In',
+          Text('Mini Singles Buy-In',
               style: theme.textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
@@ -3483,7 +3483,7 @@ class _Step6GameSetupState extends State<_Step6GameSetup> {
 
           // Match Play: auto-configured or needs per-group setup
           if (hasMatchPlay) ...[
-            Text('Match Play Brackets',
+            Text('Mini Singles Brackets',
                 style: Theme.of(context).textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),

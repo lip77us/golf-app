@@ -31,8 +31,16 @@ class NassauSetupScreen extends StatefulWidget {
   /// When true, default to an Overall-only game (a straight 18-hole match) —
   /// used by the "18-Hole Match" casual game shortcut.
   final bool overallOnly;
+
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to score entry), and
+  /// returns to the /round launch page on save instead of jumping to scoring.
+  final bool returnToHub;
+
   const NassauSetupScreen({
     super.key, required this.foursomeId, this.overallOnly = false,
+    this.returnToHub = false,
   });
 
   @override
@@ -69,14 +77,23 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   /// past the fixed base bets, so the only case a cap is offered.
   bool get _canEscalate => _pressMode != 'none' || _variant == 'claremont';
 
+  /// True for an "18-Hole Match" — overall-only, no Front/Back legs, no teams,
+  /// no presses.  Comes from the widget flag at creation, OR is derived from a
+  /// saved overall-only config when re-editing — so editing a match18 round
+  /// keeps the simplified UI instead of falling back to full Nassau.
+  bool get _overallOnly =>
+      widget.overallOnly || (!_playFront && !_playBack && _playOverall);
+
   /// Independent base bets a side can lose with no escalation.
-  int get _baseMultiple => widget.overallOnly ? 1 : 3;
+  int get _baseMultiple => _overallOnly ? 1 : 3;
 
   /// playerId → team number (1 or 2)
   final Map<int, int> _teamMap = {};
 
   bool    _loading  = true;
   bool    _starting = false;
+  /// True when editing an already-configured game (drives Save vs Start label).
+  bool    _editing  = false;
   Object? _error;
 
   @override
@@ -131,14 +148,24 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
       try {
         final existing = await client.getNassauSummary(widget.foursomeId);
 
-        // If a game is already in progress jump straight to score entry.
-        if (existing.status == 'in_progress' || existing.status == 'complete') {
+        // If a game is already in progress jump straight to score entry —
+        // unless we're in edit mode (returnToHub: round creation / "Edit
+        // Configuration"), where we stay on the form to change settings.
+        if ((existing.status == 'in_progress' || existing.status == 'complete')
+            && !widget.returnToHub) {
           if (!mounted) return;
           Navigator.of(context).pushReplacementNamed(
             '/score-entry',
             arguments: widget.foursomeId,
           );
           return;
+        }
+
+        // An existing game (with teams assigned) reached here — adopt its
+        // saved settings and flag edit mode so the form shows the saved
+        // values, not defaults, even at status 'pending'.
+        if (existing.team1.isNotEmpty || existing.team2.isNotEmpty) {
+          _editing = true;
         }
 
         // Pre-populate from the existing (pending) game.
@@ -218,6 +245,17 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             : null,
       );
 
+      if (ok && widget.returnToHub) {
+        // Round creation / "Edit Configuration": return to the launch page
+        // sitting below us. Reload the round first so the hub reflects the
+        // freshly-saved game, then pop (rather than pushing a new /round) to
+        // keep a single hub on the stack.
+        await rp.loadRound(rp.round!.id);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        return;
+      }
+
       if (!mounted) return;
       if (ok) {
         Navigator.of(context).pushReplacementNamed(
@@ -239,12 +277,18 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
       _betCtrlInitialized = true;
+      final b = rp.round!.betUnit;
+      _betCtrl.text = b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+      _stakeOk = double.tryParse(_betCtrl.text) != null;
     }
 
     return Scaffold(
       appBar: AppBar(
-          title: Text(
-              widget.overallOnly ? '18-Hole Match — Setup' : 'Nassau — Setup')),
+          title: Text(_editing
+              ? (_overallOnly ? 'Edit 18-Hole Match' : 'Edit Nassau')
+              : (_overallOnly
+                  ? '18-Hole Match — Setup'
+                  : 'Nassau — Setup'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -271,8 +315,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                                   width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
-                              : const Text('Start Match',
-                                  style: TextStyle(
+                              : Text(_editing ? 'Save Configuration' : 'Start Match',
+                                  style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold)),
                         ),
@@ -298,7 +342,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
           // ── Team assignment card (hidden for a 1-v-1 18-hole match — the
           //     two players are simply the two sides) ──
-          if (!widget.overallOnly) ...[
+          if (!_overallOnly) ...[
           SectionCard(
             title: 'Teams',
             child: Column(
@@ -400,7 +444,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           const SizedBox(height: 16),
 
           // ── Press (Nassau only; an 18-hole match has no presses) ──
-          if (!widget.overallOnly) ...[
+          if (!_overallOnly) ...[
           // ── Press configuration ───────────────────────────────────────────
           SectionCard(
             title: 'Press stakes',
@@ -449,8 +493,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           // ── Stake ─────────────────────────────────────────────────────────
           StakeField(
             controller: _betCtrl,
-            label: widget.overallOnly ? 'Stake' : 'Stake (main games)',
-            helpText: widget.overallOnly
+            label: _overallOnly ? 'Stake' : 'Stake (main games)',
+            helpText: _overallOnly
                 ? 'What the 18-hole match is worth.'
                 : 'Each of the three standard Nassau games '
                   '(Front 9, Back 9, Overall) is worth this amount.',
@@ -458,7 +502,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           ),
 
           // ── Advanced / variant (Nassau only) ──────────────────────────────
-          if (!widget.overallOnly) ...[
+          if (!_overallOnly) ...[
           _VariantCard(
             variant:       _variant,
             isFoursome:    _realMembers.length == 4,
@@ -511,7 +555,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             MaxLiabilityNote(
               bet: double.tryParse(_betCtrl.text.trim()) ?? 0,
               multiple: _baseMultiple,
-              detail: widget.overallOnly
+              detail: _overallOnly
                   ? 'the 18-hole match'
                   : 'lose all 3 (front, back, overall)',
             ),
@@ -519,9 +563,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
           // ── Rules reminder ────────────────────────────────────────────────
           SectionCard(
-            title: widget.overallOnly ? 'How the match works' : 'How Nassau works',
+            title: _overallOnly ? 'How the match works' : 'How Nassau works',
             child: Text(
-              widget.overallOnly
+              _overallOnly
                   ? 'A single 18-hole match. Each hole goes to the lower score '
                     '(per the handicap mode above); tied holes are halved. '
                     'Whoever is up after 18 holes wins the match.'

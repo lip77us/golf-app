@@ -295,6 +295,9 @@ class RoundProvider extends ChangeNotifier {
       _points531Summary = null;
       _wolfSummary      = null;
       _rabbitSummary    = null;
+      // Was previously left set — stale single-elim match-play data leaked
+      // team colours onto the next foursome's (e.g. stroke-play) rows.
+      _matchPlayData    = null;
     }
     _activeFoursomeId = foursomeId;
     _loadingScorecard = true;

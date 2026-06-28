@@ -17,6 +17,7 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
+import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
@@ -51,11 +52,17 @@ class MatchPlaySetupScreen extends StatefulWidget {
   /// "Copy payouts to other foursomes/threesomes" action.
   final List<int> peerIds;
 
+  /// When true, this screen was opened from round creation: after saving the
+  /// bracket it returns to the /round launch page instead of jumping into
+  /// scoring, and it won't auto-redirect to /match-play during setup.
+  final bool returnToHub;
+
   const MatchPlaySetupScreen({
     super.key,
     required this.foursomeId,
     this.allMatchPlayIds = const [],
     this.peerIds         = const [],
+    this.returnToHub     = false,
   });
 
   @override
@@ -130,10 +137,17 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
         data = await client.getMatchPlay(widget.foursomeId);
       } on ApiException catch (e) {
         if (e.statusCode == 404) {
-          // No bracket yet for this foursome — that's the expected state
-          // when a user lands here from a fresh casual round.  Render the
-          // empty setup form with defaults rather than an error view.
-          if (mounted) setState(() { _loading = false; });
+          // No bracket yet for this foursome — the expected state when a user
+          // lands here from a fresh round.  Seed the form from the foursome's
+          // assigned players (handicap order) so they can arrange the matchups
+          // and save, instead of showing "no players assigned".
+          if (mounted) {
+            setState(() {
+              _seedPlayers = _rosterSeeds();
+              if (_seedPlayers.isNotEmpty) _playerCount = _seedPlayers.length;
+              _loading = false;
+            });
+          }
           return;
         }
         rethrow;
@@ -141,7 +155,10 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
       if (!mounted) return;
 
       final st = data['status'] as String? ?? 'pending';
-      if (st == 'in_progress' || st == 'complete') {
+      // During round creation (returnToHub) stay on the form even for a live
+      // bracket so the user can return to the launch page; only the normal
+      // entry-point bounces straight into the live match.
+      if ((st == 'in_progress' || st == 'complete') && !widget.returnToHub) {
         Navigator.of(context).pushReplacementNamed(
             '/match-play', arguments: widget.foursomeId);
         return;
@@ -185,6 +202,25 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
     }
   }
 
+  /// Seed list built from the foursome's assigned real players, in handicap
+  /// order (lowest = seed 1).  Used before a bracket exists so the matchups can
+  /// be arranged at setup time.
+  List<_SeedPlayer> _rosterSeeds() {
+    final rp = context.read<RoundProvider>();
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    if (fs == null) return const [];
+    return fs.realPlayers
+        .map((m) => _SeedPlayer(
+              id:              m.player.id,
+              name:            m.player.name,
+              playingHandicap: m.playingHandicap,
+            ))
+        .toList()
+      ..sort((a, b) => a.playingHandicap.compareTo(b.playingHandicap));
+  }
+
   List<_SeedPlayer> _parseSeedPlayers(Map<String, dynamic> data) {
     final playersRaw = data['players'] as List? ?? [];
     final playerMap  = <int, Map<String, dynamic>>{};
@@ -209,7 +245,9 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
 
     if (ordered.isNotEmpty) return ordered;
 
-    // Fallback: list in handicap order from players array
+    // Fallback: list in handicap order from the players array; if the bracket
+    // carries no players, fall back to the foursome roster.
+    if (playersRaw.isEmpty) return _rosterSeeds();
     return playersRaw.map((p) {
       final pm = Map<String, dynamic>.from(p as Map);
       return _SeedPlayer(
@@ -317,6 +355,9 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
     setState(() { _saving = true; _error = null; });
     try {
       final client   = context.read<AuthProvider>().client;
+      // Read the round provider before the async save so the post-save
+      // reload doesn't reach across an async gap for `context`.
+      final rp       = context.read<RoundProvider>();
       final entryFee = double.tryParse(_entryFeeCtrl.text.trim()) ?? 0;
       final payouts  = <String, double>{};
       for (int i = 0; i < _numPayouts; i++) {
@@ -334,10 +375,21 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
         netPercent:   _netPercent,
       );
 
-      if (!mounted) return;
-      // Return to the round overview (round screen or wizard step 6),
-      // not directly into score entry.
-      Navigator.of(context).pop();
+      if (widget.returnToHub) {
+        // Round creation: reload the round so the /round launch page below us
+        // reflects the freshly-saved bracket, then pop back to it (rather than
+        // pushing a new route) so a single hub stays on the stack.
+        if (rp.round != null) {
+          await rp.loadRound(rp.round!.id);
+        }
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      } else {
+        if (!mounted) return;
+        // Return to the round overview (round screen or wizard step 6),
+        // not directly into score entry.
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e; _saving = false; });
     }

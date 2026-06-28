@@ -7,6 +7,7 @@ import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../utils/route_observer.dart';
 import '../utils/shared_round.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
@@ -23,7 +24,8 @@ class CasualRoundsListScreen extends StatefulWidget {
   State<CasualRoundsListScreen> createState() => _CasualRoundsListScreenState();
 }
 
-class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
+class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
+    with RouteAware {
   List<CasualRoundSummary>? _rounds;
   /// Rounds in OTHER accounts a friend added me to as a player (any size).
   List<ScoringRound> _shared = [];
@@ -46,8 +48,35 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) appRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    appRouteObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  /// Returning to this screen (a round/score screen on top was popped) — the
+  /// round's currentHole/status may have changed while away, which drives where
+  /// a tap routes (hub vs straight to scoring).  Silently refresh so the next
+  /// tap is consistent without a manual pull-to-refresh.
+  @override
+  void didPopNext() {
+    _load(silent: true);
+  }
+
+  /// [silent] refreshes the data WITHOUT the full-screen spinner — used when
+  /// returning to this screen (so the list silently reflects scores entered
+  /// while away) instead of flashing a loader on every back-navigation.
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() { _loading = true; _error = null; });
+    }
     try {
       final client = context.read<AuthProvider>().client;
       final data   = await client.getCasualRounds(
@@ -95,14 +124,16 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
+      // A silent (background) refresh that fails leaves the existing list in
+      // place rather than replacing it with a full-screen error.
+      if (mounted && !silent) {
         setState(() {
           _error        = friendlyError(e);
           _networkError = isNetworkError(e);
         });
       }
     } finally {
-      if (mounted) setState(() { _loading = false; });
+      if (mounted && !silent) setState(() { _loading = false; });
     }
   }
 

@@ -30,7 +30,17 @@ import '../widgets/handicap_mode_selector.dart';
 class SkinsSetupScreen extends StatefulWidget {
   final int foursomeId;
 
-  const SkinsSetupScreen({super.key, required this.foursomeId});
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to score entry), and
+  /// returns to the /round launch page on save instead of jumping to scoring.
+  final bool returnToHub;
+
+  const SkinsSetupScreen({
+    super.key,
+    required this.foursomeId,
+    this.returnToHub = false,
+  });
 
   @override
   State<SkinsSetupScreen> createState() => _SkinsSetupScreenState();
@@ -51,6 +61,8 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
   bool    _loading  = true;
   bool    _starting = false;
+  /// True when editing an already-configured game (drives Save vs Start label).
+  bool    _editing  = false;
   Object? _error;
 
   SkinsSummary? _summary;
@@ -74,14 +86,17 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       _summary = await client.getSkinsSummary(widget.foursomeId);
       if (!mounted) return;
 
-      // Game already set up — jump straight to score entry.  A configured
-      // game reports its players even before any hole is scored (the backend
-      // sends status 'pending' both when no game exists AND when one exists
-      // but is unscored — an empty players list is the "never set up" tell).
-      // Without the players check, a game configured via the onboarding wizard
-      // (which sets Skins up directly) would bounce the user back here when
-      // they re-open the round before entering a score.
-      if (_summary!.status == 'in_progress' || _summary!.players.isNotEmpty) {
+      // A configured game reports its players even before any hole is scored
+      // (the backend sends status 'pending' both when no game exists AND when
+      // one exists but is unscored — a non-empty players list is the
+      // "already set up" tell).
+      final configured =
+          _summary!.status == 'in_progress' || _summary!.players.isNotEmpty;
+
+      // Normal flow: an already-set-up game jumps straight to score entry.
+      // In edit mode (returnToHub — round creation / "Edit Configuration")
+      // stay on the form so the user can change settings.
+      if (configured && !widget.returnToHub) {
         Navigator.of(context).pushReplacementNamed(
           '/score-entry',
           arguments: widget.foursomeId,
@@ -89,18 +104,25 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
         return;
       }
 
+      final rp = context.read<RoundProvider>();
       setState(() {
-        // For 'pending' state (no game yet) the backend returns its own
-        // empty defaults (mode=net, carryover=true, junk=false).  Keep the
-        // frontend's casual defaults (Strokes-Off Low, carryover on, no
-        // junk) instead so the user lands on the same starting state as
-        // every other casual-game setup screen.  Only adopt the backend
-        // values once a game actually exists (status != pending).
-        if (_summary!.status != 'pending') {
+        // For a brand-new game (no players yet) keep the frontend's casual
+        // defaults (Strokes-Off Low, carryover on, no junk).  Once a game
+        // exists, adopt its saved settings so editing starts from them.
+        if (configured) {
+          _editing    = true;
           _mode       = _summary!.handicapMode;
           _netPercent = _summary!.netPercent;
           _carryover  = _summary!.carryover;
           _allowJunk  = _summary!.allowJunk;
+          // Pre-fill the stake so the current bet shows (the field is
+          // otherwise empty until the user types).
+          if (rp.round != null) {
+            final b = rp.round!.betUnit;
+            _betCtrl.text =
+                b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+            _stakeOk = true;
+          }
         }
         _loading    = false;
       });
@@ -151,11 +173,22 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       // local foursome is stale right after setup).
       await rp.loadSkins(widget.foursomeId);
 
-      if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(
-        '/score-entry',
-        arguments: widget.foursomeId,
-      );
+      if (widget.returnToHub) {
+        // Round creation / "Edit Configuration": return to the launch page
+        // sitting below us (Enter Scores / Edit Tee Boxes / Edit
+        // Configuration).  Reload the round first so the hub reflects the
+        // freshly-saved game, then pop — popping (rather than pushing a new
+        // /round) keeps a single hub on the stack.
+        await rp.loadRound(rp.round!.id);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      } else {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed(
+          '/score-entry',
+          arguments: widget.foursomeId,
+        );
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e; _starting = false; });
     }
@@ -169,7 +202,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
     }
 
     return Scaffold(
-      appBar: const GolfAppBar(title: 'Skins Setup'),
+      appBar: GolfAppBar(title: _editing ? 'Edit Skins' : 'Skins Setup'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -189,7 +222,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       child: GolfPrimaryButton(
-                        label: 'Start Game',
+                        label: _editing ? 'Save Configuration' : 'Start Game',
                         loading: _starting,
                         onPressed: (_rosterValid && _stakeOk) ? _start : null,
                       ),

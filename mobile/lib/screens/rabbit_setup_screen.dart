@@ -28,7 +28,18 @@ import '../widgets/handicap_mode_selector.dart';
 
 class RabbitSetupScreen extends StatefulWidget {
   final int foursomeId;
-  const RabbitSetupScreen({super.key, required this.foursomeId});
+
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to score entry), and
+  /// returns to the /round launch page on save instead of jumping to scoring.
+  final bool returnToHub;
+
+  const RabbitSetupScreen({
+    super.key,
+    required this.foursomeId,
+    this.returnToHub = false,
+  });
 
   @override
   State<RabbitSetupScreen> createState() => _RabbitSetupScreenState();
@@ -38,7 +49,9 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
   String _mode       = 'strokes_off';
   int    _netPercent = 100;
   bool   _accumulate = true;
-  int    _segments   = 1;
+  // Default to three 6-hole matches (rabbit resets each segment) rather than a
+  // single 18-hole match — keeps more of the round in play.
+  int    _segments   = 3;
 
   final TextEditingController _betCtrl = TextEditingController();
   /// True once a stake is entered or "no stakes" is chosen (gates Start).
@@ -47,6 +60,8 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
 
   bool   _loading  = true;
   bool   _starting = false;
+  /// True when editing an already-configured game (drives Save vs Start label).
+  bool   _editing  = false;
   Object? _error;
   RabbitSummary? _summary;
 
@@ -72,16 +87,25 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
       // A Rabbit game already exists → jump to the play screen instead of
       // re-showing setup (re-setup would wipe results).  The empty-default
       // summary (no game) reports status 'pending' with no segments.
-      if (_summary!.status == 'in_progress' ||
+      final configured = _summary!.status == 'in_progress' ||
           _summary!.status == 'complete' ||
-          _summary!.segments.isNotEmpty) {
+          _summary!.segments.isNotEmpty;
+
+      // Normal flow: an already-set-up game jumps straight to the play screen.
+      // In edit mode (returnToHub — round creation / "Edit Configuration")
+      // stay on the form so the user can change settings.
+      if (configured && !widget.returnToHub) {
         Navigator.of(context).pushReplacementNamed(
           '/rabbit', arguments: widget.foursomeId);
         return;
       }
 
       setState(() {
-        if (_summary!.status != 'pending') {
+        // Adopt saved settings when the game has been configured (non-empty
+        // segments is the tell — covers the pending-with-config edit case);
+        // a brand-new game keeps the casual defaults above.
+        if (configured || _summary!.status != 'pending') {
+          if (configured) _editing = true;
           _mode       = _summary!.handicapMode;
           _netPercent = _summary!.netPercent;
           _accumulate = _summary!.accumulate;
@@ -127,9 +151,17 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
       );
       rp.setRabbitSummary(summary);
 
-      if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(
-        '/rabbit', arguments: widget.foursomeId);
+      if (widget.returnToHub) {
+        // Round creation / "Edit Configuration": reload the round so the hub
+        // reflects the freshly-saved game, then pop back to the launch page.
+        await rp.loadRound(rp.round!.id);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      } else {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed(
+          '/rabbit', arguments: widget.foursomeId);
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e; _starting = false; });
     }
@@ -140,10 +172,13 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
       _betCtrlInitialized = true;
+      final b = rp.round!.betUnit;
+      _betCtrl.text = b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+      _stakeOk = double.tryParse(_betCtrl.text) != null;
     }
 
     return Scaffold(
-      appBar: const GolfAppBar(title: 'Rabbit Setup'),
+      appBar: GolfAppBar(title: _editing ? 'Edit Rabbit' : 'Rabbit Setup'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -168,8 +203,8 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
                                   width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
-                              : const Text('Start Game',
-                                  style: TextStyle(
+                              : Text(_editing ? 'Save Configuration' : 'Start Game',
+                                  style: const TextStyle(
                                       fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ),
@@ -240,7 +275,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
                   contentPadding: EdgeInsets.zero,
                   value: opt.$1,
                   groupValue: _segments,
-                  onChanged: (v) => setState(() => _segments = v ?? 1),
+                  onChanged: (v) => setState(() => _segments = v ?? 3),
                   title: Text(opt.$2),
                   subtitle: Text(opt.$3),
                 ),

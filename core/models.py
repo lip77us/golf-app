@@ -50,7 +50,7 @@ class GameType(models.TextChoices):
     # games/models.py MatchPlayBracket/Match/HoleResult.  Used as a
     # casual single-foursome game and as a tournament per-foursome side
     # game alongside Stroke Play.
-    MATCH_PLAY      = 'match_play',      'Match Play'
+    MATCH_PLAY      = 'match_play',      'Mini Singles Bracket'
     # Quota Nassau: two-player Stableford-vs-quota comparison, Nassau style.
     # Quota = 36 − course_handicap_index. Compare score-vs-quota at F9/B9/18.
     # Used as the per-foursome game type in Ryder Cup rounds.

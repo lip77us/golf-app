@@ -38,12 +38,19 @@ class SixesSetupScreen extends StatefulWidget {
   final int    matchNumber;         // shown in the preview
   final String teamSelectMethod;    // 'long_drive', 'random', or 'remainder'
 
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to score entry), and
+  /// returns to the /round launch page on save instead of jumping to scoring.
+  final bool returnToHub;
+
   const SixesSetupScreen({
     super.key,
     required this.foursomeId,
     this.startHole = 1,
     this.matchNumber = 1,
     this.teamSelectMethod = 'long_drive',
+    this.returnToHub = false,
   });
 
   @override
@@ -56,6 +63,9 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
 
   bool _initialized   = false;
   bool _checkingSetup = true; // true while we're checking for an existing match
+  /// True when editing an already-configured match (drives Save vs Start label
+  /// and the AppBar title).  Set in initState when an existing match is loaded.
+  bool _editing       = false;
 
   // Handicap settings the user picks for this match.
   //   _handicapMode: 'net' or 'gross' or 'strokes_off'
@@ -99,13 +109,20 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
 
       if (!mounted) return;
 
-      // 2. If already started → skip setup and go straight to score entry.
+      // 2. If already started → normally skip setup and go straight to score
+      //    entry.  In edit mode (returnToHub: round creation / "Edit
+      //    Configuration") stay on the form and pre-fill the saved teams +
+      //    options instead of bouncing.
       if (rp.sixesIsStarted(widget.foursomeId)) {
-        Navigator.of(context).pushReplacementNamed(
-          '/score-entry',
-          arguments: widget.foursomeId,
-        );
-        return;
+        if (!widget.returnToHub) {
+          Navigator.of(context).pushReplacementNamed(
+            '/score-entry',
+            arguments: widget.foursomeId,
+          );
+          return;
+        }
+        _editing = true;
+        _prefillFromSummary(rp);
       }
 
       // 3. Load scorecard so we can show hole info and player names.
@@ -122,6 +139,27 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     _betCtrl.dispose();
     super.dispose();
   }
+
+  /// In edit mode, adopt the saved match's options (handicap mode / net % /
+  /// scoring format / allocation) and remember the saved team ordering so the
+  /// lazy `_orderedPlayers` init below places players back on their saved
+  /// sides (segment 1: team1 → positions 0,1; team2 → positions 2,3).
+  void _prefillFromSummary(RoundProvider rp) {
+    final s = rp.sixesSummary;
+    if (s == null) return;
+    _handicapMode       = s.handicapMode;
+    _netPercent         = s.netPercent;
+    _scoringFormat      = s.scoringFormat;
+    _handicapAllocation = s.handicapAllocation;
+    if (s.segments.isNotEmpty) {
+      final seg = s.segments.first;
+      _savedTeamOrder = [...seg.team1.playerIds, ...seg.team2.playerIds];
+    }
+  }
+
+  /// Player-id ordering from the saved match's first segment (team1 then
+  /// team2), used to restore the team layout in edit mode.  Empty otherwise.
+  List<int> _savedTeamOrder = const [];
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -267,6 +305,18 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     // pushReplacement, so we can't rely on that signal alone).
     await rp.loadSixes(widget.foursomeId);
     if (!ctx.mounted) return;
+
+    if (widget.returnToHub) {
+      // Round creation / "Edit Configuration": return to the launch page
+      // sitting below us. Reload the round first so the hub reflects the
+      // freshly-saved game, then pop (rather than pushing a new /round) to
+      // keep a single hub on the stack.
+      await rp.loadRound(rp.round!.id);
+      if (!ctx.mounted) return;
+      Navigator.of(ctx).pop();
+      return;
+    }
+
     Navigator.of(ctx).pushReplacementNamed('/score-entry', arguments: widget.foursomeId);
   }
 
@@ -279,7 +329,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     // Show spinner while we check for an existing match.
     if (_checkingSetup || rp.loadingSixes) {
       return Scaffold(
-        appBar: const GolfAppBar(title: 'Sixes Setup'),
+        appBar: GolfAppBar(title: _editing ? 'Edit Sixes' : 'Sixes Setup'),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -289,23 +339,40 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
       final players = _playersFromProvider(rp);
       if (players.isNotEmpty) {
         _orderedPlayers = List.from(players);
+        // In edit mode, restore the saved team layout (segment 1: team1 first,
+        // team2 second) so the splitter shows the configured pairing.
+        if (_savedTeamOrder.isNotEmpty) {
+          _orderedPlayers.sort((a, b) {
+            final ia = _savedTeamOrder.indexOf(a.player.id);
+            final ib = _savedTeamOrder.indexOf(b.player.id);
+            // Unknown ids (not in the saved order) sort to the end.
+            final ra = ia < 0 ? _savedTeamOrder.length : ia;
+            final rb = ib < 0 ? _savedTeamOrder.length : ib;
+            return ra.compareTo(rb);
+          });
+        }
         _initialized = true;
       } else {
         _orderedPlayers = [];
       }
     }
 
-    // Pre-fill the bet unit field from the round exactly once, as soon as
-    // the round is available.  Doing this in build (rather than initState)
-    // means we naturally wait for loadRound() to finish.
+    // Pre-fill the bet unit field from the round's current stake exactly once,
+    // as soon as the round is available.  Doing this in build (rather than
+    // initState) means we naturally wait for loadRound() to finish.  Without
+    // this the field came up empty when editing an existing match, so saving
+    // wiped the stake.
     if (!_betCtrlInitialized && rp.round != null) {
       _betCtrlInitialized = true;
+      final b = rp.round!.betUnit;
+      _betCtrl.text = b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+      _stakeOk = double.tryParse(_betCtrl.text) != null;
     }
 
     final holeData = rp.scorecard?.holeData(widget.startHole);
 
     return Scaffold(
-      appBar: const GolfAppBar(title: 'Sixes Setup'),
+      appBar: GolfAppBar(title: _editing ? 'Edit Sixes' : 'Sixes Setup'),
       body: rp.loadingScorecard && rp.scorecard == null
           ? const Center(child: CircularProgressIndicator())
           : Column(children: [
@@ -392,7 +459,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   child: GolfPrimaryButton(
-                    label: 'Start Match',
+                    label: _editing ? 'Save Configuration' : 'Start Match',
                     loading: rp.submitting,
                     onPressed: (_orderedPlayers.length < 4 || !_stakeOk)
                         ? null

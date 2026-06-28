@@ -19,7 +19,18 @@ import '../widgets/team_splitter_4.dart';
 
 class VegasSetupScreen extends StatefulWidget {
   final int foursomeId;
-  const VegasSetupScreen({super.key, required this.foursomeId});
+
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to score entry), and
+  /// returns to the /round launch page on save instead of jumping to scoring.
+  final bool returnToHub;
+
+  const VegasSetupScreen({
+    super.key,
+    required this.foursomeId,
+    this.returnToHub = false,
+  });
 
   @override
   State<VegasSetupScreen> createState() => _VegasSetupScreenState();
@@ -41,6 +52,8 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
   List<Membership> _ordered = const [];   // [0,1] = team 1, [2,3] = team 2
   bool    _loading  = true;
   bool    _starting = false;
+  /// True when editing an already-configured game (drives Save vs Start label).
+  bool    _editing  = false;
   Object? _error;
 
   @override
@@ -75,12 +88,22 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
 
       try {
         final existing = await client.getVegasSummary(widget.foursomeId);
-        if (existing.status == 'in_progress' || existing.status == 'complete') {
+        // A configured game has its two teams assigned (isStarted) — even at
+        // status 'pending' before any hole is scored.
+        final configured = existing.status == 'in_progress' ||
+            existing.status == 'complete' ||
+            existing.isStarted;
+        // Normal flow: an already-set-up game jumps straight to score entry.
+        // In edit mode (returnToHub) stay on the form so settings can change.
+        if ((existing.status == 'in_progress' ||
+                existing.status == 'complete') &&
+            !widget.returnToHub) {
           if (!mounted) return;
           Navigator.of(context).pushReplacementNamed(
               '/score-entry', arguments: widget.foursomeId);
           return;
         }
+        if (configured) _editing = true;
         _mode       = existing.handicapMode;
         _netPercent = existing.netPercent;
         _netMaxDbl  = existing.netMaxDoubleBogey;
@@ -132,9 +155,19 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
         carryover: _carryover,
         lossCap: _capEnabled ? double.tryParse(_capCtrl.text.trim()) : null,
       );
-      if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(
-          '/score-entry', arguments: widget.foursomeId);
+
+      if (widget.returnToHub) {
+        // Round creation / "Edit Configuration": reload the round so the
+        // launch page reflects the freshly-saved game, then pop back to it
+        // (rather than pushing a new /round) so a single hub stays on stack.
+        await rp.loadRound(rp.round!.id);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      } else {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed(
+            '/score-entry', arguments: widget.foursomeId);
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e; _starting = false; });
     }
@@ -143,7 +176,8 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Las Vegas — Setup')),
+      appBar: AppBar(
+          title: Text(_editing ? 'Edit Vegas' : 'Las Vegas — Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -167,7 +201,9 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
                                   height: 20, width: 20,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
-                              : const Text('Start Las Vegas'),
+                              : Text(_editing
+                                  ? 'Save Configuration'
+                                  : 'Start Las Vegas'),
                         ),
                       ),
                     ),
@@ -192,7 +228,7 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
         SectionCard(
           title: 'Teams',
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Drag to set the two teams — partners share a colour.',
+            Text('Drag to set the two teams — partners share a color.',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
             const SizedBox(height: 8),

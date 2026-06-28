@@ -30,7 +30,18 @@ import '../widgets/team_splitter_4.dart';
 
 class TripleCupSetupScreen extends StatefulWidget {
   final int foursomeId;
-  const TripleCupSetupScreen({super.key, required this.foursomeId});
+
+  /// When true, this screen was opened from round creation or the launch
+  /// page's "Edit Configuration" action: it stays on the form even when the
+  /// game is already configured (instead of bouncing to the game screen), and
+  /// returns to the /round launch page on save instead of jumping to the game.
+  final bool returnToHub;
+
+  const TripleCupSetupScreen({
+    super.key,
+    required this.foursomeId,
+    this.returnToHub = false,
+  });
 
   @override
   State<TripleCupSetupScreen> createState() => _TripleCupSetupScreenState();
@@ -61,6 +72,8 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
   bool _loading = true;
   bool _starting = false;
+  /// True when editing an already-configured game (drives Save vs Start label).
+  bool _editing = false;
   Object? _error;
 
   @override
@@ -168,23 +181,39 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
       // Pre-populate from any existing game.
       try {
         final existing = await client.getTripleCupSummary(widget.foursomeId);
-        if (existing.isStarted) {
+
+        // A configured game reports its matches (teams) even before any hole
+        // is scored — status 'pending' is sent both when no game exists AND
+        // when one exists but is unscored, so a non-empty matches list (or an
+        // in_progress status) is the "already set up" tell.
+        final configured =
+            existing.status == 'in_progress' || existing.matches.isNotEmpty;
+
+        // Normal flow: an already-started game jumps straight to score entry.
+        // In edit mode (returnToHub — round creation / "Edit Configuration")
+        // stay on the form so the user can change settings.
+        if (existing.isStarted && !widget.returnToHub) {
           if (!mounted) return;
           Navigator.of(context).pushReplacementNamed(
-            '/triple-cup',
+            '/score-entry',
             arguments: widget.foursomeId,
           );
           return;
         }
-        _mode          = existing.handicapMode;
-        _netPercent    = existing.netPercent;
-        _altLowPct     = existing.altShotLowPct;
-        _altHighPct    = existing.altShotHighPct;
-        _foursomesFirst = existing.foursomesFirst;
-        // The summary's team info has names but no player IDs, so we
-        // default-split instead of trying to reconstruct.  The user
-        // can re-pick teams in the UI before re-starting.
-        _defaultSplit(rp);
+
+        if (configured) {
+          _editing       = true;
+          _mode          = existing.handicapMode;
+          _netPercent    = existing.netPercent;
+          _altLowPct     = existing.altShotLowPct;
+          _altHighPct    = existing.altShotHighPct;
+          _foursomesFirst = existing.foursomesFirst;
+          // Restore the saved team assignment so a re-edit starts from the
+          // user's picks (not a fresh default split).
+          _restoreTeams(rp, existing.team1Ids, existing.team2Ids);
+        } else {
+          _defaultSplit(rp);
+        }
       } catch (_) {
         _defaultSplit(rp);
       }
@@ -192,6 +221,37 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
       setState(() { _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = e; _loading = false; });
+    }
+  }
+
+  /// Restore the saved team split (ids in their saved order).  Any real member
+  /// not covered by the saved teams (roster changed since setup) is added to
+  /// the smaller side so the split stays valid; falls back to a default split
+  /// when nothing usable was saved.
+  void _restoreTeams(RoundProvider rp, List<int> team1Ids, List<int> team2Ids) {
+    final members = _realMembers;
+    final realIds = members.map((m) => m.player.id).toSet();
+    final t1 = team1Ids.where(realIds.contains).toList();
+    final t2 = team2Ids.where(realIds.contains).toList();
+    if (t1.isEmpty && t2.isEmpty) {
+      _defaultSplit(rp);
+      return;
+    }
+    _teamMap.clear();
+    _team1Order
+      ..clear()
+      ..addAll(t1);
+    _team2Order
+      ..clear()
+      ..addAll(t2);
+    for (final pid in t1) _teamMap[pid] = 1;
+    for (final pid in t2) _teamMap[pid] = 2;
+    for (final m in members) {
+      final pid = m.player.id;
+      if (_teamMap.containsKey(pid)) continue;
+      final toTeam = _team1Order.length <= _team2Order.length ? 1 : 2;
+      _teamMap[pid] = toTeam;
+      (toTeam == 1 ? _team1Order : _team2Order).add(pid);
     }
   }
 
@@ -233,14 +293,26 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
         foursomesFirst:            _foursomesFirst,
       );
 
-      if (!mounted) return;
-      if (ok) {
+      if (!ok) {
+        if (!mounted) return;
+        setState(() { _starting = false; _error = rp.error; });
+        return;
+      }
+
+      if (widget.returnToHub) {
+        // Round creation / "Edit Configuration": return to the launch page
+        // sitting below us.  Reload the round first so the hub reflects the
+        // freshly-saved game, then pop — popping (rather than pushing a new
+        // /triple-cup) keeps a single hub on the stack.
+        await rp.loadRound(rp.round!.id);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      } else {
+        if (!mounted) return;
         Navigator.of(context).pushReplacementNamed(
-          '/triple-cup',
+          '/score-entry',
           arguments: widget.foursomeId,
         );
-      } else {
-        setState(() { _starting = false; _error = rp.error; });
       }
     } catch (e) {
       if (mounted) setState(() { _error = e; _starting = false; });
@@ -254,10 +326,16 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
     final rp = context.watch<RoundProvider>();
     if (!_betCtrlInitialized && rp.round != null) {
       _betCtrlInitialized = true;
+      final b = rp.round!.betUnit;
+      _betCtrl.text = b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+      _stakeOk = double.tryParse(_betCtrl.text) != null;
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('One-Round Triple Cup — Setup')),
+      appBar: AppBar(
+          title: Text(_editing
+              ? 'Edit Triple Cup'
+              : 'One-Round Triple Cup — Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -282,8 +360,8 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                                   width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
-                              : const Text('Start Match',
-                                  style: TextStyle(
+                              : Text(_editing ? 'Save Configuration' : 'Start Match',
+                                  style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold)),
                         ),

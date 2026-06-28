@@ -43,6 +43,7 @@ import 'screens/nassau_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/casual_rounds_list_screen.dart';
 import 'screens/support_lookup_screen.dart';
+import 'utils/route_observer.dart';
 import 'screens/irish_rumble_setup_screen.dart';
 import 'screens/pink_ball_setup_screen.dart';
 import 'screens/pink_ball_screen.dart';
@@ -93,6 +94,13 @@ void main() async {
 
   runApp(GolfApp(auth: auth, localDb: localDb, settings: settings));
 }
+
+/// Setup-screen route args may be a plain int (the foursome/round id) or a Map
+/// `{'id': int, 'returnToHub': bool}` (round creation / "Edit Configuration",
+/// which lands back on the /round launch page).  These read either shape.
+int _routeId(Object? a) =>
+    a is Map ? (a['id'] ?? a['foursomeId'] ?? a['roundId']) as int : a as int;
+bool _routeReturnToHub(Object? a) => a is Map && a['returnToHub'] == true;
 
 class GolfApp extends StatefulWidget {
   final AuthProvider     auth;
@@ -193,6 +201,9 @@ class _GolfAppState extends State<GolfApp> {
       child: MaterialApp(
         navigatorKey:         navigatorKey,
         scaffoldMessengerKey: scaffoldMessengerKey,
+        // Lets screens (e.g. the casual rounds list) refresh when the user
+        // navigates back to them.
+        navigatorObservers:   [appRouteObserver],
         title: 'Halved',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -209,6 +220,11 @@ class _GolfAppState extends State<GolfApp> {
           ),
           useMaterial3: true,
         ),
+        // The app's visuals are built around a light "paper scorecard" look
+        // (white score-grid fills, hardcoded inks). Pin to light mode so Halved
+        // always renders correctly even when the phone is set to dark mode.
+        // (Revisit if/when the full theme-aware color refactor lands.)
+        themeMode: ThemeMode.light,
         initialRoute: '/splash',
         // Override the default initial-route generation so Flutter doesn't
         // split '/splash' into ['/', '/splash'] and silently push a
@@ -371,54 +387,68 @@ class _GolfAppState extends State<GolfApp> {
               readOnly:   readOnly,
             ));
       case '/sixes-setup':
-        final foursomeId = settings.arguments as int;
-        return page((_) => SixesSetupScreen(foursomeId: foursomeId));
+        return page((_) => SixesSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/points-531-setup':
-        final foursomeId = settings.arguments as int;
-        return page((_) => Points531SetupScreen(foursomeId: foursomeId));
+        return page((_) => Points531SetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/vegas-setup':
-        final foursomeId = settings.arguments as int;
-        return page((_) => VegasSetupScreen(foursomeId: foursomeId));
+        return page((_) => VegasSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/points-531':
         final foursomeId = settings.arguments as int;
         return page((_) => Points531Screen(foursomeId: foursomeId));
       case '/skins-setup':
-        final foursomeId = settings.arguments as int;
-        return page((_) => SkinsSetupScreen(foursomeId: foursomeId));
+        // Args may be a plain int (foursomeId) or a Map with
+        // {'id': int, 'returnToHub': bool} (round creation / Edit Config).
+        final a = settings.arguments;
+        final foursomeId  = a is Map ? a['id'] as int : a as int;
+        final returnToHub = a is Map && a['returnToHub'] == true;
+        return page((_) => SkinsSetupScreen(
+              foursomeId: foursomeId, returnToHub: returnToHub));
       case '/skins':
         final foursomeId = settings.arguments as int;
         return page((_) => SkinsScreen(foursomeId: foursomeId));
       case '/wolf-setup':
-        final foursomeId = settings.arguments as int;
-        return page((_) => WolfSetupScreen(foursomeId: foursomeId));
+        return page((_) => WolfSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/wolf':
         final foursomeId = settings.arguments as int;
         return page((_) => WolfScreen(foursomeId: foursomeId));
       case '/rabbit-setup':
-        final foursomeId = settings.arguments as int;
-        return page((_) => RabbitSetupScreen(foursomeId: foursomeId));
+        return page((_) => RabbitSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/rabbit':
         final foursomeId = settings.arguments as int;
         return page((_) => RabbitScreen(foursomeId: foursomeId));
       case '/triple-cup-setup':
-        final foursomeId = settings.arguments as int;
-        return page((_) => TripleCupSetupScreen(foursomeId: foursomeId));
+        return page((_) => TripleCupSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/triple-cup':
         final foursomeId = settings.arguments as int;
         return page((_) => TripleCupScreen(foursomeId: foursomeId));
       case '/multi-skins-setup':
-        final roundId = settings.arguments as int;
-        return page((_) => MultiSkinsSetupScreen(roundId: roundId));
+        return page((_) => MultiSkinsSetupScreen(
+              roundId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/multi-skins':
         final roundId = settings.arguments as int;
         return page((_) => MultiSkinsScreen(roundId: roundId));
       case '/nassau-setup':
-        final foursomeId = settings.arguments as int;
-        return page((_) => NassauSetupScreen(foursomeId: foursomeId));
+        return page((_) => NassauSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/nassau-setup-18':
-        final foursomeId = settings.arguments as int;
-        return page((_) =>
-            NassauSetupScreen(foursomeId: foursomeId, overallOnly: true));
+        return page((_) => NassauSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              overallOnly: true,
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/nassau':
         final foursomeId = settings.arguments as int;
         return page((_) => NassauScreen(foursomeId: foursomeId));
@@ -437,11 +467,13 @@ class _GolfAppState extends State<GolfApp> {
         final roundId = settings.arguments as int;
         return page((_) => IrishRumbleSetupScreen(roundId: roundId));
       case '/low-net-setup':
-        final roundId = settings.arguments as int;
-        return page((_) => LowNetSetupScreen(roundId: roundId));
+        return page((_) => LowNetSetupScreen(
+              roundId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/stableford-setup':
-        final roundId = settings.arguments as int;
-        return page((_) => StablefordSetupScreen(roundId: roundId));
+        return page((_) => StablefordSetupScreen(
+              roundId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/pink-ball-setup':
         final roundId = settings.arguments as int;
         return page((_) => PinkBallSetupScreen(roundId: roundId));
@@ -468,7 +500,7 @@ class _GolfAppState extends State<GolfApp> {
         final List<int> allMatchPlayIds;
         final List<int> peerIds;
         if (args is Map) {
-          foursomeId      = args['foursomeId']      as int;
+          foursomeId      = _routeId(args);
           allMatchPlayIds = List<int>.from(args['allMatchPlayIds'] as List? ?? []);
           peerIds         = List<int>.from(args['peerIds']         as List? ?? []);
         } else {
@@ -480,14 +512,15 @@ class _GolfAppState extends State<GolfApp> {
               foursomeId:      foursomeId,
               allMatchPlayIds: allMatchPlayIds,
               peerIds:         peerIds,
+              returnToHub:     _routeReturnToHub(args),
             ));
       case '/match-play':
         final foursomeId = settings.arguments as int;
         return page((_) => MatchPlayScreen(foursomeId: foursomeId));
       case '/three-person-match-setup':
-        final foursomeId = settings.arguments as int;
-        return page((_) =>
-            ThreePersonMatchSetupScreen(foursomeId: foursomeId));
+        return page((_) => ThreePersonMatchSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/course-search':
         return page((_) => const CourseSearchScreen());
       case '/score-entry':

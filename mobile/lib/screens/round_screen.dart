@@ -34,12 +34,29 @@ class _RoundScreenState extends State<RoundScreen> {
     final round        = rp.round;
     final isComplete   = round?.status == 'complete';
     final isInProgress = round?.status == 'in_progress';
+    // Casual rounds are labelled by their game ("Round N" is a tournament
+    // concept) and get an explicit Exit-to-home action instead of plain back.
+    final isCasual     = (round?.isCasual ?? false) && !(round?.isCupRound ?? false);
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !isCasual,
+        leading: isCasual
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Exit round',
+                // Pop back to whatever launched the round (the casual list,
+                // onboarding, etc.).  The hub sits directly above its
+                // originating screen, so a single pop returns there — not the
+                // app root (whose default view is the Tournament list).
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
         title: round == null
             ? const Text('Round')
-            : Text('Round ${round.roundNumber}'),
+            : Text(isCasual
+                ? _casualTitle(round.activeGames)
+                : 'Round ${round.roundNumber}'),
         actions: [
           if (round != null)
             RoundChatButton(roundId: round.id, title: round.course.name),
@@ -61,6 +78,8 @@ class _RoundScreenState extends State<RoundScreen> {
               ? _CompleteRoundButton(
                   roundId: round.id,
                   submitting: rp.submitting,
+                  allScored: round.allHolesScored,
+                  holesRemaining: round.holesRemaining,
                 )
               : isComplete
                   ? FilledButton.icon(
@@ -74,6 +93,15 @@ class _RoundScreenState extends State<RoundScreen> {
       ),
       body: _buildBody(context, rp, myId),
     );
+  }
+
+  /// Title for a casual round: the single game's name (e.g. "Skins"), or a
+  /// generic label for multi-game combos / unknown games.
+  String _casualTitle(List<String> games) {
+    if (games.length == 1) {
+      return gameMeta(games.first)?.displayName ?? 'Casual Round';
+    }
+    return 'Casual Round';
   }
 
   Widget _buildBody(BuildContext context, RoundProvider rp, int? myId) {
@@ -99,11 +127,29 @@ class _RoundScreenState extends State<RoundScreen> {
     final canManage = round.canManage;
 
     final hasIrishRumble = round.activeGames.contains('irish_rumble');
-    final hasLowNet      = round.activeGames.contains('low_net_round');
     final hasPinkBall    = round.activeGames.contains('pink_ball');
     final hasMatchPlay   = round.activeGames.contains('match_play');
     final hasMultiSkins  = round.activeGames.contains('multi_skins');
-    final hasSetupGames  = hasIrishRumble || hasLowNet || hasPinkBall || hasMatchPlay;
+    // The round-level Mini Singles Bracket list is only useful for a
+    // multi-foursome round (set up each group's bracket from one place).  On a
+    // single-foursome round it duplicates the foursome card's own "Set Up
+    // Bracket" / "Edit Configuration" actions and just pushes them off-screen,
+    // so hide it there.
+    final showMatchPlaySetup = hasMatchPlay && round.foursomes.length > 1;
+    // Stroke Play (low net) and Stableford are round-level games whose scoring
+    // config (handicap mode, points table, payout) is retroactive, so they're
+    // only editable BEFORE the first score is posted anywhere in the round.
+    // On a single-foursome (casual) round they show as bottom buttons on the
+    // foursome card instead; the "Game Setup" card is reserved for
+    // multi-foursome rounds.
+    final roundHasAnyScore = round.foursomes.any((f) => f.hasAnyScore);
+    final multiFoursome    = round.foursomes.length > 1;
+    final showLowNet = round.activeGames.contains('low_net_round') &&
+        !roundHasAnyScore && multiFoursome;
+    final showStableford = round.activeGames.contains('stableford') &&
+        !roundHasAnyScore && multiFoursome;
+    final hasSetupGames  = hasIrishRumble || showLowNet || hasPinkBall ||
+        showMatchPlaySetup || showStableford;
 
     return RefreshIndicator(
       onRefresh: () => rp.loadRound(widget.roundId),
@@ -134,9 +180,10 @@ class _RoundScreenState extends State<RoundScreen> {
             _GameSetupCard(
               roundId:        widget.roundId,
               hasIrishRumble: hasIrishRumble,
-              hasLowNet:      hasLowNet,
+              showLowNet:     showLowNet,
               hasPinkBall:    hasPinkBall,
-              hasMatchPlay:   hasMatchPlay,
+              hasMatchPlay:   showMatchPlaySetup,
+              showStableford: showStableford,
               foursomes:      round.foursomes,
             ),
           ],
@@ -248,9 +295,10 @@ class _RoundScreenState extends State<RoundScreen> {
                       // Triple Cup needs team assignment + handicap config.
                       route = '/triple-cup-setup';
                     } else if (fsGames.contains('triple_cup')) {
-                      // Configured Triple Cup → its home screen (cup points +
-                      // holes); its FAB jumps to universal score entry.
-                      route = '/triple-cup';
+                      // Configured Triple Cup → straight to score entry (same as
+                      // every other game).  The cup-standings home (/triple-cup)
+                      // is reachable from the leaderboard, not the play flow.
+                      route = '/score-entry';
                     } else {
                       // Everything configured (or no setup required) →
                       // universal score entry.
@@ -347,17 +395,19 @@ class _RoundInfoCard extends StatelessWidget {
 class _GameSetupCard extends StatelessWidget {
   final int            roundId;
   final bool           hasIrishRumble;
-  final bool           hasLowNet;
+  final bool           showLowNet;
   final bool           hasPinkBall;
   final bool           hasMatchPlay;
+  final bool           showStableford;
   final List<Foursome> foursomes;
 
   const _GameSetupCard({
     required this.roundId,
     required this.hasIrishRumble,
-    required this.hasLowNet,
+    required this.showLowNet,
     required this.hasPinkBall,
     required this.hasMatchPlay,
+    required this.showStableford,
     required this.foursomes,
   });
 
@@ -375,9 +425,11 @@ class _GameSetupCard extends StatelessWidget {
 
     final theme = Theme.of(context);
     // Spacer helpers: only add gaps between sections that are actually present
-    final beforeLowNet   = hasIrishRumble;
-    final beforePinkBall = hasIrishRumble || hasLowNet;
-    final beforeMatchPlay = hasIrishRumble || hasLowNet || hasPinkBall;
+    final beforeLowNet    = hasIrishRumble;
+    final beforeStableford = hasIrishRumble || showLowNet;
+    final beforePinkBall  = hasIrishRumble || showLowNet || showStableford;
+    final beforeMatchPlay = hasIrishRumble || showLowNet || showStableford ||
+        hasPinkBall;
 
     return Card(
       child: Padding(
@@ -392,13 +444,26 @@ class _GameSetupCard extends StatelessWidget {
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Configure Irish Rumble'),
               ),
-            if (hasLowNet) ...[
+            if (showLowNet) ...[
               if (beforeLowNet) const SizedBox(height: 8),
               OutlinedButton.icon(
-                onPressed: () => Navigator.of(context)
-                    .pushNamed('/low-net-setup', arguments: roundId),
+                // returnToHub: pops back to this launch page on save.
+                onPressed: () => Navigator.of(context).pushNamed(
+                    '/low-net-setup',
+                    arguments: {'id': roundId, 'returnToHub': true}),
                 icon: const Icon(Icons.tune, size: 18),
-                label: const Text('Configure Stroke Play'),
+                label: const Text('Edit Stroke Play'),
+              ),
+            ],
+            if (showStableford) ...[
+              if (beforeStableford) const SizedBox(height: 8),
+              OutlinedButton.icon(
+                // returnToHub: pops back to this launch page on save.
+                onPressed: () => Navigator.of(context).pushNamed(
+                    '/stableford-setup',
+                    arguments: {'id': roundId, 'returnToHub': true}),
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Edit Stableford'),
               ),
             ],
             if (hasPinkBall) ...[
@@ -416,7 +481,7 @@ class _GameSetupCard extends StatelessWidget {
               Row(children: [
                 const Icon(Icons.sports_golf, size: 16),
                 const SizedBox(width: 6),
-                Text('Match Play Brackets',
+                Text('Mini Singles Brackets',
                     style: theme.textTheme.labelLarge
                         ?.copyWith(fontWeight: FontWeight.bold)),
               ]),
@@ -493,17 +558,32 @@ class _GameSetupCard extends StatelessWidget {
 class _CompleteRoundButton extends StatelessWidget {
   final int roundId;
   final bool submitting;
+  /// True when every expected hole has a score — drives prominence + the
+  /// "not all holes scored" warning in the confirm dialog.
+  final bool allScored;
+  /// Count of expected-but-unscored holes (for the warning copy).
+  final int holesRemaining;
 
-  const _CompleteRoundButton({required this.roundId, required this.submitting});
+  const _CompleteRoundButton({
+    required this.roundId,
+    required this.submitting,
+    this.allScored = true,
+    this.holesRemaining = 0,
+  });
 
   Future<void> _confirm(BuildContext context) async {
+    final theme = Theme.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Complete Round?'),
-        content: const Text(
-          'This will mark the round as finished and lock all scores. '
-          'You can still view the final results afterwards.',
+        title: Text(allScored ? 'Complete Round?' : 'Finish early?'),
+        content: Text(
+          allScored
+              ? 'This will mark the round as finished and lock all scores. '
+                'You can still view the final results afterwards.'
+              : '${holesRemaining > 0 ? (holesRemaining == 1 ? '1 hole still has no score. ' : '$holesRemaining holes still have no score. ') : ''}'
+                'Completing now will lock the round with any blank holes left '
+                'blank. You can still view the results afterwards.',
         ),
         actions: [
           TextButton(
@@ -511,8 +591,14 @@ class _CompleteRoundButton extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: allScored
+                ? null
+                : FilledButton.styleFrom(
+                    backgroundColor: theme.colorScheme.error,
+                    foregroundColor: theme.colorScheme.onError,
+                  ),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Complete Round'),
+            child: Text(allScored ? 'Complete Round' : 'Complete Anyway'),
           ),
         ],
       ),
@@ -537,22 +623,37 @@ class _CompleteRoundButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final icon = submitting
+        ? SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: allScored
+                    ? theme.colorScheme.onTertiary
+                    : theme.colorScheme.primary))
+        : const Icon(Icons.flag_rounded);
+    final label = Text(submitting ? 'Completing…' : 'Complete Round');
+
+    // Fully scored → prominent filled button.  Otherwise keep it understated
+    // (outlined) so it doesn't read as the expected next step mid-round.
     return SizedBox(
       width: double.infinity,
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          backgroundColor: Theme.of(context).colorScheme.tertiary,
-          foregroundColor: Theme.of(context).colorScheme.onTertiary,
-        ),
-        onPressed: submitting ? null : () => _confirm(context),
-        icon: submitting
-            ? const SizedBox(
-                width: 16, height: 16,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
-            : const Icon(Icons.flag_rounded),
-        label: Text(submitting ? 'Completing…' : 'Complete Round'),
-      ),
+      child: allScored
+          ? FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.tertiary,
+                foregroundColor: theme.colorScheme.onTertiary,
+              ),
+              onPressed: submitting ? null : () => _confirm(context),
+              icon: icon,
+              label: label,
+            )
+          : OutlinedButton.icon(
+              onPressed: submitting ? null : () => _confirm(context),
+              icon: icon,
+              label: label,
+            ),
     );
   }
 }
@@ -560,6 +661,63 @@ class _CompleteRoundButton extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Foursome card
 // ---------------------------------------------------------------------------
+
+/// Maps a foursome's configured game to its setup screen for the launch
+/// page's "Edit Configuration" action (opened in returnToHub edit mode, so it
+/// pre-fills the saved settings and returns here on save).  Returns
+/// (null, null) when no editable game is configured yet — extended per game
+/// as each setup screen gains edit-mode support.
+/// Round-level casual games (Stroke Play, Stableford) that support edit mode,
+/// as (route, label) pairs.  On a single-foursome casual round these render as
+/// bottom buttons on the foursome card so the hub matches the per-foursome
+/// games (no separate "Game Setup" section).  Their setup screens take the
+/// round id.
+List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
+  final out = <(String, String)>[];
+  if (roundActiveGames.contains('low_net_round')) {
+    out.add(('/low-net-setup', 'Edit Stroke Play'));
+  }
+  if (roundActiveGames.contains('stableford')) {
+    out.add(('/stableford-setup', 'Edit Stableford'));
+  }
+  return out;
+}
+
+(String?, Object?) _editConfigTarget(Set<String> fsGames, Foursome fs) {
+  // Match play (Mini Singles Bracket) auto-dispatches by group size; route to
+  // whichever variant is configured so the seeds/bracket can be re-edited
+  // before scoring starts.
+  if (fsGames.contains('match_play') ||
+      fsGames.contains('three_person_match')) {
+    if (fs.configuredGames.contains('three_person_match')) {
+      return ('/three-person-match-setup', {'id': fs.id, 'returnToHub': true});
+    }
+    if (fs.configuredGames.contains('match_play')) {
+      return ('/match-play-setup', {'id': fs.id, 'returnToHub': true});
+    }
+  }
+  // Per-foursome casual games whose setup screen supports edit mode.  Keyed on
+  // configured_games so the button only shows once a game actually exists.
+  // (Round-level games — low net, stableford, multi-skins — and bracket games
+  // — match play — are configured elsewhere and excluded here.)
+  const routes = {
+    'skins':      '/skins-setup',
+    'nassau':     '/nassau-setup',
+    'points_531': '/points-531-setup',
+    'vegas':      '/vegas-setup',
+    'wolf':       '/wolf-setup',
+    'rabbit':     '/rabbit-setup',
+    'triple_cup': '/triple-cup-setup',
+    'sixes':      '/sixes-setup',
+  };
+  for (final entry in routes.entries) {
+    if (fsGames.contains(entry.key) &&
+        fs.configuredGames.contains(entry.key)) {
+      return (entry.value, {'id': fs.id, 'returnToHub': true});
+    }
+  }
+  return (null, null);
+}
 
 class _FoursomeCard extends StatelessWidget {
   final Foursome     foursome;
@@ -1244,6 +1402,56 @@ class _FoursomeCard extends StatelessWidget {
                   label: const Text('Edit Tee Boxes'),
                 ),
               ),
+            ],
+            // Edit Configuration — change game settings (handicap mode,
+            // carryover, stake, …) before any hole is scored.  Hidden once
+            // scoring starts (settings are locked), on cup rounds (configured
+            // via the cup wizard), and for games whose setup screen lacks an
+            // edit mode.
+            if (canManage && !isComplete && !isCupRound &&
+                !foursome.hasAnyScore) ...[
+              Builder(builder: (context) {
+                final (route, editArgs) = _editConfigTarget(
+                  {...roundActiveGames, ...foursome.activeGames},
+                  foursome,
+                );
+                if (route == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context)
+                          .pushNamed(route, arguments: editArgs)
+                          .then((_) {
+                        onGamesChanged();
+                      }),
+                      icon: const Icon(Icons.tune, size: 18),
+                      label: const Text('Edit Configuration'),
+                    ),
+                  ),
+                );
+              }),
+              // Round-level casual games (Stroke Play, Stableford): on a
+              // single-foursome casual round they appear here as bottom buttons
+              // instead of a separate "Game Setup" section (that card is only
+              // used for multi-foursome rounds).  Setup takes the round id.
+              if (allFoursomes.length == 1)
+                for (final t in _roundLevelEditTargets(roundActiveGames))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).pushNamed(
+                          t.$1,
+                          arguments: {'id': roundId, 'returnToHub': true},
+                        ).then((_) => onGamesChanged()),
+                        icon: const Icon(Icons.tune, size: 18),
+                        label: Text(t.$2),
+                      ),
+                    ),
+                  ),
             ],
           ],
         ]),
