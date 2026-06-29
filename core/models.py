@@ -428,3 +428,48 @@ class CatalogTee(models.Model):
 
     def __str__(self):
         return f"{self.catalog_course.name} — {self.tee_name}"
+
+
+# ---------------------------------------------------------------------------
+# Product feedback
+# ---------------------------------------------------------------------------
+
+class GameSuggestion(models.Model):
+    """A user's request to add a new game to Halved.
+
+    Free-form, with prompts for the details we need to evaluate it (players,
+    rounds, per-hole scoring, betting). Stored for review in the Django admin;
+    forwarding to info@halved.golf is a deferred enhancement (no server email
+    backend is configured yet)."""
+
+    # Who sent it. Nullable + SET_NULL so deleting an account/user never drops
+    # the suggestion — the denormalized name/email below survive regardless.
+    account        = models.ForeignKey(
+                        'accounts.Account', on_delete=models.SET_NULL,
+                        null=True, blank=True, related_name='game_suggestions')
+    submitted_by   = models.ForeignKey(
+                        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                        null=True, blank=True, related_name='game_suggestions')
+    submitter_name = models.CharField(max_length=120, blank=True)
+    contact_email  = models.EmailField(blank=True)
+
+    # The suggestion itself — each field optional; the API requires the request
+    # to carry *something* descriptive.
+    game_name      = models.CharField(max_length=120, blank=True)
+    num_players    = models.CharField(max_length=120, blank=True)
+    num_rounds     = models.CharField(max_length=120, blank=True)
+    hole_scoring   = models.TextField(blank=True)
+    betting        = models.TextField(blank=True)
+    notes          = models.TextField(blank=True)
+
+    created_at     = models.DateTimeField(auto_now_add=True)
+    handled        = models.BooleanField(
+                        default=False,
+                        help_text='Tick once reviewed / actioned.')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        who = self.submitter_name or 'someone'
+        return f"{self.game_name or 'Game suggestion'} — {who}"

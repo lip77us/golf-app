@@ -604,6 +604,18 @@ class RoundListSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+class GameSuggestionSerializer(serializers.ModelSerializer):
+    """A user's "suggest a new game" note. Submitter/account are set server-side
+    from the request, never trusted from the client."""
+    class Meta:
+        from core.models import GameSuggestion
+        model  = GameSuggestion
+        fields = ['id', 'game_name', 'num_players', 'num_rounds',
+                  'hole_scoring', 'betting', 'notes', 'contact_email',
+                  'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
 class CasualRoundSummarySerializer(serializers.Serializer):
     """
     Lightweight summary of an in-progress casual round for the Casual Rounds list screen.

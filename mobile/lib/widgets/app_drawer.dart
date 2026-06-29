@@ -205,6 +205,14 @@ class AppDrawer extends StatelessWidget {
             onTap: onSettingsTap,
           ),
           ListTile(
+            leading: const Icon(Icons.lightbulb_outline),
+            title: const Text('Suggest a Game'),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pushNamed('/suggest-game');
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('About'),
             onTap: () {

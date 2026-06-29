@@ -1068,6 +1068,44 @@ class InviteView(APIView):
         return Response({'code': code, 'url': url, 'share_text': share_text})
 
 
+class GameSuggestionView(APIView):
+    """
+    POST /api/game-suggestions/
+
+    A user's request to add a new game. Free-form, with prompts for the
+    details we need (players, rounds, per-hole scoring, betting). Stored for
+    review in the Django admin; forwarding to info@halved.golf is a deferred
+    enhancement (no server email backend is wired up yet).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from api.serializers import GameSuggestionSerializer
+        ser = GameSuggestionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        # Require something descriptive so we don't store empty notes.
+        if not any(str(d.get(f, '')).strip() for f in
+                   ('game_name', 'notes', 'hole_scoring', 'betting')):
+            return Response(
+                {'detail': 'Please describe the game you have in mind.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        player = getattr(request.user, 'player_profile', None)
+        submitter_name = (getattr(player, 'name', '') or '').strip()
+        contact_email = (d.get('contact_email')
+                         or getattr(request.user, 'email', '') or '').strip()
+        obj = ser.save(
+            account=request.user.account,
+            submitted_by=request.user,
+            submitter_name=submitter_name,
+            contact_email=contact_email,
+        )
+        # Deferred: notify info@halved.golf once a server email backend exists.
+        return Response(GameSuggestionSerializer(obj).data,
+                        status=status.HTTP_201_CREATED)
+
+
 class LogoutView(APIView):
     """POST /api/auth/logout/ — invalidates the current token."""
     permission_classes = [IsAuthenticated]

@@ -15,6 +15,7 @@ urlpatterns = [
     path('auth/otp/verify/',     views.OtpVerifyView.as_view(),     name='api-otp-verify'),
     path('auth/logout/',         views.LogoutView.as_view(),        name='api-logout'),
     path('invite/',              views.InviteView.as_view(),        name='api-invite'),
+    path('game-suggestions/',    views.GameSuggestionView.as_view(), name='api-game-suggestions'),
     path('auth/me/',             views.MeView.as_view(),            name='api-me'),
     path('auth/delete-account/', views.DeleteAccountView.as_view(), name='api-delete-account'),
 

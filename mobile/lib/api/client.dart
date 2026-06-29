@@ -291,6 +291,27 @@ class ApiClient {
     return InviteInfo.fromJson(data as Map<String, dynamic>);
   }
 
+  /// Submit a "suggest a new game" note. Stored server-side for review.
+  Future<void> submitGameSuggestion({
+    String gameName = '',
+    String numPlayers = '',
+    String numRounds = '',
+    String holeScoring = '',
+    String betting = '',
+    String notes = '',
+    String contactEmail = '',
+  }) async {
+    await _post('/game-suggestions/', {
+      'game_name':    gameName,
+      'num_players':  numPlayers,
+      'num_rounds':   numRounds,
+      'hole_scoring': holeScoring,
+      'betting':      betting,
+      'notes':        notes,
+      'contact_email': contactEmail,
+    });
+  }
+
   // ---- Reference data ----
 
   Future<List<PlayerProfile>> getPlayers() async {

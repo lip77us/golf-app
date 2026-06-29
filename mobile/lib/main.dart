@@ -44,6 +44,7 @@ import 'screens/nassau_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/casual_rounds_list_screen.dart';
 import 'screens/support_lookup_screen.dart';
+import 'screens/game_suggestion_screen.dart';
 import 'utils/route_observer.dart';
 import 'screens/irish_rumble_setup_screen.dart';
 import 'screens/pink_ball_setup_screen.dart';
@@ -364,6 +365,8 @@ class _GolfAppState extends State<GolfApp> {
         return page((_) => const CasualRoundsListScreen());
       case '/support-lookup':
         return page((_) => const SupportLookupScreen());
+      case '/suggest-game':
+        return page((_) => const GameSuggestionScreen());
       case '/settings':
         return page((_) => const SettingsScreen());
       case '/manage-courses':

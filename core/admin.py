@@ -4,7 +4,9 @@ from django import forms
 from django.contrib import admin
 from django.utils.safestring import mark_safe
 
-from .models import Player, Tee, Course, CatalogCourse, CatalogTee
+from .models import (
+    Player, Tee, Course, CatalogCourse, CatalogTee, GameSuggestion,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -193,4 +195,28 @@ class TeeAdmin(admin.ModelAdmin):
         ('Hole-by-Hole Data', {
             'fields': ('holes',),
         }),
+    )
+
+
+@admin.register(GameSuggestion)
+class GameSuggestionAdmin(admin.ModelAdmin):
+    list_display  = ('created_at', 'game_name', 'submitter_name',
+                     'contact_email', 'num_players', 'num_rounds', 'handled')
+    list_filter   = ('handled', 'created_at')
+    list_editable = ('handled',)
+    search_fields = ('game_name', 'submitter_name', 'contact_email',
+                     'notes', 'hole_scoring', 'betting')
+    readonly_fields = ('created_at', 'account', 'submitted_by',
+                       'submitter_name', 'contact_email')
+    ordering      = ('-created_at',)
+    fieldsets     = (
+        ('From', {
+            'fields': ('submitter_name', 'contact_email', 'account',
+                       'submitted_by', 'created_at'),
+        }),
+        ('Suggestion', {
+            'fields': ('game_name', 'num_players', 'num_rounds',
+                       'hole_scoring', 'betting', 'notes'),
+        }),
+        ('Triage', {'fields': ('handled',)}),
     )
