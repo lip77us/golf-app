@@ -297,6 +297,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   void dispose() {
     _syncRef?.removeListener(_syncWatcher!);
     _matchPlayTimer?.cancel();
+    _spotsDebounce?.cancel();
     super.dispose();
   }
 
@@ -360,6 +361,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         configured.contains('skins') ||
         rp.skinsSummary != null) {
       futures.add(rp.loadSkins(widget.foursomeId));
+    }
+    if (games.contains('spots') ||
+        configured.contains('spots') ||
+        rp.spotsSummary != null) {
+      futures.add(rp.loadSpots(widget.foursomeId));
     }
     // Multi-Group Skins is round-scoped (no foursome configured_games
     // entry), so gate purely on the round's active_games list.
@@ -989,6 +995,50 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         map[playerId] = next;
       }
     });
+  }
+
+  // ── Spots capture (side-game add-on) ──────────────────────────────────────
+  /// Optimistic per-hole overrides while a tally POST is in flight: hole → pid
+  /// → count. Cleared once the server summary confirms them.
+  final Map<int, Map<int, int>> _spotsOverride = {};
+  Timer? _spotsDebounce;
+
+  int _spotsCount(int pid, int hole, SpotsSummary? s) =>
+      _spotsOverride[hole]?[pid] ?? (s?.countFor(pid, hole) ?? 0);
+
+  void _adjustSpots(int pid, int hole, int delta) {
+    final rp  = context.read<RoundProvider>();
+    final cur = _spotsCount(pid, hole, rp.spotsSummary);
+    final next = (cur + delta).clamp(0, 20);
+    setState(() => (_spotsOverride[hole] ??= {})[pid] = next);
+    // Coalesce rapid +/- into one POST (also avoids out-of-order responses).
+    _spotsDebounce?.cancel();
+    _spotsDebounce = Timer(const Duration(milliseconds: 450), () => _pushSpots(hole));
+  }
+
+  Future<void> _pushSpots(int hole) async {
+    final rp     = context.read<RoundProvider>();
+    final client = context.read<AuthProvider>().client;
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId).firstOrNull;
+    if (fs == null) return;
+    final entries = [
+      for (final m in fs.memberships.where((m) => !m.player.isPhantom))
+        {'player_id': m.player.id,
+         'count': _spotsCount(m.player.id, hole, rp.spotsSummary)},
+    ];
+    try {
+      final summary = await client.postSpotsTally(
+          widget.foursomeId, holeNumber: hole, entries: entries);
+      if (!mounted) return;
+      rp.setSpotsSummary(summary);
+      setState(() => _spotsOverride.remove(hole));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not save spots. Tap again to retry.')));
+      }
+    }
   }
 
   int _currentJunk(int playerId, int hole, SkinsSummary? skins) {
@@ -1985,6 +2035,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                     .firstOrNull,
                 phantomInit: rp.phantomInitFor(widget.foursomeId),
               ),
+
+              // Spots capture strip — a "capture add-on" side game renders its
+              // per-hole input in score entry even though it isn't the primary
+              // (the capturesInScoreEntry carve-out). Per-player +/- tallies.
+              if (games.contains('spots') &&
+                  (rp.spotsSummary?.players.isNotEmpty ?? false))
+                _SpotsCaptureStrip(
+                  players:  players,
+                  hole:     _selectedHole,
+                  countFor: (pid) => _spotsCount(pid, _selectedHole, rp.spotsSummary),
+                  onAdd:    (pid) => _adjustSpots(pid, _selectedHole, 1),
+                  onRemove: (pid) => _adjustSpots(pid, _selectedHole, -1),
+                ),
 
               // Stableford running-points band — only when Stableford is the
               // primary (as a side game it shows on the leaderboard, not here).
@@ -6397,6 +6460,82 @@ class _TeamBanner extends StatelessWidget {
 /// Compact running-points band shown between the score-entry box and the
 /// points table: each player's running total with the current hole's points
 /// as a (+N) delta. Appears once a hole has been saved.
+/// Per-hole Spots capture: a compact card with a +/- stepper per real player.
+/// Rendered in score entry for the Spots add-on (capturesInScoreEntry).
+class _SpotsCaptureStrip extends StatelessWidget {
+  final List<Membership> players;
+  final int hole;
+  final int Function(int pid)  countFor;
+  final void Function(int pid) onAdd;
+  final void Function(int pid) onRemove;
+
+  const _SpotsCaptureStrip({
+    required this.players,
+    required this.hole,
+    required this.countFor,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final reals = players.where((m) => !m.player.isPhantom).toList();
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.star_outline, size: 16, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text('Spots — hole $hole',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary)),
+            ]),
+            const SizedBox(height: 4),
+            for (final m in reals)
+              Row(children: [
+                Expanded(
+                  child: Text(m.player.displayShort,
+                      style: theme.textTheme.bodyMedium,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 22,
+                  onPressed: countFor(m.player.id) > 0
+                      ? () => onRemove(m.player.id) : null,
+                  icon: const Icon(Icons.remove_circle_outline),
+                ),
+                SizedBox(
+                  width: 22,
+                  child: Text('${countFor(m.player.id)}',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleMedium),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 22,
+                  onPressed: () => onAdd(m.player.id),
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
+              ]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StablefordStrip extends StatelessWidget {
   final Map<String, dynamic> result;
   final int currentHole;

@@ -739,6 +739,10 @@ List<(String, String)> _sideGamePerFoursomeTargets(Set<String> fsGames) {
   if (fsGames.contains('skins') && primaryGameOf(fsGames) != 'skins') {
     out.add(('/skins-setup', 'Edit Skins'));
   }
+  // Spots is always a side game (capture add-on) — gets its own setup button.
+  if (fsGames.contains('spots')) {
+    out.add(('/spots-setup', 'Edit Spots'));
+  }
   return out;
 }
 

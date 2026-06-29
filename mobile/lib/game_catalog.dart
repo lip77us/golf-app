@@ -29,6 +29,7 @@ class GameIds {
   /// Translated to `nassau` (Overall-only) when the round is created.
   static const String match18    = 'match_18';
   static const String skins      = 'skins';
+  static const String spots      = 'spots';
   static const String multiSkins = 'multi_skins';
   static const String tripleCup  = 'triple_cup';
   /// Wolf — 3- or 4-player rotating-wolf game.  Each hole one player is the
@@ -132,6 +133,12 @@ class GameMeta {
   /// (Sixes / Vegas / Nassau / Triple Cup / Multi-Group Skins).
   final bool allowsSideGames;
 
+  /// CASUAL model: a "capture add-on" side game that needs a per-hole manual
+  /// input in score entry (it can't be derived from gross scores). Unlike a
+  /// pure overlay (Skins/Stableford), its capture widget renders in score
+  /// entry even though it isn't the primary. (Spots; later Snake.)
+  final bool capturesInScoreEntry;
+
   const GameMeta({
     required this.id,
     required this.displayName,
@@ -148,6 +155,7 @@ class GameMeta {
     this.excludes             = const {},
     this.canBeSideGame        = false,
     this.allowsSideGames      = true,
+    this.capturesInScoreEntry = false,
   });
 
   /// True if this game can be played with exactly [n] real players.
@@ -246,8 +254,22 @@ const List<GameMeta> kGameCatalog = [
     // (no junk in that mode, since junk is entered hole-by-hole).
     canBeSideGame: true,
     // Skins CAN combine with Nassau or Sixes.  Only Points 5-3-1 is excluded
-    // because it completely owns the three-player entry model.
-    excludes    : {GameIds.points531},
+    // because it completely owns the three-player entry model.  Spots is
+    // excluded too — Skins has its own per-hole extras (junk).
+    excludes    : {GameIds.points531, GameIds.spots},
+  ),
+  GameMeta(
+    id          : GameIds.spots,
+    displayName : 'Spots',
+    casual      : true,
+    minPlayers  : 2,
+    maxPlayers  : 4,
+    // A capture add-on: a separate-payout side game whose per-hole tallies are
+    // entered by hand in score entry (one-putt, sandy, barky, …).
+    canBeSideGame       : true,
+    capturesInScoreEntry: true,
+    // Excludes Skins (junk is the Skins way to do per-hole extras); symmetric.
+    excludes    : {GameIds.skins, GameIds.points531},
   ),
   GameMeta(
     id          : GameIds.wolf,
@@ -537,6 +559,8 @@ List<GameMeta> sideGamesFor(String primaryId,
   return kGameCatalog.where((g) {
     if (!g.enabled || !g.canBeSideGame) return false;
     if (g.id == primaryId) return false;
+    // Honor mutual exclusion vs the primary (e.g. Spots ⊥ Skins).
+    if (!gamesCompatible(primaryId, g.id)) return false;
     if (g.acrossGroups) return multiGroup;     // round-wide pools only in multi-group
     return g.supportsSize(size);
   }).toList();

@@ -685,6 +685,8 @@ class _GameView extends StatelessWidget {
         return _LowNetView(data: data, playerOrder: playerOrder);
       case 'skins':
         return _ByGroupView(data: data, builder: _SkinsGroupCard.new);
+      case 'spots':
+        return _ByGroupView(data: data, builder: _SpotsGroupCard.new);
       case 'triple_cup':
         return _ByGroupView(data: data, builder: _TripleCupGroupCard.new);
       case 'multi_skins':
@@ -2675,6 +2677,60 @@ class _SkinsGroupCard extends StatelessWidget {
               participants: players,
             ),
           ],
+        ]),
+      ),
+    );
+  }
+}
+
+// ---- Spots leaderboard card (capture add-on, separate pot) ----
+
+class _SpotsGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _SpotsGroupCard({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = group['summary'] as Map<String, dynamic>? ?? {};
+    final players = (summary['players'] as List? ?? []).cast<Map<String, dynamic>>();
+    final money   = summary['money'] as Map<String, dynamic>? ?? {};
+    final total   = money['total_spots'] ?? 0;
+    final style   = summary['payout_style']?.toString() == 'pool'
+        ? 'Pool' : 'Pay around';
+    final status  = summary['status']?.toString() ?? 'pending';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Text('$total spot${total == 1 ? '' : 's'} · $style',
+                style: const TextStyle(fontSize: 12)),
+          ]),
+          const SizedBox(height: 2),
+          Text('Status: ${status.replaceAll('_', ' ')}',
+              style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          const Divider(height: 16),
+          ...players.map((p) {
+            final spots  = p['spots'] ?? 0;
+            final payout = p['payout'];
+            final payStr = payout != null
+                ? '\$${(payout as num).formatBet()}'
+                : '\$0.00';
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                Expanded(child: Text(p['name']?.toString() ?? '—')),
+                Text('$spots spot${spots == 1 ? '' : 's'}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(width: 12),
+                Text(payStr, style: const TextStyle(fontWeight: FontWeight.w500)),
+              ]),
+            );
+          }),
         ]),
       ),
     );

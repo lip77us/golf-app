@@ -1264,6 +1264,41 @@ class ApiClient {
     return SkinsSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  // ---- Spots ----
+
+  /// GET /api/foursomes/{id}/spots/
+  Future<SpotsSummary> getSpotsSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/spots/');
+    return SpotsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/spots/setup/
+  Future<SpotsSummary> postSpotsSetup(
+    int foursomeId, {
+    double? betUnit,
+    String  payoutStyle = 'pay_around',
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/spots/setup/', {
+      if (betUnit != null) 'bet_unit': betUnit.toStringAsFixed(2),
+      'payout_style': payoutStyle,
+    });
+    return SpotsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/spots/tally/ — upsert per-player counts for a hole
+  /// ([entries] = list of {player_id, count}; count=0 deletes).
+  Future<SpotsSummary> postSpotsTally(
+    int foursomeId, {
+    required int                    holeNumber,
+    required List<Map<String, int>> entries,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/spots/tally/', {
+      'hole_number': holeNumber,
+      'entries'    : entries,
+    });
+    return SpotsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Wolf ----
 
   /// GET /api/foursomes/{id}/wolf/

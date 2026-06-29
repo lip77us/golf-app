@@ -2387,6 +2387,112 @@ class SkinsSummary {
 }
 
 // ---------------------------------------------------------------------------
+// Spots (capture add-on — per-hole achievement tallies, separate pot)
+// ---------------------------------------------------------------------------
+
+class SpotsPlayerTotal {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final int    spots;
+  final double payout;   // net (pay-around) or pool share − ante
+
+  const SpotsPlayerTotal({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.spots,
+    required this.payout,
+  });
+
+  factory SpotsPlayerTotal.fromJson(Map<String, dynamic> j) => SpotsPlayerTotal(
+        playerId:  j['player_id'] as int,
+        name:      j['name']       as String? ?? '',
+        shortName: j['short_name'] as String? ?? '',
+        spots:     j['spots']      as int? ?? 0,
+        payout:    (j['payout']    as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+/// One player's spot count on a hole.
+class SpotsEntry {
+  final int    playerId;
+  final String shortName;
+  final int    count;
+
+  const SpotsEntry({
+    required this.playerId,
+    required this.shortName,
+    required this.count,
+  });
+
+  factory SpotsEntry.fromJson(Map<String, dynamic> j) => SpotsEntry(
+        playerId:  j['player_id']  as int,
+        shortName: j['short_name'] as String? ?? '',
+        count:     j['count']      as int? ?? 0,
+      );
+}
+
+class SpotsHole {
+  final int             hole;
+  final List<SpotsEntry> spots;
+  const SpotsHole({required this.hole, required this.spots});
+
+  factory SpotsHole.fromJson(Map<String, dynamic> j) => SpotsHole(
+        hole: j['hole'] as int? ?? 0,
+        spots: (j['spots'] as List? ?? [])
+            .map((e) => SpotsEntry.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// Full summary for a Spots game — mirrors the Python spots_summary() shape.
+class SpotsSummary {
+  final String status;        // 'pending' | 'in_progress' | 'complete'
+  final String payoutStyle;   // 'pay_around' | 'pool'
+  final List<SpotsPlayerTotal> players;
+  final List<SpotsHole>        holes;
+  final double betUnit;
+  final int    totalSpots;
+
+  const SpotsSummary({
+    required this.status,
+    required this.payoutStyle,
+    required this.players,
+    required this.holes,
+    required this.betUnit,
+    required this.totalSpots,
+  });
+
+  /// Count for a given player on a given hole (0 if none).
+  int countFor(int playerId, int hole) {
+    for (final h in holes) {
+      if (h.hole != hole) continue;
+      for (final e in h.spots) {
+        if (e.playerId == playerId) return e.count;
+      }
+    }
+    return 0;
+  }
+
+  factory SpotsSummary.fromJson(Map<String, dynamic> j) {
+    final money = j['money'] as Map<String, dynamic>? ?? {};
+    return SpotsSummary(
+      status:      j['status']       as String? ?? 'pending',
+      payoutStyle: j['payout_style'] as String? ?? 'pay_around',
+      players: (j['players'] as List? ?? [])
+          .map((p) => SpotsPlayerTotal.fromJson(p as Map<String, dynamic>))
+          .toList(),
+      holes: (j['holes'] as List? ?? [])
+          .map((h) => SpotsHole.fromJson(h as Map<String, dynamic>))
+          .toList(),
+      betUnit:    (money['bet_unit']    as num?)?.toDouble() ?? 1.0,
+      totalSpots: (money['total_spots'] as num?)?.toInt()    ?? 0,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Wolf
 // ---------------------------------------------------------------------------
 

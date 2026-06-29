@@ -252,6 +252,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         onSelected: (picked) => setState(() {
           if (picked) {
             _sideGames.add(meta.id);
+            // Drop any already-selected side game that conflicts with this one
+            // (e.g. Spots and Skins are mutually exclusive).
+            _sideGames.removeWhere(
+                (g) => g != meta.id && !gamesCompatible(meta.id, g));
           } else {
             _sideGames.remove(meta.id);
           }

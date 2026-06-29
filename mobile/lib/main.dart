@@ -30,6 +30,7 @@ import 'screens/vegas_setup_screen.dart';
 import 'screens/fourball_setup_screen.dart';
 import 'screens/points_531_screen.dart';
 import 'screens/skins_setup_screen.dart';
+import 'screens/spots_setup_screen.dart';
 import 'screens/skins_screen.dart';
 import 'screens/wolf_setup_screen.dart';
 import 'screens/wolf_screen.dart';
@@ -420,6 +421,12 @@ class _GolfAppState extends State<GolfApp> {
       case '/skins':
         final foursomeId = settings.arguments as int;
         return page((_) => SkinsScreen(foursomeId: foursomeId));
+      case '/spots-setup':
+        final a = settings.arguments;
+        final foursomeId  = a is Map ? a['id'] as int : a as int;
+        final returnToHub = a is Map && a['returnToHub'] == true;
+        return page((_) => SpotsSetupScreen(
+              foursomeId: foursomeId, returnToHub: returnToHub));
       case '/wolf-setup':
         return page((_) => WolfSetupScreen(
               foursomeId: _routeId(settings.arguments),

@@ -88,6 +88,7 @@ class RoundProvider extends ChangeNotifier {
   VegasSummary?    _vegasSummary;
   FourballSummary? _fourballSummary;
   SkinsSummary?    _skinsSummary;
+  SpotsSummary?    _spotsSummary;
   WolfSummary?     _wolfSummary;
   RabbitSummary?   _rabbitSummary;
   TripleCupSummary? _tripleCupSummary;
@@ -140,6 +141,7 @@ class RoundProvider extends ChangeNotifier {
   VegasSummary?     get vegasSummary        => _vegasSummary;
   FourballSummary?  get fourballSummary     => _fourballSummary;
   SkinsSummary?     get skinsSummary       => _skinsSummary;
+  SpotsSummary?     get spotsSummary       => _spotsSummary;
   WolfSummary?      get wolfSummary        => _wolfSummary;
   RabbitSummary?    get rabbitSummary      => _rabbitSummary;
   TripleCupSummary? get tripleCupSummary   => _tripleCupSummary;
@@ -187,6 +189,7 @@ class RoundProvider extends ChangeNotifier {
     _sixesSummary            = null;
     _points531Summary        = null;
     _skinsSummary            = null;
+    _spotsSummary            = null;
     _wolfSummary             = null;
     _rabbitSummary           = null;
     _tripleCupSummary        = null;
@@ -293,6 +296,7 @@ class RoundProvider extends ChangeNotifier {
       _scorecard        = null;
       _nassauSummary    = null;
       _skinsSummary     = null;
+      _spotsSummary     = null;
       _stablefordResult = null;
       _tripleCupSummary = null;
       _sixesSummary     = null;
@@ -693,6 +697,27 @@ class RoundProvider extends ChangeNotifier {
       _loadingSkins = false;
       notifyListeners();
     }
+  }
+
+  /// Load the Spots summary for the active foursome. Non-fatal on network
+  /// errors so the entry screen keeps working offline.
+  Future<void> loadSpots(int foursomeId) async {
+    try {
+      _spotsSummary = await _client.getSpotsSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadSpots error: $e');
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Replace the cached Spots summary directly (e.g. after a tally POST returns
+  /// a fresh one) so the capture strip repaints without a round-trip.
+  void setSpotsSummary(SpotsSummary summary) {
+    _spotsSummary = summary;
+    notifyListeners();
   }
 
   /// Authoritative per-hole + total Stableford points (config-aware) for the
