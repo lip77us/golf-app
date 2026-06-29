@@ -693,6 +693,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _Points531GroupCard.new);
       case 'vegas':
         return _ByGroupView(data: data, builder: _VegasGroupCard.new);
+      case 'fourball':
+        return _ByGroupView(data: data, builder: _FourballGroupCard.new);
       case 'wolf':
         return _ByGroupView(data: data, builder: _WolfGroupCard.new);
       case 'rabbit':
@@ -8423,6 +8425,7 @@ class _MyFoursomeTabView extends StatelessWidget {
     'quota_nassau': _QuotaNassauGroupCard.new,
     'skins'      : _SkinsGroupCard.new,
     'sixes'      : _SixesGroupCard.new,
+    'fourball'   : _FourballGroupCard.new,
   };
 
   @override
@@ -8476,6 +8479,240 @@ class _MyFoursomeTabView extends StatelessWidget {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Fourball — one card per foursome (the 2v2 best-ball match + money).
+// ---------------------------------------------------------------------------
+
+class _FourballGroupCard extends StatefulWidget {
+  final Map<String, dynamic> group;
+  const _FourballGroupCard({required this.group});
+
+  @override
+  State<_FourballGroupCard> createState() => _FourballGroupCardState();
+}
+
+class _FourballGroupCardState extends State<_FourballGroupCard> {
+  final ScrollController _scroll = ScrollController();
+  static const double _labelW = 96;
+  static const double _cellW  = 26;
+  static const double _rowH   = 24;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final summary = FourballSummary.fromJson(
+        (widget.group['summary'] as Map).cast<String, dynamic>());
+
+    final t1Color = GameColors.team1;
+    final t2Color = GameColors.team2;
+
+    String join(List<String> a, List<String> b) =>
+        (a.isNotEmpty ? a : b).join(' & ');
+    final n1 = join(summary.team1.players, summary.team1.shortNames);
+    final n2 = join(summary.team2.players, summary.team2.shortNames);
+    final s1 = join(summary.team1.shortNames, summary.team1.players);
+    final s2 = join(summary.team2.shortNames, summary.team2.players);
+
+    final margin  = summary.holesUp;          // + = team 1 up
+    final thru    = summary.holes.isEmpty
+        ? 0
+        : summary.holes.map((h) => h.hole).reduce((a, b) => a > b ? a : b);
+    final decided = summary.status == 'complete' || summary.status == 'halved';
+    final leaderColor = margin > 0
+        ? t1Color
+        : margin < 0 ? t2Color : theme.colorScheme.onSurface;
+    final leaderName = margin > 0 ? s1 : margin < 0 ? s2 : null;
+
+    // Auto-scroll the grid so the latest played hole is in view.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients && thru > 7) {
+        _scroll.jumpTo(((thru - 7) * _cellW)
+            .clamp(0.0, _scroll.position.maxScrollExtent));
+      }
+    });
+
+    String status;
+    if (summary.status == 'pending') {
+      status = 'Not started';
+    } else if (decided && margin == 0) {
+      status = 'All Square';
+    } else if (decided) {
+      final left = summary.finishedOnHole != null
+          ? 18 - summary.finishedOnHole!
+          : 0;
+      status = left > 0
+          ? '$leaderName wins ${margin.abs()}&$left'
+          : '$leaderName wins ${margin.abs()} up';
+    } else if (margin == 0) {
+      status = thru == 0 ? 'Not started' : 'All Square';
+    } else {
+      status = '$leaderName ${margin.abs()} UP';
+    }
+
+    // Provisionally award the current leader the per-player stake, mirroring
+    // the 18-Hole Match card (status-screen style).
+    final bet = summary.betAmount;
+    final money = margin == 0
+        ? (decided ? 'Halved — no money' : 'All square — no money')
+        : '$leaderName  +\$${bet.formatBet()} each';
+
+    final byHole = {for (final h in summary.holes) h.hole: h};
+
+    Widget cell(Widget child, {Color? bg, bool current = false}) => Container(
+          width: _cellW, height: _rowH,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: bg ??
+                (current
+                    ? theme.colorScheme.primaryContainer.withValues(alpha: .3)
+                    : null),
+          ),
+          child: child,
+        );
+
+    Widget labelCell(String text, {Color? color, FontStyle? style}) => SizedBox(
+          width: _labelW, height: _rowH,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(text,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: color, fontWeight: FontWeight.w600, fontStyle: style)),
+          ),
+        );
+
+    Widget scoreRow(String label, Color color, int? Function(FourballHole) get) =>
+        Row(children: [
+          labelCell(label, color: color),
+          for (var h = 1; h <= 18; h++)
+            cell(
+              Text(
+                byHole[h] != null && get(byHole[h]!) != null
+                    ? '${get(byHole[h]!)}'
+                    : '·',
+                style: theme.textTheme.labelSmall,
+              ),
+              current: h == thru,
+            ),
+        ]);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Header — team long names, team 1 vs team 2.
+          Center(
+            child: RichText(
+              textAlign: TextAlign.center,
+              text: TextSpan(
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                children: [
+                  TextSpan(text: n1, style: TextStyle(color: t1Color)),
+                  TextSpan(
+                      text: '  vs  ',
+                      style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.normal)),
+                  TextSpan(text: n2, style: TextStyle(color: t2Color)),
+                ],
+              ),
+            ),
+          ),
+          if (thru > 0 && thru < 18)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('Thru $thru',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              ),
+            ),
+          const Divider(height: 14),
+
+          // Match status + running money
+          Center(
+            child: Text(status,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(color: leaderColor, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 2),
+          Center(
+            child: Text(money,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: margin == 0
+                      ? theme.colorScheme.onSurfaceVariant
+                      : Colors.green.shade700,
+                  fontWeight: FontWeight.w600,
+                )),
+          ),
+          const SizedBox(height: 10),
+
+          // Per-hole grid — team best balls + won-by.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            controller: _scroll,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                labelCell('Hole'),
+                for (var h = 1; h <= 18; h++)
+                  cell(
+                    Text('$h',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    current: h == thru,
+                  ),
+              ]),
+              scoreRow(s1, t1Color, (d) => d.t1Net),
+              scoreRow(s2, t2Color, (d) => d.t2Net),
+              // Won-by — team colour each hole.
+              Row(children: [
+                labelCell('Won by', style: FontStyle.italic,
+                    color: theme.colorScheme.onSurfaceVariant),
+                for (var h = 1; h <= 18; h++)
+                  Builder(builder: (_) {
+                    final d = byHole[h];
+                    if (d == null) {
+                      return cell(Text('·', style: theme.textTheme.labelSmall));
+                    }
+                    if (d.winner == 'T1') {
+                      return cell(
+                        Text('T1',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.bold, color: t1Color)),
+                        bg: GameColors.team1Bg,
+                      );
+                    }
+                    if (d.winner == 'T2') {
+                      return cell(
+                        Text('T2',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.bold, color: t2Color)),
+                        bg: GameColors.team2Bg,
+                      );
+                    }
+                    return cell(
+                      Text('=',
+                          style: theme.textTheme.labelSmall
+                              ?.copyWith(color: Colors.grey.shade600)),
+                      bg: Colors.grey.shade100,
+                    );
+                  }),
+              ]),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Las Vegas — one card per foursome (team totals + money + per-hole numbers).

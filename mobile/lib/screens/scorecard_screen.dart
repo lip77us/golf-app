@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
@@ -140,6 +141,12 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       }
       if (games.contains('rabbit') && rp.rabbitSummary == null) {
         rp.loadRabbit(widget.foursomeId);
+      }
+      // Fourball carries its own handicap mode (often Strokes-Off) on the
+      // game, not the round — load it so the scorecard's stroke dots match
+      // the Fourball match instead of falling back to round-level net.
+      if (games.contains('fourball') && rp.fourballSummary == null) {
+        rp.loadFourball(widget.foursomeId);
       }
       // Triple Cup: load the summary so the scorecard's per-hole strokes come
       // from the backend's segment rules (alt-shot team average, fourball
@@ -304,7 +311,10 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
   /// low_net config → nassau → skins → sixes → points_531 → round-level.
   (String mode, int netPercent) _handicapParams(RoundProvider rp) {
     final games = rp.round?.activeGames ?? const [];
-    if ((games.contains('low_net_round') || games.contains('low_net')) &&
+    // Stroke dots follow the PRIMARY game's handicap; side games
+    // (skins/stableford/stroke play) only drive it when they are the primary.
+    final primary = primaryGameOf(games);
+    if ((primary == 'low_net_round' || primary == 'low_net') &&
         rp.lowNetConfig != null) {
       final mode = rp.lowNetConfig!['handicap_mode'] as String? ?? 'net';
       final pct  = rp.lowNetConfig!['net_percent']  as int?    ?? 100;
@@ -313,7 +323,7 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     if (games.contains('nassau') && rp.nassauSummary != null) {
       return (rp.nassauSummary!.handicapMode, rp.nassauSummary!.netPercent);
     }
-    if (games.contains('skins') && rp.skinsSummary != null) {
+    if (primary == 'skins' && rp.skinsSummary != null) {
       return (rp.skinsSummary!.handicapMode, rp.skinsSummary!.netPercent);
     }
     if (games.contains('sixes') && rp.sixesSummary != null) {
@@ -328,6 +338,11 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     }
     if (games.contains('rabbit') && rp.rabbitSummary != null) {
       return (rp.rabbitSummary!.handicapMode, rp.rabbitSummary!.netPercent);
+    }
+    // Fourball keeps its mode in its own summary (often Strokes-Off); without
+    // this the scorecard fell back to the round's mode and showed full-net dots.
+    if (games.contains('fourball') && rp.fourballSummary != null) {
+      return (rp.fourballSummary!.handicapMode, rp.fourballSummary!.netPercent);
     }
     // Triple Cup keeps its mode in its own summary (often Strokes-Off); without
     // this the scorecard fell back to the round's mode and showed full-net dots.

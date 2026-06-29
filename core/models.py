@@ -96,6 +96,16 @@ class GameType(models.TextChoices):
     # flips the opponents' digits or multiplies the points (per setup), and
     # tied holes can carry.
     VEGAS           = 'vegas',           'Las Vegas'
+    # Fourball: a 4-player casual game.  Two fixed teams of two play a
+    # single 18-hole 2v2 best-ball match — each player plays their own
+    # ball and the better (lower) of the two partners' scores is the
+    # team's score for the hole.  The match is decided by holes won /
+    # lost / halved (up/down, dormie/early-finish like Match Play).
+    # Handicap: Net (with %), Gross, or Strokes-Off-Low (with %).
+    # Settlement: a single match bet — the winning team collects, a
+    # halved match is a push.  Engine in services/fourball.py and
+    # games/models.py FourballGame/Team/HoleResult.
+    FOURBALL        = 'fourball',        'Fourball'
 
 
 class RoundStatus(models.TextChoices):

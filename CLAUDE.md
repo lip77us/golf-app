@@ -35,6 +35,84 @@ I have decided to put in three modes to operate on single foursome games.  You c
 - Per-player points game, requires exactly 3 players.
 - Setup screen: `/points-531-setup` → `Points531SetupScreen`; play screen: `/points-531` → `Points531Screen`
 
+### Casual game model: one primary + leaderboard-only side games — implemented (Phase 1)
+Casual rounds no longer use a flat multi-select with `excludes` mutual-exclusion.
+A casual round now has **exactly one PRIMARY game** (owns the score-entry screen)
+plus **zero or more SECONDARY "side games"** — pure leaderboard overlays computed
+from the entered scores, with **no effect on score entry** (they appear only as
+leaderboard tabs). Mirrors how tournaments separate a primary accumulator from
+per-round side games. **Mobile-only — no backend change** (`active_games` was
+already a flat set the backend computes + tabs for every entry; the primary is
+*derived*, not stored).
+- **Classification** lives in `game_catalog.dart` `GameMeta`: `canBeSideGame`
+  (true: `skins`, `stableford` — Phase 1) and `allowsSideGames` (false:
+  `sixes`, `vegas`, `nassau`, `triple_cup`, `multi_skins`). Helpers:
+  `primaryGameOf(active)` (the entry-owning game, or the highest-priority
+  side-eligible game for an overlay-only round), `sideGamesFor(primary, size,
+  multiGroup)`, `canBeSideGame()`, `allowsSideGames()`. The old
+  `excludes`/`applyGameToggle`/`gamesCompatible` are KEPT for the tournament
+  picker (unchanged); the primary/side model is casual-only.
+- **Picker** (`casual_round_screen.dart`): `String? _primaryGame` single-select
+  + `Set<String> _sideGames` multi-select (rendered only when the primary
+  `allowsSideGames`); `_activeGames` is now a computed getter
+  (`{primary, ...sides}`). Side games prune on primary/size change.
+- **Routing off the primary**: `create_casual_round.dart` `casualGameRoute`
+  routes off `primaryGameOf(...)` (no longer gated on a single game);
+  `round_screen.dart` `onEnterScores` gates the side-game (`skins`) branch to
+  primary-only so a configured primary + unconfigured side game goes straight to
+  `/score-entry` (was hijacked to `/skins-setup`). `_editConfigTarget` targets
+  the primary; new `_sideGamePerFoursomeTargets` adds a "Set up Skins" button
+  for side-game Skins (Stableford/Stroke Play already have hub buttons via
+  `_roundLevelEditTargets`).
+- **Entry suppression** (`score_entry_screen.dart`): `_GameStatusSection` gained
+  a `primaryGame` param; the Skins / Multi-Skins / Stroke-Play / Stableford
+  sections + the Stableford strip + the junk stepper now render only when that
+  game **is** the primary. `_handicapParams` (entry) and
+  `scorecard_screen.dart` `_handicapParams` resolve the stroke-dot handicap from
+  the **primary** game (side games keep their own mode server-side).
+- **Skins-as-side ⇒ no junk** (`skins_setup_screen.dart`): junk toggle hidden +
+  `allow_junk:false` forced when Skins is a side game (junk is a score-entry
+  modifier). `_isSideGame` = `primaryGameOf(round.active_games) != 'skins'`.
+- **Validated combo:** Fourball + Skins + Stableford. **Deferred to Phase 2:**
+  `low_net_round` (Stroke Play) as a side game (flag flip); cross-group
+  Multi-Skins linkage (feed a single foursome's scores into another group's
+  pool); broaden side games to the other allowed primaries. `match_18` allows
+  side games by default (flippable). Onboarding wizard already picks a single
+  game (= primary); tournament wizard untouched.
+
+### Fourball (`fourball`) — implemented
+- A single 18-hole **2v2 best-ball match play** game; requires exactly 4 players
+  (two fixed teams of two). The better of each team's two balls counts per hole;
+  the match is decided by holes up/down with dormie/early close-out ("3&2"), like
+  Match Play. Handicap: Net / Gross / Strokes-Off-Low, each with an adjustable %
+  for Net & SO. Settlement: a single **match bet** (winning team +bet per player,
+  losing team −bet, halve = push). Mutually exclusive with all other casual games.
+- Closely derivative: the match-play up/down logic mirrors `match_play.py` /
+  Triple Cup's `_score_fourball_or_singles`; the 2v2 fixed-team setup mirrors Vegas.
+- **Backend:** `GameType.FOURBALL`; `games.models` `FourballGame`/`FourballTeam`/
+  `FourballHoleResult` (migration `games/0045`, + `tournament/0041` refreshes the
+  `game_type` enum choices); `services/fourball.py` (`setup_fourball`,
+  `calculate_fourball`, `fourball_summary` — SO uses full-round SI allocation via
+  `scoring.handicap._strokes_on_hole`, no per-segment spreading); serializer
+  `FourballSetupSerializer`; views `FourballSetupView`/`FourballResultView`; routes
+  `foursomes/<id>/fourball/` + `…/setup/`; recalc dispatch + leaderboard block in
+  `api/views.py`; `fourball_game` added to `FoursomeSerializer.get_configured_games`.
+  Tests: `scoring/tests/test_fourball.py` (engine — best ball, margin, close-out,
+  halve, settlement, 3 handicap modes) + `api/test_fourball.py` (endpoints).
+- **Mobile:** catalog entry (`GameIds.fourball`, exactPlayers 4); Dart
+  `FourballSummary`/`FourballTeamInfo`/`FourballHole`/`FourballMoneyEntry`;
+  `client.getFourballSummary`/`postFourballSetup`; `RoundProvider.loadFourball` +
+  `fourballSummary`; setup screen `/fourball-setup` → `FourballSetupScreen`
+  (TeamSplitter4 + HandicapModeSelector + StakeField); leaderboard
+  `_FourballGroupCard`. Scores entered via the generic score-entry screen (no
+  dedicated play screen, same as Vegas); results show on the leaderboard card.
+  Routing wired in `create_casual_round.dart`, `round_screen.dart`,
+  `casual_rounds_list_screen.dart`, `main.dart`, and `score_entry_screen.dart`
+  (summary load + handicap-mode resolution).
+- **Deferred:** web watch-page renderer; per-hole match strip in score entry;
+  `seed_demo` round; mid-round withdrawal settlement (the universal unblocker
+  already lets a fourball round complete).
+
 ### Skins (`skins`) — **fully implemented, not yet tested in production**
 - 2–4 players; 1 skin per hole to best score; optional carryover on ties; optional junk skins (manual integer count per player per hole); pool-based settlement (bet_unit × n_players, split proportional to total_skins).
 - Handicap: Net / Gross / Strokes-Off-Low (all three supported).

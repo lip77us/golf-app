@@ -1388,6 +1388,140 @@ class SixesSummary {
 }
 
 // ---------------------------------------------------------------------------
+// Fourball (2v2 best-ball match play, single 18-hole match)
+// ---------------------------------------------------------------------------
+
+class FourballHole {
+  final int hole;
+  final int? t1Net;        // team 1 best ball
+  final int? t2Net;        // team 2 best ball
+  final String winner;     // 'T1' | 'T2' | 'Halved'
+  final int margin;        // running match margin (positive = team 1 up)
+
+  const FourballHole({
+    required this.hole,
+    this.t1Net,
+    this.t2Net,
+    required this.winner,
+    required this.margin,
+  });
+
+  factory FourballHole.fromJson(Map<String, dynamic> j) => FourballHole(
+        hole:   j['hole']   as int,
+        t1Net:  j['t1_net'] as int?,
+        t2Net:  j['t2_net'] as int?,
+        winner: j['winner'] as String? ?? 'Halved',
+        margin: j['margin'] as int? ?? 0,
+      );
+}
+
+class FourballTeamInfo {
+  final List<String> players;     // display names
+  final List<String> shortNames;
+  final List<int>    playerIds;
+  final bool         isWinner;
+
+  const FourballTeamInfo({
+    this.players    = const [],
+    this.shortNames = const [],
+    this.playerIds  = const [],
+    this.isWinner   = false,
+  });
+
+  factory FourballTeamInfo.fromJson(Map<String, dynamic> j) => FourballTeamInfo(
+        players:    List<String>.from(j['players']     as List? ?? []),
+        shortNames: List<String>.from(j['short_names'] as List? ?? []),
+        playerIds:  List<int>.from(j['player_ids']     as List? ?? []),
+        isWinner:   j['is_winner'] as bool? ?? false,
+      );
+
+  bool get hasPlayers => players.isNotEmpty;
+  String get label => players.join(' & ');
+}
+
+class FourballMoneyEntry {
+  final String name;
+  final double amount;
+  const FourballMoneyEntry({required this.name, required this.amount});
+  factory FourballMoneyEntry.fromJson(Map<String, dynamic> j) =>
+      FourballMoneyEntry(
+        name:   j['name']   as String? ?? '',
+        amount: (j['amount'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+class FourballSummary {
+  final String  status;           // pending | in_progress | complete | halved
+  final String? result;           // 'team1' | 'team2' | 'halved' | null
+  final String  resultLabel;      // '3&2', 'All Square', '—'
+  final int?    finishedOnHole;
+  final String  handicapMode;     // 'net' | 'gross' | 'strokes_off'
+  final int     netPercent;
+  final int     holesUp;          // positive = team 1 up
+  final String? leader;           // 'team1' | 'team2' | null
+  final FourballTeamInfo team1;
+  final FourballTeamInfo team2;
+  final List<FourballHole> holes;
+  final double  betAmount;
+  final List<FourballMoneyEntry> money;
+
+  const FourballSummary({
+    required this.status,
+    this.result,
+    required this.resultLabel,
+    this.finishedOnHole,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.holesUp,
+    this.leader,
+    required this.team1,
+    required this.team2,
+    required this.holes,
+    required this.betAmount,
+    required this.money,
+  });
+
+  bool get isNet        => handicapMode == 'net';
+  bool get isGross      => handicapMode == 'gross';
+  bool get isStrokesOff => handicapMode == 'strokes_off';
+
+  /// True once both teams have their two players assigned.
+  bool get isStarted => team1.hasPlayers && team2.hasPlayers;
+
+  /// 1 → team 1, 2 → team 2, null → not on either team.
+  int? teamOf(int playerId) {
+    if (team1.playerIds.contains(playerId)) return 1;
+    if (team2.playerIds.contains(playerId)) return 2;
+    return null;
+  }
+
+  factory FourballSummary.fromJson(Map<String, dynamic> j) {
+    final hcap    = j['handicap'] as Map<String, dynamic>? ?? {};
+    final overall = j['overall']  as Map<String, dynamic>? ?? {};
+    final moneyJ  = j['money']    as Map<String, dynamic>? ?? {};
+    return FourballSummary(
+      status:         j['status'] as String? ?? 'pending',
+      result:         j['result'] as String?,
+      resultLabel:    j['result_label'] as String? ?? '—',
+      finishedOnHole: j['finished_on_hole'] as int?,
+      handicapMode:   hcap['mode'] as String? ?? 'net',
+      netPercent:     hcap['net_percent'] as int? ?? 100,
+      holesUp:        overall['holes_up'] as int? ?? 0,
+      leader:         overall['leader'] as String?,
+      team1: FourballTeamInfo.fromJson(j['team1'] as Map<String, dynamic>? ?? {}),
+      team2: FourballTeamInfo.fromJson(j['team2'] as Map<String, dynamic>? ?? {}),
+      holes: (j['holes'] as List? ?? [])
+          .map((h) => FourballHole.fromJson(h as Map<String, dynamic>))
+          .toList(),
+      betAmount: (moneyJ['bet_amount'] as num?)?.toDouble() ?? 0.0,
+      money: (moneyJ['by_player'] as List? ?? [])
+          .map((m) => FourballMoneyEntry.fromJson(m as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Triple Cup (One Round Ryder Cup)
 // ---------------------------------------------------------------------------
 

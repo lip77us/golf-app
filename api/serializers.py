@@ -458,6 +458,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             ('nassau_game',        'nassau'),
             ('points_531_game',    'points_531'),
             ('vegas_game',         'vegas'),
+            ('fourball_game',      'fourball'),
             ('three_person_match', 'three_person_match'),
             ('wolf_game',          'wolf'),
             ('rabbit_game',        'rabbit'),
@@ -854,6 +855,38 @@ class Points531SetupSerializer(serializers.Serializer):
                             "Lower it to clip losses; winners reduce pro-rata."
                         ),
                     )
+
+
+class FourballSetupSerializer(serializers.Serializer):
+    """
+    Set up (or replace) the Fourball game for a foursome (2v2 best-ball
+    match play).  The two teams are fixed at setup; both player-id lists
+    must hold exactly two entries.
+
+    handicap_mode is 'net' | 'gross' | 'strokes_off'; net_percent scales the
+    handicap for 'net' and 'strokes_off' (ignored for 'gross').  bet_amount
+    is the single match stake per player; omit it to inherit the round's
+    bet_unit.
+    """
+    handicap_mode    = serializers.ChoiceField(
+                          choices=['net', 'gross', 'strokes_off'], default='net')
+    net_percent      = serializers.IntegerField(
+                          min_value=0, max_value=200, default=100)
+    bet_amount       = serializers.DecimalField(
+                          max_digits=8, decimal_places=2,
+                          required=False, allow_null=True, default=None,
+                          min_value=0)
+    team1_player_ids = serializers.ListField(
+                          child=serializers.IntegerField(), min_length=2, max_length=2)
+    team2_player_ids = serializers.ListField(
+                          child=serializers.IntegerField(), min_length=2, max_length=2)
+
+    def validate(self, data):
+        overlap = set(data['team1_player_ids']) & set(data['team2_player_ids'])
+        if overlap:
+            raise serializers.ValidationError(
+                "A player cannot be on both Fourball teams.")
+        return data
 
 
 class VegasSetupSerializer(serializers.Serializer):

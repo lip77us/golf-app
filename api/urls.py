@@ -101,6 +101,10 @@ urlpatterns = [
     path('foursomes/<int:pk>/vegas/',            views.VegasResultView.as_view(),     name='api-vegas-result'),
     path('foursomes/<int:pk>/vegas/setup/',      views.VegasSetupView.as_view(),      name='api-vegas-setup'),
 
+    # ---- Fourball (2v2 best-ball match play) ----
+    path('foursomes/<int:pk>/fourball/',         views.FourballResultView.as_view(),  name='api-fourball-result'),
+    path('foursomes/<int:pk>/fourball/setup/',   views.FourballSetupView.as_view(),   name='api-fourball-setup'),
+
     # ---- Skins ----
     path('foursomes/<int:pk>/skins/',        views.SkinsResultView.as_view(), name='api-skins-result'),
     path('foursomes/<int:pk>/skins/setup/',  views.SkinsSetupView.as_view(),  name='api-skins-setup'),

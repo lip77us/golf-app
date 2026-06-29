@@ -27,6 +27,7 @@ import 'screens/scorecard_screen.dart';
 import 'screens/sixes_setup_screen.dart';
 import 'screens/points_531_setup_screen.dart';
 import 'screens/vegas_setup_screen.dart';
+import 'screens/fourball_setup_screen.dart';
 import 'screens/points_531_screen.dart';
 import 'screens/skins_setup_screen.dart';
 import 'screens/skins_screen.dart';
@@ -396,6 +397,10 @@ class _GolfAppState extends State<GolfApp> {
               returnToHub: _routeReturnToHub(settings.arguments)));
       case '/vegas-setup':
         return page((_) => VegasSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
+      case '/fourball-setup':
+        return page((_) => FourballSetupScreen(
               foursomeId: _routeId(settings.arguments),
               returnToHub: _routeReturnToHub(settings.arguments)));
       case '/points-531':

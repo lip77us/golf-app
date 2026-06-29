@@ -86,6 +86,7 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?    _sixesSummary;
   Points531Summary? _points531Summary;
   VegasSummary?    _vegasSummary;
+  FourballSummary? _fourballSummary;
   SkinsSummary?    _skinsSummary;
   WolfSummary?     _wolfSummary;
   RabbitSummary?   _rabbitSummary;
@@ -110,6 +111,7 @@ class RoundProvider extends ChangeNotifier {
   bool    _loadingSixes       = false;
   bool    _loadingPoints531   = false;
   bool    _loadingVegas       = false;
+  bool    _loadingFourball    = false;
   bool    _loadingSkins       = false;
   bool    _loadingWolf        = false;
   bool    _loadingRabbit      = false;
@@ -136,6 +138,7 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?     get sixesSummary       => _sixesSummary;
   Points531Summary? get points531Summary   => _points531Summary;
   VegasSummary?     get vegasSummary        => _vegasSummary;
+  FourballSummary?  get fourballSummary     => _fourballSummary;
   SkinsSummary?     get skinsSummary       => _skinsSummary;
   WolfSummary?      get wolfSummary        => _wolfSummary;
   RabbitSummary?    get rabbitSummary      => _rabbitSummary;
@@ -159,6 +162,7 @@ class RoundProvider extends ChangeNotifier {
   bool              get loadingSixes       => _loadingSixes;
   bool              get loadingPoints531   => _loadingPoints531;
   bool              get loadingVegas       => _loadingVegas;
+  bool              get loadingFourball    => _loadingFourball;
   bool              get loadingSkins       => _loadingSkins;
   bool              get loadingWolf        => _loadingWolf;
   bool              get loadingRabbit      => _loadingRabbit;
@@ -574,6 +578,24 @@ class RoundProvider extends ChangeNotifier {
       debugPrint('loadVegas error: $e');
     } finally {
       _loadingVegas = false;
+      notifyListeners();
+    }
+  }
+
+  /// Load the Fourball match summary for [foursomeId].  Non-fatal — a failure
+  /// just leaves [fourballSummary] null; the screen still works for score
+  /// entry using the cached scorecard.
+  Future<void> loadFourball(int foursomeId) async {
+    _loadingFourball = true;
+    notifyListeners();
+    try {
+      _fourballSummary = await _client.getFourballSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep whatever we had.
+    } catch (e) {
+      debugPrint('loadFourball error: $e');
+    } finally {
+      _loadingFourball = false;
       notifyListeners();
     }
   }

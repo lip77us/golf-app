@@ -385,6 +385,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         rp.vegasSummary != null) {
       futures.add(rp.loadVegas(widget.foursomeId));
     }
+    if (games.contains('fourball') ||
+        configured.contains('fourball') ||
+        rp.fourballSummary != null) {
+      futures.add(rp.loadFourball(widget.foursomeId));
+    }
     // Stableford is round-scoped; refresh the authoritative per-hole points.
     if (games.contains('stableford') && rp.round != null) {
       futures.add(rp.loadStableford(rp.round!.id));
@@ -452,7 +457,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     RoundProvider rp,
     List<String> games,
   ) {
-    if ((games.contains('low_net_round') || games.contains('low_net')) &&
+    // The stroke-dot display follows the PRIMARY game's handicap. Side games
+    // (skins / stableford / stroke play) only drive it when they ARE the
+    // primary; otherwise they compute their own net server-side.
+    final primary = primaryGameOf(games);
+    if ((primary == 'low_net_round' || primary == 'low_net') &&
         rp.lowNetConfig != null) {
       final mode = rp.lowNetConfig!['handicap_mode'] as String? ?? 'net';
       final pct  = rp.lowNetConfig!['net_percent']  as int?    ?? 100;
@@ -461,7 +470,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (games.contains('nassau') && rp.nassauSummary != null) {
       return (rp.nassauSummary!.handicapMode, rp.nassauSummary!.netPercent);
     }
-    if (games.contains('skins') && rp.skinsSummary != null) {
+    if (primary == 'skins' && rp.skinsSummary != null) {
       return (rp.skinsSummary!.handicapMode, rp.skinsSummary!.netPercent);
     }
     if (games.contains('sixes') && rp.sixesSummary != null) {
@@ -476,6 +485,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     }
     if (games.contains('vegas') && rp.vegasSummary != null) {
       return (rp.vegasSummary!.handicapMode, rp.vegasSummary!.netPercent);
+    }
+    if (games.contains('fourball') && rp.fourballSummary != null) {
+      return (rp.fourballSummary!.handicapMode, rp.fourballSummary!.netPercent);
     }
     // Three-Person Match has its own per-game handicap mode (the user
     // picks it on the TPM setup screen).  Take precedence over Match
@@ -552,6 +564,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     Round? round,
     NassauSummary? nas, {
     TripleCupSummary? tripleCup,
+    FourballSummary? fourball,
   }) {
     final foursome = round?.foursomes
         .where((f) => f.id == widget.foursomeId)
@@ -597,6 +610,23 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         for (final m in members) {
           if (teamOf[m.player.id] == t) ordered.add(m);
         }
+      }
+      for (final m in members) {
+        if (!ordered.any((o) => o.player.id == m.player.id)) ordered.add(m);
+      }
+      return ordered;
+    }
+
+    // Fourball: group teammates together — Team 1 on top, Team 2 below.
+    if (fourball != null &&
+        (fourball.team1.hasPlayers || fourball.team2.hasPlayers)) {
+      final ordered = <Membership>[];
+      for (final id in [
+        ...fourball.team1.playerIds,
+        ...fourball.team2.playerIds,
+      ]) {
+        final m = members.where((m) => m.player.id == id).firstOrNull;
+        if (m != null) ordered.add(m);
       }
       for (final m in members) {
         if (!ordered.any((o) => o.player.id == m.player.id)) ordered.add(m);
@@ -1537,6 +1567,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                     tripleCup: games.contains('triple_cup')
                         ? rp.tripleCupSummary
                         : null,
+                    fourball: games.contains('fourball')
+                        ? rp.fourballSummary
+                        : null,
                   );
                   final par = sc.holeData(_selectedHole)?.par ?? 4;
                   _completeRound(context, players, par);
@@ -1595,7 +1628,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     List<String> games,
   ) {
     final players    = _orderedPlayers(sc, rp.round, nas,
-        tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null);
+        tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null,
+        fourball: games.contains('fourball') ? rp.fourballSummary : null);
     final scores     = _effectiveScores(sc, _selectedHole);
     final allDone    = _allScored(players, scores, _selectedHole);
     final isComplete = rp.round?.status == 'complete';
@@ -1815,14 +1849,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     if (sc == null) return const SizedBox.shrink();
 
     final players  = _orderedPlayers(sc, rp.round, nas,
-        tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null);
+        tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null,
+        fourball: games.contains('fourball') ? rp.fourballSummary : null);
     final merged   = _mergePending(rp.localPendingByHole, _pending);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
     final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
     final par      = holeData?.par ?? 4;
     final (hMode, hPct) = _handicapParams(rp, games);
-    final allowJunk = games.contains('skins') && (skins?.allowJunk ?? false);
+    // Junk is a score-entry modifier, so it's only available when Skins is the
+    // PRIMARY. As a side game, Skins computes from gross/net only (no junk).
+    final allowJunk = primaryGameOf(games) == 'skins' &&
+        (skins?.allowJunk ?? false);
 
     // Sixes extra-match team gating: auto-open the picker the first time the
     // user navigates into an extras hole that has no teams assigned yet.
@@ -1877,6 +1915,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 // P531 or other games and trigger the wrong SO algorithm.
                 sixesSummary:    games.contains('sixes')      ? rp.sixesSummary    : null,
                 vegasSummary:    games.contains('vegas')      ? rp.vegasSummary    : null,
+                fourballSummary: games.contains('fourball')   ? rp.fourballSummary : null,
                 tripleCupSummary: games.contains('triple_cup') ? rp.tripleCupSummary : null,
                 points531Summary: games.contains('points_531') ? rp.points531Summary : null,
                 // Gate on match play / cup singles being active so stale
@@ -1944,9 +1983,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 phantomInit: rp.phantomInitFor(widget.foursomeId),
               ),
 
-              // Stableford running-points band — sits between the score-entry
-              // box and the points table below.
-              if (games.contains('stableford') && rp.stablefordResult != null)
+              // Stableford running-points band — only when Stableford is the
+              // primary (as a side game it shows on the leaderboard, not here).
+              if (primaryGameOf(games) == 'stableford' &&
+                  rp.stablefordResult != null)
                 _StablefordStrip(
                   result:      rp.stablefordResult!,
                   currentHole: _selectedHole,
@@ -1956,11 +1996,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
               // Game status cards
               _GameStatusSection(
                 games:                   games,
+                primaryGame:             primaryGameOf(games),
                 nassau:                  nas,
                 skins:                   skins,
                 multiSkins:              games.contains('multi_skins')       ? rp.multiSkinsSummary         : null,
                 sixesSummary:            games.contains('sixes')             ? rp.sixesSummary              : null,
                 vegasSummary:            games.contains('vegas')             ? rp.vegasSummary              : null,
+                fourballSummary:         games.contains('fourball')          ? rp.fourballSummary           : null,
                 tripleCupSummary:        games.contains('triple_cup')        ? rp.tripleCupSummary          : null,
                 points531Summary:        games.contains('points_531')        ? rp.points531Summary           : null,
                 // Gate on match play / cup singles being active so stale
@@ -2122,6 +2164,7 @@ class _HoleScoreCard extends StatelessWidget {
   final SkinsSummary?           skins;
   final SixesSummary?           sixesSummary;
   final VegasSummary?           vegasSummary;
+  final FourballSummary?        fourballSummary;
   final TripleCupSummary?       tripleCupSummary;
   final Points531Summary?       points531Summary;
   final String                  handicapMode;
@@ -2172,6 +2215,7 @@ class _HoleScoreCard extends StatelessWidget {
     required this.skins,
     this.sixesSummary,
     this.vegasSummary,
+    this.fourballSummary,
     this.tripleCupSummary,
     this.points531Summary,
     this.matchPlayData,
@@ -2276,6 +2320,13 @@ class _HoleScoreCard extends StatelessWidget {
     final vg = vegasSummary;
     if (vg != null) {
       final t = vg.teamOf(m.player.id);
+      if (t == 1) return GameColors.team1;
+      if (t == 2) return GameColors.team2;
+    }
+    // Fourball: fixed 2v2 teams → blue (team 1) / orange (team 2).
+    final fb = fourballSummary;
+    if (fb != null) {
+      final t = fb.teamOf(m.player.id);
       if (t == 1) return GameColors.team1;
       if (t == 2) return GameColors.team2;
     }
@@ -4234,6 +4285,7 @@ class _GameStatusSection extends StatelessWidget {
   final MultiSkinsSummary?    multiSkins;
   final SixesSummary?         sixesSummary;
   final VegasSummary?         vegasSummary;
+  final FourballSummary?      fourballSummary;
   final TripleCupSummary?     tripleCupSummary;
   final Points531Summary?     points531Summary;
   final Map<String, dynamic>?       matchPlayData;
@@ -4265,6 +4317,10 @@ class _GameStatusSection extends StatelessWidget {
   final int                         strokePlayNetPercent;
   // Stableford — authoritative per-hole + total points (config-aware).
   final Map<String, dynamic>?       stablefordResult;
+  // The PRIMARY game. Side-game sections (skins/multi-skins/stroke-play/
+  // stableford) render in entry ONLY when they are the primary; as side games
+  // they live on the leaderboard, not here.
+  final String?                     primaryGame;
 
   const _GameStatusSection({
     required this.games,
@@ -4273,6 +4329,7 @@ class _GameStatusSection extends StatelessWidget {
     this.multiSkins,
     required this.sixesSummary,
     this.vegasSummary,
+    this.fourballSummary,
     this.tripleCupSummary,
     this.points531Summary,
     required this.matchPlayData,
@@ -4297,6 +4354,7 @@ class _GameStatusSection extends StatelessWidget {
     this.strokePlayHandicapMode = 'net',
     this.strokePlayNetPercent   = 100,
     this.stablefordResult,
+    this.primaryGame,
   });
 
   @override
@@ -4324,8 +4382,9 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
-        // Skins standings
-        if (games.contains('skins')) ...[
+        // Skins standings — only when Skins is the primary (as a side game it
+        // shows on the leaderboard, not during entry).
+        if (primaryGame == 'skins') ...[
           if (skins != null)
             _SkinsStandingsCard(skins: skins!, currentHole: currentHole)
           else if (loadingSkins)
@@ -4338,8 +4397,9 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
-        // Multi-Group Skins standings (round-level pool across foursomes)
-        if (games.contains('multi_skins')) ...[
+        // Multi-Group Skins standings (round-level pool across foursomes) —
+        // only when it's the primary (a side game shows on the leaderboard).
+        if (primaryGame == 'multi_skins') ...[
           if (multiSkins != null)
             _MultiSkinsStandingsCard(summary: multiSkins!)
           else if (loadingMultiSkins)
@@ -4424,8 +4484,26 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
+        // Fourball — match status card + per-hole progress grid.
+        if (games.contains('fourball') && fourballSummary != null) ...[
+          _FourballStatusCard(
+            summary:     fourballSummary!,
+            currentHole: currentHole,
+          ),
+          const SizedBox(height: 8),
+          _FourballProgressGrid(
+            summary:     fourballSummary!,
+            players:     players,
+            scorecard:   scorecard,
+            currentHole: currentHole,
+            onTapHole:   onTapHole,
+          ),
+          const SizedBox(height: 12),
+        ],
+
         // Stroke Play — per-player net scores grid (no winner row).
-        if (games.contains('low_net_round')) ...[
+        // Only when it's the primary (a side game shows on the leaderboard).
+        if (primaryGame == 'low_net_round') ...[
           _StrokePlayProgressGrid(
             players:      players,
             scorecard:    scorecard,
@@ -4438,7 +4516,8 @@ class _GameStatusSection extends StatelessWidget {
         ],
 
         // Stableford — per-player per-hole points grid + running total.
-        if (games.contains('stableford') && stablefordResult != null) ...[
+        // Only when it's the primary (a side game shows on the leaderboard).
+        if (primaryGame == 'stableford' && stablefordResult != null) ...[
           _StablefordProgressGrid(
             players:     players,
             scorecard:   scorecard,
@@ -5428,6 +5507,291 @@ class _GridPlayerRow extends StatelessWidget {
           ),
         ),
     ]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fourball per-hole progress grid — modelled on _NassauProgressGrid.  Shows
+// hole #, par, the four players (grouped + tinted by team), and a "Won by"
+// row.  Unlike Nassau, the score that WON each hole — the winning team's
+// best ball — is highlighted in that player's cell.
+// ---------------------------------------------------------------------------
+
+class _FourballProgressGrid extends StatefulWidget {
+  final FourballSummary  summary;
+  final List<Membership> players;
+  final Scorecard        scorecard;
+  final int              currentHole;
+  final void Function(int hole)? onTapHole;
+
+  const _FourballProgressGrid({
+    required this.summary,
+    required this.players,
+    required this.scorecard,
+    required this.currentHole,
+    this.onTapHole,
+  });
+
+  @override
+  State<_FourballProgressGrid> createState() => _FourballProgressGridState();
+}
+
+class _FourballProgressGridState extends State<_FourballProgressGrid> {
+  final ScrollController _scrollCtrl = ScrollController();
+  static const double _labelColW = 56.0;
+  static const double _cellW     = 34.0;
+  static const double _rowH      = 28.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToHole(widget.currentHole));
+  }
+
+  @override
+  void didUpdateWidget(_FourballProgressGrid old) {
+    super.didUpdateWidget(old);
+    if (old.currentHole != widget.currentHole) {
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scrollToHole(widget.currentHole));
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToHole(int hole) {
+    if (!_scrollCtrl.hasClients) return;
+    final target = (_labelColW + (hole - 7) * _cellW)
+        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
+    _scrollCtrl.animateTo(target,
+        duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+  }
+
+  // Strokes this player gets on hole [h] under the match's handicap mode —
+  // mirrors services/fourball.py so the dots + nets match the calculator.
+  int _strokesOnHoleFor(Membership m, int h) {
+    final s = widget.summary;
+    if (s.isGross) return 0;
+    final hole  = widget.scorecard.holeData(h);
+    if (hole == null) return 0;
+    final entry = hole.scoreFor(m.player.id);
+    final si    = entry?.strokeIndex ?? hole.strokeIndex;
+    if (s.isNet) {
+      if (s.netPercent == 100 && entry != null) return entry.handicapStrokes;
+      final effective = (m.playingHandicap * s.netPercent / 100.0).round();
+      return strokesOnHole(effective, si);
+    }
+    // strokes-off — anchored on the foursome low (full-round allocation).
+    if (widget.players.isEmpty) return 0;
+    final low = widget.players
+        .map((p) => p.playingHandicap)
+        .reduce((a, b) => a < b ? a : b);
+    final rawSo = m.playingHandicap - low;
+    if (rawSo <= 0) return 0;
+    final so = (rawSo * s.netPercent / 100.0).round();
+    if (so <= 0) return 0;
+    return strokesOnHole(so, si);
+  }
+
+  FourballHole? _holeResult(int h) =>
+      widget.summary.holes.where((x) => x.hole == h).firstOrNull;
+
+  /// True when [m]'s score on hole [h] is the winning team's best ball —
+  /// i.e. it's the score that actually won the hole.
+  bool _isWinningCell(Membership m, int h) {
+    final hr = _holeResult(h);
+    if (hr == null || hr.winner == 'Halved') return false;
+    final team = widget.summary.teamOf(m.player.id);
+    if (team == null) return false;
+    final winTeam = hr.winner == 'T1' ? 1 : 2;
+    if (team != winTeam) return false;
+    final winVal = winTeam == 1 ? hr.t1Net : hr.t2Net;
+    final gross = widget.scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
+    if (winVal == null || gross == null) return false;
+    return gross - _strokesOnHoleFor(m, h) == winVal;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme     = Theme.of(context);
+    final summary   = widget.summary;
+    final scorecard = widget.scorecard;
+    final current   = widget.currentHole;
+    final onTapHole = widget.onTapHole;
+    final holeRange = List.generate(18, (i) => i + 1);
+
+    Color teamColor(int? t) => t == 1
+        ? GameColors.team1
+        : t == 2 ? GameColors.team2 : theme.colorScheme.onSurface;
+
+    // Players ordered team 1 first, then team 2, so partners sit together.
+    final ordered = [...widget.players]..sort((a, b) =>
+        (summary.teamOf(a.player.id) ?? 9)
+            .compareTo(summary.teamOf(b.player.id) ?? 9));
+
+    Widget holeCell(int h, {required Widget child, Color? bg, bool? winBorder}) {
+      final isCurrent = h == current;
+      return GestureDetector(
+        onTap: onTapHole == null ? null : () => onTapHole!(h),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: _cellW, height: _rowH,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: bg ?? (isCurrent
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.35)
+                : null),
+            border: isCurrent
+                ? Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.6),
+                    width: 1.2)
+                : null,
+          ),
+          child: child,
+        ),
+      );
+    }
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Fourball progress',
+              style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+          const SizedBox(height: 4),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            controller: _scrollCtrl,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Hole numbers
+              Row(children: [
+                SizedBox(width: _labelColW, height: _rowH,
+                    child: const Align(alignment: Alignment.centerLeft,
+                        child: Text('Hole',
+                            style: TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.bold)))),
+                for (final h in holeRange)
+                  holeCell(h, child: Text('$h',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold))),
+              ]),
+              // Par
+              Row(children: [
+                SizedBox(width: _labelColW, height: _rowH,
+                    child: Align(alignment: Alignment.centerLeft,
+                        child: Text('Par',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(fontStyle: FontStyle.italic)))),
+                for (final h in holeRange)
+                  holeCell(h, child: Text('${scorecard.holeData(h)?.par ?? "-"}',
+                      style: theme.textTheme.bodySmall)),
+              ]),
+              Container(
+                height: 1,
+                width: _labelColW + _cellW * holeRange.length,
+                color: theme.colorScheme.outlineVariant,
+                margin: const EdgeInsets.symmetric(vertical: 2),
+              ),
+              // Player score rows — names tinted by team; the winning best
+              // ball each hole is highlighted in that player's cell.
+              for (final m in ordered)
+                Builder(builder: (_) {
+                  final tNum  = summary.teamOf(m.player.id);
+                  final tCol  = teamColor(tNum);
+                  return Row(children: [
+                    SizedBox(width: _labelColW, height: _rowH,
+                        child: Align(alignment: Alignment.centerLeft,
+                            child: Text(m.player.displayShort,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w600, color: tCol)))),
+                    for (final h in holeRange)
+                      Builder(builder: (_) {
+                        final hd    = scorecard.holeData(h);
+                        final gross = hd?.scoreFor(m.player.id)?.grossScore;
+                        final win   = _isWinningCell(m, h);
+                        final strokes = _strokesOnHoleFor(m, h);
+                        return holeCell(h,
+                            bg: win
+                                ? tCol.withValues(alpha: 0.18)
+                                : null,
+                            child: Stack(children: [
+                              Center(child: Text(
+                                  gross == null ? '–' : '$gross',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                      fontWeight:
+                                          win ? FontWeight.w800 : FontWeight.w600,
+                                      color: gross == null
+                                          ? theme.colorScheme.onSurfaceVariant
+                                          : win ? tCol : null))),
+                              if (strokes > 0)
+                                Positioned(top: 2, right: 2,
+                                    child: Row(mainAxisSize: MainAxisSize.min,
+                                        children: List.generate(
+                                            strokes.clamp(0, 2),
+                                            (i) => Container(
+                                                width: 4, height: 4,
+                                                margin: const EdgeInsets
+                                                    .only(left: 1),
+                                                decoration: BoxDecoration(
+                                                    color: theme
+                                                        .colorScheme.primary,
+                                                    shape: BoxShape.circle))))),
+                            ]));
+                      }),
+                  ]);
+                }),
+              Container(
+                height: 1,
+                width: _labelColW + _cellW * holeRange.length,
+                color: theme.colorScheme.outlineVariant,
+                margin: const EdgeInsets.symmetric(vertical: 2),
+              ),
+              // Won by — T1 / T2 / = per hole.
+              Row(children: [
+                SizedBox(width: _labelColW, height: _rowH,
+                    child: Align(alignment: Alignment.centerLeft,
+                        child: Text('Won by',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontStyle: FontStyle.italic)))),
+                for (final h in holeRange)
+                  Builder(builder: (_) {
+                    final hr = _holeResult(h);
+                    Color? bg; Color? fg; String label;
+                    if (hr == null) {
+                      label = '·';
+                    } else if (hr.winner == 'T1') {
+                      bg = GameColors.team1Bg; fg = GameColors.team1; label = 'T1';
+                    } else if (hr.winner == 'T2') {
+                      bg = GameColors.team2Bg; fg = GameColors.team2; label = 'T2';
+                    } else {
+                      bg = Colors.grey.shade100; fg = Colors.grey.shade600;
+                      label = '=';
+                    }
+                    return holeCell(h, bg: bg,
+                        child: Text(label,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: fg ?? theme.colorScheme.onSurfaceVariant)));
+                  }),
+              ]),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 }
 
@@ -9127,6 +9491,119 @@ class _VegasStatusCard extends StatelessWidget {
                 ),
             ]),
           ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Live Fourball match status during score entry: both teams on one line
+/// (long names, "vs." between, colored), then the running result led by the
+/// leading team's short names ("Paul & Mike 2 UP thru 5" / "All Square" /
+/// "Paul & Mike win 3&2").
+class _FourballStatusCard extends StatelessWidget {
+  final FourballSummary summary;
+  final int currentHole;
+  const _FourballStatusCard(
+      {required this.summary, required this.currentHole});
+
+  String _hcapLabel() {
+    if (summary.isGross) return 'Gross';
+    final pct = summary.netPercent == 100 ? '' : ' ${summary.netPercent}%';
+    return summary.isStrokesOff ? 'Strokes-off$pct' : 'Net$pct';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    Color sideColor(String? side) => side == 'team1'
+        ? GameColors.team1
+        : side == 'team2'
+            ? GameColors.team2
+            : theme.colorScheme.onSurfaceVariant;
+
+    String longNames(FourballTeamInfo t) =>
+        t.players.isNotEmpty ? t.players.join(' & ') : 'Team';
+    String shortNames(FourballTeamInfo t) =>
+        (t.shortNames.isNotEmpty ? t.shortNames : t.players).join(' & ');
+
+    final thru = summary.holes.isEmpty
+        ? 0
+        : summary.holes.map((h) => h.hole).reduce((a, b) => a > b ? a : b);
+    final margin    = summary.holesUp.abs();
+    final leadTeam  = summary.holesUp > 0 ? summary.team1 : summary.team2;
+    // Live status line, led by the leading/winning team's short names:
+    //   "Paul & Mike 2 UP thru 5" / "All Square thru 5" / "Paul & Mike win 3&2".
+    final String statusLine;
+    if (summary.status == 'complete') {
+      final closed = summary.finishedOnHole != null &&
+          summary.finishedOnHole! < 18;
+      statusLine = closed
+          ? '${shortNames(leadTeam)} win $margin&${18 - summary.finishedOnHole!}'
+          : '${shortNames(leadTeam)} win $margin UP';
+    } else if (summary.status == 'halved') {
+      statusLine = 'All Square';
+    } else if (thru == 0) {
+      statusLine = 'Not started';
+    } else if (summary.holesUp == 0) {
+      statusLine = 'All Square thru $thru';
+    } else {
+      statusLine = '${shortNames(leadTeam)} $margin UP thru $thru';
+    }
+    final leaderColor = sideColor(summary.leader);
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Fourball', style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Text(_hcapLabel(),
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ]),
+          const SizedBox(height: 6),
+          // Both teams on one line, long names, "vs." in between.
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                  text: longNames(summary.team1),
+                  style: TextStyle(
+                      color: GameColors.team1, fontWeight: FontWeight.w700)),
+              TextSpan(
+                  text: '  vs.  ',
+                  style: TextStyle(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500)),
+              TextSpan(
+                  text: longNames(summary.team2),
+                  style: TextStyle(
+                      color: GameColors.team2, fontWeight: FontWeight.w700)),
+            ]),
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 6),
+          Row(children: [
+            Icon(
+                summary.status == 'complete'
+                    ? Icons.flag_rounded
+                    : summary.status == 'halved'
+                        ? Icons.handshake_rounded
+                        : Icons.timelapse_rounded,
+                size: 16, color: leaderColor),
+            const SizedBox(width: 6),
+            Text(statusLine,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600, color: leaderColor)),
+          ]),
         ]),
       ),
     );

@@ -1309,6 +1309,33 @@ class ApiClient {
     return VegasSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  // ---- Fourball (2v2 best-ball match play) ----
+
+  /// GET /api/foursomes/{id}/fourball/
+  Future<FourballSummary> getFourballSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/fourball/');
+    return FourballSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/fourball/setup/ — fix the two teams + options.
+  Future<FourballSummary> postFourballSetup(
+    int foursomeId, {
+    required List<int> team1PlayerIds,
+    required List<int> team2PlayerIds,
+    String  handicapMode = 'net',
+    int     netPercent   = 100,
+    double? betAmount,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/fourball/setup/', {
+      'team1_player_ids': team1PlayerIds,
+      'team2_player_ids': team2PlayerIds,
+      'handicap_mode'   : handicapMode,
+      'net_percent'     : netPercent,
+      if (betAmount != null) 'bet_amount': betAmount.toStringAsFixed(2),
+    });
+    return FourballSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   /// POST /api/foursomes/{id}/wolf/order/
   ///
   /// Update only the rotation order (decisions/results survive).

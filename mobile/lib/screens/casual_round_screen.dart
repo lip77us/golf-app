@@ -43,19 +43,28 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   // single-foursome casual rounds ignore this entirely).  Defaults to 1.
   final Map<int, int> _playerGroups = {};
 
-  // Active games set — starts empty so the user must explicitly pick.
-  // The catalog drives which games are shown and which can combine.
-  final Set<String> _activeGames = {};
+  // Casual game selection: exactly one PRIMARY game (owns score entry) plus
+  // zero or more SECONDARY "side games" (leaderboard-only overlays). The
+  // catalog drives which games are primaries and which can be side games.
+  String? _primaryGame;
+  final Set<String> _sideGames = {};
+
+  /// Everything sent to the backend = primary + side games. The rest of the
+  /// screen (player-count hints, multi-group, round creation) reads this.
+  Set<String> get _activeGames => {
+        if (_primaryGame != null) _primaryGame!,
+        ..._sideGames,
+      };
 
   /// Group-size filter for the game picker: '2' | '3' | '4' | 'groups'.
   /// Defaults to a foursome (the common case — sees the most games); smaller
   /// groups tap their size to get the curated list of games that fit.
   String _sizeFilter = '4';
 
-  /// Games shown for the current group-size filter. Already-selected games
-  /// stay visible so changing the filter never hides what you've picked.
+  /// PRIMARY game choices for the current group-size filter. The currently
+  /// selected primary stays visible even if the size filter changes.
   List<GameMeta> get _filteredCasualGames => casualGames.where((m) {
-        if (_activeGames.contains(m.id)) return true;
+        if (m.id == _primaryGame) return true;
         if (_sizeFilter == 'groups') return m.acrossGroups;
         return !m.acrossGroups && m.supportsSize(int.parse(_sizeFilter));
       }).toList();
@@ -199,31 +208,44 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     return tees.isEmpty ? 0 : tees.first.id;
   }
 
-  /// Render one game chip, applying catalog combination rules on toggle.
-  /// Visual styling lives in [GameSelectableChip] (single source of
-  /// truth for the D-10 polished look — green fill, white bold text,
-  /// no checkmark icon).
-  Widget _buildGameChip(GameMeta meta) {
-    final selected = _activeGames.contains(meta.id);
-    return GameSelectableChip(
-      gameId:   meta.id,
-      selected: selected,
-      onSelected: (picked) {
-        setState(() {
-          if (picked) {
-            // Compute the new set BEFORE mutating _activeGames.
-            final updated = applyGameToggle(_activeGames, meta.id, true);
-            _activeGames.clear();
-            _activeGames.addAll(updated);
-          } else {
-            // Refuse to deselect the last remaining game.
-            if (_activeGames.length == 1 && selected) return;
-            _activeGames.remove(meta.id);
-          }
-        });
-      },
-    );
+  /// Side games eligible alongside the current primary + size filter.
+  List<GameMeta> get _eligibleSideGames {
+    final p = _primaryGame;
+    if (p == null) return const [];
+    final size = _sizeFilter == 'groups' ? 4 : int.parse(_sizeFilter);
+    return sideGamesFor(p, size: size, multiGroup: _sizeFilter == 'groups');
   }
+
+  /// Pick (or re-pick) the PRIMARY game and prune any side games that are no
+  /// longer valid for it.
+  void _setPrimary(String id) {
+    setState(() {
+      _primaryGame = id;
+      final eligible = _eligibleSideGames.map((m) => m.id).toSet();
+      _sideGames.removeWhere((g) => !eligible.contains(g));
+    });
+  }
+
+  /// One PRIMARY chip — single-select. Visual styling lives in
+  /// [GameSelectableChip] (green fill, white bold text).
+  Widget _buildPrimaryChip(GameMeta meta) => GameSelectableChip(
+        gameId:   meta.id,
+        selected: _primaryGame == meta.id,
+        onSelected: (_) => _setPrimary(meta.id),
+      );
+
+  /// One SIDE-GAME chip — toggle add/remove.
+  Widget _buildSideChip(GameMeta meta) => GameSelectableChip(
+        gameId:   meta.id,
+        selected: _sideGames.contains(meta.id),
+        onSelected: (picked) => setState(() {
+          if (picked) {
+            _sideGames.add(meta.id);
+          } else {
+            _sideGames.remove(meta.id);
+          }
+        }),
+      );
 
   /// Inline-create a login-less golfer during casual-round setup. Adds them to
   /// the roster and, if a course is already chosen, auto-selects them with their
@@ -308,9 +330,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       );
       return;
     }
-    if (_activeGames.isEmpty) {
+    if (_primaryGame == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one game.')),
+        const SnackBar(content: Text('Please pick a game.')),
       );
       return;
     }
@@ -421,7 +443,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   }
 
   Widget _buildNav() {
-    final canNext = _selectedCourse != null && _activeGames.isNotEmpty;
+    final canNext = _selectedCourse != null && _primaryGame != null;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -499,17 +521,45 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             ],
             selected: {_sizeFilter},
             showSelectedIcon: false,
-            onSelectionChanged: (s) => setState(() => _sizeFilter = s.first),
+            onSelectionChanged: (s) => setState(() {
+              _sizeFilter = s.first;
+              // Drop any side games that no longer fit the new size.
+              final eligible = _eligibleSideGames.map((m) => m.id).toSet();
+              _sideGames.removeWhere((g) => !eligible.contains(g));
+            }),
           ),
           const SizedBox(height: 12),
+          // Primary game — pick exactly one. It drives the score-entry screen.
           Wrap(
             spacing: 8,
             runSpacing: 4,
             children: [
               for (final meta in _filteredCasualGames)
-                _buildGameChip(meta),
+                _buildPrimaryChip(meta),
             ],
           ),
+          // Side games — leaderboard-only overlays, only when the primary
+          // supports them.
+          if (_primaryGame != null &&
+              allowsSideGames(_primaryGame!) &&
+              _eligibleSideGames.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text('Side games',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 2),
+            Text('Tracked on the leaderboard only — they don’t change scoring.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final meta in _eligibleSideGames)
+                  _buildSideChip(meta),
+              ],
+            ),
+          ],
           ], // ── end step 1
 
           // ── Step 2: players + tees ──

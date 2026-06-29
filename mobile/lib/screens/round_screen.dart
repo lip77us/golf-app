@@ -271,9 +271,16 @@ class _RoundScreenState extends State<RoundScreen> {
                         !fs.configuredGames.contains('vegas')) {
                       // Vegas needs team assignment + options.
                       route = '/vegas-setup';
+                    } else if (fsGames.contains('fourball') &&
+                        !fs.configuredGames.contains('fourball')) {
+                      // Fourball needs team assignment + handicap + stake.
+                      route = '/fourball-setup';
                     } else if (fsGames.contains('skins') &&
+                        primaryGameOf(fsGames) == 'skins' &&
                         !fs.configuredGames.contains('skins')) {
-                      // Skins needs handicap + carryover config.
+                      // Skins as the PRIMARY needs handicap + carryover config
+                      // before scoring. As a side game it's configured from the
+                      // hub and never gates Enter Scores.
                       route = '/skins-setup';
                     } else if (fsGames.contains('wolf') &&
                         !fs.configuredGames.contains('wolf')) {
@@ -705,18 +712,34 @@ List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
     'nassau':     '/nassau-setup',
     'points_531': '/points-531-setup',
     'vegas':      '/vegas-setup',
+    'fourball':   '/fourball-setup',
     'wolf':       '/wolf-setup',
     'rabbit':     '/rabbit-setup',
     'triple_cup': '/triple-cup-setup',
     'sixes':      '/sixes-setup',
   };
-  for (final entry in routes.entries) {
-    if (fsGames.contains(entry.key) &&
-        fs.configuredGames.contains(entry.key)) {
-      return (entry.value, {'id': fs.id, 'returnToHub': true});
-    }
+  // "Edit Configuration" targets the PRIMARY game only; side games get their
+  // own buttons (see _sideGamePerFoursomeTargets).
+  final primary = primaryGameOf(fsGames);
+  if (primary != null &&
+      routes.containsKey(primary) &&
+      fs.configuredGames.contains(primary)) {
+    return (routes[primary]!, {'id': fs.id, 'returnToHub': true});
   }
   return (null, null);
+}
+
+/// Per-foursome SIDE games that need their own setup button on the foursome
+/// card (the primary uses "Edit Configuration"; round-level side games like
+/// Stableford use _roundLevelEditTargets). Skins is the only per-foursome side
+/// game today. Shown whether or not it's been configured yet, since side-game
+/// Skins no longer gets configured via Enter Scores.
+List<(String, String)> _sideGamePerFoursomeTargets(Set<String> fsGames) {
+  final out = <(String, String)>[];
+  if (fsGames.contains('skins') && primaryGameOf(fsGames) != 'skins') {
+    out.add(('/skins-setup', 'Set up Skins'));
+  }
+  return out;
 }
 
 class _FoursomeCard extends StatelessWidget {
@@ -1432,6 +1455,25 @@ class _FoursomeCard extends StatelessWidget {
                   ),
                 );
               }),
+              // Per-foursome SIDE games (e.g. Skins running alongside a
+              // primary): their own setup button, since they no longer get
+              // configured through Enter Scores.  Setup takes the foursome id.
+              for (final t in _sideGamePerFoursomeTargets(
+                  {...roundActiveGames, ...foursome.activeGames}))
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).pushNamed(
+                        t.$1,
+                        arguments: {'id': foursome.id, 'returnToHub': true},
+                      ).then((_) => onGamesChanged()),
+                      icon: const Icon(Icons.tune, size: 18),
+                      label: Text(t.$2),
+                    ),
+                  ),
+                ),
               // Round-level casual games (Stroke Play, Stableford): on a
               // single-foursome casual round they appear here as bottom buttons
               // instead of a separate "Game Setup" section (that card is only

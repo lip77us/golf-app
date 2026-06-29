@@ -18,6 +18,7 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/stake_field.dart';
@@ -58,6 +59,14 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
   bool _betCtrlInitialized = false;
   /// True once a stake is entered or "no stakes" is chosen (gates Start).
   bool _stakeOk = false;
+
+  /// True when Skins is a SECONDARY side game (some other game owns entry).
+  /// Junk is a score-entry modifier, so it's unavailable in that case.
+  bool get _isSideGame {
+    final rp = context.read<RoundProvider>();
+    final games = rp.round?.activeGames ?? const <String>[];
+    return games.contains('skins') && primaryGameOf(games) != 'skins';
+  }
 
   bool    _loading  = true;
   bool    _starting = false;
@@ -165,7 +174,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
         handicapMode: _mode,
         netPercent:   _netPercent,
         carryover:    _carryover,
-        allowJunk:    _allowJunk,
+        allowJunk:    _isSideGame ? false : _allowJunk,
       );
 
       // Pre-load the Skins summary so the score-entry status widget
@@ -284,20 +293,24 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                     value: _carryover,
                     onChanged: (v) => setState(() => _carryover = v),
                   ),
-                  SwitchListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Junk skins'),
-                    subtitle: Text(
-                      _allowJunk
-                          ? 'Entry screen shows a junk counter per player per hole.'
-                          : 'Regular skins only — no junk.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant),
+                  // Junk is only available when Skins is the PRIMARY game —
+                  // it's entered hole-by-hole during scoring, which a side
+                  // game can't touch.
+                  if (!_isSideGame)
+                    SwitchListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Junk skins'),
+                      subtitle: Text(
+                        _allowJunk
+                            ? 'Entry screen shows a junk counter per player per hole.'
+                            : 'Regular skins only — no junk.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                      value: _allowJunk,
+                      onChanged: (v) => setState(() => _allowJunk = v),
                     ),
-                    value: _allowJunk,
-                    onChanged: (v) => setState(() => _allowJunk = v),
-                  ),
                 ],
               ),
             ),

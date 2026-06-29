@@ -49,20 +49,26 @@ class CasualRoundLaunch {
   Round round,
   Foursome? firstFs,
 ) {
-  if (activeGames.length != 1 || firstFs == null) return (null, null);
+  if (firstFs == null) return (null, null);
+  // Route to the PRIMARY game's setup — side games are configured later from
+  // the /round hub and don't drive entry.
+  final primary = primaryGameOf(activeGames);
+  if (primary == null) return (null, null);
   // returnToHub: after configuring, land on the /round launch page (Enter
   // Scores / Edit Tee Boxes / Edit Configuration) instead of jumping straight
   // into score entry.  Per-foursome games key off the foursome id, round-level
   // games off the round id.
   Object fsArg() => {'id': firstFs.id, 'returnToHub': true};
   Object roundArg() => {'id': round.id, 'returnToHub': true};
-  switch (activeGames.first) {
+  switch (primary) {
     case GameIds.sixes:
       return ('/sixes-setup', fsArg());
     case GameIds.points531:
       return ('/points-531-setup', fsArg());
     case GameIds.vegas:
       return ('/vegas-setup', fsArg());
+    case GameIds.fourball:
+      return ('/fourball-setup', fsArg());
     case GameIds.skins:
       return ('/skins-setup', fsArg());
     case GameIds.wolf:

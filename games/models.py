@@ -2494,3 +2494,103 @@ class VegasHoleResult(models.Model):
 
     def __str__(self):
         return f"Hole {self.hole_number} — {self.game}"
+
+
+# ---------------------------------------------------------------------------
+# FOURBALL (2v2 best-ball match play, single 18-hole match within a foursome)
+# ---------------------------------------------------------------------------
+
+class FourballGame(models.Model):
+    """
+    The Fourball game for one Foursome — a single 18-hole 2v2 best-ball
+    match between two fixed teams of two.
+
+    Each hole, every player plays their own ball; the team's score for the
+    hole is the BETTER (lower) of its two partners' scores (net / gross /
+    strokes-off depending on handicap_mode).  Lower team score wins the hole
+    (+1 up); a tie halves it.  The match closes out early once one team leads
+    by more holes than remain (dormie / "3&2"), exactly like Match Play.
+
+    Settlement is a single match bet: the winning team collects bet_amount
+    per player (each winner +bet_amount, each loser −bet_amount, zero-sum);
+    a halved match is a push.  bet_amount / handicap_mode / net_percent are
+    stored per-game so the match owns its own policy.
+    """
+    foursome      = models.OneToOneField(
+                        Foursome, on_delete=models.CASCADE,
+                        related_name='fourball_game',
+                    )
+    status        = models.CharField(
+                        max_length=20, choices=MatchStatus.choices,
+                        default=MatchStatus.PENDING,
+                    )
+    handicap_mode = models.CharField(
+                        max_length=20, choices=HandicapMode.choices,
+                        default=HandicapMode.NET,
+                        help_text="How each player's per-hole score is derived.",
+                    )
+    net_percent   = models.PositiveSmallIntegerField(
+                        default=100,
+                        validators=[MinValueValidator(0), MaxValueValidator(200)],
+                        help_text="Percent of handicap applied for net / strokes-off modes.",
+                    )
+    bet_amount    = models.DecimalField(
+                        max_digits=8, decimal_places=2, default=0,
+                        help_text="Match stake per player; winners +, losers −, halve = push.",
+                    )
+    result        = models.CharField(
+                        max_length=6, null=True, blank=True,
+                        choices=[('team1', 'Team 1'), ('team2', 'Team 2'),
+                                 ('halved', 'Halved')],
+                    )
+    holes_up_after_final = models.IntegerField(
+                        default=0,
+                        help_text="Final running margin (positive = Team 1 up).",
+                    )
+    finished_on_hole = models.PositiveSmallIntegerField(
+                        null=True, blank=True,
+                        help_text="Hole the match closed out on (null = went to 18).",
+                    )
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Fourball — Group {self.foursome.group_number}"
+
+
+class FourballTeam(models.Model):
+    """One of the two Fourball teams. team_number is 1 or 2; players fixed."""
+    game        = models.ForeignKey(
+                    FourballGame, on_delete=models.CASCADE, related_name='teams')
+    players     = models.ManyToManyField(Player, related_name='fourball_teams')
+    team_number = models.PositiveSmallIntegerField()   # 1 or 2
+    is_winner   = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('game', 'team_number')
+
+    def __str__(self):
+        return f"Team {self.team_number} — {self.game}"
+
+
+class FourballHoleResult(models.Model):
+    """
+    Per-hole Fourball result.  team{1,2}_net are the team best-balls used to
+    decide the hole; winning_team_number is 1, 2, or null on a halve.
+    holes_up_after is the running match margin after this hole (positive =
+    Team 1 up).
+    """
+    game                = models.ForeignKey(
+                            FourballGame, on_delete=models.CASCADE,
+                            related_name='hole_results')
+    hole_number         = models.PositiveSmallIntegerField()
+    team1_net           = models.IntegerField(null=True, blank=True)
+    team2_net           = models.IntegerField(null=True, blank=True)
+    winning_team_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    holes_up_after      = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        return f"Hole {self.hole_number} — {self.game}"

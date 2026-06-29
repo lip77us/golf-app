@@ -83,6 +83,7 @@ from .serializers import (
     Points531SetupSerializer, CasualRoundSummarySerializer,
     IrishRumbleSetupSerializer, LowNetSetupSerializer,
     ThreePersonMatchSetupSerializer, MessageSerializer, VegasSetupSerializer,
+    FourballSetupSerializer,
 )
 
 
@@ -168,6 +169,10 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'vegas' in active_games:
         from services.vegas import calculate_vegas
         calculate_vegas(foursome)
+
+    if 'fourball' in active_games:
+        from services.fourball import calculate_fourball
+        calculate_fourball(foursome)
 
     if 'wolf' in active_games:
         from services.wolf import calculate_wolf
@@ -750,6 +755,18 @@ def _build_leaderboard(round_obj: Round) -> dict:
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
                  'summary': vegas_summary(fs)}
                 for fs in foursomes
+            ],
+        }
+
+    if 'fourball' in active_games:
+        from services.fourball import fourball_summary
+        games['fourball'] = {
+            'label'   : 'Fourball',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': fourball_summary(fs)}
+                for fs in foursomes
+                if fourball_summary(fs) is not None
             ],
         }
 
@@ -4172,6 +4189,57 @@ class VegasResultView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.vegas import vegas_summary
         return Response(vegas_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Fourball (2v2 best-ball match play)
+# ---------------------------------------------------------------------------
+
+class FourballSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/fourball/setup/
+    Body: team1_player_ids[2], team2_player_ids[2], handicap_mode
+    ('net'|'gross'|'strokes_off'), net_percent, bet_amount?. Idempotent;
+    recalcs any scores already on file and returns the summary.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        ser = FourballSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.fourball import (
+            setup_fourball, calculate_fourball, fourball_summary,
+        )
+        try:
+            setup_fourball(
+                foursome,
+                team1_ids     = d['team1_player_ids'],
+                team2_ids     = d['team2_player_ids'],
+                handicap_mode = d.get('handicap_mode', 'net'),
+                net_percent   = d.get('net_percent', 100),
+                bet_amount    = d.get('bet_amount'),
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        calculate_fourball(foursome)
+        return Response(fourball_summary(foursome),
+                        status=status.HTTP_201_CREATED)
+
+
+class FourballResultView(APIView):
+    """GET /api/foursomes/{id}/fourball/"""
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.fourball import fourball_summary
+        summary = fourball_summary(foursome)
+        if summary is None:
+            return Response(
+                {'detail': 'No Fourball game set up for this foursome.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(summary)
 
 
 # ---------------------------------------------------------------------------
