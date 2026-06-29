@@ -312,6 +312,28 @@ INVITE_OG_IMAGE_URL = os.environ.get(
 GAME_SUGGESTION_WEBHOOK_URL = os.environ.get('GAME_SUGGESTION_WEBHOOK_URL', '')
 
 # ---------------------------------------------------------------------------
+# Transactional email (Resend SMTP).  Real SMTP only when an API key is set —
+# otherwise log to the console so dev/test never reaches out.  (Django's test
+# runner overrides EMAIL_BACKEND with the in-memory backend regardless.)
+# ---------------------------------------------------------------------------
+EMAIL_HOST          = os.environ.get('EMAIL_HOST', 'smtp.resend.com')
+EMAIL_PORT          = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST_USER     = os.environ.get('EMAIL_HOST_USER', 'resend')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')   # Resend API key
+EMAIL_USE_TLS       = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+DEFAULT_FROM_EMAIL  = os.environ.get('DEFAULT_FROM_EMAIL',
+                                     'Halved <noreply@halved.golf>')
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.smtp.EmailBackend' if EMAIL_HOST_PASSWORD
+    else 'django.core.mail.backends.console.EmailBackend',
+)
+
+# Where new game-suggestion notifications are emailed.  Empty = don't email
+# (the webhook / admin still capture it).
+GAME_SUGGESTION_NOTIFY_EMAIL = os.environ.get('GAME_SUGGESTION_NOTIFY_EMAIL', '')
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Client version compatibility
 # ---------------------------------------------------------------------------

@@ -98,3 +98,21 @@ class GameSuggestionNotifyTests(TestCase):
                        side_effect=OSError('boom')):
                 obj = GameSuggestion.objects.create(game_name='Skins+', notes='x')
         self.assertIsNotNone(obj.pk)
+
+    def test_email_sent_when_notify_address_set(self):
+        from django.core import mail
+        with self.settings(GAME_SUGGESTION_NOTIFY_EMAIL='info@halved.golf'):
+            GameSuggestion.objects.create(
+                game_name='Skins+', notes='x', contact_email='fan@example.com')
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ['info@halved.golf'])
+        self.assertIn('Skins+', msg.subject)
+        # Reply goes to the submitter.
+        self.assertEqual(msg.reply_to, ['fan@example.com'])
+
+    def test_no_email_when_notify_address_unset(self):
+        from django.core import mail
+        with self.settings(GAME_SUGGESTION_NOTIFY_EMAIL=''):
+            GameSuggestion.objects.create(game_name='Skins+', notes='x')
+        self.assertEqual(len(mail.outbox), 0)

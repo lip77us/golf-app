@@ -38,6 +38,8 @@ def notify_new_game_suggestion(sender, instance, created, **kwargs):
     )
     logger.info('[game-suggestion] %s (id=%s)', summary, instance.id)
 
+    _email_game_suggestion(instance, summary)
+
     url = getattr(settings, 'GAME_SUGGESTION_WEBHOOK_URL', '')
     if not url:
         return
@@ -59,3 +61,35 @@ def notify_new_game_suggestion(sender, instance, created, **kwargs):
         urllib.request.urlopen(req, timeout=5)
     except Exception:
         logger.exception('[game-suggestion] webhook POST failed')
+
+
+def _email_game_suggestion(instance, summary):
+    """Email the suggestion to GAME_SUGGESTION_NOTIFY_EMAIL (e.g. info@halved.golf)
+    when configured. Reply-To is the submitter so a reply reaches them directly.
+    Best-effort — a send failure never breaks the submission."""
+    to_addr = getattr(settings, 'GAME_SUGGESTION_NOTIFY_EMAIL', '')
+    if not to_addr:
+        return
+    try:
+        from django.core.mail import EmailMessage
+        body = '\n'.join([
+            summary, '',
+            f"Game name:   {instance.game_name or '—'}",
+            f"Players:     {instance.num_players or '—'}",
+            f"Rounds:      {instance.num_rounds or '—'}",
+            '', 'How each hole is scored:', instance.hole_scoring or '—',
+            '', 'How the betting works:', instance.betting or '—',
+            '', 'Notes:', instance.notes or '—',
+            '', f"From: {instance.submitter_name or 'someone'} "
+                f"<{instance.contact_email or 'no email'}>",
+            f"Suggestion #{instance.id}",
+        ])
+        EmailMessage(
+            subject=f"[Halved] New game suggestion: "
+                    f"{instance.game_name or 'untitled'}",
+            body=body,
+            to=[to_addr],
+            reply_to=[instance.contact_email] if instance.contact_email else None,
+        ).send(fail_silently=False)
+    except Exception:
+        logger.exception('[game-suggestion] notify email failed')
