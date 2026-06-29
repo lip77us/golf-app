@@ -1431,7 +1431,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
       String label = gameDisplayName(g);
       if (g == 'nassau' && nas != null) {
         final modeStr = _modeLabel(nas.handicapMode, nas.netPercent);
-        final base = nas.isEighteenHoleMatch ? '18 Hole Match' : label;
+        final base = nas.isEighteenHoleMatch ? 'Singles Match' : label;
         label = '$base ($modeStr)';
       } else if (g == 'skins' && sk != null) {
         final modeStr = _modeLabel(sk.handicapMode, sk.netPercent);
@@ -3231,7 +3231,7 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
               const SizedBox(height: 4),
               // The 18-Hole Match runs on Nassau (Overall bet only), so the
               // front/back/total framing doesn't apply — describe it as a match.
-              Text(isEighteenHoleMatch ? 'Match' : 'Nassau',
+              Text(isEighteenHoleMatch ? 'Singles Match' : 'Nassau',
                   style: theme.textTheme.labelLarge),
               row(
                 Icon(Icons.emoji_events, size: 22, color: scheme.primary),

@@ -285,9 +285,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     return Scaffold(
       appBar: AppBar(
           title: Text(_editing
-              ? (_overallOnly ? 'Edit 18-Hole Match' : 'Edit Nassau')
+              ? (_overallOnly ? 'Edit Singles Match' : 'Edit Nassau')
               : (_overallOnly
-                  ? '18-Hole Match — Setup'
+                  ? 'Singles Match — Setup'
                   : 'Nassau — Setup'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -495,7 +495,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             controller: _betCtrl,
             label: _overallOnly ? 'Stake' : 'Stake (main games)',
             helpText: _overallOnly
-                ? 'What the 18-hole match is worth.'
+                ? 'What the Singles Match is worth.'
                 : 'Each of the three standard Nassau games '
                   '(Front 9, Back 9, Overall) is worth this amount.',
             onChanged: (v) => setState(() => _stakeOk = v),
@@ -556,7 +556,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
               bet: double.tryParse(_betCtrl.text.trim()) ?? 0,
               multiple: _baseMultiple,
               detail: _overallOnly
-                  ? 'the 18-hole match'
+                  ? 'the match'
                   : 'lose all 3 (front, back, overall)',
             ),
           const SizedBox(height: 16),

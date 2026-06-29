@@ -230,7 +230,7 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id          : GameIds.match18,
-    displayName : '18-Hole Match',
+    displayName : 'Singles Match',
     casual      : true,
     // A straight heads-up 18-hole match — runs on Nassau (Overall bet only).
     sizes       : {2},

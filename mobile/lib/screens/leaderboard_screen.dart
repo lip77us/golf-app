@@ -568,18 +568,24 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     // Triple Cup is split into an Overview (cup score) + Details (matches).
     if (g == '__triple_cup_overview__') return 'Overview';
     if (g == 'triple_cup') return 'Details';
-    // An Overall-only Nassau is a straight 18-hole match — label it as such.
+    // A heads-up, Overall-only Nassau is a Singles Match — label it as such.
+    // (2-v-2 Overall-only is Fourball, not a Singles Match, so require one
+    // player per side.)
     if (g == 'nassau') {
       final groups =
           ((lb?.games['nassau']?.data as Map?)?['by_group'] as List?) ?? const [];
       final s = groups.isNotEmpty
           ? ((groups.first as Map?)?['summary'] as Map?)
           : null;
+      final teams = s?['teams'] as Map?;
+      final headsUp = (teams?['team1'] as List?)?.length == 1 &&
+          (teams?['team2'] as List?)?.length == 1;
       if (s != null &&
           s['play_front'] == false &&
           s['play_back'] == false &&
-          s['play_overall'] != false) {
-        return '18-Hole Match';
+          s['play_overall'] != false &&
+          headsUp) {
+        return 'Singles Match';
       }
     }
     if (g == '__championship__') {

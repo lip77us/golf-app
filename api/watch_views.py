@@ -724,10 +724,17 @@ def _render_casual_triple_cup(request, round_obj, token: str, tabs: list):
 
 
 def _nassau_is_match(round_obj) -> bool:
-    """True when the casual Nassau is Overall-only — a straight 18-hole match."""
+    """True when the casual Nassau is a Singles Match: Overall-only AND heads-up
+    (1-v-1). Overall-only distinguishes it from a Singles Nassau; the two-player
+    roster distinguishes it from Fourball (the 2-v-2 18-hole match)."""
     from games.models import NassauGame
-    g = NassauGame.objects.filter(foursome__round=round_obj).first()
-    return bool(g and not g.play_front and not g.play_back and g.play_overall)
+    g = (NassauGame.objects
+         .select_related('foursome')
+         .filter(foursome__round=round_obj).first())
+    if not (g and g.play_overall and not g.play_front and not g.play_back):
+        return False
+    real = sum(1 for m in g.foursome.memberships.all() if not m.player.is_phantom)
+    return real == 2
 
 def _has_casual_match_play(round_obj) -> bool:
     """A non-cup match-play bracket (single-elim or three-player) on any
@@ -953,7 +960,7 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
     if _has_casual_nassau(round_obj):
         tabs.append({
             'key': 'nassau',
-            'label': '18-Hole Match' if _nassau_is_match(round_obj) else 'Nassau',
+            'label': 'Singles Match' if _nassau_is_match(round_obj) else 'Nassau',
             'url': f'{base}?view=nassau',
             'active': current == 'nassau',
         })
