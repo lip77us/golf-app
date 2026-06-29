@@ -149,8 +149,7 @@ def spots_summary(foursome) -> dict:
                 net[pid] += bet_unit * (spots_on_hole[pid] * n - total_h)
         net = {pid: round(v, 2) for pid, v in net.items()}
 
-    short = {m.player_id: (m.player.display_short
-                           if hasattr(m.player, 'display_short') else m.player.name)
+    short = {m.player_id: (m.player.short_name or m.player.name)
              for m in real_members}
     players = sorted(
         ({'player_id': m.player_id,
