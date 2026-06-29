@@ -63,6 +63,52 @@ class SpotsEngineTests(TestCase):
         self.assertEqual(net['D'], 1.0)
         self.assertAlmostEqual(sum(net.values()), 0.0)
 
+    def test_pool_least_negative_wins_whole_pot(self):
+        # No positives → the least-negative player takes the whole pot.
+        setup_spots(self.fs, bet_unit=Decimal('10'), payout_style='pool')
+        tally_spots(self.fs, 1, [
+            {'player_id': self.pid['A'], 'count': -4},
+            {'player_id': self.pid['B'], 'count': -3},
+            {'player_id': self.pid['C'], 'count': -2},
+            {'player_id': self.pid['D'], 'count': -1},
+        ])
+        net = self._net(spots_summary(self.fs))
+        self.assertEqual(net['D'], 30.0)   # pot 40 − ante 10
+        self.assertEqual(net['A'], -10.0)
+        self.assertEqual(net['B'], -10.0)
+        self.assertEqual(net['C'], -10.0)
+        self.assertAlmostEqual(sum(net.values()), 0.0)
+
+    def test_pool_tie_on_least_negative_splits(self):
+        setup_spots(self.fs, bet_unit=Decimal('10'), payout_style='pool')
+        tally_spots(self.fs, 1, [
+            {'player_id': self.pid['A'], 'count': -4},
+            {'player_id': self.pid['B'], 'count': -3},
+            {'player_id': self.pid['C'], 'count': -2},
+            {'player_id': self.pid['D'], 'count': -2},
+        ])
+        net = self._net(spots_summary(self.fs))
+        self.assertEqual(net['C'], 10.0)   # share 20 − ante 10
+        self.assertEqual(net['D'], 10.0)
+        self.assertEqual(net['A'], -10.0)
+        self.assertEqual(net['B'], -10.0)
+
+    def test_pool_positives_split_proportionally_ignoring_negatives(self):
+        setup_spots(self.fs, bet_unit=Decimal('10'), payout_style='pool')
+        tally_spots(self.fs, 1, [
+            {'player_id': self.pid['A'], 'count': -4},
+            {'player_id': self.pid['B'], 'count': -3},
+            {'player_id': self.pid['C'], 'count': 1},
+            {'player_id': self.pid['D'], 'count': 3},
+        ])
+        net = self._net(spots_summary(self.fs))
+        # pot 40: C gets 1/4 (=10), D gets 3/4 (=30); ante 10 each.
+        self.assertEqual(net['C'], 0.0)
+        self.assertEqual(net['D'], 20.0)
+        self.assertEqual(net['A'], -10.0)
+        self.assertEqual(net['B'], -10.0)
+        self.assertAlmostEqual(sum(net.values()), 0.0)
+
     def test_withdrawn_player_excluded_from_hole(self):
         m = self.fs.memberships.get(player_id=self.pid['D'])
         m.withdrew_after_hole = 1

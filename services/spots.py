@@ -116,12 +116,24 @@ def spots_summary(foursome) -> dict:
     # ---- settlement ---------------------------------------------------------
     net = {m.player_id: 0.0 for m in real_members}
     if game.payout_style == 'pool':
+        # Everyone antes one bet_unit (the pot = each player's max loss). The
+        # pot is then handed to the "winners":
+        #   - if anyone is positive: split among positive players proportional
+        #     to their positive spots (negatives/zeros get nothing);
+        #   - else: the least-negative player(s) take it, split on a tie.
         ante = bet_unit
-        grand = sum(totals.values())
-        pot   = ante * len(real_members)
+        pot  = ante * len(real_members)
+        positives = {pid: c for pid, c in totals.items() if c > 0}
+        shares = {}
+        if positives:
+            spos = sum(positives.values())
+            shares = {pid: pot * (c / spos) for pid, c in positives.items()}
+        elif totals:
+            top = max(totals.values())
+            winners = [pid for pid, c in totals.items() if c == top]
+            shares = {pid: pot / len(winners) for pid in winners}
         for m in real_members:
-            share = pot * (totals[m.player_id] / grand) if grand else 0.0
-            net[m.player_id] = round(share - ante, 2)
+            net[m.player_id] = round(shares.get(m.player_id, 0.0) - ante, 2)
     else:  # pay_around
         for h, hrows in by_hole.items():
             active = roster.get(h, [])
