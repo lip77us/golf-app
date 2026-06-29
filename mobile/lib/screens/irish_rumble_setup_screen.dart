@@ -27,6 +27,7 @@ import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inherited_handicap_note.dart';
+import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
 import '../widgets/net_double_bogey_card.dart';
 
@@ -630,8 +631,18 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
     return fee * _numPlayers;
   }
 
-  double get _allocated =>
-      _payoutCtrls.fold(0.0, (s, c) => s + (double.tryParse(c.text.trim()) ?? 0.0));
+  // Casual Stroke Play keeps a fixed list of 4 payout controllers (parity with
+  // Stableford's PayoutConfigField) of which only the first `_payoutPlaces` are
+  // active; tournament rounds size the list to the place count. Bound the sum
+  // by `_payoutPlaces` so padded/stale casual slots don't count.
+  double get _allocated {
+    var s = 0.0;
+    final n = _payoutPlaces.clamp(0, _payoutCtrls.length);
+    for (var i = 0; i < n; i++) {
+      s += double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0;
+    }
+    return s;
+  }
 
   /// True when payouts balance the pool (or there is no pool to balance).
   /// Start gate: an entry fee entered, or "no stakes" ticked.
@@ -682,6 +693,23 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
         ctrls.add(_makePayoutCtrl(_fmtAmount(amt)));
       }
 
+      // Casual rounds use Stableford's PayoutConfigField, which expects a fixed
+      // list of 4 controllers and reads only the first `_payoutPlaces`. Pad to 4
+      // and default a fresh round to a single paid place holding the whole pool.
+      // Tournament rounds keep the dynamic 0..maxPlaces list (sized to payouts).
+      final isTourney = cfg['is_tournament_round'] as bool? ?? false;
+      int placesCount = ctrls.length;
+      if (!isTourney) {
+        placesCount = ctrls.isEmpty ? 1 : ctrls.length.clamp(1, 4);
+        while (ctrls.length > 4) ctrls.removeLast().dispose();
+        while (ctrls.length < 4) ctrls.add(_makePayoutCtrl('0'));
+        if (payouts.isEmpty) {
+          final pool = (cfg['entry_fee'] as num? ?? 5.0).toDouble() *
+              (cfg['num_players'] as int? ?? 0);
+          ctrls[0].text = '${pool.round()}';
+        }
+      }
+
       // Prize exclusions
       final excludedList = (cfg['excluded_player_ids'] as List? ?? [])
           .map((e) => e as int)
@@ -707,7 +735,7 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
         }
         _numPlayers        = cfg['num_players'] as int? ?? 0;
         _entryCtrl.text    = _fmtAmount(cfg['entry_fee'] as num? ?? 5.0);
-        _payoutPlaces      = ctrls.length;
+        _payoutPlaces      = placesCount;
         for (final c in _payoutCtrls) c.dispose();
         _payoutCtrls
           ..clear()
@@ -769,6 +797,39 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
     });
   }
 
+  // ── Casual payout helpers (parity with Stableford) ────────────────────────
+  // Casual Stroke Play keeps a fixed list of 4 controllers, so these never
+  // resize the list (unlike the tournament `_applyPreset` / `_setPayoutPlaces`).
+
+  /// Auto-suggest: distribute the pool across the current places using the same
+  /// fixed splits as Stableford / Match Play (suggestPayouts).
+  void _suggest() {
+    final n = _payoutPlaces.clamp(1, 4);
+    final amounts = suggestPayouts(_pool.round(), n);
+    setState(() {
+      for (var i = 0; i < 4 && i < _payoutCtrls.length; i++) {
+        _payoutCtrls[i].text = '${amounts[i]}';
+      }
+    });
+  }
+
+  /// Quick-fill from a preset split (Winner-takes-all / 60-40 / 60-30-10): set
+  /// places + amounts. The last place absorbs the rounding remainder.
+  void _applyPoolPresetCasual(List<double> ratios) {
+    final pool = _pool.round();
+    setState(() {
+      final n = ratios.length.clamp(1, 4);
+      _payoutPlaces = n;
+      var remaining = pool;
+      for (var i = 0; i < 4 && i < _payoutCtrls.length; i++) {
+        if (i >= n) { _payoutCtrls[i].text = '0'; continue; }
+        final amt = i == n - 1 ? remaining : (pool * ratios[i]).round();
+        remaining -= amt;
+        _payoutCtrls[i].text = '$amt';
+      }
+    });
+  }
+
   Future<void> _save() async {
     if (!_poolBalanced) {
       setState(() {
@@ -787,7 +848,10 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
       final rp       = context.read<RoundProvider>();
       final entryFee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
       final payouts  = <Map<String, dynamic>>[];
-      for (int i = 0; i < _payoutCtrls.length; i++) {
+      // Only the first `_payoutPlaces` controllers are active (casual pads the
+      // list to 4); tournament rounds size the list to the place count.
+      final placeCount = _payoutPlaces.clamp(0, _payoutCtrls.length);
+      for (int i = 0; i < placeCount; i++) {
         final amt = double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0;
         payouts.add({'place': i + 1, 'amount': amt});
       }
@@ -1107,61 +1171,77 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Places paid',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 8),
-                // Place selector: 0 … player count.  Paying more places than
-                // there are players makes no sense, so cap at the field size
-                // (casual is at most 4); fall back to 4 until the count loads.
-                LayoutBuilder(builder: (context, constraints) {
-                  final maxPlaces = _numPlayers > 0
-                      ? (_numPlayers > 5 ? 5 : _numPlayers)
-                      : 4;
-                  final segCount  = maxPlaces + 1;          // 0 … maxPlaces
-                  final segW = ((constraints.maxWidth - (segCount - 1))
-                          / segCount)
-                      .floorToDouble();
-                  return ToggleButtons(
-                    borderRadius: BorderRadius.circular(8),
-                    constraints: BoxConstraints.tightFor(
-                        width: segW, height: 40),
-                    isSelected:
-                        List.generate(segCount, (i) => i == _payoutPlaces),
-                    onPressed: _setPayoutPlaces,
-                    children: List.generate(segCount, (i) => Text('$i')),
-                  );
-                }),
-
-                // ── Suggested payout presets ─────────────────────────────
-                const SizedBox(height: 10),
-                _PayoutPresetsRow(onPreset: _applyPreset),
-
-                if (_payoutPlaces > 0) ...[
-                  const SizedBox(height: 14),
-                  ...List.generate(_payoutPlaces, (i) {
-                    final ordinal = ['1st', '2nd', '3rd', '4th', '5th'][i];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: GolfTextField(
-                        controller: _payoutCtrls[i],
-                        label: '$ordinal place payout (\$)',
-                        prefixIcon: Icons.emoji_events_outlined,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
-                      ),
+                // Casual Stroke Play uses the same payout config as Stableford
+                // (preset chips + Auto-suggest + 1–4 paid places + balance row).
+                // Tournament rounds keep the 0..field-size place selector.
+                if (!_isTournamentRound) ...[
+                  PayoutPresetsRow(onPreset: _applyPoolPresetCasual),
+                  const SizedBox(height: 8),
+                  PayoutConfigField(
+                    pool:                _pool.round(),
+                    numPayouts:          _payoutPlaces.clamp(1, 4),
+                    payoutCtrls:         _payoutCtrls,
+                    onNumPayoutsChanged: (n) => setState(() => _payoutPlaces = n),
+                    onPayoutChanged:     () => setState(() {}),
+                    onSuggest:           _suggest,
+                  ),
+                ] else ...[
+                  Text('Places paid',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                  const SizedBox(height: 8),
+                  // Place selector: 0 … player count.  Paying more places than
+                  // there are players makes no sense, so cap at the field size
+                  // (casual is at most 4); fall back to 4 until the count loads.
+                  LayoutBuilder(builder: (context, constraints) {
+                    final maxPlaces = _numPlayers > 0
+                        ? (_numPlayers > 5 ? 5 : _numPlayers)
+                        : 4;
+                    final segCount  = maxPlaces + 1;          // 0 … maxPlaces
+                    final segW = ((constraints.maxWidth - (segCount - 1))
+                            / segCount)
+                        .floorToDouble();
+                    return ToggleButtons(
+                      borderRadius: BorderRadius.circular(8),
+                      constraints: BoxConstraints.tightFor(
+                          width: segW, height: 40),
+                      isSelected:
+                          List.generate(segCount, (i) => i == _payoutPlaces),
+                      onPressed: _setPayoutPlaces,
+                      children: List.generate(segCount, (i) => Text('$i')),
                     );
                   }),
-                  const SizedBox(height: 4),
-                ],
-                // ── Pool balance status ──────────────────────────────────
-                if (_numPlayers > 0 && _pool > 0) ...[
-                  const SizedBox(height: 8),
-                  _PoolBalanceRow(
-                    pool:      _pool,
-                    allocated: _allocated,
-                    balanced:  _poolBalanced,
-                  ),
+
+                  // ── Suggested payout presets ───────────────────────────
+                  const SizedBox(height: 10),
+                  _PayoutPresetsRow(onPreset: _applyPreset),
+
+                  if (_payoutPlaces > 0) ...[
+                    const SizedBox(height: 14),
+                    ...List.generate(_payoutPlaces, (i) {
+                      final ordinal = ['1st', '2nd', '3rd', '4th', '5th'][i];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: GolfTextField(
+                          controller: _payoutCtrls[i],
+                          label: '$ordinal place payout (\$)',
+                          prefixIcon: Icons.emoji_events_outlined,
+                          keyboardType:
+                              const TextInputType.numberWithOptions(decimal: true),
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 4),
+                  ],
+                  // ── Pool balance status ────────────────────────────────
+                  if (_numPlayers > 0 && _pool > 0) ...[
+                    const SizedBox(height: 8),
+                    _PoolBalanceRow(
+                      pool:      _pool,
+                      allocated: _allocated,
+                      balanced:  _poolBalanced,
+                    ),
+                  ],
                 ],
               ],
             ),
