@@ -2693,6 +2693,7 @@ class _SpotsGroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary = group['summary'] as Map<String, dynamic>? ?? {};
     final players = (summary['players'] as List? ?? []).cast<Map<String, dynamic>>();
+    final holes   = (summary['holes']   as List? ?? []).cast<Map<String, dynamic>>();
     final money   = summary['money'] as Map<String, dynamic>? ?? {};
     final total   = money['total_spots'] ?? 0;
     final style   = summary['payout_style']?.toString() == 'pool'
@@ -2731,8 +2732,62 @@ class _SpotsGroupCard extends StatelessWidget {
               ]),
             );
           }),
+          // Where the spots were awarded / removed (sparse — only scored holes).
+          if (holes.isNotEmpty) ...[
+            const Divider(height: 16),
+            Text('SPOTS BY HOLE',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontSize: 10, letterSpacing: 0.5, fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            _SpotsHoleStrip(holes: holes),
+          ],
         ]),
       ),
+    );
+  }
+}
+
+/// Horizontally-scrollable per-hole strip for Spots — one chip per scored hole
+/// showing who earned (+) or lost (−) spots there. Mirrors the Vegas grid.
+class _SpotsHoleStrip extends StatelessWidget {
+  final List<Map<String, dynamic>> holes;
+  const _SpotsHoleStrip({required this.holes});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        for (final h in holes)
+          Container(
+            margin: const EdgeInsets.only(right: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Text('${h['hole']}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 2),
+              for (final e in (h['spots'] as List? ?? []).cast<Map<String, dynamic>>())
+                () {
+                  final c = (e['count'] as num?)?.toInt() ?? 0;
+                  return Text(
+                    '${e['short_name'] ?? '?'} ${c > 0 ? '+' : '−'}${c.abs()}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: c >= 0 ? GameColors.win : GameColors.loss,
+                        fontFeatures: const [FontFeature.tabularFigures()]),
+                  );
+                }(),
+            ]),
+          ),
+      ]),
     );
   }
 }
