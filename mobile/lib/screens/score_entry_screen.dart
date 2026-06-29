@@ -1926,6 +1926,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                         games.contains('singles_18'))
                     ? rp.matchPlayData : null,
                 isCupSingles:    games.contains('singles_nassau') || games.contains('singles_18'),
+                hasThreePersonMatch:
+                    games.contains('match_play') && rp.threePersonMatchSummary != null,
                 handicapMode:    hMode,
                 netPercent:      hPct,
                 allowJunk:       allowJunk,
@@ -2193,6 +2195,10 @@ class _HoleScoreCard extends StatelessWidget {
   /// activates immediately, even before matchPlayData has loaded.
   final bool                    isCupSingles;
 
+  /// True when this foursome is playing the 3-player variant of Mini Singles
+  /// Bracket (Three-Person Match) — drives the legend's bracket help text.
+  final bool                    hasThreePersonMatch;
+
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership)      onEditTap;
   final void Function(int pid)  onJunkAdd;
@@ -2220,6 +2226,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.points531Summary,
     this.matchPlayData,
     this.isCupSingles = false,
+    this.hasThreePersonMatch = false,
     required this.handicapMode,
     required this.netPercent,
     required this.allowJunk,
@@ -2866,6 +2873,12 @@ class _HoleScoreCard extends StatelessWidget {
                     hasSixes:        sixesSummary != null,
                     hasTripleCup:    tripleCupSummary != null,
                     hasPoints531:    points531Summary != null,
+                    hasVegas:        vegasSummary != null,
+                    // The 4-player bracket also feeds matchPlayData for cup
+                    // singles; isCupSingles tells those apart.
+                    hasMatchPlay:    matchPlayData != null && !isCupSingles,
+                    hasThreePersonMatch: hasThreePersonMatch,
+                    isEighteenHoleMatch: nassau?.isEighteenHoleMatch ?? false,
                     isCupSingles:    isCupSingles,
                     handicapMode:    handicapMode,
                   ),
@@ -3085,6 +3098,14 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
   final bool   hasSixes;
   final bool   hasTripleCup;
   final bool   hasPoints531;
+  final bool   hasVegas;
+  /// 4-player single-elimination bracket (Mini Singles Bracket / match_play).
+  final bool   hasMatchPlay;
+  /// 3-player variant reached via the same pick (Three-Person Match).
+  final bool   hasThreePersonMatch;
+  /// True for the heads-up 18-Hole Match (Nassau Overall-only): the hole
+  /// banner reads "Match: … wins hole" with no front/back/total split.
+  final bool   isEighteenHoleMatch;
   final bool   isCupSingles;
   final String handicapMode; // 'net' | 'gross' | 'strokes_off'
 
@@ -3094,6 +3115,10 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
     required this.hasSixes,
     required this.hasTripleCup,
     required this.hasPoints531,
+    required this.hasVegas,
+    required this.hasMatchPlay,
+    required this.hasThreePersonMatch,
+    required this.isEighteenHoleMatch,
     required this.isCupSingles,
     required this.handicapMode,
   });
@@ -3174,7 +3199,7 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
                 score: 3, par: 4, strokes: 0,
                 selected: false, width: 30, height: 30,
               ),
-              'Score box color',
+              'Score notation guide',
               'Standard scorecard notation, net to par (or gross if Net-style '
                   'entry is off).  Under par is red — a circle for birdie, a '
                   'double circle for eagle or better.  Par is plain black.  Over '
@@ -3195,7 +3220,7 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
               row(
                 pill('3', bg: scheme.primaryContainer, fg: scheme.onPrimaryContainer),
                 'Skin total',
-                'Cumulative skins won (regular + junk).  Drives the payout share.',
+                'Cumulative skins won (regular + junk) — your running tally toward the payout.',
               ),
             ],
 
@@ -3203,11 +3228,20 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
               const SizedBox(height: 4),
               const Divider(height: 1),
               const SizedBox(height: 4),
-              Text('Nassau', style: theme.textTheme.labelLarge),
+              // The 18-Hole Match runs on Nassau (Overall bet only), so the
+              // front/back/total framing doesn't apply — describe it as a match.
+              Text(isEighteenHoleMatch ? 'Match' : 'Nassau',
+                  style: theme.textTheme.labelLarge),
               row(
-                Icon(Icons.flag, size: 22, color: scheme.primary),
+                Icon(Icons.emoji_events, size: 22, color: scheme.primary),
                 'Hole outcome banner',
-                'Shows team that won the hole — front 9 / back 9 / total are tracked separately.',
+                isEighteenHoleMatch
+                    ? 'Colored strip under the hole names who won it (trophy) or '
+                        'shows a halve.  A single 18-hole match — no front / back '
+                        '/ total split.'
+                    : 'Colored strip under the hole names the team that won it '
+                        '(trophy) or shows a halve.  Front 9, back 9 and total '
+                        'are tracked as separate bets.',
               ),
             ],
 
@@ -3241,10 +3275,50 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
               const SizedBox(height: 4),
               Text('Triple Cup', style: theme.textTheme.labelLarge),
               row(
-                Icon(Icons.swap_horiz, size: 22, color: scheme.primary),
-                'Match rotation',
-                'Three matches running in parallel — partners rotate each segment so every pair plays together.',
+                Icon(Icons.layers, size: 22, color: scheme.primary),
+                'Segment format',
+                'Fixed teams (T1 vs T2).  The format changes every 6 holes — '
+                    'Fourball (best ball) 1–6, Foursomes (alt-shot) 7–12, '
+                    'Singles 13–18.  Partners stay the same throughout.',
               ),
+            ],
+
+            if (hasVegas) ...[
+              const SizedBox(height: 4),
+              const Divider(height: 1),
+              const SizedBox(height: 4),
+              Text('Las Vegas', style: theme.textTheme.labelLarge),
+              row(
+                Icon(Icons.casino, size: 22, color: scheme.primary),
+                'Team number',
+                'Each team’s two net scores combine into a two-digit number '
+                    '(low ball first — e.g. a 4 and a 5 make 45).  The gap '
+                    'between the teams’ numbers is the points swing on the hole.',
+              ),
+            ],
+
+            if (hasMatchPlay || hasThreePersonMatch) ...[
+              const SizedBox(height: 4),
+              const Divider(height: 1),
+              const SizedBox(height: 4),
+              Text('Mini Singles Bracket', style: theme.textTheme.labelLarge),
+              // A 3-player group plays the Three-Person variant; only a true
+              // 4-player group sees the front/back bracket text.
+              if (hasMatchPlay && !hasThreePersonMatch)
+                row(
+                  Icon(Icons.account_tree, size: 22, color: scheme.primary),
+                  'Bracket format',
+                  'Two 9-hole semifinals on the front 9; the winners meet in the '
+                      'final on the back 9, while the two losers play a 3rd–4th '
+                      'place consolation match.',
+                ),
+              if (hasThreePersonMatch)
+                row(
+                  Icon(Icons.account_tree, size: 22, color: scheme.primary),
+                  '3-player format',
+                  'Three-Person Match — Points 5-3-1 over the front 9 seeds the '
+                      'bracket, then the top two play a 1v1 match on the back 9.',
+                ),
             ],
           ]),
         ),
