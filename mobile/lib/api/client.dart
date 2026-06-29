@@ -686,6 +686,16 @@ class ApiClient {
         .toList();
   }
 
+  /// The account's most recently played distinct courses (up to 3, newest
+  /// first). Drives the course picker's recents quick-pick. Empty for a brand
+  /// new account with no rounds.
+  Future<List<CourseInfo>> getRecentCourses() async {
+    final data = await _get('/courses/recent/');
+    return (data as List)
+        .map((c) => CourseInfo.fromJson(c as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Search the shared course catalog (deduped across accounts). Fast + free —
   /// no GolfCourseAPI call. Includes courses any account has imported.
   Future<List<CatalogCourse>> searchCatalog(String query) async {

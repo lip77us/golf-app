@@ -1342,6 +1342,38 @@ class CourseListView(APIView):
         return Response(CourseSerializer(courses, many=True).data)
 
 
+class RecentCoursesView(APIView):
+    """
+    GET /api/courses/recent/
+
+    The account's most recently played DISTINCT courses (up to 3, newest
+    first). Drives the course picker's recents quick-pick — tap one to select
+    it instantly (it's already an account course). Empty list when the account
+    has no rounds yet.
+    """
+    def get(self, request):
+        from tournament.models import Round
+        recent_ids, seen = [], set()
+        for cid in (Round.objects
+                    .filter(account=request.user.account)
+                    .order_by('-date', '-created_at')
+                    .values_list('course_id', flat=True)):
+            if cid in seen:
+                continue
+            seen.add(cid)
+            recent_ids.append(cid)
+            if len(recent_ids) >= 3:
+                break
+        if not recent_ids:
+            return Response([])
+        # Re-sort the fetched rows back into recency order (the IN query won't
+        # preserve it).
+        by_id = {c.id: c for c in
+                 Course.objects.filter(id__in=recent_ids).prefetch_related('tees')}
+        ordered = [by_id[cid] for cid in recent_ids if cid in by_id]
+        return Response(CourseSerializer(ordered, many=True).data)
+
+
 class CourseDetailView(APIView):
     """GET / DELETE /api/courses/{id}/."""
 

@@ -30,6 +30,7 @@ urlpatterns = [
     path('notification-prefs/',  views.NotificationPrefsView.as_view(), name='api-notification-prefs'),
     path('players/<int:pk>/',  views.PlayerDetailView.as_view(), name='api-player-detail'),
     path('courses/',           views.CourseListView.as_view(),   name='api-courses'),
+    path('courses/recent/',    views.RecentCoursesView.as_view(), name='api-recent-courses'),
     path('courses/<int:pk>/',  views.CourseDetailView.as_view(), name='api-course-detail'),
     path('tees/',              views.TeeListView.as_view(),      name='api-tees'),
     path('tees/<int:pk>/',     views.TeeDetailView.as_view(),    name='api-tee-detail'),

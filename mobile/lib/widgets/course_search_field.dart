@@ -34,6 +34,7 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
   int _searchSeq = 0; // guards against out-of-order async results
 
   List<CourseInfo> _local = []; // account courses, for resolving 'account' hits
+  List<CourseInfo> _recents = []; // last few played, shown when the box is empty
   List<CourseHit> _hits = [];
   bool _searching = false;
   String? _addingKey; // the hit currently being added/imported
@@ -44,6 +45,14 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
     super.initState();
     _editing = widget.selected == null;
     _loadLocal();
+    _loadRecents();
+  }
+
+  Future<void> _loadRecents() async {
+    try {
+      final r = await context.read<AuthProvider>().client.getRecentCourses();
+      if (mounted) setState(() => _recents = r);
+    } catch (_) {/* degrade — just don't show the quick-pick */}
   }
 
   @override
@@ -199,6 +208,36 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
                 : null,
           ),
         ),
+        // Recents quick-pick: shown only while the box is empty; the first
+        // keystroke hides it and the live search list takes over the same slot.
+        if (_ctrl.text.trim().isEmpty && _hits.isEmpty && _recents.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.dividerColor),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: Text('Recent courses',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
+                for (final c in _recents)
+                  ListTile(
+                    dense: true,
+                    leading: Icon(Icons.history,
+                        size: 20, color: theme.colorScheme.onSurfaceVariant),
+                    title: Text(c.name),
+                    subtitle: c.location.isEmpty ? null : Text(c.location),
+                    onTap: _addingKey == null ? () => _commit(c) : null,
+                  ),
+              ],
+            ),
+          ),
         if (_hits.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 4),
