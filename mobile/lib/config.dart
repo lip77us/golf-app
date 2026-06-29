@@ -27,7 +27,7 @@ class Config {
   ///
   /// TODO: read this from pubspec at build time via package_info_plus
   /// so we stop having two sources of truth.
-  static const String appVersion = '2.1.0';
+  static const String appVersion = '2.2.0';
 
   /// Public App Store listing — the "Update" button on the blocking
   /// update-required screen sends users here.
