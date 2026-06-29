@@ -1009,7 +1009,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   void _adjustSpots(int pid, int hole, int delta) {
     final rp  = context.read<RoundProvider>();
     final cur = _spotsCount(pid, hole, rp.spotsSummary);
-    final next = (cur + delta).clamp(0, 20);
+    final next = (cur + delta).clamp(-20, 20);
     setState(() => (_spotsOverride[hole] ??= {})[pid] = next);
     // Coalesce rapid +/- into one POST (also avoids out-of-order responses).
     _spotsDebounce?.cancel();
@@ -6481,56 +6481,55 @@ class _SpotsCaptureStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final reals = players.where((m) => !m.player.isPhantom).toList();
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      shape: RoundedRectangleBorder(
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    Widget stepBtn(IconData icon, VoidCallback onTap) => InkResponse(
+          onTap: onTap,
+          radius: 18,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Icon(icon, size: 20, color: theme.colorScheme.primary),
+          ),
+        );
+
+    // A tight row per player: Name … [−  N spots  +].  Small footprint so the
+    // main game's standings stay visible; totals live on the leaderboard.
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 2, 12, 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: Column(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('SPOTS',
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: muted, letterSpacing: 0.5)),
+          ),
+          for (final m in reals)
             Row(children: [
-              Icon(Icons.star_outline, size: 16, color: theme.colorScheme.primary),
-              const SizedBox(width: 6),
-              Text('Spots — hole $hole',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.primary)),
+              Expanded(
+                child: Text(m.player.displayShort,
+                    style: theme.textTheme.bodyMedium,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              stepBtn(Icons.remove, () => onRemove(m.player.id)),
+              SizedBox(
+                width: 56,
+                child: Text(
+                  '${countFor(m.player.id)} '
+                  'spot${countFor(m.player.id).abs() == 1 ? '' : 's'}',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+              stepBtn(Icons.add, () => onAdd(m.player.id)),
             ]),
-            const SizedBox(height: 4),
-            for (final m in reals)
-              Row(children: [
-                Expanded(
-                  child: Text(m.player.displayShort,
-                      style: theme.textTheme.bodyMedium,
-                      overflow: TextOverflow.ellipsis),
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 22,
-                  onPressed: countFor(m.player.id) > 0
-                      ? () => onRemove(m.player.id) : null,
-                  icon: const Icon(Icons.remove_circle_outline),
-                ),
-                SizedBox(
-                  width: 22,
-                  child: Text('${countFor(m.player.id)}',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleMedium),
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 22,
-                  onPressed: () => onAdd(m.player.id),
-                  icon: const Icon(Icons.add_circle_outline),
-                ),
-              ]),
-          ],
-        ),
+        ],
       ),
     );
   }

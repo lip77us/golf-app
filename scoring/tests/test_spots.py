@@ -51,6 +51,18 @@ class SpotsEngineTests(TestCase):
         self.assertEqual(net['D'], -3.0)
         self.assertAlmostEqual(sum(net.values()), 0.0)
 
+    def test_negative_spot_reverses_payment(self):
+        # A negative spot = a penalty: the player pays everyone else.
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
+        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': -1}])
+        net = self._net(spots_summary(self.fs))
+        # A −1, n=4: A −3, others +1 each. Zero-sum.
+        self.assertEqual(net['A'], -3.0)
+        self.assertEqual(net['B'], 1.0)
+        self.assertEqual(net['C'], 1.0)
+        self.assertEqual(net['D'], 1.0)
+        self.assertAlmostEqual(sum(net.values()), 0.0)
+
     def test_withdrawn_player_excluded_from_hole(self):
         m = self.fs.memberships.get(player_id=self.pid['D'])
         m.withdrew_after_hole = 1

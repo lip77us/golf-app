@@ -54,7 +54,7 @@ def tally_spots(foursome, hole_number: int, entries: list) -> SpotsGame:
         pid = e.get('player_id')
         if pid not in real_ids:
             continue
-        count = max(0, int(e.get('count') or 0))
+        count = int(e.get('count') or 0)
         if count == 0:
             SpotsPlayerHoleResult.objects.filter(
                 game=game, player_id=pid, hole_number=hole_number).delete()
@@ -103,7 +103,7 @@ def spots_summary(foursome) -> dict:
     roster   = _active_roster_by_hole(real_members)
 
     rows = list(SpotsPlayerHoleResult.objects
-                .filter(game=game, count__gt=0)
+                .filter(game=game).exclude(count=0)
                 .select_related('player'))
 
     # count[pid] and per-hole tallies

@@ -472,9 +472,10 @@ class SpotsPlayerHoleResult(models.Model):
     hole_number = models.PositiveSmallIntegerField(
                     validators=[MinValueValidator(1), MaxValueValidator(18)]
                 )
-    count       = models.PositiveSmallIntegerField(
+    count       = models.SmallIntegerField(
                     default=0,
-                    help_text="Number of spots earned by this player on this hole.",
+                    help_text="Spots earned by this player on this hole "
+                              "(negative = a reverse spot / penalty).",
                 )
 
     class Meta:

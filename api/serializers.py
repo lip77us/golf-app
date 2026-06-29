@@ -1229,9 +1229,9 @@ class SpotsSetupSerializer(serializers.Serializer):
 
 
 class SpotsTallyEntrySerializer(serializers.Serializer):
-    """One player's spot count for a single hole."""
+    """One player's spot count for a single hole (negative = reverse spot)."""
     player_id = serializers.IntegerField()
-    count     = serializers.IntegerField(min_value=0, max_value=20)
+    count     = serializers.IntegerField(min_value=-20, max_value=20)
 
 
 class SpotsTallySerializer(serializers.Serializer):
