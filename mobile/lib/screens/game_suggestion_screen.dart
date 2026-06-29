@@ -61,10 +61,26 @@ class _GameSuggestionScreenState extends State<GameSuggestionScreen> {
         contactEmail: _email.text.trim(),
       );
       if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Thanks! Your game suggestion was sent.'),
-      ));
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.check_circle_outline),
+          title: const Text('Thank you!'),
+          content: const Text(
+            'Thanks for suggesting a game — we review every idea.\n\n'
+            'Want to add details or follow up? Email us anytime at '
+            'info@halved.golf.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close the form
     } catch (e) {
       if (mounted) setState(() { _error = e; _saving = false; });
     }

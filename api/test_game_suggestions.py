@@ -71,3 +71,30 @@ class GameSuggestionTests(TestCase):
         resp = APIClient().post(reverse('api-game-suggestions'),
                                 {'notes': 'hi'}, format='json')
         self.assertIn(resp.status_code, (401, 403))
+
+
+class GameSuggestionNotifyTests(TestCase):
+    """The post_save trigger POSTs to a webhook when configured, and is a no-op
+    (log only) when not — never breaking the insert either way."""
+
+    def test_webhook_fired_when_configured(self):
+        from unittest.mock import patch
+        with self.settings(GAME_SUGGESTION_WEBHOOK_URL='https://hook.example/x'):
+            with patch('core.signals.urllib.request.urlopen') as urlopen:
+                GameSuggestion.objects.create(game_name='Skins+', notes='x')
+        self.assertTrue(urlopen.called)
+
+    def test_no_webhook_when_unset(self):
+        from unittest.mock import patch
+        with self.settings(GAME_SUGGESTION_WEBHOOK_URL=''):
+            with patch('core.signals.urllib.request.urlopen') as urlopen:
+                GameSuggestion.objects.create(game_name='Skins+', notes='x')
+        self.assertFalse(urlopen.called)
+
+    def test_webhook_failure_does_not_break_insert(self):
+        from unittest.mock import patch
+        with self.settings(GAME_SUGGESTION_WEBHOOK_URL='https://hook.example/x'):
+            with patch('core.signals.urllib.request.urlopen',
+                       side_effect=OSError('boom')):
+                obj = GameSuggestion.objects.create(game_name='Skins+', notes='x')
+        self.assertIsNotNone(obj.pk)

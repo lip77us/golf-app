@@ -306,6 +306,11 @@ INVITE_OG_IMAGE_URL = os.environ.get(
     'https://lip77us.github.io/halved-legal/halved-icon.png',
 )
 
+# Optional incoming-webhook URL (Slack / Discord / Zapier / Make / …) pinged
+# when a user submits a new-game suggestion. Empty = log only (see
+# core/signals.py). A stop-gap notification until a server email backend exists.
+GAME_SUGGESTION_WEBHOOK_URL = os.environ.get('GAME_SUGGESTION_WEBHOOK_URL', '')
+
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Client version compatibility
