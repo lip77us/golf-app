@@ -78,7 +78,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// (see the size SegmentedButton handler), so it can't stay selected-but-
   /// invisible (e.g. an 18-Hole Match after switching off "2").
   List<GameMeta> get _filteredCasualGames =>
-      casualGames.where(_fitsSizeFilter).toList();
+      // Side-game-only add-ons (Spots) are never primary candidates — they
+      // appear only in the side-games list.
+      casualGames.where((m) => !m.sideGameOnly && _fitsSizeFilter(m)).toList();
 
   /// True when the user picked Multi-Group Skins — turns on the per-player
   /// Group dropdown and lets the foursome count exceed one.

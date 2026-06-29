@@ -143,7 +143,8 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
   List<GameMeta> _fittingGames() {
     final n = _selected.length;
     final list = casualGames
-        .where((m) => !m.acrossGroups && m.supportsSize(n))
+        // Side-game-only add-ons (Spots) aren't standalone games.
+        .where((m) => !m.sideGameOnly && !m.acrossGroups && m.supportsSize(n))
         .toList();
     list.sort((a, b) {
       if (a.id == GameIds.skins) return -1;

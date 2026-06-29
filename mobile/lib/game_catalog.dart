@@ -139,6 +139,11 @@ class GameMeta {
   /// entry even though it isn't the primary. (Spots; later Snake.)
   final bool capturesInScoreEntry;
 
+  /// CASUAL model: this game is ONLY ever an add-on — never offered as the
+  /// primary. (Spots/Snake: a pure side bet with no main game of its own.)
+  /// Skins/Stableford/Low Net are NOT side-game-only — they can be a primary too.
+  final bool sideGameOnly;
+
   const GameMeta({
     required this.id,
     required this.displayName,
@@ -156,6 +161,7 @@ class GameMeta {
     this.canBeSideGame        = false,
     this.allowsSideGames      = true,
     this.capturesInScoreEntry = false,
+    this.sideGameOnly         = false,
   });
 
   /// True if this game can be played with exactly [n] real players.
@@ -268,6 +274,7 @@ const List<GameMeta> kGameCatalog = [
     // entered by hand in score entry (one-putt, sandy, barky, …).
     canBeSideGame       : true,
     capturesInScoreEntry: true,
+    sideGameOnly        : true,   // never a primary — always an add-on
     // Excludes Skins (junk is the Skins way to do per-hole extras); symmetric.
     excludes    : {GameIds.skins, GameIds.points531},
   ),
@@ -540,15 +547,17 @@ const List<String> _kSidePrimaryPriority = [
 String? primaryGameOf(Iterable<String> active) {
   final list = active.toList();
   if (list.isEmpty) return null;
-  // Prefer an entry-owning game (not side-game-eligible).
+  bool sideOnly(String g) => _kGameById[g]?.sideGameOnly ?? false;
+  // Prefer an entry-owning game (not side-game-eligible). A side-game-only
+  // add-on (Spots) is never a primary.
   for (final g in list) {
-    if (!canBeSideGame(g)) return g;
+    if (!canBeSideGame(g) && !sideOnly(g)) return g;
   }
-  // All side-game types — pick by priority, else the first.
+  // All side-game types — pick by priority, else the first non-add-on.
   for (final p in _kSidePrimaryPriority) {
     if (list.contains(p)) return p;
   }
-  return list.first;
+  return list.firstWhere((g) => !sideOnly(g), orElse: () => list.first);
 }
 
 /// The side games selectable alongside [primaryId] for a [size]-player round.
