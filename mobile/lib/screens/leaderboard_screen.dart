@@ -781,6 +781,12 @@ class _StablefordView extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 8),
+        // Per-hole points detail — mirrors the "Stableford points" grid on the
+        // score-entry screen so the side-game leaderboard isn't too sparse.
+        if (results.isNotEmpty) ...[
+          _StablefordPointsGrid(results: results),
+          const SizedBox(height: 12),
+        ],
         ...results.map((e) {
           final r        = e as Map<String, dynamic>;
           final pts      = r['total_points'] as int? ?? 0;
@@ -822,6 +828,104 @@ class _StablefordView extends StatelessWidget {
           );
         }),
       ],
+    );
+  }
+}
+
+/// Per-hole Stableford points grid for the leaderboard — Hole / per-player
+/// points / running Total. Mirrors the score-entry "Stableford points" section
+/// (without the Par row / current-hole highlight, which need the live
+/// scorecard). Driven purely by the summary's `results` (each carries a
+/// `holes:{hole:pts}` map + `total_points`).
+class _StablefordPointsGrid extends StatelessWidget {
+  final List results;
+  const _StablefordPointsGrid({required this.results});
+
+  static const double _labelColW = 64.0;
+  static const double _cellW     = 28.0;
+  static const double _rowH      = 26.0;
+  static const double _totW      = 36.0;
+
+  String _short(String full) {
+    final first = full.trim().isEmpty ? '—' : full.trim().split(' ').first;
+    return first.length > 8 ? first.substring(0, 8) : first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme     = Theme.of(context);
+    final holeRange = List.generate(18, (i) => i + 1);
+
+    Widget cell(Widget child, double w) =>
+        SizedBox(width: w, height: _rowH, child: Center(child: child));
+    Widget labelCell(String s, {bool bold = false, bool italic = false}) =>
+        SizedBox(
+          width: _labelColW, height: _rowH,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(s,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                    fontStyle: italic ? FontStyle.italic : FontStyle.normal)),
+          ),
+        );
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Stableford points',
+              style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+          const SizedBox(height: 4),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Hole numbers + Total
+              Row(children: [
+                labelCell('Hole', bold: true),
+                for (final h in holeRange)
+                  cell(Text('$h',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold)), _cellW),
+                cell(const Text('Tot',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    _totW),
+              ]),
+              Container(
+                height: 1,
+                width: _labelColW + _cellW * holeRange.length + _totW,
+                color: theme.colorScheme.outlineVariant,
+                margin: const EdgeInsets.symmetric(vertical: 2),
+              ),
+              // Per-player points rows
+              for (final e in results)
+                () {
+                  final r     = e as Map<String, dynamic>;
+                  final holes = (r['holes'] as Map?)?.cast<String, dynamic>()
+                      ?? const {};
+                  final total = r['total_points'] ?? 0;
+                  return Row(children: [
+                    labelCell(_short(r['player_name']?.toString() ?? '—')),
+                    for (final h in holeRange)
+                      cell(Text(holes['$h'] == null ? '' : '${holes['$h']}',
+                          style: theme.textTheme.bodySmall), _cellW),
+                    cell(Text('$total',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                        _totW),
+                  ]);
+                }(),
+            ]),
+          ),
+        ]),
+      ),
     );
   }
 }
