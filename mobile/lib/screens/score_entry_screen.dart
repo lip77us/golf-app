@@ -32,6 +32,7 @@ import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
+import '../widgets/halved_mark.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
@@ -3657,8 +3658,12 @@ class _NassauHoleOutcome extends StatelessWidget {
       color: bg,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       child: Row(children: [
-        Icon(winner == 'halved' ? Icons.drag_handle : Icons.emoji_events,
-            size: 14, color: fg),
+        // A halved hole is the term the app is named after — mark it with the
+        // brand mark; a won hole keeps the trophy.
+        if (winner == 'halved')
+          const HalvedMark(size: 18, tooltip: 'Halved')
+        else
+          Icon(Icons.emoji_events, size: 14, color: fg),
         const SizedBox(width: 6),
         Text(label,
             style: theme.textTheme.bodySmall
