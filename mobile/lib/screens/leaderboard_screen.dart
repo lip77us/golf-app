@@ -2748,8 +2748,9 @@ class _SpotsGroupCard extends StatelessWidget {
   }
 }
 
-/// Horizontally-scrollable per-hole strip for Spots — one chip per scored hole
-/// showing who earned (+) or lost (−) spots there. Mirrors the Vegas grid.
+/// Per-hole Spots chips that wrap across lines (no horizontal scroll) so you can
+/// see many holes at once. Each pill: hole number + short name with a green (+)
+/// or red (−) spot count. Sparse — only scored holes.
 class _SpotsHoleStrip extends StatelessWidget {
   final List<Map<String, dynamic>> holes;
   const _SpotsHoleStrip({required this.holes});
@@ -2757,37 +2758,44 @@ class _SpotsHoleStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    const tab = [FontFeature.tabularFigures()];
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
         for (final h in holes)
           Container(
-            margin: const EdgeInsets.only(right: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Text('${h['hole']}',
-                  style: theme.textTheme.labelSmall?.copyWith(
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                  text: '${h['hole']}  ',
+                  style: theme.textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 2),
-              for (final e in (h['spots'] as List? ?? []).cast<Map<String, dynamic>>())
-                () {
-                  final c = (e['count'] as num?)?.toInt() ?? 0;
-                  return Text(
-                    '${e['short_name'] ?? '?'} ${c > 0 ? '+' : '−'}${c.abs()}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: c >= 0 ? GameColors.win : GameColors.loss,
-                        fontFeatures: const [FontFeature.tabularFigures()]),
-                  );
-                }(),
-            ]),
+                      fontFeatures: tab,
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+                for (final e in (h['spots'] as List? ?? [])
+                    .cast<Map<String, dynamic>>())
+                  () {
+                    final c = (e['count'] as num?)?.toInt() ?? 0;
+                    return TextSpan(
+                      text: '${e['short_name'] ?? '?'} ${c > 0 ? '+' : '−'}'
+                          '${c.abs()}   ',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: tab,
+                          color: c >= 0 ? GameColors.win : GameColors.loss),
+                    );
+                  }(),
+              ]),
+            ),
           ),
-      ]),
+      ],
     );
   }
 }
