@@ -51,9 +51,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
   /// Everything sent to the backend = primary + side games. The rest of the
   /// screen (player-count hints, multi-group, round creation) reads this.
+  /// Side games only count when the primary allows them — a primary that lives
+  /// alone (e.g. Multi-Group Skins) never carries side games into the round,
+  /// even if some lingered in [_sideGames] before the primary changed.
   Set<String> get _activeGames => {
         if (_primaryGame != null) _primaryGame!,
-        ..._sideGames,
+        if (_primaryGame != null && allowsSideGames(_primaryGame!))
+          ..._sideGames,
       };
 
   /// Group-size filter for the game picker: '2' | '3' | '4' | 'groups'.
@@ -61,13 +65,20 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// groups tap their size to get the curated list of games that fit.
   String _sizeFilter = '4';
 
-  /// PRIMARY game choices for the current group-size filter. The currently
-  /// selected primary stays visible even if the size filter changes.
-  List<GameMeta> get _filteredCasualGames => casualGames.where((m) {
-        if (m.id == _primaryGame) return true;
-        if (_sizeFilter == 'groups') return m.acrossGroups;
-        return !m.acrossGroups && m.supportsSize(int.parse(_sizeFilter));
-      }).toList();
+  /// True if [m] is offered for the current group-size filter. "Across groups"
+  /// shows only multi-foursome games; a numeric size shows single-foursome
+  /// games that support that player count.
+  bool _fitsSizeFilter(GameMeta m) {
+    if (_sizeFilter == 'groups') return m.acrossGroups;
+    return !m.acrossGroups && m.supportsSize(int.parse(_sizeFilter));
+  }
+
+  /// PRIMARY game choices for the current group-size filter. A primary that no
+  /// longer fits the chosen size is dropped here AND deselected on size change
+  /// (see the size SegmentedButton handler), so it can't stay selected-but-
+  /// invisible (e.g. an 18-Hole Match after switching off "2").
+  List<GameMeta> get _filteredCasualGames =>
+      casualGames.where(_fitsSizeFilter).toList();
 
   /// True when the user picked Multi-Group Skins — turns on the per-player
   /// Group dropdown and lets the foursome count exceed one.
@@ -523,7 +534,16 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             showSelectedIcon: false,
             onSelectionChanged: (s) => setState(() {
               _sizeFilter = s.first;
-              // Drop any side games that no longer fit the new size.
+              // Deselect the primary if it no longer fits the new size
+              // (e.g. an 18-Hole Match when switching off "2", or a
+              // single-foursome game when switching to "Across groups").
+              final p = _primaryGame;
+              if (p != null) {
+                final meta = gameMeta(p);
+                if (meta == null || !_fitsSizeFilter(meta)) _primaryGame = null;
+              }
+              // Drop any side games that no longer fit (also clears them all
+              // when the primary was just deselected).
               final eligible = _eligibleSideGames.map((m) => m.id).toSet();
               _sideGames.removeWhere((g) => !eligible.contains(g));
             }),
