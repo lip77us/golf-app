@@ -655,6 +655,12 @@ class SharedRoundSummary {
   final String courseName;
   final String status;
   final List<String> activeGames;
+  /// True when this round's Nassau is really the "18-Hole Match" shortcut
+  /// (Overall-only, heads-up). Defaults false for tournament follows.
+  final bool isEighteenHoleMatch;
+  /// Highest hole a real player has scored; 0 = not started, null = unknown
+  /// (e.g. a tournament follow that carries status, not hole progress).
+  final int? currentHole;
   /// Source group label — the round creator's name, or the account name.
   final String groupLabel;
   /// The name of the player (in that group) that matched your phone.
@@ -669,6 +675,8 @@ class SharedRoundSummary {
     required this.courseName,
     required this.status,
     required this.activeGames,
+    this.isEighteenHoleMatch = false,
+    this.currentHole,
     required this.groupLabel,
     required this.yourName,
     this.isTournament = false,
@@ -681,6 +689,8 @@ class SharedRoundSummary {
         courseName:   j['course_name'] as String? ?? '',
         status:       j['status'] as String? ?? '',
         activeGames:  List<String>.from(j['active_games'] as List? ?? []),
+        isEighteenHoleMatch: j['is_eighteen_hole_match'] as bool? ?? false,
+        currentHole:  j['current_hole'] as int?,
         groupLabel:   j['group_label'] as String? ?? '',
         yourName:     j['your_name'] as String? ?? '',
         isTournament: j['is_tournament'] as bool? ?? false,
@@ -695,6 +705,11 @@ class ScoringRound {
   final String courseName;
   final String status;
   final List<String> activeGames;
+  /// True when this round's Nassau is really the "18-Hole Match" shortcut
+  /// (Overall-only, heads-up). Defaults false for tournament rounds.
+  final bool   isEighteenHoleMatch;
+  /// Highest hole a real player has scored; 0 = not started, null = unknown.
+  final int?   currentHole;
   final String groupLabel;
   final bool   isTournament;
   /// The foursome I'm scoring.
@@ -706,6 +721,8 @@ class ScoringRound {
     required this.courseName,
     required this.status,
     required this.activeGames,
+    this.isEighteenHoleMatch = false,
+    this.currentHole,
     required this.groupLabel,
     required this.isTournament,
     required this.yourFoursomeId,
@@ -717,6 +734,8 @@ class ScoringRound {
         courseName:     j['course_name'] as String? ?? '',
         status:         j['status'] as String? ?? '',
         activeGames:    List<String>.from(j['active_games'] as List? ?? []),
+        isEighteenHoleMatch: j['is_eighteen_hole_match'] as bool? ?? false,
+        currentHole:    j['current_hole'] as int?,
         groupLabel:     j['group_label'] as String? ?? '',
         isTournament:   j['is_tournament'] as bool? ?? false,
         yourFoursomeId: j['your_foursome_id'] as int? ?? 0,
@@ -3265,8 +3284,13 @@ class NassauSummary {
   bool get isStrokesOff => handicapMode == 'strokes_off';
   bool get isClaremont    => variant == 'claremont';
   bool get isTiebreak2nd  => variant == 'tiebreak_2nd';
-  /// Overall-only (Front + Back off) = a straight 18-hole match.
-  bool get isEighteenHoleMatch => !playFront && !playBack && playOverall;
+  /// A straight 18-Hole Match: Overall-only (Front + Back off) AND heads-up
+  /// (one player per side). Overall-only distinguishes it from a Singles
+  /// Nassau; the 1-v-1 roster distinguishes it from Fourball (the 2-v-2
+  /// 18-hole match). A 2-v-2 Overall-only Nassau is NOT an 18-Hole Match.
+  bool get isEighteenHoleMatch =>
+      !playFront && !playBack && playOverall &&
+      team1.length == 1 && team2.length == 1;
   bool get allowsManualPress => pressMode == 'manual' || pressMode == 'both';
 
   String get t1Label => team1.isNotEmpty ? team1.first.shortName : 'T1';

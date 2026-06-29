@@ -1836,21 +1836,9 @@ class CasualRoundListView(APIView):
                         })
 
             # Current hole = highest hole_number where a real (non-phantom)
-            # player has a gross_score.  Phantom scores are pre-filled for
-            # all 18 holes at setup, so we must exclude them or every round
-            # would report current_hole=18 from the start.
-            from scoring.models import HoleScore as HS
-            max_hole = (
-                HS.objects
-                .filter(
-                    foursome__round=r,
-                    gross_score__isnull=False,
-                    player__is_phantom=False,
-                )
-                .order_by('-hole_number')
-                .values_list('hole_number', flat=True)
-                .first()
-            )
+            # player has a gross_score (phantom scores are pre-filled, so
+            # they're excluded).
+            max_hole = _round_current_hole(r)
 
             # Pick the foursome that contains the requesting player.
             # Casual rounds used to always have a single foursome, but
@@ -1867,26 +1855,13 @@ class CasualRoundListView(APIView):
             )
             chosen_fs = user_fs or r.foursomes.first()
 
-            # "18-Hole Match" is stored as an Overall-only Nassau (no front/back
-            # bet).  Surface that so the list can label it "18-Hole Match"
-            # instead of the generic "Nassau".
-            is_18_hole_match = False
-            if 'nassau' in (r.active_games or []) and chosen_fs is not None:
-                try:
-                    ng = chosen_fs.nassau_game
-                    is_18_hole_match = (
-                        not ng.play_front and not ng.play_back and ng.play_overall
-                    )
-                except Exception:
-                    is_18_hole_match = False
-
             results.append({
                 'id':                   r.id,
                 'date':                 r.date,
                 'course_name':          r.course.name,
                 'status':               r.status,
                 'active_games':         r.active_games,
-                'is_eighteen_hole_match': is_18_hole_match,
+                'is_eighteen_hole_match': _round_is_eighteen_hole_match(r, chosen_fs),
                 'bet_unit':             r.bet_unit,
                 'current_hole':         max_hole or 0,
                 'created_by_player_id': r.created_by_id,
@@ -1896,6 +1871,45 @@ class CasualRoundListView(APIView):
 
         ser = CasualRoundSummarySerializer(results, many=True)
         return Response(ser.data)
+
+
+# Shared round-summary helpers (used by the casual list + the cross-account
+# playing/scoring/watching feeds so they all describe a round the same way).
+
+def _round_current_hole(rnd):
+    """Highest hole a real (non-phantom) player has scored; 0 = not started.
+    Phantom scores are pre-filled for all 18 holes, so they're excluded."""
+    from scoring.models import HoleScore as HS
+    return (
+        HS.objects
+        .filter(foursome__round=rnd, gross_score__isnull=False,
+                player__is_phantom=False)
+        .order_by('-hole_number')
+        .values_list('hole_number', flat=True)
+        .first()
+    ) or 0
+
+
+def _round_is_eighteen_hole_match(rnd, foursome=None):
+    """A (singles) 18-Hole Match = an Overall-only Nassau played 1-v-1.
+
+    Overall-only (no front/back bet) distinguishes it from a Singles Nassau;
+    the two-player roster distinguishes it from Fourball (the 2-v-2 18-hole
+    match). A 2-v-2 Overall-only Nassau is therefore NOT an 18-Hole Match.
+    """
+    if 'nassau' not in (rnd.active_games or []):
+        return False
+    fs = foursome or rnd.foursomes.first()
+    if fs is None:
+        return False
+    try:
+        ng = fs.nassau_game
+    except Exception:
+        return False
+    if not (ng.play_overall and not ng.play_front and not ng.play_back):
+        return False
+    real = sum(1 for m in fs.memberships.all() if not m.player.is_phantom)
+    return real == 2
 
 
 # How long a COMPLETED follow stays on "Shared with me" before it ages off.
@@ -1948,6 +1962,8 @@ class SharedRoundsView(APIView):
                 'course_name':   r.course.name,
                 'status':        r.status,
                 'active_games':  r.active_games,
+                'is_eighteen_hole_match': _round_is_eighteen_hole_match(r),
+                'current_hole':  _round_current_hole(r),
                 'group_label':   (r.created_by.name if r.created_by_id else None)
                                  or r.account.name,
                 'your_name':     None,
@@ -2052,6 +2068,8 @@ class ScoringForMeView(APIView):
                 'course_name':      r.course.name,
                 'status':           r.status,
                 'active_games':     r.active_games,
+                'is_eighteen_hole_match': _round_is_eighteen_hole_match(r, m.foursome),
+                'current_hole':     _round_current_hole(r),
                 'group_label':      group_label,
                 'is_tournament':    t is not None,
                 'your_foursome_id': m.foursome_id,
@@ -2174,6 +2192,8 @@ class PlayingRoundsView(APIView):
                 'course_name':      r.course.name,
                 'status':           r.status,
                 'active_games':     r.active_games,
+                'is_eighteen_hole_match': _round_is_eighteen_hole_match(r, m.foursome),
+                'current_hole':     _round_current_hole(r),
                 'group_label':      group_label,
                 'is_tournament':    t is not None,
                 'your_foursome_id': m.foursome_id,
