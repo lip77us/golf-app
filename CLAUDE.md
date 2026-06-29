@@ -853,3 +853,58 @@ WD + killed hole, control stays open, reinstate).
 
 **Deferred:** Nassau / Points 5-3-1 / Match Play settlement (universal unblocker
 already lets those rounds complete; per-game money for them is a follow-up).
+
+## Spots (`spots`) — implemented (capture add-on, side-game-only)
+
+A standalone gambling **add-on**: user-defined per-hole achievements (one-putt,
+sandy, barky, hit-the-flag, …) the app can't detect, **tallied by hand** in
+score entry like junk. **Always a side game, never a primary** (`GameMeta
+.sideGameOnly`); 2–4 players; **separate payout** (never folded into the main
+game). **Excludes Skins** in any role — junk is the Skins way to do per-hole
+extras. Full design doc: `docs/spots.md`.
+
+**The architectural carve-out it introduced:** side games were assumed to be
+pure leaderboard overlays with no score-entry effect. Spots is the first
+**capture add-on** — `GameMeta.capturesInScoreEntry`. Its capture control
+renders in score entry even though it isn't the primary. (Snake — `docs/snake.md`
+— will reuse the same slot.)
+
+**Backend:**
+- `core.GameType.SPOTS`; `games.SpotsGame` (`bet_unit`, `payout_style`) +
+  `SpotsPlayerHoleResult` (per-player-per-hole `count`, a **signed**
+  SmallInteger — negatives allowed). Migrations `games/0046`,`0047`, +
+  `tournament/0042` (enum refresh).
+- `services/spots.py`: `setup_spots`, `tally_spots` (upsert; `count=0` deletes),
+  `spots_summary`. **No recalc step** — the counts ARE the data. Settlement:
+  - **pay_around** (default): each spot pays the achiever `bet_unit` from every
+    other active player on that hole — zero-sum within the hole roster; a
+    **negative** spot reverses it (that player pays everyone). Honors mid-round
+    withdrawal (only active-on-hole players pay).
+  - **pool**: everyone antes `bet_unit` (pot = max loss). If anyone is positive,
+    the pot splits among positives ∝ positive spots (negatives/zeros get
+    nothing); else the **least-negative** player(s) take it, split on a tie.
+- Endpoints `GET/POST /api/foursomes/<id>/spots/{,setup/,tally/}`
+  (`foursome_for_scorer`); `SpotsSetup`/`SpotsTally` serializers; leaderboard
+  block; `configured_games` entry.
+- Tests: `scoring/tests/test_spots.py` (pay-around/pool zero-sum, negatives,
+  the three pool cases, withdrawal, zero-deletes) + `api/test_spots.py`.
+
+**Mobile:**
+- Catalog: `GameIds.spots`; flags `canBeSideGame`, `capturesInScoreEntry`,
+  `sideGameOnly`; `excludes: {skins}`. `sideGamesFor` honors the exclusion; the
+  casual picker prunes a conflicting side game on toggle; `sideGameOnly` is
+  filtered out of every primary list (picker + onboarding) and `primaryGameOf`.
+- Capture: an **inline `⊖ N spots ⊕`** under each player name (`_SpotsDots`,
+  modeled on `_JunkDots` but always shows the minus — negatives), threaded
+  `_HoleScoreCard` → `_PlayerRow`. Debounced optimistic tally POST.
+- `spots_setup_screen.dart` (`/spots-setup`, returnToHub) — stake + pay-around
+  /pool; reached from the round hub's "Edit Spots" button.
+- Leaderboard `_SpotsGroupCard`: per-player spots + payout, plus a wrapping
+  **"spots by hole"** chip strip (hole # + short name + green/red ± count).
+- `SpotsSummary` model; `client.get/postSpotsSetup/postSpotsTally`;
+  `RoundProvider.spotsSummary` + `loadSpots`/`setSpotsSummary`.
+
+**Deferred (v2, per `docs/spots.md`):** named spot types (Sandy/Barky/Greenie)
+with a per-type breakdown — v1 is a generic signed count. Broadening which
+primaries allow side games (Nassau/Sixes/Vegas own their structure → can't host
+Spots yet) is the separate Phase-2 item.
