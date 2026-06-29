@@ -355,6 +355,9 @@ const List<GameMeta> kGameCatalog = [
     tournament   : true,
     canBePrimary : true,
     minPlayers   : 2,
+    // Pure scoring overlay (low net / low gross) — also usable as a
+    // leaderboard-only side game alongside another primary.
+    canBeSideGame: true,
     // Stroke Play can combine with any per-foursome side game.
     excludes     : {GameIds.points531},
   ),

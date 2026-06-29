@@ -45,7 +45,7 @@ per-round side games. **Mobile-only — no backend change** (`active_games` was
 already a flat set the backend computes + tabs for every entry; the primary is
 *derived*, not stored).
 - **Classification** lives in `game_catalog.dart` `GameMeta`: `canBeSideGame`
-  (true: `skins`, `stableford` — Phase 1) and `allowsSideGames` (false:
+  (true: `skins`, `stableford`, `low_net_round` [Stroke Play]) and `allowsSideGames` (false:
   `sixes`, `vegas`, `nassau`, `triple_cup`, `multi_skins`). Helpers:
   `primaryGameOf(active)` (the entry-owning game, or the highest-priority
   side-eligible game for an overlay-only round), `sideGamesFor(primary, size,
@@ -73,12 +73,21 @@ already a flat set the backend computes + tabs for every entry; the primary is
 - **Skins-as-side ⇒ no junk** (`skins_setup_screen.dart`): junk toggle hidden +
   `allow_junk:false` forced when Skins is a side game (junk is a score-entry
   modifier). `_isSideGame` = `primaryGameOf(round.active_games) != 'skins'`.
-- **Validated combo:** Fourball + Skins + Stableford. **Deferred to Phase 2:**
-  `low_net_round` (Stroke Play) as a side game (flag flip); cross-group
-  Multi-Skins linkage (feed a single foursome's scores into another group's
-  pool); broaden side games to the other allowed primaries. `match_18` allows
-  side games by default (flippable). Onboarding wizard already picks a single
-  game (= primary); tournament wizard untouched.
+- **Side games inherit the primary's handicap, net-only for Stableford/Stroke
+  Play.** A side game has no own handicap selector — `utils/primary_handicap.dart`
+  `primaryHandicapFor()` resolves the primary's (mode, net%) and
+  `widgets/inherited_handicap_note.dart` renders the read-only note. Stableford
+  (`stableford_setup_screen.dart`) and **Stroke Play / Low Net**
+  (`LowNetSetupScreen` in `irish_rumble_setup_screen.dart`) only do net/gross, so
+  a **strokes-off primary degrades to net** there (`_isSideGame` getter +
+  `inherited` fetch in `_load`, `InheritedHandicapNote` in the body). Skins-as-side
+  inherits all three modes verbatim.
+- **Validated combo:** Fourball + Skins + Stableford (+ Stroke Play / Low Net as
+  a further side game). **Deferred to Phase 2:** cross-group Multi-Skins linkage
+  (feed a single foursome's scores into another group's pool); broaden side games
+  to the other allowed primaries. `match_18` allows side games by default
+  (flippable). Onboarding wizard already picks a single game (= primary);
+  tournament wizard untouched.
 
 ### Fourball (`fourball`) — implemented
 - A single 18-hole **2v2 best-ball match play** game; requires exactly 4 players

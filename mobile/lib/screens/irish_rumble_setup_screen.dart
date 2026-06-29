@@ -19,11 +19,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../utils/primary_handicap.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/inherited_handicap_note.dart';
 import '../widgets/section_card.dart';
 import '../widgets/net_double_bogey_card.dart';
 
@@ -594,6 +597,15 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   bool    _editing           = false;
   bool    _isTournamentRound = false;
 
+  /// True when Stroke Play is a SECONDARY side game (another game owns entry).
+  /// Side games inherit the primary's handicap — no own selector.
+  bool get _isSideGame {
+    final games = context.read<RoundProvider>().round?.activeGames ??
+        const <String>[];
+    return games.contains('low_net_round') &&
+        primaryGameOf(games) != 'low_net_round';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -646,6 +658,20 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
     try {
       final client = context.read<AuthProvider>().client;
       final cfg    = await client.getLowNetConfig(widget.roundId);
+
+      // Side games inherit the PRIMARY game's handicap. Stroke Play here is
+      // only ever net/gross as a side game, so a strokes-off primary degrades
+      // to net.
+      (String, int)? inherited;
+      if (_isSideGame) {
+        final round = context.read<RoundProvider>().round;
+        final fsId = round?.foursomes.isNotEmpty == true
+            ? round!.foursomes.first.id : null;
+        if (round != null && fsId != null) {
+          final h = await primaryHandicapFor(client, round, fsId);
+          inherited = (h.$1 == 'gross' ? 'gross' : 'net', h.$2);
+        }
+      }
       if (!mounted) return;
 
       final payouts = (cfg['payouts'] as List? ?? []);
@@ -675,6 +701,10 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
         _mode              = (cfg['round_handicap_mode'] ?? cfg['handicap_mode'])
                                  ?.toString() ?? 'net';
         _netPercent        = (cfg['round_net_percent'] ?? cfg['net_percent']) as int? ?? 100;
+        if (inherited != null) {
+          _mode       = inherited.$1;
+          _netPercent = inherited.$2;
+        }
         _numPlayers        = cfg['num_players'] as int? ?? 0;
         _entryCtrl.text    = _fmtAmount(cfg['entry_fee'] as num? ?? 5.0);
         _payoutPlaces      = ctrls.length;
@@ -1004,8 +1034,11 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
         children: [
           // ── Handicap mode ───────────────────────────────────────────────
           // For tournament rounds the mode is locked at the round level.
+          // Side games inherit the primary game's handicap (no own selector).
           if (_isTournamentRound)
             _LockedHandicapChip(mode: _mode, netPercent: _netPercent)
+          else if (_isSideGame)
+            InheritedHandicapNote(mode: _mode, netPercent: _netPercent)
           else
             HandicapModeSelector(
               mode:             _mode,
