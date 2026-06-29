@@ -422,6 +422,7 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
           dateLabel:      fmtDate(r.date),
           courseName:     r.courseName,
           activeGames:    r.activeGames,
+          isEighteenHoleMatch: r.isEighteenHoleMatch,
           isCompleted:    r.status == 'complete',
           currentHole:    r.currentHole,
           startedByMe:    true,
@@ -487,6 +488,8 @@ class _RoundItem {
   final String       dateLabel;
   final String       courseName;
   final List<String> activeGames;
+  /// True when this round's Nassau is really the "18-Hole Match" shortcut.
+  final bool         isEighteenHoleMatch;
   final bool         isCompleted;
   final int?         currentHole;
   final bool         startedByMe;
@@ -502,6 +505,7 @@ class _RoundItem {
     required this.dateLabel,
     required this.courseName,
     required this.activeGames,
+    this.isEighteenHoleMatch = false,
     required this.isCompleted,
     required this.currentHole,
     required this.startedByMe,
@@ -529,7 +533,8 @@ class _RoundCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final gameLabels = item.activeGames.map(gameDisplayName).join(' • ');
+    final gameLabels = gamesDisplayLabel(item.activeGames,
+        isEighteenHoleMatch: item.isEighteenHoleMatch);
 
     // The flag that replaced the section headers: who started this round, or —
     // for a round I'm only watching — that I'm observing it (not playing).

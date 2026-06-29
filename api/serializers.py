@@ -614,6 +614,9 @@ class CasualRoundSummarySerializer(serializers.Serializer):
     course_name         = serializers.CharField()
     status              = serializers.CharField()
     active_games        = serializers.ListField(child=serializers.CharField())
+    # True when the round's Nassau is Overall-only — i.e. the "18-Hole Match"
+    # shortcut — so the list can label it accordingly rather than "Nassau".
+    is_eighteen_hole_match = serializers.BooleanField(default=False)
     bet_unit            = serializers.DecimalField(max_digits=6, decimal_places=2)
     current_hole        = serializers.IntegerField()   # 0 = not started
     created_by_player_id = serializers.IntegerField(allow_null=True)

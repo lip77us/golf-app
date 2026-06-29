@@ -1867,12 +1867,26 @@ class CasualRoundListView(APIView):
             )
             chosen_fs = user_fs or r.foursomes.first()
 
+            # "18-Hole Match" is stored as an Overall-only Nassau (no front/back
+            # bet).  Surface that so the list can label it "18-Hole Match"
+            # instead of the generic "Nassau".
+            is_18_hole_match = False
+            if 'nassau' in (r.active_games or []) and chosen_fs is not None:
+                try:
+                    ng = chosen_fs.nassau_game
+                    is_18_hole_match = (
+                        not ng.play_front and not ng.play_back and ng.play_overall
+                    )
+                except Exception:
+                    is_18_hole_match = False
+
             results.append({
                 'id':                   r.id,
                 'date':                 r.date,
                 'course_name':          r.course.name,
                 'status':               r.status,
                 'active_games':         r.active_games,
+                'is_eighteen_hole_match': is_18_hole_match,
                 'bet_unit':             r.bet_unit,
                 'current_hole':         max_hole or 0,
                 'created_by_player_id': r.created_by_id,

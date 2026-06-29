@@ -602,6 +602,9 @@ class CasualRoundSummary {
   final String courseName;
   final String status;
   final List<String> activeGames;
+  /// True when the Nassau is Overall-only — i.e. the "18-Hole Match" shortcut —
+  /// so the list shows "18-Hole Match" instead of "Nassau".
+  final bool   isEighteenHoleMatch;
   final double betUnit;
   /// Highest hole number with any score entered; 0 = not started yet.
   final int    currentHole;
@@ -618,6 +621,7 @@ class CasualRoundSummary {
     required this.courseName,
     required this.status,
     required this.activeGames,
+    this.isEighteenHoleMatch = false,
     required this.betUnit,
     required this.currentHole,
     this.createdByPlayerId,
@@ -632,6 +636,7 @@ class CasualRoundSummary {
         courseName:          j['course_name'] as String,
         status:              j['status'] as String,
         activeGames:         List<String>.from(j['active_games'] as List? ?? []),
+        isEighteenHoleMatch: j['is_eighteen_hole_match'] as bool? ?? false,
         betUnit:             double.parse(j['bet_unit'].toString()),
         currentHole:         j['current_hole'] as int? ?? 0,
         createdByPlayerId:   j['created_by_player_id'] as int?,

@@ -3640,7 +3640,9 @@ class _NassauHoleOutcome extends StatelessWidget {
     if (winner == 'halved') {
       bg    = Colors.grey.shade100;
       fg    = Colors.grey.shade700;
-      label = '$prefix: Halved';
+      // It's the HOLE that's halved, not the match/Nassau — say so plainly
+      // (the win labels already read "… wins hole", so they stay clear).
+      label = 'Hole: Halved';
     } else if (winner == 'team1') {
       bg    = GameColors.team1Bg;
       fg    = GameColors.team1;

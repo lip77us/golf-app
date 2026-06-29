@@ -444,6 +444,18 @@ String gameDisplayName(String gameId) =>
     ?? _kExtraGameLabels[gameId]
     ?? gameId;
 
+/// Joined display label for a round's [activeGames]. An Overall-only Nassau is
+/// stored as `nassau` but is really the "18-Hole Match" shortcut, so when
+/// [isEighteenHoleMatch] is set we show that name instead of the generic
+/// "Nassau".
+String gamesDisplayLabel(Iterable<String> activeGames,
+        {bool isEighteenHoleMatch = false}) =>
+    activeGames
+        .map((g) => (g == GameIds.nassau && isEighteenHoleMatch)
+            ? gameDisplayName(GameIds.match18)
+            : gameDisplayName(g))
+        .join(' • ');
+
 /// Games shown in the casual-round picker (enabled only).
 List<GameMeta> get casualGames =>
     kGameCatalog.where((g) => g.casual && g.enabled).toList();
