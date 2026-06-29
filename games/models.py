@@ -418,6 +418,75 @@ class SkinsPlayerHoleResult(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# SPOTS (capture add-on: user-defined per-hole achievements, separate pot)
+# ---------------------------------------------------------------------------
+
+class SpotsGame(models.Model):
+    """
+    Spots for one Foursome (2–4 real players).  A "spot" is a user-defined
+    per-hole achievement the app can't detect (one-putt, sandy, barky, …); the
+    scorer tallies them by hand per player per hole, like junk.  Always a
+    SEPARATE payout — never folded into the main game.
+
+    Settlement:
+      - pay_around (default): each spot pays the achiever 1 × bet_unit from
+        every other active player (zero-sum within the group).
+      - pool: total spots × bet_unit forms a pot split proportional to spots won.
+    """
+    foursome     = models.OneToOneField(
+                    Foursome, on_delete=models.CASCADE,
+                    related_name='spots_game',
+                )
+    status       = models.CharField(
+                    max_length=20, choices=MatchStatus.choices,
+                    default=MatchStatus.PENDING,
+                )
+    bet_unit     = models.DecimalField(
+                    max_digits=6, decimal_places=2, default=1,
+                    help_text="Value of one spot.",
+                )
+    payout_style = models.CharField(
+                    max_length=12,
+                    choices=[('pay_around', 'Pay around'), ('pool', 'Pool')],
+                    default='pay_around',
+                )
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Spots — Group {self.foursome.group_number}"
+
+
+class SpotsPlayerHoleResult(models.Model):
+    """
+    Manually entered spot counts per player per hole.  Only rows with count > 0
+    need persisting; the settlement reads these directly (no detection).
+    """
+    game        = models.ForeignKey(
+                    SpotsGame, on_delete=models.CASCADE,
+                    related_name='hole_results',
+                )
+    player      = models.ForeignKey(
+                    Player, on_delete=models.CASCADE,
+                    related_name='spots_results',
+                )
+    hole_number = models.PositiveSmallIntegerField(
+                    validators=[MinValueValidator(1), MaxValueValidator(18)]
+                )
+    count       = models.PositiveSmallIntegerField(
+                    default=0,
+                    help_text="Number of spots earned by this player on this hole.",
+                )
+
+    class Meta:
+        unique_together = ('game', 'player', 'hole_number')
+        ordering        = ['hole_number', 'player_id']
+
+    def __str__(self):
+        return (f"Spots ×{self.count} — {self.player.name} "
+                f"hole {self.hole_number} ({self.game})")
+
+
+# ---------------------------------------------------------------------------
 # WOLF (3- or 4-player rotating-wolf game, casual-round only)
 # ---------------------------------------------------------------------------
 

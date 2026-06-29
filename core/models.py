@@ -106,6 +106,10 @@ class GameType(models.TextChoices):
     # halved match is a push.  Engine in services/fourball.py and
     # games/models.py FourballGame/Team/HoleResult.
     FOURBALL        = 'fourball',        'Fourball'
+    # Capture add-on: user-defined per-hole achievements tallied by hand
+    # (one-putt, sandy, barky, …), settled on their own pot.  Engine in
+    # services/spots.py and games/models.py SpotsGame/SpotsPlayerHoleResult.
+    SPOTS           = 'spots',           'Spots'
 
 
 class RoundStatus(models.TextChoices):

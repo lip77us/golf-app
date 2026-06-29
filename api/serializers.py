@@ -455,6 +455,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
         # OneToOne relationships — safe to check via hasattr
         for attr, key in [
             ('skins_game',         'skins'),
+            ('spots_game',         'spots'),
             ('nassau_game',        'nassau'),
             ('points_531_game',    'points_531'),
             ('vegas_game',         'vegas'),
@@ -1217,6 +1218,26 @@ class SkinsJunkSerializer(serializers.Serializer):
     """
     hole_number  = serializers.IntegerField(min_value=1, max_value=18)
     junk_entries = SkinsJunkEntrySerializer(many=True, min_length=1)
+
+
+class SpotsSetupSerializer(serializers.Serializer):
+    """Configure the Spots add-on for a foursome."""
+    bet_unit     = serializers.DecimalField(
+                    max_digits=6, decimal_places=2, required=False, min_value=0)
+    payout_style = serializers.ChoiceField(
+                    choices=['pay_around', 'pool'], default='pay_around')
+
+
+class SpotsTallyEntrySerializer(serializers.Serializer):
+    """One player's spot count for a single hole."""
+    player_id = serializers.IntegerField()
+    count     = serializers.IntegerField(min_value=0, max_value=20)
+
+
+class SpotsTallySerializer(serializers.Serializer):
+    """Upsert per-player spot counts for one hole (count=0 deletes the row)."""
+    hole_number = serializers.IntegerField(min_value=1, max_value=18)
+    entries     = SpotsTallyEntrySerializer(many=True, min_length=1)
 
 
 class WolfSetupSerializer(serializers.Serializer):

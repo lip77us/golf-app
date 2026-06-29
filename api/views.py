@@ -402,6 +402,17 @@ def _build_leaderboard(round_obj: Round) -> dict:
             ],
         }
 
+    if 'spots' in active_games:
+        from services.spots import spots_summary
+        games['spots'] = {
+            'label'   : 'Spots',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': spots_summary(fs)}
+                for fs in foursomes
+            ],
+        }
+
     if 'multi_skins' in active_games:
         from services.multi_skins import multi_skins_summary
         games['multi_skins'] = {
@@ -4437,6 +4448,67 @@ class SkinsJunkView(APIView):
 
         from services.skins import skins_summary
         return Response(skins_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Spots (capture add-on — separate pot, tallied like junk)
+# ---------------------------------------------------------------------------
+
+class SpotsSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/spots/setup/
+    Body: {"bet_unit": "1.00"?, "payout_style": "pay_around"|"pool"}
+    Creates (or replaces) the SpotsGame. Safe to call repeatedly.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import SpotsSetupSerializer
+        ser = SpotsSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from services.spots import setup_spots, spots_summary
+        d = ser.validated_data
+        setup_spots(
+            foursome,
+            bet_unit     = d.get('bet_unit'),
+            payout_style = d.get('payout_style', 'pay_around'),
+        )
+        return Response(spots_summary(foursome), status=status.HTTP_201_CREATED)
+
+
+class SpotsResultView(APIView):
+    """GET /api/foursomes/{id}/spots/"""
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.spots import spots_summary
+        return Response(spots_summary(foursome))
+
+
+class SpotsTallyView(APIView):
+    """
+    POST /api/foursomes/{id}/spots/tally/
+    Body: {"hole_number": 1..18, "entries": [{"player_id": N, "count": N}, ...]}
+    Upserts per-player spot counts for a hole (count=0 deletes the row).
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import SpotsTallySerializer
+        ser = SpotsTallySerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from games.models import SpotsGame
+        try:
+            foursome.spots_game
+        except SpotsGame.DoesNotExist:
+            return Response(
+                {'detail': 'Spots game not set up for this foursome.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from services.spots import tally_spots, spots_summary
+        tally_spots(
+            foursome,
+            hole_number=ser.validated_data['hole_number'],
+            entries=ser.validated_data['entries'],
+        )
+        return Response(spots_summary(foursome))
 
 
 # ---------------------------------------------------------------------------
