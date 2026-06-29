@@ -4,7 +4,8 @@
 "spot" is a user-defined per-hole achievement the app can't detect — one-putt,
 hit-the-flag, sandy par, barky (hit a tree and still made par), greenie, etc.
 The group decides what counts; the scorer **tallies them by hand** during score
-entry, exactly the way junk is entered today. Foursome-only.
+entry, exactly the way junk is entered today. **2–4 players** (any casual group
+size).
 
 Spots is the first **capture add-on** built on the general mechanism (junk is
 the pre-existing one); **Snake** (a separate doc) will reuse the same
@@ -29,9 +30,10 @@ score-entry slot.
     flag). If "Skins + a separate pot" is ever wanted, the cleaner fix is a
     "junk pays its own pot" toggle *inside* Skins — not opening Spots to overlap.
 - **Settlement = pay-around by default.** Each spot: everyone else pays the
-  achiever one bet unit (so a spot earned by P1 in a foursome = +3 units to P1,
-  −1 to each other). A **pool** style is a secondary option (configurable).
-- **Foursome-only**, per-foursome game model (like Skins / Sixes).
+  achiever one bet unit, scaling with group size (P1's spot in a foursome = +3
+  to P1, −1 to each other; in a 2-player game = +1 / −1). A **pool** style is a
+  secondary option (configurable).
+- **2–4 players** (any casual group size), per-foursome game model (like Skins).
 - **v1 captures a generic count** (like junk — "2 spots this hole for P3").
   **Named spot types** (Sandy / Barky / Greenie …) are a v2 enhancement.
 
@@ -119,7 +121,8 @@ GameMeta(
   id: GameIds.spots,
   displayName: 'Spots',
   casual: true,
-  exactPlayers: 4,
+  minPlayers: 2,
+  maxPlayers: 4,
   canBeSideGame: true,          // it's an add-on
   capturesInScoreEntry: true,   // NEW — renders a capture strip in score entry
   excludes: { GameIds.skins },  // symmetric; junk is the Skins way
@@ -129,8 +132,8 @@ GameMeta(
   a non-side-eligible game; Spots being side-eligible keeps it out of the
   primary role. A Spots-only round is nonsensical (it's an add-on) — the picker
   should require a primary, which it already does.
-- `sideGamesFor(primary, size, …)` offers Spots whenever size==4 and the primary
-  isn't Skins (the exclusion).
+- `sideGamesFor(primary, size, …)` offers Spots whenever the primary isn't Skins
+  (the exclusion), at any casual size 2–4.
 
 ---
 
@@ -190,7 +193,7 @@ settlement.
 
 ## Tests
 
-- `scoring/tests/test_spots.py` — pay-around zero-sum (foursome), pool split,
+- `scoring/tests/test_spots.py` — pay-around zero-sum (2–4 players), pool split,
   multi-spot hole, withdrawal roster (inactive players don't pay), bet-unit math.
 - `api/test_spots.py` — setup, tally upsert (idempotent), summary shape, scorer
   auth, **Skins-exclusion** (can't add Spots alongside Skins).
