@@ -21,6 +21,8 @@ import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../utils/primary_handicap.dart';
+import '../widgets/inherited_handicap_note.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
@@ -114,6 +116,15 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       }
 
       final rp = context.read<RoundProvider>();
+
+      // Side games never carry their own handicap config — the PRIMARY game
+      // drives SO/Net/Gross. Inherit it (and force junk off).
+      (String, int)? inherited;
+      if (_isSideGame && rp.round != null) {
+        inherited = await primaryHandicapFor(client, rp.round!, widget.foursomeId);
+      }
+      if (!mounted) return;
+
       setState(() {
         // For a brand-new game (no players yet) keep the frontend's casual
         // defaults (Strokes-Off Low, carryover on, no junk).  Once a game
@@ -132,6 +143,11 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                 b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
             _stakeOk = true;
           }
+        }
+        if (inherited != null) {
+          _mode       = inherited.$1;
+          _netPercent = inherited.$2;
+          _allowJunk  = false;
         }
         _loading    = false;
       });
@@ -253,12 +269,17 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
           const SizedBox(height: 16),
 
-          HandicapModeSelector(
-            mode:             _mode,
-            netPercent:       _netPercent,
-            onModeChanged:    (m) => setState(() => _mode = m),
-            onPercentChanged: (p) => setState(() => _netPercent = p),
-          ),
+          // Side games inherit the primary game's handicap (no own selector);
+          // the primary drives Strokes-Off / Net / Gross for the round.
+          if (_isSideGame)
+            InheritedHandicapNote(mode: _mode, netPercent: _netPercent)
+          else
+            HandicapModeSelector(
+              mode:             _mode,
+              netPercent:       _netPercent,
+              onModeChanged:    (m) => setState(() => _mode = m),
+              onPercentChanged: (p) => setState(() => _netPercent = p),
+            ),
 
           const SizedBox(height: 16),
 

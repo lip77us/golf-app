@@ -7,10 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../utils/primary_handicap.dart';
 import '../widgets/error_view.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/inherited_handicap_note.dart';
 import '../widgets/payout_config_field.dart';
 
 // Bucket order, top (best) to bottom.
@@ -78,6 +81,14 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   bool _editing = false;
   Object? _error;
 
+  /// True when Stableford is a SECONDARY side game (another game owns entry).
+  /// Side games inherit the primary's handicap — no own selector.
+  bool get _isSideGame {
+    final games = context.read<RoundProvider>().round?.activeGames ??
+        const <String>[];
+    return games.contains('stableford') && primaryGameOf(games) != 'stableford';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -122,14 +133,31 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final cfg = await context.read<AuthProvider>().client
-          .getStablefordConfig(widget.roundId);
+      final client = context.read<AuthProvider>().client;
+      final cfg = await client.getStablefordConfig(widget.roundId);
+
+      // Side games inherit the PRIMARY game's handicap. Stableford only does
+      // net/gross, so a strokes-off primary degrades to net here.
+      (String, int)? inherited;
+      if (_isSideGame) {
+        final round = context.read<RoundProvider>().round;
+        final fsId = round?.foursomes.isNotEmpty == true
+            ? round!.foursomes.first.id : null;
+        if (round != null && fsId != null) {
+          final h = await primaryHandicapFor(client, round, fsId);
+          inherited = (h.$1 == 'gross' ? 'gross' : 'net', h.$2);
+        }
+      }
       if (!mounted) return;
       setState(() {
         _numPlayers = cfg['num_players'] as int? ?? 0;
         final mode = (cfg['handicap_mode']?.toString() ?? 'net');
         _mode = (mode == 'gross') ? 'gross' : 'net';
         _netPercent = cfg['net_percent'] as int? ?? 100;
+        if (inherited != null) {
+          _mode       = inherited.$1;
+          _netPercent = inherited.$2;
+        }
         _payoutStyle = (cfg['payout_style']?.toString() == 'per_point')
             ? 'per_point' : 'pool';
         final ppm = cfg['per_point_mode']?.toString();
@@ -309,13 +337,17 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         // ── Handicap (Net%/Gross — shared slider widget, no Strokes-Off) ──
-        HandicapModeSelector(
-          mode: _mode,
-          netPercent: _netPercent,
-          allowStrokesOff: false,
-          onModeChanged: (m) => setState(() => _mode = m),
-          onPercentChanged: (p) => setState(() => _netPercent = p),
-        ),
+        // Side games inherit the primary game's handicap (no own selector).
+        if (_isSideGame)
+          InheritedHandicapNote(mode: _mode, netPercent: _netPercent)
+        else
+          HandicapModeSelector(
+            mode: _mode,
+            netPercent: _netPercent,
+            allowStrokesOff: false,
+            onModeChanged: (m) => setState(() => _mode = m),
+            onPercentChanged: (p) => setState(() => _netPercent = p),
+          ),
         const SizedBox(height: 24),
 
         // ── Points table ──

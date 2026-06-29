@@ -737,7 +737,7 @@ List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
 List<(String, String)> _sideGamePerFoursomeTargets(Set<String> fsGames) {
   final out = <(String, String)>[];
   if (fsGames.contains('skins') && primaryGameOf(fsGames) != 'skins') {
-    out.add(('/skins-setup', 'Set up Skins'));
+    out.add(('/skins-setup', 'Edit Skins'));
   }
   return out;
 }
