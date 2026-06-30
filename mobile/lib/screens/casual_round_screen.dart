@@ -575,7 +575,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             Text('Side games',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 2),
-            Text('Tracked on the leaderboard only — they don’t change scoring.',
+            Text('Each settles separately and does not change how your main '
+                'game is scored.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 8),
