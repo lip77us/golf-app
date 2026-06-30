@@ -33,6 +33,7 @@ import '../utils/round_complete.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
 import '../widgets/halved_mark.dart';
+import '../widgets/spots_capture.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
@@ -178,7 +179,8 @@ class ScoreEntryScreen extends StatefulWidget {
   State<ScoreEntryScreen> createState() => _ScoreEntryScreenState();
 }
 
-class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
+class _ScoreEntryScreenState extends State<ScoreEntryScreen>
+    with SpotsCaptureMixin {
   /// Unsubmitted score edits: hole → playerId → gross.
   final Map<int, Map<int, int>> _pending = {};
 
@@ -297,7 +299,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
   void dispose() {
     _syncRef?.removeListener(_syncWatcher!);
     _matchPlayTimer?.cancel();
-    _spotsDebounce?.cancel();
+    disposeSpots();
     super.dispose();
   }
 
@@ -995,50 +997,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         map[playerId] = next;
       }
     });
-  }
-
-  // ── Spots capture (side-game add-on) ──────────────────────────────────────
-  /// Optimistic per-hole overrides while a tally POST is in flight: hole → pid
-  /// → count. Cleared once the server summary confirms them.
-  final Map<int, Map<int, int>> _spotsOverride = {};
-  Timer? _spotsDebounce;
-
-  int _spotsCount(int pid, int hole, SpotsSummary? s) =>
-      _spotsOverride[hole]?[pid] ?? (s?.countFor(pid, hole) ?? 0);
-
-  void _adjustSpots(int pid, int hole, int delta) {
-    final rp  = context.read<RoundProvider>();
-    final cur = _spotsCount(pid, hole, rp.spotsSummary);
-    final next = (cur + delta).clamp(-20, 20);
-    setState(() => (_spotsOverride[hole] ??= {})[pid] = next);
-    // Coalesce rapid +/- into one POST (also avoids out-of-order responses).
-    _spotsDebounce?.cancel();
-    _spotsDebounce = Timer(const Duration(milliseconds: 450), () => _pushSpots(hole));
-  }
-
-  Future<void> _pushSpots(int hole) async {
-    final rp     = context.read<RoundProvider>();
-    final client = context.read<AuthProvider>().client;
-    final fs = rp.round?.foursomes
-        .where((f) => f.id == widget.foursomeId).firstOrNull;
-    if (fs == null) return;
-    final entries = [
-      for (final m in fs.memberships.where((m) => !m.player.isPhantom))
-        {'player_id': m.player.id,
-         'count': _spotsCount(m.player.id, hole, rp.spotsSummary)},
-    ];
-    try {
-      final summary = await client.postSpotsTally(
-          widget.foursomeId, holeNumber: hole, entries: entries);
-      if (!mounted) return;
-      rp.setSpotsSummary(summary);
-      setState(() => _spotsOverride.remove(hole));
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Could not save spots. Tap again to retry.')));
-      }
-    }
   }
 
   int _currentJunk(int playerId, int hole, SkinsSummary? skins) {
@@ -2023,12 +1981,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 onJunkRemove: (pid) => _adjustJunk(pid, _selectedHole, -1),
                 // Spots add-on: an inline ⊖ N spots ⊕ under each player name
                 // (the capturesInScoreEntry carve-out). Shown once configured.
-                spotsActive: games.contains('spots') &&
-                    (rp.spotsSummary?.players.isNotEmpty ?? false),
+                spotsActive: spotsActive(rp),
                 spotsCountFor: (pid) =>
-                    _spotsCount(pid, _selectedHole, rp.spotsSummary),
-                onSpotsAdd:    (pid) => _adjustSpots(pid, _selectedHole, 1),
-                onSpotsRemove: (pid) => _adjustSpots(pid, _selectedHole, -1),
+                    spotsCount(pid, _selectedHole, rp.spotsSummary),
+                onSpotsAdd:    (pid) =>
+                    adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
+                onSpotsRemove: (pid) =>
+                    adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
                 // Long-press a player to record / undo a mid-round withdrawal.
                 // Disabled once the round is final.
                 onWithdrawTap: isComplete
@@ -4019,7 +3978,7 @@ class _PlayerRow extends StatelessWidget {
               // allowed). Mutually exclusive with junk, so they never stack.
               if (spotsActive) ...[
                 const SizedBox(height: 2),
-                _SpotsDots(
+                SpotsDots(
                   count:    spotsCount,
                   onAdd:    onSpotsAdd ?? () {},
                   onRemove: onSpotsRemove ?? () {},
@@ -4226,51 +4185,6 @@ class _JunkDots extends StatelessWidget {
           '$count junk',
           style: theme.textTheme.labelSmall?.copyWith(
             color: theme.colorScheme.tertiary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(width: 4),
-        GestureDetector(
-          onTap: onAdd,
-          child: Icon(Icons.add_circle_outline,
-              size: 14, color: theme.colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-}
-
-/// Inline Spots control under a player name — like _JunkDots, but ALWAYS shows
-/// the minus (spots can go negative) and starts at "0 spots".
-class _SpotsDots extends StatelessWidget {
-  final int          count;
-  final VoidCallback onAdd;
-  final VoidCallback onRemove;
-
-  const _SpotsDots({
-    required this.count,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: onRemove,
-          child: Icon(Icons.remove_circle_outline,
-              size: 14, color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          '$count spot${count.abs() == 1 ? '' : 's'}',
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: count == 0
-                ? theme.colorScheme.onSurfaceVariant
-                : theme.colorScheme.tertiary,
             fontWeight: FontWeight.bold,
           ),
         ),

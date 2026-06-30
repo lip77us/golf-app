@@ -49,16 +49,19 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   String? _primaryGame;
   final Set<String> _sideGames = {};
 
-  /// Everything sent to the backend = primary + side games. The rest of the
-  /// screen (player-count hints, multi-group, round creation) reads this.
-  /// Side games only count when the primary allows them — a primary that lives
-  /// alone (e.g. Multi-Group Skins) never carries side games into the round,
-  /// even if some lingered in [_sideGames] before the primary changed.
-  Set<String> get _activeGames => {
-        if (_primaryGame != null) _primaryGame!,
-        if (_primaryGame != null && allowsSideGames(_primaryGame!))
-          ..._sideGames,
-      };
+  /// Everything sent to the backend = primary + side games. A side game counts
+  /// only when it's valid for the primary: an overlay needs `allowsSideGames`,
+  /// while a capture add-on (Spots) rides any primary that hosts it. This keeps
+  /// a live-alone primary (e.g. Multi-Group Skins) from carrying stale picks.
+  Set<String> get _activeGames {
+    final p = _primaryGame;
+    if (p == null) return {};
+    return {
+      p,
+      ..._sideGames.where((g) =>
+          allowsSideGames(p) || (gameMeta(g)?.capturesInScoreEntry ?? false)),
+    };
+  }
 
   /// Group-size filter for the game picker: '2' | '3' | '4' | 'groups'.
   /// Defaults to a foursome (the common case — sees the most games); smaller
@@ -564,11 +567,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 _buildPrimaryChip(meta),
             ],
           ),
-          // Side games — leaderboard-only overlays, only when the primary
-          // supports them.
-          if (_primaryGame != null &&
-              allowsSideGames(_primaryGame!) &&
-              _eligibleSideGames.isNotEmpty) ...[
+          // Side games — overlays when the primary allows them, plus capture
+          // add-ons (Spots) that ride structure-owning primaries too.
+          // sideGamesFor() encodes that, so just gate on the eligible list.
+          if (_primaryGame != null && _eligibleSideGames.isNotEmpty) ...[
             const SizedBox(height: 20),
             Text('Side games',
                 style: Theme.of(context).textTheme.titleMedium),

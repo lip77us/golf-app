@@ -275,8 +275,10 @@ const List<GameMeta> kGameCatalog = [
     canBeSideGame       : true,
     capturesInScoreEntry: true,
     sideGameOnly        : true,   // never a primary — always an add-on
-    // Excludes Skins (junk is the Skins way to do per-hole extras); symmetric.
-    excludes    : {GameIds.skins, GameIds.points531},
+    // Excludes Skins (junk is the Skins way), and the team/round-wide games we
+    // deliberately don't host Spots on (Vegas, Triple Cup, Multi-Skins).
+    excludes    : {GameIds.skins, GameIds.vegas, GameIds.tripleCup,
+                   GameIds.multiSkins},
   ),
   GameMeta(
     id          : GameIds.wolf,
@@ -561,15 +563,22 @@ String? primaryGameOf(Iterable<String> active) {
 }
 
 /// The side games selectable alongside [primaryId] for a [size]-player round.
-/// Empty when the primary disallows side games.
+///
+/// Overlay accumulators (Skins/Stableford/Low Net) are offered only when the
+/// primary `allowsSideGames`. A CAPTURE add-on (Spots — `capturesInScoreEntry`)
+/// is orthogonal to the main game's scoring, so it's offered even on a
+/// structure-owning primary that disallows overlays (Sixes/Nassau) — gated only
+/// by the per-game `excludes` (e.g. Spots excludes Vegas / Triple Cup).
 List<GameMeta> sideGamesFor(String primaryId,
     {required int size, bool multiGroup = false}) {
-  if (!allowsSideGames(primaryId)) return const [];
+  final allowOverlays = allowsSideGames(primaryId);
   return kGameCatalog.where((g) {
     if (!g.enabled || !g.canBeSideGame) return false;
     if (g.id == primaryId) return false;
-    // Honor mutual exclusion vs the primary (e.g. Spots ⊥ Skins).
+    // Honor mutual exclusion vs the primary (e.g. Spots ⊥ Skins / Vegas).
     if (!gamesCompatible(primaryId, g.id)) return false;
+    // Structure-owning primaries still accept capture add-ons, but not overlays.
+    if (!allowOverlays && !g.capturesInScoreEntry) return false;
     if (g.acrossGroups) return multiGroup;     // round-wide pools only in multi-group
     return g.supportsSize(size);
   }).toList();
