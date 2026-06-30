@@ -92,13 +92,36 @@ class WithdrawalTests(TestCase):
         assert resp.data['status'] == 'complete', resp.data
         assert resp.data['all_foursomes_done'] is True
 
-    def test_round_blocked_without_withdrawal(self):
-        """Control: with no WD recorded, a fully-unscored hole keeps the
-        round open — only a killed hole is exempt from coverage."""
+    def test_single_foursome_completes_early(self):
+        """A single-foursome casual round completes on the explicit
+        "Finish round" / "Complete Round" tap even with holes unscored —
+        finishing early (a match closed out, or a round cut short) is a
+        deliberate action the score-entry soft-gate warns about first.
+        all_foursomes_done still reports False since hole coverage is partial."""
         for h in range(1, 19):
             if h == 10:
-                continue   # hole 10 entirely unscored, no withdrawal
+                continue   # hole 10 left unscored — finishing early
             self._score(self.players, h, 4)
+        resp = self.client.post(reverse('api-round-complete', args=[self.round.id]))
+        assert resp.status_code == 200, resp.content
+        assert resp.data['status'] == 'complete', resp.data
+        assert resp.data['all_foursomes_done'] is False
+
+    def test_multi_foursome_blocked_until_all_groups_done(self):
+        """The multi-group lock-out still holds: completing while another
+        group has unscored holes (and no withdrawal to exempt them) keeps the
+        round open, so the first group to finish can't lock the others out."""
+        # Group 1 finishes all 18.
+        for h in range(1, 19):
+            self._score(self.players, h, 4)
+        # A second group exists but hasn't scored anything yet.
+        fs2 = Foursome.objects.create(round=self.round, group_number=2)
+        p = Player.objects.create(
+            account=self.acct, name='Ed', handicap_index=Decimal('10.0'),
+        )
+        FoursomeMembership.objects.create(
+            foursome=fs2, player=p, course_handicap=10, playing_handicap=10,
+        )
         resp = self.client.post(reverse('api-round-complete', args=[self.round.id]))
         assert resp.status_code == 200, resp.content
         assert resp.data['status'] == 'in_progress', resp.data

@@ -3130,8 +3130,15 @@ class RoundCompleteView(APIView):
         )
 
         all_done = self._all_foursomes_done(round_obj)
+        # Single-foursome rounds (casual play, one-group cup days) complete on
+        # this explicit user request even with holes unscored — finishing early
+        # (a match closed out, or a casual round cut short) is a deliberate action
+        # the score-entry soft-gate already warns about, and the only caller is a
+        # "Complete Round" / "Finish round" tap.  Multi-foursome rounds still wait
+        # for every group so the first to finish can't lock the others out.
+        single_foursome = round_obj.foursomes.count() == 1
 
-        if all_done and round_obj.status != 'complete':
+        if (all_done or single_foursome) and round_obj.status != 'complete':
             round_obj.status = 'complete'
             round_obj.save(update_fields=['status'])
             # Notify followers the multi-group round is final (once; best-effort).
