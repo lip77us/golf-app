@@ -212,21 +212,6 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
     });
   }
 
-  /// Quick-fill from a preset split (Stroke Play parity): set places + amounts.
-  void _applyPoolPreset(List<double> ratios) {
-    final pool = _pool.round();
-    setState(() {
-      _numPayouts = ratios.length;
-      var remaining = pool;
-      for (var i = 0; i < 4; i++) {
-        if (i >= ratios.length) { _payoutCtrls[i].text = '0'; continue; }
-        final amt = i == ratios.length - 1 ? remaining : (pool * ratios[i]).round();
-        remaining -= amt;
-        _payoutCtrls[i].text = '$amt';
-      }
-    });
-  }
-
   Future<void> _save() async {
     setState(() { _saving = true; _error = null; });
     try {
@@ -440,8 +425,6 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
           const SizedBox(height: 6),
           Text('Pool: \$${_pool.toStringAsFixed(0)}  ($_numPlayers players)',
               style: theme.textTheme.bodySmall),
-          const SizedBox(height: 8),
-          PayoutPresetsRow(onPreset: _applyPoolPreset),
           const SizedBox(height: 8),
           PayoutConfigField(
             pool: _pool.round(),

@@ -105,20 +105,6 @@ class _TournamentStablefordSetupScreenState
   void _applyPreset(Map<String, int> t) =>
       setState(() { for (final b in _kBuckets) _points[b]!.text = '${t[b]}'; });
 
-  void _applyPoolPreset(List<double> ratios) {
-    final pool = _pool.round();
-    setState(() {
-      _numPayouts = ratios.length;
-      var remaining = pool;
-      for (var i = 0; i < 4; i++) {
-        if (i >= ratios.length) { _payoutCtrls[i].text = '0'; continue; }
-        final amt = i == ratios.length - 1 ? remaining : (pool * ratios[i]).round();
-        remaining -= amt;
-        _payoutCtrls[i].text = '$amt';
-      }
-    });
-  }
-
   void _suggest() {
     final amounts = suggestPayouts(_pool.round(), _numPayouts);
     setState(() {
@@ -252,8 +238,6 @@ class _TournamentStablefordSetupScreenState
         const SizedBox(height: 6),
         Text('Pool: \$${_pool.toStringAsFixed(0)}  ($_numPlayers players)',
             style: theme.textTheme.bodySmall),
-        const SizedBox(height: 8),
-        PayoutPresetsRow(onPreset: _applyPoolPreset),
         const SizedBox(height: 8),
         PayoutConfigField(
           pool: _pool.round(),
