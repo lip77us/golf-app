@@ -60,6 +60,7 @@ class HandicapModeSelector extends StatelessWidget {
                 color: theme.colorScheme.primary)),
         const SizedBox(height: 8),
         SegmentedButton<String>(
+          showSelectedIcon: false,
           segments: [
             const ButtonSegment(value: 'net',   label: Text('Net')),
             const ButtonSegment(value: 'gross', label: Text('Gross')),

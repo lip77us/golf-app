@@ -440,6 +440,7 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                             ),
                           ),
                           SegmentedButton<int>(
+                            showSelectedIcon: false,
                             segments: [
                               ButtonSegment(
                                 value: 1,

@@ -198,6 +198,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 ),
                 const SizedBox(height: 8),
                 SegmentedButton<String>(
+                  showSelectedIcon: false,
                   segments: const [
                     ButtonSegment(value: 'M', label: Text("Men's")),
                     ButtonSegment(value: 'W', label: Text("Women's")),

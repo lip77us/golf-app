@@ -250,6 +250,7 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
           title: 'Birdies',
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SegmentedButton<String>(
+              showSelectedIcon: false,
               segments: const [
                 ButtonSegment(value: 'flip', label: Text('Flip')),
                 ButtonSegment(value: 'multiplier', label: Text('Multiply')),

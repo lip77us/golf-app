@@ -403,6 +403,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
         Text('How is the money settled?', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         SegmentedButton<String>(
+          showSelectedIcon: false,
           segments: const [
             ButtonSegment(value: 'pool', label: Text('Pool')),
             ButtonSegment(value: 'per_point', label: Text('Per point')),
@@ -452,6 +453,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
           ),
         ] else ...[
           SegmentedButton<String>(
+            showSelectedIcon: false,
             segments: const [
               ButtonSegment(value: 'average', label: Text('vs Average')),
               ButtonSegment(value: 'all',     label: Text('Above you')),

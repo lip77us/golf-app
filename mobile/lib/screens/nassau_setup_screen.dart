@@ -389,6 +389,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                           ),
                         ),
                         SegmentedButton<int>(
+                          showSelectedIcon: false,
                           segments: const [
                             ButtonSegment(value: 1, label: Text('T1')),
                             ButtonSegment(value: 2, label: Text('T2')),

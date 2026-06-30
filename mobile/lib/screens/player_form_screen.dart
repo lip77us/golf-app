@@ -236,6 +236,7 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
                   helperText: 'Used to pick the default tee at round setup.',
                 ),
                 child: SegmentedButton<String>(
+                  showSelectedIcon: false,
                   segments: const [
                     ButtonSegment(value: 'M', label: Text('Men')),
                     ButtonSegment(value: 'W', label: Text('Women')),

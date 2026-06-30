@@ -1181,6 +1181,7 @@ class _Step0Tournament extends StatelessWidget {
           const SizedBox(height: 24),
 
           SegmentedButton<bool>(
+            showSelectedIcon: false,
             segments: const [
               ButtonSegment(value: true,  label: Text('New'),      icon: Icon(Icons.add)),
               ButtonSegment(value: false, label: Text('Existing'), icon: Icon(Icons.list)),

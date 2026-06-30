@@ -736,6 +736,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                         fontSize: 13)),
                 const SizedBox(height: 4),
                 SegmentedButton<int>(
+                  showSelectedIcon: false,
                   segments: team
                       .map((p) => ButtonSegment<int>(
                             value: p.playerId,

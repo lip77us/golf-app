@@ -206,6 +206,7 @@ Then 18 hole rows (whitespace, tabs, or commas):
               // Sex selector — drives the default-tee picker at
               // round setup.  Unisex tees show up for both M and W.
               SegmentedButton<String>(
+                showSelectedIcon: false,
                 segments: const [
                   ButtonSegment(value: 'M', label: Text("Men")),
                   ButtonSegment(value: 'W', label: Text("Women")),

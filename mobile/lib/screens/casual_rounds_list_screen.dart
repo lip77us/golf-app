@@ -236,6 +236,7 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: SegmentedButton<bool>(
+              showSelectedIcon: false,
               segments: const [
                 ButtonSegment(
                   value: false,
