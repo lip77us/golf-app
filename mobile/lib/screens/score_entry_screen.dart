@@ -2746,9 +2746,10 @@ class _HoleScoreCard extends StatelessWidget {
     if (nassau == null) return null;
     // 18-hole match is 1-v-1 — no T1/T2 badge; the red/blue name says it all.
     if (nassau!.isEighteenHoleMatch) return null;
-    // Red team (team2) = T1, Blue team (team1) = T2
-    if (nassau!.team2.any((p) => p.playerId == playerId)) return 'T1';
-    if (nassau!.team1.any((p) => p.playerId == playerId)) return 'T2';
+    // T1 = team1, T2 = team2 — matching the setup screen and the leaderboard
+    // (the colour comes from nameColor, so the badge stays team-coloured).
+    if (nassau!.team1.any((p) => p.playerId == playerId)) return 'T1';
+    if (nassau!.team2.any((p) => p.playerId == playerId)) return 'T2';
     return null;
   }
 
@@ -3684,13 +3685,13 @@ class _NassauHoleOutcome extends StatelessWidget {
       fg    = GameColors.team1;
       label = isMatch
           ? '$prefix: ${sideName(nassau.team1)} wins hole'
-          : 'Nassau: T2 wins hole';
+          : 'Nassau: T1 wins hole';
     } else {
       bg    = GameColors.team2Bg;
       fg    = GameColors.team2;
       label = isMatch
           ? '$prefix: ${sideName(nassau.team2)} wins hole'
-          : 'Nassau: T1 wins hole';
+          : 'Nassau: T2 wins hole';
     }
     return Container(
       color: bg,
@@ -5436,15 +5437,16 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                             label = '·';
                           }
                         } else {
-                          // Standard style: T1=red(team2) / T2=blue(team1) / =
+                          // Standard style: T1 = team1, T2 = team2 (colour from
+                          // the team), matching setup + the leaderboard.
                           if (winner == 'team1') {
                             bg = GameColors.team1Bg;
                             fg = GameColors.team1;
-                            label = 'T2';
+                            label = 'T1';
                           } else if (winner == 'team2') {
                             bg = GameColors.team2Bg;
                             fg = GameColors.team2;
-                            label = 'T1';
+                            label = 'T2';
                           } else if (winner == 'halved') {
                             bg = Colors.grey.shade100;
                             fg = Colors.grey.shade600;
@@ -6421,25 +6423,25 @@ class _TeamBanner extends StatelessWidget {
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(children: [
-        // Orange (team2) on left
+        // Blue (team1 / T1) on left — matches the T1-first player rows + setup.
         Expanded(
-          child: Text(t2,
+          child: Text(t1,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: GameColors.team2,
+                color: GameColors.team1,
               ),
               overflow: TextOverflow.ellipsis),
         ),
         Text(' vs ',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        // Blue (team1) on right
+        // Orange (team2 / T2) on right.
         Expanded(
-          child: Text(t1,
+          child: Text(t2,
               textAlign: TextAlign.right,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: GameColors.team1,
+                color: GameColors.team2,
               ),
               overflow: TextOverflow.ellipsis),
         ),
