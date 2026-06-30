@@ -236,6 +236,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       icon: const Icon(Icons.more_vert),
       onSelected: (value) {
         switch (value) {
+          case 'refresh':
+            context.read<RoundProvider>().loadLeaderboard(widget.roundId);
+            break;
           case 'invite':
             inviteWatcher(context, roundId: widget.roundId);
             break;
@@ -251,6 +254,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         }
       },
       itemBuilder: (_) => [
+        const PopupMenuItem(
+          value: 'refresh',
+          child: ListTile(
+            leading: Icon(Icons.refresh),
+            title: Text('Refresh'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
         const PopupMenuItem(
           value: 'invite',
           child: ListTile(
@@ -368,12 +379,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             icon: const Icon(Icons.table_chart_outlined),
             onPressed: _openScorecard,
           ),
-          IconButton(
-            tooltip: 'Refresh',
-            icon: const Icon(Icons.refresh),
-            onPressed: () =>
-                context.read<RoundProvider>().loadLeaderboard(widget.roundId),
-          ),
+          // Refresh is a fallback (the leaderboard reloads on entry), so it
+          // folds into the ⋯ overflow — keeping the toolbar to the 0–2 actions
+          // above.  The support view hides ⋯, so keep refresh inline there.
+          if (isSupportView)
+            IconButton(
+              tooltip: 'Refresh',
+              icon: const Icon(Icons.refresh),
+              onPressed: () =>
+                  context.read<RoundProvider>().loadLeaderboard(widget.roundId),
+            ),
           if (!isSupportView)
             _buildOverflowMenu(context, rp,
                 watchToken: watchToken, isFinal: isFinal),

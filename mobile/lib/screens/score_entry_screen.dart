@@ -1536,12 +1536,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               ),
             ),
           // Pull the latest scores (e.g. when another scorer is ahead of you)
-          // and re-land on the current hole.
-          IconButton(
-            tooltip: 'Refresh scores',
-            icon: const Icon(Icons.refresh),
-            onPressed: rp.round == null ? null : _refresh,
-          ),
+          // and re-land on the current hole.  (Refresh is a fallback — scores
+          // auto-sync — so it lives in the ⋯ overflow, not the toolbar.)
           // Chat lives here because the scorer lives on this screen; the badge
           // is the (push-less) notification that a message arrived.
           if (rp.round != null)
@@ -1569,6 +1565,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
             icon: const Icon(Icons.more_vert),
             onSelected: (v) {
               switch (v) {
+                case 'refresh':
+                  if (rp.round != null) _refresh();
+                  break;
                 case 'finish':
                   if (sc == null) return;
                   final players = _orderedPlayers(
@@ -1589,6 +1588,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               }
             },
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'refresh',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.refresh),
+                  title: Text('Refresh scores'),
+                ),
+              ),
               if (!isComplete && sc != null)
                 const PopupMenuItem(
                   value: 'finish',
