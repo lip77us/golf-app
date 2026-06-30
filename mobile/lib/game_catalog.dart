@@ -144,6 +144,11 @@ class GameMeta {
   /// Skins/Stableford/Low Net are NOT side-game-only — they can be a primary too.
   final bool sideGameOnly;
 
+  /// TOURNAMENT model: a Cup-only match format (the two 1v1 cup-singles formats).
+  /// These are configured through the cup-design step, not as generic per-round
+  /// side games, so they're excluded from [tournamentRoundGames].
+  final bool cupOnly;
+
   const GameMeta({
     required this.id,
     required this.displayName,
@@ -162,6 +167,7 @@ class GameMeta {
     this.allowsSideGames      = true,
     this.capturesInScoreEntry = false,
     this.sideGameOnly         = false,
+    this.cupOnly              = false,
   });
 
   /// True if this game can be played with exactly [n] real players.
@@ -414,12 +420,14 @@ const List<GameMeta> kGameCatalog = [
     id          : GameIds.singlesNassau,
     displayName : 'Singles Nassau',
     tournament  : true,
+    cupOnly     : true,   // configured via the cup-design step, not a side game
     exactPlayers: 4,
   ),
   GameMeta(
     id          : GameIds.singles18,
     displayName : '18-Hole Singles',
     tournament  : true,
+    cupOnly     : true,   // configured via the cup-design step, not a side game
     exactPlayers: 4,
   ),
   GameMeta(
@@ -491,10 +499,12 @@ String gamesDisplayLabel(Iterable<String> activeGames,
 List<GameMeta> get casualGames =>
     kGameCatalog.where((g) => g.casual && g.enabled).toList();
 
-/// Games shown in the per-round game picker inside the tournament wizard
-/// (enabled only).
+/// Games shown in the per-round side-game picker inside the tournament wizard
+/// (enabled only).  Cup-only match formats (Singles Nassau / 18-Hole Singles)
+/// are excluded — they're configured through the cup-design step, not as generic
+/// side games, so they only make sense in a Cup tournament.
 List<GameMeta> get tournamentRoundGames =>
-    kGameCatalog.where((g) => g.tournament && g.enabled).toList();
+    kGameCatalog.where((g) => g.tournament && g.enabled && !g.cupOnly).toList();
 
 /// Games eligible as the primary accumulator for multi-day tournaments.
 List<GameMeta> get primaryGames =>
