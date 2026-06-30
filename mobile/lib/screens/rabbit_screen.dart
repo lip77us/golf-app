@@ -25,6 +25,7 @@ import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
 
@@ -46,7 +47,7 @@ class RabbitScreen extends StatefulWidget {
   State<RabbitScreen> createState() => _RabbitScreenState();
 }
 
-class _RabbitScreenState extends State<RabbitScreen> {
+class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
   final Map<int, Map<int, int>> _pending = {};
   int  _selectedHole    = 1;
   bool _prevHadPending  = false;
@@ -67,13 +68,25 @@ class _RabbitScreenState extends State<RabbitScreen> {
         rp.refreshPendingOverlay();
       }
       rp.loadRabbit(widget.foursomeId);
+      if (rp.round?.activeGames.contains('spots') ?? false) {
+        rp.loadSpots(widget.foursomeId);
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    disposeSpots();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
     final rp = context.read<RoundProvider>();
     await rp.loadScorecard(widget.foursomeId);
     rp.loadRabbit(widget.foursomeId);
+    if (rp.round?.activeGames.contains('spots') ?? false) {
+      rp.loadSpots(widget.foursomeId);
+    }
   }
 
   List<Membership> _realMembers(Round? round) {
@@ -492,6 +505,13 @@ class _RabbitScreenState extends State<RabbitScreen> {
               onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
               onEditTap: (m) => setState(() => _editingPlayerId =
                   _editingPlayerId == m.player.id ? null : m.player.id),
+              spotsActive:   spotsActive(rp),
+              spotsCountFor: (pid) =>
+                  spotsCount(pid, _selectedHole, rp.spotsSummary),
+              onSpotsAdd:    (pid) =>
+                  adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
+              onSpotsRemove: (pid) =>
+                  adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
             ),
             if (holeInfo != null && holeInfo.isScored) ...[
               const SizedBox(height: 10),
@@ -744,6 +764,9 @@ class _HoleHeader extends StatelessWidget {
 // Score-entry card
 // ===========================================================================
 
+int  _rabbitZeroSpots(int _) => 0;
+void _rabbitNoopPid(int _) {}
+
 class _HoleScoreCard extends StatelessWidget {
   final ScorecardHole?   holeData;
   final List<Membership> players;
@@ -757,6 +780,10 @@ class _HoleScoreCard extends StatelessWidget {
   final int?             editingPlayerId;  // scored row the user tapped to fix
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership) onEditTap;
+  final bool                   spotsActive;
+  final int  Function(int pid) spotsCountFor;
+  final void Function(int pid) onSpotsAdd;
+  final void Function(int pid) onSpotsRemove;
 
   const _HoleScoreCard({
     required this.holeData,
@@ -771,6 +798,10 @@ class _HoleScoreCard extends StatelessWidget {
     required this.editingPlayerId,
     required this.onScoreSelected,
     required this.onEditTap,
+    this.spotsActive   = false,
+    this.spotsCountFor = _rabbitZeroSpots,
+    this.onSpotsAdd    = _rabbitNoopPid,
+    this.onSpotsRemove = _rabbitNoopPid,
   });
 
   String get _mode       => summary?.handicapMode ?? 'net';
@@ -836,6 +867,10 @@ class _HoleScoreCard extends StatelessWidget {
               isHolder: _isHolder(m.player.id),
               isEditing: isEditing,
               onTap: editable ? () => onEditTap(m) : null,
+              spotsActive:   spotsActive,
+              spotsCount:    spotsActive ? spotsCountFor(m.player.id) : 0,
+              onSpotsAdd:    spotsActive ? () => onSpotsAdd(m.player.id) : null,
+              onSpotsRemove: spotsActive ? () => onSpotsRemove(m.player.id) : null,
             ),
             if (isHot || isEditing)
               _InlinePicker(
@@ -858,6 +893,10 @@ class _PlayerRow extends StatelessWidget {
   final bool       isHolder;
   final bool       isEditing;  // its inline picker is currently open
   final VoidCallback? onTap;
+  final bool          spotsActive;
+  final int           spotsCount;
+  final VoidCallback? onSpotsAdd;
+  final VoidCallback? onSpotsRemove;
 
   const _PlayerRow({
     required this.member,
@@ -869,6 +908,10 @@ class _PlayerRow extends StatelessWidget {
     required this.isHolder,
     this.isEditing = false,
     this.onTap,
+    this.spotsActive = false,
+    this.spotsCount = 0,
+    this.onSpotsAdd,
+    this.onSpotsRemove,
   });
 
   @override
@@ -899,7 +942,11 @@ class _PlayerRow extends StatelessWidget {
                 color: theme.colorScheme.primary),
           ),
         Expanded(
-          child: Row(children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(children: [
             Flexible(
               child: Text(member.player.name,
                   overflow: TextOverflow.ellipsis,
@@ -923,7 +970,18 @@ class _PlayerRow extends StatelessWidget {
                 ),
               ),
             ],
-          ]),
+              ]),
+              if (spotsActive)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: SpotsDots(
+                    count:    spotsCount,
+                    onAdd:    onSpotsAdd ?? () {},
+                    onRemove: onSpotsRemove ?? () {},
+                  ),
+                ),
+            ],
+          ),
         ),
         // Tapping a scored row opens its inline editor (no pencil affordance —
         // consistent with the other score screens).
