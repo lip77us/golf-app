@@ -88,35 +88,53 @@ equalizer**.
 a **phantom** so all groups count the same number of balls. A true,
 phantom-less threesome should be treated as a known imbalance.
 
-## Options to level mixed groups (deferred — design notes)
+## Leveling mixed groups — chosen design (borrowed-4th phantom)
 
-If we want true-threesomes to compete fairly without requiring a phantom, the
-candidates, roughly in order of preference:
+A true threesome is automatically given a **phantom 4th team member** whose
+per-hole score is **borrowed from real players across the whole field**. This
+makes every group score the full `configured` balls, so the field competes on
+equal footing without inventing or averaging anything.
 
-1. **Phantom-fill automatically (recommended, smallest change).** When a group
-   is short, auto-attach a phantom for Irish Rumble scoring so it always counts
-   the full `configured` balls. Reuses the existing, already-tested
-   `PhantomScoreProvider` path; no change to the comparison math. Decision to
-   make: what donor scores the phantom uses (its current cross-group donor, or
-   the group's own worst ball as a self-fill).
+**Rules:**
 
-2. **Self-fill with the group's own worst ball.** For the all-balls segment,
-   pad a short group up to `configured` by repeating its highest (worst) score.
-   Removes the "fewer balls to add" advantage without inventing a donor. Simple
-   and self-contained, but only addresses the all-balls segment, not the
-   deeper-pool edge in best-1/2/3.
+1. **Automatic** — any IR group with exactly 3 real players (and no existing
+   phantom) gets one. No TD toggle. The phantom counts as a team member feeding
+   the group's best-N pool (it is NOT an opponent — contrast Triple Cup, where
+   the same donor machinery fills an *opponent* slot).
+2. **Donor pool = every real player in every other group, regardless of tee-off
+   order** — one fixed shuffled rotation built at setup (reuses
+   `CrossFoursomeRotation`). Hole by hole, the phantom takes the **next donor's
+   posted score** for that hole. Borrowing spreads across the whole field, so no
+   single golfer dominates the phantom's card. Donors are never notified — their
+   scores are simply read; only the threesome sees the phantom.
+3. **Handicap: the donor's own individual handicap.** The borrowed ball is the
+   donor's **net** under the round's IR mode — net (donor gross − donor strokes),
+   gross (raw), or strokes-off (donor gross − `max(0, donor_hcp − round_low)`,
+   round-wide low). No team/foursome handicap is computed; individual handicaps
+   cover it. The net-double-bogey cap (if on) applies to the donor's adjusted
+   score like any other.
+4. **No self-fill, accept the leaderboard lag.** If a donor hasn't posted a hole
+   yet (donors can be anywhere on the course), that hole simply has no phantom
+   score until they do — the threesome shows a provisional total on its 3 real
+   balls and firms up once the donor posts. Acceptable because Irish Rumble is a
+   side game; the lag is the price of true fairness over a self-fill guess.
+5. **TD guidance:** schedule the threesome **last** so most donors are already
+   finished — minimizing how long the lag lasts.
 
-3. **Normalize segment totals to balls counted (per-ball average).** Rank on
-   `total / balls` instead of `total`. Directly removes the sum-of-3-vs-4
-   asymmetry in the all-balls segment, but changes the feel (you're comparing
-   averages, not strokes) and still doesn't fix the deeper-pool selection edge.
+Considered and rejected: per-ball averaging and par-relative normalization
+(change strokes→averages on the board, less intuitive); restricting donors to
+groups *ahead* + self-fill fallback (less fair than borrowing a real net score
+once it lands).
 
-4. **Par-relative normalization.** Rank on net-to-par per counted ball. Most
-   "statistically fair," least intuitive to players reading a scoreboard.
+### Implementation notes
 
-None of these is implemented. **Recommendation: option 1** (auto phantom-fill) —
-it makes every group a foursome for scoring, which both the math and the UI
-already handle, and keeps strokes (not averages) on the board.
+- Reuses `scoring/phantom.py` `CrossFoursomeRotation` (donor rotation +
+  per-donor `donor_handicaps`) and the existing IR phantom injection
+  ([irish_rumble.py:276](../services/irish_rumble.py)).
+- New: (a) a setup/ensure step that creates the phantom membership for a 3-real
+  IR group with a whole-field donor rotation; (b) the IR injection must adjust
+  each borrowed hole by the **per-hole donor's** handicap (via
+  `donor_handicaps`), not a single phantom handicap.
 
 ## Files
 
