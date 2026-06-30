@@ -454,8 +454,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     return Scaffold(
       appBar: GolfAppBar(
         title: _step == 0
-            ? 'Casual Round · Course & Game'
-            : 'Casual Round · Players',
+            ? 'Casual Round — Course & Game'
+            : 'Casual Round — Players',
       ),
       body: _buildBody(),
       bottomNavigationBar: (_loading || _error != null) ? null : _buildNav(),
