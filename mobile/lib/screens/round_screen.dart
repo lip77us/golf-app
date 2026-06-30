@@ -1391,7 +1391,10 @@ class _FoursomeCard extends StatelessWidget {
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
+              // Primary action on the group card → filled (dark-green / white):
+              // clear hierarchy over the outlined "Edit …" buttons and high
+              // contrast on the tinted card. (D-05)
+              child: FilledButton.icon(
                 onPressed: onEnterScores,
                 icon: Icon(
                   isComplete

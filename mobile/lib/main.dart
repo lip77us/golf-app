@@ -64,6 +64,41 @@ import 'screens/confirm_tees_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/manage_courses_screen.dart';
 
+/// App theme for a given brightness. Centralizes the two pieces the May/June
+/// design reviews flagged as drifting (D-03 / D-05):
+///   * Selected state is ONE thing app-wide — filled brand-green with white
+///     text — so segmented controls (handicap, group size, payout toggles)
+///     match the GameSelectableChip picker instead of M3's pale
+///     secondaryContainer + checkmark.
+///   * FABs are a primary action, so they use the same filled brand-green as
+///     every other primary (FilledButton) rather than M3's light default.
+ThemeData _halvedTheme(Brightness brightness) {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: const Color(0xFF2E7D32),
+    brightness: brightness,
+  );
+  return ThemeData(
+    colorScheme: scheme,
+    useMaterial3: true,
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected)
+                ? scheme.primary
+                : scheme.surface),
+        foregroundColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected)
+                ? scheme.onPrimary
+                : scheme.onSurface),
+      ),
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: scheme.primary,
+      foregroundColor: scheme.onPrimary,
+    ),
+  );
+}
+
 /// Global navigator key — lets AuthProvider redirect to /login on 401
 /// from outside the widget tree.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -209,20 +244,8 @@ class _GolfAppState extends State<GolfApp> {
         navigatorObservers:   [appRouteObserver],
         title: 'Halved',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF2E7D32),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF2E7D32),
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-        ),
+        theme:     _halvedTheme(Brightness.light),
+        darkTheme: _halvedTheme(Brightness.dark),
         // The app's visuals are built around a light "paper scorecard" look
         // (white score-grid fills, hardcoded inks). Pin to light mode so Halved
         // always renders correctly even when the phone is set to dark mode.
