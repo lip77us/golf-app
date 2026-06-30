@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.1.0)
+# App Store listing copy — Halved (v2.2.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -21,8 +21,8 @@ https://halved.golf/support
 ## Primary category
 Sports  (Secondary: optional, e.g. Utilities)
 
-## Keywords (100 max) — refreshed for 2.1.0
-vegas,wolf,sixes,stableford,handicap,foursome,matchplay,scorecard,tournament,settle,stakes,points
+## Keywords (100 max) — refreshed for 2.2.0
+vegas,wolf,sixes,stableford,spots,handicap,foursome,matchplay,scorecard,tournament,settle,stakes
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
@@ -44,6 +44,7 @@ GAMES YOU CAN PLAY
 • Rabbit
 • Points 5-3-1
 • Stableford, with a custom points table
+• Spots — a side game for one-putts, sandies, barkies and more
 • Match Play
 • Stroke Play
 • Multi-Group Skins across foursomes
@@ -84,17 +85,15 @@ what — settle up in seconds, with no spreadsheets and no napkin math.
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
 
-## What's New (v2.1.0)
-New games and easier play with your group:
+## What's New (v2.2.0)
+A new side game and quicker setup:
 
-• New game: Las Vegas (2v2 team match)
-• Added Wolf, Rabbit, and Stableford
-• Follow along — rounds a friend adds you to, or invites you to watch, now appear
-  right on your Casual Rounds and Tournaments lists, flagged so you know whether
-  you're playing or just watching
-• Round chat plus a live feed of birdies and big moments
-• One-tap text invites when you add a golfer to a round
-• Faster course search — just type a name and pick it
-• Open the full scorecard anytime, right from the leaderboard
-• Clearer, easier-to-read score colors
-• Various fixes and polish
+• New: Spots — track one-putts, sandies, barkies, or whatever your group counts,
+  as a separate side game. Add or subtract per hole; it never touches your main
+  game. Play it alongside Nassau, Sixes, Points, Wolf, Rabbit and more.
+• Suggest a Game — got a format we don't have yet? Send it to us from the app.
+• Recent courses — your last courses are one tap away when you start a round.
+• "18-Hole Match" is now "Singles Match."
+• Stroke Play can ride along as a side game, with the same simple payout setup as
+  Stableford.
+• Various fixes and polish.
