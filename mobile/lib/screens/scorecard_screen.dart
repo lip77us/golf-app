@@ -943,7 +943,13 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
             ),
         ],
       ),
-      body: Column(children: [
+      // Inset the grid past the notch / home-indicator: in landscape those land
+      // on the left/right edges and would otherwise clip the name and NET/STB
+      // columns. SafeArea shrinks the scroll viewport, leaving the scroll-to-hole
+      // math untouched (it reads the live viewport dimension).
+      body: SafeArea(
+        top: false,
+        child: Column(children: [
         _SyncBanner(sync: sync),
         if (rp.loadingScorecard)
           const Expanded(child: Center(child: CircularProgressIndicator()))
@@ -959,6 +965,7 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
             ),
           ),
       ]),
+      ),
     );
   }
 }
