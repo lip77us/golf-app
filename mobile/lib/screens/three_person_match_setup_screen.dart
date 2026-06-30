@@ -23,6 +23,7 @@ import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inline_message.dart';
+import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
 
 class ThreePersonMatchSetupScreen extends StatefulWidget {
@@ -57,15 +58,15 @@ class _ThreePersonMatchSetupScreenState
   String _mode       = 'strokes_off';
   int    _netPercent = 100;
 
-  final _entryFeeCtrl = TextEditingController(text: '0');
+  final _entryFeeCtrl = TextEditingController();
   // Payout controllers indexed 0..2 → places "1st" / "2nd" / "3rd".  Number
   // of *active* places is driven by [_payoutPlaces] (0–3), matching the
   // Pink Ball / Low Net "Places paid" toggle UX.  Inactive places aren't
   // sent on save.
   static const _placeLabels = ['1st', '2nd', '3rd'];
   final List<TextEditingController> _payoutCtrls = List.generate(
-      3, (_) => TextEditingController(text: '0'));
-  int _payoutPlaces = 0;
+      3, (_) => TextEditingController());
+  int _payoutPlaces = 1;
 
   /// Format a monetary amount without unnecessary decimal places — "5"
   /// instead of "5.00", "5.50" stays "5.50".  Matches the convention
@@ -109,11 +110,6 @@ class _ThreePersonMatchSetupScreenState
 
   double get _pool => _entryFee * (_rosterValid ? 3 : 3);
 
-  double get _payoutTotal => _payoutCtrls
-      .take(_payoutPlaces)
-      .map((c) => double.tryParse(c.text.trim()) ?? 0.0)
-      .fold(0.0, (a, b) => a + b);
-
   // ── Load / Save ───────────────────────────────────────────────────────────
 
   Future<void> _load() async {
@@ -147,10 +143,10 @@ class _ThreePersonMatchSetupScreenState
           int places = 0;
           for (int i = 0; i < _placeLabels.length; i++) {
             final amt = (cfg[_placeLabels[i]] as num?)?.toDouble() ?? 0.0;
-            _payoutCtrls[i].text = _fmtAmount(amt);
+            _payoutCtrls[i].text = amt > 0 ? _fmtAmount(amt) : '';
             if (amt > 0) places = i + 1;
           }
-          _payoutPlaces = places;
+          _payoutPlaces = places.clamp(1, 3);
         }
         _loading = false;
       });
@@ -168,20 +164,12 @@ class _ThreePersonMatchSetupScreenState
   }
 
   void _suggestPayouts() {
-    if (_pool <= 0 || _payoutPlaces == 0) return;
+    final pool = _pool.round();
+    if (pool <= 0) return;
+    final amts = suggestPayouts(pool, _payoutPlaces);
     setState(() {
-      // Distribute by the number of active places.  Final place absorbs
-      // rounding remainder so the split always totals the pool exactly.
-      final ratios = switch (_payoutPlaces) {
-        1 => const [1.0],
-        2 => const [0.7, 0.3],
-        _ => const [0.6, 0.3, 0.1],
-      };
-      double remaining = _pool;
       for (int i = 0; i < _payoutPlaces; i++) {
-        final amt = i < _payoutPlaces - 1 ? (_pool * ratios[i]) : remaining;
-        remaining -= amt;
-        _payoutCtrls[i].text = _fmtAmount(amt);
+        _payoutCtrls[i].text = amts[i] == 0 ? '' : '${amts[i]}';
       }
     });
   }
@@ -321,6 +309,7 @@ class _ThreePersonMatchSetupScreenState
       GolfTextField(
         controller: _entryFeeCtrl,
         label: 'Per player (\$)',
+        hint: '0',
         prefixIcon: Icons.attach_money,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
       ),
@@ -335,79 +324,20 @@ class _ThreePersonMatchSetupScreenState
     ]),
   );
 
-  Widget _payoutsCard(ThemeData theme) {
-    final remaining = _pool - _payoutTotal;
-    final balanced  = remaining.abs() < 0.01 || _pool == 0;
-    return SectionCard(
-      title: 'Payouts',
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Places paid',
-            style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 6),
-        // 0–3 places — max is 3 since this is a 3-player game.  Same
-        // ToggleButtons pattern as Pink Ball / Low Net for consistency.
-        LayoutBuilder(builder: (context, constraints) {
-          final segW = ((constraints.maxWidth - 5) / 4).floorToDouble();
-          return ToggleButtons(
-            borderRadius: BorderRadius.circular(8),
-            constraints: BoxConstraints.tightFor(width: segW, height: 40),
-            isSelected: List.generate(4, (i) => i == _payoutPlaces),
-            onPressed: (n) => setState(() => _payoutPlaces = n),
-            children: const [Text('0'), Text('1'), Text('2'), Text('3')],
-          );
-        }),
-        if (_payoutPlaces > 0) ...[
-          const SizedBox(height: 14),
-          for (int i = 0; i < _payoutPlaces; i++) ...[
-            Row(children: [
-              SizedBox(
-                width: 32,
-                child: Text(_placeLabels[i],
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GolfTextField(
-                  controller: _payoutCtrls[i],
-                  prefixText: '\$ ',
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 8),
-          ],
-        ],
-        if (_pool > 0 && _payoutPlaces > 0) ...[
-          const Divider(height: 12),
-          Row(children: [
-            Expanded(
-              child: Text(
-                balanced
-                    ? 'Payouts balance ✓'
-                    : 'Remaining: \$${_fmtAmount(remaining)}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: balanced
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.error),
-              ),
-            ),
-            TextButton(
-              onPressed: _suggestPayouts,
-              child: Text(switch (_payoutPlaces) {
-                1 => 'Auto-suggest (winner takes all)',
-                2 => 'Auto-suggest (70/30)',
-                _ => 'Auto-suggest (60/30/10)',
-              }),
-            ),
-          ]),
-        ],
-      ]),
-    );
-  }
+  Widget _payoutsCard(ThemeData theme) => SectionCard(
+    title: 'Payouts',
+    // Shared payout construct — paid-places stepper (max 3 for a threesome),
+    // amount fields, balance + Auto-suggest. Matches every other game.
+    child: PayoutConfigField(
+      pool:                _pool.round(),
+      numPayouts:          _payoutPlaces.clamp(1, 3),
+      payoutCtrls:         _payoutCtrls,
+      maxPayouts:          3,
+      onNumPayoutsChanged: (n) => setState(() => _payoutPlaces = n),
+      onPayoutChanged:     () => setState(() {}),
+      onSuggest:           _suggestPayouts,
+    ),
+  );
 
   Widget _rulesCard(ThemeData theme) => SectionCard(
     title: 'How it works',

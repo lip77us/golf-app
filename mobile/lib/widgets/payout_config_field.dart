@@ -75,6 +75,16 @@ class PayoutConfigField extends StatelessWidget {
   final void Function()    onPayoutChanged;
   final void Function()    onSuggest;
 
+  /// Maximum paid places the stepper allows (1..maxPayouts). Defaults to 4;
+  /// pass a smaller cap for games bounded by player count (e.g. a threesome → 3).
+  final int maxPayouts;
+
+  /// Optional helper line shown under place [i]'s amount field (0-based) — used
+  /// by whole-field POOL games to show the per-player split of that prize
+  /// ("Splits to $X/player …"). Return null/'' for no subtitle on that place.
+  /// Within-group games (Match Play) leave this null.
+  final String? Function(int placeIndex)? placeSubtitle;
+
   const PayoutConfigField({
     super.key,
     required this.pool,
@@ -83,6 +93,8 @@ class PayoutConfigField extends StatelessWidget {
     required this.onNumPayoutsChanged,
     required this.onPayoutChanged,
     required this.onSuggest,
+    this.maxPayouts   = 4,
+    this.placeSubtitle,
   });
 
   int get _payoutTotal {
@@ -133,7 +145,7 @@ class PayoutConfigField extends StatelessWidget {
             ),
             IconButton(
               icon:          const Icon(Icons.add_circle_outline),
-              onPressed:     numPayouts < 4
+              onPressed:     numPayouts < maxPayouts
                   ? () => onNumPayoutsChanged(numPayouts + 1)
                   : null,
               visualDensity: VisualDensity.compact,
@@ -159,6 +171,7 @@ class PayoutConfigField extends StatelessWidget {
                 controller:   payoutCtrls[i],
                 decoration:   const InputDecoration(
                   prefixText: '\$ ',
+                  hintText:   '0',          // grey placeholder, not a literal 0
                   border:     OutlineInputBorder(),
                   isDense:    true,
                 ),
@@ -167,6 +180,17 @@ class PayoutConfigField extends StatelessWidget {
               ),
             ),
           ]),
+          if (placeSubtitle?.call(i)?.isNotEmpty ?? false) ...[
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.only(left: 48),
+              child: Text(
+                placeSubtitle!(i)!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
         ],
 
