@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/client.dart';
+import '../api/models.dart' show prettyCourseName;
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 
@@ -100,8 +101,8 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
   /// Display title for a course result: club name, with course name appended
   /// in parentheses when it differs (e.g. multi-course facilities).
   static String _courseTitle(Map<String, dynamic> c) {
-    final club   = (c['club_name']   as String? ?? '').trim();
-    final course = (c['course_name'] as String? ?? '').trim();
+    final club   = prettyCourseName((c['club_name']   as String? ?? '').trim());
+    final course = prettyCourseName((c['course_name'] as String? ?? '').trim());
     if (course.isNotEmpty && course != club) return '$club ($course)';
     return club;
   }
@@ -351,8 +352,8 @@ class _CourseDetailSheetState extends State<_CourseDetailSheet> {
   }
 
   static String _courseTitle(Map<String, dynamic> c) {
-    final club   = (c['club_name']   as String? ?? '').trim();
-    final course = (c['course_name'] as String? ?? '').trim();
+    final club   = prettyCourseName((c['club_name']   as String? ?? '').trim());
+    final course = prettyCourseName((c['course_name'] as String? ?? '').trim());
     if (course.isNotEmpty && course != club) return '$club ($course)';
     return club;
   }

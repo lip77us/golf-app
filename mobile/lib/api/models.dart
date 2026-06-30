@@ -277,6 +277,15 @@ class PlayerProfile {
   String get displayHandicap => handicapIndex;
 }
 
+/// Tidy a course name for display. GolfCourseAPI title-cases everything, so the
+/// "Golf Course" / "Country Club" abbreviations come back as "Gc"/"Cc" — fix
+/// those standalone tokens to the conventional "GC"/"CC". Display-only; the
+/// course is matched server-side by golf_api_id, never by name.
+String prettyCourseName(String raw) => raw.replaceAllMapped(
+      RegExp(r'\b(Gc|Cc)\b'),
+      (m) => m[1]!.toUpperCase(),
+    );
+
 class CourseInfo {
   final int id;
   final String name;
@@ -301,7 +310,7 @@ class CourseInfo {
 
   factory CourseInfo.fromJson(Map<String, dynamic> j) => CourseInfo(
         id: j['id'] as int,
-        name: j['name'] as String,
+        name: prettyCourseName(j['name'] as String),
         city: j['city'] as String? ?? '',
         state: j['state'] as String? ?? '',
         tees: (j['tees'] as List? ?? const [])
@@ -339,7 +348,7 @@ class CatalogCourse {
 
   factory CatalogCourse.fromJson(Map<String, dynamic> j) => CatalogCourse(
         id: j['id'] as int,
-        name: j['name'] as String,
+        name: prettyCourseName(j['name'] as String),
         city: j['city'] as String? ?? '',
         state: j['state'] as String? ?? '',
         teeCount: j['tee_count'] as int? ?? 0,
@@ -382,7 +391,7 @@ class CourseHit {
 
   factory CourseHit.fromJson(Map<String, dynamic> j) => CourseHit(
         source: j['source'] as String? ?? 'api',
-        name: j['name'] as String? ?? '',
+        name: prettyCourseName(j['name'] as String? ?? ''),
         city: j['city'] as String? ?? '',
         state: j['state'] as String? ?? '',
         country: j['country'] as String? ?? '',
@@ -511,7 +520,7 @@ class RoundSummary {
         courseId       : j['course_id'] as int? ?? 0,
         roundNumber    : j['round_number'] as int,
         date           : j['date'] as String,
-        courseName     : j['course_name'] as String? ?? '',
+        courseName     : prettyCourseName(j['course_name'] as String? ?? ''),
         status         : j['status'] as String,
         activeGames    : List<String>.from(j['active_games'] as List? ?? []),
         betUnit        : double.parse(j['bet_unit'].toString()),
@@ -633,7 +642,7 @@ class CasualRoundSummary {
       CasualRoundSummary(
         id:                  j['id'] as int,
         date:                j['date'] as String,
-        courseName:          j['course_name'] as String,
+        courseName:          prettyCourseName(j['course_name'] as String),
         status:              j['status'] as String,
         activeGames:         List<String>.from(j['active_games'] as List? ?? []),
         isEighteenHoleMatch: j['is_eighteen_hole_match'] as bool? ?? false,
@@ -686,7 +695,7 @@ class SharedRoundSummary {
       SharedRoundSummary(
         id:           j['id'] as int,
         date:         j['date'] as String? ?? '',
-        courseName:   j['course_name'] as String? ?? '',
+        courseName:   prettyCourseName(j['course_name'] as String? ?? ''),
         status:       j['status'] as String? ?? '',
         activeGames:  List<String>.from(j['active_games'] as List? ?? []),
         isEighteenHoleMatch: j['is_eighteen_hole_match'] as bool? ?? false,
@@ -731,7 +740,7 @@ class ScoringRound {
   factory ScoringRound.fromJson(Map<String, dynamic> j) => ScoringRound(
         id:             j['id'] as int,
         date:           j['date'] as String? ?? '',
-        courseName:     j['course_name'] as String? ?? '',
+        courseName:     prettyCourseName(j['course_name'] as String? ?? ''),
         status:         j['status'] as String? ?? '',
         activeGames:    List<String>.from(j['active_games'] as List? ?? []),
         isEighteenHoleMatch: j['is_eighteen_hole_match'] as bool? ?? false,
@@ -3612,7 +3621,7 @@ class Leaderboard {
     return Leaderboard(
       roundId:    j['round_id']  as int,
       roundDate:  j['round_date'] as String,
-      course:     j['course']     as String,
+      course:     prettyCourseName(j['course'] as String),
       status:     j['status']     as String,
       isCupRound: j['is_cup_round'] as bool? ?? false,
       activeGames: List<String>.from(j['active_games'] as List? ?? []),
@@ -3887,7 +3896,7 @@ class CupRound {
         roundId:          j['round_id']           as int,
         roundNumber:      j['round_number']        as int,
         date:             j['date']                as String,
-        course:           j['course']              as String,
+        course:           prettyCourseName(j['course'] as String),
         nassauPointValue: (j['nassau_point_value'] as num? ?? 1).toDouble(),
         pointMultiplier:  (j['point_multiplier']   as num? ?? 1).toDouble(),
         notes:            j['notes']               as String? ?? '',
