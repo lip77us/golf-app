@@ -4228,10 +4228,24 @@ class _InlinePickerState extends State<_InlinePicker> {
 
   late final ScrollController _ctrl;
 
+  // Edge-fade hints: fade the leading/trailing chips when there's more to
+  // scroll to, so it's obvious the row continues past par (e.g. for a high score).
+  bool _atStart = true;
+  bool _atEnd   = false;
+
   double _offsetFor(int par, int strokes) {
     final netPar   = par + strokes;
     final startIdx = (netPar - 3).clamp(0, 11);
     return (startIdx * _itemTotal).clamp(0.0, double.infinity);
+  }
+
+  void _onScroll() {
+    if (!_ctrl.hasClients) return;
+    final atStart = _ctrl.offset <= 0.5;
+    final atEnd   = _ctrl.offset >= _ctrl.position.maxScrollExtent - 0.5;
+    if (atStart != _atStart || atEnd != _atEnd) {
+      setState(() { _atStart = atStart; _atEnd = atEnd; });
+    }
   }
 
   @override
@@ -4239,6 +4253,8 @@ class _InlinePickerState extends State<_InlinePicker> {
     super.initState();
     _ctrl = ScrollController(
         initialScrollOffset: _offsetFor(widget.par, widget.strokes));
+    _ctrl.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onScroll());
   }
 
   @override
@@ -4272,7 +4288,23 @@ class _InlinePickerState extends State<_InlinePicker> {
           top: BorderSide(color: theme.colorScheme.primary.withOpacity(0.2)),
         ),
       ),
-      child: ListView.builder(
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (bounds) {
+          final f = (16.0 / bounds.width).clamp(0.0, 0.5);
+          return LinearGradient(
+            begin: Alignment.centerLeft,
+            end:   Alignment.centerRight,
+            colors: [
+              _atStart ? Colors.white : Colors.transparent,
+              Colors.white,
+              Colors.white,
+              _atEnd ? Colors.white : Colors.transparent,
+            ],
+            stops: [0.0, f, 1 - f, 1.0],
+          ).createShader(bounds);
+        },
+        child: ListView.builder(
         controller:      _ctrl,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -4316,6 +4348,7 @@ class _InlinePickerState extends State<_InlinePicker> {
             ),
           );
         },
+        ),
       ),
     );
   }
