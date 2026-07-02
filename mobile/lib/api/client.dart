@@ -1555,6 +1555,14 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  /// Irish Rumble standings — segments + overall, including each group's
+  /// borrowed-4th donor status (`overall[].phantom`).  Used by score entry to
+  /// show a leveled threesome its borrowed-ball / pending holes.
+  Future<Map<String, dynamic>> getIrishRumbleResult(int roundId) async {
+    final data = await _get('/rounds/$roundId/irish-rumble/');
+    return data as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> postIrishRumbleSetup(
     int roundId, {
     required String                      handicapMode,

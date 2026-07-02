@@ -39,7 +39,7 @@ int _effectiveHandicap({
   }
 }
 
-String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
+String _toPar(int v) => v == 0 ? 'E' : (v > 0 ? '+$v' : '$v');
 
 /// One dot color per player slot (up to 4 players) used in the hole-
 /// strip stroke indicators.  A filled circle in the player's slot color
@@ -679,6 +679,13 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        // Close (X), not a back arrow — the '<' was being tapped by mistake as
+        // a "previous hole" control. X reads clearly as "leave the scorecard".
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Close scorecard',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -910,6 +917,13 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 40,
+        // Close (X) instead of a back arrow — avoids being mistaken for a
+        // "previous hole" control.
+        leading: IconButton(
+          icon: const Icon(Icons.close, size: 20),
+          tooltip: 'Close scorecard',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: Text(
           'Scorecard — Group ${rp.scorecard?.groupNumber ?? ""}  ·  $modeLabel',
           style: const TextStyle(fontSize: 14),
@@ -1236,13 +1250,20 @@ class _HoleScoreCard extends StatelessWidget {
                   ]),
                 ),
 
-                // Running totals
-                Text(
-                  '${_signed(rt.grossVsPar)}G '
-                  '${_signed(rt.netVsPar)}N',
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.secondary),
+                // Running totals — Gross always; Net on a second row only when
+                // the player receives strokes (skip for gross games / scratch).
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Gross ${_toPar(rt.grossVsPar)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.secondary)),
+                    if (effectiveHcap(m) > 0)
+                      Text('Net ${_toPar(rt.netVsPar)}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.secondary)),
+                  ],
                 ),
                 const SizedBox(width: 8),
 
@@ -1253,23 +1274,17 @@ class _HoleScoreCard extends StatelessWidget {
                       : null,
                   child: gross != null
                       // Scored: NetScoreButton (golf colors + circle/square).
-                      ? Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            NetScoreButton(
-                              score:    gross,
-                              par:      par,
-                              strokes:  strokes,
-                              selected: false,
-                              width:    40,
-                              height:   36,
-                            ),
-                            if (strokes > 0)
-                              Positioned(
-                                top: 1, right: 1,
-                                child: _StrokeDots(count: strokes),
-                              ),
-                          ],
+                      ? scoreCellWithDots(
+                          NetScoreButton(
+                            score:    gross,
+                            par:      par,
+                            strokes:  strokes,
+                            selected: false,
+                            width:    40,
+                            height:   36,
+                          ),
+                          strokes,
+                          theme.colorScheme.primary,
                         )
                       // Empty: plain box, hot highlight when active.
                       : AnimatedContainer(
@@ -1814,36 +1829,30 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
     return TableCell(
       child: Container(
         height: rowH, color: bg,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  gross != null
-                      ? scoreMark(
-                          text: '$gross',
-                          diff: (gross - strokes) - par,
-                          baseStyle: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14),
-                          theme: theme,
-                        )
-                      : const Text('—',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14)),
-                  if (isLocalOnly)
-                    Icon(Icons.cloud_upload_outlined,
-                        size: 8, color: theme.colorScheme.tertiary),
-                ],
-              ),
+        child: scoreCellWithDots(
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                gross != null
+                    ? scoreMark(
+                        text: '$gross',
+                        diff: (gross - strokes) - par,
+                        baseStyle: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14),
+                        theme: theme,
+                      )
+                    : const Text('—',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                if (isLocalOnly)
+                  Icon(Icons.cloud_upload_outlined,
+                      size: 8, color: theme.colorScheme.tertiary),
+              ],
             ),
-            if (strokes > 0)
-              Positioned(
-                top: 1, right: 1,
-                child: _StrokeDots(count: strokes),
-              ),
-          ],
+          ),
+          strokes,
+          theme.colorScheme.primary,
         ),
       ),
     );
@@ -1880,35 +1889,3 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Stroke dots — small corner badge that shows how many handicap strokes a
-// player receives on a hole.  Big enough to actually see; clamped at 2 so
-// a 36-handicap player doesn't fill the cell.
-// ---------------------------------------------------------------------------
-
-class _StrokeDots extends StatelessWidget {
-  final int count;
-  const _StrokeDots({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    if (count <= 0) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    final visible = count.clamp(1, 2);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(visible, (i) {
-        return Container(
-          width: 8,
-          height: 8,
-          margin: EdgeInsets.only(left: i == 0 ? 0 : 2),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
-            shape: BoxShape.circle,
-            border: Border.all(color: theme.colorScheme.onPrimary, width: 1),
-          ),
-        );
-      }),
-    );
-  }
-}

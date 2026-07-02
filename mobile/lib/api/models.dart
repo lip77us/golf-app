@@ -3497,14 +3497,20 @@ class NassauPhantomDonorHole {
   final int    playerId;
   final String playerName;
   final String shortName;
+  final int?   hcp;         // donor's playing handicap
   final bool   hasScore;
+  final int?   gross;       // donor's gross this hole (null until they post)
+  final int    strokes;     // donor's handicap strokes this hole (dot count)
   final int    so;          // phantom's strokes-off VALUE this hole (donor − real low)
 
   const NassauPhantomDonorHole({
     required this.playerId,
     required this.playerName,
     required this.shortName,
+    this.hcp,
     required this.hasScore,
+    this.gross,
+    this.strokes = 0,
     required this.so,
   });
 
@@ -3513,7 +3519,10 @@ class NassauPhantomDonorHole {
         playerId:   j['player_id']   as int,
         playerName: j['player_name'] as String? ?? '',
         shortName:  j['short_name']  as String? ?? (j['player_name'] as String? ?? ''),
+        hcp:        j['hcp']         as int?,
         hasScore:   j['has_score']   as bool?   ?? false,
+        gross:      j['gross']       as int?,
+        strokes:    j['strokes']     as int?    ?? 0,
         so:         j['so']          as int?    ?? 0,
       );
 }
@@ -3755,13 +3764,21 @@ class CupPlayer {
   final int    id;
   final String name;
   final String shortName;
+  /// 'M'/'W' tee designation. Older payloads omit it → defaults to 'M'.
+  final String sex;
 
-  const CupPlayer({required this.id, required this.name, required this.shortName});
+  const CupPlayer({
+    required this.id,
+    required this.name,
+    required this.shortName,
+    this.sex = 'M',
+  });
 
   factory CupPlayer.fromJson(Map<String, dynamic> j) => CupPlayer(
         id:        j['player_id'] as int,
         name:      j['name']      as String,
         shortName: j['short_name'] as String? ?? '',
+        sex:       j['sex'] as String? ?? 'M',
       );
 }
 

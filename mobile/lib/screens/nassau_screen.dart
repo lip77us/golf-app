@@ -27,8 +27,6 @@ import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
 
-String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
-
 Color _nassauTeamColor(String? raw) {
   switch ((raw ?? '').toLowerCase()) {
     case 'red':    return Colors.red.shade700;
@@ -43,11 +41,6 @@ Color _nassauTeamColor(String? raw) {
   }
 }
 
-class _RunningTotal {
-  final int grossVsPar;
-  final int netVsPar;
-  const _RunningTotal({required this.grossVsPar, required this.netVsPar});
-}
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -500,6 +493,13 @@ class _NassauScreenState extends State<NassauScreen> {
 
     return Scaffold(
       appBar: GolfAppBar(
+        // Close (X), not a back arrow — avoids being tapped as "previous hole".
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Close',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: nas != null
             ? 'Nassau — ${_modeLabel(nas.handicapMode, nas.netPercent)}'
             : 'Nassau',
@@ -525,11 +525,6 @@ class _NassauScreenState extends State<NassauScreen> {
                 ),
               ),
             ),
-          IconButton(
-            tooltip: 'Refresh scores',
-            icon: const Icon(Icons.refresh),
-            onPressed: rp.round == null ? null : _refresh,
-          ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
           IconButton(
@@ -629,7 +624,8 @@ class _NassauScreenState extends State<NassauScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _selectedHole > 1 ? _retreat : null,
                   icon: const Icon(Icons.chevron_left, size: 20),
-                  label: Text('Hole ${_selectedHole - 1}'),
+                  label: Text(
+                      _selectedHole > 1 ? 'Hole ${_selectedHole - 1}' : 'Previous'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -887,22 +883,6 @@ class _NassauHoleScoreCard extends StatelessWidget {
     return 0;
   }
 
-  _RunningTotal _running(int playerId) {
-    final m = players.where((x) => x.player.id == playerId).firstOrNull;
-
-    int gross = 0, parSum = 0, net = 0;
-    for (final h in scorecard.holes) {
-      final pendingGross = merged[h.holeNumber]?[playerId];
-      final saved        = h.scoreFor(playerId);
-      final grossScore   = pendingGross ?? saved?.grossScore;
-      if (grossScore == null) continue;
-      gross  += grossScore;
-      parSum += h.par;
-      final strokes = m == null ? 0 : _strokesForHole(m, h);
-      net += grossScore - strokes;
-    }
-    return _RunningTotal(grossVsPar: gross - parSum, netVsPar: net - parSum);
-  }
 
   String? _teamLabelFor(int playerId) {
     if (nassau == null) return null;
@@ -1010,27 +990,27 @@ class _NassauHoleScoreCard extends StatelessWidget {
               ];
             }
 
-            final rt         = _running(m.player.id);
             final gross      = scores[m.player.id];
             final isHot      = idx == hotSpotIdx;
             final hasScore   = gross != null;
             final matchStrok = _strokesForHole(m, holeData);
 
+            // Handicap pill reads "gets N" (strokes this player receives).
+            // The stroke-this-hole indicator now lives in the dot strip above
+            // the score box, so no bullets here. Hidden for a 0-stroke player.
             String? hcapLabel;
             if (_mode == 'net' || _mode == 'strokes_off') {
-              final dots = matchStrok > 0 ? ' ${'•' * matchStrok}' : '';
-              hcapLabel = '-${_matchHcapFor(m)}$dots';
+              final h = _matchHcapFor(m);
+              if (h > 0) hcapLabel = 'gets $h';
             }
 
             return [
               _NassauPlayerRow(
                 member:              m,
-                running:             rt,
                 gross:               gross,
                 isHot:               isHot,
                 matchHcapLabel:      hcapLabel,
                 strokesOnThisHole:   matchStrok,
-                showNetRunningTotal: _mode == 'net',
                 teamLabel:           _teamLabelFor(m.player.id),
                 t1Color:             _t1Color,
                 t2Color:             _t2Color,
@@ -1237,26 +1217,22 @@ class _PhantomDonorRow extends StatelessWidget {
 
 class _NassauPlayerRow extends StatelessWidget {
   final Membership    member;
-  final _RunningTotal running;
   final int?          gross;
   final bool          isHot;
   final String?       matchHcapLabel;
   final VoidCallback? onTap;
   final int           strokesOnThisHole;
-  final bool          showNetRunningTotal;
   final String?       teamLabel;
   final Color         t1Color;
   final Color         t2Color;
 
   const _NassauPlayerRow({
     required this.member,
-    required this.running,
     required this.gross,
     required this.isHot,
     this.matchHcapLabel,
     this.onTap,
     this.strokesOnThisHole = 0,
-    this.showNetRunningTotal = true,
     this.teamLabel,
     Color? t1Color,
     Color? t2Color,
@@ -1357,31 +1333,22 @@ class _NassauPlayerRow extends StatelessWidget {
           ]),
         ),
 
-        // Running total
-        Text(
-          showNetRunningTotal
-              ? '${_signed(running.grossVsPar)}G ${_signed(running.netVsPar)}N'
-              : '${_signed(running.grossVsPar)}G',
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.secondary),
-        ),
         const SizedBox(width: 8),
 
         // Score box with optional stroke dots
         GestureDetector(
           onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 40,
-            height: 36,
-            decoration: BoxDecoration(
-              color: boxBg,
-              border: boxBorder,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Stack(children: [
-              Center(
+          child: scoreCellWithDots(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 40,
+              height: 36,
+              decoration: BoxDecoration(
+                color: boxBg,
+                border: boxBorder,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Center(
                 child: gross != null
                     ? Text('$gross',
                         style: theme.textTheme.titleSmall
@@ -1392,25 +1359,9 @@ class _NassauPlayerRow extends StatelessWidget {
                             color: theme.colorScheme.primary)
                         : const SizedBox.shrink(),
               ),
-              if (strokesOnThisHole > 0)
-                Positioned(
-                  top: 2, right: 2,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(
-                      strokesOnThisHole.clamp(0, 2),
-                      (i) => Container(
-                        width: 4, height: 4,
-                        margin: const EdgeInsets.only(left: 1),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ]),
+            ),
+            strokesOnThisHole,
+            theme.colorScheme.primary,
           ),
         ),
       ]),

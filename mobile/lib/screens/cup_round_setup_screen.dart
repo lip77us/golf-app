@@ -220,6 +220,16 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
     return 'Player $id';
   }
 
+  /// A player's tee-designation sex ('M'/'W'), used to filter the tee list so
+  /// each golfer only sees their own set (not both men's and women's tees).
+  String _playerSex(int id) {
+    for (final t in _teams) {
+      final p = t.players.where((p) => p.id == id).firstOrNull;
+      if (p != null) return p.sex;
+    }
+    return 'M';
+  }
+
   // ── Game filtering ─────────────────────────────────────────────────────────
 
   /// Games to show in the picker, filtered to the round's game plan.
@@ -739,6 +749,7 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
       case _BuildStep.tees:      return _TeePicker(
         playerIds  : _selectedIds.toList(),
         playerName : _playerName,
+        playerSex  : _playerSex,
         courseTees : _courseTees,
         playerTees : _playerTees,
         onPickTee  : (pid, teeId) => setState(() => _playerTees[pid] = teeId),
@@ -1087,6 +1098,7 @@ class _PlayerPicker extends StatelessWidget {
 class _TeePicker extends StatelessWidget {
   final List<int>            playerIds;
   final String Function(int) playerName;
+  final String Function(int) playerSex;   // playerId → 'M'/'W'
   final List<TeeInfo>        courseTees;
   final Map<int, int>        playerTees;    // playerId → teeId
   final void Function(int pid, int teeId) onPickTee;
@@ -1096,6 +1108,7 @@ class _TeePicker extends StatelessWidget {
   const _TeePicker({
     required this.playerIds,
     required this.playerName,
+    required this.playerSex,
     required this.courseTees,
     required this.playerTees,
     required this.onPickTee,
@@ -1124,7 +1137,14 @@ class _TeePicker extends StatelessWidget {
           )
         else
           ...playerIds.map((pid) {
-            final selectedTeeId = playerTees[pid];
+            // Only this golfer's tees: unisex tees plus those matching their sex.
+            final sex  = playerSex(pid);
+            final tees = courseTees
+                .where((t) => t.sex == null || t.sex == sex)
+                .toList();
+            final selectedTeeId = tees.any((t) => t.id == playerTees[pid])
+                ? playerTees[pid]
+                : null;
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: Padding(
@@ -1146,7 +1166,7 @@ class _TeePicker extends StatelessWidget {
                         contentPadding: EdgeInsets.symmetric(
                             horizontal: 12, vertical: 8),
                       ),
-                      items: courseTees.map((t) => DropdownMenuItem(
+                      items: tees.map((t) => DropdownMenuItem(
                         value: t.id,
                         child: Text(t.teeName,
                             overflow: TextOverflow.ellipsis),

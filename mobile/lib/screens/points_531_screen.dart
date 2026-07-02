@@ -33,14 +33,6 @@ import '../widgets/inline_message.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 
-String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
-
-class _RunningTotal {
-  final int grossVsPar;
-  final int netVsPar;
-  const _RunningTotal({required this.grossVsPar, required this.netVsPar});
-}
-
 // ---------------------------------------------------------------------------
 // The screen
 // ---------------------------------------------------------------------------
@@ -444,15 +436,15 @@ class _Points531ScreenState extends State<Points531Screen> {
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Points 5-3-1',
-        automaticallyImplyLeading: !showExit,
-        leading: showExit
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Exit to rounds',
-                onPressed: () => Navigator.of(context).popUntil(
-                    (r) => r.settings.name == '/casual-rounds' || r.isFirst),
-              )
-            : null,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: showExit ? 'Exit to rounds' : 'Close',
+          onPressed: showExit
+              ? () => Navigator.of(context).popUntil(
+                  (r) => r.settings.name == '/casual-rounds' || r.isFirst)
+              : () => Navigator.of(context).maybePop(),
+        ),
         actions: [
           if (sync.hasPending)
             Padding(
@@ -474,11 +466,6 @@ class _Points531ScreenState extends State<Points531Screen> {
                 ),
               ),
             ),
-          IconButton(
-            tooltip: 'Refresh scores',
-            icon: const Icon(Icons.refresh),
-            onPressed: rp.round == null ? null : _refresh,
-          ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
           // Leaderboard shortcut — round-level summary across every game.
@@ -528,7 +515,8 @@ class _Points531ScreenState extends State<Points531Screen> {
             child: OutlinedButton.icon(
               onPressed: _selectedHole > 1 ? _retreat : null,
               icon: const Icon(Icons.chevron_left, size: 20),
-              label: Text('Hole ${_selectedHole - 1}'),
+              label: Text(
+                  _selectedHole > 1 ? 'Hole ${_selectedHole - 1}' : 'Previous'),
             ),
           ),
           const SizedBox(width: 8),
@@ -744,24 +732,6 @@ class _P531HoleScoreCard extends StatelessWidget {
     return 0;
   }
 
-  _RunningTotal _running(int playerId) {
-    final m = players
-        .where((x) => x.player.id == playerId)
-        .firstOrNull;
-
-    int gross = 0, parSum = 0, net = 0;
-    for (final h in scorecard.holes) {
-      final pendingGross = merged[h.holeNumber]?[playerId];
-      final saved        = h.scoreFor(playerId);
-      final grossScore   = pendingGross ?? saved?.grossScore;
-      if (grossScore == null) continue;
-      gross  += grossScore;
-      parSum += h.par;
-      final strokes = m == null ? 0 : _strokesForHole(m, h);
-      net += grossScore - strokes;
-    }
-    return _RunningTotal(grossVsPar: gross - parSum, netVsPar: net - parSum);
-  }
 
   /// Per-player cumulative Points 5-3-1 total (from the server summary).
   double _pointsFor(int playerId) {
@@ -899,25 +869,20 @@ class _P531HoleScoreCard extends StatelessWidget {
           ...players.asMap().entries.expand((entry) {
             final idx     = entry.key;
             final m       = entry.value;
-            final rt      = _running(m.player.id);
             final gross   = scores[m.player.id];
             final isHot   = idx == hotSpotIdx;
             final hasScore = gross != null;
 
             final matchStrokes = _strokesForHole(m, holeData);
 
-            // Name-chip label: "-N" or "-N •" (1 stroke) / "-N ••" (2).
-            //   Net mode:   "-N"  = match handicap allowance (phcp × pct)
-            //   SO mode:    "-N"  = strokes off the low golfer
-            //   Gross mode: hidden (no strokes of any kind are given)
-            // The dots appended to the number reflect strokes received on
-            // THIS hole (zero, one, or two).  Gross mode hides the chip
-            // outright since neither a handicap-allowance nor an
-            // SO-delta is meaningful there.
+            // Handicap chip reads "gets N" (strokes this player receives).
+            // The stroke-this-hole indicator now lives in the dot strip above
+            // the score box, so no bullets here. Hidden for a 0-stroke player
+            // and in gross mode (no strokes of any kind are given).
             String? hcapLabel;
             if (_mode == 'net' || _mode == 'strokes_off') {
-              final dots = matchStrokes > 0 ? ' ${'•' * matchStrokes}' : '';
-              hcapLabel = '-${_matchHcapFor(m)}$dots';
+              final h = _matchHcapFor(m);
+              if (h > 0) hcapLabel = 'gets $h';
             }
 
             final pointsForThisHole = awards[m.player.id];
@@ -927,7 +892,6 @@ class _P531HoleScoreCard extends StatelessWidget {
               _P531PlayerRow(
                 position:       idx + 1,
                 member:         m,
-                running:        rt,
                 gross:          gross,
                 isHot:          isHot,
                 matchHcapLabel: hcapLabel,
@@ -936,12 +900,6 @@ class _P531HoleScoreCard extends StatelessWidget {
                 // Net mode this duplicates the chip's stroke dots, which
                 // is fine; in SO mode it's the ONLY visual indicator.
                 strokesOnThisHole: matchStrokes,
-                // Only Net mode shows the "N" running total.  In Gross
-                // there are no strokes so N would equal G; in SO the
-                // running net doesn't represent the scoring currency
-                // the user cares about (per user feedback the handicap
-                // chip already conveys SO strokes cleanly).
-                showNetRunningTotal: _mode == 'net',
                 // Tapping a scored non-hot row opens the edit picker.
                 onTap: (hasScore && !isHot)
                     ? () => onEditTap(m)
@@ -971,7 +929,6 @@ class _P531HoleScoreCard extends StatelessWidget {
 class _P531PlayerRow extends StatelessWidget {
   final int          position;
   final Membership   member;
-  final _RunningTotal running;
   final int?         gross;
   final bool         isHot;
   final String?      matchHcapLabel;
@@ -982,12 +939,6 @@ class _P531PlayerRow extends StatelessWidget {
   /// so the info stays visible even when the matchHcapLabel chip is
   /// hidden (SO / Gross modes).  Zero means no dot.
   final int          strokesOnThisHole;
-
-  /// When false, only the gross-vs-par running total is displayed next
-  /// to the score box.  We set this false in Gross mode — where net
-  /// would be identical to gross and showing both is noise — and true
-  /// in Net and SO modes.
-  final bool         showNetRunningTotal;
 
   /// Points awarded to this player on the currently-selected hole, or
   /// null if the hole isn't fully scored yet.  When present we render
@@ -1002,13 +953,11 @@ class _P531PlayerRow extends StatelessWidget {
   const _P531PlayerRow({
     required this.position,
     required this.member,
-    required this.running,
     required this.gross,
     required this.isHot,
     this.matchHcapLabel,
     this.onTap,
     this.strokesOnThisHole = 0,
-    this.showNetRunningTotal = true,
     required this.holePoints,
     required this.cumulativePoints,
   });
@@ -1083,15 +1032,6 @@ class _P531PlayerRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                showNetRunningTotal
-                    ? '${_signed(running.grossVsPar)}G ${_signed(running.netVsPar)}N'
-                    : '${_signed(running.grossVsPar)}G',
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.secondary),
-              ),
-              const SizedBox(height: 2),
               Row(mainAxisSize: MainAxisSize.min, children: [
                 // "Hole: X" pill — only when the hole is fully scored.
                 if (holePoints != null) ...[
@@ -1140,18 +1080,17 @@ class _P531PlayerRow extends StatelessWidget {
         // reassurance in Net mode alongside the chip's dots.
         GestureDetector(
           onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 40,
-            height: 36,
-            decoration: BoxDecoration(
-              color: boxBg,
-              border: boxBorder,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Stack(children: [
-              // Centred score digit or "hot" arrow.
-              Center(
+          child: scoreCellWithDots(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 40,
+              height: 36,
+              decoration: BoxDecoration(
+                color: boxBg,
+                border: boxBorder,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Center(
                 child: gross != null
                     ? Text(
                         '$gross',
@@ -1166,28 +1105,9 @@ class _P531PlayerRow extends StatelessWidget {
                           )
                         : const SizedBox.shrink(),
               ),
-              // Stroke dots in the top-right corner — rendered even when
-              // the chip is hidden so SO-mode users can still see "this
-              // golfer gets a stroke on this hole" at a glance.
-              if (strokesOnThisHole > 0)
-                Positioned(
-                  top: 2, right: 2,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(
-                      strokesOnThisHole.clamp(0, 2),
-                      (i) => Container(
-                        width: 4, height: 4,
-                        margin: const EdgeInsets.only(left: 1),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ]),
+            ),
+            strokesOnThisHole,
+            theme.colorScheme.primary,
           ),
         ),
       ]),
@@ -1729,53 +1649,27 @@ class _PlayerGridRows extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.w600)),
             ),
           ),
-          for (final h in holeRange) _cell(h, context, child: SizedBox(
-            // Explicit width/height so Stack + Positioned anchor relative
-            // to the FULL cell, not just the score text's bounding box.
-            // Without this the stroke dot ended up hugging the score
-            // character instead of the cell's corner.
-            width:  cellW,
-            height: rowH,
-            child: Stack(
-              children: [
-                // Score text — centred manually so the Stack itself can
-                // still be sized to the cell.
-                Center(
-                  child: Builder(builder: (_) {
-                    final saved = scorecard.holeData(h)?.scoreFor(member.player.id);
-                    final gross = saved?.grossScore;
-                    return Text(
-                      gross == null ? '–' : '$gross',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: gross == null
-                              ? theme.colorScheme.onSurfaceVariant
-                              : null),
-                    );
-                  }),
-                ),
-                // Stroke-dot overlay in the top-right corner.  For 2+
-                // strokes we draw up to 2 dots (rare).
-                Positioned(
-                  top: 2, right: 2,
-                  child: Builder(builder: (_) {
-                    final strokes = strokesOnHole(h);
-                    if (strokes <= 0) return const SizedBox.shrink();
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(strokes.clamp(0, 2), (i) => Container(
-                        width: 4, height: 4,
-                        margin: const EdgeInsets.only(left: 1),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      )),
-                    );
-                  }),
-                ),
-              ],
+          for (final h in holeRange) _cell(h, context, child: scoreCellWithDots(
+            SizedBox(
+              width:  cellW,
+              height: rowH,
+              child: Center(
+                child: Builder(builder: (_) {
+                  final saved = scorecard.holeData(h)?.scoreFor(member.player.id);
+                  final gross = saved?.grossScore;
+                  return Text(
+                    gross == null ? '–' : '$gross',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: gross == null
+                            ? theme.colorScheme.onSurfaceVariant
+                            : null),
+                  );
+                }),
+              ),
             ),
+            strokesOnHole(h),
+            theme.colorScheme.primary,
           )),
         ]),
         // Points awarded row (same player, labelled "pts")

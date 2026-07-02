@@ -8,8 +8,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
+import '../utils/golf_colors.dart';
 import '../utils/watcher_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
@@ -65,11 +66,14 @@ class _TournamentLeaderboardScreenState
           .map((g) => g as String)
           .toList();
 
-      // Only show tabs for games that have data in the games map
+      // Only show tabs for games that have data in the games map. Dedupe so a
+      // game listed twice (e.g. championship + same-id side game) can't produce
+      // two identical tabs.
       final gamesMap = payload['games'] as Map? ?? {};
-      final tabs = activeGames
-          .where((g) => gamesMap.containsKey(g))
-          .toList();
+      final tabs = <String>[];
+      for (final g in activeGames) {
+        if (gamesMap.containsKey(g) && !tabs.contains(g)) tabs.add(g);
+      }
 
       setState(() {
         _payload = payload;
@@ -90,9 +94,10 @@ class _TournamentLeaderboardScreenState
   // ── Build ─────────────────────────────────────────────────────────────────
 
   static const _labels = {
-    'low_net'   : 'Stroke Play',
+    'low_net'      : 'Stroke Play (Championship)',
+    'low_net_round': 'Stroke Play',
     'stableford_championship': 'Stableford',
-    'match_play': 'Mini Singles Bracket',
+    'match_play'   : 'Mini Singles Bracket',
   };
 
   @override
@@ -134,7 +139,7 @@ class _TournamentLeaderboardScreenState
                 controller  : _tabCtrl,
                 isScrollable: true,
                 tabs: _tabs.map((g) =>
-                    Tab(text: _labels[g] ?? g)).toList(),
+                    Tab(text: _labels[g] ?? gameDisplayName(g))).toList(),
               )
             : null,
       ),
@@ -321,9 +326,8 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
 
   static Color _ntpColor(int? ntp, ThemeData theme) {
     if (ntp == null) return theme.colorScheme.onSurfaceVariant;
-    if (ntp < 0)     return Colors.green.shade700;
-    if (ntp > 0)     return Colors.red.shade700;
-    return theme.colorScheme.onSurface;
+    // Golf convention: under par red, even/over neutral (shared toParColor).
+    return toParColor(ntp) ?? theme.colorScheme.onSurface;
   }
 
   static String _modeLabel(String m) {
@@ -402,10 +406,9 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
           final nDiff  = capped - par;
           return gridRow(
             hole: '$hNum', par: '$par', gross: '$gross', net: '$capped',
-            grossColor: gDiff < 0 ? Colors.green.shade700
-                      : gDiff > 0 ? theme.colorScheme.error : null,
-            netColor:   nDiff < 0 ? Colors.green.shade700
-                      : nDiff > 0 ? theme.colorScheme.error : null,
+            // Golf convention: under par red, par/over default (no green/red flip).
+            grossColor: toParColor(gDiff),
+            netColor:   toParColor(nDiff),
           );
         }),
         const Divider(height: 6, thickness: 0.5),
@@ -1029,9 +1032,10 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
   String?               _error;
 
   static const _labels = {
-    'low_net'   : 'Stroke Play',
+    'low_net'      : 'Stroke Play (Championship)',
+    'low_net_round': 'Stroke Play',
     'stableford_championship': 'Stableford',
-    'match_play': 'Mini Singles Bracket',
+    'match_play'   : 'Mini Singles Bracket',
   };
 
   @override
@@ -1057,7 +1061,10 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
       final activeGames = (payload['active_games'] as List? ?? [])
           .map((g) => g as String).toList();
       final gamesMap = payload['games'] as Map? ?? {};
-      final tabs = activeGames.where((g) => gamesMap.containsKey(g)).toList();
+      final tabs = <String>[];
+      for (final g in activeGames) {
+        if (gamesMap.containsKey(g) && !tabs.contains(g)) tabs.add(g);
+      }
 
       if (_tabCtrl == null || _tabCtrl!.length != tabs.length) {
         _tabCtrl?.dispose();
@@ -1118,7 +1125,7 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
         TabBar(
           controller  : _tabCtrl,
           isScrollable: true,
-          tabs: _tabs.map((g) => Tab(text: _labels[g] ?? g)).toList(),
+          tabs: _tabs.map((g) => Tab(text: _labels[g] ?? gameDisplayName(g))).toList(),
         ),
         Expanded(
           child: TabBarView(

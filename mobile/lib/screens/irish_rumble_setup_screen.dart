@@ -116,6 +116,13 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
     return _pool.round() == _allocated.round();
   }
 
+  /// True when the round mixes sizes such that a true threesome will be leveled
+  /// with a borrowed-4th phantom — some group has 3 real players AND another has
+  /// 4 to level up to.  Matches the backend's ensure_irish_rumble_phantom guard:
+  /// an all-threesome field (3-on-3-on-3) is NOT leveled, so no notice.
+  bool get _hasLeveledThreesome =>
+      _groupSizes.contains(3) && _groupSizes.any((n) => n >= 4);
+
   /// Distinct foursome sizes in this round, sorted descending (foursome,
   /// threesome, …).  Used to compute the per-player payout breakdown.
   List<int> get _distinctGroupSizes {
@@ -314,6 +321,46 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ── Borrowed-4th notice (mixed group sizes) ─────────────────────
+          if (_hasLeveledThreesome) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: theme.colorScheme.primary.withOpacity(0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.groups_2_outlined,
+                      size: 18, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(children: const [
+                        TextSpan(
+                          text: 'Threesome leveling. ',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        TextSpan(
+                          text: 'This round mixes a threesome with a foursome, '
+                              'so each threesome is given a 4th ball borrowed '
+                              'from the rest of the field — every group then '
+                              'counts the same number of balls. Tip: tee the '
+                              'threesome off last so its donors have already '
+                              'posted.',
+                        ),
+                      ]),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           // ── Variant picker + segment preview ────────────────────────────
           _VariantPicker(
             variant:  _variant,

@@ -14,6 +14,7 @@ import '../providers/round_provider.dart';
 import '../utils/watcher_invite.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
+import '../widgets/borrowed_fourth.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 
@@ -503,9 +504,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             controller: _tabController,
             children: _gameTabs.map((gameKey) {
               if (gameKey == '__championship__') {
+                // The championship is cumulative across ALL rounds — never
+                // scope it to the current round (passing roundId triggers the
+                // single-round backend branch that reports "1/1 rounds" and
+                // hides earlier rounds). Matches the tournament-level view.
                 return ChampionshipTabView(
                   tournamentId: lb.tournamentId!,
-                  roundId: widget.roundId,
+                  roundId: null,
                 );
               }
               if (gameKey == '__bandon_cup__') {
@@ -609,7 +614,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       final ta = lb?.tournamentActiveGames ?? const <String>[];
       if (ta.contains('stableford_championship')) return 'Stableford';
       if (ta.contains('match_play') && !ta.contains('low_net')) return 'Mini Singles Bracket';
+      // Title the Stroke Play championship with the tournament's name so it's
+      // distinct from a per-round "Stroke Play" side game. Guard against the
+      // cup case where the tournament name already appears as the cup tab.
+      final tn = lb?.tournamentName;
+      final cn = lb?.cupName;
+      if (tn != null && tn.isNotEmpty && tn != cn) return tn;
       return 'Stroke Play';
+    }
+    // Pink Ball tab tracks the configured ball colour (e.g. "Red Ball").
+    if (g == 'pink_ball') {
+      final color =
+          ((lb?.games['pink_ball']?.data as Map?)?['ball_color'])?.toString();
+      return (color != null && color.isNotEmpty) ? '$color Ball' : 'Pink Ball';
     }
     return gameDisplayName(g);
   }
@@ -1577,12 +1594,24 @@ class _IrishRumbleView extends StatelessWidget {
         ]),
         const SizedBox(height: 8),
 
+        // Borrowed-4th explainer — shown once when any group is a leveled
+        // threesome carrying a whole-field donor rotation (docs/irish-rumble.md).
+        if (overall.any((r) => borrowedFourthFromJson((r as Map)['phantom']) != null)) ...[
+          const BorrowedFourthNote(),
+          const SizedBox(height: 8),
+        ],
+
         ...overall.map((r) {
           final row             = r as Map<String, dynamic>;
           final rank            = row['rank'] as int?;
           final hasPhantom      = row['has_phantom'] as bool? ?? false;
+          final phantomInfo     = borrowedFourthFromJson(row['phantom']);
           final playersRaw      = row['players']?.toString() ?? '';
-          final players         = hasPhantom ? '$playersRaw + Phantom' : playersRaw;
+          // "Borrowed 4th" only for a cross-foursome (whole-field) phantom; a
+          // legacy intra-foursome tournament phantom keeps the generic label.
+          final players         = phantomInfo != null
+              ? '$playersRaw + Borrowed 4th'
+              : hasPhantom ? '$playersRaw + Phantom' : playersRaw;
           final ntp             = row['net_to_par'] as int?;
           final currentHole     = row['current_hole'] as int?;
           final payout          = (row['payout'] as num?)?.toDouble() ?? 0.0;
@@ -1609,60 +1638,85 @@ class _IrishRumbleView extends StatelessWidget {
                     : theme.colorScheme.outlineVariant,
               ),
             ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              leading: CircleAvatar(
-                radius: 16,
-                backgroundColor: isLeading
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.surfaceContainerHighest,
-                child: Text(
-                  rank != null ? '$rank' : '—',
-                  style: TextStyle(
-                      fontSize: rank != null ? 13 : 11,
-                      fontWeight: FontWeight.bold,
-                      color: isLeading ? Colors.white : null),
-                ),
-              ),
-              title: Text(players,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(holeLabel,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-              trailing: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    _ntpLabel(ntp),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      // Golf convention: under par red, even/over default.
-                      color: toParColor(ntp),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  leading: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: isLeading
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.surfaceContainerHighest,
+                    child: Text(
+                      rank != null ? '$rank' : '—',
+                      style: TextStyle(
+                          fontSize: rank != null ? 13 : 11,
+                          fontWeight: FontWeight.bold,
+                          color: isLeading ? Colors.white : null),
                     ),
                   ),
-                  if (pool > 0) ...[
-                    Text(
-                      perPersonPayout > 0
-                          ? '\$${perPersonPayout.formatBet()}'
-                          : '—',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: perPersonPayout > 0
-                            ? Colors.green.shade700
-                            : theme.colorScheme.onSurfaceVariant,
+                  title: Text(players,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(holeLabel,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                  trailing: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        _ntpLabel(ntp),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          // Golf convention: under par red, even/over default.
+                          color: toParColor(ntp),
+                        ),
                       ),
-                    ),
-                    if (perPersonPayout > 0)
-                      Text('each',
+                      if (pool > 0) ...[
+                        Text(
+                          perPersonPayout > 0
+                              ? '\$${perPersonPayout.formatBet()}'
+                              : '—',
                           style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.green.shade600)),
-                  ],
-                ],
-              ),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: perPersonPayout > 0
+                                ? Colors.green.shade700
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (perPersonPayout > 0)
+                          Text('each',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.green.shade600)),
+                      ],
+                    ],
+                  ),
+                ),
+                // Borrowed-4th: anonymous pending count only — the donor
+                // identities are deliberately NOT shown on the public
+                // leaderboard (only the threesome's own scorer sees them).
+                if (phantomInfo != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                    child: Builder(builder: (_) {
+                      final pending = pendingDonorHoles(phantomInfo);
+                      return Text(
+                        pending > 0
+                            ? 'Borrowed 4th · $pending hole'
+                                '${pending == 1 ? '' : 's'} pending'
+                            : 'Borrowed 4th · all holes in',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      );
+                    }),
+                  ),
+              ],
             ),
           );
         }),
@@ -1670,6 +1724,7 @@ class _IrishRumbleView extends StatelessWidget {
     );
   }
 }
+
 
 // ── Irish Rumble tab: cup live card + per-foursome scorecard grids ────────────
 

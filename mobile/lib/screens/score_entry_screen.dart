@@ -32,6 +32,7 @@ import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
+import '../widgets/borrowed_fourth.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/icon_help_sheet.dart';
@@ -156,16 +157,8 @@ int _sixesSoStrokesOnHole({
   return planned;
 }
 
-String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
-
 String _fmtPoints(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
-
-class _RunningTotal {
-  final int grossVsPar;
-  final int netVsPar;
-  const _RunningTotal({required this.grossVsPar, required this.netVsPar});
-}
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -1500,15 +1493,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !showExit,
-        leading: showExit
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Exit to rounds',
-                onPressed: () => Navigator.of(context).popUntil(
-                  (r) => r.settings.name == '/casual-rounds' || r.isFirst),
-              )
-            : null,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: showExit ? 'Exit to rounds' : 'Close',
+          onPressed: showExit
+              ? () => Navigator.of(context).popUntil(
+                  (r) => r.settings.name == '/casual-rounds' || r.isFirst)
+              : () => Navigator.of(context).maybePop(),
+        ),
         title: Text(
           _appBarTitle(games, nas, skins),
           style: const TextStyle(fontSize: 15),
@@ -1636,6 +1629,33 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     );
   }
 
+  /// Irish Rumble "best N of M count this hole" banner, shown at the top of the
+  /// entry body (matching the Pink Ball carrier banner).
+  Widget _irBallsBanner(BuildContext ctx, RoundProvider rp) {
+    final irN = rp.round?.irBallsForHole(_selectedHole);
+    if (irN == null) return const SizedBox.shrink();
+    final theme = Theme.of(ctx);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      // Matches the Pink Ball carrier banner's wording + icon.
+      child: Row(children: [
+        Icon(Icons.filter_none, size: 16,
+            color: theme.colorScheme.onSecondaryContainer),
+        const SizedBox(width: 8),
+        Text(
+          '$irN ${irN == 1 ? 'ball counts' : 'balls count'} for Irish Rumble',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSecondaryContainer),
+        ),
+      ]),
+    );
+  }
+
   // ── Bottom bar ────────────────────────────────────────────────────────────────
 
   Widget _buildBottomBar(
@@ -1695,36 +1715,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
             mpData!['bracket_type'] == 'cup_singles'
                 ? _CupSinglesStatusBar(data: mpData)
                 : _MatchPlayStatusBar(data: mpData),
-          // Irish Rumble: show "Best N of M" for the current hole
-          if (games.contains('irish_rumble')) Builder(builder: (ctx) {
-            final irN = rp.round?.irBallsForHole(_selectedHole);
-            final total = rp.round?.foursomes
-                .where((f) => f.id == rp.activeFoursomeId)
-                .firstOrNull?.realPlayers.length;
-            if (irN == null) return const SizedBox.shrink();
-            return Container(
-              margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: Theme.of(ctx).colorScheme.secondaryContainer.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.golf_course, size: 14,
-                    color: Theme.of(ctx).colorScheme.onSecondaryContainer),
-                const SizedBox(width: 6),
-                Text(
-                  total != null
-                      ? 'Best $irN of $total count this hole'
-                      : 'Best $irN count this hole',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(ctx).colorScheme.onSecondaryContainer),
-                ),
-              ]),
-            );
-          }),
+          // (Irish Rumble balls-counted banner + borrowed-4th row moved to the
+          // TOP of the entry body — see _buildBody — to match the Pink Ball
+          // screen; they no longer live in this footer.)
           // Hole navigation / completion.  (Finishing the round early lives in
           // the app-bar overflow menu — it's a rare action and doesn't earn a
           // permanent slot down here.)
@@ -1916,6 +1909,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Irish Rumble balls-counted banner — at the top, matching the
+              // Pink Ball screen (was previously a footer strip).
+              if (games.contains('irish_rumble')) _irBallsBanner(ctx, rp),
               // Active hole score card
               _HoleScoreCard(
                 holeData:        holeData,
@@ -2010,6 +2006,22 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     .where((m) => m.player.isPhantom)
                     .firstOrNull,
                 phantomInit: rp.phantomInitFor(widget.foursomeId),
+                // Borrowed-4th (leveled threesome) rendered INSIDE the card as
+                // a 4th player row, when this foursome carries a phantom.
+                bottomRow: (() {
+                  if (!games.contains('irish_rumble')) return null;
+                  final fs = rp.round?.foursomes
+                      .where((f) => f.id == widget.foursomeId).firstOrNull;
+                  final rid = rp.round?.id;
+                  if (fs == null || rid == null || fs.hasPhantom != true) {
+                    return null;
+                  }
+                  return BorrowedFourthRow(
+                    roundId:     rid,
+                    foursomeId:  fs.id,
+                    currentHole: _selectedHole,
+                  );
+                })(),
               ),
 
               // Stableford running-points band — only when Stableford is the
@@ -2282,7 +2294,12 @@ class _HoleScoreCard extends StatelessWidget {
     this.onWithdrawTap,
     this.phantomMembership,
     this.phantomInit,
+    this.bottomRow,
   });
+
+  /// Optional widget rendered as the last row INSIDE the card (e.g. the Irish
+  /// Rumble borrowed-4th row).
+  final Widget? bottomRow;
 
   int? get _lowPlayingHandicap {
     if (handicapMode != 'strokes_off' || players.isEmpty) return null;
@@ -2623,22 +2640,6 @@ class _HoleScoreCard extends StatelessWidget {
     return strokesOnHole(scaled, si);
   }
 
-  _RunningTotal _running(int playerId) {
-    final m = players.where((x) => x.player.id == playerId).firstOrNull;
-    int gross = 0, parSum = 0, net = 0;
-    for (final h in scorecard.holes) {
-      final pendingGross = merged[h.holeNumber]?[playerId];
-      final saved        = h.scoreFor(playerId);
-      final grossScore   = pendingGross ?? saved?.grossScore;
-      if (grossScore == null) continue;
-      gross  += grossScore;
-      parSum += h.par;
-      final strokes = m == null ? 0 : _strokesForHole(m, h);
-      net += grossScore - strokes;
-    }
-    return _RunningTotal(grossVsPar: gross - parSum, netVsPar: net - parSum);
-  }
-
   /// Expected handicap strokes for *playerId* on *hole* per the
   /// Triple Cup match that contains that hole.  Returns null when
   /// the hole is outside every match (caller falls back to the
@@ -2947,18 +2948,17 @@ class _HoleScoreCard extends StatelessWidget {
           ...players.asMap().entries.expand((entry) {
             final idx        = entry.key;
             final m          = entry.value;
-            final rt         = _running(m.player.id);
             final gross      = scores[m.player.id];
             final isHot      = idx == hotSpotIdx;
             final matchStrok = _strokesForHole(m, holeData);
 
             String? hcapLabel;
             if (isCupSingles) {
-              // Singles: show match-play differential (0 for lower player,
-              // difference for higher player), plus stroke dots for this hole.
+              // Singles: show the match-play differential (strokes the higher
+              // player receives).  Hidden for the lower player (0 = gets none);
+              // the stroke-this-hole indicator lives in the dot strip above.
               final so = _cupSinglesHandicapFor(m);
-              final dots = matchStrok > 0 ? ' ${'•' * matchStrok}' : '';
-              hcapLabel = '-$so$dots';
+              if (so > 0) hcapLabel = 'gets $so';
             } else if (handicapMode == 'net' || handicapMode == 'strokes_off') {
               // Triple Cup: each match the player is on at this hole
               // gets its own "-N •" badge.  The 2v1 singles solo
@@ -2973,28 +2973,21 @@ class _HoleScoreCard extends StatelessWidget {
                   ? _tripleCupEntriesForHole(m.player.id, holeNumber)
                   : const <({int? strokesOff, int strokesOnHole})>[];
               if (tcEntries.isNotEmpty) {
-                String fmt(({int? strokesOff, int strokesOnHole}) e) {
-                  final so   = e.strokesOff ?? 0;
-                  final dots = e.strokesOnHole > 0
-                      ? ' ${'•' * e.strokesOnHole}'
-                      : '';
-                  return '-$so$dots';
-                }
                 // Dedupe identical entries.  In 2-player TC a single
                 // hole shows up in two simultaneous matches (e.g. hole
                 // 4 is in both F9 and Overall) — same pairing, same
-                // per-pair SO, same dots — so rendering it twice ("-6
-                // / -6") is noise.  Only the genuine ghost-singles
-                // case in 3-player TC (solo vs two opponents with
-                // different SOs) produces distinct values worth
-                // showing side-by-side.
-                final unique = <String>{};
+                // per-pair SO — so rendering it twice ("gets 6 / gets
+                // 6") is noise.  Only the genuine ghost-singles case in
+                // 3-player TC (solo vs two opponents with different SOs)
+                // produces distinct values worth showing side-by-side.
+                // Zero-stroke entries are dropped (nothing given).
+                final unique = <int>{};
                 final labels = <String>[];
                 for (final e in tcEntries) {
-                  final lbl = fmt(e);
-                  if (unique.add(lbl)) labels.add(lbl);
+                  final so = e.strokesOff ?? 0;
+                  if (so > 0 && unique.add(so)) labels.add('gets $so');
                 }
-                hcapLabel = labels.join(' / ');
+                if (labels.isNotEmpty) hcapLabel = labels.join(' / ');
               } else {
                 // Match Play single-elim brackets in SO mode: bubble shows
                 // strokes vs the per-match opponent (semi opponent on
@@ -3006,8 +2999,7 @@ class _HoleScoreCard extends StatelessWidget {
                     ? _matchPlaySo(m.player.id, holeNumber)
                     : null;
                 final displayHcap = mpSo ?? _effectiveHcap(m);
-                final dots = matchStrok > 0 ? ' ${'•' * matchStrok}' : '';
-                hcapLabel = '-$displayHcap$dots';
+                if (displayHcap > 0) hcapLabel = 'gets $displayHcap';
               }
             }
 
@@ -3033,13 +3025,11 @@ class _HoleScoreCard extends StatelessWidget {
                     : null,
                 child: _PlayerRow(
                 member:              m,
-                running:             rt,
                 gross:               gross,
                 isHot:               isHot,
                 par:                 par,
                 matchHcapLabel:      hcapLabel,
                 strokesOnThisHole:   matchStrok,
-                showNetRunningTotal: handicapMode == 'net',
                 teamLabel:           _teamLabelFor(m.player.id),
                 nameColor:           _nameColorFor(m, holeNumber),
                 allowJunk:           allowJunk,
@@ -3127,6 +3117,9 @@ class _HoleScoreCard extends StatelessWidget {
                         phantomMembership!.player.id, holeNumber) ?? 0,
               );
             }),
+          // Optional extra row inside the card (e.g. the Irish Rumble
+          // borrowed-4th), so it reads as a 4th player, not a footer.
+          if (bottomRow != null) bottomRow!,
         ],
       ),
     );
@@ -3214,11 +3207,11 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
 
             if (showHcapChip)
               row(
-                pill('-16'),
+                pill('gets 16'),
                 'Match handicap',
                 isCupSingles
                   ? 'Strokes-off-low differential for this match (lower handicap plays scratch).'
-                  : 'Handicap this player is using in the current game (after Net % / Strokes-Off adjustments).',
+                  : 'Handicap strokes this player receives in the current game (after Net % / Strokes-Off adjustments).',
               ),
 
             if (showHcapChip)
@@ -3234,12 +3227,6 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
                 'Tee box',
                 'Tee the player is using — drives par and stroke index.',
               ),
-
-            row(
-              pill('(+1)G'),
-              'Running total',
-              'Cumulative score vs. par.  G = gross, N = net.  Negative is under par.',
-            ),
 
             row(
               const NetScoreButton(
@@ -3790,14 +3777,12 @@ class _SkinsCarryChip extends StatelessWidget {
 
 class _PlayerRow extends StatelessWidget {
   final Membership    member;
-  final _RunningTotal running;
   final int?          gross;
   final bool          isHot;
   final int           par;
   final String?       matchHcapLabel;
   final VoidCallback? onTap;
   final int           strokesOnThisHole;
-  final bool          showNetRunningTotal;
   final String?       teamLabel;
   /// Override name color (e.g. cup singles team color). Ignored when isHot.
   final Color?        nameColor;
@@ -3827,14 +3812,12 @@ class _PlayerRow extends StatelessWidget {
 
   const _PlayerRow({
     required this.member,
-    required this.running,
     required this.gross,
     required this.isHot,
     required this.par,
     this.matchHcapLabel,
     this.onTap,
     this.strokesOnThisHole = 0,
-    this.showNetRunningTotal = true,
     this.teamLabel,
     this.nameColor,
     this.allowJunk = false,
@@ -3947,16 +3930,8 @@ class _PlayerRow extends StatelessWidget {
                     ),
                   ),
                 ],
-                // Tee name lives next to the handicap index when there is
-                // one (net / strokes-off); falls back to right next to the
-                // player name in gross-mode games where the handicap chip
-                // is hidden.
-                if (member.tee != null) ...[
-                  const SizedBox(width: 6),
-                  Text(member.tee!.teeName,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ],
+                // (Tee name intentionally not shown — matches the Pink Ball
+                // screen and keeps the row compact.)
                 if (withdrawn) ...[
                   const SizedBox(width: 6),
                   Container(
@@ -3998,21 +3973,12 @@ class _PlayerRow extends StatelessWidget {
           ),
         ),
 
-        // Running total + optional Points 5-3-1 pills
+        // Optional Points 5-3-1 pills
         if (p531CumulativePoints != null)
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                showNetRunningTotal
-                    ? '${_signed(running.grossVsPar)}G ${_signed(running.netVsPar)}N'
-                    : '${_signed(running.grossVsPar)}G',
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.secondary),
-              ),
-              const SizedBox(height: 2),
               Row(mainAxisSize: MainAxisSize.min, children: [
                 if (p531HolePoints != null) ...[
                   Container(
@@ -4045,15 +4011,6 @@ class _PlayerRow extends StatelessWidget {
                 ),
               ]),
             ],
-          )
-        else
-          Text(
-            showNetRunningTotal
-                ? '${_signed(running.grossVsPar)}G ${_signed(running.netVsPar)}N'
-                : '${_signed(running.grossVsPar)}G',
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.secondary),
           ),
         const SizedBox(width: 8),
 
@@ -4075,75 +4032,37 @@ class _PlayerRow extends StatelessWidget {
         // entered, or a plain highlighted border while the player is hot.
         GestureDetector(
           onTap: onTap,
-          child: gross != null
-              // Score entered: use NetScoreButton for color + shape feedback.
-              ? Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    NetScoreButton(
-                      score:    gross!,
-                      par:      par,
-                      strokes:  strokesOnThisHole,
-                      selected: false,
-                      width:    40,
-                      height:   36,
+          // Stroke dots sit in a strip BELOW the box (scoreCellWithDots) so the
+          // bogey/double-bogey square never covers them.
+          child: scoreCellWithDots(
+            gross != null
+                // Score entered: NetScoreButton for color + shape feedback.
+                ? NetScoreButton(
+                    score:    gross!,
+                    par:      par,
+                    strokes:  strokesOnThisHole,
+                    selected: false,
+                    width:    40,
+                    height:   36,
+                  )
+                // No score yet: plain box, highlighted border when hot.
+                : AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 40,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isHot
+                          ? theme.colorScheme.primaryContainer.withOpacity(0.4)
+                          : Colors.transparent,
+                      border: isHot
+                          ? Border.all(color: theme.colorScheme.primary, width: 2)
+                          : Border.all(color: theme.colorScheme.outline),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    if (strokesOnThisHole > 0)
-                      Positioned(
-                        top: 2, right: 2,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: List.generate(
-                            strokesOnThisHole.clamp(0, 2),
-                            (i) => Container(
-                              width: 4, height: 4,
-                              margin: const EdgeInsets.only(left: 1),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                )
-              // No score yet: plain box, highlighted border when hot.
-              : AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 40,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: isHot
-                        ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-                        : Colors.transparent,
-                    border: isHot
-                        ? Border.all(color: theme.colorScheme.primary, width: 2)
-                        : Border.all(color: theme.colorScheme.outline),
-                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: strokesOnThisHole > 0
-                      ? Stack(children: [
-                          Positioned(
-                            top: 2, right: 2,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: List.generate(
-                                strokesOnThisHole.clamp(0, 2),
-                                (_) => Container(
-                                  width: 4, height: 4,
-                                  margin: const EdgeInsets.only(left: 1),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ])
-                      : null,
-                ),
+            strokesOnThisHole,
+            theme.colorScheme.primary,
+          ),
         ),
       ]),
     );
@@ -9788,3 +9707,4 @@ class _FourballStatusCard extends StatelessWidget {
     );
   }
 }
+

@@ -112,21 +112,16 @@ class _MatchPlayScreenState extends State<MatchPlayScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Match Play'),
-        automaticallyImplyLeading: !showExit,
-        leading: showExit
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Exit to rounds',
-                onPressed: () => Navigator.of(context).popUntil(
-                    (r) => r.settings.name == '/casual-rounds' || r.isFirst),
-              )
-            : null,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: showExit ? 'Exit to rounds' : 'Close',
+          onPressed: showExit
+              ? () => Navigator.of(context).popUntil(
+                  (r) => r.settings.name == '/casual-rounds' || r.isFirst)
+              : () => Navigator.of(context).maybePop(),
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh scores',
-            onPressed: _load,
-          ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
         ],

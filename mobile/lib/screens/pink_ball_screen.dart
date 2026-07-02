@@ -22,6 +22,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/borrowed_fourth.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
@@ -572,21 +573,16 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Group $groupNum',
-        automaticallyImplyLeading: !showExit,
-        leading: showExit
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Exit to rounds',
-                onPressed: () => Navigator.of(context).popUntil(
-                    (r) => r.settings.name == '/casual-rounds' || r.isFirst),
-              )
-            : null,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: showExit ? 'Exit to rounds' : 'Close',
+          onPressed: showExit
+              ? () => Navigator.of(context).popUntil(
+                  (r) => r.settings.name == '/casual-rounds' || r.isFirst)
+              : () => Navigator.of(context).maybePop(),
+        ),
         actions: [
-          IconButton(
-            tooltip: 'Refresh scores',
-            icon: const Icon(Icons.refresh),
-            onPressed: rp.round == null ? null : _refresh,
-          ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
           IconButton(
@@ -617,18 +613,8 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
         ],
       ),
       body: Column(children: [
-        // ── Hole chip strip ───────────────────────────────────────────────
-        _HoleChipStrip(
-          holeIndex:    _holeIndex,
-          scorecard:    sc,
-          realMembers:  realMembers,
-          onTap:        (i) => setState(() {
-            _holeIndex = i;
-            _ballLost  = _ballLostOnHole == (i + 1);
-            _pendingScores.clear();
-          }),
-        ),
-
+        // No hole-chip strip: hole navigation is the prev/next buttons below,
+        // consistent with the casual score-entry screen.
         Expanded(
           child: RefreshIndicator(
             onRefresh: _refresh,
@@ -745,15 +731,17 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                   }).toList();
                 }(),
 
-                // Phantom player row — read-only, at the bottom of the card.
-                // Shown whenever this foursome has a phantom player.
-                if (phantomMember != null && hole != null)
-                  _PinkBallPhantomRow(
-                    phantom:     phantomMember,
-                    holeNumber:  _holeNumber,
-                    hole:        hole,
-                    phantomInit: rp.phantomInitFor(widget.foursomeId),
-                    realMembers: realMembers,
+                // Pink Ball itself is the 3 live players (no phantom).  But when
+                // Irish Rumble is ALSO active, the threesome carries an IR
+                // borrowed-4th (a donor from another foursome) — show its
+                // donor-by-hole status here so the scorer sees the 4th ball.
+                if (_irishRumbleActive &&
+                    phantomMember != null &&
+                    rp.round?.id != null)
+                  BorrowedFourthRow(
+                    roundId:     rp.round!.id,
+                    foursomeId:  widget.foursomeId,
+                    currentHole: _holeNumber,
                   ),
                   ],
                 ),
@@ -796,7 +784,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                         _pendingScores.clear();
                       }),
               icon: const Icon(Icons.chevron_left),
-              label: Text('Hole $_holeIndex'),
+              label: Text(_holeIndex == 0 ? 'Previous' : 'Hole $_holeIndex'),
             ),
             const Spacer(),
             FilledButton.icon(
@@ -820,72 +808,6 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
             ),
           ]),
         ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Hole chip strip
-// ---------------------------------------------------------------------------
-
-class _HoleChipStrip extends StatelessWidget {
-  final int              holeIndex;
-  final Scorecard        scorecard;
-  final List<Membership> realMembers;
-  final void Function(int) onTap;
-
-  const _HoleChipStrip({
-    required this.holeIndex,
-    required this.scorecard,
-    required this.realMembers,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SizedBox(
-      height: 44,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        itemCount: scorecard.holes.length,
-        itemBuilder: (_, i) {
-          final h        = scorecard.holes[i];
-          final complete = h.scores.every((s) => s.grossScore != null);
-          final isCurrent = i == holeIndex;
-          return GestureDetector(
-            onTap: () => onTap(i),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: isCurrent
-                    ? theme.colorScheme.primary
-                    : complete
-                        ? theme.colorScheme.primaryContainer
-                        : theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Center(
-                child: Text(
-                  '${h.holeNumber}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: isCurrent
-                        ? theme.colorScheme.onPrimary
-                        : complete
-                            ? theme.colorScheme.onPrimaryContainer
-                            : theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -1044,26 +966,6 @@ class _PlayerScoreRow extends StatelessWidget {
     final theme  = Theme.of(context);
     final player = member.player;
 
-    // Score box coloring: net result when scored, hot highlight when active+empty.
-    final Color? boxBg;
-    final Border boxBorder;
-    if (grossScore != null) {
-      final diff = (grossScore! - handicapStrokes) - par;
-      final Color c = diff < 0
-          ? Colors.green.shade200
-          : diff == 0
-              ? Colors.grey.shade200
-              : Colors.red.shade200;
-      boxBg    = c;
-      boxBorder = Border.all(color: c);
-    } else if (isHot) {
-      boxBg    = theme.colorScheme.primaryContainer.withOpacity(0.4);
-      boxBorder = Border.all(color: theme.colorScheme.primary, width: 2);
-    } else {
-      boxBg    = null;
-      boxBorder = Border.all(color: theme.colorScheme.outline);
-    }
-
     return Container(
       decoration: BoxDecoration(
         // Carrier gets a distinctive tinted band; hot player gets the standard blue tint.
@@ -1139,26 +1041,38 @@ class _PlayerScoreRow extends StatelessWidget {
           ]),
         ),
 
-        // Score box
+        // Score box — shared NetScoreButton (golf-scorecard notation: under-par
+        // red circle, over-par square, stroke dots) once scored; a hot/outline
+        // box while empty.  Matches the generic score-entry grid.
         GestureDetector(
           onTap: grossScore != null ? onEditTap : null,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 40,
-            height: 36,
-            decoration: BoxDecoration(
-              color: boxBg,
-              border: boxBorder,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            alignment: Alignment.center,
-            child: grossScore != null
-                ? Text(
-                    '$grossScore',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
+          // Stroke dots in a strip below the box (clear of the bogey square).
+          child: scoreCellWithDots(
+            grossScore != null
+                ? NetScoreButton(
+                    score:    grossScore!,
+                    par:      par,
+                    strokes:  handicapStrokes,
+                    selected: false,
+                    width:    40,
+                    height:   36,
                   )
-                : null,
+                : AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 40,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isHot
+                          ? theme.colorScheme.primaryContainer.withOpacity(0.4)
+                          : Colors.transparent,
+                      border: isHot
+                          ? Border.all(color: theme.colorScheme.primary, width: 2)
+                          : Border.all(color: theme.colorScheme.outline),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+            handicapStrokes,
+            theme.colorScheme.primary,
           ),
         ),
       ]),
@@ -1233,33 +1147,6 @@ class _ScorePickerState extends State<_ScorePicker> {
           );
         },
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-
-class _ScoreChip extends StatelessWidget {
-  final int gross;
-  final int par;
-  final int strokes;
-  const _ScoreChip({required this.gross, required this.par,
-      required this.strokes});
-
-  @override
-  Widget build(BuildContext context) {
-    final net  = gross - strokes;
-    final diff = net - par;
-    Color bg;
-    if (diff < 0) bg = Colors.green.shade200;
-    else if (diff > 0) bg = Colors.red.shade200;
-    else bg = Colors.grey.shade200;
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: bg,
-      child: Text('$gross',
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
-              color: Colors.black87)),
     );
   }
 }
@@ -1797,153 +1684,6 @@ class _MPStatusChip extends StatelessWidget {
       child: Text(label,
           style: theme.textTheme.labelSmall
               ?.copyWith(fontWeight: FontWeight.w600)),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Phantom player row — read-only informational row for the ghost player.
-// Shows gross score (copied from source player) and attribution.
-// Mirrors _PhantomPlayerRow in score_entry_screen.dart but reads from the
-// pink-ball scorecard data model instead of the sixes/points-531 model.
-// ---------------------------------------------------------------------------
-
-class _PinkBallPhantomRow extends StatelessWidget {
-  final Membership        phantom;
-  final int               holeNumber;
-  final ScorecardHole     hole;
-  final PhantomInitResult? phantomInit;
-  final List<Membership>  realMembers;
-
-  const _PinkBallPhantomRow({
-    required this.phantom,
-    required this.holeNumber,
-    required this.hole,
-    required this.phantomInit,
-    required this.realMembers,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final ghost = theme.colorScheme.onSurface.withOpacity(0.38);
-
-    // Phantom's stored score for this hole (pre-created at round setup).
-    final phantomEntry = hole.scoreFor(phantom.player.id);
-    final gross        = phantomEntry?.grossScore;
-    final net          = phantomEntry?.netScore;
-
-    // Which real player is the source for this hole?
-    final sourcePid  = phantomInit?.sourceByHole[holeNumber];
-    final sourceName = sourcePid != null
-        ? realMembers
-            .where((m) => m.player.id == sourcePid)
-            .firstOrNull
-            ?.player
-            .displayShort
-        : null;
-
-    final String subtitle;
-    if (sourceName != null) {
-      subtitle = 'Copies $sourceName this hole';
-    } else if (phantomInit != null) {
-      subtitle = 'Phantom player';
-    } else {
-      subtitle = 'Phantom (initialising…)';
-    }
-
-    final int? playingHcp = phantomInit?.playingHandicap;
-
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(children: [
-        Icon(Icons.person_outline, size: 18, color: ghost),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Row(
-            children: [
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      phantom.player.displayShort,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: ghost,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(color: ghost),
-                    ),
-                  ],
-                ),
-              ),
-              // Computed handicap chip — always shown once phantomInit is loaded.
-              if (playingHcp != null) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: ghost.withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: ghost.withOpacity(0.25)),
-                  ),
-                  child: Text(
-                    'Hcp $playingHcp',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: ghost,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        // Net score chip (if available) + gross in the score box
-        if (net != null && net != gross) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-            margin: const EdgeInsets.only(right: 4),
-            decoration: BoxDecoration(
-              color: ghost.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              'Net $net',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: ghost, fontStyle: FontStyle.italic),
-            ),
-          ),
-        ],
-        Container(
-          width: 40,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: ghost.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: ghost.withOpacity(0.3)),
-          ),
-          child: gross != null
-              ? Text(
-                  '$gross',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: ghost,
-                    fontStyle: FontStyle.italic,
-                  ),
-                )
-              : Text('—',
-                  style: theme.textTheme.bodySmall?.copyWith(color: ghost)),
-        ),
-      ]),
     );
   }
 }

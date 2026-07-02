@@ -25,15 +25,6 @@ import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
 
-String _signed(int v) => v > 0 ? '(+$v)' : '($v)';
-
-// Running gross + net vs par for a player through holes already scored.
-class _RunningTotal {
-  final int grossVsPar;
-  final int netVsPar;
-  const _RunningTotal({required this.grossVsPar, required this.netVsPar});
-}
-
 // ---------------------------------------------------------------------------
 // The screen
 // ---------------------------------------------------------------------------
@@ -402,6 +393,13 @@ class _SkinsScreenState extends State<SkinsScreen> {
 
     return Scaffold(
       appBar: GolfAppBar(
+        // Close (X), not a back arrow — avoids being tapped as "previous hole".
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Close',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: 'Skins',
         actions: [
           if (sync.hasPending)
@@ -424,11 +422,6 @@ class _SkinsScreenState extends State<SkinsScreen> {
                 ),
               ),
             ),
-          IconButton(
-            tooltip: 'Refresh scores',
-            icon: const Icon(Icons.refresh),
-            onPressed: rp.round == null ? null : _refresh,
-          ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
           IconButton(
@@ -672,22 +665,6 @@ class _SkinsHoleScoreCard extends StatelessWidget {
     return 0;
   }
 
-  /// Running gross + net vs par through all scored holes.
-  _RunningTotal _running(int playerId) {
-    final m = players.where((x) => x.player.id == playerId).firstOrNull;
-    int gross = 0, parSum = 0, net = 0;
-    for (final h in scorecard.holes) {
-      final pendingGross = merged[h.holeNumber]?[playerId];
-      final saved        = h.scoreFor(playerId);
-      final grossScore   = pendingGross ?? saved?.grossScore;
-      if (grossScore == null) continue;
-      gross  += grossScore;
-      parSum += h.par;
-      final strokes = m == null ? 0 : _strokesForHole(m, h);
-      net += grossScore - strokes;
-    }
-    return _RunningTotal(grossVsPar: gross - parSum, netVsPar: net - parSum);
-  }
 
   /// Hole outcome for the selected hole (from server summary).
   SkinsHole? _holeOutcome() => summary?.holes
@@ -806,22 +783,18 @@ class _SkinsHoleScoreCard extends StatelessWidget {
             final idx          = entry.key;
             final m            = entry.value;
             final pid          = m.player.id;
-            final rt           = _running(pid);
             final gross        = scores[pid];
             final isHot        = idx == hotSpotIdx;
             final hasScore     = gross != null;
             final matchStrokes = _strokesForHole(m, holeData);
 
-            // Handicap chip label: "-N•" (dots = strokes on this hole).
-            // Only show the chip when the player actually has strokes to give —
-            // a "-0" label is meaningless and clutters the row.
+            // Handicap chip reads "gets N" (strokes this player receives).
+            // The stroke-this-hole indicator now lives in the dot strip above
+            // the score box, so no bullets here. Hidden for a 0-stroke player.
             String? hcapLabel;
             if (_mode == 'net' || _mode == 'strokes_off') {
               final eff = _matchHcapFor(m);
-              if (eff > 0) {
-                final dots = matchStrokes > 0 ? ' ${'•' * matchStrokes}' : '';
-                hcapLabel = '-$eff$dots';
-              }
+              if (eff > 0) hcapLabel = 'gets $eff';
             }
 
             // Running skins total from server summary.
@@ -845,12 +818,10 @@ class _SkinsHoleScoreCard extends StatelessWidget {
               _SkinsPlayerRow(
                 position:          idx + 1,
                 member:            m,
-                running:           rt,
                 gross:             gross,
                 isHot:             isHot,
                 matchHcapLabel:    hcapLabel,
                 strokesOnThisHole: matchStrokes,
-                showNetRunningTotal: _mode == 'net',
                 totalSkins:        totalSkins,
                 isHoleWinner:      isHoleWinner,
                 allowJunk:         allowJunk,
@@ -977,13 +948,11 @@ class _SkinsLegendSheet extends StatelessWidget {
 class _SkinsPlayerRow extends StatelessWidget {
   final int          position;
   final Membership   member;
-  final _RunningTotal running;
   final int?         gross;
   final bool         isHot;
   final String?      matchHcapLabel;
   final VoidCallback? onTap;
   final int          strokesOnThisHole;
-  final bool         showNetRunningTotal;
 
   /// Cumulative skins won by this player across the round.
   final int   totalSkins;
@@ -1000,13 +969,11 @@ class _SkinsPlayerRow extends StatelessWidget {
   const _SkinsPlayerRow({
     required this.position,
     required this.member,
-    required this.running,
     required this.gross,
     required this.isHot,
     this.matchHcapLabel,
     this.onTap,
     this.strokesOnThisHole = 0,
-    this.showNetRunningTotal = true,
     required this.totalSkins,
     required this.isHoleWinner,
     required this.allowJunk,
@@ -1086,15 +1053,6 @@ class _SkinsPlayerRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                showNetRunningTotal
-                    ? '${_signed(running.grossVsPar)}G ${_signed(running.netVsPar)}N'
-                    : '${_signed(running.grossVsPar)}G',
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.secondary),
-              ),
-              const SizedBox(height: 2),
               // Trophy icon when this player won the active hole.
               // Using Icon instead of an emoji Text to avoid font-fallback
               // rendering issues (emoji shows as '?' on some devices).
@@ -1113,19 +1071,19 @@ class _SkinsPlayerRow extends StatelessWidget {
             // Score box — identical to _P531PlayerRow.
             GestureDetector(
               onTap: onTap,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 40,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: isHot
-                      ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-                      : Colors.transparent,
-                  border: boxBorder,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Stack(children: [
-                  Center(
+              child: scoreCellWithDots(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 40,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: isHot
+                        ? theme.colorScheme.primaryContainer.withOpacity(0.4)
+                        : Colors.transparent,
+                    border: boxBorder,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Center(
                     child: gross != null
                         ? Text(
                             '$gross',
@@ -1138,25 +1096,9 @@ class _SkinsPlayerRow extends StatelessWidget {
                                 color: theme.colorScheme.primary)
                             : const SizedBox.shrink(),
                   ),
-                  if (strokesOnThisHole > 0)
-                    Positioned(
-                      top: 2, right: 2,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: List.generate(
-                          strokesOnThisHole.clamp(0, 2),
-                          (_) => Container(
-                            width: 4, height: 4,
-                            margin: const EdgeInsets.only(left: 1),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ]),
+                ),
+                strokesOnThisHole,
+                theme.colorScheme.primary,
               ),
             ),
 

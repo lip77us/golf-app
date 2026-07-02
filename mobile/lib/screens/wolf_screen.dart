@@ -554,15 +554,15 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Wolf',
-        automaticallyImplyLeading: !showExit,
-        leading: showExit
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Exit to rounds',
-                onPressed: () => Navigator.of(context).popUntil(
-                    (r) => r.settings.name == '/casual-rounds' || r.isFirst),
-              )
-            : null,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: showExit ? 'Exit to rounds' : 'Close',
+          onPressed: showExit
+              ? () => Navigator.of(context).popUntil(
+                  (r) => r.settings.name == '/casual-rounds' || r.isFirst)
+              : () => Navigator.of(context).maybePop(),
+        ),
         actions: [
           if (sync.hasPending)
             Padding(
@@ -584,11 +584,6 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                 ),
               ),
             ),
-          IconButton(
-            tooltip: 'Refresh scores',
-            icon: const Icon(Icons.refresh),
-            onPressed: rp.round == null ? null : _refresh,
-          ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
           // Standard order: Leaderboard then Scorecard (scorecard rightmost).
@@ -809,7 +804,8 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
             child: OutlinedButton.icon(
               onPressed: _selectedHole > 1 ? _retreat : null,
               icon: const Icon(Icons.chevron_left, size: 20),
-              label: Text('Hole ${_selectedHole - 1}'),
+              label: Text(
+                  _selectedHole > 1 ? 'Hole ${_selectedHole - 1}' : 'Previous'),
             ),
           ),
           const SizedBox(width: 8),
@@ -1549,7 +1545,7 @@ class _PlayerRow extends StatelessWidget {
                         color: theme.colorScheme.onSecondaryContainer)),
               ),
             ],
-            if (showHcap) ...[
+            if (showHcap && hcap > 0) ...[
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -1559,7 +1555,7 @@ class _PlayerRow extends StatelessWidget {
                   border: Border.all(color: theme.colorScheme.outlineVariant),
                 ),
                 child: Text(
-                  '-$hcap${strokes > 0 ? ' ${'•' * strokes.clamp(0, 2)}' : ''}',
+                  'gets $hcap',
                   style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: theme.colorScheme.onSecondaryContainer),

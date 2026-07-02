@@ -1139,6 +1139,48 @@ class _BottomBar extends StatelessWidget {
 // Step 0 — Tournament
 // ===========================================================================
 
+/// Wizard step layout: a pinned title/subtitle header that never scrolls up
+/// under the app bar / progress bar (matters on short screens like the iPhone
+/// 13 mini) above a scrollable body. For steps whose body is a simple Column.
+Widget _pinnedStep(
+  BuildContext context, {
+  required String title,
+  String? subtitle,
+  GlobalKey<FormState>? formKey,
+  required List<Widget> children,
+}) {
+  final theme = Theme.of(context);
+  Widget body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: children);
+  if (formKey != null) body = Form(key: formKey, child: body);
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: theme.textTheme.headlineSmall),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(subtitle,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: Colors.grey)),
+            ],
+          ],
+        ),
+      ),
+      Expanded(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: body,
+        ),
+      ),
+    ],
+  );
+}
+
 class _Step0Tournament extends StatelessWidget {
   final bool              createNew;
   final List<Tournament>  tournaments;
@@ -1168,17 +1210,12 @@ class _Step0Tournament extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: formKey,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Tournament', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 4),
-          Text('Create a new tournament or add this round to an existing one.',
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: Colors.grey)),
-          const SizedBox(height: 24),
+    return _pinnedStep(
+      context,
+      title: 'Tournament',
+      subtitle: 'Create a new tournament or add this round to an existing one.',
+      formKey: formKey,
+      children: [
 
           SegmentedButton<bool>(
             showSelectedIcon: false,
@@ -1309,8 +1346,7 @@ class _Step0Tournament extends StatelessWidget {
                 validator: (v) => v == null ? 'Select a tournament' : null,
               ),
           ],
-        ]),
-      ),
+      ],
     );
   }
 }
@@ -1367,18 +1403,32 @@ class _Step1Details extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: formKey,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Round Details',
-              style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 4),
-          Text('Tees are assigned per player in the next step.',
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: Colors.grey)),
-          const SizedBox(height: 20),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Pinned header — stays put so it never scrolls up under the app bar /
+        // progress bar (matters on short screens like the iPhone 13 mini, where
+        // the form is taller than the viewport).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Round Details', style: theme.textTheme.headlineSmall),
+              const SizedBox(height: 4),
+              Text('Tees are assigned per player in the next step.',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: Colors.grey)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Form(
+              key: formKey,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
 
           // ── Round 1 header (only shown when multi-round) ─────────────────
           if (additionalRounds.isNotEmpty) ...[
@@ -1485,8 +1535,11 @@ class _Step1Details extends StatelessWidget {
               onChanged: onChangeNetMaxDoubleBogey,
             ),
           ],
-        ]),
-      ),
+              ]),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1664,19 +1717,12 @@ class _Step3GroupsAndTees extends StatelessWidget {
     }
     final isOverridden = !_sameAsAuto();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Groups & Tees',
-              style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 4),
-          Text(
-            'Drag  ≡  to reorder. Tap "Edit sizes" to override the '
-            'default group breakdown. Pick each player\'s tee on the right.',
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
-          ),
+    return _pinnedStep(
+      context,
+      title: 'Groups & Tees',
+      subtitle: 'Drag  ≡  to reorder. Tap "Edit sizes" to override the '
+          'default group breakdown. Pick each player\'s tee on the right.',
+      children: [
           const SizedBox(height: 8),
           // Group legend chips + Edit Sizes affordance
           Row(children: [
@@ -1858,7 +1904,6 @@ class _Step3GroupsAndTees extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
-      ),
     );
   }
 }
@@ -1894,17 +1939,12 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Cup Design', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 4),
-        Text(
-          'Give the cup a name and choose how many teams will compete. '
+    return _pinnedStep(
+      context,
+      title: 'Cup Design',
+      subtitle: 'Give the cup a name and choose how many teams will compete. '
           'Team names and player assignments come later.',
-          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
-        ),
-        const SizedBox(height: 24),
+      children: [
 
         // Cup name (required)
         GolfTextField(
@@ -2017,7 +2057,7 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
             ),
           ]),
         ),
-      ]),
+      ],
     );
   }
 }
@@ -2152,19 +2192,12 @@ class _Step3CupRoundGames extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Games by Round', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 4),
-        Text(
-          'For each round, add one entry per foursome. '
+    return _pinnedStep(
+      context,
+      title: 'Games by Round',
+      subtitle: 'For each round, add one entry per foursome. '
           'The order defines which group plays which format.',
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(color: Colors.grey),
-        ),
-        const SizedBox(height: 20),
+      children: [
         for (int r = 0; r < numRounds; r++) ...[
           _RoundGameSlots(
             roundIndex        : r,
@@ -2182,7 +2215,7 @@ class _Step3CupRoundGames extends StatelessWidget {
           ),
           if (r < numRounds - 1) const SizedBox(height: 16),
         ],
-      ]),
+      ],
     );
   }
 }
@@ -3063,14 +3096,11 @@ class _Step5Review extends StatelessWidget {
     };
     final courseMap   = {for (final c in courses) c.id: c};
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Review', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 4),
-        Text('Tap "Create Round" to set up all foursomes and games.',
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey)),
-        const SizedBox(height: 20),
+    return _pinnedStep(
+      context,
+      title: 'Review',
+      subtitle: 'Tap "Create Round" to set up all foursomes and games.',
+      children: [
 
         _ReviewCard(children: [
           _ReviewRow(Icons.emoji_events, 'Tournament',
@@ -3215,7 +3245,7 @@ class _Step5Review extends StatelessWidget {
         ],
 
         const SizedBox(height: 80),
-      ]),
+      ],
     );
   }
 }

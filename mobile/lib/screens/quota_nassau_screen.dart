@@ -389,6 +389,13 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        // Close (X), not a back arrow — avoids being tapped as "previous hole".
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Close',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: const Text('Four Ball Quota'),
         centerTitle: true,
         actions: [
@@ -413,11 +420,6 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
                 ),
               ),
             ),
-          IconButton(
-            tooltip: 'Refresh scores',
-            icon: const Icon(Icons.refresh),
-            onPressed: rp.round == null ? null : _refresh,
-          ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
           IconButton(
@@ -472,7 +474,8 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
             child: OutlinedButton.icon(
               onPressed: _selectedHole > 1 ? _retreat : null,
               icon: const Icon(Icons.chevron_left, size: 20),
-              label: Text('Hole ${_selectedHole - 1}'),
+              label: Text(
+                  _selectedHole > 1 ? 'Hole ${_selectedHole - 1}' : 'Previous'),
             ),
           ),
           const SizedBox(width: 8),

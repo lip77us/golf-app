@@ -4,6 +4,37 @@ import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/golf_colors.dart';
 
+/// Wraps a score [box] (a NetScoreButton or an empty cell) and shows its
+/// handicap stroke dots in a small strip ABOVE the box — the traditional
+/// scorecard placement — so they never collide with the bogey / double-bogey
+/// square that fills the cell.  The strip is always reserved (fixed height) so
+/// rows stay aligned whether or not a player gets strokes on the hole.
+Widget scoreCellWithDots(Widget box, int strokes, Color color) {
+  final n = strokes.clamp(0, 2);
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      SizedBox(
+        height: 5,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < n; i++)
+              Container(
+                width: 5, height: 5,
+                margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 2),
+      box,
+    ],
+  );
+}
+
 /// A tappable score button using golf-scorecard notation.  When the user's Net
 /// Style Entry preference is on (the default), the shape/colour are driven by
 /// NET par (par + the player's strokes on the hole); when off, by GROSS par.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api/models.dart';
+import '../game_catalog.dart';
 
 /// Card for a round shared with me — a tournament or multi-group skins game a
 /// friend/TD added me to. Shown in a "Shared with you" section on the Active
@@ -21,8 +22,9 @@ class SharedRoundCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final games =
-        round.activeGames.isEmpty ? '' : '  ·  ${round.activeGames.join(", ")}';
+    final games = round.activeGames.isEmpty
+        ? ''
+        : '  ·  ${gamesDisplayLabel(round.activeGames, isEighteenHoleMatch: round.isEighteenHoleMatch)}';
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
