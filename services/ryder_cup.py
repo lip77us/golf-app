@@ -576,6 +576,7 @@ def ryder_cup_summary(team_tournament: TeamTournament) -> dict:
                         'player_id' : p.id,
                         'name'      : p.name,
                         'short_name': p.short_name,
+                        'sex'       : p.sex,
                     }
                     for p in t.players.all()
                 ],

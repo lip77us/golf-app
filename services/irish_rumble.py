@@ -175,6 +175,154 @@ def par_by_hole_for_round(round_obj):
 
 
 # ---------------------------------------------------------------------------
+# Threesome leveling — borrowed-4th phantom
+# ---------------------------------------------------------------------------
+
+@transaction.atomic
+def ensure_irish_rumble_phantom(round_obj) -> int:
+    """
+    Idempotently give every *true threesome* in an Irish Rumble round a
+    borrowed-4th phantom (the threesome-leveling design — see
+    docs/irish-rumble.md, "Leveling mixed groups — chosen design").
+
+    A true threesome = a foursome with exactly 3 real players and no existing
+    phantom.  Each such group gets a phantom 4th whose per-hole gross is
+    borrowed from a fixed, shuffled donor rotation over **every real player in
+    every other group** (whole-field), via
+    ``scoring.phantom.CrossFoursomeRotation``.  The phantom counts as a team
+    member feeding the group's best-N pool (it is NOT an opponent — contrast
+    Triple Cup, which uses the same machinery to fill an opponent slot).  Each
+    borrowed hole is handicapped by that hole's donor (``donor_handicaps``),
+    applied in :func:`_build_ir_score_index`.
+
+    Safe to call repeatedly: groups that already have a phantom are left
+    untouched (the rotation is built once and stays fixed).  Returns the number
+    of phantoms created.
+
+    No-op unless the round has an :class:`IrishRumbleConfig`.
+    """
+    from tournament.models import FoursomeMembership
+    from scoring.models import HoleScore
+    from scoring.phantom import get_algorithm, CROSS_FOURSOME_ALGORITHM_ID
+    from services.round_setup import _get_or_create_phantom
+
+    if not IrishRumbleConfig.objects.filter(round=round_obj).exists():
+        return 0
+
+    foursomes = list(
+        Foursome.objects
+        .filter(round=round_obj)
+        .prefetch_related('memberships__player', 'memberships__tee')
+    )
+
+    # {foursome_id: [(player_id, name, playing_handicap), ...]} — real players.
+    real_by_fs = {
+        fs.pk: [
+            (m.player_id, m.player.name, m.playing_handicap or 0)
+            for m in fs.memberships.all()
+            if not m.player.is_phantom
+        ]
+        for fs in foursomes
+    }
+
+    # The borrowed-4th levels a threesome UP to the field's largest group.  When
+    # every group is the same size (e.g. a 9-golfer 3-on-3-on-3 round), there is
+    # no asymmetry to correct — all groups already count the same number of balls
+    # — so no phantom is added.  Only pad a threesome when some group has ≥4 real
+    # players to level up to.
+    max_group_size = max((len(m) for m in real_by_fs.values()), default=0)
+    if max_group_size < 4:
+        return 0
+
+    algo           = get_algorithm(CROSS_FOURSOME_ALGORITHM_ID)
+    phantom_player = None
+    created        = 0
+
+    for fs in foursomes:
+        real = real_by_fs[fs.pk]
+        if len(real) != 3:
+            continue
+
+        # A threesome may already carry a phantom membership from another game's
+        # pad-to-4 (e.g. Pink Ball / Sixes), created as an INTRA-foursome rotating
+        # phantom.  Irish Rumble's borrowed-4th is a CROSS-foursome phantom, so we
+        # CONVERT that membership rather than skip it.  An already-converted
+        # borrowed-4th is left untouched (don't reshuffle its rotation).
+        existing_phantom_m = next(
+            (m for m in fs.memberships.all() if m.player.is_phantom), None
+        )
+        if (existing_phantom_m
+                and existing_phantom_m.phantom_algorithm == CROSS_FOURSOME_ALGORITHM_ID):
+            continue
+
+        # Donor pool = every real player in every OTHER group (whole field),
+        # finished or not — unfinished donors resolve once they post.
+        donors = [
+            (pid, name, hcp)
+            for other_id, members in real_by_fs.items()
+            if other_id != fs.pk
+            for (pid, name, hcp) in members
+        ]
+        if not donors:
+            continue  # single-group round — nothing to borrow from.
+
+        config = algo.initial_config_with_names(
+            [(pid, name) for pid, name, _ in donors]
+        )
+        # Per-donor handicaps drive the per-hole borrowed-ball adjustment.
+        config['donor_handicaps'] = {str(pid): hcp for pid, _, hcp in donors}
+
+        # Phantom plays from a real member's tee (for SI lookups); scratch
+        # handicap — the rotating donor's handicap drives each borrowed hole.
+        first_real_m = next(
+            (m for m in fs.memberships.all()
+             if not m.player.is_phantom and m.tee_id is not None),
+            None,
+        )
+        phantom_tee = first_real_m.tee if first_real_m else None
+
+        if existing_phantom_m is not None:
+            # Convert the pad-to-4 phantom into the borrowed-4th in place.
+            existing_phantom_m.phantom_algorithm = CROSS_FOURSOME_ALGORITHM_ID
+            existing_phantom_m.phantom_config     = config
+            existing_phantom_m.course_handicap    = 0
+            existing_phantom_m.playing_handicap   = 0
+            if existing_phantom_m.tee_id is None and phantom_tee is not None:
+                existing_phantom_m.tee = phantom_tee
+            existing_phantom_m.save(update_fields=[
+                'phantom_algorithm', 'phantom_config',
+                'course_handicap', 'playing_handicap', 'tee',
+            ])
+            phantom_for_cleanup = existing_phantom_m.player
+        else:
+            if phantom_player is None:
+                phantom_player = _get_or_create_phantom(round_obj.account)
+            FoursomeMembership.objects.create(
+                foursome          = fs,
+                player            = phantom_player,
+                tee               = phantom_tee,
+                course_handicap   = 0,
+                playing_handicap  = 0,
+                phantom_algorithm = CROSS_FOURSOME_ALGORITHM_ID,
+                phantom_config    = config,
+            )
+            phantom_for_cleanup = phantom_player
+
+        # IR reads donor scores live (provider.phantom_gross_scores) — drop any
+        # pre-populated filler (pad-to-4 phantoms carry bogey scores) so the
+        # borrowed ball stays empty until its donor posts.
+        HoleScore.objects.filter(foursome=fs, player=phantom_for_cleanup).delete()
+
+        if not fs.has_phantom:
+            fs.has_phantom = True
+            fs.save(update_fields=['has_phantom'])
+
+        created += 1
+
+    return created
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
@@ -274,7 +422,25 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent):
         result.setdefault(fid, {}).setdefault(pid, {})[hole] = adjusted
 
     # ── Inject phantom scores ───────────────────────────────────────────────
-    from scoring.phantom import PhantomScoreProvider
+    # A phantom's per-hole gross is borrowed from a donor.  For a cross-foursome
+    # (borrowed-4th) phantom — the Irish Rumble threesome-leveling design — each
+    # borrowed hole is handicapped by THAT HOLE'S donor (donor_handicaps), so the
+    # borrowed ball is the donor's own net/gross/strokes-off under the round's IR
+    # mode.  Legacy intra-foursome (rotating_player_scores) phantoms keep their
+    # averaged playing handicap.
+    from scoring.phantom import PhantomScoreProvider, get_algorithm
+
+    # player_id → membership (with tee) across the whole round.  A borrowed-4th
+    # phantom scores each hole AS its rotating donor, so the donor's own tee
+    # drives stroke-index allocation + par — courses where the men's/women's SI
+    # tables differ (e.g. Tilden Park) would mis-allocate against any other tee.
+    member_by_pid = {
+        m.player_id: m
+        for fs in foursomes
+        for m in fs.memberships.all()
+        if not m.player.is_phantom
+    }
+
     for fs in foursomes:
         if not fs.has_phantom:
             continue
@@ -286,31 +452,68 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent):
         )
         if phantom_m is None:
             continue
-        phantom_hcp    = provider.phantom_playing_handicap()
-        phantom_gross  = provider.phantom_gross_scores()
-        phantom_pid    = phantom_m.player_id
-        # Compute capped adjusted score per hole for the phantom
+        phantom_gross = provider.phantom_gross_scores()
+        phantom_pid   = phantom_m.player_id
+        is_cross      = provider.is_cross_foursome
+        phantom_hcp   = None if is_cross else provider.phantom_playing_handicap()
+        donor_algo    = get_algorithm(phantom_m.phantom_algorithm) if is_cross else None
+        donor_cfg     = (phantom_m.phantom_config or {}) if is_cross else {}
+
+        # Fallback tee (legacy phantom, or donor with no tee) — phantom's own,
+        # else the first real member's.
+        fallback_tee = phantom_m.tee or next(
+            (m.tee for m in fs.memberships.all()
+             if not m.player.is_phantom and m.tee_id), None
+        )
+        if fallback_tee is None and not is_cross:
+            continue
+
+        # Only borrow a 4th ball on holes the group has actually PLAYED (some
+        # real player scored).  A donor who is ahead of the threesome must not
+        # add "future" holes to the group total or advance its "thru".
+        real_holes = set()
+        for holes_map in result.get(fs.pk, {}).values():
+            real_holes.update(holes_map.keys())
+
         for hole, gross in phantom_gross.items():
-            # Get tee for SI lookup — use the phantom membership's tee, or fallback to first real member
-            tee = phantom_m.tee or next(
-                (m.tee for m in fs.memberships.all() if not m.player.is_phantom and m.tee_id), None
-            )
-            if tee is None:
+            if hole not in real_holes:
                 continue
-            si = tee.hole(hole).get('stroke_index', 18)
+            if is_cross:
+                # Borrowed ball is fully the donor's hole: donor's own tee for
+                # SI + par, and the donor's individual handicap for this hole.
+                donor_pid = donor_algo.get_source_player_id(hole, donor_cfg)
+                donor_m   = member_by_pid.get(donor_pid)
+                hole_tee  = (donor_m.tee if (donor_m and donor_m.tee_id)
+                             else fallback_tee)
+                hcp       = donor_algo.donor_handicap(hole, donor_cfg)
+            else:
+                hole_tee  = fallback_tee
+                hcp       = phantom_hcp
+            if hole_tee is None:
+                continue
+            hd       = hole_tee.hole(hole)
+            si       = hd.get('stroke_index', 18)
+            hole_par = hd.get('par', 4)
+            if hcp is None:
+                hcp = 0
 
             if handicap_mode == HandicapMode.GROSS:
                 adjusted = gross
             elif handicap_mode == HandicapMode.NET:
-                eff = _effective_hcp(phantom_hcp, net_percent)
+                eff = _effective_hcp(hcp, net_percent)
                 adjusted = gross - _strokes_on_hole(eff, si)
             else:  # STROKES_OFF
-                so = max(0, phantom_hcp - low_hcp)
+                so = max(0, hcp - low_hcp)
                 adjusted = gross - _strokes_on_hole(so, si)
 
-            par    = par_index.get(fs.pk, {}).get(hole, 4)
-            capped = min(adjusted, par + 2)
-            result.setdefault(fs.pk, {}).setdefault(phantom_pid, {})[hole] = capped
+            # Net-double-bogey cap, gated like the real players above.
+            if cap_enabled:
+                # Legacy phantom keeps the receiving foursome's par; a borrowed
+                # ball uses the donor's own tee par (computed above).
+                par      = hole_par if is_cross else par_index.get(fs.pk, {}).get(hole, 4)
+                adjusted = min(adjusted, par + 2)
+
+            result.setdefault(fs.pk, {}).setdefault(phantom_pid, {})[hole] = adjusted
 
     return result
 
@@ -350,6 +553,11 @@ def calculate_irish_rumble(round_obj) -> list:
     config = IrishRumbleConfig.objects.filter(round=round_obj).first()
     if config is None:
         return []
+
+    # Auto-apply the borrowed-4th here (not just at setup) so an existing round
+    # picks it up on the next score submit — no IR-setup re-save required.
+    # Idempotent: no-op once every true threesome already carries it.
+    ensure_irish_rumble_phantom(round_obj)
 
     handicap_mode = config.handicap_mode
     net_percent   = config.net_percent
@@ -628,16 +836,45 @@ def irish_rumble_summary(round_obj) -> dict:
         short_names  = ' / '.join(m.player.short_name or m.player.name
                                   for m in real_members)
         group_payout = _payout_for(row['rank'])
+        # Borrowed-4th donor status (which donor feeds each hole + whether they
+        # have posted yet → the "provisional total" lag).  None for full groups
+        # and legacy intra-foursome phantoms.
+        phantom_info = None
+        if fs.has_phantom:
+            from scoring.phantom import build_phantom_info
+            phantom_info = build_phantom_info(fs, config.net_percent)
+
+        # "Thru" — for a leveled threesome the borrowed-4th lags, so a hole
+        # isn't complete until its donor has also posted.  Cap "thru" at the
+        # last hole (contiguous from 1) where the phantom has a score too;
+        # otherwise a group shows "thru 2" while still waiting on hole 2.
+        current_hole = hole_progress.get(fid)
+        if fs.has_phantom and current_hole:
+            fs_scores  = score_index.get(fid, {})
+            real_pids  = {m.player_id for m in real_members}
+            phantom_scores = next(
+                (h for pid, h in fs_scores.items() if pid not in real_pids), {}
+            )
+            complete_thru = 0
+            for h in range(1, current_hole + 1):
+                if h in phantom_scores:
+                    complete_thru = h
+                else:
+                    break
+            current_hole = complete_thru or None
+
         overall_out.append({
             'rank'             : row['rank'],
+            'foursome_id'      : fid,
             'group'            : f"Group {fs.group_number}",
             'players'          : players,
             'short_names'      : short_names,
             'n_players'        : n_players,
             'has_phantom'      : fs.has_phantom,
+            'phantom'          : phantom_info,
             'total_score'      : r['score'] if r else None,
             'net_to_par'       : ntp,
-            'current_hole'     : hole_progress.get(fid),
+            'current_hole'     : current_hole,
             'payout'           : group_payout,
             'per_person_payout': round(group_payout / n_players, 2) if n_players else 0.0,
         })

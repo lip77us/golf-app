@@ -423,17 +423,19 @@ class PhantomScoreProvider:
         ]
         real_low = min(real_hcps) if real_hcps else 0
 
-        # Fetch which (donor, hole) pairs have scores
-        scored_pairs = set(
-            HoleScore.objects
+        # Fetch each (donor, hole) pair's gross + handicap strokes so the
+        # borrowed row can show the donor's actual score AND their stroke dots.
+        rows_by_pair = {
+            (r['player_id'], r['hole_number']):
+                (r['gross_score'], r['handicap_strokes'] or 0)
+            for r in HoleScore.objects
             .filter(
                 foursome__round_id=self._foursome.round_id,
                 player_id__in=donor_ids,
             )
             .exclude(gross_score=None)
-            .values_list('player_id', 'hole_number')
-        )
-        scored_pairs = {(pid, h) for pid, h in scored_pairs}
+            .values('player_id', 'hole_number', 'gross_score', 'handicap_strokes')
+        }
 
         status = {}
         for hole in range(1, 19):
@@ -445,11 +447,15 @@ class PhantomScoreProvider:
             so = 0
             if donor_hcp is not None:
                 so = max(0, round((donor_hcp - real_low) * net_percent / 100))
+            gross, strokes = rows_by_pair.get((pid, hole), (None, 0))
             status[hole] = {
                 'player_id'  : pid,
                 'player_name': name,
                 'short_name' : shorts.get(pid) or name,
-                'has_score'  : (pid, hole) in scored_pairs,
+                'hcp'        : donor_hcp,
+                'has_score'  : gross is not None,
+                'gross'      : gross,
+                'strokes'    : strokes,
                 'so'         : so,
             }
         return status

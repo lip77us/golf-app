@@ -144,6 +144,7 @@ urlpatterns = [
 
     # ---- Irish Rumble setup (round-level) ----
     path('rounds/<int:pk>/irish-rumble/setup/', views.IrishRumbleSetupView.as_view(), name='api-irish-rumble-setup'),
+    path('rounds/<int:pk>/irish-rumble/', views.IrishRumbleResultView.as_view(), name='api-irish-rumble-result'),
 
     # ---- Low Net setup (round-level) ----
     path('rounds/<int:pk>/low-net/setup/', views.LowNetSetupView.as_view(), name='api-low-net-setup'),

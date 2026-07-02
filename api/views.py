@@ -5293,6 +5293,12 @@ class IrishRumbleSetupView(APIView):
                 'custom_balls' : custom_balls,
             },
         )
+        # Level true threesomes with a borrowed-4th phantom (whole-field donor
+        # rotation) so every group counts the configured number of balls.
+        # Idempotent — safe to re-run on every setup save.
+        from services.irish_rumble import ensure_irish_rumble_phantom
+        ensure_irish_rumble_phantom(round_obj)
+
         # Recalculate if there are already hole scores on file
         from services.irish_rumble import calculate_irish_rumble
         try:
@@ -5301,6 +5307,18 @@ class IrishRumbleSetupView(APIView):
             pass  # No scores yet — calculation will run after first score save
 
         return Response(self._config_dict(config), status=status.HTTP_201_CREATED)
+
+
+class IrishRumbleResultView(APIView):
+    """GET /api/rounds/{id}/irish-rumble/ → segment + overall standings.
+
+    Carries the per-group borrowed-4th donor status (`overall[].phantom`) so the
+    score-entry screen can show a threesome its borrowed-ball / pending holes
+    without parsing the whole leaderboard payload."""
+    def get(self, request, pk):
+        round_obj = round_for_reader(request.user, pk)
+        from services.irish_rumble import irish_rumble_summary
+        return Response(irish_rumble_summary(round_obj))
 
 
 # ---------------------------------------------------------------------------

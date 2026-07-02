@@ -97,10 +97,15 @@ equal footing without inventing or averaging anything.
 
 **Rules:**
 
-1. **Automatic** — any IR group with exactly 3 real players (and no existing
-   phantom) gets one. No TD toggle. The phantom counts as a team member feeding
-   the group's best-N pool (it is NOT an opponent — contrast Triple Cup, where
-   the same donor machinery fills an *opponent* slot).
+1. **Automatic, only when sizes are mixed** — an IR group with exactly 3 real
+   players (and no existing phantom) gets one **only when some other group has 4
+   real players** to level up to. When the whole field is the same size (e.g. a
+   9-golfer **3-on-3-on-3** round), there is no ball-count asymmetry to correct,
+   so no phantoms are added. No TD toggle. The phantom counts as a team member
+   feeding the group's best-N pool (it is NOT an opponent — contrast Triple Cup,
+   where the same donor machinery fills an *opponent* slot). *(Separate, deferred:
+   an IR setup mode that forbids 4-player groups so a TD running 3×3×3 can't
+   accidentally create a foursome.)*
 2. **Donor pool = every real player in every other group, regardless of tee-off
    order** — one fixed shuffled rotation built at setup (reuses
    `CrossFoursomeRotation`). Hole by hole, the phantom takes the **next donor's
@@ -111,8 +116,12 @@ equal footing without inventing or averaging anything.
    donor's **net** under the round's IR mode — net (donor gross − donor strokes),
    gross (raw), or strokes-off (donor gross − `max(0, donor_hcp − round_low)`,
    round-wide low). No team/foursome handicap is computed; individual handicaps
-   cover it. The net-double-bogey cap (if on) applies to the donor's adjusted
-   score like any other.
+   cover it. **The borrowed ball is scored entirely as the donor's hole:** its
+   stroke allocation (and the net-double-bogey cap's par) use the **donor's own
+   tee** stroke index / par, not the threesome's. This matters on courses whose
+   men's and women's cards carry different SI tables (e.g. Tilden Park), where
+   the donor and the threesome may play different tees. The net-double-bogey cap
+   (if on) applies to the donor's adjusted score like any other.
 4. **No self-fill, accept the leaderboard lag.** If a donor hasn't posted a hole
    yet (donors can be anywhere on the course), that hole simply has no phantom
    score until they do — the threesome shows a provisional total on its 3 real
@@ -134,7 +143,39 @@ once it lands).
 - New: (a) a setup/ensure step that creates the phantom membership for a 3-real
   IR group with a whole-field donor rotation; (b) the IR injection must adjust
   each borrowed hole by the **per-hole donor's** handicap (via
-  `donor_handicaps`), not a single phantom handicap.
+  `donor_handicaps`), not a single phantom handicap, and by the **donor's own
+  tee** SI/par (not the threesome's), so mixed-tee/mixed-gender SI tables score
+  the borrowed ball correctly.
+- Implemented: `ensure_irish_rumble_phantom(round_obj)` (idempotent; runs in
+  `IrishRumbleSetupView`; only levels when sizes are mixed) + the donor-aware
+  injection in `_build_ir_score_index`. Tests:
+  `scoring/tests/test_irish_rumble_phantom.py`.
+- **Shares one phantom membership with pad-to-4 games.** A threesome in a round
+  that also runs Pink Ball / Sixes already gets an INTRA-foursome rotating
+  phantom from `setup_round`'s pad-to-4. `ensure_irish_rumble_phantom`
+  **converts** that membership to the cross-foursome borrowed-4th in place
+  (algorithm + config + scratch handicap, clearing pad-to-4 bogey scores) rather
+  than skipping it; an already-converted borrowed-4th is left untouched (no
+  reshuffle). Pink Ball is unaffected — it scores the **3 live players only**
+  (`player__is_phantom=False` throughout `services/red_ball.py`); the phantom is
+  purely an IR construct.
+- Mobile: the Pink Ball screen shows **no phantom row** (Pink Ball = 3 players),
+  except when Irish Rumble is also active — then it renders the shared
+  `BorrowedFourthBanner` (donor-by-hole status) so the scorer sees the IR
+  borrowed-4th. `BorrowedFourthBanner` (in `widgets/borrowed_fourth.dart`) is
+  shared by the generic score-entry and Pink Ball screens.
+- Backend exposure: each `irish_rumble_summary` overall row carries
+  `foursome_id` + a `phantom` block (`build_phantom_info` donor-by-hole status)
+  for a leveled threesome. New `GET /api/rounds/<id>/irish-rumble/`
+  (`IrishRumbleResultView`) returns the summary for score-entry to read.
+- Mobile surfaces (all four): shared widgets in
+  `mobile/lib/widgets/borrowed_fourth.dart` (`BorrowedFourthNote`,
+  `DonorByHoleStrip`, reusing `NassauPhantomInfo` for the donor block). The IR
+  leaderboard (`_IrishRumbleView`) relabels "+ Phantom" → "+ Borrowed 4th",
+  shows the explainer, and a collapsible donor-by-hole strip per leveled group;
+  the IR setup screen shows a threesome-leveling notice when sizes are mixed;
+  score entry shows a borrowed-ball banner + donor strip
+  (`_BorrowedFourthBanner`, fetched via `getIrishRumbleResult`).
 
 ## Files
 

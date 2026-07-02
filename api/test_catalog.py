@@ -13,7 +13,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from accounts.models import Account
-from core.models import CatalogCourse, Course, Tee
+from core.models import CatalogCourse, CatalogTee, Course, Tee
 
 
 User = get_user_model()
@@ -222,3 +222,98 @@ class CourseFindMergeTests(TestCase):
         resp = self.client.get(reverse('api-course-find'), {'q': 'P'})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['courses'], [])
+
+
+class SyncCatalogTeesCommandTests(TestCase):
+    """The sync_catalog_tees management command (catalog → account tee push)."""
+
+    def _corrected_holes(self):
+        # Par 5 on hole 1, longer yardage — a real "correction".
+        return [
+            {'number': n, 'par': 5 if n == 1 else 4,
+             'stroke_index': n, 'yards': 500}
+            for n in range(1, 19)
+        ]
+
+    def setUp(self):
+        from services.catalog import clone_catalog_to_account
+        self.cc = CatalogCourse.objects.create(
+            golf_api_id='tilden-1', name='Tilden Park',
+            city='Berkeley', state='CA', country='US')
+        CatalogTee.objects.create(
+            catalog_course=self.cc, tee_name='Blue', slope=130,
+            course_rating=Decimal('72.1'), par=72, sex='M',
+            default_sort_priority=10, holes=_holes())
+
+        self.acct_a = Account.objects.create(name='Acct A')
+        self.acct_b = Account.objects.create(name='Acct B')
+        self.course_a, _ = clone_catalog_to_account(self.cc, self.acct_a)
+        self.course_b, _ = clone_catalog_to_account(self.cc, self.acct_b)
+
+    def _run(self, **kw):
+        from io import StringIO
+        from django.core.management import call_command
+        out = StringIO()
+        call_command('sync_catalog_tees', name='Tilden', stdout=out, **kw)
+        return out.getvalue()
+
+    def _blue(self, course):
+        return course.tees.get(tee_name='Blue', superseded_by__isnull=True)
+
+    def test_dry_run_does_not_write(self):
+        blue = self.cc.tees.get(tee_name='Blue')
+        blue.holes = self._corrected_holes()
+        blue.save()
+
+        self._run()  # no --apply
+
+        self.assertEqual(self._blue(self.course_a).holes[0]['par'], 4)
+        self.assertEqual(self._blue(self.course_b).holes[0]['par'], 4)
+
+    def test_apply_propagates_correction_to_all_accounts(self):
+        blue = self.cc.tees.get(tee_name='Blue')
+        blue.holes = self._corrected_holes()
+        blue.save()
+
+        self._run(apply=True)
+
+        self.assertEqual(self._blue(self.course_a).holes[0]['par'], 5)
+        self.assertEqual(self._blue(self.course_b).holes[0]['par'], 5)
+
+    def test_apply_adds_new_catalog_tee_to_all_accounts(self):
+        CatalogTee.objects.create(
+            catalog_course=self.cc, tee_name='White', slope=120,
+            course_rating=Decimal('70.0'), par=72, sex='M',
+            default_sort_priority=20, holes=_holes())
+
+        self._run(apply=True)
+
+        self.assertTrue(self.course_a.tees.filter(tee_name='White').exists())
+        self.assertTrue(self.course_b.tees.filter(tee_name='White').exists())
+
+    def test_account_filter_limits_scope(self):
+        blue = self.cc.tees.get(tee_name='Blue')
+        blue.holes = self._corrected_holes()
+        blue.save()
+
+        self._run(apply=True, account='Acct A')
+
+        self.assertEqual(self._blue(self.course_a).holes[0]['par'], 5)  # synced
+        self.assertEqual(self._blue(self.course_b).holes[0]['par'], 4)  # untouched
+
+    def test_local_sort_priority_preserved(self):
+        # Acct B re-orders their Blue tee locally; a catalog correction must not
+        # clobber that local preference.
+        tee_b = self._blue(self.course_b)
+        tee_b.sort_priority = 99
+        tee_b.save(update_fields=['sort_priority'])
+
+        blue = self.cc.tees.get(tee_name='Blue')
+        blue.holes = self._corrected_holes()
+        blue.save()
+
+        self._run(apply=True)
+
+        refreshed = self._blue(self.course_b)
+        self.assertEqual(refreshed.holes[0]['par'], 5)      # geometry synced
+        self.assertEqual(refreshed.sort_priority, 99)       # local order kept
