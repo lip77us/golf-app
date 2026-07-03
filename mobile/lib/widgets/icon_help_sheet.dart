@@ -147,9 +147,9 @@ const List<IconHelpEntry> _leaderboardHelp = [
         'read-only.',
   ),
   IconHelpEntry(
-    icon: Icons.share_outlined,
-    title: 'Share spectator link',
-    body: 'Share a public web link so anyone can watch the live scores in a '
+    icon: Icons.copy_outlined,
+    title: 'Copy spectator link',
+    body: 'Copy a public web link so anyone can watch the live scores in a '
         'browser — no app needed.',
   ),
 ];

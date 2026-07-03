@@ -275,8 +275,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           const PopupMenuItem(
             value: 'share',
             child: ListTile(
-              leading: Icon(Icons.share_outlined),
-              title: Text('Share spectator link'),
+              leading: Icon(Icons.copy_outlined),
+              title: Text('Copy spectator link'),
               contentPadding: EdgeInsets.zero,
             ),
           ),
