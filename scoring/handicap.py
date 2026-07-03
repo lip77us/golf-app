@@ -63,6 +63,21 @@ from core.models import HandicapMode
 from scoring.models import HoleScore
 
 
+def par_adjusted_playing_handicap(course_handicap: int, tee_par: int,
+                                  min_group_par: int,
+                                  allowance: float = 1.0) -> int:
+    """Playing handicap including the WHS mixed-par (different-par) adjustment.
+
+    When players compete across tees with different pars, the player on the
+    HIGHER-par tee adds the par difference to their handicap so cross-par Net
+    and Strokes-Off comparisons are equitable — e.g. a woman on a par-71 tee
+    against men on par-70 gets +1, matching GHIN's Playing Handicap. A group
+    with a single par (all men or all women) gets a 0 adjustment. `min_group_par`
+    is the lowest par among the tees in play in the group.
+    """
+    return round(course_handicap * allowance) + (tee_par - min_group_par)
+
+
 def _effective_hcp(playing_handicap: int, net_percent: int) -> int:
     """Scale playing_handicap by net_percent (%) and round to an int."""
     if net_percent == 100:

@@ -97,9 +97,10 @@ class RabbitTests(TestCase):
 
     # ── Segments + money ─────────────────────────────────────────────────────
 
-    def test_three_segments_split_pot_and_push_when_loose(self):
-        # entry 6 each → pot 18; per segment a loser pays 6/3 = 2, the
-        # holder collects from both (+4 net per won segment).
+    def test_three_segments_per_match_stake_and_push_when_loose(self):
+        # Sixes-style: each segment stakes the FULL bet_unit (6), not a share
+        # of one pot.  Per won segment a loser pays 6 and the holder collects
+        # from both (+12 net per won segment).
         setup_rabbit(self.fs, handicap_mode='gross', accumulate=True,
                      num_segments=3)
         # Segment 1 (1-6): Ann catches hole 1 and holds (wins all) → Ann.
@@ -117,15 +118,15 @@ class RabbitTests(TestCase):
         calculate_rabbit(self.fs)
         s = rabbit_summary(self.fs)
         segs = {x['index']: x for x in s['segments']}
-        assert segs[1]['holder_short'] == self.sn['Ann'] and segs[1]['payout'] == 4.0
+        assert segs[1]['holder_short'] == self.sn['Ann'] and segs[1]['payout'] == 12.0
         assert segs[2]['holder_short'] is None and segs[2]['payout'] == 0.0  # push
-        assert segs[3]['holder_short'] == self.sn['Ben'] and segs[3]['payout'] == 4.0
+        assert segs[3]['holder_short'] == self.sn['Ben'] and segs[3]['payout'] == 12.0
         money = {p['short_name']: p['money'] for p in s['players']}
-        # Ann: +4 (seg1) −2 (seg3) = +2 ; Ben: −2 (seg1) +4 (seg3) = +2 ;
-        # Cal: −2 (seg1) −2 (seg3) = −4.  Segment 2 pushes.
-        assert money[self.sn['Ann']] == 2.0, money
-        assert money[self.sn['Ben']] == 2.0, money
-        assert money[self.sn['Cal']] == -4.0, money
+        # Ann: +12 (seg1) −6 (seg3) = +6 ; Ben: −6 (seg1) +12 (seg3) = +6 ;
+        # Cal: −6 (seg1) −6 (seg3) = −12.  Segment 2 pushes.
+        assert money[self.sn['Ann']] == 6.0, money
+        assert money[self.sn['Ben']] == 6.0, money
+        assert money[self.sn['Cal']] == -12.0, money
         assert abs(sum(money.values())) < 1e-9
 
     def test_single_segment_winner_takes_whole_pot(self):
@@ -137,6 +138,7 @@ class RabbitTests(TestCase):
         calculate_rabbit(self.fs)
         s = rabbit_summary(self.fs)
         money = {p['short_name']: p['money'] for p in s['players']}
-        # entry 6 each → pot 18.  Ann wins it: +12 net, Ben/Cal −6 each.
+        # 1 segment, stake 6.  Ann wins it: +12 net (6 from each), Ben/Cal −6.
         assert money == {self.sn['Ann']: 12.0, self.sn['Ben']: -6.0, self.sn['Cal']: -6.0}, money
-        assert s['money']['pot'] == 18.0, s['money']
+        # pot = max a player can lose = stake × segments = 6 × 1.
+        assert s['money']['pot'] == 6.0, s['money']

@@ -142,6 +142,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'api.context_processors.public_links',
             ],
         },
     },
@@ -299,6 +300,20 @@ APP_DOWNLOAD_URL   = os.environ.get(
     'APP_DOWNLOAD_URL',
     'https://apps.apple.com/app/id6768284628',
 )
+
+# Canonical public base URL for user-facing links (watch pages, universal
+# deep links, invite landings).  MUST match the domain the iOS app is
+# associated with for universal links (see the apple-app-site-association view
+# + the Associated Domains entitlement).  Override per-env on Railway; before
+# the custom domain is live you can point this at the Railway URL.
+PUBLIC_BASE_URL    = os.environ.get(
+    'PUBLIC_BASE_URL', 'https://link.halved.golf',
+).rstrip('/')
+
+# iOS universal-links app identifier = <Apple Team ID>.<bundle id>.  Served in
+# the apple-app-site-association file.  From the Xcode project:
+# DEVELOPMENT_TEAM=V5P3HRQA4G, PRODUCT_BUNDLE_IDENTIFIER=us.lipkin.golfapp.
+IOS_APP_ID         = os.environ.get('IOS_APP_ID', 'V5P3HRQA4G.us.lipkin.golfapp')
 # Logo image shown in the invite link's social/Messages preview (og:image).
 # Host a square PNG (≈512px) and point this at it; empty = no preview image.
 INVITE_OG_IMAGE_URL = os.environ.get(

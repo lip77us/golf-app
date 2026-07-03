@@ -10,6 +10,7 @@ from django.test import TestCase
 from services.round_setup import setup_round
 
 from ._helpers import (
+    make_course,
     make_player,
     make_round,
     make_tee,
@@ -131,3 +132,46 @@ class ExplicitGroupSetupTests(TestCase):
         for fs in fs_list:
             real_count = fs.real_players().count()
             assert fs.has_phantom == (real_count < 4), (real_count, fs.has_phantom)
+
+
+class MixedParPlayingHandicapTests(TestCase):
+    """WHS mixed-par adjustment: a player on a higher-par tee than the group's
+    lowest par adds the par difference to their PLAYING handicap (course
+    handicap is unchanged), so Net + Strokes-Off are equitable across tees with
+    different pars (e.g. hole 1 par 4 for men / par 5 for women)."""
+
+    def setUp(self):
+        self.course = make_course()
+        # rating == par + slope 113 → course_handicap == handicap_index, so the
+        # only thing moving the playing handicap is the par adjustment.
+        self.men_tee   = make_tee(self.course, tee_name='White',
+                                  par=70, course_rating=70.0, slope=113)
+        self.women_tee = make_tee(self.course, tee_name='Red',
+                                  par=71, course_rating=71.0, slope=113)
+        self.round = make_round(self.course)
+
+    def test_higher_par_tee_gets_plus_one_playing_handicap(self):
+        man   = make_player('Man',   handicap_index=20)
+        woman = make_player('Woman', handicap_index=20)
+        fs = setup_round(self.round, players=[
+            {'player_id': man.id,   'tee_id': self.men_tee.id,   'group_number': 1},
+            {'player_id': woman.id, 'tee_id': self.women_tee.id, 'group_number': 1},
+        ])[0]
+        by_pid = {m.player_id: m for m in fs.memberships.all()}
+        # Course handicap unchanged for both (rating == par → CH == index).
+        assert by_pid[man.id].course_handicap == 20
+        assert by_pid[woman.id].course_handicap == 20
+        # Playing handicap: man (lowest par) == CH; woman (par + 1) == CH + 1.
+        assert by_pid[man.id].playing_handicap == 20
+        assert by_pid[woman.id].playing_handicap == 21
+
+    def test_same_par_group_gets_no_adjustment(self):
+        a = make_player('A', handicap_index=15)
+        b = make_player('B', handicap_index=8)
+        fs = setup_round(self.round, players=[
+            {'player_id': a.id, 'tee_id': self.men_tee.id, 'group_number': 1},
+            {'player_id': b.id, 'tee_id': self.men_tee.id, 'group_number': 1},
+        ])[0]
+        by_pid = {m.player_id: m for m in fs.memberships.all()}
+        assert by_pid[a.id].playing_handicap == 15
+        assert by_pid[b.id].playing_handicap == 8

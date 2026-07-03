@@ -25,6 +25,7 @@ import random
 from django.db import transaction
 
 from core.models import Player
+from scoring.handicap import par_adjusted_playing_handicap
 from tournament.models import Foursome, FoursomeMembership
 
 
@@ -255,11 +256,16 @@ def setup_round(
             has_phantom     = needs_phantom,
         )
 
-        # Real player memberships
+        # Real player memberships. Playing handicap includes the WHS mixed-par
+        # adjustment relative to the lowest par among this group's tees, so a
+        # player on a higher-par tee (e.g. women's par-71 vs men's par-70) gets
+        # the extra stroke(s) in Net and Strokes-Off.
+        min_par = min(tee_map[p.id].par for p in group)
         for player in group:
             tee = tee_map[player.id]
             course_hcp  = player.course_handicap(tee)
-            playing_hcp = round(course_hcp * handicap_allowance)
+            playing_hcp = par_adjusted_playing_handicap(
+                course_hcp, tee.par, min_par, handicap_allowance)
             FoursomeMembership.objects.create(
                 foursome        = foursome,
                 player          = player,

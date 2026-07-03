@@ -68,6 +68,9 @@ urlpatterns = [
     path('rounds/<int:pk>/watchers/',    views.RoundWatcherView.as_view(),  name='api-round-watchers'),
     path('rounds/<int:pk>/watcher-candidates/', views.RoundWatcherCandidatesView.as_view(), name='api-round-watcher-candidates'),
 
+    # Resolve a universal watch link (halved.golf/watch/<token>/) → round to open.
+    path('watch/<str:token>/resolve/', views.WatchTokenResolveView.as_view(), name='api-watch-resolve'),
+
     # ---- Foursomes ----
     path('foursomes/<int:pk>/',              views.FoursomeDetailView.as_view(),      name='api-foursome-detail'),
     path('foursomes/<int:pk>/active-games/', views.FoursomeActiveGamesView.as_view(), name='api-foursome-active-games'),

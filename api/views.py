@@ -497,7 +497,7 @@ def _build_leaderboard(round_obj: Round) -> dict:
             for fs in foursomes:
                 try:
                     if fs.ryder_cup_foursome_config.game_type == GameType.IRISH_RUMBLE:
-                        ir_groups.add(f"Group {fs.group_number}")
+                        ir_groups.add(fs.display_name)
                 except Exception:
                     pass
             if ir_groups:
@@ -2214,6 +2214,46 @@ class SupportRoundLookupView(APIView):
         })
 
 
+class WatchTokenResolveView(APIView):
+    """
+    GET /api/watch/<token>/resolve/
+
+    Called by the app when it's opened via a universal watch link
+    (https://halved.golf/watch/<token>/).  Resolves the round from the token,
+    records the caller as a watcher (by their verified phone — so the round
+    also surfaces under "Observing" and round_for_reader admits them), and
+    returns the ids the app needs to open the read-only leaderboard.
+    """
+    def get(self, request, token):
+        from tournament.models import Round, Watcher
+        rnd = (Round.objects.select_related('tournament')
+               .filter(watch_token=(token or '').upper()).first())
+        if rnd is None:
+            return Response({'detail': 'No round found for that link.'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        # Record the opener as a watcher unless they're already playing in it.
+        phone = getattr(request.user, 'phone', None)
+        if phone:
+            from accounts.phone import normalize
+            norm = normalize(phone)
+            if norm:
+                _, part_phones = _round_participant_keys(rnd)
+                if norm not in part_phones:
+                    prof = getattr(request.user, 'player_profile', None)
+                    Watcher.objects.get_or_create(
+                        round=rnd, tournament=None, phone=norm,
+                        defaults={'name': (prof.name if prof else 'Watcher'),
+                                  'invited_by': prof})
+        t = rnd.tournament
+        return Response({
+            'round_id':        rnd.id,
+            'is_tournament':   t is not None,
+            'tournament_id':   t.id if t is not None else None,
+            'tournament_name': t.name if t is not None else None,
+        })
+
+
 class PlayingRoundsView(APIView):
     """
     GET /api/rounds/playing-for-me/
@@ -2392,9 +2432,26 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
             import logging
             logging.getLogger(__name__).exception('watch-invite push failed')
 
+    # Public watch link (a halved.golf universal link — opens the app to this
+    # round for installed users once deep-linking is live, else the read-only
+    # web watch page).  For a tournament, link the in-progress round's page (or
+    # the first round) since watch tokens live on Round.
+    from django.conf import settings
+    base = settings.PUBLIC_BASE_URL
+    watch_url = None
+    watch_round = round_obj
+    if watch_round is None and tournament is not None:
+        watch_round = (tournament.rounds.filter(status='in_progress').first()
+                       or tournament.rounds.first())
+    if watch_round is not None and watch_round.watch_token:
+        watch_url = f'{base}/watch/{watch_round.watch_token}/'
+
     return Response(
         {'watcher_id': watcher.id, 'created': created, 'is_on_app': is_on_app,
-         'player_id': roster_player.id if roster_player else None},
+         'player_id': roster_player.id if roster_player else None,
+         'watch_url': watch_url,
+         'download_url': settings.APP_DOWNLOAD_URL,
+         'phone': norm},
         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
@@ -2752,6 +2809,25 @@ class FoursomeDetailView(APIView):
         )
         return Response(FoursomeSerializer(foursome).data)
 
+    def patch(self, request, pk):
+        """Set this group's custom name (TD action).  Body: {"name": "..."}.
+        An empty/blank name clears it — the group falls back to 'Group N'."""
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response(
+                {'detail': 'Only the organizer can rename a group.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        foursome = foursome_for_scorer(request.user, pk)
+        name = (request.data.get('name') or '').strip()
+        if len(name) > 50:
+            return Response(
+                {'detail': 'Group name must be 50 characters or fewer.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        foursome.name = name
+        foursome.save(update_fields=['name'])
+        return Response(FoursomeSerializer(foursome).data)
+
 
 class FoursomeActiveGamesView(APIView):
     """
@@ -2849,9 +2925,26 @@ class FoursomeTeesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from scoring.handicap import par_adjusted_playing_handicap
+
         memberships = {
-            m.player_id: m for m in foursome.memberships.select_related('tee').all()
+            m.player_id: m
+            for m in foursome.memberships.select_related('tee', 'player').all()
         }
+
+        # Recover each real player's handicap allowance BEFORE any tee change,
+        # backing out the current mixed-par adjustment so it isn't folded into
+        # the ratio (allowance is otherwise 1.0 in practice).
+        real_now = [m for m in memberships.values()
+                    if not m.player.is_phantom and m.tee]
+        old_min_par = min((m.tee.par for m in real_now), default=0)
+        allowance_by_pid = {}
+        for m in real_now:
+            base = m.playing_handicap - (m.tee.par - old_min_par)
+            allowance_by_pid[m.player_id] = (
+                base / m.course_handicap
+                if m.course_handicap and m.course_handicap > 0 else 1.0)
+
         updated = []
         for item in tees_data:
             if not isinstance(item, dict):
@@ -2863,23 +2956,21 @@ class FoursomeTeesView(APIView):
             m = memberships.get(pid)
             if m is None:
                 continue
-            new_tee = get_object_or_404(Tee, pk=tid)
-
-            # Infer original handicap_allowance ratio from the existing
-            # playing/course handicaps so a non-100% allowance survives.
-            if m.course_handicap and m.course_handicap > 0:
-                allowance = m.playing_handicap / m.course_handicap
-            else:
-                allowance = 1.0
-
-            new_course_hcp  = m.player.course_handicap(new_tee)
-            new_playing_hcp = round(new_course_hcp * allowance)
-
-            m.tee              = new_tee
-            m.course_handicap  = new_course_hcp
-            m.playing_handicap = new_playing_hcp
-            m.save(update_fields=['tee', 'course_handicap', 'playing_handicap'])
+            m.tee             = get_object_or_404(Tee, pk=tid)
+            m.course_handicap = m.player.course_handicap(m.tee)
             updated.append(m.player_id)
+
+        # Recompute par-adjusted playing handicaps across the WHOLE foursome —
+        # a tee change can shift the group's lowest par, so every real member's
+        # adjustment is re-derived and saved.
+        real = [m for m in memberships.values()
+                if not m.player.is_phantom and m.tee]
+        new_min_par = min((m.tee.par for m in real), default=0)
+        for m in real:
+            m.playing_handicap = par_adjusted_playing_handicap(
+                m.course_handicap, m.tee.par, new_min_par,
+                allowance_by_pid.get(m.player_id, 1.0))
+            m.save(update_fields=['tee', 'course_handicap', 'playing_handicap'])
 
         return Response({
             'foursome_id'      : foursome.id,

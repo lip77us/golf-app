@@ -181,6 +181,14 @@ class Foursome(models.Model):
     """
     round               = models.ForeignKey(Round, on_delete=models.CASCADE, related_name='foursomes')
     group_number        = models.PositiveSmallIntegerField()
+    name                = models.CharField(
+                            max_length=50, blank=True, default='',
+                            help_text=(
+                                "Optional custom name for this group/foursome "
+                                "(e.g. a team name). Falls back to 'Group N' "
+                                "when blank — see display_name."
+                            )
+                        )
     pink_ball_order     = models.JSONField(
                             default=list,
                             help_text="Ordered list of player PKs for pink ball rotation."
@@ -211,8 +219,13 @@ class Foursome(models.Model):
     def player_count(self):
         return self.memberships.filter(player__is_phantom=False).count()
 
+    @property
+    def display_name(self):
+        """Custom name if set, else the default 'Group N' label."""
+        return self.name.strip() if self.name.strip() else f"Group {self.group_number}"
+
     def __str__(self):
-        return f"Group {self.group_number} — {self.round}"
+        return f"{self.display_name} — {self.round}"
 
 
 class FoursomeMembership(models.Model):

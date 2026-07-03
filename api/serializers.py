@@ -495,10 +495,13 @@ class FoursomeSerializer(serializers.ModelSerializer):
             pass
         return games
 
+    # Custom group name + the resolved label ("<name>" or "Group N").
+    display_name = serializers.ReadOnlyField()
+
     class Meta:
         model  = Foursome
         fields = [
-            'id', 'group_number', 'has_phantom',
+            'id', 'group_number', 'name', 'display_name', 'has_phantom',
             'pink_ball_order', 'active_games', 'configured_games',
             'tee_time', 'memberships', 'has_any_score', 'you_score',
         ]

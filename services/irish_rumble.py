@@ -697,7 +697,7 @@ def irish_rumble_summary(round_obj) -> dict:
             'results': [
                 {
                     'rank'      : r.rank,
-                    'group'     : f"Group {r.foursome.group_number}",
+                    'group'     : r.foursome.display_name,
                     'score'     : r.total_net_score,
                     'net_to_par': (
                         r.total_net_score - seg_par
@@ -866,7 +866,7 @@ def irish_rumble_summary(round_obj) -> dict:
         overall_out.append({
             'rank'             : row['rank'],
             'foursome_id'      : fid,
-            'group'            : f"Group {fs.group_number}",
+            'group'            : fs.display_name,
             'players'          : players,
             'short_names'      : short_names,
             'n_players'        : n_players,

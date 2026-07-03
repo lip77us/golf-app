@@ -172,7 +172,7 @@ def scramble_summary(round_obj) -> list:
         )
         summary.append({
             'rank'        : r.rank,
-            'group'       : f"Group {r.foursome.group_number}",
+            'group'       : r.foursome.display_name,
             'players'     : players,
             'total_gross' : r.total_gross,
             'total_net'   : r.total_net,

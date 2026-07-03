@@ -19,12 +19,13 @@ hole.
 
 Segments: num_segments is 1 (one 18-hole match), 2 (two 9-hole matches),
 or 3 (three 6-hole matches).  The rabbit resets at the start of each
-segment.  Whoever holds the rabbit when a segment ends wins that segment's
-share of the pot (pot / num_segments); a segment that ends loose is a push.
+segment.  Whoever holds the rabbit when a segment ends wins that segment;
+a segment that ends loose is a push.
 
-Settlement: pot = Round.bet_unit.  Each completed segment is worth
-seg_value = pot / num_segments, won by its holder and paid by the two
-non-holders equally — so the table nets to zero.
+Settlement: bet_unit is the per-segment stake (Sixes-style — each segment is
+its own match, NOT a share of one pot).  On every completed segment the holder
+collects bet_unit from each non-holder; a push moves no money.  So the table
+nets to zero and winning every segment is worth (n-1) × num_segments units.
 
 Handicap modes mirror Points 5-3-1 / Wolf (Net %, Gross, Strokes-Off-Low).
 
@@ -245,7 +246,7 @@ def rabbit_summary(foursome) -> dict:
             'current'     : {'holder_id': None, 'holder_short': None,
                              'lead': 0, 'segment': 1},
             'money'       : {'bet_unit': bet_unit, 'entry': bet_unit,
-                             'pot': bet_unit * 3, 'seg_value': bet_unit * 3},
+                             'pot': bet_unit, 'seg_value': bet_unit},
         }
 
     members  = _real_members(foursome)
@@ -255,14 +256,15 @@ def rabbit_summary(foursome) -> dict:
     ranges      = segment_ranges(game.num_segments)
     nseg        = game.num_segments or 1
 
-    # bet_unit is the per-player ENTRY (buy-in).  pot = n × entry; each
-    # segment a loser pays entry/num_segments and the holder collects from
-    # both opponents.  Winning every segment nets +(n-1) entries; each loser
-    # nets −1 entry.  Push segments (loose at the end) move no money.
+    # bet_unit is the per-segment stake (Sixes-style — each segment is its own
+    # match, not a share of one pot).  On every completed segment each loser
+    # pays the holder one full bet_unit and the holder collects from all
+    # opponents.  Winning every segment nets +(n-1)·num_segments; losing every
+    # segment nets −num_segments.  Push segments (loose at the end) move nothing.
     n         = len(real_ids) or 3
     entry     = bet_unit
-    pot       = entry * n
-    per_loser = entry / nseg          # each loser pays this on a won segment
+    pot       = entry * nseg          # max a single player can lose (all segments)
+    per_loser = entry                 # each loser pays a full stake per lost segment
 
     # Gross + par for display.
     gross_index: dict = {}
@@ -394,5 +396,5 @@ def rabbit_summary(foursome) -> dict:
             'segment'     : cur_seg,
         },
         'money'       : {'bet_unit': entry, 'entry': entry, 'pot': pot,
-                         'seg_value': pot / nseg},
+                         'seg_value': entry},
     }
