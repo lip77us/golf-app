@@ -1239,7 +1239,7 @@ class _HoleScoreCard extends StatelessWidget {
                             color: theme.colorScheme.outlineVariant),
                       ),
                       child: Text(
-                        'Hcp ${effectiveHcap(m)}',
+                        'Course ${m.playingHandicap}',
                         style: theme.textTheme.labelSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: theme.colorScheme
@@ -1791,7 +1791,7 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
                     style: const TextStyle(
                         fontWeight: FontWeight.w600, fontSize: 11),
                     overflow: TextOverflow.ellipsis),
-                Text('Hcp ${m.playingHandicap}',
+                Text('Course ${m.playingHandicap}',
                     style: const TextStyle(fontSize: 9)),
               ],
             ),

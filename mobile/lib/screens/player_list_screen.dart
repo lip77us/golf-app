@@ -239,7 +239,7 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
           ),
           subtitle: Text(
             [
-              'Hcp ${p.displayHandicap}',
+              'Index ${p.displayHandicap}',
               if (p.email.isNotEmpty) p.email,
             ].join('  ·  '),
             style: const TextStyle(fontSize: 13),

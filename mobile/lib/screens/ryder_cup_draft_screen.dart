@@ -699,7 +699,7 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
                         value: selected,
                         onChanged: (_) => _toggle(p),
                         title: Text(p.name),
-                        subtitle: Text('Hcp ${p.handicapIndex}'),
+                        subtitle: Text('Index ${p.handicapIndex}'),
                       );
                     },
                   ),

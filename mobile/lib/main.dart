@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
@@ -46,6 +47,7 @@ import 'screens/leaderboard_screen.dart';
 import 'screens/casual_rounds_list_screen.dart';
 import 'screens/support_lookup_screen.dart';
 import 'screens/game_suggestion_screen.dart';
+import 'utils/deep_links.dart';
 import 'utils/route_observer.dart';
 import 'screens/irish_rumble_setup_screen.dart';
 import 'screens/pink_ball_setup_screen.dart';
@@ -129,6 +131,10 @@ void main() async {
   // setup simply has no push; the app runs normally.
   await PushService.initFirebase();
   PushService.attach(auth, navigatorKey);
+
+  // Universal links (halved.golf/watch/<token>/ → open the round's leaderboard).
+  // Guarded — no-op on platforms/builds without the association set up.
+  unawaited(DeepLinkService(auth).start());
 
   runApp(GolfApp(auth: auth, localDb: localDb, settings: settings));
 }

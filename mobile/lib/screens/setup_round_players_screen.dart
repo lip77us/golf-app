@@ -22,6 +22,7 @@ import '../utils/golfer_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/halved_mark.dart';
+import '../widgets/tee_assignment.dart';
 import 'player_form_screen.dart';
 
 // Group badge colours — mirrors new_round_wizard.dart
@@ -444,7 +445,7 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                         ],
                       ],
                     ),
-                    subtitle : Text('Hcp ${p.handicapIndex}'),
+                    subtitle : Text('Index ${p.handicapIndex}'),
                     secondary: CircleAvatar(
                       backgroundColor: sel
                           ? Theme.of(context).colorScheme.primary
@@ -514,6 +515,57 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
           }),
         ),
         const SizedBox(height: 12),
+
+        // Bulk "Set all" tees by sex — one tap sets every man / woman to a tee
+        // (each mapped to a valid tee for that sex).  A big time-saver for a
+        // full field; individual pickers below still override anyone.
+        Builder(builder: (_) {
+          final bySex = <String, List<PlayerProfile>>{};
+          for (final p in players) {
+            bySex.putIfAbsent(p.sex, () => []).add(p);
+          }
+          final order = <String>[
+            if (bySex.containsKey('M')) 'M',
+            if (bySex.containsKey('W')) 'W',
+            ...bySex.keys.where((k) => k != 'M' && k != 'W'),
+          ];
+          String label(String s) =>
+              s == 'M' ? 'All men' : s == 'W' ? 'All women' : 'All';
+          final rows = <Widget>[];
+          for (final s in order) {
+            final grp = bySex[s]!;
+            if (grp.length < 2) continue; // no point bulk-setting a single golfer
+            final grpTees = teesForPlayer(_courseTees, grp.first);
+            final ids = grp.map((p) => _playerTees[p.id]?.id).toSet();
+            final common = ids.length == 1 && grpTees.any((t) => t.id == ids.first)
+                ? ids.first
+                : null;
+            rows.add(Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(label(s),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              TeePicker(
+                tees: grpTees,
+                value: common,
+                hint: 'Choose',
+                warn: false,
+                onChanged: (id) => setState(() {
+                  final t = grpTees.firstWhere((t) => t.id == id);
+                  for (final p in grp) {
+                    _playerTees[p.id] = t;
+                  }
+                }),
+              ),
+            ]));
+          }
+          if (rows.isEmpty) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Wrap(spacing: 16, runSpacing: 8, children: rows),
+          );
+        }),
 
         Card(
           elevation  : 0,
@@ -587,26 +639,18 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                               style: theme.textTheme.bodyMedium
                                   ?.copyWith(fontWeight: FontWeight.w600)),
                           const SizedBox(height: 2),
-                          DropdownButton<TeeInfo>(
-                            value    : (tee != null && playerTeeOptions.contains(tee))
-                                ? tee : null,
-                            isDense  : true,
-                            // Fill the column + ellipsize so a long tee name
-                            // can't overflow the row on a narrow phone.
-                            isExpanded: true,
-                            underline: const SizedBox.shrink(),
-                            hint     : Text('Pick tee',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant)),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface),
-                            items: playerTeeOptions.map((t) => DropdownMenuItem(
-                                value: t, child: Text(t.teeName))).toList(),
-                            onChanged: (t) {
-                              if (t != null) {
-                                setState(() => _playerTees[player.id] = t);
-                              }
-                            },
+                          // Prominent shared picker: loud "Pick tee" when
+                          // unassigned, tee name + yardage when set (par +
+                          // rating/slope in the open menu).
+                          TeePicker(
+                            tees:  playerTeeOptions,
+                            value: (tee != null &&
+                                    playerTeeOptions.contains(tee))
+                                ? tee.id
+                                : null,
+                            onChanged: (id) => setState(() =>
+                                _playerTees[player.id] = playerTeeOptions
+                                    .firstWhere((t) => t.id == id)),
                           ),
                         ],
                       ),

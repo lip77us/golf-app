@@ -5,13 +5,13 @@
 /// app-download link is shared so they can install and follow.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_sms/flutter_sms.dart';
 import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../screens/player_form_screen.dart';
-import '../widgets/app_drawer.dart'; // shareInvite, shareOriginFrom
 import '../widgets/halved_mark.dart';
 
 /// Open the invite-a-watcher sheet for a round OR a tournament (exactly one id).
@@ -66,29 +66,38 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
         playerId: playerId, phone: phone, name: name);
   }
 
-  /// Record the watcher. If they're already on Halved, the server notifies them
-  /// in-app (push) — no download pitch; otherwise share the app link so they
-  /// can install and follow.
+  /// Record the watcher, then open Messages pre-filled with a watch invite —
+  /// the SAME halved.golf link for everyone (it opens the app for a Halved
+  /// user, or the read-only web page otherwise), with a download link added
+  /// only when the recipient isn't on Halved yet.  The user just taps Send and
+  /// is returned to the app.
   Future<void> _invite({int? playerId, String? phone, String? name}) async {
-    final auth      = context.read<AuthProvider>();
     final messenger = ScaffoldMessenger.of(context);
-    final origin    = shareOriginFrom(context);
     final navigator = Navigator.of(context);
-    final who = (name?.trim().isNotEmpty == true) ? name! : 'Your watcher';
+    final inviter =
+        context.read<AuthProvider>().player?.name.trim() ?? '';
+    final who = (name?.trim().isNotEmpty == true) ? name!.trim() : 'They';
     setState(() => _busy = true);
     try {
-      final res   = await _post(playerId: playerId, phone: phone, name: name);
-      final onApp = res['is_on_app'] == true;
+      final res      = await _post(playerId: playerId, phone: phone, name: name);
+      final onApp    = res['is_on_app'] == true;
+      final watchUrl = res['watch_url'] as String?;
+      final dlUrl    = res['download_url'] as String?;
+      final toPhone  = (res['phone'] as String?) ?? phone ?? '';
       navigator.pop(); // close the sheet
-      if (onApp) {
-        messenger.showSnackBar(SnackBar(
-          content: Text("$who is on Halved — they'll be notified in the app."),
-        ));
-      } else {
-        await shareInvite(auth, messenger, origin: origin, inviteeName: name);
-        messenger.showSnackBar(SnackBar(
-          content: Text('$who can now follow along — invite link shared.'),
-        ));
+
+      final body = _watchInviteBody(
+        inviter: inviter, onApp: onApp, watchUrl: watchUrl, downloadUrl: dlUrl);
+      final sent = toPhone.isNotEmpty
+          ? await _launchWatchSms(phone: toPhone, body: body)
+          : false;
+      if (!sent) {
+        // Couldn't open Messages (simulator / no SMS) — surface the link so the
+        // invite isn't lost. The watcher is already recorded server-side.
+        messenger.showSnackBar(SnackBar(content: Text(
+          watchUrl != null
+              ? '$who added. Watch link: $watchUrl'
+              : '$who was added as a watcher.')));
       }
     } on ApiException catch (e) {
       if (mounted) setState(() => _busy = false);
@@ -97,6 +106,40 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
       if (mounted) setState(() => _busy = false);
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not invite watcher.')));
+    }
+  }
+
+  /// Body of the watch-invite text.  One halved.golf link for everyone; a
+  /// download link is appended only for a non-Halved recipient.
+  String _watchInviteBody({
+    required String inviter,
+    required bool   onApp,
+    String?         watchUrl,
+    String?         downloadUrl,
+  }) {
+    final by = inviter.isNotEmpty ? inviter : 'A friend';
+    final b  = StringBuffer(
+        '$by invited you to observe an active Halved round.');
+    if (watchUrl != null) {
+      b.write(onApp ? ' Follow it live: $watchUrl' : ' Watch live: $watchUrl');
+    }
+    if (!onApp && downloadUrl != null) {
+      b.write('  Get the Halved app: $downloadUrl');
+    }
+    return b.toString();
+  }
+
+  /// Open the native message composer pre-addressed to [phone] with [body].
+  /// Returns false if the device can't send SMS or the composer failed.
+  Future<bool> _launchWatchSms(
+      {required String phone, required String body}) async {
+    final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    try {
+      if (!await canSendSMS()) return false;
+      await sendSMS(message: body, recipients: [cleaned]);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -198,8 +241,8 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
                   Text('Invite a watcher', style: theme.textTheme.titleLarge),
                   const SizedBox(height: 4),
                   Text(
-                    'They’ll follow the live leaderboard in the app '
-                    '(read-only). We’ll share a link so they can install it.',
+                    'Pick who to invite — we’ll open a text with a link to '
+                    'follow this round live (read-only). Just tap Send.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),

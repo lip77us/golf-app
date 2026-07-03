@@ -841,7 +841,7 @@ class _FoursomeCard extends StatelessWidget {
                       ),
                     ),
                     title: Text(m.player.name),
-                    subtitle: Text('Hcp ${m.playingHandicap}'),
+                    subtitle: Text('Course ${m.playingHandicap}'),
                     onTap: () => Navigator.of(ctx).pop(m),
                   )),
               const SizedBox(height: 8),
@@ -949,7 +949,7 @@ class _FoursomeCard extends StatelessWidget {
                       ),
                     ),
                     title: Text(m.player.name),
-                    subtitle: Text('Hcp ${m.playingHandicap}'),
+                    subtitle: Text('Course ${m.playingHandicap}'),
                     onTap: () => Navigator.of(ctx).pop(m),
                   )),
               const SizedBox(height: 8),
@@ -1164,6 +1164,53 @@ class _FoursomeCard extends StatelessWidget {
     }
   }
 
+  /// TD-only "rename group" tool — give this foursome a custom name (e.g. a
+  /// team name) shown everywhere in place of "Group N".  Clearing the field
+  /// resets it back to the default label.
+  Future<void> _renameGroup(BuildContext context, Foursome fs) async {
+    final ctrl = TextEditingController(text: fs.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: const Text('Rename group'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLength: 50,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: 'Group name',
+            hintText: 'Group ${fs.groupNumber}',
+            helperText: 'Leave blank to reset to "Group ${fs.groupNumber}".',
+          ),
+          onSubmitted: (v) => Navigator.pop(dctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dctx, ctrl.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (newName == null || !context.mounted) return;
+    try {
+      final client = context.read<AuthProvider>().client;
+      await client.setFoursomeName(fs.id, newName);
+      onGamesChanged();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not rename group: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _showGameSheet(BuildContext context) async {
     // Only offer games that are active at the round level and can be per-foursome
     final eligible = roundActiveGames
@@ -1308,6 +1355,9 @@ class _FoursomeCard extends StatelessWidget {
                     case 'configure_games':
                       _showGameSheet(context);
                       break;
+                    case 'rename_group':
+                      _renameGroup(context, foursome);
+                      break;
                   }
                 },
                 itemBuilder: (_) => [
@@ -1320,6 +1370,15 @@ class _FoursomeCard extends StatelessWidget {
                               : theme.colorScheme.onSurfaceVariant),
                       const SizedBox(width: 12),
                       const Flexible(child: Text('Configure group games')),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'rename_group',
+                    child: Row(children: [
+                      Icon(Icons.edit_outlined, size: 18,
+                          color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 12),
+                      const Flexible(child: Text('Rename group')),
                     ]),
                   ),
                 ],
@@ -1380,7 +1439,7 @@ class _FoursomeCard extends StatelessWidget {
                           color: theme.colorScheme.onSurfaceVariant)),
                   const SizedBox(width: 8),
                 ],
-                Text('Hcp ${m.playingHandicap}',
+                Text('Course ${m.playingHandicap}',
                     style: theme.textTheme.bodySmall),
               ]),
             );

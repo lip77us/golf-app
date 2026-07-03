@@ -12,6 +12,7 @@ import '../utils/golfer_invite.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/inline_message.dart';
+import '../widgets/tee_assignment.dart';
 import '../widgets/course_search_field.dart';
 import 'player_form_screen.dart';
 
@@ -182,14 +183,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       _tees    = results[1] as List<TeeInfo>;
       _selectedCourse =
           _courses.firstWhere((c) => c.id == course.id, orElse: () => course);
+      // Changing course invalidates any prior tee choice — reset to unassigned
+      // (0).  Suggestions are re-applied on the tee step, not silently here.
       for (final pid in _playerTees.keys.toList()) {
         final cur = _playerTees[pid];
         final valid = cur != 0 && _availableTees.any((t) => t.id == cur);
-        if (!valid) {
-          final player = _players.firstWhere((p) => p.id == pid,
-              orElse: () => _players.first);
-          _playerTees[pid] = _defaultTeeIdForPlayer(player);
-        }
+        if (!valid) _playerTees[pid] = 0;
       }
     });
   }
@@ -204,17 +203,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// by (sort_priority ASC, tee_name ASC) so the "default" tee at this
   /// course for this sex comes out first.  Returns [] if no course is
   /// selected yet.
-  List<TeeInfo> _teesForPlayer(PlayerProfile p) {
-    final tees = _availableTees
-        .where((t) => t.sex == null || t.sex == p.sex)
-        .toList()
-      ..sort((a, b) {
-        final pc = a.sortPriority.compareTo(b.sortPriority);
-        if (pc != 0) return pc;
-        return a.teeName.compareTo(b.teeName);
-      });
-    return tees;
-  }
+  List<TeeInfo> _teesForPlayer(PlayerProfile p) =>
+      teesForPlayer(_availableTees, p);
 
   /// Tee id to pre-select for this player: the lowest-priority tee in
   /// [_teesForPlayer].  Returns 0 if no course is selected or no tee
@@ -327,11 +317,11 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         // top) are visible again, ready for the next selection.
         _playerSearch = '';
         _playerSearchCtrl.clear();
-        // Assign the right default tee for this specific player (by sex
-        // + priority).  Women get their lowest-priority women's tee,
-        // men get their lowest-priority men's tee.
-        final player = _players.firstWhere((p) => p.id == playerId);
-        _playerTees[playerId] = _defaultTeeIdForPlayer(player);
+        // Tees are chosen on the dedicated tee step (after selection), so a
+        // player is added with NO tee yet (0 = unassigned) — no silent
+        // default that's easy to miss.  Suggestions are filled in on the tee
+        // step via _applyTeeSuggestions().
+        _playerTees[playerId] = 0;
         // Auto-spillover: land in the lowest group with room (< 4
         // players).  Without this the 5th player joined group 1 and
         // the round-setup API rejected the 5-player group.
@@ -341,6 +331,19 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         _playerGroups.remove(playerId);
       }
     });
+  }
+
+  /// Fill a sex-based suggested tee for every selected player who still has
+  /// none (0) or whose current tee isn't valid at the selected course.  Called
+  /// when advancing to the tee step, so the guesses are shown for confirmation
+  /// on a deliberate screen — never silently applied during selection.
+  void _applyTeeSuggestions() {
+    for (final pid in _playerTees.keys.toList()) {
+      final player = _players.firstWhere((p) => p.id == pid,
+          orElse: () => _players.first);
+      final valid = _teesForPlayer(player).any((t) => t.id == _playerTees[pid]);
+      if (!valid) _playerTees[pid] = _defaultTeeIdForPlayer(player);
+    }
   }
 
   Future<void> _createRound() async {
@@ -455,7 +458,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       appBar: GolfAppBar(
         title: _step == 0
             ? 'Casual Round — Course & Game'
-            : 'Casual Round — Players',
+            : _step == 1
+                ? 'Casual Round — Players'
+                : 'Casual Round — Tees',
       ),
       body: _buildBody(),
       bottomNavigationBar: (_loading || _error != null) ? null : _buildNav(),
@@ -469,15 +474,27 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
         child: Row(
           children: [
-            if (_step == 1)
+            if (_step > 0)
               OutlinedButton(
-                onPressed: _creating ? null : () => setState(() => _step = 0),
+                onPressed: _creating ? null : () => setState(() => _step -= 1),
                 child: const Text('Back'),
               ),
             const Spacer(),
             if (_step == 0)
               FilledButton(
                 onPressed: canNext ? () => setState(() => _step = 1) : null,
+                child: const Text('Next'),
+              )
+            else if (_step == 1)
+              FilledButton(
+                // Players chosen → move to the dedicated tee step, filling in
+                // sex-based suggestions for review.
+                onPressed: _playerTees.length >= 2
+                    ? () => setState(() {
+                          _applyTeeSuggestions();
+                          _step = 2;
+                        })
+                    : null,
                 child: const Text('Next'),
               )
             else
@@ -649,7 +666,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               itemBuilder: (context, i) {
                 final player = shown[i];
                 final isSelected = _playerTees.containsKey(player.id);
-                final playerTeeId = _playerTees[player.id];
                 // The logged-in player is always locked in as a participant.
                 final authPlayer = context.read<AuthProvider>().player;
                 final isLockedIn = authPlayer != null && player.id == authPlayer.id;
@@ -737,67 +753,37 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                               // Line 2: handicap, plus the tee (and group)
                               // selectors when this player is selected — on the
                               // same line as the handicap to keep the card tight.
-                              if (isSelected)
+                              // Tees moved to their own step; here we only show
+                              // the index (+ the group selector for multi-group
+                              // rounds).  Tees are set on the next step.
+                              if (isSelected && _multiGroup)
                                 Row(children: [
-                                  Text('Hcp: ${player.handicapIndex}',
+                                  Text('Index ${player.handicapIndex}',
                                       style: Theme.of(context)
                                           .textTheme.bodySmall),
                                   const SizedBox(width: 12),
-                                  if (_multiGroup) ...[
-                                    DropdownButton<int>(
-                                      value: _playerGroups[player.id] ?? 1,
-                                      isDense: true,
-                                      hint: const Text('Group'),
-                                      items: [
-                                        for (int g = 1;
-                                            g <= _maxGroupOption; g++)
-                                          DropdownMenuItem(
-                                            value: g,
-                                            child: Text('G$g'),
-                                          ),
-                                      ],
-                                      onChanged: (g) {
-                                        if (g != null) {
-                                          setState(() =>
-                                              _playerGroups[player.id] = g);
-                                        }
-                                      },
-                                    ),
-                                    const SizedBox(width: 8),
-                                  ],
-                                  Expanded(
-                                    child: Builder(builder: (_) {
-                                      // Dropdown only shows tees this player can
-                                      // legitimately play: matching sex + any
-                                      // unisex tees, sorted by priority.
-                                      final playerTees = _teesForPlayer(player);
-                                      final effectiveValue = playerTees
-                                              .any((t) => t.id == playerTeeId)
-                                          ? playerTeeId
-                                          : null;
-                                      return DropdownButton<int>(
-                                        value: effectiveValue,
-                                        hint: const Text('Tee'),
-                                        isDense: true,
-                                        isExpanded: true,
-                                        items: playerTees
-                                            .map((t) => DropdownMenuItem(
-                                                  value: t.id,
-                                                  child: Text(t.teeName),
-                                                ))
-                                            .toList(),
-                                        onChanged: (teeId) {
-                                          if (teeId != null) {
-                                            setState(() => _playerTees[
-                                                player.id] = teeId);
-                                          }
-                                        },
-                                      );
-                                    }),
+                                  DropdownButton<int>(
+                                    value: _playerGroups[player.id] ?? 1,
+                                    isDense: true,
+                                    hint: const Text('Group'),
+                                    items: [
+                                      for (int g = 1;
+                                          g <= _maxGroupOption; g++)
+                                        DropdownMenuItem(
+                                          value: g,
+                                          child: Text('G$g'),
+                                        ),
+                                    ],
+                                    onChanged: (g) {
+                                      if (g != null) {
+                                        setState(() =>
+                                            _playerGroups[player.id] = g);
+                                      }
+                                    },
                                   ),
                                 ])
                               else
-                                Text('Hcp: ${player.handicapIndex}',
+                                Text('Index ${player.handicapIndex}',
                                     style: Theme.of(context)
                                         .textTheme.bodySmall),
                             ],
@@ -813,9 +799,43 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           ],
             const SizedBox(height: 80),
           ], // ── end step 2
+
+          // ── Step 3: set tees (grouped by sex, with per-group bulk picker) ──
+          if (_step == 2) ...[
+            ..._buildTeeStep(),
+            const SizedBox(height: 80),
+          ], // ── end step 3
         ],
       ),
     );
+  }
+
+  /// The dedicated tee step: selected golfers grouped by sex, each group with a
+  /// bulk "set all" picker and per-player overrides.  Suggested tees are
+  /// pre-filled (by sex) when entering this step, so the guess is visible and
+  /// confirmed here rather than defaulted silently during selection.
+  List<Widget> _buildTeeStep() {
+    final theme = Theme.of(context);
+    final selected =
+        _players.where((p) => _playerTees.containsKey(p.id)).toList();
+    return [
+      Text('Set tees', style: theme.textTheme.titleLarge),
+      const SizedBox(height: 4),
+      Text(
+        'Confirm each golfer’s tee. We suggested one by sex — change any that '
+        'don’t fit, or set a whole group at once.',
+        style: theme.textTheme.bodyMedium
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+      const SizedBox(height: 16),
+      TeeAssignmentList(
+        players:   selected,
+        tees:      _availableTees,
+        picks:     _playerTees,
+        onChanged: (pid, id) => setState(() => _playerTees[pid] = id),
+        subtitle:  (p) => 'Index ${p.handicapIndex}',
+      ),
+    ];
   }
 
   /// Players-step guidance: how many golfers the chosen game allows, turning

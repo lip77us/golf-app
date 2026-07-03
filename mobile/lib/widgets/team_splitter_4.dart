@@ -174,7 +174,7 @@ class _PlayerRow extends StatelessWidget {
               Text(member.player.name,
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w600)),
-              Text('Hcp ${member.playingHandicap}',
+              Text('Course ${member.playingHandicap}',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
             ],

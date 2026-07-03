@@ -24,6 +24,7 @@ import '../api/models.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/tee_assignment.dart' show TeePicker;
 
 // ---------------------------------------------------------------------------
 // Game choices (same IDs as the Django backend)
@@ -436,9 +437,17 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
 
   void _prefillTees() {
     if (_courseTees.isEmpty) return;
-    final defaultTee = _courseTees.first;
     for (final id in _selectedIds) {
-      _playerTees.putIfAbsent(id, () => defaultTee.id);
+      _playerTees.putIfAbsent(id, () {
+        // Sex-matched default: each golfer's lowest-priority tee (men's for
+        // men, women's for women), not just the first course tee.
+        final sex = _playerSex(id);
+        final tees = _courseTees
+            .where((t) => t.sex == null || t.sex == sex)
+            .toList()
+          ..sort((a, b) => a.sortPriority.compareTo(b.sortPriority));
+        return (tees.isNotEmpty ? tees.first : _courseTees.first).id;
+      });
     }
     setState(() {});
   }
@@ -1156,25 +1165,12 @@ class _TeePicker extends StatelessWidget {
                             ?.copyWith(fontWeight: FontWeight.w600)),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      value: selectedTeeId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        isDense      : true,
-                        border       : OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                      ),
-                      items: tees.map((t) => DropdownMenuItem(
-                        value: t.id,
-                        child: Text(t.teeName,
-                            overflow: TextOverflow.ellipsis),
-                      )).toList(),
-                      onChanged: (id) {
-                        if (id != null) onPickTee(pid, id);
-                      },
-                    ),
+                  // Shared prominent picker: loud "Pick tee" when unassigned,
+                  // tee name + yardage when set (par + rating/slope in the menu).
+                  TeePicker(
+                    tees:  tees,
+                    value: selectedTeeId,
+                    onChanged: (id) => onPickTee(pid, id),
                   ),
                 ]),
               ),

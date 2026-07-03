@@ -276,7 +276,7 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
               for (final fs in foursomes) ...[
                 Padding(
                   padding: const EdgeInsets.only(top: 12, bottom: 4),
-                  child: Text('Group ${fs.groupNumber}',
+                  child: Text(fs.label,
                       style: Theme.of(context).textTheme.labelLarge),
                 ),
                 for (final m in fs.memberships.where((m) => !m.player.isPhantom))
@@ -284,7 +284,7 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     title: Text(m.player.name),
-                    subtitle: Text('Hcp ${m.player.handicapIndex}'),
+                    subtitle: Text('Index ${m.player.handicapIndex}'),
                     value: _participants[m.player.id] ?? false,
                     onChanged: (v) => setState(() {
                       _participants[m.player.id] = v ?? false;

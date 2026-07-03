@@ -47,6 +47,11 @@ dependencies:
   # "Halved" top-left back tap (unlike the url_launcher sms: external launch).
   flutter_sms: ^3.0.1
 
+  # iOS/Android universal-link handling. Taps on https://halved.golf/watch/...
+  # open the app (Associated Domains + apple-app-site-association) and are
+  # routed to the read-only leaderboard for that round.
+  app_links: ^6.3.2
+
   # Renders the Halved brand mark (SVG) inline — e.g. the "On Halved"
   # connected-golfer badge.
   flutter_svg: ^2.0.16

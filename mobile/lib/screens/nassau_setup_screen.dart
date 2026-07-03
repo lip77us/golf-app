@@ -62,7 +62,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   late bool _playBack    = !widget.overallOnly;
   bool      _playOverall = true;
 
-  final _pressUnitCtrl = TextEditingController(text: '0');
+  final _pressUnitCtrl = TextEditingController();
   final _betCtrl       = TextEditingController();
   bool  _stakeOk = false;
   bool  _betCtrlInitialized = false;
@@ -278,8 +278,14 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     if (!_betCtrlInitialized && rp.round != null) {
       _betCtrlInitialized = true;
       final b = rp.round!.betUnit;
-      _betCtrl.text = b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
-      _stakeOk = double.tryParse(_betCtrl.text) != null;
+      // Only prefill a real, previously-set stake — a fresh round
+      // (bet 0) starts empty so the user must consciously set a
+      // stake or tick "Play for fun" before Start enables.
+      if (b > 0) {
+        _betCtrl.text =
+            b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+        _stakeOk = true;
+      }
     }
 
     return Scaffold(
@@ -382,7 +388,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                             children: [
                               Text(m.player.name,
                                   style: const TextStyle(fontWeight: FontWeight.w500)),
-                              Text('Hcp ${m.playingHandicap}',
+                              Text('Course ${m.playingHandicap}',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant)),
                             ],
@@ -444,8 +450,21 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
           const SizedBox(height: 16),
 
+          // ── Stake ─────────────────────────────────────────────────────────
+          StakeField(
+            controller: _betCtrl,
+            label: _overallOnly ? 'Stake' : 'Stake (main games)',
+            helpText: _overallOnly
+                ? 'What the Singles Match is worth.'
+                : 'Each of the three standard Nassau games '
+                  '(Front 9, Back 9, Overall) is worth this amount.',
+            onChanged: (v) => setState(() => _stakeOk = v),
+          ),
+
           // ── Press (Nassau only; an 18-hole match has no presses) ──
+          // Shown after the main stake — the press unit is a secondary bet.
           if (!_overallOnly) ...[
+          const SizedBox(height: 16),
           // ── Press configuration ───────────────────────────────────────────
           SectionCard(
             title: 'Press stakes',
@@ -487,20 +506,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
               ],
             ),
           ),
-
-          const SizedBox(height: 16),
           ],
-
-          // ── Stake ─────────────────────────────────────────────────────────
-          StakeField(
-            controller: _betCtrl,
-            label: _overallOnly ? 'Stake' : 'Stake (main games)',
-            helpText: _overallOnly
-                ? 'What the Singles Match is worth.'
-                : 'Each of the three standard Nassau games '
-                  '(Front 9, Back 9, Overall) is worth this amount.',
-            onChanged: (v) => setState(() => _stakeOk = v),
-          ),
 
           // ── Advanced / variant (Nassau only) ──────────────────────────────
           if (!_overallOnly) ...[

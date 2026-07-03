@@ -467,7 +467,7 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
             ),
           ],
         ]),
-        subtitle: Text('Hcp: ${p.handicapIndex}',
+        subtitle: Text('Index ${p.handicapIndex}',
             style: theme.textTheme.bodySmall),
       ),
     );

@@ -81,10 +81,10 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       final client = context.read<AuthProvider>().client;
-      final rp = context.read<RoundProvider>();
-      _betCtrl.text = (rp.round?.betUnit ?? 1).toStringAsFixed(
-          (rp.round?.betUnit ?? 1) % 1 == 0 ? 0 : 2);
-      _stakeOk = double.tryParse(_betCtrl.text) != null;
+      // NB: don't pre-fill a default stake here.  A fresh Vegas setup must
+      // start with an EMPTY stake and _stakeOk=false so the Start button stays
+      // disabled until the user consciously enters a stake or ticks "Play for
+      // fun".  A previously-configured game restores its saved bet below.
 
       try {
         final existing = await client.getVegasSummary(widget.foursomeId);
@@ -103,7 +103,18 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
               '/score-entry', arguments: widget.foursomeId);
           return;
         }
-        if (configured) _editing = true;
+        if (configured) {
+          _editing = true;
+          // Restore the previously-saved stake so editing keeps it.  (A game
+          // set up "for fun" has bet 0 → field stays empty and the user must
+          // re-confirm the stake decision before starting again.)
+          final b = existing.betUnit;
+          if (b > 0) {
+            _betCtrl.text =
+                b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+            _stakeOk = true;
+          }
+        }
         _mode       = existing.handicapMode;
         _netPercent = existing.netPercent;
         _netMaxDbl  = existing.netMaxDoubleBogey;

@@ -23,7 +23,7 @@ import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
-import '../widgets/net_score_button.dart';
+import '../widgets/inline_score_picker.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
@@ -868,7 +868,7 @@ class _HoleScoreCard extends StatelessWidget {
               onSpotsRemove: spotsActive ? () => onSpotsRemove(m.player.id) : null,
             ),
             if (isHot || isEditing)
-              _InlinePicker(
+              InlineScorePicker(
                 par: par, strokes: strokes, currentScore: gross,
                 onScoreSelected: (s) => onScoreSelected(m, s)),
           ];
@@ -1000,109 +1000,6 @@ class _PlayerRow extends StatelessWidget {
 
     if (onTap == null) return row;
     return InkWell(onTap: onTap, child: row);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Inline score picker
-// ---------------------------------------------------------------------------
-
-class _InlinePicker extends StatefulWidget {
-  final int  par;
-  final int  strokes;
-  final int? currentScore;
-  final void Function(int) onScoreSelected;
-  const _InlinePicker({
-    required this.par, required this.strokes,
-    required this.currentScore, required this.onScoreSelected});
-
-  @override
-  State<_InlinePicker> createState() => _InlinePickerState();
-}
-
-class _InlinePickerState extends State<_InlinePicker> {
-  static const double _itemWidth = 52.0;
-  static const double _itemMargin = 5.0;
-  static const double _itemTotal = _itemWidth + _itemMargin * 2;
-  late final ScrollController _ctrl;
-
-  double _offsetFor(int par, int strokes) {
-    final netPar = par + strokes;
-    final startIdx = (netPar - 3).clamp(0, 11);
-    return (startIdx * _itemTotal).clamp(0.0, double.infinity);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = ScrollController(
-        initialScrollOffset: _offsetFor(widget.par, widget.strokes));
-  }
-
-  @override
-  void didUpdateWidget(covariant _InlinePicker old) {
-    super.didUpdateWidget(old);
-    if (old.par != widget.par || old.strokes != widget.strokes) {
-      final target = _offsetFor(widget.par, widget.strokes);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_ctrl.hasClients) return;
-        _ctrl.jumpTo(target.clamp(0.0, _ctrl.position.maxScrollExtent));
-      });
-    }
-  }
-
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scores = List.generate(12, (i) => i + 1);
-    return Container(
-      height: 68,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withOpacity(0.12),
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.primary.withOpacity(0.2))),
-      ),
-      child: ListView.builder(
-        controller: _ctrl,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        itemCount: scores.length + (widget.currentScore != null ? 1 : 0),
-        itemBuilder: (_, i) {
-          if (widget.currentScore != null && i == scores.length) {
-            return Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: GestureDetector(
-                onTap: () => widget.onScoreSelected(-1),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  height: 48, alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                        color: theme.colorScheme.error.withOpacity(0.4)),
-                    borderRadius: BorderRadius.circular(8)),
-                  child: Text('Clear',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.error,
-                          fontWeight: FontWeight.bold)),
-                ),
-              ),
-            );
-          }
-          final s = scores[i];
-          final sel = s == widget.currentScore;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: _itemMargin),
-            child: NetScoreButton(
-              score: s, par: widget.par, strokes: widget.strokes,
-              selected: sel, width: _itemWidth, height: 48,
-              onTap: () => widget.onScoreSelected(s)),
-          );
-        },
-      ),
-    );
   }
 }
 
@@ -1355,8 +1252,8 @@ class _RabbitGrid extends StatelessWidget {
           if (summary.entry > 0) ...[
             const SizedBox(height: 4),
             Text(
-              'Pot \$${summary.pot.toStringAsFixed(2)} '
-              '(3 × \$${summary.entry.toStringAsFixed(2)} entry)',
+              'Each segment worth \$${summary.entry.toStringAsFixed(2)} — '
+              'its holder wins that from every opponent',
               style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant),
             ),

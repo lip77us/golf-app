@@ -484,6 +484,12 @@ class TeeInfo {
       );
 
   String get display => '${course.name} — $teeName';
+
+  /// Total yardage across the 18 holes.  0 when this tee was inflated from a
+  /// payload that omits per-hole data (e.g. a nested list); the `/tees/`
+  /// endpoint includes holes, so setup screens get a real total.
+  int get totalYards =>
+      holes.fold(0, (s, h) => s + ((h['yards'] as num?)?.toInt() ?? 0));
 }
 
 // ---------------------------------------------------------------------------
@@ -918,6 +924,8 @@ class Membership {
 class Foursome {
   final int id;
   final int groupNumber;
+  /// Optional custom group name (e.g. a team name). Blank = use "Group N".
+  final String name;
   final bool hasPhantom;
   final List<int> pinkBallOrder;
   final List<Membership> memberships;
@@ -940,6 +948,7 @@ class Foursome {
   const Foursome({
     required this.id,
     required this.groupNumber,
+    this.name = '',
     required this.hasPhantom,
     required this.pinkBallOrder,
     required this.memberships,
@@ -953,6 +962,7 @@ class Foursome {
   factory Foursome.fromJson(Map<String, dynamic> j) => Foursome(
         id:              j['id'] as int,
         groupNumber:     j['group_number'] as int,
+        name:            (j['name'] as String?)?.trim() ?? '',
         hasPhantom:      j['has_phantom'] as bool? ?? false,
         pinkBallOrder:   List<int>.from(j['pink_ball_order'] as List? ?? []),
         activeGames:     List<String>.from(j['active_games'] as List? ?? []),
@@ -971,7 +981,8 @@ class Foursome {
   bool containsPlayer(int playerId) =>
       memberships.any((m) => m.player.id == playerId);
 
-  String get label => 'Group $groupNumber';
+  /// Display label — the custom [name] if set, else "Group N".
+  String get label => name.isNotEmpty ? name : 'Group $groupNumber';
 }
 
 class Round {

@@ -271,7 +271,7 @@ class _BorrowedFourthRowTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: theme.colorScheme.outlineVariant),
                 ),
-                child: Text('Hcp ${donor.hcp}',
+                child: Text('Course ${donor.hcp}',
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: theme.colorScheme.onSecondaryContainer,

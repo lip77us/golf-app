@@ -17,6 +17,7 @@ import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/round_complete.dart';
@@ -911,8 +912,9 @@ class _QNHoleScoreCard extends StatelessWidget {
                     : null,
               ),
               if (isHot && !m.player.isPhantom)
-                _QNInlinePicker(
+                InlineScorePicker(
                   par:             playerPar,
+                  strokes:         0, // gross only — net par == par
                   currentScore:    gross,
                   onScoreSelected: (score) => onScoreSelected(m, score),
                 ),
@@ -1097,124 +1099,6 @@ class _QNPtsBadge extends StatelessWidget {
       child: Text('$pts pt${pts == 1 ? '' : 's'}',
           style: TextStyle(
               fontSize: 11, fontWeight: FontWeight.bold, color: color)),
-    );
-  }
-}
-
-// ===========================================================================
-// Inline score picker — gross only (strokes=0), auto-shown for hotspot player
-// ===========================================================================
-
-class _QNInlinePicker extends StatefulWidget {
-  final int  par;
-  final int? currentScore;
-  final void Function(int) onScoreSelected;
-
-  const _QNInlinePicker({
-    required this.par,
-    required this.currentScore,
-    required this.onScoreSelected,
-  });
-
-  @override
-  State<_QNInlinePicker> createState() => _QNInlinePickerState();
-}
-
-class _QNInlinePickerState extends State<_QNInlinePicker> {
-  static const double _itemW  = 52.0;
-  static const double _margin = 5.0;
-  static const double _total  = _itemW + _margin * 2;
-
-  late final ScrollController _ctrl;
-
-  double _offsetFor(int par) {
-    final startIdx = (par - 3).clamp(0, 11);
-    return (startIdx * _total).clamp(0.0, double.infinity);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = ScrollController(initialScrollOffset: _offsetFor(widget.par));
-  }
-
-  @override
-  void didUpdateWidget(covariant _QNInlinePicker old) {
-    super.didUpdateWidget(old);
-    if (old.par != widget.par) {
-      final target = _offsetFor(widget.par);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_ctrl.hasClients) return;
-        _ctrl.jumpTo(target.clamp(0.0, _ctrl.position.maxScrollExtent));
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final scores = List.generate(12, (i) => i + 1);
-
-    return Container(
-      height: 68,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withOpacity(0.12),
-        border: Border(
-          top: BorderSide(
-              color: theme.colorScheme.primary.withOpacity(0.2)),
-        ),
-      ),
-      child: ListView.builder(
-        controller:      _ctrl,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        itemCount: scores.length + (widget.currentScore != null ? 1 : 0),
-        itemBuilder: (_, i) {
-          if (widget.currentScore != null && i == scores.length) {
-            return Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: GestureDetector(
-                onTap: () => widget.onScoreSelected(-1),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  height: 48,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                        color:
-                            theme.colorScheme.error.withOpacity(0.4)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('Clear',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.error,
-                          fontWeight: FontWeight.bold)),
-                ),
-              ),
-            );
-          }
-          final s   = scores[i];
-          final sel = s == widget.currentScore;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: _margin),
-            child: NetScoreButton(
-              score:    s,
-              par:      widget.par,
-              strokes:  0, // gross: par = white
-              selected: sel,
-              width:    _itemW,
-              height:   48,
-              onTap:    () => widget.onScoreSelected(s),
-            ),
-          );
-        },
-      ),
     );
   }
 }

@@ -37,6 +37,7 @@ import '../widgets/halved_mark.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
+import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/team_splitter_4.dart';
@@ -3035,6 +3036,7 @@ class _HoleScoreCard extends StatelessWidget {
                 allowJunk:           allowJunk,
                 junkCount:           junkCount,
                 dimmed:              dimmed,
+                deemphasized:        hotSpotIdx != -1 && !isHot,
                 withdrawn:           withdrawn,
                 p531HolePoints:      p531Hole,
                 p531CumulativePoints: p531Cumulative,
@@ -3054,7 +3056,7 @@ class _HoleScoreCard extends StatelessWidget {
               ),
               if (isHot)
                 blockedExtraSeg == null
-                  ? _InlinePicker(
+                  ? InlineScorePicker(
                       par:             par,
                       strokes:         matchStrok,
                       currentScore:    gross,
@@ -3800,6 +3802,10 @@ class _PlayerRow extends StatelessWidget {
   /// partner shouldn't be the score target.  Score selection disabled.
   final bool          dimmed;
 
+  /// True when a different row is the active score target — this row is
+  /// de-emphasised (dimmed, still tappable) so the active player stands out.
+  final bool          deemphasized;
+
   /// True when this player has withdrawn ("can't continue") and is out
   /// for the hole being shown — render a WD badge and no score box.
   final bool          withdrawn;
@@ -3829,6 +3835,7 @@ class _PlayerRow extends StatelessWidget {
     this.onSpotsAdd,
     this.onSpotsRemove,
     this.dimmed = false,
+    this.deemphasized = false,
     this.withdrawn = false,
     this.p531HolePoints,
     this.p531CumulativePoints,
@@ -3845,10 +3852,13 @@ class _PlayerRow extends StatelessWidget {
     final teamTint = nameColor;
     final body = Container(
       decoration: BoxDecoration(
-        color: teamTint != null
-            ? teamTint.withValues(alpha: 0.07)
-            : (isHot
-                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.08)
+        // Active row gets a clear green highlight (over any faint team tint) so
+        // it's obvious whose score is up; the coloured left edge still marks
+        // the team.
+        color: isHot
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.28)
+            : (teamTint != null
+                ? teamTint.withValues(alpha: 0.07)
                 : null),
         border: Border(
           top: BorderSide(color: theme.colorScheme.outlineVariant),
@@ -3900,14 +3910,12 @@ class _PlayerRow extends StatelessWidget {
               Row(children: [
                 Flexible(
                   child: Text(
-                    member.player.displayShort,
+                    member.player.name,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      // Keep the player's team colour (red / blue / cup
-                      // colour) regardless of hot-spot state — the row's
-                      // background highlight + the green score box make
-                      // the active picker obvious enough.
+                      // Bolder name on the active row so whose-score-is-up reads
+                      // instantly; team colour is kept for identity.
+                      fontWeight: isHot ? FontWeight.w800 : FontWeight.w600,
                       color: nameColor,
                     ),
                   ),
@@ -4066,13 +4074,17 @@ class _PlayerRow extends StatelessWidget {
         ),
       ]),
     );
-    // Dim + disable interaction for the alt-shot partner whose turn
-    // it isn't.  The active player keeps full color and is scorable.
-    if (!dimmed) return body;
-    return Opacity(
-      opacity: 0.40,
-      child: IgnorePointer(ignoring: true, child: body),
-    );
+    // Dim + disable interaction for the alt-shot partner whose turn it isn't.
+    if (dimmed) {
+      return Opacity(
+        opacity: 0.40,
+        child: IgnorePointer(ignoring: true, child: body),
+      );
+    }
+    // De-emphasise the non-active rows (still tappable to edit their score) so
+    // the active player is the one clear focal point.
+    if (deemphasized) return Opacity(opacity: 0.55, child: body);
+    return body;
   }
 }
 
@@ -4124,160 +4136,6 @@ class _JunkDots extends StatelessWidget {
               size: 14, color: theme.colorScheme.onSurfaceVariant),
         ),
       ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Inline score picker (identical to nassau_screen.dart _InlinePicker)
-// ---------------------------------------------------------------------------
-
-class _InlinePicker extends StatefulWidget {
-  final int  par;
-  final int  strokes;
-  final int? currentScore;
-  final void Function(int) onScoreSelected;
-
-  const _InlinePicker({
-    required this.par,
-    required this.strokes,
-    required this.currentScore,
-    required this.onScoreSelected,
-  });
-
-  @override
-  State<_InlinePicker> createState() => _InlinePickerState();
-}
-
-class _InlinePickerState extends State<_InlinePicker> {
-  static const double _itemWidth  = 52.0;
-  static const double _itemMargin = 5.0;
-  static const double _itemTotal  = _itemWidth + _itemMargin * 2;
-
-  late final ScrollController _ctrl;
-
-  // Edge-fade hints: fade the leading/trailing chips when there's more to
-  // scroll to, so it's obvious the row continues past par (e.g. for a high score).
-  bool _atStart = true;
-  bool _atEnd   = false;
-
-  double _offsetFor(int par, int strokes) {
-    final netPar   = par + strokes;
-    final startIdx = (netPar - 3).clamp(0, 11);
-    return (startIdx * _itemTotal).clamp(0.0, double.infinity);
-  }
-
-  void _onScroll() {
-    if (!_ctrl.hasClients) return;
-    final atStart = _ctrl.offset <= 0.5;
-    final atEnd   = _ctrl.offset >= _ctrl.position.maxScrollExtent - 0.5;
-    if (atStart != _atStart || atEnd != _atEnd) {
-      setState(() { _atStart = atStart; _atEnd = atEnd; });
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = ScrollController(
-        initialScrollOffset: _offsetFor(widget.par, widget.strokes));
-    _ctrl.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _onScroll());
-  }
-
-  @override
-  void didUpdateWidget(covariant _InlinePicker old) {
-    super.didUpdateWidget(old);
-    if (old.par != widget.par || old.strokes != widget.strokes) {
-      final target = _offsetFor(widget.par, widget.strokes);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_ctrl.hasClients) return;
-        _ctrl.jumpTo(target.clamp(0.0, _ctrl.position.maxScrollExtent));
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final scores = List.generate(12, (i) => i + 1);
-
-    return Container(
-      height: 68,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withOpacity(0.12),
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.primary.withOpacity(0.2)),
-        ),
-      ),
-      child: ShaderMask(
-        blendMode: BlendMode.dstIn,
-        shaderCallback: (bounds) {
-          final f = (16.0 / bounds.width).clamp(0.0, 0.5);
-          return LinearGradient(
-            begin: Alignment.centerLeft,
-            end:   Alignment.centerRight,
-            colors: [
-              _atStart ? Colors.white : Colors.transparent,
-              Colors.white,
-              Colors.white,
-              _atEnd ? Colors.white : Colors.transparent,
-            ],
-            stops: [0.0, f, 1 - f, 1.0],
-          ).createShader(bounds);
-        },
-        child: ListView.builder(
-        controller:      _ctrl,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        itemCount: scores.length + (widget.currentScore != null ? 1 : 0),
-        itemBuilder: (_, i) {
-          if (widget.currentScore != null && i == scores.length) {
-            return Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: GestureDetector(
-                onTap: () => widget.onScoreSelected(-1),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  height: 48,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                        color: theme.colorScheme.error.withOpacity(0.4)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('Clear',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: theme.colorScheme.error,
-                        fontWeight: FontWeight.bold,
-                      )),
-                ),
-              ),
-            );
-          }
-          final s   = scores[i];
-          final sel = s == widget.currentScore;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: _itemMargin),
-            child: NetScoreButton(
-              score:    s,
-              par:      widget.par,
-              strokes:  widget.strokes,
-              selected: sel,
-              width:    _itemWidth,
-              height:   48,
-              onTap:    () => widget.onScoreSelected(s),
-            ),
-          );
-        },
-        ),
-      ),
     );
   }
 }

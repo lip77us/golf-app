@@ -399,6 +399,14 @@ class ApiClient {
         .toList();
   }
 
+  /// Resolve a universal watch link's token → the round/tournament to open
+  /// (and record the caller as a watcher). Used by the deep-link handler when
+  /// the app is opened via https://halved.golf/watch/<token>/.
+  Future<Map<String, dynamic>> resolveWatchToken(String token) async {
+    final data = await _get('/watch/$token/resolve/');
+    return data as Map<String, dynamic>;
+  }
+
   /// Tees available at a foursome's COURSE (for the tee-box editor). Sourced
   /// from the round's course, not the viewer's account — so a cross-account
   /// scorer (TD or designated scorer) gets the right options.
@@ -1631,6 +1639,12 @@ class ApiClient {
       'active_games': activeGames,
     });
     return data as Map<String, dynamic>;
+  }
+
+  /// Set a group's custom name (TD action). Blank clears it → "Group N".
+  Future<Foursome> setFoursomeName(int foursomeId, String name) async {
+    final data = await _patch('/foursomes/$foursomeId/', {'name': name});
+    return Foursome.fromJson(data as Map<String, dynamic>);
   }
 
   /// Reassign each player's tee for a foursome.  Server-side this also

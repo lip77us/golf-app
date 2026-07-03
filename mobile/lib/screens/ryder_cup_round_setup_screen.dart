@@ -321,7 +321,7 @@ class _FoursomeConfigCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Header
-          Text('Group ${foursome.groupNumber}',
+          Text(foursome.label,
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold)),
           if (realPlayers.isNotEmpty)

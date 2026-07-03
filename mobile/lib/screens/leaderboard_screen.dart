@@ -207,7 +207,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           for (final fs in foursomes)
             ListTile(
               leading: const Icon(Icons.groups_outlined),
-              title: Text('Group ${fs.groupNumber}'),
+              title: Text(fs.label),
               subtitle: Text(
                 fs.memberships
                     .where((m) => !m.player.isPhantom)
@@ -4458,8 +4458,10 @@ class _RabbitGroupCard extends StatelessWidget {
           if (betUnit > 0)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('Pot \$${pot.formatBet()}  (3 × \$${betUnit.formatBet()} '
-                  'entry)  •  holder of each segment wins its share.',
+              child: Text(
+                  'Each segment worth \$${betUnit.formatBet()} — its holder '
+                  'wins that from every opponent'
+                  '${numSeg > 1 ? '  •  up to \$${pot.formatBet()} at risk' : ''}.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant)),
             ),

@@ -24,6 +24,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/borrowed_fourth.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 
@@ -699,7 +700,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                         : null,
                   ),
                   if (isHot && displayed == null)
-                    _ScorePicker(
+                    InlineScorePicker(
                       par:             par,
                       strokes:         strokes,
                       currentScore:    null,
@@ -1012,7 +1013,7 @@ class _PlayerScoreRow extends StatelessWidget {
                     color: theme.colorScheme.outlineVariant),
               ),
               child: Text(
-                'Hcp ${member.playingHandicap}',
+                'Course ${member.playingHandicap}',
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: theme.colorScheme.onSecondaryContainer,
@@ -1076,77 +1077,6 @@ class _PlayerScoreRow extends StatelessWidget {
           ),
         ),
       ]),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Horizontal score picker — scrollable 1–12, opens with par-2 as first visible
-// ---------------------------------------------------------------------------
-
-class _ScorePicker extends StatefulWidget {
-  final int    par;
-  final int    strokes;
-  final int?   currentScore;
-  final void Function(int) onScoreSelected;
-
-  const _ScorePicker({
-    required this.par,
-    required this.strokes,
-    required this.currentScore,
-    required this.onScoreSelected,
-  });
-
-  @override
-  State<_ScorePicker> createState() => _ScorePickerState();
-}
-
-class _ScorePickerState extends State<_ScorePicker> {
-  static const _itemWidth  = 50.0;
-  static const _itemMargin = 4.0;
-  static const _itemTotal  = _itemWidth + _itemMargin * 2;
-
-  late final ScrollController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    final firstIdx = (widget.par + widget.strokes - 3).clamp(0, 9);
-    _ctrl = ScrollController(initialScrollOffset: firstIdx * _itemTotal);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scores = List.generate(12, (i) => i + 1);
-    return SizedBox(
-      height: 48,
-      child: ListView.builder(
-        controller:      _ctrl,
-        scrollDirection: Axis.horizontal,
-        padding:         EdgeInsets.zero,
-        itemCount:       scores.length,
-        itemBuilder: (_, i) {
-          final s = scores[i];
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: _itemMargin),
-            child: NetScoreButton(
-              score:    s,
-              par:      widget.par,
-              strokes:  widget.strokes,
-              selected: s == widget.currentScore,
-              width:    _itemWidth,
-              height:   44,
-              onTap:    () => widget.onScoreSelected(s),
-            ),
-          );
-        },
-      ),
     );
   }
 }

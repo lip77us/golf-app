@@ -31,7 +31,7 @@ class _TournamentLowNetSetupScreenState
     extends State<TournamentLowNetSetupScreen> {
   String _mode       = 'net';
   int    _netPercent = 100;
-  final  _entryCtrl       = TextEditingController(text: '0');
+  final  _entryCtrl       = TextEditingController();
   // Local-only: used to estimate the prize pool (not saved to server)
   final  _numPlayersCtrl  = TextEditingController(text: '');
 

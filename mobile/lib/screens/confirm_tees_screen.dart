@@ -16,6 +16,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/tee_assignment.dart';
 
 class ConfirmTeesScreen extends StatefulWidget {
   final int foursomeId;
@@ -80,18 +81,7 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
   }
 
   /// Tees this player can play — matches their sex, plus any unisex.
-  /// Sorted by sort_priority so the "house default" lands at the top.
-  List<TeeInfo> _teesForPlayer(PlayerProfile p) {
-    final tees = _tees
-        .where((t) => t.sex == null || t.sex == p.sex)
-        .toList()
-      ..sort((a, b) {
-        final pc = a.sortPriority.compareTo(b.sortPriority);
-        if (pc != 0) return pc;
-        return a.teeName.compareTo(b.teeName);
-      });
-    return tees;
-  }
+  List<TeeInfo> _teesForPlayer(PlayerProfile p) => teesForPlayer(_tees, p);
 
   Future<void> _save() async {
     setState(() { _saving = true; _error = null; });
@@ -192,57 +182,17 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
               color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 16),
-        ..._members.map((m) {
-          final tees    = _teesForPlayer(m.player);
-          final pickId  = _picks[m.player.id];
-          final picked  = tees.any((t) => t.id == pickId) ? pickId : null;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: theme.colorScheme.outline),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(m.player.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600)),
-                        Text('Course Hcp ${m.courseHandicap}'
-                            '  ·  Playing ${m.playingHandicap}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color:
-                                    theme.colorScheme.onSurfaceVariant)),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    width: 140,
-                    child: DropdownButton<int>(
-                      isExpanded: true,
-                      value: picked,
-                      hint: const Text('Tee'),
-                      items: tees
-                          .map((t) => DropdownMenuItem(
-                              value: t.id, child: Text(t.teeName)))
-                          .toList(),
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setState(() => _picks[m.player.id] = v);
-                      },
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-          );
-        }),
+        TeeAssignmentList(
+          players:   _members.map((m) => m.player).toList(),
+          tees:      _tees,
+          picks:     _picks,
+          onChanged: (pid, id) => setState(() => _picks[pid] = id),
+          subtitle:  (p) {
+            final m = _members.firstWhere((m) => m.player.id == p.id);
+            return 'Course Hcp ${m.courseHandicap}'
+                '  ·  Playing ${m.playingHandicap}';
+          },
+        ),
       ],
     );
   }

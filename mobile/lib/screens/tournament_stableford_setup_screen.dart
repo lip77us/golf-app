@@ -40,12 +40,12 @@ class _TournamentStablefordSetupScreenState
     extends State<TournamentStablefordSetupScreen> {
   String _mode = 'net';
   int _netPercent = 100;
-  final _entryCtrl = TextEditingController(text: '0');
+  final _entryCtrl = TextEditingController();
   int _numPlayers = 0;
 
   final _points = {for (final b in _kBuckets) b: TextEditingController()};
   final _payoutCtrls =
-      List<TextEditingController>.generate(4, (_) => TextEditingController(text: '0'));
+      List<TextEditingController>.generate(4, (_) => TextEditingController());
   int _numPayouts = 0;
 
   bool _loading = true;

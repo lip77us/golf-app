@@ -1640,7 +1640,7 @@ class _Step2Players extends StatelessWidget {
                     value    : sel,
                     onChanged: (_) => onToggle(p.id),
                     title    : Text(p.name),
-                    subtitle : Text('Hcp ${p.handicapIndex}'),
+                    subtitle : Text('Index ${p.handicapIndex}'),
                     secondary: CircleAvatar(
                       backgroundColor: sel
                           ? Theme.of(context).colorScheme.primary
@@ -3209,7 +3209,7 @@ class _Step5Review extends StatelessWidget {
                                   color:
                                       theme.colorScheme.onSurfaceVariant)),
                         const SizedBox(width: 8),
-                        Text('Hcp ${p.handicapIndex}',
+                        Text('Index ${p.handicapIndex}',
                             style: theme.textTheme.bodySmall?.copyWith(
                                 color:
                                     theme.colorScheme.onSurfaceVariant)),

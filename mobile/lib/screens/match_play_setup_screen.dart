@@ -84,14 +84,14 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
   int    _netPercent = 100;
 
   // Entry fee
-  final _entryFeeCtrl = TextEditingController(text: '0');
+  final _entryFeeCtrl = TextEditingController();
   /// Explicit opt-in to a no-money match (lets Start proceed at $0).
   bool _noStakes = false;
 
   // Payouts: N paid places (1–4) with one integer amount per place
   int _numPayouts = 3;
   static const _placeLabels = ['1st', '2nd', '3rd', '4th'];
-  final _payoutCtrls = List.generate(4, (_) => TextEditingController(text: '0'));
+  final _payoutCtrls = List.generate(4, (_) => TextEditingController());
 
   // Seedings: ordered list — index 0 = seed 1 (plays seed 4 in Semi 1)
   List<_SeedPlayer> _seedPlayers = [];

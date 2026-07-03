@@ -76,9 +76,14 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
     try {
       final client = context.read<AuthProvider>().client;
       final rp = context.read<RoundProvider>();
-      final bet = rp.round?.betUnit ?? 1;
-      _betCtrl.text = bet.toStringAsFixed(bet % 1 == 0 ? 0 : 2);
-      _stakeOk = double.tryParse(_betCtrl.text) != null;
+      // Only prefill a real, previously-set stake — a fresh round (bet 0)
+      // starts empty so the stake gate forces a conscious stake / "Play for
+      // fun" choice before Start enables.
+      final bet = rp.round?.betUnit ?? 0;
+      if (bet > 0) {
+        _betCtrl.text = bet.toStringAsFixed(bet % 1 == 0 ? 0 : 2);
+        _stakeOk = true;
+      }
 
       try {
         final existing = await client.getFourballSummary(widget.foursomeId);

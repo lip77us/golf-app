@@ -230,8 +230,14 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
     if (!_betCtrlInitialized && rp.round != null) {
       _betCtrlInitialized = true;
       final b = rp.round!.betUnit;
-      _betCtrl.text = b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
-      _stakeOk = double.tryParse(_betCtrl.text) != null;
+      // Only prefill a real, previously-set stake — a fresh round
+      // (bet 0) starts empty so the user must consciously set a
+      // stake or tick "Play for fun" before Start enables.
+      if (b > 0) {
+        _betCtrl.text =
+            b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+        _stakeOk = true;
+      }
     }
 
     return Scaffold(

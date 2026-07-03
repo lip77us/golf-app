@@ -488,12 +488,17 @@ String gameDisplayName(String gameId) =>
 /// [isEighteenHoleMatch] is set we show that name instead of the generic
 /// "Nassau".
 String gamesDisplayLabel(Iterable<String> activeGames,
-        {bool isEighteenHoleMatch = false}) =>
-    activeGames
-        .map((g) => (g == GameIds.nassau && isEighteenHoleMatch)
-            ? gameDisplayName(GameIds.match18)
-            : gameDisplayName(g))
-        .join(' • ');
+    {bool isEighteenHoleMatch = false}) {
+  final label = activeGames
+      .map((g) => (g == GameIds.nassau && isEighteenHoleMatch)
+          ? gameDisplayName(GameIds.match18)
+          : gameDisplayName(g))
+      .join(' • ');
+  // A round with no explicit gambling game is still scored as Stroke Play
+  // (the backend always adds a "Stroke Play" low-net tab for every
+  // individual-ball round), so label it that way rather than leaving it blank.
+  return label.isEmpty ? gameDisplayName(GameIds.strokePlay) : label;
+}
 
 /// Games shown in the casual-round picker (enabled only).
 List<GameMeta> get casualGames =>
