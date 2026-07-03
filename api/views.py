@@ -2012,11 +2012,10 @@ class SharedRoundsView(APIView):
     NOTE: rounds you're a PLAYER in are intentionally NOT here — those live in
     your own active list (see PlayingRoundsView) and move to its Completed tab
     when closed.  "Shared with me" is purely for non-playing spectators, and
-    completed follows age off after SHARED_WATCH_RETENTION_DAYS so the list
+    completed follows drop off once they're from a previous date so the list
     doesn't grow without bound.
     """
     def get(self, request):
-        from datetime import timedelta
         from django.utils import timezone
         from tournament.models import Watcher, Tournament
 
@@ -2028,10 +2027,13 @@ class SharedRoundsView(APIView):
         def _status_ok(s):
             return status not in ('in_progress', 'complete', 'pending') or s == status
 
-        cutoff = timezone.now().date() - timedelta(days=SHARED_WATCH_RETENTION_DAYS)
+        # Completed follows drop off the observing lists once they're from a
+        # PREVIOUS date (yesterday or earlier) — no point carrying a round you
+        # only watched after the day it finished.  Live (in_progress / pending)
+        # follows always stay, regardless of date.
+        today = timezone.now().date()
         def _recent_enough(s, d):
-            # Keep live follows; drop completed ones older than the window.
-            return s != 'complete' or (d is not None and d >= cutoff)
+            return s != 'complete' or (d is not None and d >= today)
 
         results = []
         seen_rounds = set()

@@ -107,22 +107,23 @@ class SharedRoundsTests(TestCase):
         ids = [r['id'] for r in self.client.get(self.url).data]
         self.assertNotIn(rc.id, ids)
 
-    def test_completed_follow_ages_off(self):
-        # A follow completed long ago drops; one completed inside the window stays.
-        old_date = timezone.now().date() - timedelta(days=30)
-        _acct_old, round_old = _watched_round(
-            'Old Group', 'Old GC', '+15105550123',
-            status='complete', date=old_date,
+    def test_completed_follow_previous_date_drops(self):
+        # A completed follow from a PREVIOUS date drops off the observing list;
+        # one completed TODAY stays.
+        today     = timezone.now().date()
+        yesterday = today - timedelta(days=1)
+        _a1, round_prev = _watched_round(
+            'Prev Group', 'Prev GC', '+15105550123',
+            status='complete', date=yesterday,
         )
-        recent_date = timezone.now().date() - timedelta(days=3)
-        _acct_recent, round_recent = _watched_round(
-            'Recent Group', 'Recent GC', '+15105550123',
-            status='complete', date=recent_date,
+        _a2, round_today = _watched_round(
+            'Today Group', 'Today GC', '+15105550123',
+            status='complete', date=today,
         )
         ids = [r['id'] for r in self.client.get(self.url).data]
-        self.assertNotIn(round_old.id, ids)      # >7 days → aged off
-        self.assertIn(round_recent.id, ids)      # <7 days → kept
-        self.assertIn(self.round_a.id, ids)      # today → kept
+        self.assertNotIn(round_prev.id, ids)     # previous date → dropped
+        self.assertIn(round_today.id, ids)       # completed today → kept
+        self.assertIn(self.round_a.id, ids)      # today (setUp) → kept
 
     def test_in_progress_old_follow_kept(self):
         # A still-live round is kept even if its date is old (you're watching it).
