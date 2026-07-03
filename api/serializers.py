@@ -53,11 +53,41 @@ class PlayerSerializer(serializers.ModelSerializer):
     # False for single-player uses (login/me).
     is_on_app = serializers.SerializerMethodField()
 
+    # This golfer's home course.  `home_course_id` is read+write (PATCH an
+    # account course id, or null/0 to clear); `home_course_name` is a read-only
+    # label so the client can render it without a second fetch.
+    home_course_id   = serializers.IntegerField(
+        required=False, allow_null=True,
+        help_text='ID of an account course to set as this golfer\'s home '
+                  'course. Pass null or 0 to clear.',
+    )
+    home_course_name = serializers.SerializerMethodField()
+
     class Meta:
         model  = Player
         fields = ['id', 'name', 'short_name', 'handicap_index',
-                  'is_phantom', 'email', 'phone', 'sex', 'user_id', 'is_on_app']
+                  'is_phantom', 'email', 'phone', 'sex', 'user_id', 'is_on_app',
+                  'home_course_id', 'home_course_name']
         read_only_fields = ['id']
+
+    def get_home_course_name(self, obj) -> str:
+        # Guard on the id column so players WITHOUT a home course (the whole
+        # roster, typically) never trigger a join.
+        return obj.home_course.name if obj.home_course_id else ''
+
+    def validate_home_course_id(self, value):
+        """0/null clears; otherwise the course must live in this account."""
+        if value in (None, 0):
+            return None
+        from core.models import Course
+        target_account_id = (
+            self.instance.account_id if self.instance is not None
+            else self.context.get('account_id')
+        )
+        if not Course.objects.filter(
+                pk=value, account_id=target_account_id).exists():
+            raise serializers.ValidationError('No such course in this account.')
+        return value
 
     def get_is_on_app(self, obj) -> bool:
         from accounts.phone import normalize
@@ -111,6 +141,10 @@ class PlayerSerializer(serializers.ModelSerializer):
                     user_id=new_user_id,
                 ).exclude(pk=instance.pk).update(user=None)
                 instance.user_id = new_user_id
+        # home_course_id is a declared field (validated above); apply it
+        # directly like user_id so ModelSerializer doesn't fight the FK.
+        if 'home_course_id' in validated_data:
+            instance.home_course_id = validated_data.pop('home_course_id')
         return super().update(instance, validated_data)
 
 

@@ -377,6 +377,12 @@ class ApiClient {
     //   neither (the default)  → leave the link unchanged.
     int?    userId,
     bool    unlinkUser = false,
+    // Home course:
+    //   homeCourseId != null   → set this golfer's home course.
+    //   clearHomeCourse = true  → clear it.
+    //   neither (the default)   → leave it unchanged.
+    int?    homeCourseId,
+    bool    clearHomeCourse = false,
   }) async {
     final body = <String, dynamic>{
       if (name != null) 'name': name,
@@ -387,6 +393,8 @@ class ApiClient {
       if (shortName != null) 'short_name': shortName,
       if (unlinkUser) 'user_id': null
       else if (userId != null) 'user_id': userId,
+      if (clearHomeCourse) 'home_course_id': null
+      else if (homeCourseId != null) 'home_course_id': homeCourseId,
     };
     final data = await _patch('/players/$id/', body);
     return PlayerProfile.fromJson(data as Map<String, dynamic>);

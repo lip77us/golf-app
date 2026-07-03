@@ -221,6 +221,18 @@ class Player(models.Model):
                         help_text="Determines the default tee during round setup.",
                     )
     is_phantom      = models.BooleanField(default=False)
+    # This golfer's home course.  Personal preference of a logged-in golfer —
+    # pinned to the top of the course picker's default (pre-search) list so a
+    # regular player picks their usual course in one tap.  SET_NULL so deleting
+    # a course never blocks; related_name='+' since we never reverse-query it.
+    home_course     = models.ForeignKey(
+                        'core.Course',
+                        on_delete=models.SET_NULL,
+                        null=True, blank=True,
+                        related_name='+',
+                        help_text="Golfer's home course; pinned atop the course "
+                                  "picker's default list.",
+                    )
     created_at      = models.DateTimeField(auto_now_add=True)
 
     objects         = AccountScopedManager()

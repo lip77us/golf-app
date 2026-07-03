@@ -1285,15 +1285,17 @@ class PlayerDetailView(APIView):
             PlayerSerializer(player, context=_on_app_context([player])).data)
 
     def patch(self, request, pk):
-        # Editing a player is admin-only, matching create/delete.
-        if not (request.user.is_staff or request.user.is_account_admin):
+        player = account_get_or_404(
+            Player, request.user.account, pk=pk, is_phantom=False,
+        )
+        # Admins may edit anyone; every golfer may edit their OWN profile
+        # (name / handicap / home course), which is what the Profile screen does.
+        is_own = player.user_id == request.user.id
+        if not (is_own or request.user.is_staff or request.user.is_account_admin):
             return Response(
                 {'detail': 'Only admins can edit players.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        player = account_get_or_404(
-            Player, request.user.account, pk=pk, is_phantom=False,
-        )
         before_index = player.handicap_index
         ser = PlayerSerializer(player, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)

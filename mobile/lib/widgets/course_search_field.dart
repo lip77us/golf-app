@@ -164,6 +164,20 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // The signed-in golfer's home course, resolved against the loaded account
+    // courses so we have its full CourseInfo (with tees) to commit on tap.
+    // Pinned to the top of the pre-search list; hidden once the user types.
+    final homeId = context.watch<AuthProvider>().player?.homeCourseId;
+    CourseInfo? home;
+    if (homeId != null) {
+      for (final c in _local) {
+        if (c.id == homeId) { home = c; break; }
+      }
+    }
+    // Don't repeat the home course down in the recents list.
+    final recentsToShow =
+        _recents.where((c) => c.id != home?.id).toList();
+
     // Collapsed: show the selected course in a normal single-line field, with a
     // compact "change" suffix icon so the box matches the search field height.
     if (!_editing && widget.selected != null) {
@@ -208,9 +222,11 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
                 : null,
           ),
         ),
-        // Recents quick-pick: shown only while the box is empty; the first
+        // Pre-search quick-pick: shown only while the box is empty; the first
         // keystroke hides it and the live search list takes over the same slot.
-        if (_ctrl.text.trim().isEmpty && _hits.isEmpty && _recents.isNotEmpty)
+        // The home course is pinned to the very top, then recent courses.
+        if (_ctrl.text.trim().isEmpty && _hits.isEmpty &&
+            (home != null || recentsToShow.isNotEmpty))
           Container(
             margin: const EdgeInsets.only(top: 4),
             decoration: BoxDecoration(
@@ -220,21 +236,35 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: Text('Recent courses',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ),
-                for (final c in _recents)
+                if (home != null)
                   ListTile(
                     dense: true,
-                    leading: Icon(Icons.history,
-                        size: 20, color: theme.colorScheme.onSurfaceVariant),
-                    title: Text(c.name),
-                    subtitle: c.location.isEmpty ? null : Text(c.location),
-                    onTap: _addingKey == null ? () => _commit(c) : null,
+                    leading: Icon(Icons.flag,
+                        size: 20, color: theme.colorScheme.primary),
+                    title: Text(home.name),
+                    subtitle: Text(home.location.isEmpty
+                        ? 'Home course'
+                        : '${home.location}  ·  Home course'),
+                    onTap: _addingKey == null ? () => _commit(home!) : null,
                   ),
+                if (recentsToShow.isNotEmpty) ...[
+                  if (home != null) const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                    child: Text('Recent courses',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                  ),
+                  for (final c in recentsToShow)
+                    ListTile(
+                      dense: true,
+                      leading: Icon(Icons.history,
+                          size: 20, color: theme.colorScheme.onSurfaceVariant),
+                      title: Text(c.name),
+                      subtitle: c.location.isEmpty ? null : Text(c.location),
+                      onTap: _addingKey == null ? () => _commit(c) : null,
+                    ),
+                ],
               ],
             ),
           ),

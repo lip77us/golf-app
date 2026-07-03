@@ -229,6 +229,12 @@ class PlayerProfile {
   /// matches this golfer's phone). Only populated by GET /api/players/.
   final bool isOnApp;
 
+  /// This golfer's home course (personal preference), or null when unset.
+  /// Pinned to the top of the course picker's default list. `homeCourseName`
+  /// is a display label so we don't need a second fetch to render it.
+  final int? homeCourseId;
+  final String homeCourseName;
+
   const PlayerProfile({
     required this.id,
     required this.name,
@@ -240,6 +246,8 @@ class PlayerProfile {
     this.sex = 'M',
     this.userId,
     this.isOnApp = false,
+    this.homeCourseId,
+    this.homeCourseName = '',
   });
 
   factory PlayerProfile.fromJson(Map<String, dynamic> j) => PlayerProfile(
@@ -253,6 +261,8 @@ class PlayerProfile {
         sex: j['sex'] as String? ?? 'M',
         userId: j['user_id'] as int?,
         isOnApp: j['is_on_app'] as bool? ?? false,
+        homeCourseId: j['home_course_id'] as int?,
+        homeCourseName: j['home_course_name'] as String? ?? '',
       );
 
   /// Compute a safe fallback initials string from a full name.  Matches
