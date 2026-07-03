@@ -2404,7 +2404,12 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
             status=status.HTTP_400_BAD_REQUEST)
 
     # Put the watcher in the inviter's roster (so they can be re-invited / seen).
-    roster_player, _ = ensure_roster_player(request.user.account, phone_raw, name)
+    # roster_created distinguishes a brand-new golfer from a phone match against
+    # an existing one — the client uses it (with roster_name) to tell the user
+    # exactly what happened, since a match keeps the existing (possibly older)
+    # name rather than silently renaming it.
+    roster_player, roster_created = ensure_roster_player(
+        request.user.account, phone_raw, name)
     inviter = getattr(request.user, 'player_profile', None)
     watcher, created = Watcher.objects.get_or_create(
         round=round_obj, tournament=tournament, phone=norm,
@@ -2449,6 +2454,8 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
     return Response(
         {'watcher_id': watcher.id, 'created': created, 'is_on_app': is_on_app,
          'player_id': roster_player.id if roster_player else None,
+         'roster_name': roster_player.name if roster_player else None,
+         'roster_created': roster_created,
          'watch_url': watch_url,
          'download_url': settings.APP_DOWNLOAD_URL,
          'phone': norm},
