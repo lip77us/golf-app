@@ -79,11 +79,13 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
     final who = (name?.trim().isNotEmpty == true) ? name!.trim() : 'They';
     setState(() => _busy = true);
     try {
-      final res      = await _post(playerId: playerId, phone: phone, name: name);
-      final onApp    = res['is_on_app'] == true;
-      final watchUrl = res['watch_url'] as String?;
-      final dlUrl    = res['download_url'] as String?;
-      final toPhone  = (res['phone'] as String?) ?? phone ?? '';
+      final res        = await _post(playerId: playerId, phone: phone, name: name);
+      final onApp      = res['is_on_app'] == true;
+      final watchUrl   = res['watch_url'] as String?;
+      final dlUrl      = res['download_url'] as String?;
+      final toPhone    = (res['phone'] as String?) ?? phone ?? '';
+      final rosterName = (res['roster_name'] as String?)?.trim();
+      final rosterNew  = res['roster_created'] == true;
       navigator.pop(); // close the sheet
 
       final body = _watchInviteBody(
@@ -91,14 +93,26 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
       final sent = toPhone.isNotEmpty
           ? await _launchWatchSms(phone: toPhone, body: body)
           : false;
-      if (!sent) {
-        // Couldn't open Messages (simulator / no SMS) — surface the link so the
-        // invite isn't lost. The watcher is already recorded server-side.
-        messenger.showSnackBar(SnackBar(content: Text(
-          watchUrl != null
-              ? '$who added. Watch link: $watchUrl'
-              : '$who was added as a watcher.')));
+
+      // Always confirm what happened to My Golfers — including a phone match
+      // against an existing golfer saved under a DIFFERENT name (we don't
+      // rename it), which would otherwise be invisible and confusing.
+      final typed = name?.trim() ?? '';
+      String roster;
+      if (rosterName == null || rosterName.isEmpty) {
+        roster = '$who added to My Golfers';
+      } else if (rosterNew) {
+        roster = '$rosterName added to My Golfers';
+      } else if (typed.isNotEmpty &&
+                 rosterName.toLowerCase() != typed.toLowerCase()) {
+        roster = 'Already in My Golfers as “$rosterName”';
+      } else {
+        roster = '$rosterName is in My Golfers';
       }
+      final tail = sent
+          ? ' · text opened'
+          : (watchUrl != null ? ' · link: $watchUrl' : '');
+      messenger.showSnackBar(SnackBar(content: Text('$roster$tail')));
     } on ApiException catch (e) {
       if (mounted) setState(() => _busy = false);
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
