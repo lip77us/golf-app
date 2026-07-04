@@ -11,6 +11,13 @@ round's scorecard stays frozen) while a fresh current revision picks up the fix;
 unplayed tees update in place; newly-added catalog tees are created; local
 Tee.sort_priority is preserved.  Account tees NOT in the catalog are left alone.
 
+Both HOLE geometry (par + stroke index + yards) AND the tee RATING
+(slope / course rating / total par) are reconciled and reported.  A
+rating-only change (the common case — a corrected slope) updates in place on
+the current tee even if it's been played, because course handicaps are
+snapshotted onto each round at setup, so past scorecards are unaffected; only
+new rounds pick up the corrected rating.
+
 Identify the catalog course by name or golf_api_id:
 
     # See what WOULD change across all accounts (dry-run is the default):
@@ -30,6 +37,25 @@ Finish your catalog edits (corrections + tee additions) BEFORE running with
 """
 
 from django.core.management.base import BaseCommand, CommandError
+
+
+def _rating_changed(tee, catalog_tee) -> bool:
+    """True when slope / course rating / total par differ (holes aside)."""
+    return (tee.slope != catalog_tee.slope
+            or tee.course_rating != catalog_tee.course_rating
+            or tee.par != catalog_tee.par)
+
+
+def _rating_desc(tee, catalog_tee) -> str:
+    """Human diff, e.g. "GOLD/W slope 114→116, CR 69.4→69.4"."""
+    bits = []
+    if tee.slope != catalog_tee.slope:
+        bits.append(f"slope {tee.slope}→{catalog_tee.slope}")
+    if tee.course_rating != catalog_tee.course_rating:
+        bits.append(f"CR {tee.course_rating}→{catalog_tee.course_rating}")
+    if tee.par != catalog_tee.par:
+        bits.append(f"par {tee.par}→{catalog_tee.par}")
+    return f"{catalog_tee.tee_name}/{catalog_tee.sex} " + ", ".join(bits)
 
 
 class Command(BaseCommand):
@@ -100,10 +126,11 @@ class Command(BaseCommand):
             f"{'APPLYING to' if apply else 'DRY-RUN over'} {len(courses)} account "
             f"cop{'y' if len(courses) == 1 else 'ies'}:\n")
 
-        totals = {'add': 0, 'update_inplace': 0, 'update_revision': 0, 'unchanged': 0}
+        totals = {'add': 0, 'update_inplace': 0, 'update_revision': 0,
+                  'rating': 0, 'unchanged': 0}
 
         for course in courses:
-            adds, inplace, revised, unchanged = [], [], [], []
+            adds, inplace, revised, rerated, unchanged = [], [], [], [], []
             current_by_key = {
                 (t.tee_name.casefold(), t.sex): t
                 for t in course.tees.filter(superseded_by__isnull=True)
@@ -113,16 +140,23 @@ class Command(BaseCommand):
                 if existing is None:
                     adds.append(ct.tee_name)
                 elif existing.holes != ct.holes:
+                    # Hole geometry changed → copy-on-write (revision if played).
                     if _tee_is_referenced(existing):
                         revised.append(ct.tee_name)
                     else:
                         inplace.append(ct.tee_name)
+                elif _rating_changed(existing, ct):
+                    # Same holes, but slope / course rating / total par differ:
+                    # an in-place re-rate (safe even for played tees — course
+                    # handicaps are snapshotted at setup).
+                    rerated.append(_rating_desc(existing, ct))
                 else:
                     unchanged.append(ct.tee_name)
 
             totals['add'] += len(adds)
             totals['update_inplace'] += len(inplace)
             totals['update_revision'] += len(revised)
+            totals['rating'] += len(rerated)
             totals['unchanged'] += len(unchanged)
 
             # Only account tees that AREN'T in the catalog (left untouched).
@@ -131,8 +165,9 @@ class Command(BaseCommand):
 
             parts = []
             if adds:     parts.append(f"add {adds}")
-            if revised:  parts.append(f"re-rate (played→new revision) {revised}")
-            if inplace:  parts.append(f"update {inplace}")
+            if revised:  parts.append(f"re-rate holes (played→new revision) {revised}")
+            if inplace:  parts.append(f"update holes {inplace}")
+            if rerated:  parts.append(f"re-rate {rerated}")
             if unchanged: parts.append(f"{len(unchanged)} unchanged")
             if orphan:   parts.append(f"leave account-only {orphan}")
             self.stdout.write(f"  {course.account.name}: " + ('; '.join(parts) or 'nothing'))
@@ -144,8 +179,10 @@ class Command(BaseCommand):
         verb = "Applied" if apply else "Would apply"
         self.stdout.write(self.style.SUCCESS(
             f"{verb}: {totals['add']} tee(s) added, "
-            f"{totals['update_inplace']} updated in place, "
+            f"{totals['update_inplace']} hole-updated in place, "
             f"{totals['update_revision']} re-rated as new revisions "
-            f"(played rounds frozen), {totals['unchanged']} unchanged."))
+            f"(played rounds frozen), "
+            f"{totals['rating']} slope/rating-corrected in place, "
+            f"{totals['unchanged']} unchanged."))
         if not apply:
             self.stdout.write("Re-run with --apply to commit.")
