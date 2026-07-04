@@ -442,6 +442,21 @@ class CatalogTee(models.Model):
                             )
     default_sort_priority = models.PositiveSmallIntegerField(default=100)
 
+    # Provenance / curation (see docs/catalog-curation-and-updates.md).
+    # `origin` records where the row came from; `curated` means "a human vetted
+    # or edited this — a GolfCourseAPI re-import must NOT overwrite or delete
+    # it".  upsert_catalog_course() creates API rows as origin='api'/curated=
+    # False and PROTECTS any curated row; every other creation path (manual
+    # paste, seed-from-account, hand edits) marks curated=True.
+    ORIGIN_API    = 'api'
+    ORIGIN_MANUAL = 'manual'
+    ORIGIN_CHOICES = [(ORIGIN_API, 'GolfCourseAPI'), (ORIGIN_MANUAL, 'Manual')]
+    origin  = models.CharField(max_length=8, choices=ORIGIN_CHOICES,
+                               default=ORIGIN_API)
+    curated = models.BooleanField(
+        default=False,
+        help_text='Human-vetted — protected from API re-import overwrite.')
+
     def __str__(self):
         return f"{self.catalog_course.name} — {self.tee_name}"
 

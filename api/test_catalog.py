@@ -54,6 +54,60 @@ def _admin(account_name, username):
     return account, user
 
 
+class CatalogCurationMergeTests(TestCase):
+    """upsert_catalog_course is a curation-aware MERGE, not delete-and-rebuild:
+    curated tees survive a re-import untouched; uncurated ones update."""
+
+    def _tee(self, name, slope=130, sex='M'):
+        return {'name': name, 'slope': slope, 'course_rating': Decimal('72.1'),
+                'par': 72, 'sex': sex, 'holes': _holes()}
+
+    def _import(self, tees=None):
+        from services.catalog import upsert_catalog_course
+        c = _fake_api_course(555)
+        if tees is not None:
+            c['tees'] = tees
+        return upsert_catalog_course(c, '555', 'Pebble Beach')
+
+    def test_first_import_is_api_origin_uncurated(self):
+        cc = self._import()
+        self.assertEqual(cc.tees.count(), 2)
+        for t in cc.tees.all():
+            self.assertEqual(t.origin, 'api')
+            self.assertFalse(t.curated)
+
+    def test_reimport_updates_uncurated_tee(self):
+        self._import()
+        cc = self._import([self._tee('Blue', slope=140), self._tee('White')])
+        self.assertEqual(cc.tees.get(tee_name='Blue', sex='M').slope, 140)
+
+    def test_reimport_protects_curated_tee(self):
+        cc = self._import()
+        blue = cc.tees.get(tee_name='Blue', sex='M')
+        blue.slope, blue.curated = 133, True
+        blue.save(update_fields=['slope', 'curated'])
+        self._import([self._tee('Blue', slope=140), self._tee('White')])
+        blue.refresh_from_db()
+        self.assertEqual(blue.slope, 133)  # curated → untouched by re-import
+
+    def test_reimport_adds_new_api_tee(self):
+        cc = self._import()
+        self._import([self._tee('Blue'), self._tee('White'), self._tee('Black', slope=145)])
+        self.assertTrue(cc.tees.filter(tee_name='Black', sex='M').exists())
+
+    def test_reimport_keeps_curated_orphan_drops_uncurated_orphan(self):
+        cc = self._import()  # Blue + White, both uncurated
+        CatalogTee.objects.create(
+            catalog_course=cc, tee_name='Blue/White Combo', sex='M',
+            slope=126, course_rating=Decimal('71.0'), par=72, holes=_holes(),
+            origin='manual', curated=True)
+        self._import([self._tee('Blue')])  # API drops White; keeps Blue
+        names = set(cc.tees.values_list('tee_name', flat=True))
+        self.assertIn('Blue/White Combo', names)  # curated orphan survives
+        self.assertIn('Blue', names)
+        self.assertNotIn('White', names)          # uncurated orphan dropped
+
+
 class CatalogImportTests(TestCase):
     def setUp(self):
         self.account, self.user = _admin('Acct A', 'a')

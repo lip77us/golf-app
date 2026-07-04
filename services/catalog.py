@@ -30,7 +30,18 @@ def _normalize_holes(holes):
 
 @transaction.atomic
 def upsert_catalog_course(api_course: dict, golf_api_id, name: str):
-    """Create or refresh the shared catalog entry for golf_api_id; return it."""
+    """Create or refresh the shared catalog entry for golf_api_id; return it.
+
+    CURATION-AWARE MERGE (see docs/catalog-curation-and-updates.md): a re-import
+    must never blow away hand-curated work.  Matching catalog tees to the API
+    payload by (tee_name, sex):
+      * CURATED tees are left completely untouched — neither overwritten nor
+        deleted (protects rating fixes + manually-added tees like combos).
+      * Uncurated (pure-API) tees are updated in place from the new payload.
+      * API tees with no existing match are created (origin='api', curated=False).
+      * Uncurated tees the API no longer returns are deleted; curated orphans stay.
+    A course whose tees are all curated therefore survives a re-import intact.
+    """
     from core.models import CatalogCourse, CatalogTee
 
     cc, _ = CatalogCourse.objects.update_or_create(
@@ -44,19 +55,41 @@ def upsert_catalog_course(api_course: dict, golf_api_id, name: str):
             'longitude': api_course.get('longitude'),
         },
     )
-    # Rebuild tees from the authoritative API data.
-    cc.tees.all().delete()
-    for priority, tee_data in enumerate(api_course.get('tees', []), start=10):
-        CatalogTee.objects.create(
-            catalog_course        = cc,
-            tee_name              = tee_data['name'] or 'Default',
-            slope                 = max(55, min(155, tee_data['slope'])),
-            course_rating         = tee_data['course_rating'],
-            par                   = tee_data['par'],
-            sex                   = tee_data['sex'],
-            default_sort_priority = priority,
-            holes                 = _normalize_holes(tee_data.get('holes', [])),
+
+    existing = {(t.tee_name.casefold(), t.sex): t for t in cc.tees.all()}
+    seen = set()
+    next_priority = (max((t.default_sort_priority for t in existing.values()),
+                         default=0) + 10)
+
+    for tee_data in api_course.get('tees', []):
+        name_i = tee_data['name'] or 'Default'
+        sex_i  = tee_data['sex']
+        key    = (name_i.casefold(), sex_i)
+        seen.add(key)
+        cur = existing.get(key)
+        if cur is not None and cur.curated:
+            continue  # protected — the API must not touch curated work
+        fields = dict(
+            slope         = max(55, min(155, tee_data['slope'])),
+            course_rating = tee_data['course_rating'],
+            par           = tee_data['par'],
+            holes         = _normalize_holes(tee_data.get('holes', [])),
         )
+        if cur is None:
+            CatalogTee.objects.create(
+                catalog_course=cc, tee_name=name_i, sex=sex_i,
+                default_sort_priority=next_priority,
+                origin=CatalogTee.ORIGIN_API, curated=False, **fields)
+            next_priority += 10
+        else:
+            for f, v in fields.items():
+                setattr(cur, f, v)
+            cur.save(update_fields=list(fields))
+
+    # Drop pure-API tees the API dropped; keep curated ones (our combos etc.).
+    for key, t in existing.items():
+        if key not in seen and not t.curated:
+            t.delete()
     return cc
 
 
@@ -102,6 +135,10 @@ def catalog_from_course(course, *, overwrite: bool = False):
             sex                   = t.sex,
             default_sort_priority = t.sort_priority,
             holes                 = t.holes,
+            # Seeded from an account's CURRENT (locally-vetted) data — treat as
+            # curated so a later API re-import can't clobber it.
+            origin                = CatalogTee.ORIGIN_MANUAL,
+            curated               = True,
         )
     return cc, ('created' if created else 'updated')
 
