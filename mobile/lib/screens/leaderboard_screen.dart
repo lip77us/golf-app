@@ -8985,7 +8985,7 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
                     }
                     if (d.winner == 'T1') {
                       return cell(
-                        Text('T1',
+                        Text('B',
                             style: theme.textTheme.labelSmall?.copyWith(
                                 fontWeight: FontWeight.bold, color: t1Color)),
                         bg: GameColors.team1Bg,
@@ -8993,7 +8993,7 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
                     }
                     if (d.winner == 'T2') {
                       return cell(
-                        Text('T2',
+                        Text('O',
                             style: theme.textTheme.labelSmall?.copyWith(
                                 fontWeight: FontWeight.bold, color: t2Color)),
                         bg: GameColors.team2Bg,
