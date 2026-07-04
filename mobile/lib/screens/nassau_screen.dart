@@ -2145,9 +2145,10 @@ class _PressesStrip extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 6),
         itemBuilder: (_, i) {
           final p      = visible[i];
-          // No F/B prefix — the nine is already implied by which screen
-          // section we're in, and the hole range makes it clear.
-          final label  = '${p.startHole}–${p.endHole}';
+          // Label by nine + sequential press number within that nine
+          // (e.g. "F9 Press 1", "F9 Press 2") — clearer than the hole range.
+          final ninePrefix = currentNine == 'front' ? 'F9' : 'B9';
+          final label      = '$ninePrefix Press ${i + 1}';
           final result = p.result;
           final m      = p.margin ?? 0;
           final mAbs   = m.abs();

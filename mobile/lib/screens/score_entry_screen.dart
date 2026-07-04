@@ -6575,7 +6575,14 @@ class _PressesStrip extends StatelessWidget {
         itemBuilder: (_, i) {
           final p        = visible[i].press;
           final isBottom = visible[i].isBottom;
-          final label    = '${p.startHole}–${p.endHole}';
+          // Sequential press number within this nine (and top/bottom group),
+          // labelled by nine — e.g. "F9 Press 1", "F9 Press 2".
+          int pressNo = 1;
+          for (int k = 0; k < i; k++) {
+            if (visible[k].isBottom == isBottom) pressNo++;
+          }
+          final ninePrefix = currentNine == 'front' ? 'F9' : 'B9';
+          final label      = '$ninePrefix Press $pressNo';
           final result   = p.result;
           final m        = p.margin ?? 0;
           final mAbs     = m.abs();
