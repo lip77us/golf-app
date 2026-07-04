@@ -1104,8 +1104,15 @@ class GameSuggestionView(APIView):
 
         player = getattr(request.user, 'player_profile', None)
         submitter_name = (getattr(player, 'name', '') or '').strip()
+        # Email is required so we can follow up (falls back to the account email
+        # if the form left it blank). The serializer's EmailField already
+        # rejects a malformed address; this guards the empty case.
         contact_email = (d.get('contact_email')
                          or getattr(request.user, 'email', '') or '').strip()
+        if not contact_email:
+            return Response(
+                {'detail': 'Please include an email address so we can follow up.'},
+                status=status.HTTP_400_BAD_REQUEST)
         obj = ser.save(
             account=request.user.account,
             submitted_by=request.user,

@@ -30,6 +30,17 @@ class _GameSuggestionScreenState extends State<GameSuggestionScreen> {
   bool    _saving = false;
   Object? _error;
 
+  static final _emailRe = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill with the golfer's profile email so it's one less thing to type
+    // (still editable + required).
+    final email = context.read<AuthProvider>().player?.email.trim() ?? '';
+    if (email.isNotEmpty) _email.text = email;
+  }
+
   @override
   void dispose() {
     for (final c in [_name, _players, _rounds, _scoring, _betting, _notes,
@@ -46,6 +57,9 @@ class _GameSuggestionScreenState extends State<GameSuggestionScreen> {
       _scoring.text.trim().isNotEmpty ||
       _betting.text.trim().isNotEmpty ||
       _notes.text.trim().isNotEmpty;
+
+  /// A valid email is required so we can follow up on the suggestion.
+  bool get _emailValid => _emailRe.hasMatch(_email.text.trim());
 
   Future<void> _submit() async {
     setState(() { _saving = true; _error = null; });
@@ -161,8 +175,12 @@ class _GameSuggestionScreenState extends State<GameSuggestionScreen> {
             const SizedBox(height: 12),
             GolfTextField(
               controller: _email,
-              label: 'Your email (optional, for follow-up)',
+              label: 'Your email (required, for follow-up)',
               keyboardType: TextInputType.emailAddress,
+              onChanged: (_) => setState(() {}),
+              errorText: (_email.text.trim().isNotEmpty && !_emailValid)
+                  ? 'Enter a valid email address'
+                  : null,
             ),
 
             if (_error != null) ...[
@@ -180,7 +198,8 @@ class _GameSuggestionScreenState extends State<GameSuggestionScreen> {
 
             const SizedBox(height: 24),
             FilledButton.icon(
-              onPressed: (_saving || !_hasContent) ? null : _submit,
+              onPressed: (_saving || !_hasContent || !_emailValid)
+                  ? null : _submit,
               icon: _saving
                   ? const SizedBox(
                       width: 18, height: 18,
