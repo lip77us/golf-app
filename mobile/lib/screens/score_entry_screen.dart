@@ -5252,11 +5252,11 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                           if (winner == 'team1') {
                             bg = GameColors.team1Bg;
                             fg = GameColors.team1;
-                            label = nassauTeamColorShort(1);
+                            label = nassauTeamInitials(nassau.team1);
                           } else if (winner == 'team2') {
                             bg = GameColors.team2Bg;
                             fg = GameColors.team2;
-                            label = nassauTeamColorShort(2);
+                            label = nassauTeamInitials(nassau.team2);
                           } else if (winner == 'halved') {
                             bg = Colors.grey.shade100;
                             fg = Colors.grey.shade600;

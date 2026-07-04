@@ -1658,11 +1658,11 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                         if (winner == 'team1') {
                           bg    = t1Color.withOpacity(0.15);
                           fg    = t1Color;
-                          label = nassauTeamColorShort(1);
+                          label = nassauTeamInitials(nassau.team1);
                         } else if (winner == 'team2') {
                           bg    = t2Color.withOpacity(0.15);
                           fg    = t2Color;
-                          label = nassauTeamColorShort(2);
+                          label = nassauTeamInitials(nassau.team2);
                         } else if (winner == 'halved') {
                           bg    = Colors.grey.shade100;
                           fg    = Colors.grey.shade600;

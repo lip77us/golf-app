@@ -5,6 +5,7 @@ import '../api/models.dart';
 import '../config.dart';
 import '../game_catalog.dart';
 import '../game_colors.dart';
+import '../utils/nassau_team_style.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/round_chat_button.dart';
@@ -1313,6 +1314,9 @@ class _LowNetViewState extends State<_LowNetView> {
           final name = row['name']?.toString() ?? '—';
           final ntp = row['net_to_par'] as int?;
           final payout = (row['payout'] as num?)?.toDouble();
+          // Course handicap drives the stroke dots (circle/square = net vs par),
+          // so surface it next to the name in net / strokes-off modes.
+          final ch = row['handicap'] as int? ?? 0;
           return box(nameW, rowH,
             Row(children: [
               SizedBox(
@@ -1332,10 +1336,23 @@ class _LowNetViewState extends State<_LowNetView> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontSize: 12, fontWeight: FontWeight.w600)),
-                    if (payout != null)
-                      Text('\$${payout.formatBet()}',
-                          style: TextStyle(
-                              fontSize: 9, color: Colors.green.shade700)),
+                    if (showNet || payout != null)
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        if (showNet)
+                          Text('CH $ch',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                        if (showNet && payout != null)
+                          Text('  ·  ',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                        if (payout != null)
+                          Text('\$${payout.formatBet()}',
+                              style: TextStyle(
+                                  fontSize: 9, color: Colors.green.shade700)),
+                      ]),
                   ],
                 ),
               ),
@@ -8985,7 +9002,7 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
                     }
                     if (d.winner == 'T1') {
                       return cell(
-                        Text('B',
+                        Text(teamInitialsFromNames(summary.team1.players),
                             style: theme.textTheme.labelSmall?.copyWith(
                                 fontWeight: FontWeight.bold, color: t1Color)),
                         bg: GameColors.team1Bg,
@@ -8993,7 +9010,7 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
                     }
                     if (d.winner == 'T2') {
                       return cell(
-                        Text('O',
+                        Text(teamInitialsFromNames(summary.team2.players),
                             style: theme.textTheme.labelSmall?.copyWith(
                                 fontWeight: FontWeight.bold, color: t2Color)),
                         bg: GameColors.team2Bg,

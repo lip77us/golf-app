@@ -28,6 +28,29 @@ String nassauTeamColorName(int team) => team == 1 ? 'Blue' : 'Orange';
 /// presses strip chips).
 String nassauTeamColorShort(int team) => team == 1 ? 'B' : 'O';
 
+/// Compact winner label for a progress grid — the winning team's initials
+/// (nicer than a bare colour letter). Singles (one name): the first letter of
+/// up to its first two words ("Paul Lipkin" → "PL", "Paul" → "P"). Doubles (two
+/// names): each name's first initial ("PD"). Reusable across games (Nassau,
+/// Fourball, …) — pass the team's player NAMES.
+String teamInitialsFromNames(List<String> names) {
+  final ns = names.map((n) => n.trim()).where((n) => n.isNotEmpty).toList();
+  if (ns.isEmpty) return '?';
+  if (ns.length == 1) return _nameInitials(ns.first);
+  return ns.take(2).map((n) => n[0].toUpperCase()).join();
+}
+
+/// Nassau convenience over [teamInitialsFromNames].
+String nassauTeamInitials(List<NassauPlayerInfo> members) =>
+    teamInitialsFromNames(members.map((m) => m.name).toList());
+
+String _nameInitials(String name) {
+  final words =
+      name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return '?';
+  return words.take(2).map((w) => w[0].toUpperCase()).join();
+}
+
 /// Label for a "won by" / hole-winner line: the golfer's short name when the
 /// team is a single player (singles), else the colour name (doubles).
 String nassauWonByLabel(int team, List<NassauPlayerInfo> members) {
