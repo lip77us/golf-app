@@ -719,11 +719,13 @@ List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
     'sixes':      '/sixes-setup',
   };
   // "Edit Configuration" targets the PRIMARY game only; side games get their
-  // own buttons (see _sideGamePerFoursomeTargets).
+  // own buttons (see _sideGamePerFoursomeTargets).  Shown even before the game
+  // is configured — the setup screen creates it on first save — so a game that
+  // needs team assignment (e.g. 4-player Nassau / Vegas / Fourball, which isn't
+  // auto-configured like a 1-v-1 Nassau) still gets a config affordance at the
+  // hub instead of it being reachable only through "Enter Scores".
   final primary = primaryGameOf(fsGames);
-  if (primary != null &&
-      routes.containsKey(primary) &&
-      fs.configuredGames.contains(primary)) {
+  if (primary != null && routes.containsKey(primary)) {
     return (routes[primary]!, {'id': fs.id, 'returnToHub': true});
   }
   return (null, null);
