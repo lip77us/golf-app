@@ -25,6 +25,7 @@ import '../widgets/section_card.dart';
 import '../widgets/max_liability_note.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
+import '../utils/nassau_team_style.dart';
 
 class NassauSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -396,9 +397,17 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                         ),
                         SegmentedButton<int>(
                           showSelectedIcon: false,
-                          segments: const [
-                            ButtonSegment(value: 1, label: Text('T1')),
-                            ButtonSegment(value: 2, label: Text('T2')),
+                          segments: [
+                            ButtonSegment(
+                                value: 1,
+                                icon: Icon(Icons.circle, size: 12,
+                                    color: nassauTeamColor(1)),
+                                label: const Text('Blue')),
+                            ButtonSegment(
+                                value: 2,
+                                icon: Icon(Icons.circle, size: 12,
+                                    color: nassauTeamColor(2)),
+                                label: const Text('Orange')),
                           ],
                           selected: {team},
                           onSelectionChanged: (s) =>
@@ -414,14 +423,18 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
                 const SizedBox(height: 8),
 
-                // Team summary chips
+                // Team summary chips — colour dot + colour name + roster.
                 Row(children: [
-                  const Text('T1: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                  nassauTeamDot(1), const SizedBox(width: 6),
+                  const Text('Blue: ',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                   Expanded(child: Text(_teamLabel(members, 1))),
                 ]),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Row(children: [
-                  const Text('T2: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                  nassauTeamDot(2), const SizedBox(width: 6),
+                  const Text('Orange: ',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                   Expanded(child: Text(_teamLabel(members, 2))),
                 ]),
 

@@ -29,6 +29,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
+import '../utils/nassau_team_style.dart';
 import '../utils/round_complete.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
@@ -2755,12 +2756,9 @@ class _HoleScoreCard extends StatelessWidget {
       }
     }
     if (nassau == null) return null;
-    // 18-hole match is 1-v-1 — no T1/T2 badge; the red/blue name says it all.
-    if (nassau!.isEighteenHoleMatch) return null;
-    // T1 = team1, T2 = team2 — matching the setup screen and the leaderboard
-    // (the colour comes from nameColor, so the badge stays team-coloured).
-    if (nassau!.team1.any((p) => p.playerId == playerId)) return 'T1';
-    if (nassau!.team2.any((p) => p.playerId == playerId)) return 'T2';
+    // Nassau: no "T1"/"T2" text badge — team identity is the colour (the name
+    // is tinted Blue/Orange via _nameColorFor and the row carries a matching
+    // coloured left edge), so a letter badge would be redundant.
     return null;
   }
 
@@ -3666,9 +3664,6 @@ class _NassauHoleOutcome extends StatelessWidget {
     final winner  = hole.winner!;
     final isMatch = nassau.isEighteenHoleMatch;
     final prefix  = isMatch ? 'Match' : 'Nassau';
-    String sideName(List<NassauPlayerInfo> t) => t.isNotEmpty
-        ? (t.first.shortName.isNotEmpty ? t.first.shortName : t.first.name)
-        : '';
     final Color bg;
     final Color fg;
     final String label;
@@ -3681,15 +3676,11 @@ class _NassauHoleOutcome extends StatelessWidget {
     } else if (winner == 'team1') {
       bg    = GameColors.team1Bg;
       fg    = GameColors.team1;
-      label = isMatch
-          ? '$prefix: ${sideName(nassau.team1)} wins hole'
-          : 'Nassau: T1 wins hole';
+      label = '$prefix: ${nassauWonByLabel(1, nassau.team1)} wins hole';
     } else {
       bg    = GameColors.team2Bg;
       fg    = GameColors.team2;
-      label = isMatch
-          ? '$prefix: ${sideName(nassau.team2)} wins hole'
-          : 'Nassau: T2 wins hole';
+      label = '$prefix: ${nassauWonByLabel(2, nassau.team2)} wins hole';
     }
     return Container(
       color: bg,
@@ -5256,16 +5247,16 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                             label = '·';
                           }
                         } else {
-                          // Standard style: T1 = team1, T2 = team2 (colour from
-                          // the team), matching setup + the leaderboard.
+                          // Standard style: team colour identifies the winner —
+                          // "B"/"O" (Blue/Orange), matching setup + leaderboard.
                           if (winner == 'team1') {
                             bg = GameColors.team1Bg;
                             fg = GameColors.team1;
-                            label = 'T1';
+                            label = nassauTeamColorShort(1);
                           } else if (winner == 'team2') {
                             bg = GameColors.team2Bg;
                             fg = GameColors.team2;
-                            label = 'T2';
+                            label = nassauTeamColorShort(2);
                           } else if (winner == 'halved') {
                             bg = Colors.grey.shade100;
                             fg = Colors.grey.shade600;
@@ -6242,7 +6233,9 @@ class _TeamBanner extends StatelessWidget {
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(children: [
-        // Blue (team1 / T1) on left — matches the T1-first player rows + setup.
+        // Blue (team 1) on the left — matches the team-1-first player rows + setup.
+        nassauTeamDot(1),
+        const SizedBox(width: 6),
         Expanded(
           child: Text(t1,
               style: theme.textTheme.titleSmall?.copyWith(
@@ -6254,7 +6247,7 @@ class _TeamBanner extends StatelessWidget {
         Text(' vs ',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        // Orange (team2 / T2) on right.
+        // Orange (team 2) on the right.
         Expanded(
           child: Text(t2,
               textAlign: TextAlign.right,
@@ -6264,6 +6257,8 @@ class _TeamBanner extends StatelessWidget {
               ),
               overflow: TextOverflow.ellipsis),
         ),
+        const SizedBox(width: 6),
+        nassauTeamDot(2),
       ]),
     );
   }
@@ -6590,12 +6585,12 @@ class _PressesStrip extends StatelessWidget {
           String scoreText;
 
           if (result == 'team1') {
-            chipColor = Colors.blue.shade100;
+            chipColor = GameColors.team1Bg;
             scoreText = isBottom
                 ? '+$mAbs pts'
                 : (p.holesRemaining > 0 ? '$mAbs&${p.holesRemaining}' : '${mAbs}UP');
           } else if (result == 'team2') {
-            chipColor = Colors.red.shade100;
+            chipColor = GameColors.team2Bg;
             scoreText = isBottom
                 ? '+$mAbs pts'
                 : (p.holesRemaining > 0 ? '$mAbs&${p.holesRemaining}' : '${mAbs}UP');
@@ -6731,7 +6726,7 @@ class _MatchStatusBar extends StatelessWidget {
         subtitle = 'AS';
       } else {
         final winsT1 = result == 'team1';
-        bg            = winsT1 ? Colors.blue.shade100 : Colors.red.shade100;
+        bg            = winsT1 ? GameColors.team1Bg : GameColors.team2Bg;
         subtitleColor = winsT1 ? t1Color : t2Color;
         final dm = bet.decidedMargin;
         final dr = bet.decidedRemaining;
@@ -6748,7 +6743,7 @@ class _MatchStatusBar extends StatelessWidget {
       bg       = theme.colorScheme.surfaceContainer;
       subtitle = 'AS';
     } else if (holesLeft >= 0 && bet.margin.abs() > holesLeft) {
-      bg            = t1Leads ? Colors.blue.shade100 : Colors.red.shade100;
+      bg            = t1Leads ? GameColors.team1Bg : GameColors.team2Bg;
       subtitleColor = t1Leads ? t1Color : t2Color;
       subtitle      = '${bet.margin.abs()}&$holesLeft';
     } else {
@@ -6797,7 +6792,7 @@ class _MatchStatusBar extends StatelessWidget {
         subtitle = 'AS';
       } else {
         final winsT1 = result == 'team1';
-        bg            = winsT1 ? Colors.blue.shade100 : Colors.red.shade100;
+        bg            = winsT1 ? GameColors.team1Bg : GameColors.team2Bg;
         subtitleColor = winsT1 ? t1Color : t2Color;
         subtitle      = 'wins';
       }

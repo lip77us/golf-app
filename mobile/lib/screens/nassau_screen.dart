@@ -8,7 +8,7 @@
 ///   • 18-hole summary grid with per-hole winner indicator
 ///   • Bottom hole-navigation bar (← Hole N-1 | Hole N+1 →)
 /// Nassau-specific additions layered around the entry pattern:
-///   • Team banner (T1 vs T2 short names)
+///   • Team banner (Blue vs Orange colour dots + names)
 ///   • Presses strip (active/completed presses)
 ///   • F9 / B9 / Overall match status chips + Call Press button
 
@@ -26,22 +26,8 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
+import '../utils/nassau_team_style.dart';
 import '../utils/round_complete.dart';
-
-Color _nassauTeamColor(String? raw) {
-  switch ((raw ?? '').toLowerCase()) {
-    case 'red':    return Colors.red.shade700;
-    case 'green':  return Colors.green.shade700;
-    case 'gold':
-    case 'yellow': return Colors.amber.shade700;
-    case 'orange': return Colors.deepOrange.shade700;
-    case 'purple': return Colors.purple.shade700;
-    case 'black':  return Colors.black87;
-    case 'blue':
-    default:       return Colors.blue.shade700;
-  }
-}
-
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -703,7 +689,7 @@ class _NassauScreenState extends State<NassauScreen> {
     });
 
     return Column(children: [
-      // Team banner (T1 vs T2 names)
+      // Team banner (Blue vs Orange colour dots + names)
       if (nas != null) _TeamBanner(summary: nas),
 
       // Presses strip — show only presses for the current nine.
@@ -712,8 +698,8 @@ class _NassauScreenState extends State<NassauScreen> {
         _PressesStrip(
           presses:     nas.presses,
           currentHole: _selectedHole,
-          t1Color:     _nassauTeamColor(nas.team1Colour),
-          t2Color:     _nassauTeamColor(nas.team2Colour),
+          t1Color:     nassauTeamColor(1),
+          t2Color:     nassauTeamColor(2),
         ),
 
       Expanded(
@@ -847,8 +833,6 @@ class _NassauHoleScoreCard extends StatelessWidget {
 
   String get _mode       => nassau?.handicapMode ?? 'net';
   int    get _netPercent => nassau?.netPercent   ?? 100;
-  Color  get _t1Color    => _nassauTeamColor(nassau?.team1Colour);
-  Color  get _t2Color    => _nassauTeamColor(nassau?.team2Colour);
 
   int? get _lowPlayingHandicap {
     if (_mode != 'strokes_off' || players.isEmpty) return null;
@@ -885,10 +869,11 @@ class _NassauHoleScoreCard extends StatelessWidget {
   }
 
 
-  String? _teamLabelFor(int playerId) {
+  /// The player's 1-based team index (1 = Blue, 2 = Orange), or null.
+  int? _teamOf(int playerId) {
     if (nassau == null) return null;
-    if (nassau!.team1.any((p) => p.playerId == playerId)) return 'T1';
-    if (nassau!.team2.any((p) => p.playerId == playerId)) return 'T2';
+    if (nassau!.team1.any((p) => p.playerId == playerId)) return 1;
+    if (nassau!.team2.any((p) => p.playerId == playerId)) return 2;
     return null;
   }
 
@@ -986,7 +971,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
                   gross:       gross,
                   donorName:   donor?.playerName ?? 'Donor',
                   donorScored: donor?.hasScore ?? hasScore,
-                  teamLabel:   _teamLabelFor(m.player.id),
+                  team:        _teamOf(m.player.id),
                 ),
               ];
             }
@@ -1012,9 +997,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
                 isHot:               isHot,
                 matchHcapLabel:      hcapLabel,
                 strokesOnThisHole:   matchStrok,
-                teamLabel:           _teamLabelFor(m.player.id),
-                t1Color:             _t1Color,
-                t2Color:             _t2Color,
+                team:                _teamOf(m.player.id),
                 onTap: (hasScore && !isHot) ? () => onEditTap(m) : null,
               ),
               if (isHot)
@@ -1055,15 +1038,15 @@ class _HoleOutcomeBanner extends StatelessWidget {
       fg    = Colors.grey.shade700;
       label = 'Halved';
     } else if (winner == 'team1') {
-      final c = _nassauTeamColor(nassau.team1Colour);
+      final c = nassauTeamColor(1);
       bg    = c.withOpacity(0.10);
       fg    = c;
-      label = 'T1 wins hole';
+      label = '${nassauWonByLabel(1, nassau.team1)} wins hole';
     } else {
-      final c = _nassauTeamColor(nassau.team2Colour);
+      final c = nassauTeamColor(2);
       bg    = c.withOpacity(0.10);
       fg    = c;
-      label = 'T2 wins hole';
+      label = '${nassauWonByLabel(2, nassau.team2)} wins hole';
     }
 
     return Container(
@@ -1097,14 +1080,14 @@ class _PhantomDonorRow extends StatelessWidget {
   final int?    gross;          // phantom's gross score (null = not yet available)
   final String  donorName;     // player whose score the phantom is copying
   final bool    donorScored;   // whether the donor has posted their score
-  final String? teamLabel;
+  final int?    team;          // 1 = Blue, 2 = Orange (null = unteamed)
 
   const _PhantomDonorRow({
     required this.holeNumber,
     required this.gross,
     required this.donorName,
     required this.donorScored,
-    this.teamLabel,
+    this.team,
   });
 
   @override
@@ -1176,14 +1159,9 @@ class _PhantomDonorRow extends StatelessWidget {
                   ),
                 ]),
         ),
-        if (teamLabel != null) ...[
+        if (team != null) ...[
           const SizedBox(width: 8),
-          Text(
-            teamLabel!,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
+          nassauTeamDot(team!),
         ],
         const SizedBox(width: 8),
         // Score chip
@@ -1223,9 +1201,7 @@ class _NassauPlayerRow extends StatelessWidget {
   final String?       matchHcapLabel;
   final VoidCallback? onTap;
   final int           strokesOnThisHole;
-  final String?       teamLabel;
-  final Color         t1Color;
-  final Color         t2Color;
+  final int?          team; // 1 = Blue, 2 = Orange (null = unteamed)
 
   const _NassauPlayerRow({
     required this.member,
@@ -1234,11 +1210,8 @@ class _NassauPlayerRow extends StatelessWidget {
     this.matchHcapLabel,
     this.onTap,
     this.strokesOnThisHole = 0,
-    this.teamLabel,
-    Color? t1Color,
-    Color? t2Color,
-  })  : t1Color = t1Color ?? const Color(0xFF1976D2),
-        t2Color = t2Color ?? const Color(0xFFD32F2F);
+    this.team,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1262,24 +1235,9 @@ class _NassauPlayerRow extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
-        // Team badge (T1 = blue, T2 = orange)
-        if (teamLabel != null) ...[
-          Container(
-            width: 28,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            decoration: BoxDecoration(
-              color: (teamLabel == 'T1' ? t1Color : t2Color).withOpacity(0.15),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              teamLabel!,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: teamLabel == 'T1' ? t1Color : t2Color,
-              ),
-            ),
-          ),
+        // Team identity is the colour dot (Blue = team 1, Orange = team 2).
+        if (team != null) ...[
+          nassauTeamDot(team!),
           const SizedBox(width: 6),
         ],
 
@@ -1295,9 +1253,7 @@ class _NassauPlayerRow extends StatelessWidget {
                   // Tint the name with the player's team colour — the
                   // green score-box outline + row tint already mark the
                   // hot-spot player.
-                  color: teamLabel == 'T1'
-                      ? t1Color
-                      : (teamLabel == 'T2' ? t2Color : null),
+                  color: team != null ? nassauTeamColor(team!) : null,
                 ),
               ),
             ),
@@ -1565,8 +1521,8 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
     final players   = widget.players;
     final scorecard = widget.scorecard;
     final currentHole = widget.currentHole;
-    final t1Color = _nassauTeamColor(nassau.team1Colour);
-    final t2Color = _nassauTeamColor(nassau.team2Colour);
+    final t1Color = nassauTeamColor(1);
+    final t2Color = nassauTeamColor(2);
     final onTapHole   = widget.onTapHole;
 
     const double labelColW = 56.0;
@@ -1702,11 +1658,11 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                         if (winner == 'team1') {
                           bg    = t1Color.withOpacity(0.15);
                           fg    = t1Color;
-                          label = 'T1';
+                          label = nassauTeamColorShort(1);
                         } else if (winner == 'team2') {
                           bg    = t2Color.withOpacity(0.15);
                           fg    = t2Color;
-                          label = 'T2';
+                          label = nassauTeamColorShort(2);
                         } else if (winner == 'halved') {
                           bg    = Colors.grey.shade100;
                           fg    = Colors.grey.shade600;
@@ -2069,20 +2025,18 @@ class _TeamBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final t1 = summary.team1.map((p) => p.name).join(' & ');
-    final t2 = summary.team2.map((p) => p.name).join(' & ');
-    final rawT1 = _nassauTeamColor(summary.team1Colour);
-    final rawT2 = _nassauTeamColor(summary.team2Colour);
-    final t1IsRed   = rawT1.red >= rawT1.blue;
-    final leftColor  = t1IsRed ? rawT1 : rawT2;
-    final rightColor = t1IsRed ? rawT2 : rawT1;
-    final leftLabel  = t1IsRed ? t1 : t2;
-    final rightLabel = t1IsRed ? t2 : t1;
+    // Team 1 (Blue) on the left, Team 2 (Orange) on the right.
+    final leftLabel  = summary.team1.map((p) => p.name).join(' & ');
+    final rightLabel = summary.team2.map((p) => p.name).join(' & ');
+    final leftColor  = nassauTeamColor(1);
+    final rightColor = nassauTeamColor(2);
 
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(children: [
+        nassauTeamDot(1),
+        const SizedBox(width: 6),
         Expanded(
           child: Text(leftLabel,
               style: theme.textTheme.titleSmall?.copyWith(
@@ -2103,6 +2057,8 @@ class _TeamBanner extends StatelessWidget {
               ),
               overflow: TextOverflow.ellipsis),
         ),
+        const SizedBox(width: 6),
+        nassauTeamDot(2),
       ]),
     );
   }
@@ -2123,8 +2079,8 @@ class _PressesStrip extends StatelessWidget {
     required this.currentHole,
     Color? t1Color,
     Color? t2Color,
-  })  : t1Color = t1Color ?? const Color(0xFF1976D2),
-        t2Color = t2Color ?? const Color(0xFFD32F2F);
+  })  : t1Color = t1Color ?? kNassauTeam1Color,
+        t2Color = t2Color ?? kNassauTeam2Color;
 
   @override
   Widget build(BuildContext context) {
@@ -2256,8 +2212,8 @@ class _MatchStatusBar extends StatelessWidget {
     );
   }
 
-  Color get _t1Color => _nassauTeamColor(summary.team1Colour);
-  Color get _t2Color => _nassauTeamColor(summary.team2Colour);
+  Color get _t1Color => nassauTeamColor(1);
+  Color get _t2Color => nassauTeamColor(2);
 
   Widget _betChip(
     BuildContext context,
