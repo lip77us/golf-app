@@ -296,7 +296,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: TextField(
                   controller: _shortCtrl,
                   maxLength: 5,
-                  textCapitalization: TextCapitalization.characters,
                   onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Short name',

@@ -347,9 +347,11 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
 
-          // ── Team assignment card (hidden for a 1-v-1 18-hole match — the
-          //     two players are simply the two sides) ──
-          if (!_overallOnly) ...[
+          // ── Team assignment card. Hidden for SINGLES (2 players) — there
+          //     are no teams to pick, each golfer is simply a side, so the
+          //     colour toggle adds no value — and for the 1-v-1 18-hole match.
+          //     Shown for 3-4 players, where the pairing actually matters.
+          if (!_overallOnly && members.length >= 3) ...[
           SectionCard(
             title: 'Teams',
             child: Column(
