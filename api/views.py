@@ -4195,10 +4195,15 @@ class NassauPressView(APIView):
         ser.is_valid(raise_exception=True)
 
         from services.nassau import add_manual_press, nassau_summary
+        start_hole = ser.validated_data['start_hole']
         try:
-            add_manual_press(foursome, ser.validated_data['start_hole'])
+            add_manual_press(foursome, start_hole)
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Announce the new press to the round feed (best-effort — never blocks).
+        from services.messaging_events import emit_nassau_press_called
+        emit_nassau_press_called(foursome, start_hole)
 
         return Response(nassau_summary(foursome))
 

@@ -320,10 +320,12 @@ class _EventCard extends StatelessWidget {
       case 'carryover':
         return Icons.attach_money;
       case 'match_result':
+      case 'press_called':
         return Icons.sports_golf;
       case 'lead_change':
       case 'leader':
       case 'front9':
+      case 'front9_recap':
         return Icons.trending_up;
       case 'withdrawal':
         return Icons.person_off;

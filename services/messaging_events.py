@@ -151,6 +151,7 @@ def emit_score_events(foursome, hole_number, submitted):
     ``{player_id, gross_score}`` just posted for ``hole_number``. Each detector
     is independently guarded so one failing can't suppress the others."""
     _guard(_emit_birdies, foursome, hole_number, submitted)
+    _guard(_emit_front9_recap, foursome, hole_number)
     _guard(_emit_skins, foursome)
     _guard(_emit_multi_skins, foursome)
     _guard(_emit_match_results, foursome)
@@ -220,6 +221,59 @@ def _emit_birdies(foursome, hole_number, submitted):
               data={'type': etype, 'hole': hole_number, 'player_id': pid,
                     'player_name': name, 'gross': gross, 'par': par},
               push_category='birdie', push_title='Nice shot!')
+
+
+def _emit_front9_recap(foursome, hole_number):
+    """Feed card at the turn: each player's GROSS front-nine total, lowest first
+    (e.g. "Front 9 done — Paul 41, Jenn 44"). Posts once per foursome, only once
+    every non-withdrawn real player has all nine front scores in. Fires for ANY
+    game (it's just a scorecard recap), feed-only like the round-complete recap.
+    Only bothers to check while scoring the front nine."""
+    if hole_number > 9:
+        return
+    from scoring.models import HoleScore
+    round_obj = foursome.round
+
+    front = {}  # player_id -> {hole: gross}
+    for hs in (HoleScore.objects
+               .filter(foursome=foursome, player__is_phantom=False,
+                       hole_number__lte=9)
+               .values('player_id', 'hole_number', 'gross_score')):
+        if hs['gross_score'] is None:
+            continue
+        front.setdefault(hs['player_id'], {})[hs['hole_number']] = hs['gross_score']
+
+    players = []
+    for m in (foursome.memberships
+              .filter(player__is_phantom=False)
+              .select_related('player')):
+        p = m.player
+        holes = front.get(p.id, {})
+        # A player who withdrew on the front nine only needs the holes they
+        # actually played; they show as WD (no total) rather than blocking.
+        wd_front = (m.withdrew_after_hole is not None
+                    and m.withdrew_after_hole < 9)
+        last_needed = min(m.withdrew_after_hole, 9) if wd_front else 9
+        if any(h not in holes for h in range(1, last_needed + 1)):
+            return  # someone still owes a front-nine score — wait
+        if wd_front:
+            players.append({'player_id': p.id, 'name': p.name,
+                            'withdrew': True, 'front': None})
+        else:
+            players.append({'player_id': p.id, 'name': p.name,
+                            'withdrew': False,
+                            'front': sum(holes[h] for h in range(1, 10))})
+    if not players:
+        return
+
+    players.sort(key=lambda x: (x['withdrew'],
+                                x['front'] if x['front'] is not None else 10**9))
+    parts = [f"{x['name']} WD" if x['withdrew'] else f"{x['name']} {x['front']}"
+             for x in players]
+    _emit(round_obj,
+          event_key=f'front9_recap:{round_obj.id}:{foursome.id}',
+          body='Front 9 done — ' + ', '.join(parts),
+          data={'type': 'front9_recap', 'players': players})  # feed-only
 
 
 def _emit_skins(foursome):
@@ -292,6 +346,7 @@ def _emit_match_results(foursome):
     games = _active_games(foursome)
     if 'nassau' in games:
         _emit_nassau_results(foursome)
+        _emit_nassau_presses(foursome)
     if 'sixes' in games:
         _emit_sixes_results(foursome)
     if 'match_play' in games:
@@ -334,6 +389,87 @@ def _emit_nassau_results(foursome):
               data={'type': 'match_result', 'game': 'nassau', 'unit': unit,
                     'result': result or 'halved', 'margin': margin},
               push_category='match_result', push_title='Match result')
+
+
+def _press_labels(presses):
+    """Map each press to its app-facing label ("F9 Press 1", "B9 Press 2"):
+    numbered sequentially within its nine by start hole, matching the mobile
+    presses strip. Returns {(nine, start_hole): 'F9 Press N'}."""
+    labels, counters = {}, {}
+    for p in sorted(presses, key=lambda x: (x.get('nine') or '',
+                                            x.get('start_hole') or 0)):
+        nine = p.get('nine')
+        counters[nine] = counters.get(nine, 0) + 1
+        prefix = 'F9' if nine == 'front' else 'B9'
+        labels[(nine, p.get('start_hole'))] = f'{prefix} Press {counters[nine]}'
+    return labels
+
+
+def _emit_nassau_presses(foursome):
+    """Announce each Nassau press once it's decided (won or halved). Keyed per
+    press (nine + start hole) so re-scanning on every submit posts each once."""
+    from services.nassau import nassau_summary
+    s = nassau_summary(foursome)
+    if not s:
+        return
+    round_obj = foursome.round
+    team1 = s.get('teams', {}).get('team1', [])
+    team2 = s.get('teams', {}).get('team2', [])
+    presses = s.get('presses', [])
+    labels = _press_labels(presses)
+    for p in presses:
+        result = p.get('result')
+        if not result:
+            continue  # still open
+        nine, start = p.get('nine'), p.get('start_hole')
+        label = labels.get((nine, start), 'Press')
+        m   = abs(p.get('margin') or 0)
+        rem = p.get('holes_remaining') or 0
+        margin_txt = f'{m}&{rem}' if rem > 0 else (f'{m} up' if m else '')
+        if result == 'team1':
+            body = f'{_side_names(team1)} won {label}' + (f', {margin_txt}.' if margin_txt else '.')
+        elif result == 'team2':
+            body = f'{_side_names(team2)} won {label}' + (f', {margin_txt}.' if margin_txt else '.')
+        else:
+            body = f'{label} was halved.'
+        _emit(round_obj,
+              event_key=f'nassaupress:{round_obj.id}:{foursome.id}:{nine}:{start}',
+              body=body,
+              data={'type': 'match_result', 'game': 'nassau_press',
+                    'nine': nine, 'label': label, 'result': result, 'margin': m},
+              push_category='match_result', push_title='Press result')
+
+
+def emit_nassau_press_called(foursome, start_hole):
+    """Announce a manually-called press (from NassauPressView, after the press
+    is added). Names the trailing side that pressed, and the press label."""
+    try:
+        from services.nassau import nassau_summary
+        s = nassau_summary(foursome)
+        if not s:
+            return
+        round_obj = foursome.round
+        nine   = 'front' if start_hole <= 9 else 'back'
+        label  = _press_labels(s.get('presses', [])).get((nine, start_hole), 'Press')
+        # Presser = the side that's DOWN on this nine (only the trailing team
+        # may press). front9/back9 margin: +ve = team1 up, -ve = team2 up.
+        seg    = s.get(f'{nine}9') or {}
+        margin = seg.get('margin') or 0
+        team1  = s.get('teams', {}).get('team1', [])
+        team2  = s.get('teams', {}).get('team2', [])
+        who = _side_names(team2) if margin > 0 else (
+              _side_names(team1) if margin < 0 else '')
+        lead = f'{who} pressed' if who else 'New press'
+        body = f'{lead} on hole {start_hole} — {label} is on.'
+        _emit(round_obj,
+              event_key=f'nassaupresscall:{round_obj.id}:{foursome.id}:{nine}:{start_hole}',
+              body=body,
+              data={'type': 'press_called', 'game': 'nassau',
+                    'nine': nine, 'label': label, 'start_hole': start_hole},
+              push_category='match_result', push_title='New press')
+    except Exception:  # pragma: no cover - defensive
+        logger.exception('emit_nassau_press_called failed (foursome %s)',
+                         foursome.id)
 
 
 def _emit_sixes_results(foursome):

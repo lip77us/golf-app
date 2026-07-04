@@ -174,6 +174,103 @@ class NassauMatchResultTests(TestCase):
                  if m.data.get('unit') in ('back9', 'overall')]), 0)
 
 
+class Front9RecapTests(TestCase):
+    def setUp(self):
+        self.tee = make_tee(make_course())
+        self.round = make_round(self.tee.course, active_games=['skins'])
+        self.paul = make_player('Paul Lipkin', 0, short_name='Paul')
+        self.dana = make_player('Dana Wu', 0, short_name='Dana')
+        self.fs = make_foursome(self.round, [(self.paul, 0), (self.dana, 0)],
+                                tee=self.tee)
+
+    def _play_front(self, upto=9, paul=4, dana=5):
+        for h in range(1, upto + 1):
+            submit_hole(self.fs, h, [(self.paul, paul), (self.dana, dana)])
+            ev.emit_score_events(self.fs, h, [
+                {'player_id': self.paul.id, 'gross_score': paul},
+                {'player_id': self.dana.id, 'gross_score': dana}])
+
+    def test_recap_posts_after_full_front(self):
+        self._play_front(9)
+        recaps = _events(self.round, 'front9_recap')
+        self.assertEqual(len(recaps), 1)
+        body = recaps[0].body
+        self.assertIn('Paul Lipkin 36', body)  # 9 × 4
+        self.assertIn('Dana Wu 45', body)       # 9 × 5
+        self.assertLess(body.index('Paul'), body.index('Dana'))  # lowest first
+
+    def test_no_recap_before_front_complete(self):
+        self._play_front(8)
+        self.assertEqual(len(_events(self.round, 'front9_recap')), 0)
+
+    def test_recap_idempotent(self):
+        self._play_front(9)
+        submit_hole(self.fs, 9, [(self.paul, 4), (self.dana, 5)])  # an edit
+        ev.emit_score_events(self.fs, 9, [
+            {'player_id': self.paul.id, 'gross_score': 4},
+            {'player_id': self.dana.id, 'gross_score': 5}])
+        self.assertEqual(len(_events(self.round, 'front9_recap')), 1)
+
+    def test_withdrawn_front_player_marked_wd_not_blocking(self):
+        # Dana withdraws after hole 4; the recap should still fire (she owes no
+        # holes 5-9) and show her as WD.
+        for h in range(1, 5):
+            submit_hole(self.fs, h, [(self.paul, 4), (self.dana, 5)])
+        dana_m = self.fs.memberships.get(player=self.dana)
+        dana_m.withdrew_after_hole = 4
+        dana_m.save(update_fields=['withdrew_after_hole'])
+        for h in range(5, 10):
+            submit_hole(self.fs, h, [(self.paul, 4)])
+        ev.emit_score_events(self.fs, 9,
+                             [{'player_id': self.paul.id, 'gross_score': 4}])
+        body = _events(self.round, 'front9_recap')[0].body
+        self.assertIn('Paul Lipkin 36', body)
+        self.assertIn('Dana Wu WD', body)
+
+
+class NassauPressEventTests(TestCase):
+    def setUp(self):
+        from services.nassau import setup_nassau
+        self.tee = make_tee(make_course())
+        self.round = make_round(self.tee.course, active_games=['nassau'])
+        self.paul = make_player('Paul Lipkin', 0, short_name='Paul')
+        self.dana = make_player('Dana Wu', 0, short_name='Dana')
+        self.fs = make_foursome(self.round, [(self.paul, 0), (self.dana, 0)],
+                                tee=self.tee)
+        setup_nassau(self.fs, [self.paul.id], [self.dana.id],
+                     handicap_mode='gross', press_mode='manual')
+
+    def test_press_called_names_trailing_side(self):
+        from services.nassau import add_manual_press, calculate_nassau
+        # Paul wins holes 1-2 → Dana is down and presses at hole 3.
+        for h in (1, 2):
+            submit_hole(self.fs, h, [(self.paul, 4), (self.dana, 5)])
+        calculate_nassau(self.fs)
+        add_manual_press(self.fs, 3)
+        ev.emit_nassau_press_called(self.fs, 3)
+        called = _events(self.round, 'press_called')
+        self.assertEqual(len(called), 1)
+        self.assertIn('Dana Wu pressed on hole 3', called[0].body)
+        self.assertIn('F9 Press 1', called[0].body)
+
+    def test_press_decided_posts_result(self):
+        from services.nassau import add_manual_press, calculate_nassau
+        for h in (1, 2):
+            submit_hole(self.fs, h, [(self.paul, 4), (self.dana, 5)])
+        calculate_nassau(self.fs)
+        add_manual_press(self.fs, 3)         # press runs holes 3-9
+        for h in range(3, 10):               # Paul wins them all → press to Paul
+            submit_hole(self.fs, h, [(self.paul, 4), (self.dana, 5)])
+        calculate_nassau(self.fs)
+        ev.emit_score_events(self.fs, 9, [
+            {'player_id': self.paul.id, 'gross_score': 4},
+            {'player_id': self.dana.id, 'gross_score': 5}])
+        decided = [m for m in _events(self.round, 'match_result')
+                   if m.data.get('game') == 'nassau_press']
+        self.assertEqual(len(decided), 1)
+        self.assertIn('Paul Lipkin won F9 Press 1', decided[0].body)
+
+
 class SixesMatchResultTests(TestCase):
     def test_segment_result_uses_player_names(self):
         from services.sixes import setup_sixes, calculate_sixes
