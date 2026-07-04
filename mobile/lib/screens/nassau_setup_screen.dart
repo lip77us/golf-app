@@ -387,8 +387,11 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Name takes on the selected team's colour.
                               Text(m.player.name,
-                                  style: const TextStyle(fontWeight: FontWeight.w500)),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: nassauTeamColor(team))),
                               Text('Course ${m.playingHandicap}',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant)),
@@ -397,23 +400,20 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                         ),
                         SegmentedButton<int>(
                           showSelectedIcon: false,
-                          segments: [
-                            ButtonSegment(
-                                value: 1,
-                                icon: Icon(Icons.circle, size: 12,
-                                    color: nassauTeamColor(1)),
-                                label: const Text('Blue')),
-                            ButtonSegment(
-                                value: 2,
-                                icon: Icon(Icons.circle, size: 12,
-                                    color: nassauTeamColor(2)),
-                                label: const Text('Orange')),
+                          segments: const [
+                            ButtonSegment(value: 1, label: Text('Blue')),
+                            ButtonSegment(value: 2, label: Text('Orange')),
                           ],
                           selected: {team},
                           onSelectionChanged: (s) =>
                               setState(() => _teamMap[pid] = s.first),
                           style: SegmentedButton.styleFrom(
                             visualDensity: VisualDensity.compact,
+                            // Selected fills with the team colour + white text;
+                            // the unselected side is dimmed black.
+                            selectedBackgroundColor: nassauTeamColor(team),
+                            selectedForegroundColor: Colors.white,
+                            foregroundColor: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ]),
