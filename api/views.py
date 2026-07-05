@@ -824,6 +824,13 @@ def _leaderboard_active_games(round_obj, games_dict: dict) -> list:
     """
     active = list(round_obj.active_games or [])
     for key in games_dict:
+        # 'settlement' is a derived cross-game summary, not a real game. Keep it
+        # OUT of active_games so older clients (which tab off active_games and
+        # don't know the key) don't render it as a raw-JSON junk tab. New
+        # clients pin the Settlement tab explicitly from games['settlement'],
+        # exactly like low_net_round.
+        if key == 'settlement':
+            continue
         if key not in active:
             active.append(key)
     return active

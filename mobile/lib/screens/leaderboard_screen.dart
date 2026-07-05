@@ -102,6 +102,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       games.add('__my_foursome__');
     }
 
+    // 3.5. Settlement (cross-game "who owes whom") — pinned explicitly from the
+    // games block, NOT active_games, so older clients that don't know the key
+    // never render it as a junk tab. Sits just left of the Low Net scores.
+    if (lb.games.containsKey('settlement') && !games.contains('settlement')) {
+      games.add('settlement');
+    }
+
     // 4. Low Net (scores) — ALWAYS rightmost; the backend supplies the block for
     // any individual-ball round (not in active_games). Excluded for Triple Cup.
     if (!isTripleCupRound &&
