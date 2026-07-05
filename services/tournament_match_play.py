@@ -675,6 +675,16 @@ def tournament_match_play_summary(foursome) -> dict | None:
         if match.result == 'player2': return match.player1.name
         return None
 
+    def _winner_id(match):
+        if match.result == 'player1': return match.player1_id
+        if match.result == 'player2': return match.player2_id
+        return None
+
+    def _loser_id(match):
+        if match.result == 'player1': return match.player2_id
+        if match.result == 'player2': return match.player1_id
+        return None
+
     def _tie_break_type(match, hole_results):
         if match.status != 'complete':
             return None
@@ -789,12 +799,19 @@ def tournament_match_play_summary(foursome) -> dict | None:
         '3rd': _winner_name(third_match) if third_match and third_match.status == 'complete' else None,
         '4th': _loser_name(third_match)  if third_match and third_match.status == 'complete' else None,
     }
+    place_player_ids = {
+        '1st': _winner_id(final)       if final and final.status == 'complete' else None,
+        '2nd': _loser_id(final)        if final and final.status == 'complete' else None,
+        '3rd': _winner_id(third_match) if third_match and third_match.status == 'complete' else None,
+        '4th': _loser_id(third_match)  if third_match and third_match.status == 'complete' else None,
+    }
 
     payouts_out = [
         {
-            'place'  : place,
-            'player' : place_players.get(place),
-            'amount' : float(payout_cfg.get(place, 0.00)),
+            'place'    : place,
+            'player'   : place_players.get(place),
+            'player_id': place_player_ids.get(place),
+            'amount'   : float(payout_cfg.get(place, 0.00)),
         }
         for place in ('1st', '2nd', '3rd', '4th')
     ]

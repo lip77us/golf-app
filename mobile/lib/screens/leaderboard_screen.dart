@@ -531,6 +531,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       return lb?.cupName ?? 'Cup';
     }
     if (g == '__my_foursome__') return 'My Foursome';
+    if (g == 'settlement') return 'Settlement';
     // Triple Cup is split into an Overview (cup score) + Details (matches).
     if (g == '__triple_cup_overview__') return 'Overview';
     if (g == 'triple_cup') return 'Details';
@@ -685,6 +686,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _WolfGroupCard.new);
       case 'rabbit':
         return _ByGroupView(data: data, builder: _RabbitGroupCard.new);
+      case 'settlement':
+        return _SettlementView(data: data);
       case 'singles_nassau':
         return _ByGroupView(data: data, builder: _CupSinglesGroupCard.new);
       case 'singles_18':
@@ -708,6 +711,202 @@ class _GameView extends StatelessWidget {
       default:
         return _RawJsonView(data: data);
     }
+  }
+}
+
+// ---- Settlement (cross-game "who owes whom") ----
+
+class _SettlementView extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _SettlementView({required this.data});
+
+  /// Signed money text: green when receiving, red when owing, muted at zero.
+  static Widget _money(num v, ThemeData theme, {bool bold = false}) {
+    final d = v.toDouble();
+    final color = d > 0.004
+        ? Colors.green.shade700
+        : d < -0.004
+            ? Colors.red.shade700
+            : theme.colorScheme.onSurfaceVariant;
+    final sign = d > 0.004 ? '+' : (d < -0.004 ? '−' : '');
+    final amt = d.abs();
+    final txt = amt == amt.roundToDouble()
+        ? amt.toStringAsFixed(0)
+        : amt.toStringAsFixed(2);
+    return Text('$sign\$$txt',
+        style: TextStyle(
+            color: color,
+            fontWeight: bold ? FontWeight.bold : FontWeight.w600));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final players =
+        (data['players'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final perGame =
+        (data['per_game'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final transfers =
+        (data['transfers'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final uncovered =
+        (data['uncovered_games'] as List? ?? const []).map((e) => '$e').toList();
+
+    if (players.isEmpty) {
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.all(24), child: Text('No settlement yet.')));
+    }
+
+    TextStyle? header() => theme.textTheme.labelLarge?.copyWith(
+        fontWeight: FontWeight.bold, color: theme.colorScheme.primary);
+
+    String nameOf(Map<String, dynamic> p) {
+      final s = (p['short_name'] ?? '').toString();
+      return s.isNotEmpty ? s : (p['name'] ?? '').toString();
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        // ── Bottom line: each player's net for the whole round. ──
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Net for the round', style: header()),
+              const SizedBox(height: 4),
+              ...players.map((p) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(children: [
+                      Expanded(
+                          child: Text((p['name'] ?? '').toString(),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600))),
+                      _money((p['net'] as num?) ?? 0, theme, bold: true),
+                    ]),
+                  )),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Settle up: minimal set of transfers. ──
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Settle up', style: header()),
+              const SizedBox(height: 4),
+              if (transfers.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text('All square — nobody owes anything.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                )
+              else
+                ...transfers.map((t) {
+                  final amt = (t['amount'] as num?)?.toDouble() ?? 0;
+                  final amtTxt = amt == amt.roundToDouble()
+                      ? amt.toStringAsFixed(0)
+                      : amt.toStringAsFixed(2);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text.rich(TextSpan(children: [
+                          TextSpan(
+                              text: (t['from_name'] ?? '').toString(),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                          const TextSpan(text: '  →  '),
+                          TextSpan(
+                              text: (t['to_name'] ?? '').toString(),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                        ])),
+                      ),
+                      Text('\$$amtTxt',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary)),
+                    ]),
+                  );
+                }),
+            ]),
+          ),
+        ),
+
+        // ── Per-game breakdown (only when there's more than one game). ──
+        if (perGame.length > 1) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('By game', style: header()),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columnSpacing: 22,
+                      headingRowHeight: 34,
+                      dataRowMinHeight: 32,
+                      dataRowMaxHeight: 40,
+                      columns: [
+                        const DataColumn(label: Text('Player')),
+                        for (final g in perGame)
+                          DataColumn(
+                              label: Text((g['label'] ?? '').toString()),
+                              numeric: true),
+                        const DataColumn(label: Text('Total'), numeric: true),
+                      ],
+                      rows: [
+                        for (final p in players)
+                          DataRow(cells: [
+                            DataCell(Text(nameOf(p))),
+                            for (final g in perGame)
+                              DataCell(Align(
+                                alignment: Alignment.centerRight,
+                                child: _money(
+                                    ((g['nets'] as Map?)?[
+                                                p['player_id'].toString()]
+                                            as num?) ??
+                                        0,
+                                    theme),
+                              )),
+                            DataCell(Align(
+                                alignment: Alignment.centerRight,
+                                child: _money((p['net'] as num?) ?? 0, theme,
+                                    bold: true))),
+                          ]),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+
+        // ── Games we can't net per-player yet (team games). ──
+        if (uncovered.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              'Not included: ${uncovered.map(gameDisplayName).join(', ')} '
+              '(settle on its own tab).',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ],
+        const SizedBox(height: 24),
+      ],
+    );
   }
 }
 

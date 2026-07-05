@@ -803,6 +803,14 @@ def _build_leaderboard(round_obj: Round) -> dict:
             ],
         }
 
+    # Cross-game settlement ("who owes whom") — nets every per-player-settleable
+    # game into one summary.  None when the round has no nettable game (e.g. a
+    # team-only Nassau round), in which case there's no Settlement tab.
+    from services.settlement import round_settlement
+    settlement = round_settlement(round_obj)
+    if settlement is not None:
+        games['settlement'] = {'label': 'Settlement', **settlement}
+
     return games
 
 
