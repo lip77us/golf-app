@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.2.0)
+# App Store listing copy — Halved (v2.3.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -27,8 +27,8 @@ vegas,wolf,sixes,stableford,spots,handicap,foursome,matchplay,scorecard,tourname
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
 ## Promotional text (170 max, editable without review)
-Score Skins, Nassau, Vegas, Wolf and more — casual foursome or full tournament.
-Live results, follow your friends' rounds, group chat, and an easy settle-up.
+Score Skins, Nassau, Vegas, Wolf and more — then let the new Settlement tab show
+exactly who owes whom. Live results, group chat, and a one-tap settle-up.
 
 ## Description (4000 max)
 Halved keeps score for the games golfers really play. Set up a round, pick your
@@ -79,13 +79,26 @@ Score net (with an adjustable handicap percentage), gross, or
 strokes-off-the-low-player — set per game to match how your group plays.
 
 SETTLE UP
-At the end of the round, Halved totals everything and shows exactly who owes
-what — settle up in seconds, with no spreadsheets and no napkin math.
+At the end of the round, the Settlement tab nets every game into one summary and
+shows exactly who owes whom — plus the fewest payments to square up. Settle in
+seconds, with no spreadsheets and no napkin math.
 
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
 
-## What's New (v2.2.0)
+## What's New (v2.3.0)
+See exactly who owes whom:
+
+• New Settlement tab — nets every game in your round into one who-owes-whom
+  summary, and shows the fewest payments needed to settle up.
+• Choose how each game splits the pot — Pool, Pay the leader, or Pay everyone
+  above you — now consistent across Skins, Spots and Points 5-3-1, with an
+  optional cap on losses.
+• Cleaner, unified game-setup screens.
+• Simpler Nassau setup — presses and variants tucked under Advanced.
+• Fixes and polish across Nassau, Stableford and the scorecard.
+
+## What's New (v2.2.0) — previous
 A new side game and quicker setup:
 
 • New: Spots — track one-putts, sandies, barkies, or whatever your group counts,
