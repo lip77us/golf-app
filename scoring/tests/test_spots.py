@@ -51,6 +51,20 @@ class SpotsEngineTests(TestCase):
         self.assertEqual(net['D'], -3.0)
         self.assertAlmostEqual(sum(net.values()), 0.0)
 
+    def test_per_point_pay_leader(self):
+        """Per-spot 'first' — only the leader collects each player's deficit."""
+        setup_spots(self.fs, bet_unit=Decimal('1'),
+                    payout_style='per_point', per_point_mode='first')
+        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': 2}])
+        tally_spots(self.fs, 2, [{'player_id': self.pid['B'], 'count': 1}])
+        net = self._net(spots_summary(self.fs))
+        # A leads with 2 spots; each other pays their deficit × $1.
+        self.assertEqual(net['A'], 5.0)    # collects 1 + 2 + 2
+        self.assertEqual(net['B'], -1.0)
+        self.assertEqual(net['C'], -2.0)
+        self.assertEqual(net['D'], -2.0)
+        self.assertAlmostEqual(sum(net.values()), 0.0)
+
     def test_negative_spot_reverses_payment(self):
         # A negative spot = a penalty: the player pays everyone else.
         setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')

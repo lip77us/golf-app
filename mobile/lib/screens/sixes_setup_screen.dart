@@ -21,7 +21,6 @@ import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/golf_primary_button.dart';
-import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/section_card.dart';
 import '../widgets/max_liability_note.dart';
@@ -432,6 +431,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       // ── Stake (round-level, editable here) ──
                       StakeField(
                         controller: _betCtrl,
+                        label: 'Stake per match',
                         onChanged: (v) => setState(() => _stakeOk = v),
                       ),
                       MaxLiabilityNote(

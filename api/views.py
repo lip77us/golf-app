@@ -4365,9 +4365,11 @@ class Points531SetupView(APIView):
         data = ser.validated_data
         setup_points_531(
             foursome,
-            handicap_mode = data.get('handicap_mode', 'net'),
-            net_percent   = data.get('net_percent', 100),
-            loss_cap      = data.get('loss_cap'),
+            handicap_mode  = data.get('handicap_mode', 'net'),
+            net_percent    = data.get('net_percent', 100),
+            loss_cap       = data.get('loss_cap'),
+            payout_style   = data.get('payout_style', 'per_point'),
+            per_point_mode = data.get('per_point_mode', 'average'),
         )
         # Score any pre-existing hole entries right away so the first
         # UI fetch isn't blank.  calculate_points_531 is a no-op if
@@ -4508,10 +4510,14 @@ class SkinsSetupView(APIView):
         d = ser.validated_data
         setup_skins(
             foursome,
-            handicap_mode = d.get('handicap_mode', 'net'),
-            net_percent   = d.get('net_percent', 100),
-            carryover     = d.get('carryover', True),
-            allow_junk    = d.get('allow_junk', False),
+            handicap_mode  = d.get('handicap_mode', 'net'),
+            net_percent    = d.get('net_percent', 100),
+            carryover      = d.get('carryover', True),
+            allow_junk     = d.get('allow_junk', False),
+            payout_style   = d.get('payout_style', 'pool'),
+            per_point_mode = d.get('per_point_mode', 'first'),
+            per_point_rate = d.get('per_point_rate', 0),
+            loss_cap       = d.get('loss_cap'),
         )
         calculate_skins(foursome)
         return Response(skins_summary(foursome), status=status.HTTP_201_CREATED)
@@ -4591,8 +4597,10 @@ class SpotsSetupView(APIView):
         d = ser.validated_data
         setup_spots(
             foursome,
-            bet_unit     = d.get('bet_unit'),
-            payout_style = d.get('payout_style', 'pay_around'),
+            bet_unit       = d.get('bet_unit'),
+            payout_style   = d.get('payout_style', 'per_point'),
+            per_point_mode = d.get('per_point_mode', 'all'),
+            loss_cap       = d.get('loss_cap'),
         )
         return Response(spots_summary(foursome), status=status.HTTP_201_CREATED)
 

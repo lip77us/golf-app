@@ -72,7 +72,10 @@ from core.models import HandicapMode, MatchStatus
 from games.models import Points531Game, Points531PlayerHoleResult
 from scoring.handicap import build_score_index
 from scoring.models import HoleScore
-from services.wager import PER_POINT, VS_AVERAGE, WagerConfig, settle
+from services.wager import (
+    PER_POINT, POOL, PROPORTIONAL, VS_AVERAGE, PAY_ABOVE, PAY_WINNER,
+    WagerConfig, settle,
+)
 from tournament.models import Foursome
 
 
@@ -86,6 +89,8 @@ def setup_points_531(
     handicap_mode: str = HandicapMode.NET,
     net_percent: int = 100,
     loss_cap=None,
+    payout_style: str = 'per_point',
+    per_point_mode: str = 'average',
 ) -> 'Points531Game':
     """
     Create (or replace) the Points 5-3-1 game for a foursome.
@@ -113,12 +118,19 @@ def setup_points_531(
         if loss_cap < 0:
             loss_cap = None
 
+    if payout_style not in ('pool', 'per_point'):
+        payout_style = 'per_point'
+    if per_point_mode not in ('average', 'all', 'first'):
+        per_point_mode = 'average'
+
     game = Points531Game.objects.create(
-        foursome      = foursome,
-        handicap_mode = handicap_mode,
-        net_percent   = net_percent,
-        loss_cap      = loss_cap,
-        status        = MatchStatus.PENDING,
+        foursome       = foursome,
+        handicap_mode  = handicap_mode,
+        net_percent    = net_percent,
+        loss_cap       = loss_cap,
+        payout_style   = payout_style,
+        per_point_mode = per_point_mode,
+        status         = MatchStatus.PENDING,
     )
     return game
 
@@ -478,18 +490,28 @@ def points_531_summary(foursome) -> dict:
         for m in real_members
     }
 
-    # Money via the shared wager engine. 5-3-1 is the constant-baseline
-    # case of vs-average settlement: because a hole is only scored once
-    # all three players reported, holes_played is uniform, so total/n is
-    # identically 3 × holes_played — same result the old
+    # Money via the shared wager engine. The classic 5-3-1 is the
+    # constant-baseline case of vs-average settlement: because a hole is
+    # only scored once all three players reported, holes_played is uniform,
+    # so total/n is identically 3 × holes_played — same result the old
     # (points − 3 × holes) × bet_unit produced, but now the optional
-    # loss_cap (clip losers, rescale winners pro-rata) applies too.
-    cfg = WagerConfig(
-        funding    = PER_POINT,
-        settlement = VS_AVERAGE,
-        rate       = Decimal(str(bet_unit)),
-        cap        = game.loss_cap,
-    )
+    # loss_cap (clip losers, rescale winners pro-rata) applies too. The
+    # payout_style / per_point_mode knobs also allow pool / pay-leader /
+    # pay-above settlements on the same 5-3-1 points; bet_unit is the rate.
+    if game.payout_style == 'pool':
+        cfg = WagerConfig(
+            funding    = POOL,
+            settlement = PROPORTIONAL,
+            entry      = Decimal(str(bet_unit)),
+        )
+    else:
+        _MODE = {'average': VS_AVERAGE, 'all': PAY_ABOVE, 'first': PAY_WINNER}
+        cfg = WagerConfig(
+            funding    = PER_POINT,
+            settlement = _MODE.get(game.per_point_mode, VS_AVERAGE),
+            rate       = Decimal(str(bet_unit)),
+            cap        = game.loss_cap,
+        )
     payouts = settle(
         {pid: points_by_pid.get(pid, Decimal('0')) for pid in by_pid},
         cfg,
@@ -520,8 +542,10 @@ def points_531_summary(foursome) -> dict:
         'players' : players_out,
         'holes'   : holes_out,
         'money'   : {
-            'bet_unit'    : bet_unit,
-            'par_per_hole': par_per_hole,
-            'loss_cap'    : float(game.loss_cap) if game.loss_cap is not None else None,
+            'bet_unit'      : bet_unit,
+            'par_per_hole'  : par_per_hole,
+            'loss_cap'      : float(game.loss_cap) if game.loss_cap is not None else None,
+            'payout_style'  : game.payout_style,
+            'per_point_mode': game.per_point_mode,
         },
     }

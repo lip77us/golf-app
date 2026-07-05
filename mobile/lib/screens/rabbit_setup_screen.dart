@@ -291,6 +291,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
 
           StakeField(
             controller: _betCtrl,
+            label: 'Stake per match',
             onChanged: (v) => setState(() => _stakeOk = v)),
           const SizedBox(height: 16),
 

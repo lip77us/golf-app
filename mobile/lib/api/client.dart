@@ -1165,16 +1165,20 @@ class ApiClient {
   /// summary so the caller doesn't need a second GET.
   Future<Points531Summary> postPoints531Setup(
     int foursomeId, {
-    String  handicapMode = 'net',
-    int     netPercent   = 100,
+    String  handicapMode  = 'net',
+    int     netPercent    = 100,
     double? lossCap,
+    String  payoutStyle   = 'per_point',
+    String  perPointMode  = 'average',
   }) async {
     final data = await _post('/foursomes/$foursomeId/points_531/setup/', {
-      'handicap_mode': handicapMode,
-      'net_percent'  : netPercent,
+      'handicap_mode' : handicapMode,
+      'net_percent'   : netPercent,
       // null = uncapped; the backend treats a missing/null cap as the
       // 36×bet_unit theoretical max (never binds).
-      'loss_cap'     : lossCap,
+      'loss_cap'      : lossCap,
+      'payout_style'  : payoutStyle,
+      'per_point_mode': perPointMode,
     });
     return Points531Summary.fromJson(data as Map<String, dynamic>);
   }
@@ -1255,12 +1259,20 @@ class ApiClient {
     int    netPercent   = 100,
     bool   carryover    = true,
     bool   allowJunk    = false,
+    String  payoutStyle  = 'pool',
+    String  perPointMode = 'first',
+    double  perPointRate = 0.0,
+    double? lossCap,
   }) async {
     final data = await _post('/foursomes/$foursomeId/skins/setup/', {
-      'handicap_mode': handicapMode,
-      'net_percent'  : netPercent,
-      'carryover'    : carryover,
-      'allow_junk'   : allowJunk,
+      'handicap_mode' : handicapMode,
+      'net_percent'   : netPercent,
+      'carryover'     : carryover,
+      'allow_junk'    : allowJunk,
+      'payout_style'  : payoutStyle,
+      'per_point_mode': perPointMode,
+      'per_point_rate': perPointRate,
+      if (lossCap != null) 'loss_cap': lossCap,
     });
     return SkinsSummary.fromJson(data as Map<String, dynamic>);
   }
@@ -1294,11 +1306,15 @@ class ApiClient {
   Future<SpotsSummary> postSpotsSetup(
     int foursomeId, {
     double? betUnit,
-    String  payoutStyle = 'pay_around',
+    String  payoutStyle  = 'per_point',
+    String  perPointMode = 'all',
+    double? lossCap,
   }) async {
     final data = await _post('/foursomes/$foursomeId/spots/setup/', {
       if (betUnit != null) 'bet_unit': betUnit.toStringAsFixed(2),
-      'payout_style': payoutStyle,
+      'payout_style'  : payoutStyle,
+      'per_point_mode': perPointMode,
+      if (lossCap != null) 'loss_cap': lossCap,
     });
     return SpotsSummary.fromJson(data as Map<String, dynamic>);
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
+import '../ui_labels.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -152,9 +153,9 @@ class _RoundScreenState extends State<RoundScreen> {
   /// generic label for multi-game combos / unknown games.
   String _casualTitle(List<String> games) {
     if (games.length == 1) {
-      return gameMeta(games.first)?.displayName ?? 'Casual Round';
+      return gameMeta(games.first)?.displayName ?? kCasualRoundLabel;
     }
-    return 'Casual Round';
+    return kCasualRoundLabel;
   }
 
   Widget _buildBody(BuildContext context, RoundProvider rp, int? myId) {

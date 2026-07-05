@@ -48,6 +48,8 @@ Workflow
    mobile UI and the leaderboard.
 """
 
+from decimal import Decimal
+
 from django.db import transaction
 
 from core.models import HandicapMode, MatchStatus
@@ -67,6 +69,10 @@ def setup_skins(
     net_percent:   int  = 100,
     carryover:     bool = True,
     allow_junk:    bool = False,
+    payout_style:   str = 'pool',
+    per_point_mode: str = 'first',
+    per_point_rate      = 0,
+    loss_cap            = None,
 ) -> 'SkinsGame':
     """
     Create (or replace) the Skins game for a foursome.
@@ -74,17 +80,24 @@ def setup_skins(
     Deleting the old SkinsGame cascades to all SkinsHoleResult and
     SkinsPlayerHoleResult rows, so the game starts fresh each time.
     net_percent is clamped to [0, 200].
+
+    payout_style 'pool' keeps the classic ante-pool economics; 'per_point'
+    settles total skins through services.wager at per_point_mode/rate.
     """
     SkinsGame.objects.filter(foursome=foursome).delete()
     net_percent = max(0, min(200, int(net_percent)))
 
     game = SkinsGame.objects.create(
-        foursome      = foursome,
-        handicap_mode = handicap_mode,
-        net_percent   = net_percent,
-        carryover     = carryover,
-        allow_junk    = allow_junk,
-        status        = MatchStatus.PENDING,
+        foursome       = foursome,
+        handicap_mode  = handicap_mode,
+        net_percent    = net_percent,
+        carryover      = carryover,
+        allow_junk     = allow_junk,
+        payout_style   = payout_style if payout_style in ('pool', 'per_point') else 'pool',
+        per_point_mode = per_point_mode if per_point_mode in ('average', 'all', 'first') else 'first',
+        per_point_rate = Decimal(str(per_point_rate or 0)),
+        loss_cap       = (Decimal(str(loss_cap)) if loss_cap not in (None, '') else None),
+        status         = MatchStatus.PENDING,
     )
     return game
 
@@ -492,10 +505,17 @@ def skins_summary(foursome) -> dict:
     plan        = _skins_withdrawal_plan(real_members)
     hr_by_hole  = {hr.hole_number: hr for hr in hole_results}
     payout_by_pid: dict = {m.player_id: 0.0 for m in real_members}
+    # What each player actually anted (pool mode) — one bet_unit spread over 18
+    # holes, only for the holes they were in play. Drives the signed net below.
+    contribution_by_pid: dict = {m.player_id: 0.0 for m in real_members}
     pool_at_risk = 0.0
     for seg in plan['segments']:
         seg_pot      = len(seg['holes']) * len(seg['roster']) * bet_unit / 18.0
         pool_at_risk += seg_pot
+        per_player_ante = len(seg['holes']) * bet_unit / 18.0
+        for pid in seg['roster']:
+            if pid in contribution_by_pid:
+                contribution_by_pid[pid] += per_player_ante
         seg_skins: dict = {}
         seg_total = 0
         for hole_num in seg['holes']:
@@ -512,6 +532,29 @@ def skins_summary(foursome) -> dict:
             for pid, sk in seg_skins.items():
                 if pid in payout_by_pid:
                     payout_by_pid[pid] += seg_pot * sk / seg_total
+
+    # ── Signed net per player (settlement-ready, zero-sum) ────────────────────
+    # Pool: net = pot share − ante (WD-aware, preserves the classic economics).
+    # Per-skin: settle total skins through the shared wager engine (pay the
+    # leader / pay everyone above you / vs the field average), which is itself
+    # zero-sum; 'payout' then mirrors the signed net (no ante pool).
+    if game.payout_style == 'per_point':
+        from services.wager import (settle as _wager_settle, WagerConfig,
+                                    PER_POINT, VS_AVERAGE, PAY_ABOVE, PAY_WINNER)
+        _MODE = {'average': VS_AVERAGE, 'all': PAY_ABOVE, 'first': PAY_WINNER}
+        cfg = WagerConfig(
+            funding    = PER_POINT,
+            settlement = _MODE.get(game.per_point_mode, PAY_WINNER),
+            rate       = Decimal(str(game.per_point_rate or 0)),
+            cap        = (Decimal(str(game.loss_cap))
+                          if game.loss_cap is not None else None),
+        )
+        net_by_pid = {pid: float(v)
+                      for pid, v in _wager_settle(dict(total_skins_by_pid), cfg).items()}
+        payout_by_pid = {pid: net_by_pid.get(pid, 0.0) for pid in payout_by_pid}
+    else:
+        net_by_pid = {pid: round(payout_by_pid[pid] - contribution_by_pid[pid], 2)
+                      for pid in payout_by_pid}
 
     # Net strokes actually in play for each foursome member — drives
     # the "(N)" label on the scorecard so observers can see whose
@@ -543,6 +586,8 @@ def skins_summary(foursome) -> dict:
             'junk_skins'  : junk_skins[pid],
             'total_skins' : ts,
             'payout'      : round(payout_by_pid[pid], 2),
+            # Signed, zero-sum net for the Settlement view (+received / −owed).
+            'net'         : round(net_by_pid[pid], 2),
             'withdrew_after_hole': m.withdrew_after_hole,
             'phcp_in_play': _phcp_in_play(m.playing_handicap or 0),
         })
@@ -656,4 +701,11 @@ def skins_summary(foursome) -> dict:
             'pool_at_risk': round(pool_at_risk, 2),
             'total_skins' : grand_total,
         },
+        # Payout mode (2-axis, maps to services.wager). Drives the settlement
+        # math above and the setup UI.
+        'payout_style'  : game.payout_style,
+        'per_point_mode': game.per_point_mode,
+        'per_point_rate': float(game.per_point_rate or 0),
+        'loss_cap'      : (float(game.loss_cap)
+                           if game.loss_cap is not None else None),
     }

@@ -2244,6 +2244,8 @@ class Points531Summary {
   /// 36 × betUnit (the theoretical 5-3-1 max loss), so the setup screen
   /// pre-fills 36 × betUnit and only stores a value when the user lowers it.
   final double? lossCap;
+  final String  payoutStyle;   // 'pool' | 'per_point'
+  final String  perPointMode;  // 'average' | 'all' | 'first'
 
   const Points531Summary({
     required this.status,
@@ -2254,6 +2256,8 @@ class Points531Summary {
     required this.betUnit,
     required this.parPerHole,
     this.lossCap,
+    this.payoutStyle  = 'per_point',
+    this.perPointMode = 'average',
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -2277,6 +2281,8 @@ class Points531Summary {
       betUnit:    (money['bet_unit']     as num?)?.toDouble() ?? 1.0,
       parPerHole: money['par_per_hole']  as int?    ?? 3,
       lossCap:    (money['loss_cap']     as num?)?.toDouble(),
+      payoutStyle:  money['payout_style']   as String? ?? 'per_point',
+      perPointMode: money['per_point_mode'] as String? ?? 'average',
     );
   }
 }
@@ -2293,7 +2299,8 @@ class SkinsPlayerTotal {
   final int    skinsWon;    // regular per-hole skins
   final int    junkSkins;   // manually entered junk skins
   final int    totalSkins;  // skinsWon + junkSkins
-  final double payout;      // share of the pool
+  final double payout;      // share of the pool (pool mode) / signed net (per-skin)
+  final double net;         // signed, zero-sum net (+received / −owed) for Settlement
 
   const SkinsPlayerTotal({
     required this.playerId,
@@ -2303,6 +2310,7 @@ class SkinsPlayerTotal {
     required this.junkSkins,
     required this.totalSkins,
     required this.payout,
+    this.net = 0.0,
   });
 
   factory SkinsPlayerTotal.fromJson(Map<String, dynamic> j) =>
@@ -2314,6 +2322,7 @@ class SkinsPlayerTotal {
         junkSkins:  j['junk_skins']  as int? ?? 0,
         totalSkins: j['total_skins'] as int? ?? 0,
         payout:     (j['payout']     as num?)?.toDouble() ?? 0.0,
+        net:        (j['net']        as num?)?.toDouble() ?? 0.0,
       );
 }
 
@@ -2382,6 +2391,11 @@ class SkinsSummary {
   final double betUnit;
   final double pool;      // num_players × bet_unit
   final int    totalSkins; // grand total skins won (denominator)
+  // Payout mode (2-axis; maps to the shared wager engine).
+  final String  payoutStyle;   // 'pool' | 'per_point'
+  final String  perPointMode;  // 'average' | 'all' | 'first'
+  final double  perPointRate;  // $/skin (per_point)
+  final double? lossCap;       // per-player loss cap (per_point); null = uncapped
 
   const SkinsSummary({
     required this.status,
@@ -2394,6 +2408,10 @@ class SkinsSummary {
     required this.betUnit,
     required this.pool,
     required this.totalSkins,
+    this.payoutStyle  = 'pool',
+    this.perPointMode = 'first',
+    this.perPointRate = 0.0,
+    this.lossCap,
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -2418,6 +2436,10 @@ class SkinsSummary {
       betUnit:    (money['bet_unit']    as num?)?.toDouble() ?? 1.0,
       pool:       (money['pool']        as num?)?.toDouble() ?? 0.0,
       totalSkins: (money['total_skins'] as num?)?.toInt()   ?? 0,
+      payoutStyle:  j['payout_style']?.toString()  ?? 'pool',
+      perPointMode: j['per_point_mode']?.toString() ?? 'first',
+      perPointRate: (j['per_point_rate'] as num?)?.toDouble() ?? 0.0,
+      lossCap:      (j['loss_cap'] as num?)?.toDouble(),
     );
   }
 }
@@ -2485,7 +2507,9 @@ class SpotsHole {
 /// Full summary for a Spots game — mirrors the Python spots_summary() shape.
 class SpotsSummary {
   final String status;        // 'pending' | 'in_progress' | 'complete'
-  final String payoutStyle;   // 'pay_around' | 'pool'
+  final String payoutStyle;   // 'pool' | 'per_point'
+  final String perPointMode;  // 'average' | 'all' | 'first'
+  final double? lossCap;
   final List<SpotsPlayerTotal> players;
   final List<SpotsHole>        holes;
   final double betUnit;
@@ -2494,6 +2518,8 @@ class SpotsSummary {
   const SpotsSummary({
     required this.status,
     required this.payoutStyle,
+    this.perPointMode = 'all',
+    this.lossCap,
     required this.players,
     required this.holes,
     required this.betUnit,
@@ -2515,7 +2541,9 @@ class SpotsSummary {
     final money = j['money'] as Map<String, dynamic>? ?? {};
     return SpotsSummary(
       status:      j['status']       as String? ?? 'pending',
-      payoutStyle: j['payout_style'] as String? ?? 'pay_around',
+      payoutStyle: j['payout_style'] as String? ?? 'per_point',
+      perPointMode: j['per_point_mode'] as String? ?? 'all',
+      lossCap:     (j['loss_cap'] as num?)?.toDouble(),
       players: (j['players'] as List? ?? [])
           .map((p) => SpotsPlayerTotal.fromJson(p as Map<String, dynamic>))
           .toList(),

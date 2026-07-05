@@ -90,3 +90,47 @@ class Points531SettlementTests(TestCase):
     def test_negative_cap_is_treated_as_uncapped(self):
         game = setup_points_531(self.fs, loss_cap=Decimal("-10"))
         self.assertIsNone(game.loss_cap)
+
+    # --- payout modes (2-axis) --------------------------------------------
+    # Fixture points: Ann 15, Bob 9, Cy 3 (total 27, mean 9) at $1/pt.
+
+    def test_default_is_per_point_average(self):
+        game = setup_points_531(self.fs)
+        self.assertEqual(game.payout_style, 'per_point')
+        self.assertEqual(game.per_point_mode, 'average')
+        summary = points_531_summary(self.fs)
+        self.assertEqual(summary["money"]["payout_style"], 'per_point')
+        self.assertEqual(summary["money"]["per_point_mode"], 'average')
+
+    def test_pay_above_is_n_times_vs_average(self):
+        # PAY_ABOVE: (n·p − total)·rate → Ann +18, Bob 0, Cy −18.
+        setup_points_531(self.fs, payout_style='per_point', per_point_mode='all')
+        self._score_three_holes()
+        money = self._money(points_531_summary(self.fs))
+        self.assertEqual(money["Ann"], 18.0)
+        self.assertEqual(money["Bob"], 0.0)
+        self.assertEqual(money["Cy"], -18.0)
+        self.assertAlmostEqual(sum(money.values()), 0.0)
+
+    def test_pay_leader_only_the_top_collects(self):
+        # PAY_WINNER: Ann leads (15); Bob pays 6, Cy pays 12; Ann +18.
+        setup_points_531(self.fs, payout_style='per_point', per_point_mode='first')
+        self._score_three_holes()
+        money = self._money(points_531_summary(self.fs))
+        self.assertEqual(money["Ann"], 18.0)
+        self.assertEqual(money["Bob"], -6.0)
+        self.assertEqual(money["Cy"], -12.0)
+        self.assertAlmostEqual(sum(money.values()), 0.0)
+
+    def test_pool_splits_pot_by_points_share(self):
+        # POOL: ante $1 each (pot $3), split 15:9:3 → 1.67 / 1.00 / 0.33
+        # gross; net ±ante. Zero-sum after penny reconciliation.
+        setup_points_531(self.fs, payout_style='pool')
+        self._score_three_holes()
+        summary = points_531_summary(self.fs)
+        money = self._money(summary)
+        self.assertEqual(summary["money"]["payout_style"], 'pool')
+        self.assertEqual(money["Bob"], 0.0)
+        self.assertGreater(money["Ann"], 0.0)
+        self.assertLess(money["Cy"], 0.0)
+        self.assertAlmostEqual(sum(money.values()), 0.0)

@@ -6,6 +6,7 @@
 /// 2–4 real players.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
@@ -32,7 +33,11 @@ class SpotsSetupScreen extends StatefulWidget {
 class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
   final _betCtrl = TextEditingController();
   bool   _stakeOk = false;
-  String _payoutStyle = 'pay_around';
+  String _payoutStyle  = 'per_point';   // 'pool' | 'per_point'
+  String _perPointMode = 'all';         // 'average' | 'all' | 'first'
+  bool _advancedOpen = false;
+  bool _capEnabled   = false;
+  final _capCtrl = TextEditingController();
 
   bool    _loading  = true;
   bool    _starting = false;
@@ -48,6 +53,7 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
   @override
   void dispose() {
     _betCtrl.dispose();
+    _capCtrl.dispose();
     super.dispose();
   }
 
@@ -66,8 +72,14 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
       }
       setState(() {
         if (configured) {
-          _editing     = true;
-          _payoutStyle = summary.payoutStyle;
+          _editing      = true;
+          _payoutStyle  = summary.payoutStyle;
+          _perPointMode = summary.perPointMode;
+          if (summary.lossCap != null) {
+            _capEnabled   = true;
+            _advancedOpen = true;
+            _capCtrl.text = summary.lossCap!.toStringAsFixed(0);
+          }
           final b = summary.betUnit;
           _betCtrl.text =
               b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
@@ -104,8 +116,12 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
       final bet    = double.tryParse(_betCtrl.text.trim());
       await client.postSpotsSetup(
         widget.foursomeId,
-        betUnit:     bet,
-        payoutStyle: _payoutStyle,
+        betUnit:      bet,
+        payoutStyle:  _payoutStyle,
+        perPointMode: _perPointMode,
+        lossCap: (_payoutStyle == 'per_point' && _capEnabled)
+            ? (double.tryParse(_capCtrl.text.trim()) ?? 0.0)
+            : null,
       );
       await rp.loadSpots(widget.foursomeId);
       if (widget.returnToHub) {
@@ -158,32 +174,112 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('How the money settles',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-          const SizedBox(height: 8),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'pay_around', label: Text('Pay around')),
-              ButtonSegment(value: 'pool',       label: Text('Pool')),
-            ],
-            selected: {_payoutStyle},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) =>
-                setState(() => _payoutStyle = s.first),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _payoutStyle == 'pay_around'
-                ? 'Each spot is paid to the achiever by every other player.'
-                : 'Everyone antes the stake; the pot splits by spots won.',
-            style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant),
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(color: theme.colorScheme.outline),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('How the money settles',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary)),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 'pool',      label: Text('Pool')),
+                      ButtonSegment(value: 'per_point', label: Text('Per spot')),
+                    ],
+                    selected: {_payoutStyle},
+                    onSelectionChanged: (s) =>
+                        setState(() => _payoutStyle = s.first),
+                  ),
+                  const SizedBox(height: 8),
+                  if (_payoutStyle == 'pool')
+                    Text(
+                        'Everyone antes the spot value; the pot splits by '
+                        'spots won.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant))
+                  else ...[
+                    SegmentedButton<String>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(value: 'average', label: Text('vs Average')),
+                        ButtonSegment(value: 'all',     label: Text('Above you')),
+                        ButtonSegment(value: 'first',   label: Text('Just leader')),
+                      ],
+                      selected: {_perPointMode},
+                      onSelectionChanged: (s) =>
+                          setState(() => _perPointMode = s.first),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      switch (_perPointMode) {
+                        'first' => 'Only the leader collects — everyone else pays '
+                            'the leader their spot deficit × the spot value.',
+                        'all' => 'Each spot pays the achiever the spot value from '
+                            'every other player ("pay around").',
+                        _ => 'Settle vs the field average — spots above the '
+                            'average win, below owe, at the spot value.',
+                      },
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    Theme(
+                      data: theme.copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        initiallyExpanded: _advancedOpen,
+                        onExpansionChanged: (v) => _advancedOpen = v,
+                        childrenPadding: EdgeInsets.zero,
+                        title: Text('Advanced', style: theme.textTheme.bodyMedium),
+                        children: [
+                          SwitchListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text("Cap each player's losses"),
+                            value: _capEnabled,
+                            onChanged: (v) => setState(() => _capEnabled = v),
+                          ),
+                          if (_capEnabled)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: SizedBox(
+                                width: 180,
+                                child: TextField(
+                                  controller: _capCtrl,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly
+                                  ],
+                                  decoration: const InputDecoration(
+                                    labelText: 'Max loss',
+                                    prefixText: '\$ ',
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           StakeField(
             controller: _betCtrl,
-            label: 'Value of one spot',
+            label: _payoutStyle == 'pool' ? 'Ante per player' : 'Value per spot',
             onChanged: (v) => setState(() => _stakeOk = v),
           ),
           const SizedBox(height: 16),

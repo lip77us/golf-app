@@ -16,9 +16,9 @@
 /// error instead of silently breaking the 3-way tie-splitting math.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -53,6 +53,13 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
   // other casual-game setup screens (Sixes, Nassau, Skins).
   String _mode       = 'strokes_off';
   int    _netPercent = 100;
+
+  /// Points 5-3-1 settles PER POINT — its points always sum to a fixed total
+  /// (9/hole), so a proportional "pool" is degenerate (there is no pool for
+  /// points). The per-point stake IS the rate; default is the classic
+  /// vs-average settlement.
+  String _perPointMode = 'average';     // 'average' | 'all' | 'first'
+  bool _advancedOpen = false;
 
   final TextEditingController _betCtrl = TextEditingController();
   /// True once a stake is entered or "no stakes" is chosen (gates Start).
@@ -142,9 +149,10 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
         // state as every other casual-game setup screen.  Once a game
         // exists, adopt its saved settings so editing starts from them.
         if (configured) {
-          _editing    = true;
-          _mode       = _summary!.handicapMode;
-          _netPercent = _summary!.netPercent;
+          _editing      = true;
+          _mode         = _summary!.handicapMode;
+          _netPercent   = _summary!.netPercent;
+          _perPointMode = _summary!.perPointMode;
           // Adopt the saved cap state (null = the user chose uncapped).
           _capEnabled = _summary!.lossCap != null;
           if (_summary!.lossCap != null) {
@@ -192,8 +200,10 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
 
       await client.postPoints531Setup(
         widget.foursomeId,
-        handicapMode: _mode,
-        netPercent:   _netPercent,
+        handicapMode:  _mode,
+        netPercent:    _netPercent,
+        payoutStyle:   'per_point',   // no pool for points
+        perPointMode:  _perPointMode,
         // null = uncapped. An enabled-but-unparseable field also falls
         // back to uncapped rather than blocking Start.
         lossCap: _capEnabled ? double.tryParse(_capCtrl.text.trim()) : null,
@@ -308,29 +318,22 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
 
           const SizedBox(height: 16),
 
+          _buildPayoutCard(theme),
+
+          const SizedBox(height: 16),
+
+          // Stake — the per-point value, with the shared "play for fun" opt-in
+          // (consistent with Skins / Spots).
           StakeField(
             controller: _betCtrl,
-            label: 'Per-point stake',
+            label: 'Value per point',
             helpText:
-                'Points 5-3-1 pays per point: you win or lose this much for '
-                'every point you finish above or below the 54-point average.',
+                'You win or lose this much per point above or below the '
+                'settlement baseline.',
             onChanged: (v) => setState(() {
               _stakeOk = v;
               _syncCapToStake();
             })),
-
-          const SizedBox(height: 16),
-
-          _LossCapCard(
-            enabled:    _capEnabled,
-            controller: _capCtrl,
-            suggested:  _currentBet * _maxLossMultiple,
-            onToggle: (on) => setState(() {
-              _capEnabled = on;
-              if (on) _syncCapToStake();
-            }),
-            onEdited: () => _capEdited = true,
-          ),
 
           const SizedBox(height: 16),
 
@@ -384,6 +387,106 @@ class _Points531SetupScreenState extends State<Points531SetupScreen> {
 
           const SizedBox(height: 80), // leave room for the bottom button
         ],
+      ),
+    );
+  }
+
+  /// Per-point settlement selector (Points 5-3-1 has no pool — see the note on
+  /// [_perPointMode]). Three flavors + the loss cap under Advanced. Mirrors the
+  /// Skins / Spots setup screens.
+  Widget _buildPayoutCard(ThemeData theme) {
+    final worst = _currentBet * _maxLossMultiple;
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('How the money settles',
+                style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary)),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: 'average', label: Text('vs Average')),
+                ButtonSegment(value: 'all',     label: Text('Above you')),
+                ButtonSegment(value: 'first',   label: Text('Just leader')),
+              ],
+              selected: {_perPointMode},
+              onSelectionChanged: (s) =>
+                  setState(() => _perPointMode = s.first),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              switch (_perPointMode) {
+                'first' => 'Only the leader collects — everyone else pays the '
+                    'leader their point deficit × the stake.',
+                'all' => 'Pay everyone above you the point difference × the '
+                    'stake (the biggest swings).',
+                _ => 'The classic 5-3-1: settle vs the field average — points '
+                    'above the mean win, below owe, at the stake.',
+              },
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+            Theme(
+              data: theme.copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                initiallyExpanded: _advancedOpen,
+                onExpansionChanged: (v) => _advancedOpen = v,
+                childrenPadding: EdgeInsets.zero,
+                title: Text('Advanced', style: theme.textTheme.bodyMedium),
+                children: [
+                  SwitchListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text("Cap each player's losses"),
+                    subtitle: Text(
+                      _capEnabled
+                          ? 'Nobody loses more than the amount below.'
+                          : (worst > 0
+                              ? 'Off — worst case is \$${worst.toStringAsFixed(0)} '
+                                '(36 × stake).'
+                              : 'Off — the most you can lose is 36 × the stake.'),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    value: _capEnabled,
+                    onChanged: (on) => setState(() {
+                      _capEnabled = on;
+                      if (on) _syncCapToStake();
+                    }),
+                  ),
+                  if (_capEnabled)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        width: 180,
+                        child: TextField(
+                          controller: _capCtrl,
+                          onChanged: (_) => _capEdited = true,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly],
+                          decoration: const InputDecoration(
+                            labelText: 'Max loss', prefixText: '\$ ',
+                            border: OutlineInputBorder(), isDense: true),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -441,92 +544,6 @@ class _RosterBanner extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ===========================================================================
-// Loss-cap card — optional table-wide per-player loss ceiling
-// ===========================================================================
-
-class _LossCapCard extends StatelessWidget {
-  final bool enabled;
-  final TextEditingController controller;
-  final double suggested;            // 36 × current stake
-  final ValueChanged<bool> onToggle;
-  final VoidCallback onEdited;       // fired when the player types a cap
-
-  const _LossCapCard({
-    required this.enabled,
-    required this.controller,
-    required this.suggested,
-    required this.onToggle,
-    required this.onEdited,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SwitchListTile(
-            contentPadding: const EdgeInsets.fromLTRB(14, 4, 8, 0),
-            title: const Text('Cap losses',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text(
-              enabled
-                  ? 'Nobody loses more than the amount below.'
-                  : (suggested > 0
-                      ? 'Off — worst case at this stake is '
-                        '\$${suggested.toStringAsFixed(0)} (36 × stake). '
-                        'Turn on to cap below that.'
-                      : 'Off — the most you can lose is 36 × the stake.'),
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant),
-            ),
-            value: enabled,
-            onChanged: onToggle,
-          ),
-          if (enabled)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: controller,
-                    onChanged: (_) => onEdited(),
-                    keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true),
-                    decoration: const InputDecoration(
-                      prefixText: '\$',
-                      labelText: 'Max loss per player',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    suggested > 0
-                        ? 'Worst case at this stake is \$${suggested.toStringAsFixed(0)} '
-                          '(36 × stake). Losers stop at the cap; winners share '
-                          'what’s collected, pro-rata.'
-                        : 'Enter a stake above to see the suggested maximum.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
-        ],
       ),
     );
   }

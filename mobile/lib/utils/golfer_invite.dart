@@ -3,6 +3,7 @@ import 'package:flutter_sms/flutter_sms.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../ui_labels.dart';
 import '../providers/auth_provider.dart';
 import '../screens/player_form_screen.dart';
 import '../widgets/app_drawer.dart'; // shareInvite, shareOriginFrom
@@ -83,7 +84,7 @@ Future<void> maybeOfferRoundSmsInvite(
       content: Text(
         'Open Messages with a ready-to-send invite to ${golfer.name} '
         '(${golfer.phone.trim()}). When they join Halved and verify this '
-        "number, they'll see this round in their Casual Rounds.",
+        "number, they'll see this round in their $kCasualRoundsLabel.",
       ),
       actions: [
         TextButton(

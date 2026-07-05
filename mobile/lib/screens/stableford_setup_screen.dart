@@ -52,12 +52,12 @@ class StablefordSetupScreen extends StatefulWidget {
 }
 
 class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
-  int _step = 0; // 0 = handicap + points, 1 = payout
   String _mode = 'net';
   int _netPercent = 100;
 
   String _payoutStyle = 'pool';        // 'pool' | 'per_point'
   String _perPointMode = 'average';    // 'average' | 'all' | 'first'
+  bool _advancedOpen = false;          // loss-cap expander (per-point)
   final _entryCtrl  = TextEditingController(text: '5');
   final _rateCtrl   = TextEditingController(text: '1'); // $/point (per_point)
   bool _noStakes = false;
@@ -269,10 +269,8 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(
-          _editing
-              ? 'Edit Stableford'
-              : (_step == 0 ? 'Stableford · Scoring' : 'Stableford · Payout'))),
+      appBar: AppBar(
+          title: Text(_editing ? 'Edit Stableford' : 'Stableford Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : (_error != null && !_saving)
@@ -281,49 +279,55 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
                   isNetwork: isNetworkError(_error!),
                   onRetry: _load)
               : Column(children: [
-                  Expanded(child: _step == 0 ? _scoringBody() : _payoutBody()),
-                  SafeArea(top: false, child: _nav()),
+                  Expanded(child: _buildBody()),
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton(
+                          onPressed:
+                              (_saving || !_stakeChosen) ? null : _save,
+                          child: _saving
+                              ? const SizedBox(width: 20, height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : Text(
+                                  _editing ? 'Save Configuration' : 'Start Game',
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ),
+                  ),
                 ]),
     );
   }
 
-  Widget _nav() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Row(children: [
-        if (_step == 1)
-          OutlinedButton(
-            onPressed: _saving ? null : () => setState(() => _step = 0),
-            child: const Text('Back'),
-          ),
-        const Spacer(),
-        if (_step == 0)
-          FilledButton(
-            onPressed: () => setState(() => _step = 1),
-            child: const Text('Next'),
-          )
-        else
-          FilledButton(
-            onPressed: (_saving || !_stakeChosen) ? null : _save,
-            child: _saving
-                ? const SizedBox(width: 20, height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : Text(_editing ? 'Save Configuration' : 'Save Setup',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-      ]),
-    );
-  }
+  // Header + bordered-card helpers so every section matches the Skins / Spots
+  // / Points 5-3-1 setup screens.
+  TextStyle? _cardHeader(ThemeData theme) => theme.textTheme.labelLarge
+      ?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary);
 
-  // ── Step 1: handicap + points table ──
-  Widget _scoringBody() {
+  Widget _card(ThemeData theme, {required Widget child}) => Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: theme.colorScheme.outline),
+        ),
+        child: Padding(padding: const EdgeInsets.all(14), child: child),
+      );
+
+  Widget _buildBody() {
     final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── Handicap (Net%/Gross — shared slider widget, no Strokes-Off) ──
-        // Side games inherit the primary game's handicap (no own selector).
+        // ── Handicap (Net%/Gross — no Strokes-Off).  Side games inherit the
+        //    primary game's handicap (no own selector). ──
         if (_isSideGame)
           InheritedHandicapNote(mode: _mode, netPercent: _netPercent)
         else
@@ -334,180 +338,211 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
             onModeChanged: (m) => setState(() => _mode = m),
             onPercentChanged: (p) => setState(() => _netPercent = p),
           ),
-        const SizedBox(height: 24),
-
-        // ── Points table ──
-        Text('Points table', style: theme.textTheme.titleMedium),
-        Text('Points awarded per hole by score vs par. Negatives allowed.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: [
-            for (final entry in _kPresets.entries)
-              ActionChip(
-                label: Text(entry.key),
-                onPressed: () => _applyPreset(entry.value),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        for (final b in _kBuckets)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Expanded(child: Text(_kBucketLabels[b]!)),
-                SizedBox(
-                  width: 90,
-                  child: TextField(
-                    controller: _points[b],
-                    textAlign: TextAlign.center,
-                    keyboardType: const TextInputType.numberWithOptions(
-                        signed: true),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'-?\d*')),
-                    ],
-                    decoration: const InputDecoration(
-                        border: OutlineInputBorder(), isDense: true),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  // ── Step 2: payout ──
-  Widget _payoutBody() {
-    final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Text('How is the money settled?', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: 'pool', label: Text('Pool')),
-            ButtonSegment(value: 'per_point', label: Text('Per point')),
-          ],
-          selected: {_payoutStyle},
-          onSelectionChanged: (s) => setState(() => _payoutStyle = s.first),
-        ),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          controlAffinity: ListTileControlAffinity.leading,
-          title: const Text('Play for fun — no stakes'),
-          value: _noStakes,
-          onChanged: (v) => setState(() {
-            _noStakes = v ?? false;
-            if (_noStakes) { _entryCtrl.text = '0'; _rateCtrl.text = '0'; }
-          }),
-        ),
         const SizedBox(height: 16),
 
-        if (_payoutStyle == 'pool') ...[
-          Text('Everyone antes the entry fee; the pool is split among the '
-              'paid places.', style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _entryCtrl,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
-              labelText: 'Entry fee per player', prefixText: '\$ ',
-              border: OutlineInputBorder(), isDense: true),
-          ),
-          const SizedBox(height: 6),
-          Text('Pool: \$${_pool.toStringAsFixed(0)}  ($_numPlayers players)',
-              style: theme.textTheme.bodySmall),
-          const SizedBox(height: 8),
-          PayoutConfigField(
-            pool: _pool.round(),
-            numPayouts: _numPayouts,
-            payoutCtrls: _payoutCtrls,
-            onNumPayoutsChanged: (n) => setState(() => _numPayouts = n),
-            onPayoutChanged: () => setState(() {}),
-            onSuggest: _suggest,
-          ),
-        ] else ...[
-          SegmentedButton<String>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 'average', label: Text('vs Average')),
-              ButtonSegment(value: 'all',     label: Text('Above you')),
-              ButtonSegment(value: 'first',   label: Text('Just first')),
-            ],
-            selected: {_perPointMode},
-            onSelectionChanged: (s) => setState(() => _perPointMode = s.first),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            switch (_perPointMode) {
-              'first' => 'Only the leader collects — everyone else pays the '
-                  'leader their points deficit at this rate per point.',
-              'all' => 'You pay everyone above you (and collect from everyone '
-                  'below) at this rate per point of difference.',
-              _ => 'Standard: settle against the field average. Every point '
-                  'above the average wins; every point below owes — at this '
-                  'rate per point.',
-            },
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: 180,
-            child: TextField(
-              controller: _rateCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+        // ── Points table ──
+        _card(theme, child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Points table', style: _cardHeader(theme)),
+            const SizedBox(height: 4),
+            Text('Points awarded per hole by score vs par. Negatives allowed.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final entry in _kPresets.entries)
+                  ActionChip(
+                    label: Text(entry.key),
+                    onPressed: () => _applyPreset(entry.value),
+                  ),
               ],
-              decoration: const InputDecoration(
-                labelText: 'Rate per point', prefixText: '\$ ',
-                border: OutlineInputBorder(), isDense: true),
             ),
-          ),
-          const SizedBox(height: 12),
-          // Optional per-player loss cap.
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Cap losses'),
-            subtitle: Text(
-              _capEnabled
-                  ? 'Nobody loses more than the amount below; winners share '
-                    'what’s collected, pro-rata.'
-                  : 'Off — per-point losses are uncapped.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            value: _capEnabled,
-            onChanged: (v) => setState(() => _capEnabled = v),
-          ),
-          if (_capEnabled)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: SizedBox(
+            const SizedBox(height: 8),
+            for (final b in _kBuckets)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: [
+                  Expanded(child: Text(_kBucketLabels[b]!)),
+                  SizedBox(
+                    width: 90,
+                    child: TextField(
+                      controller: _points[b],
+                      textAlign: TextAlign.center,
+                      keyboardType: const TextInputType.numberWithOptions(
+                          signed: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'-?\d*')),
+                      ],
+                      decoration: const InputDecoration(
+                          border: OutlineInputBorder(), isDense: true),
+                    ),
+                  ),
+                ]),
+              ),
+          ],
+        )),
+        const SizedBox(height: 16),
+
+        // ── Payout ──
+        // ── How the money settles (mode only — the stake lives below). ──
+        _card(theme, child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('How the money settles', style: _cardHeader(theme)),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: 'pool', label: Text('Pool')),
+                ButtonSegment(value: 'per_point', label: Text('Per point')),
+              ],
+              selected: {_payoutStyle},
+              onSelectionChanged: (s) => setState(() => _payoutStyle = s.first),
+            ),
+            const SizedBox(height: 8),
+            if (_payoutStyle == 'pool')
+              Text('Everyone antes the entry fee; the pool is split among the '
+                  'paid places.', style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant))
+            else ...[
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 'average', label: Text('vs Average')),
+                  ButtonSegment(value: 'all',     label: Text('Above you')),
+                  ButtonSegment(value: 'first',   label: Text('Just first')),
+                ],
+                selected: {_perPointMode},
+                onSelectionChanged: (s) => setState(() => _perPointMode = s.first),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                switch (_perPointMode) {
+                  'first' => 'Only the leader collects — everyone else pays the '
+                      'leader their points deficit at the value below.',
+                  'all' => 'You pay everyone above you (and collect from everyone '
+                      'below) at the value below, per point of difference.',
+                  _ => 'Standard: settle against the field average. Every point '
+                      'above the average wins; every point below owes — at the '
+                      'value below.',
+                },
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              // Loss cap — tucked under Advanced, consistent with the others.
+              Theme(
+                data: theme.copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  initiallyExpanded: _advancedOpen,
+                  onExpansionChanged: (v) => _advancedOpen = v,
+                  childrenPadding: EdgeInsets.zero,
+                  title: Text('Advanced', style: theme.textTheme.bodyMedium),
+                  children: [
+                    SwitchListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text("Cap each player's losses"),
+                      subtitle: Text(
+                        _capEnabled
+                            ? 'Nobody loses more than the amount below; winners '
+                              'share what’s collected, pro-rata.'
+                            : 'Off — per-point losses are uncapped.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                      value: _capEnabled,
+                      onChanged: (v) => setState(() => _capEnabled = v),
+                    ),
+                    if (_capEnabled)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: 180,
+                          child: TextField(
+                            controller: _capCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                            ],
+                            decoration: const InputDecoration(
+                              labelText: 'Max loss', prefixText: '\$ ',
+                              border: OutlineInputBorder(), isDense: true),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        )),
+        const SizedBox(height: 16),
+
+        // ── Stake (ante for pool / value per point) + play-for-fun, mirroring
+        //    the Skins / Spots / Points 5-3-1 stake card. ──
+        _card(theme, child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_payoutStyle == 'pool' ? 'Ante per player' : 'Value per point',
+                style: _cardHeader(theme)),
+            const SizedBox(height: 8),
+            if (_payoutStyle == 'pool') ...[
+              TextField(
+                controller: _entryCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Ante', prefixText: '\$ ',
+                  border: OutlineInputBorder(), isDense: true),
+              ),
+            ] else ...[
+              SizedBox(
                 width: 180,
                 child: TextField(
-                  controller: _capCtrl,
+                  controller: _rateCtrl,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                   ],
                   decoration: const InputDecoration(
-                    labelText: 'Max loss per player', prefixText: '\$ ',
+                    labelText: 'Value per point', prefixText: '\$ ',
                     border: OutlineInputBorder(), isDense: true),
                 ),
               ),
+            ],
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Play for fun — no stakes'),
+              value: _noStakes,
+              onChanged: (v) => setState(() {
+                _noStakes = v ?? false;
+                if (_noStakes) { _entryCtrl.text = '0'; _rateCtrl.text = '0'; }
+              }),
             ),
-        ],
+            // Pool: show the pot total and how it splits across the paid places.
+            if (_payoutStyle == 'pool') ...[
+              const SizedBox(height: 2),
+              Text('Pool: \$${_pool.toStringAsFixed(0)}  ($_numPlayers players)',
+                  style: theme.textTheme.bodySmall),
+              const SizedBox(height: 8),
+              PayoutConfigField(
+                pool: _pool.round(),
+                numPayouts: _numPayouts,
+                payoutCtrls: _payoutCtrls,
+                onNumPayoutsChanged: (n) => setState(() => _numPayouts = n),
+                onPayoutChanged: () => setState(() {}),
+                onSuggest: _suggest,
+              ),
+            ],
+          ],
+        )),
+        const SizedBox(height: 24),
       ],
     );
   }

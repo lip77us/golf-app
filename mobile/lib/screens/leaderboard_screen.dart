@@ -2677,6 +2677,17 @@ class _SkinsGroupCard extends StatelessWidget {
     final money    = summary['money'] as Map<String, dynamic>? ?? {};
     final pool     = money['pool'] ?? 0;
     final status   = summary['status']?.toString() ?? 'pending';
+    // Payout mode (Pool vs Per-skin: pay leader / pay above / vs average).
+    final style    = summary['payout_style']?.toString() ?? 'pool';
+    final ppMode   = summary['per_point_mode']?.toString() ?? 'first';
+    final rate     = (summary['per_point_rate'] as num?)?.toDouble() ?? 0.0;
+    final modeLabel = style == 'pool'
+        ? 'Pool: \$$pool'
+        : 'Per skin · ${switch (ppMode) {
+            'first' => 'pay leader',
+            'all'   => 'pay above',
+            _       => 'vs avg',
+          }} · \$${rate.formatBet()}/skin';
 
     return Card(
       child: Padding(
@@ -2686,8 +2697,7 @@ class _SkinsGroupCard extends StatelessWidget {
             Text('Group ${group['group_number']}',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const Spacer(),
-            Text('Pool: \$$pool',
-                style: const TextStyle(fontSize: 12)),
+            Text(modeLabel, style: const TextStyle(fontSize: 12)),
           ]),
           const SizedBox(height: 2),
           Text('Status: ${status.replaceAll('_', ' ')}',
@@ -2696,10 +2706,14 @@ class _SkinsGroupCard extends StatelessWidget {
           ...players.map((p) {
             final skinsWon = p['skins_won'] ?? 0;
             final junk     = p['junk_skins'] ?? 0;
-            final payout   = p['payout'];
-            final payStr   = payout != null
-                ? '\$${(payout as num).formatBet()}'
-                : '\$0.00';
+            // Signed net (up/down) — the true settlement figure in both modes.
+            final net      = (p['net'] as num?)?.toDouble() ?? 0.0;
+            final netStr   = net > 0
+                ? '+\$${net.formatBet()}'
+                : net < 0 ? '−\$${(-net).formatBet()}' : '\$0';
+            final netColor = net > 0
+                ? Colors.green.shade700
+                : net < 0 ? Colors.red.shade700 : Colors.grey;
             final skinsLabel = junk > 0
                 ? '$skinsWon skin${skinsWon == 1 ? '' : 's'} and $junk junk'
                 : '$skinsWon skin${skinsWon == 1 ? '' : 's'}';
@@ -2710,8 +2724,9 @@ class _SkinsGroupCard extends StatelessWidget {
                 Text(skinsLabel,
                     style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(width: 12),
-                Text(payStr,
-                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                Text(netStr,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, color: netColor)),
               ]),
             );
           }),
@@ -2746,7 +2761,12 @@ class _SpotsGroupCard extends StatelessWidget {
     final money   = summary['money'] as Map<String, dynamic>? ?? {};
     final total   = money['total_spots'] ?? 0;
     final style   = summary['payout_style']?.toString() == 'pool'
-        ? 'Pool' : 'Pay around';
+        ? 'Pool'
+        : switch (summary['per_point_mode']?.toString()) {
+            'first'   => 'Pay leader',
+            'average' => 'vs Average',
+            _         => 'Pay around',
+          };
     final status  = summary['status']?.toString() ?? 'pending';
 
     return Card(
@@ -3926,6 +3946,16 @@ class _Points531GroupCard extends StatelessWidget {
     return pct == 100 ? 'Net' : 'Net ($pct%)';
   }
 
+  /// Compact settlement-mode tag for the card header.
+  static String _modeLabel(Map<String, dynamic> money) {
+    if (money['payout_style']?.toString() == 'pool') return 'Pool';
+    return switch (money['per_point_mode']?.toString()) {
+      'first' => 'Pay leader',
+      'all'   => 'Pay above',
+      _       => 'Per point',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme    = Theme.of(context);
@@ -3965,7 +3995,7 @@ class _Points531GroupCard extends StatelessWidget {
           Row(children: [
             Expanded(
               child: Text(
-                'Points 5-3-1 — ${_hcapLabel(hcap)}',
+                'Points 5-3-1 — ${_hcapLabel(hcap)} · ${_modeLabel(money)}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),

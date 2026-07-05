@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../api/client.dart';
+import '../ui_labels.dart';
 import '../config.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
@@ -156,7 +157,7 @@ class AppDrawer extends StatelessWidget {
                 }),
                 ListTile(
                   leading: const Icon(Icons.sports_golf),
-                  title: const Text('Casual Rounds'),
+                  title: const Text(kCasualRoundsLabel),
                   onTap: onCasualRoundsTap,
                 ),
                 ListTile(

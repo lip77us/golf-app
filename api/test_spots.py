@@ -58,7 +58,9 @@ class SpotsEndpointTests(TestCase):
     def test_setup_returns_summary(self):
         resp = self._setup()
         self.assertEqual(resp.status_code, 201, resp.data)
-        self.assertEqual(resp.data['payout_style'], 'pay_around')
+        # Legacy 'pay_around' normalizes to the 2-axis per_point/'all'.
+        self.assertEqual(resp.data['payout_style'], 'per_point')
+        self.assertEqual(resp.data['per_point_mode'], 'all')
         self.assertEqual(resp.data['money']['total_spots'], 0)
 
     def test_tally_then_summary_reflects_counts(self):

@@ -243,6 +243,25 @@ class Points531Game(models.Model):
                                 "pro-rata — see services.wager.settle()."
                             ),
                         )
+    # Money model (2-axis, shared with Skins/Spots/Stableford via
+    # services.wager). ``bet_unit`` IS the value of one point (the rate) —
+    # no separate rate field.
+    #   pool                    — everyone antes bet_unit; the pot splits by
+    #                             share of points (PROPORTIONAL). Entry is the cap.
+    #   per_point + 'average'   — the CLASSIC 5-3-1: (points − mean) × bet_unit
+    #                             (VS_AVERAGE). This is the default.
+    #   per_point + 'all'       — pay everyone above you (PAY_ABOVE).
+    #   per_point + 'first'     — only the leader collects (PAY_WINNER).
+    PAYOUT_STYLES   = [('pool', 'Pool'), ('per_point', 'Per point')]
+    payout_style    = models.CharField(max_length=12, choices=PAYOUT_STYLES,
+                                       default='per_point')
+    PER_POINT_MODES = [
+        ('average', 'Settle vs the field average'),
+        ('all',     'Pay everyone above you'),
+        ('first',   'Pay the leader'),
+    ]
+    per_point_mode  = models.CharField(max_length=8, choices=PER_POINT_MODES,
+                                       default='average')
     created_at          = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -339,6 +358,29 @@ class SkinsGame(models.Model):
                         help_text="If True the entry screen shows a per-player "
                                   "junk-skin counter (birdies, sandies, chip-ins, etc.).",
                     )
+
+    # ── Payout mode (2-axis, shared with Stableford; maps to services.wager) ──
+    # 'pool' keeps the classic Skins economics (each player antes Round.bet_unit;
+    # the pot splits by share of total skins — WD-aware, see services.skins).
+    # 'per_point' settles on total skins via services.wager.settle at the chosen
+    # per_point_mode/rate (pay leader / pay above / vs average).
+    PAYOUT_STYLES  = [('pool', 'Pool'), ('per_point', 'Per skin')]
+    payout_style   = models.CharField(max_length=12, choices=PAYOUT_STYLES,
+                                      default='pool')
+    PER_POINT_MODES = [
+        ('average', 'Settle vs the field average'),
+        ('all',     'Pay everyone above you'),
+        ('first',   'Pay the leader'),
+    ]
+    per_point_mode = models.CharField(max_length=8, choices=PER_POINT_MODES,
+                                      default='first')
+    per_point_rate = models.DecimalField(
+                        max_digits=6, decimal_places=2, default=0.00,
+                        help_text="$ per skin of margin (per_point style).")
+    loss_cap       = models.DecimalField(
+                        max_digits=8, decimal_places=2, null=True, blank=True,
+                        help_text="Optional per-player loss cap (per_point "
+                                  "style); null = uncapped.")
     created_at      = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -428,10 +470,13 @@ class SpotsGame(models.Model):
     scorer tallies them by hand per player per hole, like junk.  Always a
     SEPARATE payout — never folded into the main game.
 
-    Settlement:
-      - pay_around (default): each spot pays the achiever 1 × bet_unit from
-        every other active player (zero-sum within the group).
-      - pool: total spots × bet_unit forms a pot split proportional to spots won.
+    Settlement (2-axis, shared with the other points games; maps to
+    services.wager). ``bet_unit`` IS the per-spot rate (no separate field):
+      - pool: everyone antes bet_unit; the pot splits by share of spots.
+      - per_point + 'all'  = "pay around" (each spot pays the achiever bet_unit
+        from every other active player — per-hole, withdrawal-aware).
+      - per_point + 'first' = only the leader collects the deficit.
+      - per_point + 'average' = settle vs the field average.
     """
     foursome     = models.OneToOneField(
                     Foursome, on_delete=models.CASCADE,
@@ -445,11 +490,24 @@ class SpotsGame(models.Model):
                     max_digits=6, decimal_places=2, default=1,
                     help_text="Value of one spot.",
                 )
-    payout_style = models.CharField(
+    # 2-axis payout (maps to services.wager). Default preserves the historical
+    # "pay around" behavior (per_point + 'all').
+    payout_style   = models.CharField(
                     max_length=12,
-                    choices=[('pay_around', 'Pay around'), ('pool', 'Pool')],
-                    default='pay_around',
+                    choices=[('pool', 'Pool'), ('per_point', 'Per spot')],
+                    default='per_point',
                 )
+    per_point_mode = models.CharField(
+                    max_length=8,
+                    choices=[('average', 'Settle vs the field average'),
+                             ('all',     'Pay everyone above you'),
+                             ('first',   'Pay the leader')],
+                    default='all',
+                )
+    loss_cap       = models.DecimalField(
+                    max_digits=8, decimal_places=2, null=True, blank=True,
+                    help_text="Optional per-player loss cap (per_point style); "
+                              "null = uncapped.")
     created_at   = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

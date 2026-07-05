@@ -57,6 +57,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   String _pressMode  = 'none';
   /// 'none' | 'tiebreak_2nd' | 'claremont'
   String _variant    = 'none';
+  /// Advanced expander (presses + variant + loss cap). Opens on its own when a
+  /// saved config has any of them set.
+  bool _advancedOpen = false;
 
   /// Which of the three bets are live (Front+Back off = an 18-hole match).
   late bool _playFront   = !widget.overallOnly;
@@ -180,6 +183,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           _playOverall = existing.playOverall;
           _pressUnitCtrl.text = existing.pressUnit.truncate().toString();
           _capEnabled = existing.lossCap != null;
+          _advancedOpen = existing.pressMode != 'none' ||
+              existing.variant != 'none' || existing.lossCap != null;
           if (existing.lossCap != null) {
             _capCtrl.text = existing.lossCap! % 1 == 0
                 ? existing.lossCap!.toStringAsFixed(0)
@@ -468,112 +473,26 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           // ── Stake ─────────────────────────────────────────────────────────
           StakeField(
             controller: _betCtrl,
-            label: _overallOnly ? 'Stake' : 'Stake (main games)',
+            label: 'Stake per match',
             helpText: _overallOnly
                 ? 'What the Singles Match is worth.'
-                : 'Each of the three standard Nassau games '
+                : 'Each of the three standard Nassau matches '
                   '(Front 9, Back 9, Overall) is worth this amount.',
             onChanged: (v) => setState(() => _stakeOk = v),
           ),
 
-          // ── Press (Nassau only; an 18-hole match has no presses) ──
-          // Shown after the main stake — the press unit is a secondary bet.
+          // ── Advanced (Nassau only): presses, game variant, and — once the
+          //     match can escalate — the loss cap.  Collapsed by default so the
+          //     common case (teams + handicap + stake) stays simple. ──
           if (!_overallOnly) ...[
-          const SizedBox(height: 16),
-          // ── Press configuration ───────────────────────────────────────────
-          SectionCard(
-            title: 'Press stakes',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Press mode',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6, runSpacing: 4,
-                  children: [
-                    _pressChip('none',   'None'),
-                    _pressChip('manual', 'Manual'),
-                    _pressChip('auto',   'Auto at 2-down'),
-                    _pressChip('both',   'Manual + Auto'),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                _pressDescription(theme),
-                if (_pressMode != 'none') ...[
-                  const SizedBox(height: 14),
-                  GolfTextField(
-                    controller: _pressUnitCtrl,
-                    label: 'Press unit (\$)',
-                    prefixIcon: Icons.attach_money,
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Dollar amount per press stake (separate from the main stake).',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ],
-            ),
-          ),
+            const SizedBox(height: 16),
+            _advancedCard(theme, members),
           ],
 
-          // ── Advanced / variant (Nassau only) ──────────────────────────────
-          if (!_overallOnly) ...[
-          _VariantCard(
-            variant:       _variant,
-            isFoursome:    _realMembers.length == 4,
-            onChanged:     (v) => setState(() => _variant = v),
-          ),
-
-          const SizedBox(height: 16),
-          ],
-
-          // ── Loss cap (escalating) / max liability (bounded) ───────────────
-          if (_canEscalate)
-            SectionCard(
-              title: 'Cap losses',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Presses and Claremont can run the stakes up with no fixed '
-                    'ceiling, so you can cap each side’s losses. A side at the '
-                    'cap can’t press (it would be free).',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: const Text('Cap each side’s losses'),
-                    value: _capEnabled,
-                    onChanged: (v) => setState(() => _capEnabled = v),
-                  ),
-                  if (_capEnabled)
-                    SizedBox(
-                      width: 180,
-                      child: TextField(
-                        controller: _capCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        decoration: const InputDecoration(
-                          prefixText: '\$ ',
-                          labelText: 'Max loss per side',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            )
-          else
+          // Bounded match (no presses / Claremont) → show the fixed max
+          // liability; once it can escalate, the cap lives inside Advanced.
+          if (!_canEscalate) ...[
+            const SizedBox(height: 16),
             MaxLiabilityNote(
               bet: double.tryParse(_betCtrl.text.trim()) ?? 0,
               multiple: _baseMultiple,
@@ -581,6 +500,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                   ? 'the match'
                   : 'lose all 3 (front, back, overall)',
             ),
+          ],
           const SizedBox(height: 16),
 
           // ── Rules reminder ────────────────────────────────────────────────
@@ -668,101 +588,151 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             color: theme.colorScheme.onSurfaceVariant));
   }
 
-}
+  Widget _variantChip(String value, String label, {bool disabled = false}) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: _variant == value,
+      onSelected: disabled ? null : (_) => setState(() => _variant = value),
+    );
+  }
 
-// ===========================================================================
-// _VariantCard — Advanced settings: game variant picker
-// ===========================================================================
+  // ── Advanced expander: presses, game variant, and (once escalating) the
+  //    loss cap.  Collapsed by default; the sub-headings mirror what were
+  //    previously separate always-visible cards. ──
+  Widget _advancedCard(ThemeData theme, List<Membership> members) {
+    final isFoursome = members.length == 4;
+    TextStyle? sub() =>
+        theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600);
+    TextStyle? hint() => theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
 
-class _VariantCard extends StatelessWidget {
-  final String   variant;
-  final bool     isFoursome;   // true only when roster is 2v2 (4 real players)
-  final ValueChanged<String> onChanged;
-
-  const _VariantCard({
-    required this.variant,
-    required this.isFoursome,
-    required this.onChanged,
-  });
-
-  static const _descriptions = <String, String>{
-    'none': 'Standard Nassau — tied holes are halved with no further comparison.',
-    'tiebreak_2nd':
-        '2nd-Ball Tie-Break — when best balls are equal, the 2nd best ball '
-        'decides the hole winner. Eliminates most ties. Foursomes only.',
-    'claremont':
-        'Claremont — adds a simultaneous 2-point bottom game alongside the '
-        'standard Nassau (top). Each hole: 1 pt for best ball, 1 pt for 2nd '
-        'best ball. Bottom tracks its own F9/B9/Overall games with independent '
-        'auto-presses at ±4 points down. Foursomes only.',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: theme.colorScheme.outline),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: _advancedOpen,
+          onExpansionChanged: (v) => _advancedOpen = v,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
+          title: Text('Advanced',
+              style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary)),
+          subtitle: Text('Presses, game variant, loss cap', style: hint()),
           children: [
-            Text('Advanced',
-                style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
-            const SizedBox(height: 10),
-            Text('Game variant',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant)),
+            // ── Press stakes ──
+            Text('Press stakes', style: sub()),
             const SizedBox(height: 8),
-
-            // ── Variant chips ──────────────────────────────────────────────
             Wrap(
-              spacing: 6,
-              runSpacing: 4,
+              spacing: 6, runSpacing: 4,
               children: [
-                _chip(context, 'none',         'Standard'),
-                _chip(context, 'tiebreak_2nd', '2nd Ball Tiebreak',
-                    disabled: !isFoursome),
-                _chip(context, 'claremont',    'Claremont',
-                    disabled: !isFoursome),
+                _pressChip('none',   'None'),
+                _pressChip('manual', 'Manual'),
+                _pressChip('auto',   'Auto at 2-down'),
+                _pressChip('both',   'Manual + Auto'),
               ],
             ),
-
-            if (!isFoursome && variant == 'none') ...[
-              const SizedBox(height: 8),
+            const SizedBox(height: 8),
+            _pressDescription(theme),
+            if (_pressMode != 'none') ...[
+              const SizedBox(height: 14),
+              GolfTextField(
+                controller: _pressUnitCtrl,
+                label: 'Press unit (\$)',
+                prefixIcon: Icons.attach_money,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
+              ),
+              const SizedBox(height: 6),
               Text(
-                'Tiebreak and Claremont variants require a 2v2 foursome.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant),
+                'Dollar amount per press stake (separate from the main stake).',
+                style: hint(),
               ),
             ],
 
-            const SizedBox(height: 10),
-            Text(
-              _descriptions[variant] ?? '',
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant),
+            const Divider(height: 28),
+
+            // ── Game variant ──
+            Text('Game variant', style: sub()),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6, runSpacing: 4,
+              children: [
+                _variantChip('none',         'Standard'),
+                _variantChip('tiebreak_2nd', '2nd Ball Tiebreak',
+                    disabled: !isFoursome),
+                _variantChip('claremont',    'Claremont',
+                    disabled: !isFoursome),
+              ],
             ),
+            if (!isFoursome && _variant == 'none') ...[
+              const SizedBox(height: 8),
+              Text('Tiebreak and Claremont variants require a 2v2 foursome.',
+                  style: hint()),
+            ],
+            const SizedBox(height: 10),
+            Text(_kVariantDescriptions[_variant] ?? '', style: hint()),
+
+            // ── Loss cap (only once the match can escalate) ──
+            if (_canEscalate) ...[
+              const Divider(height: 28),
+              Text('Cap losses', style: sub()),
+              const SizedBox(height: 4),
+              Text(
+                'Presses and Claremont can run the stakes up with no fixed '
+                'ceiling, so you can cap each side’s losses. A side at the cap '
+                'can’t press (it would be free).',
+                style: hint(),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Cap each side’s losses'),
+                value: _capEnabled,
+                onChanged: (v) => setState(() => _capEnabled = v),
+              ),
+              if (_capEnabled)
+                SizedBox(
+                  width: 180,
+                  child: TextField(
+                    controller: _capCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      prefixText: '\$ ',
+                      labelText: 'Max loss per side',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _chip(BuildContext context, String value, String label,
-      {bool disabled = false}) {
-    final selected = variant == value;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: disabled ? null : (_) => onChanged(value),
-    );
-  }
 }
+
+// Game-variant descriptions, shown under the variant chips in the Advanced
+// expander.
+const _kVariantDescriptions = <String, String>{
+  'none': 'Standard Nassau — tied holes are halved with no further comparison.',
+  'tiebreak_2nd':
+      '2nd-Ball Tie-Break — when best balls are equal, the 2nd best ball '
+      'decides the hole winner. Eliminates most ties. Foursomes only.',
+  'claremont':
+      'Claremont — adds a simultaneous 2-point bottom game alongside the '
+      'standard Nassau (top). Each hole: 1 pt for best ball, 1 pt for 2nd '
+      'best ball. Bottom tracks its own F9/B9/Overall games with independent '
+      'auto-presses at ±4 points down. Foursomes only.',
+};
 

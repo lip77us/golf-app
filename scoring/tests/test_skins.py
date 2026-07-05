@@ -85,6 +85,36 @@ class SkinsTests(TestCase):
         totals = {p['name']: p['skins_won'] for p in summary['players']}
         assert totals == {'Alice': 3, 'Bob': 0, 'Carol': 0, 'Dave': 0}, totals
 
+    # ── Payout modes (signed net) ──────────────────────────────────────────
+
+    def test_pool_net_is_signed_and_zero_sum(self):
+        """Pool mode exposes a signed net (pot share − ante) that sums to 0."""
+        setup_skins(self.fs, handicap_mode='gross', carryover=True,
+                    payout_style='pool')
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 3), (self.pid['Bob'], 4),
+                                 (self.pid['Carol'], 4), (self.pid['Dave'], 4)])
+        calculate_skins(self.fs)
+        s = skins_summary(self.fs)
+        nets = {p['name']: p['net'] for p in s['players']}
+        assert round(sum(nets.values()), 2) == 0.0, nets
+        assert nets['Alice'] > 0, nets
+        assert all(nets[n] < 0 for n in ('Bob', 'Carol', 'Dave')), nets
+
+    def test_per_point_pay_leader(self):
+        """Per-skin 'first' — the leader collects the margin from everyone."""
+        setup_skins(self.fs, handicap_mode='gross', carryover=True,
+                    payout_style='per_point', per_point_mode='first',
+                    per_point_rate=5)
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 3), (self.pid['Bob'], 4),
+                                 (self.pid['Carol'], 4), (self.pid['Dave'], 4)])
+        calculate_skins(self.fs)
+        s = skins_summary(self.fs)
+        nets = {p['name']: p['net'] for p in s['players']}
+        assert round(sum(nets.values()), 2) == 0.0, nets
+        # Alice (1 skin) collects $5 from each of the 3 others.
+        assert nets['Alice'] == 15.0, nets
+        assert nets['Bob'] == nets['Carol'] == nets['Dave'] == -5.0, nets
+
     def test_no_carryover_dead_skins_on_tie(self):
         """With carryover off, a tied hole simply produces zero skins —
         no one wins anything and the next hole starts fresh at 1 skin."""

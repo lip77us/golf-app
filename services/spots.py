@@ -23,19 +23,31 @@ from core.models import MatchStatus, RoundStatus
 from games.models import SpotsGame, SpotsPlayerHoleResult
 
 
-def setup_spots(foursome, bet_unit=None, payout_style='pay_around') -> SpotsGame:
+def setup_spots(foursome, bet_unit=None, payout_style='per_point',
+                per_point_mode='all', loss_cap=None) -> SpotsGame:
     """Create (or replace) the Spots game for a foursome. Replacing cascades to
-    all SpotsPlayerHoleResult rows, so it starts fresh."""
+    all SpotsPlayerHoleResult rows, so it starts fresh.
+
+    Defaults preserve the historical "pay around" behavior (per_point + 'all').
+    Legacy callers passing payout_style='pay_around' are mapped to per_point/all.
+    """
+    from decimal import Decimal
     SpotsGame.objects.filter(foursome=foursome).delete()
     if bet_unit is None:
         bet_unit = foursome.round.bet_unit
-    if payout_style not in ('pay_around', 'pool'):
-        payout_style = 'pay_around'
+    if payout_style == 'pay_around':          # legacy value → 2-axis
+        payout_style, per_point_mode = 'per_point', 'all'
+    if payout_style not in ('pool', 'per_point'):
+        payout_style = 'per_point'
+    if per_point_mode not in ('average', 'all', 'first'):
+        per_point_mode = 'all'
     return SpotsGame.objects.create(
-        foursome     = foursome,
-        bet_unit     = bet_unit,
-        payout_style = payout_style,
-        status       = MatchStatus.PENDING,
+        foursome       = foursome,
+        bet_unit       = bet_unit,
+        payout_style   = payout_style,
+        per_point_mode = per_point_mode,
+        loss_cap       = (Decimal(str(loss_cap)) if loss_cap not in (None, '') else None),
+        status         = MatchStatus.PENDING,
     )
 
 
@@ -114,8 +126,24 @@ def spots_summary(foursome) -> dict:
         by_hole.setdefault(r.hole_number, []).append(r)
 
     # ---- settlement ---------------------------------------------------------
+    # 2-axis (maps to services.wager): pool / per_point{all|first|average}.
+    # 'all' keeps the historical per-hole, withdrawal-aware "pay around"; the
+    # other per-point modes settle round-level total spots via the wager engine.
     net = {m.player_id: 0.0 for m in real_members}
-    if game.payout_style == 'pool':
+    _per_point = game.payout_style == 'per_point'
+    if _per_point and game.per_point_mode in ('first', 'average'):
+        from decimal import Decimal
+        from services.wager import (settle as _wager_settle, WagerConfig,
+                                    PER_POINT, VS_AVERAGE, PAY_WINNER)
+        cfg = WagerConfig(
+            funding    = PER_POINT,
+            settlement = PAY_WINNER if game.per_point_mode == 'first' else VS_AVERAGE,
+            rate       = Decimal(str(bet_unit)),
+            cap        = (Decimal(str(game.loss_cap))
+                          if game.loss_cap is not None else None),
+        )
+        net = {pid: float(v) for pid, v in _wager_settle(dict(totals), cfg).items()}
+    elif game.payout_style == 'pool':
         # Everyone antes one bet_unit (the pot = each player's max loss). The
         # pot is then handed to the "winners":
         #   - if anyone is positive: split among positive players proportional
@@ -156,7 +184,9 @@ def spots_summary(foursome) -> dict:
           'name'      : m.player.name,
           'short_name': short[m.player_id],
           'spots'     : totals[m.player_id],
-          'payout'    : net[m.player_id]}
+          'payout'    : net[m.player_id],
+          # Signed, zero-sum net for the Settlement view (== payout here).
+          'net'       : net[m.player_id]}
          for m in real_members),
         key=lambda p: p['spots'], reverse=True)
 
@@ -174,10 +204,13 @@ def spots_summary(foursome) -> dict:
               else (MatchStatus.IN_PROGRESS if rows else game.status))
 
     return {
-        'status'      : status,
-        'payout_style': game.payout_style,
-        'players'     : players,
-        'holes'       : holes,
-        'money'       : {'bet_unit': bet_unit,
-                         'total_spots': sum(totals.values())},
+        'status'        : status,
+        'payout_style'  : game.payout_style,
+        'per_point_mode': game.per_point_mode,
+        'loss_cap'      : (float(game.loss_cap)
+                           if game.loss_cap is not None else None),
+        'players'       : players,
+        'holes'         : holes,
+        'money'         : {'bet_unit': bet_unit,
+                           'total_spots': sum(totals.values())},
     }

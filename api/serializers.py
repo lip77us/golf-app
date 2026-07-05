@@ -910,6 +910,12 @@ class Points531SetupSerializer(serializers.Serializer):
                             "Lower it to clip losses; winners reduce pro-rata."
                         ),
                     )
+    payout_style   = serializers.ChoiceField(
+                        choices=['pool', 'per_point'], default='per_point',
+                    )
+    per_point_mode = serializers.ChoiceField(
+                        choices=['average', 'all', 'first'], default='average',
+                    )
 
 
 class FourballSetupSerializer(serializers.Serializer):
@@ -1060,6 +1066,18 @@ class SkinsSetupSerializer(serializers.Serializer):
                     )
     carryover     = serializers.BooleanField(default=True)
     allow_junk    = serializers.BooleanField(default=False)
+    # Payout mode (2-axis, maps to services.wager). Defaults preserve the
+    # classic ante-pool behavior for clients that don't send them.
+    payout_style   = serializers.ChoiceField(
+                        choices=['pool', 'per_point'], default='pool')
+    per_point_mode = serializers.ChoiceField(
+                        choices=['average', 'all', 'first'], default='first')
+    per_point_rate = serializers.DecimalField(
+                        max_digits=6, decimal_places=2, default=0,
+                        min_value=0)
+    loss_cap       = serializers.DecimalField(
+                        max_digits=8, decimal_places=2, required=False,
+                        allow_null=True, min_value=0)
 
 
 class MultiSkinsSetupSerializer(serializers.Serializer):
@@ -1263,8 +1281,15 @@ class SpotsSetupSerializer(serializers.Serializer):
     """Configure the Spots add-on for a foursome."""
     bet_unit     = serializers.DecimalField(
                     max_digits=6, decimal_places=2, required=False, min_value=0)
-    payout_style = serializers.ChoiceField(
-                    choices=['pay_around', 'pool'], default='pay_around')
+    # 'pay_around' still accepted (legacy) → mapped to per_point/'all' in setup.
+    payout_style   = serializers.ChoiceField(
+                    choices=['pool', 'per_point', 'pay_around'],
+                    default='per_point')
+    per_point_mode = serializers.ChoiceField(
+                    choices=['average', 'all', 'first'], default='all')
+    loss_cap       = serializers.DecimalField(
+                    max_digits=8, decimal_places=2, required=False,
+                    allow_null=True, min_value=0)
 
 
 class SpotsTallyEntrySerializer(serializers.Serializer):

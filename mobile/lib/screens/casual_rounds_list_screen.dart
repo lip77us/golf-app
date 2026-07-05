@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../ui_labels.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -188,7 +189,7 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
 
     return Scaffold(
       appBar: GolfAppBar(
-        title: 'Casual Rounds',
+        title: kCasualRoundsLabel,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

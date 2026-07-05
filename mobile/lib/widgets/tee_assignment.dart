@@ -118,16 +118,21 @@ class TeeAssignmentList extends StatelessWidget {
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold)),
                   const SizedBox(width: 12),
-                  TeePicker(
-                    tees: groupTees,
-                    value: commonId,
-                    hint: 'Choose',
-                    warn: false, // null here = "mixed", not an error
-                    onChanged: (id) {
-                      for (final p in group) {
-                        onChanged(p.id, id);
-                      }
-                    },
+                  // Flexible + isExpanded so a wide tee name ellipsizes
+                  // instead of overflowing the header on a narrow phone.
+                  Flexible(
+                    child: TeePicker(
+                      tees: groupTees,
+                      value: commonId,
+                      hint: 'Choose',
+                      warn: false, // null here = "mixed", not an error
+                      isExpanded: true,
+                      onChanged: (id) {
+                        for (final p in group) {
+                          onChanged(p.id, id);
+                        }
+                      },
+                    ),
                   ),
                 ],
               ]),
@@ -154,6 +159,10 @@ class TeePicker extends StatelessWidget {
   final int?              value; // null = unassigned / mixed
   final String            hint;
   final bool              warn;
+  /// When true the dropdown fills its parent's width and the collapsed chip
+  /// ellipsizes — used inside a Flexible so a wide tee name can't overflow a
+  /// narrow row (e.g. the group "Set all" header).
+  final bool              isExpanded;
   final ValueChanged<int> onChanged;
 
   const TeePicker({
@@ -163,6 +172,7 @@ class TeePicker extends StatelessWidget {
     required this.onChanged,
     this.hint = 'Pick tee',
     this.warn = true,
+    this.isExpanded = false,
   });
 
   @override
@@ -183,6 +193,7 @@ class TeePicker extends StatelessWidget {
         child: DropdownButton<int>(
           value: value,
           isDense: true,
+          isExpanded: isExpanded,
           borderRadius: BorderRadius.circular(8),
           hint: Row(mainAxisSize: MainAxisSize.min, children: [
             if (loud) ...[
@@ -190,13 +201,16 @@ class TeePicker extends StatelessWidget {
                   size: 17, color: scheme.onErrorContainer),
               const SizedBox(width: 4),
             ],
-            Text(hint,
-                style: TextStyle(
-                    fontSize: 14,
-                    color: loud
-                        ? scheme.onErrorContainer
-                        : scheme.onSurfaceVariant,
-                    fontWeight: loud ? FontWeight.bold : FontWeight.w500)),
+            Flexible(
+              child: Text(hint,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: loud
+                          ? scheme.onErrorContainer
+                          : scheme.onSurfaceVariant,
+                      fontWeight: loud ? FontWeight.bold : FontWeight.w500)),
+            ),
           ]),
           // Collapsed chip: compact (name + yardage).  The open menu shows the
           // full line with rating/slope so you can compare tees.
@@ -210,6 +224,7 @@ class TeePicker extends StatelessWidget {
                       t.totalYards > 0
                           ? '${t.teeName} · ${t.totalYards}y'
                           : t.teeName,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600),
                     ),
