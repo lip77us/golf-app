@@ -691,12 +691,14 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
 
       // Presses strip — show only presses for the current nine.
       // Front-nine presses are cleared once we reach hole 10.
-      if (nas != null && nas.presses.isNotEmpty)
+      if (nas != null &&
+          (nas.presses.isNotEmpty || nas.bottomPresses.isNotEmpty))
         _PressesStrip(
-          presses:     nas.presses,
-          currentHole: _selectedHole,
-          t1Color:     nassauTeamColor(1),
-          t2Color:     nassauTeamColor(2),
+          presses:       nas.presses,
+          bottomPresses: nas.bottomPresses,
+          currentHole:   _selectedHole,
+          t1Color:       nassauTeamColor(1),
+          t2Color:       nassauTeamColor(2),
         ),
 
       Expanded(
@@ -2111,12 +2113,15 @@ class _TeamBanner extends StatelessWidget {
 
 class _PressesStrip extends StatelessWidget {
   final List<NassauPressResult> presses;
+  /// Claremont bottom-series presses (2 pts/hole); labelled "Bot".
+  final List<NassauPressResult> bottomPresses;
   /// Current hole being viewed — used to filter which nine's presses to show.
   final int currentHole;
   final Color t1Color;
   final Color t2Color;
   const _PressesStrip({
     required this.presses,
+    this.bottomPresses = const [],
     required this.currentHole,
     Color? t1Color,
     Color? t2Color,
@@ -2129,7 +2134,13 @@ class _PressesStrip extends StatelessWidget {
     // Show only presses for the currently active nine.
     // Front-nine presses disappear once we move to hole 10+.
     final currentNine = currentHole <= 9 ? 'front' : 'back';
-    final visible = presses.where((p) => p.nine == currentNine).toList();
+    // Combine the top series with the Claremont bottom series (tagged).
+    final tagged = [
+      for (final p in presses)       (press: p, isBottom: false),
+      for (final p in bottomPresses) (press: p, isBottom: true),
+    ];
+    final visible =
+        tagged.where((t) => t.press.nine == currentNine).toList();
     if (visible.isEmpty) return const SizedBox.shrink();
 
     return Container(
@@ -2141,11 +2152,16 @@ class _PressesStrip extends StatelessWidget {
         itemCount: visible.length,
         separatorBuilder: (_, __) => const SizedBox(width: 6),
         itemBuilder: (_, i) {
-          final p      = visible[i];
-          // Label by nine + sequential press number within that nine
-          // (e.g. "F9 Press 1", "F9 Press 2") — compact for the play-screen chip.
+          final p        = visible[i].press;
+          final isBottom = visible[i].isBottom;
+          // Sequential number within this nine + series, e.g. "F9 Press 1";
+          // Claremont bottom presses get a "Bot" tag: "F9 Bot Press 1".
+          int pressNo = 1;
+          for (int k = 0; k < i; k++) {
+            if (visible[k].isBottom == isBottom) pressNo++;
+          }
           final ninePrefix = currentNine == 'front' ? 'F9' : 'B9';
-          final label      = '$ninePrefix Press ${i + 1}';
+          final label = '$ninePrefix ${isBottom ? 'Bot ' : ''}Press $pressNo';
           final result = p.result;
           final m      = p.margin ?? 0;
           final mAbs   = m.abs();
@@ -2153,14 +2169,14 @@ class _PressesStrip extends StatelessWidget {
           String scoreText;
           if (result == 'team1') {
             chipColor = t1Color.withOpacity(0.15);
-            scoreText = p.holesRemaining > 0
-                ? '$mAbs&${p.holesRemaining}'
-                : '${mAbs}UP';
+            scoreText = isBottom
+                ? '$mAbs pts'
+                : (p.holesRemaining > 0 ? '$mAbs&${p.holesRemaining}' : '${mAbs}UP');
           } else if (result == 'team2') {
             chipColor = t2Color.withOpacity(0.15);
-            scoreText = p.holesRemaining > 0
-                ? '$mAbs&${p.holesRemaining}'
-                : '${mAbs}UP';
+            scoreText = isBottom
+                ? '$mAbs pts'
+                : (p.holesRemaining > 0 ? '$mAbs&${p.holesRemaining}' : '${mAbs}UP');
           } else if (result == 'halved') {
             chipColor = Colors.grey.shade200;
             scoreText = 'AS';

@@ -173,6 +173,27 @@ class NassauMatchResultTests(TestCase):
             len([m for m in _events(rnd, 'match_result')
                  if m.data.get('unit') in ('back9', 'overall')]), 0)
 
+    def test_front_nine_announced_when_decided_early(self):
+        """The front-nine card fires the MOMENT the nine is clinched (before
+        all 9 holes are in), with match-play "N&M" close-out notation."""
+        from services.nassau import setup_nassau, calculate_nassau
+        tee = make_tee(make_course())
+        rnd = make_round(tee.course, active_games=['nassau'])
+        paul = make_player('Paul Lipkin', 0, short_name='Paul')
+        dana = make_player('Dana Wu', 0, short_name='Dana')
+        fs = make_foursome(rnd, [(paul, 0), (dana, 0)], tee=tee)
+        setup_nassau(fs, [paul.id], [dana.id])
+        # Paul wins holes 1-5 → 5 up with 4 to play = clinched at hole 5.
+        for h in range(1, 6):
+            submit_hole(fs, h, [(paul, 4), (dana, 5)])
+        calculate_nassau(fs)
+        ev.emit_score_events(fs, 5, [{'player_id': paul.id, 'gross_score': 4},
+                                     {'player_id': dana.id, 'gross_score': 5}])
+        results = [m for m in _events(rnd, 'match_result')
+                   if m.data.get('unit') == 'front9']
+        self.assertEqual(len(results), 1)   # announced at hole 5, not hole 9
+        self.assertIn('5&4', results[0].body)
+
 
 class Front9RecapTests(TestCase):
     def setUp(self):
@@ -269,6 +290,46 @@ class NassauPressEventTests(TestCase):
                    if m.data.get('game') == 'nassau_press']
         self.assertEqual(len(decided), 1)
         self.assertIn('Paul Lipkin won F9 Press 1', decided[0].body)
+
+
+class ClaremontBottomEventTests(TestCase):
+    def setUp(self):
+        from services.nassau import setup_nassau
+        self.tee = make_tee(make_course())
+        self.round = make_round(self.tee.course, active_games=['nassau'])
+        self.t1a = make_player('Paul Lipkin', 0, short_name='Paul')
+        self.t1b = make_player('Gina Lee',   0, short_name='Gina')
+        self.t2a = make_player('Dana Wu',    0, short_name='Dana')
+        self.t2b = make_player('Ed Ray',     0, short_name='Ed')
+        self.fs = make_foursome(
+            self.round,
+            [(self.t1a, 0), (self.t1b, 0), (self.t2a, 0), (self.t2b, 0)],
+            tee=self.tee)
+        setup_nassau(self.fs, [self.t1a.id, self.t1b.id],
+                     [self.t2a.id, self.t2b.id],
+                     handicap_mode='gross', press_mode='auto',
+                     variant='claremont', press_unit='5.00')
+
+    def test_bottom_press_and_side_announce_with_bot_label(self):
+        from services.nassau import calculate_nassau
+        # Team 1 sweeps both balls all front nine → bottom margin runs up at
+        # 2 pts/hole, an auto bottom-press fires and closes, and the bottom
+        # front-nine bet is won.
+        for h in range(1, 10):
+            submit_hole(self.fs, h, [(self.t1a, 4), (self.t1b, 4),
+                                     (self.t2a, 5), (self.t2b, 5)])
+        calculate_nassau(self.fs)
+        ev.emit_score_events(self.fs, 9, [
+            {'player_id': self.t1a.id, 'gross_score': 4},
+            {'player_id': self.t1b.id, 'gross_score': 4},
+            {'player_id': self.t2a.id, 'gross_score': 5},
+            {'player_id': self.t2b.id, 'gross_score': 5}])
+        bodies = [m.body for m in _events(self.round, 'match_result')]
+        # A bottom PRESS announced, labelled "Bot …".
+        self.assertTrue(any('Bot' in b and 'Press' in b for b in bodies), bodies)
+        # The bottom front-nine SIDE bet announced (margin in points).
+        self.assertTrue(any('bottom front nine' in b and 'pts' in b
+                            for b in bodies), bodies)
 
 
 class SixesMatchResultTests(TestCase):

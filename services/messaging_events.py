@@ -346,6 +346,7 @@ def _emit_match_results(foursome):
     games = _active_games(foursome)
     if 'nassau' in games:
         _emit_nassau_results(foursome)
+        _emit_nassau_bottom_results(foursome)
         _emit_nassau_presses(foursome)
     if 'sixes' in games:
         _emit_sixes_results(foursome)
@@ -373,21 +374,72 @@ def _emit_nassau_results(foursome):
     team2 = s.get('teams', {}).get('team2', [])
     for unit, (label, holes) in _NINE.items():
         seg = s.get(unit) or {}
-        if (seg.get('holes_played') or 0) < holes:
-            continue  # nine not finished yet
-        result = seg.get('result')
-        margin = abs(seg.get('margin') or 0)
-        if result == 'team1' and margin:
-            body = f'{_side_names(team1)} won {label}, {margin} up.'
-        elif result == 'team2' and margin:
-            body = f'{_side_names(team2)} won {label}, {margin} up.'
+        # Announce the MOMENT the nine is won — either mathematically decided
+        # before the last hole (decided_margin set → "3&2" style) or played out
+        # (result set → "2 up" / halved). Skip while still live.
+        dm       = seg.get('decided_margin')
+        complete = (seg.get('holes_played') or 0) >= holes
+        if dm is None and not complete:
+            continue
+        if dm is not None:
+            margin = abs(dm)
+            rem    = seg.get('decided_remaining') or 0
+            result = 'team1' if dm > 0 else 'team2'
+            names  = team1 if result == 'team1' else team2
+            tail   = f'{margin}&{rem}' if rem > 0 else f'{margin} up'
+            body   = f'{_side_names(names)} won {label}, {tail}.'
         else:
-            body = f'{label[0].upper()}{label[1:]} was halved.'
+            result = seg.get('result')
+            margin = abs(seg.get('margin') or 0)
+            if result == 'team1' and margin:
+                body = f'{_side_names(team1)} won {label}, {margin} up.'
+            elif result == 'team2' and margin:
+                body = f'{_side_names(team2)} won {label}, {margin} up.'
+            else:
+                body = f'{label[0].upper()}{label[1:]} was halved.'
         _emit(round_obj,
               event_key=f'nassau:{unit}:{round_obj.id}:{foursome.id}',
               body=body,
               data={'type': 'match_result', 'game': 'nassau', 'unit': unit,
                     'result': result or 'halved', 'margin': margin},
+              push_category='match_result', push_title='Match result')
+
+
+_BOTTOM_NINE = {
+    'bottom_front9':  ('the bottom front nine', 9),
+    'bottom_back9':   ('the bottom back nine', 9),
+    'bottom_overall': ('the bottom overall match', 18),
+}
+
+
+def _emit_nassau_bottom_results(foursome):
+    """Announce each Claremont BOTTOM nine (front / back / overall) once
+    complete. The bottom bet is worth 2 points/hole, so its margin is in POINTS
+    ("4 pts"). No-op unless the game is Claremont (bottom_* blocks are null)."""
+    from services.nassau import nassau_summary
+    s = nassau_summary(foursome)
+    if not s or not s.get('bottom_front9'):   # null unless variant == 'claremont'
+        return
+    round_obj = foursome.round
+    team1 = s.get('teams', {}).get('team1', [])
+    team2 = s.get('teams', {}).get('team2', [])
+    for unit, (label, holes) in _BOTTOM_NINE.items():
+        seg = s.get(unit) or {}
+        if (seg.get('holes_played') or 0) < holes:
+            continue  # nine not finished yet
+        result = seg.get('result')
+        margin = abs(seg.get('margin') or 0)
+        if result == 'team1' and margin:
+            body = f'{_side_names(team1)} won {label}, {margin} pts.'
+        elif result == 'team2' and margin:
+            body = f'{_side_names(team2)} won {label}, {margin} pts.'
+        else:
+            body = f'{label[0].upper()}{label[1:]} was halved.'
+        _emit(round_obj,
+              event_key=f'nassaubot:{unit}:{round_obj.id}:{foursome.id}',
+              body=body,
+              data={'type': 'match_result', 'game': 'nassau_bottom',
+                    'unit': unit, 'result': result or 'halved', 'margin': margin},
               push_category='match_result', push_title='Match result')
 
 
@@ -406,8 +458,9 @@ def _press_labels(presses):
 
 
 def _emit_nassau_presses(foursome):
-    """Announce each Nassau press once it's decided (won or halved). Keyed per
-    press (nine + start hole) so re-scanning on every submit posts each once."""
+    """Announce each Nassau press once it's decided (won or halved) — both the
+    top series and the Claremont BOTTOM series (labelled "Bot …"). Keyed per
+    press so re-scanning on every submit posts each once."""
     from services.nassau import nassau_summary
     s = nassau_summary(foursome)
     if not s:
@@ -415,17 +468,33 @@ def _emit_nassau_presses(foursome):
     round_obj = foursome.round
     team1 = s.get('teams', {}).get('team1', [])
     team2 = s.get('teams', {}).get('team2', [])
-    presses = s.get('presses', [])
+    _emit_press_group(round_obj, foursome, s.get('presses', []),
+                      team1, team2, is_bottom=False)
+    _emit_press_group(round_obj, foursome, s.get('bottom_presses', []),
+                      team1, team2, is_bottom=True)
+
+
+def _emit_press_group(round_obj, foursome, presses, team1, team2, *, is_bottom):
+    """Emit one press series. Top margins are in holes ("2&1" / "2 up"); the
+    Claremont bottom series is in POINTS ("4 pts") and its label + event key
+    carry "Bot" so it's distinct from the top press at the same start hole."""
+    if not presses:
+        return
     labels = _press_labels(presses)
+    prefix = 'Bot ' if is_bottom else ''
+    kind   = 'nassaubotpress' if is_bottom else 'nassaupress'
     for p in presses:
         result = p.get('result')
         if not result:
             continue  # still open
         nine, start = p.get('nine'), p.get('start_hole')
-        label = labels.get((nine, start), 'Press')
-        m   = abs(p.get('margin') or 0)
-        rem = p.get('holes_remaining') or 0
-        margin_txt = f'{m}&{rem}' if rem > 0 else (f'{m} up' if m else '')
+        label = prefix + labels.get((nine, start), 'Press')
+        m = abs(p.get('margin') or 0)
+        if is_bottom:
+            margin_txt = f'{m} pts' if m else ''
+        else:
+            rem = p.get('holes_remaining') or 0
+            margin_txt = f'{m}&{rem}' if rem > 0 else (f'{m} up' if m else '')
         if result == 'team1':
             body = f'{_side_names(team1)} won {label}' + (f', {margin_txt}.' if margin_txt else '.')
         elif result == 'team2':
@@ -433,10 +502,11 @@ def _emit_nassau_presses(foursome):
         else:
             body = f'{label} was halved.'
         _emit(round_obj,
-              event_key=f'nassaupress:{round_obj.id}:{foursome.id}:{nine}:{start}',
+              event_key=f'{kind}:{round_obj.id}:{foursome.id}:{nine}:{start}',
               body=body,
               data={'type': 'match_result', 'game': 'nassau_press',
-                    'nine': nine, 'label': label, 'result': result, 'margin': m},
+                    'nine': nine, 'label': label, 'result': result,
+                    'margin': m, 'bottom': is_bottom},
               push_category='match_result', push_title='Press result')
 
 

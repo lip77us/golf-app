@@ -3543,10 +3543,11 @@ class _NassauGroupCard extends StatelessWidget {
         }
       }
     } else if (result == 'halved') {
-      display = 'AS';
+      display = 'AS · Final';
       color   = theme.colorScheme.onSurfaceVariant;
     } else {
-      // Completed nine — show winner name + score.
+      // Completed nine — show winner name + score, tagged Final so a plain
+      // "1 UP" reads as over (not a live lead). "&" already implies closed.
       final won    = result == 'team1';
       final winner = won ? t1Names : t2Names;
       color = won ? Colors.blue.shade700 : t2Color;
@@ -3557,7 +3558,7 @@ class _NassauGroupCard extends StatelessWidget {
         display = '$winner ${dm.abs()}&$dr';
       } else {
         final m = bet.margin.abs();
-        display = m > 0 ? '$winner ${m}UP' : '$winner wins';
+        display = m > 0 ? '$winner ${m}UP · Final' : '$winner wins · Final';
       }
     }
 
@@ -3580,13 +3581,15 @@ class _NassauGroupCard extends StatelessWidget {
       final leader = m > 0 ? t1Names : t2Names;
       return '$leader ${m.abs()}UP';
     }
-    if (p.result == 'halved') return 'AS';
+    if (p.result == 'halved') return 'AS · Final';
     final m      = (p.margin ?? 0).abs();
     final winner = p.result == 'team1' ? t1Names : t2Names;
-    if (m == 0) return '$winner wins';
+    if (m == 0) return '$winner wins · Final';
+    // "N&M" already reads as a closed-out match; a plain "N UP" is ambiguous
+    // with a live lead, so tag it Final.
     final score  = p.holesRemaining > 0
         ? '$m&${p.holesRemaining}'
-        : '${m}UP';
+        : '${m}UP · Final';
     return '$winner $score';
   }
 
@@ -3600,11 +3603,11 @@ class _NassauGroupCard extends StatelessWidget {
       final leader = m > 0 ? t1Names : t2Names;
       return '$leader +${m.abs()} pts';
     }
-    if (p.result == 'halved') return 'AS';
+    if (p.result == 'halved') return 'AS · Final';
     final m      = (p.margin ?? 0).abs();
     final winner = p.result == 'team1' ? t1Names : t2Names;
-    if (m == 0) return '$winner wins';
-    return '$winner +$m pts';
+    if (m == 0) return '$winner wins · Final';
+    return '$winner +$m pts · Final';
   }
 
   /// Shared press rows widget — used for both top and bottom presses.
@@ -3675,13 +3678,14 @@ class _NassauGroupCard extends StatelessWidget {
         color   = m > 0 ? Colors.blue.shade700 : t2Color;
       }
     } else if (result == 'halved') {
-      display = 'AS';
+      display = 'AS · Final';
       color   = theme.colorScheme.onSurfaceVariant;
     } else {
       final won    = result == 'team1';
       final winner = won ? t1Names : t2Names;
       color   = won ? Colors.blue.shade700 : t2Color;
-      display = '$winner wins';
+      final m = bet.margin.abs();
+      display = m > 0 ? '$winner +$m pts · Final' : '$winner wins · Final';
     }
 
     return Row(children: [

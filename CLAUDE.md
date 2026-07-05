@@ -1045,3 +1045,20 @@ Two bugs blocked the plays-to PH from responding to a Stroke Play net-% edit:
   `_reloadRound()` resets the guard before `loadRound`; wired to both
   `onGamesChanged` (config-edit return) and pull-to-refresh, so the plays-to PH
   updates once the new % is saved.
+
+### Nassau event/label refinements (testing round 2)
+- **Claremont bottom presses in the play-screen bubble** (`nassau_screen.dart` +
+  `score_entry_screen.dart` `_PressesStrip`): the strip now combines the top and
+  bottom series; bottom presses are tagged "Bot" → **"F9 Bot Press 1"** (points
+  margin, e.g. "4 pts"). nassau_screen previously showed only the top series.
+- **Nassau nine announced when WON, not just when complete**
+  (`messaging_events.py` `_emit_nassau_results`): fires on the `decided_margin`
+  (mathematically clinched before the last hole → "3&2" close-out notation), else
+  on play-out. Applies to front/back/overall. Test:
+  `test_front_nine_announced_when_decided_early`.
+- **Leaderboard "· Final" tag** (`leaderboard_screen.dart` `_betRow`,
+  `_bottomBetRow`, `_pressResultLabel`, `_bottomPressResultLabel`): a decided
+  press/side shown as a plain "1 UP" / "+4 pts" / "AS" now reads "1 UP · Final"
+  etc., so it's distinct from a live lead (the "N&M" close-out notation already
+  implies final, so it's left untagged). The Singles-Match status banner already
+  says "wins …", so it's unchanged.
