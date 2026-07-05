@@ -616,7 +616,7 @@ class RoundSerializer(serializers.ModelSerializer):
         model  = Round
         fields = [
             'id', 'round_number', 'date', 'course', 'status',
-            'active_games', 'game_point_values', 'bet_unit',
+            'active_games', 'primary_game', 'game_point_values', 'bet_unit',
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'scramble_config', 'notes', 'foursomes',
             'is_cup_round', 'ir_balls_config', 'can_manage',
@@ -729,6 +729,8 @@ class RoundCreateSerializer(serializers.Serializer):
     date              = serializers.DateField()
     bet_unit          = serializers.DecimalField(max_digits=6, decimal_places=2, default='0.00')
     active_games      = serializers.ListField(child=serializers.CharField(), default=list)
+    primary_game      = serializers.CharField(required=False, allow_null=True,
+                                               allow_blank=True, default=None)
     game_point_values = serializers.JSONField(required=False, default=dict)
     cup_group_counts  = serializers.JSONField(required=False, default=dict)
     round_number      = serializers.IntegerField(default=1, min_value=1)

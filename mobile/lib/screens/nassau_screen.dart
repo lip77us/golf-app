@@ -25,6 +25,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
 import '../utils/nassau_team_style.dart';
 import '../utils/round_complete.dart';
@@ -41,7 +42,7 @@ class NassauScreen extends StatefulWidget {
   State<NassauScreen> createState() => _NassauScreenState();
 }
 
-class _NassauScreenState extends State<NassauScreen> {
+class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
   /// Unsubmitted score edits for the current session.  hole → playerId → gross.
   final Map<int, Map<int, int>> _pending = {};
 
@@ -75,6 +76,9 @@ class _NassauScreenState extends State<NassauScreen> {
         rp.refreshPendingOverlay();
       }
       rp.loadNassau(widget.foursomeId);
+      if (rp.round?.activeGames.contains('spots') ?? false) {
+        rp.loadSpots(widget.foursomeId);
+      }
 
       // Register a direct listener so we catch the pending → idle
       // transition even when it completes within a single frame.
@@ -97,6 +101,7 @@ class _NassauScreenState extends State<NassauScreen> {
   void dispose() {
     _phantomPollTimer?.cancel();
     if (_syncWatcher != null) _syncRef?.removeListener(_syncWatcher!);
+    disposeSpots();
     super.dispose();
   }
 
@@ -522,14 +527,6 @@ class _NassauScreenState extends State<NassauScreen> {
                 : () => Navigator.of(context)
                     .pushNamed('/leaderboard', arguments: rp.round!.id),
           ),
-          IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
-          ),
         ],
       ),
       body: _buildBody(context, rp, sync, sc, nas, isComplete),
@@ -723,6 +720,13 @@ class _NassauScreenState extends State<NassauScreen> {
                 par:             par,
                 nassau:          nas,
                 phantomInfo:     nas?.phantom,
+                spotsActive:     spotsActive(rp),
+                spotsCountFor:   (pid) =>
+                    spotsCount(pid, _selectedHole, rp.spotsSummary),
+                onSpotsAdd:      (pid) =>
+                    adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
+                onSpotsRemove:   (pid) =>
+                    adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
                 onScoreSelected: (m, score) {
                   final hole = _selectedHole;
                   final wasAllScored = _allScored(
@@ -815,6 +819,11 @@ class _NassauHoleScoreCard extends StatelessWidget {
   final NassauPhantomInfo?      phantomInfo;
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership)      onEditTap;
+  // Spots add-on (captured in this dedicated entry screen).
+  final bool                    spotsActive;
+  final int  Function(int pid)  spotsCountFor;
+  final void Function(int pid)  onSpotsAdd;
+  final void Function(int pid)  onSpotsRemove;
 
   const _NassauHoleScoreCard({
     required this.holeData,
@@ -829,6 +838,10 @@ class _NassauHoleScoreCard extends StatelessWidget {
     this.phantomInfo,
     required this.onScoreSelected,
     required this.onEditTap,
+    this.spotsActive   = false,
+    required this.spotsCountFor,
+    required this.onSpotsAdd,
+    required this.onSpotsRemove,
   });
 
   String get _mode       => nassau?.handicapMode ?? 'net';
@@ -999,6 +1012,11 @@ class _NassauHoleScoreCard extends StatelessWidget {
                 strokesOnThisHole:   matchStrok,
                 team:                _teamOf(m.player.id),
                 onTap: (hasScore && !isHot) ? () => onEditTap(m) : null,
+                spotsActive:   spotsActive,
+                spotsCount:    spotsActive ? spotsCountFor(m.player.id) : 0,
+                onSpotsAdd:    spotsActive ? () => onSpotsAdd(m.player.id) : null,
+                onSpotsRemove:
+                    spotsActive ? () => onSpotsRemove(m.player.id) : null,
               ),
               if (isHot)
                 InlineScorePicker(
@@ -1202,6 +1220,10 @@ class _NassauPlayerRow extends StatelessWidget {
   final VoidCallback? onTap;
   final int           strokesOnThisHole;
   final int?          team; // 1 = Blue, 2 = Orange (null = unteamed)
+  final bool          spotsActive;
+  final int           spotsCount;
+  final VoidCallback? onSpotsAdd;
+  final VoidCallback? onSpotsRemove;
 
   const _NassauPlayerRow({
     required this.member,
@@ -1211,6 +1233,10 @@ class _NassauPlayerRow extends StatelessWidget {
     this.onTap,
     this.strokesOnThisHole = 0,
     this.team,
+    this.spotsActive = false,
+    this.spotsCount = 0,
+    this.onSpotsAdd,
+    this.onSpotsRemove,
   });
 
   @override
@@ -1243,7 +1269,11 @@ class _NassauPlayerRow extends StatelessWidget {
 
         // Name + handicap chip
         Expanded(
-          child: Row(children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(children: [
             Flexible(
               child: Text(
                 member.player.displayShort,
@@ -1288,6 +1318,17 @@ class _NassauPlayerRow extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant)),
             ],
           ]),
+              if (spotsActive)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: SpotsDots(
+                    count: spotsCount,
+                    onAdd: onSpotsAdd ?? () {},
+                    onRemove: onSpotsRemove ?? () {},
+                  ),
+                ),
+            ],
+          ),
         ),
 
         const SizedBox(width: 8),
@@ -2102,7 +2143,7 @@ class _PressesStrip extends StatelessWidget {
         itemBuilder: (_, i) {
           final p      = visible[i];
           // Label by nine + sequential press number within that nine
-          // (e.g. "F9 Press 1", "F9 Press 2") — clearer than the hole range.
+          // (e.g. "F9 Press 1", "F9 Press 2") — compact for the play-screen chip.
           final ninePrefix = currentNine == 'front' ? 'F9' : 'B9';
           final label      = '$ninePrefix Press ${i + 1}';
           final result = p.result;

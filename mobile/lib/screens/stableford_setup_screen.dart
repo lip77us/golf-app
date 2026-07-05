@@ -84,9 +84,10 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   /// True when Stableford is a SECONDARY side game (another game owns entry).
   /// Side games inherit the primary's handicap — no own selector.
   bool get _isSideGame {
-    final games = context.read<RoundProvider>().round?.activeGames ??
-        const <String>[];
-    return games.contains('stableford') && primaryGameOf(games) != 'stableford';
+    final round = context.read<RoundProvider>().round;
+    final games = round?.activeGames ?? const <String>[];
+    return games.contains('stableford') &&
+        resolvePrimary(round?.primaryGame, games) != 'stableford';
   }
 
   @override

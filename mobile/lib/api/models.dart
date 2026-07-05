@@ -1002,6 +1002,10 @@ class Round {
   final CourseInfo course;
   final String status;
   final List<String> activeGames;
+  /// The casual round's PRIMARY game (owns score entry + config), as chosen in
+  /// the picker. Null for tournament/legacy rounds → derive from activeGames.
+  /// Resolve via `resolvePrimary(round.primaryGame, round.activeGames)`.
+  final String? primaryGame;
   final double betUnit;
   /// 'gross' | 'net' | 'strokes_off' — set at round level for tournaments.
   final String handicapMode;
@@ -1041,6 +1045,7 @@ class Round {
     required this.course,
     required this.status,
     required this.activeGames,
+    this.primaryGame,
     required this.betUnit,
     this.handicapMode = 'net',
     this.netPercent   = 100,
@@ -1062,6 +1067,7 @@ class Round {
         course:       CourseInfo.fromJson(j['course'] as Map<String, dynamic>),
         status:       j['status'] as String,
         activeGames:  List<String>.from(j['active_games'] as List? ?? []),
+        primaryGame:  j['primary_game'] as String?,
         betUnit:      double.parse(j['bet_unit'].toString()),
         handicapMode: j['handicap_mode'] as String? ?? 'net',
         netPercent:   j['net_percent']   as int?    ?? 100,

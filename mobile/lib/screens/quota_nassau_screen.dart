@@ -20,6 +20,7 @@ import '../sync/sync_service.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/spots_capture.dart';
 import '../utils/round_complete.dart';
 
 // Gross Stableford: eagle=4, birdie=3, par=2, bogey=1, dbl+=0
@@ -49,7 +50,8 @@ class QuotaNassauScreen extends StatefulWidget {
   State<QuotaNassauScreen> createState() => _QuotaNassauScreenState();
 }
 
-class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
+class _QuotaNassauScreenState extends State<QuotaNassauScreen>
+    with SpotsCaptureMixin {
   final Map<int, Map<int, int>> _pending = {};
   int  _selectedHole    = 1;
   bool _initialJumpDone = false;
@@ -68,7 +70,16 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
         rp.refreshPendingOverlay();
       }
       rp.loadQuotaNassau(widget.foursomeId);
+      if (rp.round?.activeGames.contains('spots') ?? false) {
+        rp.loadSpots(widget.foursomeId);
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    disposeSpots();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -431,17 +442,6 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
                 : () => Navigator.of(context)
                     .pushNamed('/leaderboard', arguments: round.id),
           ),
-          IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                    arguments: {
-                      'foursomeId': widget.foursomeId,
-                      'readOnly': true
-                    }),
-          ),
         ],
       ),
       body: sc == null
@@ -546,6 +546,13 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen> {
                 par:             par,
                 quotaMap:        quotaMap,
                 summary:         summary,
+                spotsActive:     spotsActive(rp),
+                spotsCountFor:   (pid) =>
+                    spotsCount(pid, _selectedHole, rp.spotsSummary),
+                onSpotsAdd:      (pid) =>
+                    adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
+                onSpotsRemove:   (pid) =>
+                    adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
                 onScoreSelected: (m, score) {
                   final hole = _selectedHole;
                   final wasAllScored = _allScored(players, scores);
@@ -794,6 +801,11 @@ class _QNHoleScoreCard extends StatelessWidget {
   final QuotaNassauSummary?            summary;
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership)      onReTapPlayer;
+  // Spots add-on (captured in this dedicated entry screen).
+  final bool                   spotsActive;
+  final int  Function(int pid) spotsCountFor;
+  final void Function(int pid) onSpotsAdd;
+  final void Function(int pid) onSpotsRemove;
 
   const _QNHoleScoreCard({
     required this.holeData,
@@ -806,6 +818,10 @@ class _QNHoleScoreCard extends StatelessWidget {
     required this.summary,
     required this.onScoreSelected,
     required this.onReTapPlayer,
+    this.spotsActive   = false,
+    required this.spotsCountFor,
+    required this.onSpotsAdd,
+    required this.onSpotsRemove,
   });
 
   Color get _t1Color => _qnTeamColor(summary?.team1Colour);
@@ -910,6 +926,11 @@ class _QNHoleScoreCard extends StatelessWidget {
                 onTap: gross != null && !isHot
                     ? () => onReTapPlayer(m)
                     : null,
+                spotsActive:   spotsActive,
+                spotsCount:    spotsActive ? spotsCountFor(m.player.id) : 0,
+                onSpotsAdd:    spotsActive ? () => onSpotsAdd(m.player.id) : null,
+                onSpotsRemove:
+                    spotsActive ? () => onSpotsRemove(m.player.id) : null,
               ),
               if (isHot && !m.player.isPhantom)
                 InlineScorePicker(
@@ -940,6 +961,10 @@ class _QNPlayerRow extends StatelessWidget {
   final VoidCallback? onTap;
   final Color         t1Color;
   final Color         t2Color;
+  final bool          spotsActive;
+  final int           spotsCount;
+  final VoidCallback? onSpotsAdd;
+  final VoidCallback? onSpotsRemove;
 
   const _QNPlayerRow({
     required this.member,
@@ -949,6 +974,10 @@ class _QNPlayerRow extends StatelessWidget {
     this.quota,
     this.teamLabel,
     this.onTap,
+    this.spotsActive = false,
+    this.spotsCount = 0,
+    this.onSpotsAdd,
+    this.onSpotsRemove,
     Color? t1Color,
     Color? t2Color,
   })  : t1Color = t1Color ?? const Color(0xFF1976D2),
@@ -1022,6 +1051,15 @@ class _QNPlayerRow extends StatelessWidget {
                   'Quota ${quota! ~/ 2}/${quota! - quota! ~/ 2}/$quota',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              if (spotsActive)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: SpotsDots(
+                    count: spotsCount,
+                    onAdd: onSpotsAdd ?? () {},
+                    onRemove: onSpotsRemove ?? () {},
                   ),
                 ),
             ],

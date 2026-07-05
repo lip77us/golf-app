@@ -1803,6 +1803,7 @@ class RoundCreateView(APIView):
             course            = course,
             status            = 'pending',
             active_games      = d['active_games'],
+            primary_game      = d.get('primary_game') or None,
             game_point_values = d.get('game_point_values', {}),
             cup_group_counts  = d.get('cup_group_counts', {}),
             bet_unit          = d['bet_unit'],

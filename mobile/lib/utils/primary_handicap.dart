@@ -18,7 +18,7 @@ Future<(String mode, int netPercent)> primaryHandicapFor(
   Round round,
   int foursomeId,
 ) async {
-  final primary = primaryGameOf(round.activeGames);
+  final primary = resolvePrimary(round.primaryGame, round.activeGames);
   try {
     switch (primary) {
       case 'fourball':
@@ -48,6 +48,25 @@ Future<(String mode, int netPercent)> primaryHandicapFor(
         final c = await client.getStablefordConfig(round.id);
         return (c['handicap_mode'] as String? ?? 'net',
                 c['net_percent'] as int? ?? 100);
+      case 'nassau':
+        final s = await client.getNassauSummary(foursomeId);
+        return (s.handicapMode, s.netPercent);
+      case 'sixes':
+        final s = await client.getSixesSummary(foursomeId);
+        return (s.handicapMode, s.netPercent);
+      case 'vegas':
+        final s = await client.getVegasSummary(foursomeId);
+        return (s.handicapMode, s.netPercent);
+      case 'triple_cup':
+        final s = await client.getTripleCupSummary(foursomeId);
+        return (s.handicapMode, s.netPercent);
+      case 'low_net_round':
+      case 'low_net':
+        final c = await client.getLowNetConfig(round.id);
+        return (c['handicap_mode'] as String? ?? 'net',
+                c['net_percent'] as int? ?? 100);
+      case 'quota_nassau':
+        return ('gross', 100);   // Quota Nassau is gross-only
     }
   } catch (_) {/* fall through to round default */}
   return (round.handicapMode, round.netPercent);

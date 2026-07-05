@@ -16,7 +16,7 @@
 /// Used by:
 ///   * score_entry_screen.dart — drives the per-hole stroke dots shown
 ///     next to each player's name on the live entry screen
-///   * scorecard_screen.dart  — drives the scorecard's stroke dots so
+///   * widgets/scorecard_grid.dart — drives the scorecard's stroke dots so
 ///     they agree with the entry screen rather than showing the naive
 ///     round-wide allocation.
 ///

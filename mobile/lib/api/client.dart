@@ -834,6 +834,7 @@ class ApiClient {
     required int courseId,
     required String date,          // 'YYYY-MM-DD'
     List<String> activeGames = const [],
+    String? primaryGame,
     Map<String, double> gamePointValues = const {},
     Map<String, int>    cupGroupCounts  = const {},
     int roundNumber = 1,
@@ -845,6 +846,7 @@ class ApiClient {
       'course_id'          : courseId,
       'date'               : date,
       'active_games'       : activeGames,
+      if (primaryGame != null) 'primary_game': primaryGame,
       'round_number'       : roundNumber,
       'handicap_mode'      : handicapMode,
       'net_percent'        : netPercent,

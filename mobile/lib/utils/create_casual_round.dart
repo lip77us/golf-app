@@ -47,12 +47,15 @@ class CasualRoundLaunch {
 (String?, Object?) casualGameRoute(
   Set<String> activeGames,
   Round round,
-  Foursome? firstFs,
-) {
+  Foursome? firstFs, {
+  String? primaryGame,
+}) {
   if (firstFs == null) return (null, null);
   // Route to the PRIMARY game's setup — side games are configured later from
-  // the /round hub and don't drive entry.
-  final primary = primaryGameOf(activeGames);
+  // the /round hub and don't drive entry.  Honor the user's explicit pick
+  // (primaryGame) over the derived one, since a two-overlay set like
+  // {low_net_round, skins} can't be disambiguated from the flat set alone.
+  final primary = resolvePrimary(primaryGame, activeGames);
   if (primary == null) return (null, null);
   // returnToHub: after configuring, land on the /round launch page (Enter
   // Scores / Edit Tee Boxes / Edit Configuration) instead of jumping straight
@@ -112,10 +115,16 @@ Future<CasualRoundLaunch> createCasualRound({
   required int courseId,
   required Map<int, int> playerTees,
   required Set<String> activeGames,
+  String? primaryGame,
   Map<int, int>? playerGroups,
 }) async {
   final multiGroup = activeGames.contains(GameIds.multiSkins);
   final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+  // The picker's `match_18` shortcut becomes `nassau` on the round; mirror that
+  // in the stored primary so it matches active_games.
+  final storedPrimary =
+      primaryGame == GameIds.match18 ? GameIds.nassau : primaryGame;
 
   // "18-Hole Match" is a UI shortcut for an Overall-only Nassau.
   final round = await client.createRound(
@@ -124,6 +133,7 @@ Future<CasualRoundLaunch> createCasualRound({
     activeGames: activeGames
         .map((g) => g == GameIds.match18 ? GameIds.nassau : g)
         .toList(),
+    primaryGame: storedPrimary,
   );
 
   final playersSetup = playerTees.entries.map((e) {
@@ -144,7 +154,10 @@ Future<CasualRoundLaunch> createCasualRound({
 
   final firstFs =
       fullRound.foursomes.isNotEmpty ? fullRound.foursomes.first : null;
-  final (route, args) = casualGameRoute(activeGames, fullRound, firstFs);
+  // Pass the ORIGINAL pick (still carrying the match_18 shortcut) so the route
+  // dispatch keys off it, matching how activeGames is passed here.
+  final (route, args) =
+      casualGameRoute(activeGames, fullRound, firstFs, primaryGame: primaryGame);
 
   return CasualRoundLaunch(
     round: fullRound,

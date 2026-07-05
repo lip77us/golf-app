@@ -547,10 +547,10 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   /// True when Stroke Play is a SECONDARY side game (another game owns entry).
   /// Side games inherit the primary's handicap — no own selector.
   bool get _isSideGame {
-    final games = context.read<RoundProvider>().round?.activeGames ??
-        const <String>[];
+    final round = context.read<RoundProvider>().round;
+    final games = round?.activeGames ?? const <String>[];
     return games.contains('low_net_round') &&
-        primaryGameOf(games) != 'low_net_round';
+        resolvePrimary(round?.primaryGame, games) != 'low_net_round';
   }
 
   @override
@@ -648,17 +648,24 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
 
+      final isTourney = cfg['is_tournament_round'] as bool? ?? false;
       setState(() {
         _configured        = cfg['configured'] as bool? ?? false;
         // A configured game means we're editing saved settings → drives the
         // "Save Configuration" label + "Edit Stroke Play" title.
         _editing           = _configured;
-        _isTournamentRound = cfg['is_tournament_round'] as bool? ?? false;
-        // For tournament rounds the mode is locked at the round level;
-        // fall back to the stored game config value for casual rounds.
-        _mode              = (cfg['round_handicap_mode'] ?? cfg['handicap_mode'])
+        _isTournamentRound = isTourney;
+        // Tournament rounds lock handicap at the ROUND level; casual rounds use
+        // the game config's OWN saved value (the round-level value is a fixed
+        // default — always 100% — so preferring it hid the saved casual %).
+        _mode              = (isTourney
+                                 ? (cfg['round_handicap_mode'] ?? cfg['handicap_mode'])
+                                 : (cfg['handicap_mode'] ?? cfg['round_handicap_mode']))
                                  ?.toString() ?? 'net';
-        _netPercent        = (cfg['round_net_percent'] ?? cfg['net_percent']) as int? ?? 100;
+        _netPercent        = (isTourney
+                                 ? (cfg['round_net_percent'] ?? cfg['net_percent'])
+                                 : (cfg['net_percent'] ?? cfg['round_net_percent']))
+                                 as int? ?? 100;
         if (inherited != null) {
           _mode       = inherited.$1;
           _netPercent = inherited.$2;

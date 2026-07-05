@@ -594,17 +594,6 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                 : () => Navigator.of(context)
                     .pushNamed('/leaderboard', arguments: round.id),
           ),
-          IconButton(
-            icon: const Icon(Icons.table_chart_outlined),
-            tooltip: 'View scorecard',
-            onPressed: () {
-              context.read<RoundProvider>().loadScorecard(widget.foursomeId);
-              Navigator.of(context).pushNamed('/scorecard', arguments: {
-                'foursomeId': widget.foursomeId,
-                'readOnly': true,
-              });
-            },
-          ),
           // Game-specific action last.
           IconButton(
             icon: const Icon(Icons.format_list_numbered),

@@ -41,9 +41,13 @@ A casual round now has **exactly one PRIMARY game** (owns the score-entry screen
 plus **zero or more SECONDARY "side games"** — pure leaderboard overlays computed
 from the entered scores, with **no effect on score entry** (they appear only as
 leaderboard tabs). Mirrors how tournaments separate a primary accumulator from
-per-round side games. **Mobile-only — no backend change** (`active_games` was
-already a flat set the backend computes + tabs for every entry; the primary is
-*derived*, not stored).
+per-round side games. Originally the primary was **derived** from the flat
+`active_games` set (mobile-only). That broke for two-overlay sets like
+{`low_net_round`, `skins`} — Stroke-Play-primary + Skins-side and its inverse
+produce the SAME set, so `primaryGameOf` guessed (wrongly) via priority. The
+primary is now **STORED** — see "Casual primary game stored" below — so the
+user's explicit pick is authoritative; `primaryGameOf` remains the fallback for
+legacy/tournament rounds (null `primary_game`).
 - **Classification** lives in `game_catalog.dart` `GameMeta`: `canBeSideGame`
   (true: `skins`, `stableford`, `low_net_round` [Stroke Play]) and `allowsSideGames` (false:
   `sixes`, `vegas`, `nassau`, `triple_cup`, `multi_skins`). Helpers:
@@ -908,3 +912,136 @@ renders in score entry even though it isn't the primary. (Snake — `docs/snake.
 with a per-type breakdown — v1 is a generic signed count. Broadening which
 primaries allow side games (Nassau/Sixes/Vegas own their structure → can't host
 Spots yet) is the separate Phase-2 item.
+
+#### Spots capture wired into every casual entry screen
+The `SpotsDots` ⊖N⊕ control (via `SpotsCaptureMixin` in `widgets/spots_capture.dart`)
+now renders in ALL casual score-entry surfaces, not just the universal
+`score_entry_screen` + Wolf + Rabbit. Added to the dedicated-screen games whose
+primary can host Spots: **Nassau** (`nassau_screen.dart`), **Points 5-3-1**
+(`points_531_screen.dart`), **Quota Nassau** (`quota_nassau_screen.dart`).
+**Sixes** needed no change — it plays through the universal `score_entry_screen`
+(no dedicated play screen; `/sixes-setup` → `/score-entry`), which already had
+Spots. Pattern per screen: `with SpotsCaptureMixin`, load in initState when
+`activeGames` contains `spots`, `disposeSpots()` in dispose, and thread
+`spotsActive`/`spotsCountFor`/`onSpotsAdd`/`onSpotsRemove` from the State →
+hole-card widget → player-row widget, rendering `SpotsDots` under the player name.
+**Deliberately NOT wired:** Pink Ball + Irish Rumble (tournament-only games — for
+a foursome side game inside a tournament, start a separate casual round instead).
+This closes the gap where Spots was addable to a Nassau round but had no capture UI.
+
+## Scorecard reconciliation — standalone screen retired, rotate-to-landscape (mobile-only)
+
+Collapsed three overlapping surfaces (portrait scorecard, landscape scorecard,
+the leaderboard "Stroke Play" tab) into three distinct jobs with **no duplicated
+grid**. The standalone `ScorecardScreen` + `/scorecard` route + all ~10
+"Full scorecard" `table_chart` toolbar icons were **deleted**. No backend change.
+- **Rotate the phone to landscape anywhere in a round → the full-group stacked
+  card.** The app has no orientation lock (iOS `Info.plist` allows landscape; no
+  `SystemChrome` lock), so `widgets/round_landscape_scorecard.dart`
+  (`RoundLandscapeScorecard`, a `MediaQuery.orientation` gate) is the single place
+  that gives landscape meaning. It wraps each per-foursome route in `main.dart`
+  (score-entry + skins/points_531/wolf/nassau/rabbit/quota_nassau/pink_ball/
+  triple_cup/match_play) **plus the leaderboard**. The wrapped screen stays
+  mounted via `Offstage` (state preserved across rotate-out/in). `foursomeId`
+  null ⇒ rotation is a no-op (e.g. multi-group leaderboard where the target group
+  is ambiguous — the leaderboard resolves the sole/viewer's foursome, else null).
+- **The grid itself:** `widgets/scorecard_grid.dart` (`ScorecardGrid`) — the
+  landscape stacked grid (all players × 18 holes, handicap **dots** + **STBL** +
+  net/OUT/IN/TOT), extracted verbatim from the old screen's landscape view along
+  with ALL its stroke/handicap/ordering logic (`_handicapParams`,
+  `_effectiveHcapFor`, `_tripleCupStrokes`, sixes-SO, team ordering) — still
+  mirrors `score_entry_screen.dart`. Read-only (entry lives on the game screens).
+  `showClose` param: X-button pops only when PUSHED as its own route
+  (multi-skins per-group card); the rotate gate passes `showClose:false` +
+  `automaticallyImplyLeading:false` so it never pops the screen underneath.
+- **The "Stroke Play" tab is now a ranked net-to-par TABLE, not a grid**
+  (`_LowNetView` rewrite, `leaderboard_screen.dart`): rank · name+CH · gross ·
+  net · +/- · $payout, one row per player, **tap a row to expand that player's
+  own 18-hole strip inline** (accordion, `_expandedPid`; par + gross coloured by
+  net-vs-par via the kept `_scoreCell`, front/back subtotals + totals). Scales to
+  a big tournament field where a stacked grid wouldn't. Fed by the existing
+  backend `low_net_round` block — which the server already emits for every
+  individual-ball round **except** `triple_cup`/`scramble` (alt-shot), so
+  Sixes/Vegas/Fourball participants get the tab too (their individual scores,
+  even though that isn't the bet). Future scramble/shamble just join that
+  exclusion set. `_standingsRow` + the old stacked-grid body were removed.
+- The round hub's completed-round **"View Scorecard"** FAB
+  (`round_screen.dart`, still `table_chart_outlined`) was intentionally LEFT — it
+  routes to read-only `/score-entry` (now rotate-gated), not the deleted route.
+  Multi-Skins keeps its own skin-winner scorecard (`_MsScorecard`, unrelated).
+
+## Casual primary game stored (`Round.primary_game`) — implemented
+
+The casual round's PRIMARY game is now **persisted**, replacing the ambiguous
+"derive from `active_games`" approach. Bug it fixes: picking Stroke Play as the
+primary + Skins as a side game produced the unordered set {`low_net_round`,
+`skins`}; `primaryGameOf` then re-derived **Skins** as primary (priority list put
+skins first), so the create wizard dropped the user into **Skins** config (not
+Stroke Play), the hub's "Edit Configuration" targeted Skins (generic label, no
+"Edit Skins" side button), and stroke-dots/junk followed the wrong game. Two
+overlay games can't be disambiguated from a flat set — so we store the pick.
+- **Backend:** `Round.primary_game` (CharField, `null=True`; null = derive, for
+  tournament/legacy rounds). Migration `tournament/0044`. `RoundCreateSerializer`
+  accepts `primary_game`; `RoundCreateView` persists `d.get('primary_game') or
+  None`; `RoundSerializer` exposes it (read).
+- **Mobile:** `Round.primaryGame` (from `primary_game`); `ApiClient.createRound`
+  sends it; `createCasualRound(primaryGame:)` + `casualGameRoute(…, primaryGame:)`
+  route off the explicit pick; the casual picker passes `_primaryGame`, onboarding
+  passes its single game.
+- **Resolution helper:** `resolvePrimary(storedPrimary, active)` in
+  `game_catalog.dart` — returns `storedPrimary` when present AND still in `active`,
+  else `primaryGameOf(active)` (unchanged fallback). Applied at EVERY former
+  `primaryGameOf(...)` call site that has a round in hand (~13):
+  `primary_handicap.dart`, `create_casual_round.dart`, `score_entry_screen.dart`
+  (×4: handicap params, junk gate, Stableford strip, `_GameStatusSection`),
+  `scorecard_grid.dart`, `round_screen.dart` (onEnterScores routing +
+  `_editConfigTarget`/`_sideGamePerFoursomeTargets`, which gained a `primaryGame`
+  param threaded from a new `_FoursomeCard.primaryGame` field),
+  `skins_setup_screen.dart` / `stableford_setup_screen.dart` /
+  `irish_rumble_setup_screen.dart` (`_isSideGame`). Legacy/tournament rounds
+  (null `primary_game`) fall back to the derived value → no behavior change.
+- Both directions now honored: Stroke Play primary + Skins side AND Skins primary
+  + Stroke Play side each configure/route/score the game the user actually chose.
+
+## Nassau press fixes + hub plays-to PH — implemented
+
+Three testing-found fixes:
+- **Claremont bottom auto-press skip (`services/nassau.py`).** The bottom bet is
+  2 points/hole (best ball + 2nd ball), so its margin moves up to ±2/hole and an
+  odd margin could LEAP OVER the exact ±4/±8 threshold (e.g. −3 → −5 skips −4) —
+  the `in AUTO_BOT_THRESHOLDS` exact match never fired. Now triggers on
+  REACHING/CROSSING a 4-point band (`abs(margin) >= 4`, `band = sign*((abs//4)*4)`,
+  tracked in `bot_*_thresholds_fired`). Top presses were fine (±1/hole hits every
+  integer). Regression test in `scoring/tests/test_nassau.py`.
+- **Press labels on the Nassau LEADERBOARD** (`leaderboard_screen.dart`
+  `_pressRows`): "Auto press 3–9" → **"Auto Press holes 3–9"** (capital P +
+  "holes"). The compact **play-screen** chips (`nassau_screen.dart` /
+  `score_entry_screen.dart` `_PressesStrip`) intentionally KEEP the short
+  "F9 Press 1" form — the long label is leaderboard-only.
+- **Hub Playing Handicap is now the PLAYS-TO number** (`round_screen.dart`
+  `hubHandicapLabel`). Was the stored WHS playing handicap (course + mixed-par,
+  100% allowance) — which for a same-par full-net round equals CH, so nothing
+  extra showed. Now it's the EFFECTIVE handicap after the primary game's
+  allowance: "CH 20 · PH 18" for Nassau at 90%. The hub loads each foursome's
+  primary-game `(mode, net%)` async via `primaryHandicapFor` (extended to cover
+  nassau/sixes/vegas/triple_cup/low_net_round/quota_nassau) — **casual rounds
+  only**, bounded to a few calls; the effective handicap uses
+  `effectiveMatchHandicap(mode, net%, playingHandicap, groupLow)`. Until loaded
+  (or on non-casual/unconfigured games) it falls back to the WHS playing handicap
+  → shows "CH x" alone. So the PH difference appears only once the primary game's
+  handicap is configured with an allowance <100% / strokes-off (or mixed par).
+
+### Follow-up: editing Stroke Play net % now reflects on the hub
+Two bugs blocked the plays-to PH from responding to a Stroke Play net-% edit:
+- **Load** (`irish_rumble_setup_screen.dart` `_LowNetSetupScreenState._load`): read
+  `cfg['round_net_percent'] ?? cfg['net_percent']` — but `round_net_percent`
+  (=`Round.net_percent`, a fixed 100% for casual) is always present, so it hid the
+  config's saved `net_percent` and the slider always showed 100%. Now gated on
+  `is_tournament_round`: tournament rounds use the round-level value; casual rounds
+  prefer the game config's own `net_percent`/`handicap_mode`. (The POST already
+  persisted `net_percent` correctly — save was never the problem.)
+- **Hub cache** (`round_screen.dart`): the per-foursome handicap load used a
+  one-time `_hcapLoadStarted` guard, so it never re-fetched after an edit. New
+  `_reloadRound()` resets the guard before `loadRound`; wired to both
+  `onGamesChanged` (config-edit return) and pull-to-refresh, so the plays-to PH
+  updates once the new % is saved.

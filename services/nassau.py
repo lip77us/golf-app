@@ -520,10 +520,9 @@ def calculate_nassau(foursome) -> NassauGame | None:
     bot_active_presses:    list = []
     bot_completed_presses: list = []
 
-    # Bottom auto-press fires at ±4, ±8, ±12, ±16
-    # "2-down" in Claremont means 2 holes equivalent = 4 points (2 pts/hole).
-    # Subsequent presses fire every 4 more points down.
-    AUTO_BOT_THRESHOLDS = frozenset(range(-16, 17, 4)) - {0}  # → {±4, ±8, ±12, ±16}
+    # Bottom auto-press fires on reaching ±4, ±8, ±12, ±16 points (see the
+    # trigger below). "2-down" in Claremont = 2 holes equivalent = 4 points
+    # (2 pts/hole); each further 4 points down fires the next press.
     bot_front9_thresholds_fired: set = set()
     bot_back9_thresholds_fired:  set = set()
 
@@ -732,12 +731,21 @@ def calculate_nassau(foursome) -> NassauGame | None:
             bot_active_presses = still_bot
 
             # ── Trigger bottom auto-press ─────────────────────────────────
+            # Fire on REACHING/CROSSING a 4-point band (±4, ±8, …), not on an
+            # exact-margin match: the bottom margin moves up to ±2 per hole
+            # (best ball + 2nd ball), so an odd margin can leap over the exact
+            # threshold — e.g. −3 → −5 skips −4 — and no press would ever fire.
+            # Thresholds are 4 apart and the step is ≤2, so at most one new band
+            # is crossed per hole.  `bf` tracks the signed band level already
+            # pressed so a recovery-then-relapse doesn't re-press the same band.
             if auto_enabled:
                 pts_left_in_nine = (nine_end - hole_num) * 2
-                if pts_left_in_nine > 0 and bot_nine_margin in AUTO_BOT_THRESHOLDS:
+                if pts_left_in_nine > 0 and abs(bot_nine_margin) >= 4:
                     bf = bot_front9_thresholds_fired if nine_key == 'front' else bot_back9_thresholds_fired
-                    if bot_nine_margin not in bf and not _auto_press_blocked(bot_nine_margin):
-                        bf.add(bot_nine_margin)
+                    sign        = 1 if bot_nine_margin > 0 else -1
+                    band_level  = sign * ((abs(bot_nine_margin) // 4) * 4)  # ±4/±8/…
+                    if band_level not in bf and not _auto_press_blocked(band_level):
+                        bf.add(band_level)
                         bot_active_presses.append({
                             'nine': nine_key, 'press_type': 'auto', 'side': 'bottom',
                             'trigger_hole': hole_num, 'start': hole_num + 1,

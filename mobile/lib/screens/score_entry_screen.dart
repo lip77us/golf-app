@@ -464,7 +464,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // The stroke-dot display follows the PRIMARY game's handicap. Side games
     // (skins / stableford / stroke play) only drive it when they ARE the
     // primary; otherwise they compute their own net server-side.
-    final primary = primaryGameOf(games);
+    final primary = resolvePrimary(rp.round?.primaryGame, games);
     if ((primary == 'low_net_round' || primary == 'low_net') &&
         rp.lowNetConfig != null) {
       final mode = rp.lowNetConfig!['handicap_mode'] as String? ?? 'net';
@@ -1546,14 +1546,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 : () => Navigator.of(context)
                     .pushNamed('/leaderboard', arguments: rp.round!.id),
           ),
-          IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
-          ),
           // Overflow: low-frequency actions — finishing the round early (soft
           // gate) and the icon-legend help sheet.
           PopupMenuButton<String>(
@@ -1872,7 +1864,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final (hMode, hPct) = _handicapParams(rp, games);
     // Junk is a score-entry modifier, so it's only available when Skins is the
     // PRIMARY. As a side game, Skins computes from gross/net only (no junk).
-    final allowJunk = primaryGameOf(games) == 'skins' &&
+    final allowJunk = resolvePrimary(rp.round?.primaryGame, games) == 'skins' &&
         (skins?.allowJunk ?? false);
 
     // Sixes extra-match team gating: auto-open the picker the first time the
@@ -2028,7 +2020,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
               // Stableford running-points band — only when Stableford is the
               // primary (as a side game it shows on the leaderboard, not here).
-              if (primaryGameOf(games) == 'stableford' &&
+              if (resolvePrimary(rp.round?.primaryGame, games) == 'stableford' &&
                   rp.stablefordResult != null)
                 _StablefordStrip(
                   result:      rp.stablefordResult!,
@@ -2039,7 +2031,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // Game status cards
               _GameStatusSection(
                 games:                   games,
-                primaryGame:             primaryGameOf(games),
+                primaryGame:             resolvePrimary(rp.round?.primaryGame, games),
                 nassau:                  nas,
                 skins:                   skins,
                 multiSkins:              games.contains('multi_skins')       ? rp.multiSkinsSummary         : null,

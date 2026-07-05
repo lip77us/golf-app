@@ -7,6 +7,31 @@ import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../widgets/round_chat_button.dart';
+import '../utils/match_handicap.dart';
+import '../utils/primary_handicap.dart';
+
+/// Handicap label for the hub. Shows the Course Handicap and, when it differs,
+/// the **Playing Handicap the player actually plays to** — the strokes received
+/// after the primary game's handicap allowance (e.g. Nassau at 90%) and/or a
+/// mixed-par tee. e.g. "CH 20" (no adjustment) or "CH 20 · PH 18" (90% net).
+///
+/// [primaryHcap] is the primary game's (mode, net%) for this foursome, loaded
+/// async on the hub; when null (not yet loaded, or a non-casual round) it falls
+/// back to the stored WHS playing handicap (par-adjusted, no allowance). For
+/// strokes-off, [groupLow] is the foursome's lowest playing handicap.
+String hubHandicapLabel(Membership m,
+    {(String mode, int netPercent)? primaryHcap, int? groupLow}) {
+  final ch = m.courseHandicap;
+  final ph = primaryHcap == null
+      ? m.playingHandicap
+      : effectiveMatchHandicap(
+          mode:                  primaryHcap.$1,
+          netPercent:            primaryHcap.$2,
+          playingHandicap:       m.playingHandicap,
+          lowestPlayingHandicap: groupLow,
+        );
+  return ch == ph ? 'CH $ch' : 'CH $ch · PH $ph';
+}
 
 class RoundScreen extends StatefulWidget {
   final int roundId;
@@ -17,12 +42,40 @@ class RoundScreen extends StatefulWidget {
 }
 
 class _RoundScreenState extends State<RoundScreen> {
+  /// Per-foursome primary-game handicap (mode, net%), loaded async so the hub
+  /// can show each player's plays-to Playing Handicap (strokes after the
+  /// allowance). Casual rounds only (bounded to a couple of calls); tournament
+  /// rounds fall back to the WHS playing handicap.
+  final Map<int, (String, int)> _fsHcap = {};
+  bool _hcapLoadStarted = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RoundProvider>().loadRound(widget.roundId);
     });
+  }
+
+  /// Reload the round AND allow the per-foursome handicap params to re-fetch,
+  /// so editing a game's handicap allowance (e.g. Stroke Play net %) updates the
+  /// hub's plays-to PH. Used by pull-to-refresh and the config-edit return path.
+  Future<void> _reloadRound() {
+    _hcapLoadStarted = false;   // let _maybeLoadHcap re-fetch the fresh %
+    return context.read<RoundProvider>().loadRound(widget.roundId);
+  }
+
+  /// Kick off the per-foursome primary handicap loads once, when the round
+  /// first arrives. Each result updates just its foursome's chip.
+  void _maybeLoadHcap(Round round) {
+    if (_hcapLoadStarted || !round.isCasual) return;
+    _hcapLoadStarted = true;
+    final client = context.read<AuthProvider>().client;
+    for (final fs in round.foursomes) {
+      primaryHandicapFor(client, round, fs.id).then((hp) {
+        if (mounted) setState(() => _fsHcap[fs.id] = hp);
+      }).catchError((_) {/* leave the WHS fallback in place */});
+    }
   }
 
   @override
@@ -117,6 +170,8 @@ class _RoundScreenState extends State<RoundScreen> {
     final round = rp.round;
     if (round == null) return const SizedBox.shrink();
 
+    _maybeLoadHcap(round);
+
     final isComplete = round.status == 'complete';
 
     // Anyone with admin privileges in this app — Django staff OR
@@ -152,7 +207,7 @@ class _RoundScreenState extends State<RoundScreen> {
         showMatchPlaySetup || showStableford;
 
     return RefreshIndicator(
-      onRefresh: () => rp.loadRound(widget.roundId),
+      onRefresh: _reloadRound,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         children: [
@@ -204,6 +259,8 @@ class _RoundScreenState extends State<RoundScreen> {
                 return _FoursomeCard(
                   foursome:        fs,
                   myPlayerId:      myId,
+                  primaryGame:     round.primaryGame,
+                  primaryHcap:     _fsHcap[fs.id],
                   canManage:       canManage,
                   isComplete:      isComplete,
                   isCupRound:      round.isCupRound,
@@ -212,7 +269,7 @@ class _RoundScreenState extends State<RoundScreen> {
                   roundActiveGames: round.activeGames,
                   allFoursomes:    round.foursomes,
                   roundId:         widget.roundId,
-                  onGamesChanged:  () => rp.loadRound(widget.roundId),
+                  onGamesChanged:  _reloadRound,
                   onEnterScores:   () {
                     context.read<RoundProvider>().loadScorecard(fs.id);
                     // Route priority: setup screens for games that need initial
@@ -276,7 +333,7 @@ class _RoundScreenState extends State<RoundScreen> {
                       // Fourball needs team assignment + handicap + stake.
                       route = '/fourball-setup';
                     } else if (fsGames.contains('skins') &&
-                        primaryGameOf(fsGames) == 'skins' &&
+                        resolvePrimary(round.primaryGame, fsGames) == 'skins' &&
                         !fs.configuredGames.contains('skins')) {
                       // Skins as the PRIMARY needs handicap + carryover config
                       // before scoring. As a side game it's configured from the
@@ -690,7 +747,8 @@ List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
   return out;
 }
 
-(String?, Object?) _editConfigTarget(Set<String> fsGames, Foursome fs) {
+(String?, Object?) _editConfigTarget(
+    Set<String> fsGames, Foursome fs, String? primaryGame) {
   // Match play (Mini Singles Bracket) auto-dispatches by group size; route to
   // whichever variant is configured so the seeds/bracket can be re-edited
   // before scoring starts.
@@ -724,7 +782,7 @@ List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
   // needs team assignment (e.g. 4-player Nassau / Vegas / Fourball, which isn't
   // auto-configured like a 1-v-1 Nassau) still gets a config affordance at the
   // hub instead of it being reachable only through "Enter Scores".
-  final primary = primaryGameOf(fsGames);
+  final primary = resolvePrimary(primaryGame, fsGames);
   if (primary != null && routes.containsKey(primary)) {
     return (routes[primary]!, {'id': fs.id, 'returnToHub': true});
   }
@@ -736,9 +794,11 @@ List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
 /// Stableford use _roundLevelEditTargets). Skins is the only per-foursome side
 /// game today. Shown whether or not it's been configured yet, since side-game
 /// Skins no longer gets configured via Enter Scores.
-List<(String, String)> _sideGamePerFoursomeTargets(Set<String> fsGames) {
+List<(String, String)> _sideGamePerFoursomeTargets(
+    Set<String> fsGames, String? primaryGame) {
   final out = <(String, String)>[];
-  if (fsGames.contains('skins') && primaryGameOf(fsGames) != 'skins') {
+  if (fsGames.contains('skins') &&
+      resolvePrimary(primaryGame, fsGames) != 'skins') {
     out.add(('/skins-setup', 'Edit Skins'));
   }
   // Spots is always a side game (capture add-on) — gets its own setup button.
@@ -759,6 +819,13 @@ class _FoursomeCard extends StatelessWidget {
   final bool         sixesActive;
   final bool         sixesStarted;
   final List<String> roundActiveGames;
+  /// The round's stored PRIMARY game (null = derive). Makes the config buttons
+  /// target the user's actual pick rather than the derived one.
+  final String? primaryGame;
+  /// This foursome's primary-game handicap (mode, net%), loaded async. Null
+  /// until loaded (or non-casual) → the player rows show the WHS playing
+  /// handicap; once present they show the plays-to Playing Handicap.
+  final (String, int)? primaryHcap;
   /// Round-wide foursome list so the TD move/swap actions can list
   /// other groups as targets.  Includes the current foursome — the
   /// menu filters it out at render time.
@@ -776,6 +843,8 @@ class _FoursomeCard extends StatelessWidget {
     required this.sixesActive,
     required this.sixesStarted,
     required this.roundActiveGames,
+    this.primaryGame,
+    this.primaryHcap,
     required this.allFoursomes,
     required this.roundId,
     required this.onEnterScores,
@@ -843,7 +912,7 @@ class _FoursomeCard extends StatelessWidget {
                       ),
                     ),
                     title: Text(m.player.name),
-                    subtitle: Text('Course ${m.playingHandicap}'),
+                    subtitle: Text(hubHandicapLabel(m)),
                     onTap: () => Navigator.of(ctx).pop(m),
                   )),
               const SizedBox(height: 8),
@@ -951,7 +1020,7 @@ class _FoursomeCard extends StatelessWidget {
                       ),
                     ),
                     title: Text(m.player.name),
-                    subtitle: Text('Course ${m.playingHandicap}'),
+                    subtitle: Text(hubHandicapLabel(m)),
                     onTap: () => Navigator.of(ctx).pop(m),
                   )),
               const SizedBox(height: 8),
@@ -1441,7 +1510,16 @@ class _FoursomeCard extends StatelessWidget {
                           color: theme.colorScheme.onSurfaceVariant)),
                   const SizedBox(width: 8),
                 ],
-                Text('Course ${m.playingHandicap}',
+                Text(
+                    hubHandicapLabel(m,
+                        primaryHcap: primaryHcap,
+                        groupLow: primaryHcap?.$1 == 'strokes_off'
+                            ? foursome.realPlayers
+                                .map((x) => x.playingHandicap)
+                                .fold<int?>(
+                                    null,
+                                    (a, b) => a == null || b < a ? b : a)
+                            : null),
                     style: theme.textTheme.bodySmall),
               ]),
             );
@@ -1505,6 +1583,7 @@ class _FoursomeCard extends StatelessWidget {
                 final (route, editArgs) = _editConfigTarget(
                   {...roundActiveGames, ...foursome.activeGames},
                   foursome,
+                  primaryGame,
                 );
                 if (route == null) return const SizedBox.shrink();
                 return Padding(
@@ -1527,7 +1606,7 @@ class _FoursomeCard extends StatelessWidget {
               // primary): their own setup button, since they no longer get
               // configured through Enter Scores.  Setup takes the foursome id.
               for (final t in _sideGamePerFoursomeTargets(
-                  {...roundActiveGames, ...foursome.activeGames}))
+                  {...roundActiveGames, ...foursome.activeGames}, primaryGame))
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: SizedBox(

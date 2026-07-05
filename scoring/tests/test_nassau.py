@@ -164,6 +164,27 @@ class NassauTests(TestCase):
         # $5 loss under a $10 cap → real downside remains, the auto-press fires.
         assert len(self._auto_front_loss_then_2down_back(cap=Decimal('10'))) == 1
 
+    def test_claremont_bottom_press_fires_when_margin_skips_exact_threshold(self):
+        """Regression: the bottom margin moves up to ±2/hole (best + 2nd ball),
+        so it can leap over the exact −4 threshold (e.g. −3 → −5) and never fire
+        the bottom auto-press. It must fire on REACHING/CROSSING ±4."""
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross',
+                     variant='claremont', press_mode='auto', press_unit='5.00')
+        # Bottom margin (team1 perspective): −1, −3, −5 across holes 1–3.
+        #   h1: T2 wins best ball only (2nd tied)      → delta −1  (margin −1)
+        #   h2: T2 wins best AND 2nd ball              → delta −2  (margin −3)
+        #   h3: T2 wins best AND 2nd ball              → delta −2  (margin −5, skips −4)
+        submit_hole(self.fs, 1, [(self.pid['T1A'], 5), (self.pid['T1B'], 5),
+                                 (self.pid['T2A'], 4), (self.pid['T2B'], 5)])
+        submit_hole(self.fs, 2, [(self.pid['T1A'], 5), (self.pid['T1B'], 5),
+                                 (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        submit_hole(self.fs, 3, [(self.pid['T1A'], 5), (self.pid['T1B'], 5),
+                                 (self.pid['T2A'], 4), (self.pid['T2B'], 4)])
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+        assert len(s['bottom_presses']) == 1, s['bottom_presses']
+        assert s['bottom_presses'][0]['start_hole'] == 4, s['bottom_presses'][0]
+
     def test_back9_scored_independently_of_front(self):
         """A blowout on the front doesn't bleed into the back-9 bet."""
         setup_nassau(self.fs, self.team1, self.team2,

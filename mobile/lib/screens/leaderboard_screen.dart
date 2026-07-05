@@ -9,12 +9,14 @@ import '../utils/nassau_team_style.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/round_landscape_scorecard.dart';
 import '../widgets/inline_message.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../utils/watcher_invite.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
+import '../widgets/net_score_button.dart' show scoreCellWithDots;
 import '../widgets/borrowed_fourth.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
@@ -152,76 +154,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     ));
   }
 
-  /// Open the round's full scorecard (read-only) from the leaderboard, so it's
-  /// reachable during AND after the round without going through score entry.
-  /// Single-foursome rounds open directly; multi-group rounds ask which group.
-  Future<void> _openScorecard() async {
-    final nav       = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-    final rp        = context.read<RoundProvider>();
-
-    var foursomes =
-        (rp.round?.id == widget.roundId) ? rp.round!.foursomes : const <Foursome>[];
-    if (foursomes.isEmpty) {
-      try {
-        foursomes = (await context
-                .read<AuthProvider>()
-                .client
-                .getRound(widget.roundId))
-            .foursomes;
-      } catch (_) {
-        messenger.showSnackBar(const SnackBar(
-            content: Text('Could not open the scorecard. Try again.')));
-        return;
+  /// Foursome whose card the rotate-to-landscape gesture shows on the
+  /// leaderboard.  Single-foursome rounds resolve directly; multi-group rounds
+  /// prefer the viewer's own group, else the first.  Null (→ rotation is a
+  /// no-op) when the round isn't loaded here — each group's card is still
+  /// reachable by rotating on its game screen.
+  int? _landscapeFoursomeId(RoundProvider rp) {
+    if (rp.round?.id != widget.roundId) return null;
+    final foursomes = rp.round!.foursomes;
+    if (foursomes.isEmpty) return null;
+    if (foursomes.length == 1) return foursomes.first.id;
+    final myPid = context.read<AuthProvider>().player?.id;
+    if (myPid != null) {
+      for (final fs in foursomes) {
+        if (fs.memberships.any((m) => m.player.id == myPid)) return fs.id;
       }
     }
-    if (!mounted) return;
-    if (foursomes.isEmpty) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text('No scorecard available for this round yet.')));
-      return;
-    }
-
-    final foursomeId = foursomes.length == 1
-        ? foursomes.first.id
-        : await _pickFoursome(foursomes);
-    if (foursomeId == null || !mounted) return;
-    nav.pushNamed('/scorecard',
-        arguments: {'foursomeId': foursomeId, 'readOnly': true});
-  }
-
-  /// Bottom sheet to choose which group's scorecard to open (multi-group rounds).
-  Future<int?> _pickFoursome(List<Foursome> foursomes) {
-    return showModalBottomSheet<int>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text("Which group's scorecard?",
-                  style: Theme.of(ctx).textTheme.titleMedium),
-            ),
-          ),
-          for (final fs in foursomes)
-            ListTile(
-              leading: const Icon(Icons.groups_outlined),
-              title: Text(fs.label),
-              subtitle: Text(
-                fs.memberships
-                    .where((m) => !m.player.isPhantom)
-                    .map((m) => m.player.shortName)
-                    .join(', '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              onTap: () => Navigator.of(ctx).pop(fs.id),
-            ),
-        ]),
-      ),
-    );
+    return foursomes.first.id;
   }
 
   /// The leaderboard's secondary actions, folded behind a more_vert menu so the
@@ -364,7 +313,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         lb?.accountId != null &&
         lb!.accountId != auth.account?.id;
 
-    return Scaffold(
+    return RoundLandscapeScorecard(
+      foursomeId: _landscapeFoursomeId(rp),
+      child: Scaffold(
       appBar: GolfAppBar(
         title: 'Leaderboard',
         // Keep the header to a few direct icons + an overflow menu so it never
@@ -374,13 +325,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           // Round chat / event feed. Hidden in a support view (read-only).
           if (!isSupportView)
             RoundChatButton(roundId: widget.roundId, title: courseName),
-          // Full scorecard — always reachable here, during AND after the round
-          // (previously only inside the score-entry screen).
-          IconButton(
-            tooltip: 'Scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: _openScorecard,
-          ),
           // Refresh is a fallback (the leaderboard reloads on entry), so it
           // folds into the ⋯ overflow — keeping the toolbar to the 0–2 actions
           // above.  The support view hides ⋯, so keep refresh inline there.
@@ -451,6 +395,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               Expanded(child: _buildBody(context, rp)),
             ])
           : _buildBody(context, rp),
+      ),
     );
   }
 
@@ -1144,24 +1089,10 @@ class _LowNetView extends StatefulWidget {
 }
 
 class _LowNetViewState extends State<_LowNetView> {
-  final ScrollController _scroll = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    // Auto-scroll to the right so the latest holes (current play) are visible.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
+  /// Player rows currently expanded to show their hole-by-hole strip. Multiple
+  /// can be open at once; a row toggles closed only when re-tapped. Resets to
+  /// empty when the tab's state is recreated (leaving and returning).
+  final Set<int> _expandedPids = <int>{};
 
   static String _ntpLabel(int? ntp) {
     if (ntp == null) return '—';
@@ -1196,23 +1127,17 @@ class _LowNetViewState extends State<_LowNetView> {
   Widget build(BuildContext context) {
     final theme   = Theme.of(context);
     final results = [...(widget.data['results'] as List? ?? [])];
-    // Order rows like the score-entry screen (foursome membership order) when
-    // we know it; otherwise keep the server's net-rank order.  Players not in
-    // the order list fall to the end, stably.
-    final order = widget.playerOrder;
-    if (order.isNotEmpty) {
-      int idx(dynamic r) {
-        final pid = (r as Map)['player_id'] as int?;
-        final i = pid == null ? -1 : order.indexOf(pid);
-        return i < 0 ? 1 << 30 : i;
-      }
-      results.sort((a, b) => idx(a).compareTo(idx(b)));
-    }
-    final entryFee= (widget.data['entry_fee'] as num?)?.toDouble() ?? 0.0;
-    final payouts = (widget.data['payouts'] as List? ?? []);
-    final hmode   = widget.data['handicap_mode']?.toString() ?? 'net';
-    final npct    = widget.data['net_percent'] as int? ?? 100;
-    final showNet = hmode != 'gross';
+    // Rank order (rank 1 first) — this is a leaderboard, not score entry.
+    results.sort((a, b) {
+      final ra = (a as Map)['rank'] as int? ?? 1 << 30;
+      final rb = (b as Map)['rank'] as int? ?? 1 << 30;
+      return ra.compareTo(rb);
+    });
+    final entryFee = (widget.data['entry_fee'] as num?)?.toDouble() ?? 0.0;
+    final payouts  = (widget.data['payouts'] as List? ?? []);
+    final hmode    = widget.data['handicap_mode']?.toString() ?? 'net';
+    final npct     = widget.data['net_percent'] as int? ?? 100;
+    final showNet  = hmode != 'gross';
 
     final modeLabel = hmode == 'gross' ? 'Gross'
         : hmode == 'strokes_off' ? 'Strokes Off'
@@ -1252,239 +1177,40 @@ class _LowNetViewState extends State<_LowNetView> {
       ]);
     }
 
-    // Par per hole — union across players so any hole anyone played gets a column.
-    final parByHole = <int, int>{};
-    for (final r in results) {
-      for (final h in ((r as Map)['holes'] as List? ?? [])) {
-        final m = h as Map;
-        final n = m['hole'] as int?;
-        final p = m['par'] as int?;
-        if (n != null && p != null) parByHole[n] = p;
-      }
-    }
-    final holeNums = parByHole.keys.toList()..sort();
+    final anyPayout = results.any((r) => (r as Map)['payout'] != null);
 
-    // No per-hole data yet → simple standings list.
-    if (holeNums.isEmpty) {
-      return ListView(padding: const EdgeInsets.all(16), children: [
-        chips,
-        const SizedBox(height: 8),
-        ...results.map((r) => _standingsRow(theme, r as Map<String, dynamic>)),
-      ]);
-    }
-
-    // ── One row per player; holes are columns (scroll horizontally). The
-    //    player column (rank/name/total) stays pinned so you can scan a hole
-    //    across everyone at once. ──
-    const double nameW = 132, holeW = 30, headH = 22, parH = 20, rowH = 38;
-    final headerStyle = theme.textTheme.labelSmall!.copyWith(
-        fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
-    final parStyle = theme.textTheme.labelSmall!
-        .copyWith(color: theme.colorScheme.onSurfaceVariant);
-    const cellStyle = TextStyle(fontSize: 12);
-    final divider = BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5);
-    // Dark line under the Par row, separating the header from the data.
-    final headSep = BorderSide(color: theme.colorScheme.outline, width: 1.4);
-
-    Widget box(double w, double h, Widget child,
-        {Alignment align = Alignment.center,
-        EdgeInsets? pad,
-        bool border = false,
-        BorderSide? bottomSide}) {
-      final side = bottomSide ?? (border ? divider : null);
-      return Container(
-        width: w, height: h, alignment: align, padding: pad,
-        decoration:
-            side != null ? BoxDecoration(border: Border(bottom: side)) : null,
-        child: child,
-      );
-    }
-
-    // Pinned left column: header, par label, then rank + name (+ payout) + total.
-    final frozen = <Widget>[
-      box(nameW, headH, Text('Hole', style: headerStyle),
-          align: Alignment.centerLeft, pad: const EdgeInsets.only(left: 4)),
-      box(nameW, parH, Text('Par', style: parStyle),
-          align: Alignment.centerLeft, pad: const EdgeInsets.only(left: 4),
-          bottomSide: headSep),
-      for (final r in results)
-        () {
-          final row = r as Map<String, dynamic>;
-          final rank = row['rank'] as int? ?? 0;
-          final name = row['name']?.toString() ?? '—';
-          final ntp = row['net_to_par'] as int?;
-          final payout = (row['payout'] as num?)?.toDouble();
-          // Course handicap drives the stroke dots (circle/square = net vs par),
-          // so surface it next to the name in net / strokes-off modes.
-          final ch = row['handicap'] as int? ?? 0;
-          return box(nameW, rowH,
-            Row(children: [
-              SizedBox(
-                  width: 16,
-                  child: Text('$rank',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.bold))),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600)),
-                    if (showNet || payout != null)
-                      Row(mainAxisSize: MainAxisSize.min, children: [
-                        if (showNet)
-                          Text('CH $ch',
-                              style: TextStyle(
-                                  fontSize: 9,
-                                  color: theme.colorScheme.onSurfaceVariant)),
-                        if (showNet && payout != null)
-                          Text('  ·  ',
-                              style: TextStyle(
-                                  fontSize: 9,
-                                  color: theme.colorScheme.onSurfaceVariant)),
-                        if (payout != null)
-                          Text('\$${payout.formatBet()}',
-                              style: TextStyle(
-                                  fontSize: 9, color: Colors.green.shade700)),
-                      ]),
-                  ],
-                ),
-              ),
-              Text(_ntpLabel(ntp),
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: toParColor(ntp))),
-              // Match the gap on the other side of the divider (margin: 6) so
-              // the net score isn't tight against the border line.
-              const SizedBox(width: 6),
-            ]),
-            align: Alignment.centerLeft, border: true);
-        }(),
-    ];
-
-    // Totals: gross Out (1-9) appears once hole 9 is reached; In, Gross (total)
-    // and Net appear once hole 18 is reached.
-    const double totW = 36;
-    final frontHoles = holeNums.where((n) => n <= 9).toList();
-    final backHoles  = holeNums.where((n) => n > 9).toList();
-    final showOut = holeNums.contains(9);
-    final showEnd = holeNums.contains(18);
-    final outPar = frontHoles.fold<int>(0, (s, n) => s + (parByHole[n] ?? 0));
-    final inPar  = backHoles.fold<int>(0, (s, n) => s + (parByHole[n] ?? 0));
-    final totalPar = outPar + inPar;
-
-    // Scrollable columns, in scorecard order: front holes, Out (after 9), back
-    // holes, then In / Gross / Net (after 18).  Par row has a dark line under it.
-    final headerRow = Row(children: [
-      for (final n in frontHoles) box(holeW, headH, Text('$n', style: headerStyle)),
-      if (showOut) box(totW, headH, Text('Out', style: headerStyle)),
-      for (final n in backHoles) box(holeW, headH, Text('$n', style: headerStyle)),
-      if (showEnd) ...[
-        box(totW, headH, Text('In', style: headerStyle)),
-        box(totW, headH, Text('Gross', style: headerStyle)),
-        box(totW, headH, Text('Net', style: headerStyle)),
-      ],
-    ]);
-    final parRow = Row(children: [
-      for (final n in frontHoles)
-        box(holeW, parH, Text('${parByHole[n]}', style: parStyle),
-            bottomSide: headSep),
-      if (showOut)
-        box(totW, parH, Text('$outPar', style: parStyle), bottomSide: headSep),
-      for (final n in backHoles)
-        box(holeW, parH, Text('${parByHole[n]}', style: parStyle),
-            bottomSide: headSep),
-      if (showEnd) ...[
-        box(totW, parH, Text('$inPar', style: parStyle), bottomSide: headSep),
-        box(totW, parH, Text('$totalPar', style: parStyle), bottomSide: headSep),
-        box(totW, parH, const SizedBox(), bottomSide: headSep),
-      ],
-    ]);
-    final playerRows = <Widget>[
-      for (final r in results)
-        () {
-          final row = r as Map<String, dynamic>;
-          final hm = <int, Map>{};
-          for (final h in (row['holes'] as List? ?? [])) {
-            final m = h as Map;
-            final n = m['hole'] as int?;
-            if (n != null) hm[n] = m;
-          }
-          int grossSum(List<int> hs) => hs.fold<int>(
-              0, (s, n) => s + ((hm[n]?['gross'] as int?) ?? 0));
-          final netTotal = row['total_net'] as int?;
-          final ntp = row['net_to_par'] as int?;
-          Widget holeCell(int n) => box(holeW, rowH,
-              hm[n] == null
-                  ? Text('–',
-                      style: cellStyle.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant))
-                  : _scoreCell(theme, hm[n]!, showNet, cellStyle),
-              border: true);
-          Widget totCell(String text, {bool bold = false, Color? color}) =>
-              box(totW, rowH,
-                  Text(text,
-                      style: cellStyle.copyWith(
-                          fontWeight: bold ? FontWeight.bold : FontWeight.w600,
-                          color: color)),
-                  border: true);
-          return Row(children: [
-            for (final n in frontHoles) holeCell(n),
-            if (showOut) totCell('${grossSum(frontHoles)}'),
-            for (final n in backHoles) holeCell(n),
-            if (showEnd) ...[
-              totCell('${grossSum(backHoles)}'),
-              totCell('${grossSum(holeNums)}'),
-              totCell('${netTotal ?? ''}',
-                  bold: true, color: toParColor(ntp)),
-            ],
-          ]);
-        }(),
-    ];
-
+    // Ranked net-to-par table.  Tapping a row expands that player's own
+    // hole-by-hole strip inline (accordion); the full stacked grid lives in
+    // the rotate-to-landscape scorecard, so this table scales to a big field.
     return ListView(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
       children: [
         chips,
         const SizedBox(height: 10),
+        _headerRow(theme, showNet: showNet),
+        for (final r in results)
+          ..._playerBlock(theme, r as Map<String, dynamic>,
+              showNet: showNet, showMoney: anyPayout),
+        const SizedBox(height: 12),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Pinned net-score column, with a stronger divider before the holes.
-            Container(
-              margin: const EdgeInsets.only(right: 6),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.colorScheme.outline, width: 2),
-                ),
-              ),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, children: frozen),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scroll,
-                scrollDirection: Axis.horizontal,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [headerRow, parRow, ...playerRows],
-                ),
+            Icon(Icons.screen_rotation_outlined,
+                size: 14, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                "Rotate your phone to see the whole field's scorecard.",
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Text(
-          showNet
-              ? 'Gross per hole. Red/circle = under net par; square = over.'
-              : 'Gross per hole. Red/circle = under par; square = over.',
+          'Tap a player for their hole-by-hole scores.',
+          textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
@@ -1492,29 +1218,265 @@ class _LowNetViewState extends State<_LowNetView> {
     );
   }
 
-  Widget _standingsRow(ThemeData theme, Map<String, dynamic> row) {
-    final rank = row['rank'] as int? ?? 0;
-    final name = row['name']?.toString() ?? '—';
-    final ntp = row['net_to_par'] as int?;
-    final payout = (row['payout'] as num?)?.toDouble();
+  static const double _rankW = 26;
+  static const double _colW  = 44;
+
+  Widget _headerRow(ThemeData theme, {required bool showNet}) {
+    final style = theme.textTheme.labelSmall?.copyWith(
+        fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
+    Widget h(String t, double w) =>
+        SizedBox(width: w, child: Text(t, style: style, textAlign: TextAlign.center));
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.only(bottom: 4, left: 4, right: 4),
       child: Row(children: [
-        SizedBox(
-            width: 24,
-            child: Text('$rank',
-                style: const TextStyle(fontWeight: FontWeight.bold))),
-        Expanded(child: Text(name)),
-        if (payout != null)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Text('\$${payout.formatBet()}',
-                style: TextStyle(color: Colors.green.shade700)),
-          ),
-        Text(_ntpLabel(ntp),
-            style: TextStyle(
-                fontWeight: FontWeight.bold, color: toParColor(ntp))),
+        h('#', _rankW),
+        const SizedBox(width: 4),
+        Expanded(child: Text('Player', style: style)),
+        // Net-to-par first, Gross-to-par second (the raw totals are dropped —
+        // they're not meaningful mid-round). Gross-only rounds show just Gross.
+        if (showNet) h('Net', _colW),
+        h('Gross', _colW),
+        h('Thru', _colW),
+        const SizedBox(width: 24), // chevron gutter
       ]),
+    );
+  }
+
+  /// Gross vs par over the holes played so far (in-progress friendly — no raw
+  /// total, which isn't meaningful until the round is done).
+  int _grossToPar(Map<String, dynamic> row) {
+    var d = 0;
+    for (final h in (row['holes'] as List? ?? [])) {
+      final m = h as Map;
+      final g = m['gross'] as int?;
+      final p = m['par'] as int?;
+      if (g != null && p != null) d += g - p;
+    }
+    return d;
+  }
+
+  List<Widget> _playerBlock(ThemeData theme, Map<String, dynamic> row,
+      {required bool showNet, required bool showMoney}) {
+    final pid      = row['player_id'] as int?;
+    final rank     = row['rank'] as int? ?? 0;
+    final name     = row['name']?.toString() ?? '—';
+    final ntp      = row['net_to_par'] as int?;
+    final payout   = (row['payout'] as num?)?.toDouble();
+    final ch       = row['handicap'] as int? ?? 0;
+    final holes    = (row['holes'] as List? ?? []);
+    final thru     = row['holes_played'] as int? ?? holes.length;
+    final grossTp  = _grossToPar(row);
+    final expanded = pid != null && _expandedPids.contains(pid);
+    final showPay  = showMoney && payout != null;
+
+    Widget toParCell(int? v) => SizedBox(
+          width: _colW,
+          child: Text(_ntpLabel(v),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: toParColor(v))),
+        );
+    final thruLabel = holes.isEmpty ? '—' : (thru >= 18 ? 'F' : '$thru');
+
+    final rowWidget = InkWell(
+      onTap: holes.isEmpty || pid == null
+          ? null
+          : () => setState(() =>
+              expanded ? _expandedPids.remove(pid) : _expandedPids.add(pid)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        decoration: BoxDecoration(
+          border: Border(
+              bottom: BorderSide(
+                  color: theme.colorScheme.outlineVariant, width: 0.5)),
+        ),
+        child: Row(children: [
+          SizedBox(
+              width: _rankW,
+              child: Text('$rank',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.bold))),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+                if (showNet || showPay)
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (showNet)
+                      Text('CH $ch',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: theme.colorScheme.onSurfaceVariant)),
+                    if (showNet && showPay)
+                      Text('  ·  ',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: theme.colorScheme.onSurfaceVariant)),
+                    if (showPay)
+                      Text('\$${payout.formatBet()}',
+                          style: TextStyle(
+                              fontSize: 10, color: Colors.green.shade700)),
+                  ]),
+              ],
+            ),
+          ),
+          // Net-to-par first, Gross-to-par second (gross-only rounds show one).
+          if (showNet) toParCell(ntp),
+          toParCell(grossTp),
+          SizedBox(
+            width: _colW,
+            child: Text(thruLabel,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+          ),
+          SizedBox(
+            width: 24,
+            child: holes.isEmpty
+                ? const SizedBox()
+                : Icon(expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 20, color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ]),
+      ),
+    );
+
+    return [
+      rowWidget,
+      if (expanded) _holeStrip(theme, row, showNet: showNet),
+    ];
+  }
+
+  /// One player's hole-by-hole strip, styled like the landscape scorecard: a
+  /// hole-number header row, a par row, then the player's scores (coloured
+  /// circle/square marks + stroke dots).  Subtotals appear only once a segment
+  /// is complete — Out after the front 9, In after the back 9, Tot/Net when the
+  /// round is done — matching the landscape grid.
+  Widget _holeStrip(ThemeData theme, Map<String, dynamic> row,
+      {required bool showNet}) {
+    final hm = <int, Map>{};
+    for (final h in (row['holes'] as List? ?? [])) {
+      final m = h as Map;
+      final n = m['hole'] as int?;
+      if (n != null) hm[n] = m;
+    }
+    final holeNums = hm.keys.toList()..sort();
+    if (holeNums.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Text('No scores yet.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      );
+    }
+    final front    = holeNums.where((n) => n <= 9).toList();
+    final back     = holeNums.where((n) => n > 9).toList();
+    final allFront = [for (int i = 1; i <= 9; i++) i].every(hm.containsKey);
+    final allBack  = [for (int i = 10; i <= 18; i++) i].every(hm.containsKey);
+    final allDone  = allFront && allBack;
+    int grossSum(List<int> hs) =>
+        hs.fold<int>(0, (s, n) => s + ((hm[n]?['gross'] as int?) ?? 0));
+    int parSum(List<int> hs) =>
+        hs.fold<int>(0, (s, n) => s + ((hm[n]?['par'] as int?) ?? 0));
+    final netTot = row['total_net'] as int?;
+    final ntp    = row['net_to_par'] as int?;
+
+    const double holeW = 32, sumW = 40, headH = 20, parH = 18, scoreH = 32;
+    const cellStyle = TextStyle(fontSize: 12);
+    final headerStyle = theme.textTheme.labelSmall?.copyWith(
+        fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
+    final parStyle = theme.textTheme.labelSmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final border = Border.all(
+        color: theme.colorScheme.outlineVariant, width: 0.5);
+
+    Widget headCell(String t, double w) => Container(
+          width: w, height: headH, alignment: Alignment.center,
+          decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest, border: border),
+          child: Text(t, style: headerStyle),
+        );
+    Widget parCell(String t, double w) => Container(
+          width: w, height: parH, alignment: Alignment.center,
+          decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow, border: border),
+          child: Text(t, style: parStyle),
+        );
+    Widget scoreCell(int n) {
+      final hole    = hm[n];
+      final gross   = hole?['gross'] as int?;
+      final net     = hole?['net'] as int?;
+      final raw     = (gross != null && net != null) ? gross - net : 0;
+      final strokes = raw < 0 ? 0 : (raw > 9 ? 9 : raw);
+      return Container(
+        width: holeW, height: scoreH, alignment: Alignment.center,
+        decoration: BoxDecoration(border: border),
+        child: scoreCellWithDots(
+          Center(
+            child: gross == null
+                ? const Text('–', style: cellStyle)
+                : _scoreCell(theme, hole!, showNet, cellStyle),
+          ),
+          strokes,
+          theme.colorScheme.primary,
+        ),
+      );
+    }
+    Widget sumCell(String t, double w, {Color? color}) => Container(
+          width: w, height: scoreH, alignment: Alignment.center,
+          decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow, border: border),
+          child: Text(t,
+              style: cellStyle.copyWith(
+                  fontWeight: FontWeight.bold, color: color)),
+        );
+
+    return Container(
+      color: theme.colorScheme.surface,
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Hole-number header
+          Row(children: [
+            for (final n in front) headCell('$n', holeW),
+            if (allFront) headCell('Out', sumW),
+            for (final n in back) headCell('$n', holeW),
+            if (allBack) headCell('In', sumW),
+            if (allDone) headCell('Tot', sumW),
+            if (allDone && showNet) headCell('Net', sumW),
+          ]),
+          // Par row
+          Row(children: [
+            for (final n in front) parCell('${hm[n]?['par'] ?? '-'}', holeW),
+            if (allFront) parCell('${parSum(front)}', sumW),
+            for (final n in back) parCell('${hm[n]?['par'] ?? '-'}', holeW),
+            if (allBack) parCell('${parSum(back)}', sumW),
+            if (allDone) parCell('${parSum(holeNums)}', sumW),
+            if (allDone && showNet) parCell('', sumW),
+          ]),
+          // Score row
+          Row(children: [
+            for (final n in front) scoreCell(n),
+            if (allFront) sumCell('${grossSum(front)}', sumW),
+            for (final n in back) scoreCell(n),
+            if (allBack) sumCell('${grossSum(back)}', sumW),
+            if (allDone) sumCell('${grossSum(holeNums)}', sumW),
+            if (allDone && showNet)
+              sumCell('${netTot ?? ''}', sumW, color: toParColor(ntp)),
+          ]),
+        ]),
+      ),
     );
   }
 }
@@ -3676,7 +3638,7 @@ class _NassauGroupCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(children: [
           Text(
-            '$labelPrefix${p.pressType == 'manual' ? 'Manual' : 'Auto'} press '
+            '$labelPrefix${p.pressType == 'manual' ? 'Manual' : 'Auto'} Press holes '
             '${p.startHole}–${p.endHole}',
             style: theme.textTheme.bodySmall,
           ),

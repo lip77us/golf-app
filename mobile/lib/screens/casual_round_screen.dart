@@ -434,6 +434,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         courseId: _selectedCourse!.id,
         playerTees: _playerTees,
         activeGames: _activeGames,
+        primaryGame: _primaryGame,
         playerGroups: _multiGroup ? _playerGroups : null,
       );
 

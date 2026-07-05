@@ -561,6 +561,18 @@ const List<String> _kSidePrimaryPriority = [
 /// side-game type; if every active game is side-game-eligible (e.g. a
 /// Skins-only round), it's the highest-priority one. Returns null for an
 /// empty set.
+/// The primary game for a round, preferring the user's EXPLICIT stored pick
+/// ([storedPrimary], from `round.primaryGame`) when it's present and still in
+/// the active set; otherwise derives it from [active]. Use this everywhere the
+/// primary matters — a two-overlay set like {low_net_round, skins} can't be
+/// disambiguated from the flat set, so the stored pick is authoritative.
+String? resolvePrimary(String? storedPrimary, Iterable<String> active) {
+  if (storedPrimary != null && active.contains(storedPrimary)) {
+    return storedPrimary;
+  }
+  return primaryGameOf(active);
+}
+
 String? primaryGameOf(Iterable<String> active) {
   final list = active.toList();
   if (list.isEmpty) return null;

@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../widgets/scorecard_grid.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
@@ -225,10 +226,9 @@ class _GroupHeader extends StatelessWidget {
           tooltip: 'View scorecard',
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
-          onPressed: () => Navigator.of(context).pushNamed(
-            '/scorecard',
-            arguments: {'foursomeId': foursomeId, 'readOnly': true},
-          ),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ScorecardGrid(foursomeId: foursomeId),
+          )),
         ),
       ]),
     );

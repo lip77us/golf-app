@@ -76,6 +76,17 @@ class Round(models.Model):
                             default=list,
                             help_text="List of GameType values active for this round."
                         )
+    primary_game        = models.CharField(
+                            max_length=40, null=True, blank=True,
+                            help_text=(
+                                "The casual round's PRIMARY game — the one that owns "
+                                "score entry + configuration. Stored so the user's "
+                                "explicit pick survives (active_games is an unordered "
+                                "set; when two overlay games like Stroke Play + Skins "
+                                "are both present, which is primary can't be derived). "
+                                "Null = derive from active_games (tournament/legacy rounds)."
+                            )
+                        )
     game_point_values   = models.JSONField(
                             default=dict, blank=True,
                             help_text=(

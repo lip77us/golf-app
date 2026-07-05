@@ -188,6 +188,7 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
         courseId: _course!.id,
         playerTees: tees,
         activeGames: {GameIds.skins},
+        primaryGame: GameIds.skins,
       );
       final fsId = launch.firstFoursome!.id;
 
@@ -227,6 +228,7 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
         courseId: _course!.id,
         playerTees: tees,
         activeGames: {game},
+        primaryGame: game,
       );
       if (!mounted) return;
       // Wizard completed (a round was created) → retire the onboarding entry.

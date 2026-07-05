@@ -67,7 +67,8 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
   bool get _isSideGame {
     final rp = context.read<RoundProvider>();
     final games = rp.round?.activeGames ?? const <String>[];
-    return games.contains('skins') && primaryGameOf(games) != 'skins';
+    return games.contains('skins') &&
+        resolvePrimary(rp.round?.primaryGame, games) != 'skins';
   }
 
   bool    _loading  = true;

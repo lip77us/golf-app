@@ -126,9 +126,10 @@ const List<IconHelpEntry> _scoreEntryHelp = [
     body: "Live standings and who's up or down money so far.",
   ),
   IconHelpEntry(
-    icon: Icons.table_chart_outlined,
+    icon: Icons.screen_rotation_outlined,
     title: 'Full scorecard',
-    body: "The whole group's 18-hole scorecard, read-only.",
+    body: "Rotate your phone to landscape to see the whole group's "
+        '18-hole scorecard.',
   ),
 ];
 

@@ -595,14 +595,6 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                 : () => Navigator.of(context).pushNamed(
                     '/leaderboard', arguments: rp.round!.id),
           ),
-          IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
-          ),
           // Overflow: low-frequency actions — set rotation, end the round
           // early (soft gate), and the icon-legend help.
           PopupMenuButton<String>(

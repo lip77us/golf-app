@@ -435,14 +435,6 @@ class _SkinsScreenState extends State<SkinsScreen> {
                       arguments: rp.round!.id,
                     ),
           ),
-          IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                      arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
-          ),
         ],
       ),
       body: _buildBody(context, rp, sync, isComplete),

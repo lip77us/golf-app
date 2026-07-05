@@ -33,6 +33,7 @@ import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/spots_capture.dart';
 
 // ---------------------------------------------------------------------------
 // The screen
@@ -46,7 +47,8 @@ class Points531Screen extends StatefulWidget {
   State<Points531Screen> createState() => _Points531ScreenState();
 }
 
-class _Points531ScreenState extends State<Points531Screen> {
+class _Points531ScreenState extends State<Points531Screen>
+    with SpotsCaptureMixin {
   /// Unsubmitted score edits for the current session.  Shape:
   /// hole → playerId → gross.
   final Map<int, Map<int, int>> _pending = {};
@@ -66,7 +68,16 @@ class _Points531ScreenState extends State<Points531Screen> {
         rp.refreshPendingOverlay();
       }
       rp.loadPoints531(widget.foursomeId);
+      if (rp.round?.activeGames.contains('spots') ?? false) {
+        rp.loadSpots(widget.foursomeId);
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    disposeSpots();
+    super.dispose();
   }
 
   /// Re-pull this screen's data (scorecard + Points 5-3-1 standings).
@@ -480,16 +491,6 @@ class _Points531ScreenState extends State<Points531Screen> {
                       arguments: rp.round!.id,
                     ),
           ),
-          // Scorecard shortcut — full 18-hole / player grid.  Rotate phone
-          // to landscape for the comfortable full-course view.
-          IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null
-                ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                      arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
-          ),
         ],
       ),
       body: _buildBody(context, rp, sync, isComplete),
@@ -605,6 +606,13 @@ class _Points531ScreenState extends State<Points531Screen> {
                 hotSpotIdx:  hotSpot,
                 par:         par,
                 summary:     rp.points531Summary,
+                spotsActive:   spotsActive(rp),
+                spotsCountFor: (pid) =>
+                    spotsCount(pid, _selectedHole, rp.spotsSummary),
+                onSpotsAdd:    (pid) =>
+                    adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
+                onSpotsRemove: (pid) =>
+                    adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
                 onScoreSelected: (m, score) =>
                     _handleScore(ctx, m, score, players, par),
                 onEditTap: (m) =>
@@ -655,6 +663,11 @@ class _P531HoleScoreCard extends StatelessWidget {
   final Points531Summary? summary;
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership)      onEditTap;
+  // Spots add-on (captured in this dedicated entry screen).
+  final bool                   spotsActive;
+  final int  Function(int pid) spotsCountFor;
+  final void Function(int pid) onSpotsAdd;
+  final void Function(int pid) onSpotsRemove;
 
   const _P531HoleScoreCard({
     required this.holeData,
@@ -668,6 +681,10 @@ class _P531HoleScoreCard extends StatelessWidget {
     required this.summary,
     required this.onScoreSelected,
     required this.onEditTap,
+    this.spotsActive   = false,
+    required this.spotsCountFor,
+    required this.onSpotsAdd,
+    required this.onSpotsRemove,
   });
 
   String get _mode        => summary?.handicapMode ?? 'net';
@@ -907,6 +924,11 @@ class _P531HoleScoreCard extends StatelessWidget {
                     : null,
                 holePoints:      pointsForThisHole,
                 cumulativePoints: cumulativePoints,
+                spotsActive:   spotsActive,
+                spotsCount:    spotsActive ? spotsCountFor(m.player.id) : 0,
+                onSpotsAdd:    spotsActive ? () => onSpotsAdd(m.player.id) : null,
+                onSpotsRemove:
+                    spotsActive ? () => onSpotsRemove(m.player.id) : null,
               ),
               if (isHot)
                 InlineScorePicker(
@@ -951,6 +973,11 @@ class _P531PlayerRow extends StatelessWidget {
   /// Always shown (0.0 until any hole is scored).
   final double       cumulativePoints;
 
+  final bool          spotsActive;
+  final int           spotsCount;
+  final VoidCallback? onSpotsAdd;
+  final VoidCallback? onSpotsRemove;
+
   const _P531PlayerRow({
     required this.position,
     required this.member,
@@ -961,6 +988,10 @@ class _P531PlayerRow extends StatelessWidget {
     this.strokesOnThisHole = 0,
     required this.holePoints,
     required this.cumulativePoints,
+    this.spotsActive = false,
+    this.spotsCount = 0,
+    this.onSpotsAdd,
+    this.onSpotsRemove,
   });
 
   static String _fmtPoints(double v) =>
@@ -990,7 +1021,11 @@ class _P531PlayerRow extends StatelessWidget {
       child: Row(children: [
         // Name + match handicap chip
         Expanded(
-          child: Row(children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(children: [
             Text('$position)  ',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.primary)),
@@ -1024,6 +1059,17 @@ class _P531PlayerRow extends StatelessWidget {
               ),
             ],
           ]),
+              if (spotsActive)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: SpotsDots(
+                    count: spotsCount,
+                    onAdd: onSpotsAdd ?? () {},
+                    onRemove: onSpotsRemove ?? () {},
+                  ),
+                ),
+            ],
+          ),
         ),
 
         // Running totals + points pills

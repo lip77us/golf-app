@@ -367,13 +367,6 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
                 : () => Navigator.of(context).pushNamed(
                     '/leaderboard', arguments: rp.round!.id),
           ),
-          IconButton(
-            tooltip: 'Full scorecard',
-            icon: const Icon(Icons.table_chart_outlined),
-            onPressed: sc == null ? null
-                : () => Navigator.of(context).pushNamed('/scorecard',
-                    arguments: {'foursomeId': widget.foursomeId, 'readOnly': true}),
-          ),
           // Overflow: end the round early (soft gate) + the icon-legend help.
           PopupMenuButton<String>(
             tooltip: 'More',
