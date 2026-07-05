@@ -3570,6 +3570,9 @@ class _NassauGroupCard extends StatelessWidget {
         display = bet.holesPlayed == 0 ? 'Not started' : 'AS';
       } else {
         final leader = m > 0 ? t1Names : t2Names;
+        // Colour the running leader in their team colour (matches the
+        // completed-nine row below).
+        color = m > 0 ? Colors.blue.shade700 : t2Color;
         if (bet.holesPlayed > 0 && holesLeft > 0 && m.abs() > holesLeft) {
           // Mathematically decided before last hole — match-play "&" notation.
           display = '$leader ${m.abs()}&$holesLeft';
@@ -3663,7 +3666,11 @@ class _NassauGroupCard extends StatelessWidget {
       } else if (p.result == 'team2') {
         resultColor = t2Color;
       } else {
-        resultColor = theme.colorScheme.onSurfaceVariant;
+        // In-progress press: colour the running leader by margin (AS neutral).
+        final m = p.margin ?? 0;
+        resultColor = m == 0
+            ? theme.colorScheme.onSurfaceVariant
+            : (m > 0 ? Colors.blue.shade700 : t2Color);
       }
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
