@@ -3208,13 +3208,19 @@ class ScoreSubmitView(APIView):
         # Propagate scores to any cross-foursome phantom in the same round.
         # A real player's gross score may be the donor for a phantom in another
         # foursome — if so, write the phantom's HoleScore now so the Nassau
-        # calculator picks it up during _recalculate_games.
+        # calculator picks it up. Collect the affected phantom foursomes so we
+        # can recalc THEIR games below — otherwise a donor change (incl. a
+        # retroactive edit/clear) refreshes only the phantom's raw score, and
+        # that foursome's stored result stays stale until it posts again (which
+        # may be never, if it's finished).
         from scoring.phantom import propagate_phantom_score
+        phantom_foursomes: dict = {}   # id -> Foursome
         for s in scores:
             try:
-                propagate_phantom_score(
+                for fs in propagate_phantom_score(
                     foursome.round, hole_number, s['player_id'], s['gross_score']
-                )
+                ):
+                    phantom_foursomes[fs.id] = fs
             except Exception:
                 pass  # never block score submission due to phantom propagation
 
@@ -3242,6 +3248,15 @@ class ScoreSubmitView(APIView):
                 pbhr.save()
 
         _recalculate_games(foursome)
+
+        # Recalc any OTHER foursome whose phantom this donor feeds, so its stored
+        # result reflects the change now (not on its own next post). Best-effort.
+        for fs in phantom_foursomes.values():
+            if fs.id != foursome.id:
+                try:
+                    _recalculate_games(fs)
+                except Exception:
+                    pass
 
         # Slice 3: emit server events (birdies now; skins/matches next) — runs
         # after recalc, fully best-effort (never blocks the score response).

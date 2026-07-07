@@ -467,17 +467,22 @@ class PhantomScoreProvider:
 
 def propagate_phantom_score(round_obj, hole_number: int,
                             donor_player_id: int,
-                            gross_score: int | None) -> None:
+                            gross_score: int | None) -> list:
     """
     Called after a real player (donor) saves a HoleScore.
 
     Finds any phantom membership in the same round that uses
     cross_foursome_rotation AND lists donor_player_id in its rotation.
-    For each found, creates or updates the phantom's HoleScore for
-    hole_number using the same gross_score and the phantom's own handicap.
+    For each found, creates/updates (or deletes when gross_score is None) the
+    phantom's HoleScore for hole_number using the phantom's own handicap.
 
     This keeps the phantom's HoleScore table current so that
     build_score_index (used by Nassau) can read it without modification.
+
+    Returns the list of **affected phantom Foursomes** (deduped) so the caller
+    can recalculate THOSE foursomes' games — a donor's change must refresh the
+    phantom foursome's result, not just its raw score, even when that foursome
+    isn't the one being submitted (and may have already finished).
     """
     from scoring.models import HoleScore
     from tournament.models import FoursomeMembership
@@ -506,8 +511,9 @@ def propagate_phantom_score(round_obj, hole_number: int,
         .first()
     )
     if donor_m is None or donor_m.tee_id is None:
-        return
+        return []
 
+    touched: dict = {}   # foursome_id -> Foursome (deduped)
     for pm in phantom_memberships:
         config = pm.phantom_config or {}
         rotation = config.get('rotation', [])
@@ -520,6 +526,8 @@ def propagate_phantom_score(round_obj, hole_number: int,
         assigned_donor = rotation[(hole_number - 1) % len(rotation)]
         if assigned_donor != donor_player_id:
             continue  # another donor handles this hole
+
+        touched[pm.foursome_id] = pm.foursome
 
         # Phantom carries the donor's raw GROSS; strokes-off is recomputed
         # per hole by the scoring layer.
@@ -540,6 +548,8 @@ def propagate_phantom_score(round_obj, hole_number: int,
         hs.gross_score      = gross_score
         hs.handicap_strokes = 0
         hs.save()
+
+    return list(touched.values())
 
 
 def build_phantom_info(foursome, net_percent: int = 100) -> 'dict | None':
