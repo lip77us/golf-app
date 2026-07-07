@@ -1810,6 +1810,18 @@ class RoundCreateView(APIView):
         # for admin/staff accounts that have no linked Player profile).
         created_by = getattr(request.user, 'player_profile', None)
 
+        # Holes played (docs/hole-flexibility.md) — clamp to the course size so
+        # a 9-hole course can never claim 18. A start beyond the course size
+        # falls back to hole 1.
+        from services.hole_plan import DEFAULT_HOLE_COUNT
+        tee_counts = [len(t.holes) for t in
+                      course.tees.filter(superseded_by__isnull=True) if t.holes]
+        universe = max(tee_counts) if tee_counts else DEFAULT_HOLE_COUNT
+        num_holes = min(d.get('num_holes', 18) or 18, universe)
+        starting_hole = d.get('starting_hole', 1) or 1
+        if starting_hole > universe:
+            starting_hole = 1
+
         round_obj = Round.objects.create(
             account           = request.user.account,
             tournament        = tournament,
@@ -1825,6 +1837,8 @@ class RoundCreateView(APIView):
             handicap_mode     = d.get('handicap_mode', 'net'),
             net_percent       = d.get('net_percent', 100),
             net_max_double_bogey = d.get('net_max_double_bogey', True),
+            num_holes         = num_holes,
+            starting_hole     = starting_hole,
             notes             = d['notes'],
             created_by        = created_by,
         )

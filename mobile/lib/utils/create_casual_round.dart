@@ -117,6 +117,8 @@ Future<CasualRoundLaunch> createCasualRound({
   required Set<String> activeGames,
   String? primaryGame,
   Map<int, int>? playerGroups,
+  int numHoles = 18,
+  int startingHole = 1,
 }) async {
   final multiGroup = activeGames.contains(GameIds.multiSkins);
   final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -134,6 +136,8 @@ Future<CasualRoundLaunch> createCasualRound({
         .map((g) => g == GameIds.match18 ? GameIds.nassau : g)
         .toList(),
     primaryGame: storedPrimary,
+    numHoles: numHoles,
+    startingHole: startingHole,
   );
 
   final playersSetup = playerTees.entries.map((e) {

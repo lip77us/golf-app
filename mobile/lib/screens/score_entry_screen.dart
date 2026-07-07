@@ -812,13 +812,43 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     _jumpToFirstUnplayed(fresh);
   }
 
+  /// The holes this foursome plays, IN PLAY ORDER — starting at the round's
+  /// starting hole and wrapping around the course size. Reduces to 1..18 for a
+  /// normal round. Mirrors services/hole_plan.play_order. (Per-group shotgun
+  /// starts are a later slice; casual rounds use the round-level start.)
+  List<int> _playOrderFor(RoundProvider rp) {
+    final r  = rp.round;
+    final sc = rp.scorecard;
+    final universe = (sc == null || sc.holes.isEmpty)
+        ? 18
+        : sc.holes.map((h) => h.holeNumber).reduce((a, b) => a > b ? a : b);
+    final start = r?.startingHole ?? 1;
+    final n = (r?.numHoles ?? universe).clamp(1, universe);
+    return [for (int i = 0; i < n; i++) ((start - 1 + i) % universe) + 1];
+  }
+
+  /// The hole after [_selectedHole] in play order, or null if it's the last one.
+  int? _nextHoleInOrder(RoundProvider rp) {
+    final order = _playOrderFor(rp);
+    final i = order.indexOf(_selectedHole);
+    return (i < 0 || i + 1 >= order.length) ? null : order[i + 1];
+  }
+
+  /// The hole before [_selectedHole] in play order, or null if it's the first.
+  int? _prevHoleInOrder(RoundProvider rp) {
+    final order = _playOrderFor(rp);
+    final i = order.indexOf(_selectedHole);
+    return (i <= 0) ? null : order[i - 1];
+  }
+
   void _jumpToFirstUnplayed(RoundProvider rp) {
     final sc = rp.scorecard;
     if (sc == null) return;
     final realIds = _orderedPlayers(sc, rp.round, rp.nassauSummary)
         .map((m) => m.player.id)
         .toSet();
-    for (int h = 1; h <= 18; h++) {
+    final order = _playOrderFor(rp);
+    for (final h in order) {
       final hd = sc.holeData(h);
       if (hd == null) continue;
       final allScored = hd.scores
@@ -830,7 +860,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         return;
       }
     }
-    setState(() => _selectedHole = 18);
+    setState(() => _selectedHole = order.isNotEmpty ? order.last : 18);
   }
 
   /// True iff *playerId* is the dimmed alt-shot partner on *hole*
@@ -931,8 +961,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// Number of holes (1–18) not yet fully scored — used by the soft-gate
   /// "Finish early?" warning when completing before the 18th.
   int _unscoredHoleCount(Scorecard sc, List<Membership> players) {
+    final rp = context.read<RoundProvider>();
     int n = 0;
-    for (int h = 1; h <= 18; h++) {
+    for (final h in _playOrderFor(rp)) {
       if (!_allScored(players, _effectiveScores(sc, h), h)) n++;
     }
     return n;
@@ -948,7 +979,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // before the round detail (foursome.hasAnyScore) reloads.
     final sc = rp.scorecard;
     if (sc != null) {
-      for (int h = 1; h <= 18; h++) {
+      for (final h in _playOrderFor(rp)) {
         if (_effectiveScores(sc, h).isNotEmpty) return true;
       }
     }
@@ -1010,11 +1041,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   // ── Navigation ───────────────────────────────────────────────────────────────
 
   void _advance() {
-    if (_selectedHole < 18) setState(() => _selectedHole++);
+    final n = _nextHoleInOrder(context.read<RoundProvider>());
+    if (n != null) setState(() => _selectedHole = n);
   }
 
   void _retreat() {
-    if (_selectedHole > 1) setState(() => _selectedHole--);
+    final p = _prevHoleInOrder(context.read<RoundProvider>());
+    if (p != null) setState(() => _selectedHole = p);
   }
 
   // ── Save & advance ───────────────────────────────────────────────────────────
@@ -1719,13 +1752,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Row(children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _selectedHole > 1 ? _retreat : null,
-                  icon: const Icon(Icons.chevron_left, size: 20),
-                  label: Text(
-                    _selectedHole > 1 ? 'Hole ${_selectedHole - 1}' : 'Previous',
-                  ),
-                ),
+                child: Builder(builder: (_) {
+                  final prev = _prevHoleInOrder(rp);
+                  return OutlinedButton.icon(
+                    onPressed: prev != null ? _retreat : null,
+                    icon: const Icon(Icons.chevron_left, size: 20),
+                    label: Text(prev != null ? 'Hole $prev' : 'Previous'),
+                  );
+                }),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1769,7 +1803,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       );
     }
 
-    if (_selectedHole < 18) {
+    final nextHole = _nextHoleInOrder(rp);
+    if (nextHole != null) {
       return FilledButton.icon(
         onPressed: (allDone && !rp.submitting)
             ? () => _saveAndAdvance(ctx, players, par)
@@ -1780,14 +1815,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: Colors.white))
             : const Icon(Icons.chevron_right, size: 20),
-        label: Text(rp.submitting ? 'Saving…' : 'Hole ${_selectedHole + 1}'),
+        label: Text(rp.submitting ? 'Saving…' : 'Hole $nextHole'),
         iconAlignment: IconAlignment.end,
       );
     }
 
-    // Hole 18.
-    final pendingHere = (_pending[18]?.isNotEmpty ?? false) ||
-                       (_pendingJunk[18]?.isNotEmpty ?? false);
+    // Last hole in play order.
+    final pendingHere = (_pending[_selectedHole]?.isNotEmpty ?? false) ||
+                       (_pendingJunk[_selectedHole]?.isNotEmpty ?? false);
 
     if (pendingHere) {
       return FilledButton.icon(

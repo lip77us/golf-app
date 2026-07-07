@@ -5,12 +5,21 @@ End-to-end backend behavior for partial rounds (Phase 2 of
 docs/hole-flexibility.md): a 9-hole round completes on its 9 holes, not 18.
 Grows as later sub-slices (per-hole scoring, handicap, segment games) land.
 """
+from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
 
+from decimal import Decimal
+
+from accounts.models import Account
 from api.views import RoundCompleteView
+from core.models import Course, Tee
 from scoring.tests._helpers import (
     DEFAULT_HOLES, make_course, make_foursome, make_round, make_tee, submit_hole,
 )
+
+User = get_user_model()
 
 
 class PartialRoundCompletionTests(TestCase):
@@ -37,6 +46,45 @@ class PartialRoundCompletionTests(TestCase):
     def test_expected_holes_is_the_nine_played(self):
         r, fs = self._nine_hole_round()
         self.assertEqual(RoundCompleteView._expected_holes(fs), set(range(1, 10)))
+
+
+class RoundCreateHolesTests(TestCase):
+    """The create endpoint persists num_holes/starting_hole and clamps them to
+    the course size."""
+
+    def setUp(self):
+        self.account = Account.objects.create(name='Create Holes')
+        self.user = User.objects.create_user(username='td', account=self.account)
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def _course(self, holes):
+        """A course + tee owned by the test user's account (so create passes
+        the account scope check)."""
+        course = Course.objects.create(name='Create GC', account=self.account)
+        Tee.objects.create(course=course, tee_name='White', slope=113,
+                           course_rating=Decimal('72.0'), par=72, holes=holes)
+        return course
+
+    def _create(self, course, **extra):
+        body = {'course_id': course.id, 'date': '2026-07-07',
+                'active_games': ['low_net_round'], **extra}
+        return self.client.post(reverse('api-round-create'), body, format='json')
+
+    def test_defaults_are_full_18(self):
+        resp = self._create(self._course(DEFAULT_HOLES))
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual((resp.data['num_holes'], resp.data['starting_hole']), (18, 1))
+
+    def test_back_nine_persists(self):
+        resp = self._create(self._course(DEFAULT_HOLES), num_holes=9, starting_hole=10)
+        self.assertEqual((resp.data['num_holes'], resp.data['starting_hole']), (9, 10))
+
+    def test_num_holes_clamped_to_short_course(self):
+        resp = self._create(self._course(DEFAULT_HOLES[:9]), num_holes=18, starting_hole=1)
+        self.assertEqual(resp.data['num_holes'], 9)   # clamped to the 9-hole course
 
 
 class BackNineCompletionTests(TestCase):

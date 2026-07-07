@@ -618,6 +618,7 @@ class RoundSerializer(serializers.ModelSerializer):
             'id', 'round_number', 'date', 'course', 'status',
             'active_games', 'primary_game', 'game_point_values', 'bet_unit',
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
+            'num_holes', 'starting_hole',
             'scramble_config', 'notes', 'foursomes',
             'is_cup_round', 'ir_balls_config', 'can_manage',
             'is_casual', 'all_holes_scored', 'holes_remaining',
@@ -740,6 +741,11 @@ class RoundCreateSerializer(serializers.Serializer):
     )
     net_percent       = serializers.IntegerField(default=100, min_value=0, max_value=200)
     net_max_double_bogey = serializers.BooleanField(default=True)
+    # Holes played (see docs/hole-flexibility.md). Defaults reproduce a normal
+    # 18-hole round from hole 1. num_holes is validated against the course size
+    # in the view (a 9-hole course caps at 9).
+    num_holes         = serializers.IntegerField(default=18, min_value=1, max_value=18)
+    starting_hole     = serializers.IntegerField(default=1, min_value=1, max_value=18)
 
 
 class PlayerTeeSelectionSerializer(serializers.Serializer):

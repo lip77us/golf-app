@@ -50,6 +50,23 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   String? _primaryGame;
   final Set<String> _sideGames = {};
 
+  // Advanced: how many holes and which hole to start on (docs/hole-flexibility).
+  // Defaults reproduce a normal full round from hole 1.
+  int _numHoles = 18;
+  int _startingHole = 1;
+
+  /// The selected course's hole count (18, or 9 for a short course), derived
+  /// from its loaded tees; 18 until tees are known. Bounds the Advanced steppers
+  /// (the backend also clamps, so this is just UX).
+  int get _courseHoleCount {
+    final c = _selectedCourse;
+    if (c == null) return 18;
+    final counts = _tees
+        .where((t) => t.course.id == c.id && t.holes.isNotEmpty)
+        .map((t) => t.holes.length);
+    return counts.isEmpty ? 18 : counts.reduce((a, b) => a > b ? a : b);
+  }
+
   /// Everything sent to the backend = primary + side games. A side game counts
   /// only when it's valid for the primary: an overlay needs `allowsSideGames`,
   /// while a capture add-on (Spots) rides any primary that hosts it. This keeps
@@ -436,6 +453,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         activeGames: _activeGames,
         primaryGame: _primaryGame,
         playerGroups: _multiGroup ? _playerGroups : null,
+        numHoles: _numHoles,
+        startingHole: _startingHole,
       );
 
       if (!mounted) return;
@@ -512,6 +531,89 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Advanced round options — hole count + starting hole (back 9, wine-and-9,
+  /// or a short course). Defaults (full round from hole 1) stay collapsed and
+  /// change nothing. See docs/hole-flexibility.md.
+  Widget _buildAdvanced() {
+    final size = _courseHoleCount;
+    // Keep selections in range if the course turns out to be short.
+    if (_numHoles > size) _numHoles = size;
+    if (_startingHole > size) _startingHole = 1;
+    final isDefault = _numHoles == size && _startingHole == 1;
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        title: const Text('Advanced'),
+        subtitle: Text(
+          isDefault
+              ? 'Full round from hole 1'
+              : '$_numHoles holes from hole $_startingHole',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        children: [
+          if (size >= 18) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(spacing: 8, children: [
+                _presetChip('Full 18', 18, 1),
+                _presetChip('Front 9', 9, 1),
+                _presetChip('Back 9', 9, 10),
+              ]),
+            ),
+            const SizedBox(height: 12),
+          ],
+          _stepperRow('Holes', _numHoles, 1, size,
+              (v) => setState(() => _numHoles = v)),
+          const SizedBox(height: 4),
+          _stepperRow('Starting hole', _startingHole, 1, size,
+              (v) => setState(() => _startingHole = v)),
+          const SizedBox(height: 8),
+          Text(
+            'For a shotgun, set each group\'s starting hole per group in '
+            'tournament setup.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _presetChip(String label, int holes, int start) {
+    final selected = _numHoles == holes && _startingHole == start;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) =>
+          setState(() { _numHoles = holes; _startingHole = start; }),
+    );
+  }
+
+  Widget _stepperRow(
+      String label, int value, int min, int max, ValueChanged<int> onChanged) {
+    return Row(
+      children: [
+        Expanded(child: Text(label)),
+        IconButton(
+          icon: const Icon(Icons.remove_circle_outline),
+          onPressed: value > min ? () => onChanged(value - 1) : null,
+        ),
+        SizedBox(
+          width: 28,
+          child: Text('$value',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        IconButton(
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: value < max ? () => onChanged(value + 1) : null,
+        ),
+      ],
     );
   }
 
@@ -607,6 +709,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               ],
             ),
           ],
+          const SizedBox(height: 12),
+          _buildAdvanced(),
           ], // ── end step 1
 
           // ── Step 2: players + tees ──

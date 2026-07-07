@@ -1037,6 +1037,11 @@ class Round {
   final bool allHolesScored;
   /// Count of expected-but-unscored holes across all foursomes (0 = done).
   final int holesRemaining;
+  /// How many holes this round plays (9 or 18). See docs/hole-flexibility.md.
+  final int numHoles;
+  /// The hole the round starts on (1 = normal). For a shotgun each foursome
+  /// may override this per group (Foursome.startingHole).
+  final int startingHole;
 
   const Round({
     required this.id,
@@ -1058,6 +1063,8 @@ class Round {
     this.isCasual       = false,
     this.allHolesScored = false,
     this.holesRemaining = 0,
+    this.numHoles     = 18,
+    this.startingHole = 1,
   });
 
   factory Round.fromJson(Map<String, dynamic> j) => Round(
@@ -1078,6 +1085,8 @@ class Round {
         isCasual:       j['is_casual']        as bool? ?? false,
         allHolesScored: j['all_holes_scored'] as bool? ?? false,
         holesRemaining: j['holes_remaining']  as int?  ?? 0,
+        numHoles:     j['num_holes']     as int? ?? 18,
+        startingHole: j['starting_hole'] as int? ?? 1,
         irBallsConfig: (j['ir_balls_config'] as List? ?? [])
             .map((s) => Map<String, dynamic>.from(s as Map))
             .toList(),
