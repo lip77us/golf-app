@@ -279,3 +279,13 @@ opt-in and nothing changes for existing flows.
    **OPEN — Fourball / match-style games:** a 2v2 match's running "thru N / n up"
    state is inherently play-order. Paul is testing whether Fourball's DISPLAY
    wants play order (match state) while the raw scorecard stays by number. TBD.
+6. **Score entry is sequential in play order** (all games, 2026-07-08). The hole
+   strip lets you tap BACK to any hole already reached, or the current hole, but
+   NOT jump ahead to an unplayed hole — a round can't be entered out of order /
+   with gaps. (score_entry_screen `_canSelectHole`/`_selectHole`.)
+7. **Points displays read chronologically (play order); score/scorecard displays
+   read by hole number** (2026-07-08). Refines decision 5: a hole-by-hole POINTS
+   grid (Points 5-3-1; Stableford where it has one) renders in play order —
+   14,15,…,18,1,2 with upcoming holes blank at the end. A raw SCORE card (Stroke
+   Play strip, scorecard grid) stays by hole number. Backend emits the points
+   grid's `holes_in_play` play-ordered; "thru N" (match/points) is a count.
