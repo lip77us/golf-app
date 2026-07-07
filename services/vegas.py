@@ -297,6 +297,13 @@ def vegas_summary(foursome) -> dict:
          'carry': h.carry_count}
         for h in holes
     ]
+    # Order the per-hole chips by PLAY ORDER (14,15,…,18,1) rather than hole
+    # number — Vegas is a chronological betting log, not a scorecard, so it reads
+    # in the order the holes were played. Also puts the current hole last, so the
+    # grid's scroll-to-end lands there.
+    from services.hole_plan import play_order
+    _pos = {h: i for i, h in enumerate(play_order(foursome.round, foursome))}
+    holes_out.sort(key=lambda e: _pos.get(e['hole'], 999))
 
     return {
         'status': game.status,
