@@ -533,19 +533,17 @@ def points_531_summary(foursome) -> dict:
     # Leaderboard: money desc, then name for stable ordering.
     players_out.sort(key=lambda e: (-e['money'], e['name']))
 
-    # The holes this round plays (by number) so the leaderboard grid can render
-    # the FULL card — including not-yet-played holes as blank columns — instead
-    # of only the scored holes. For a normal round this is 1..18; for a
-    # mid-course start it's still 1..18 (played in a different order).
-    from services.hole_plan import (
-        holes_in_play as _holes_in_play, play_order as _play_order,
-    )
-    in_play = sorted(_holes_in_play(foursome.round))
-    # The group's CURRENT hole = the last hole played in PLAY ORDER, so the grid
+    # The holes this round plays, IN PLAY ORDER — a points display reads
+    # chronologically, so the grid renders 14,15,…,18,1,2… (upcoming holes as
+    # blank columns at the end) rather than by hole number. For a normal round
+    # this is just 1..18.
+    from services.hole_plan import play_order as _play_order
+    in_play = _play_order(foursome.round, foursome)
+    # The group's CURRENT hole = the last hole played in play order, so the grid
     # scrolls to it (and the upcoming blanks) even after wrapping (…18 → 1).
     _played = {h['hole'] for h in holes_out}
     current_hole = 0
-    for _h in _play_order(foursome.round, foursome):
+    for _h in in_play:
         if _h in _played:
             current_hole = _h
 

@@ -63,6 +63,20 @@ class Points531SettlementTests(TestCase):
         self.assertEqual(s["holes_in_play"], list(range(1, 19)))
         self.assertEqual(s["current_hole"], 5)
 
+    def test_holes_in_play_is_play_order_on_a_mid_course_start(self):
+        # A points grid reads chronologically — holes_in_play is PLAY order, so a
+        # round starting on 14 leads with 14,15,16 (not 1,2,3).
+        self.round.starting_hole = 14
+        self.round.num_holes = 18
+        self.round.save(update_fields=["starting_hole", "num_holes"])
+        setup_points_531(self.fs)
+        for h in (14, 15):
+            submit_hole(self.fs, h, [(self.ann, 4), (self.bob, 5), (self.cy, 6)])
+        calculate_points_531(self.fs)
+        s = points_531_summary(self.fs)
+        self.assertEqual(s["holes_in_play"][:3], [14, 15, 16])
+        self.assertEqual(s["current_hole"], 15)
+
     def test_uncapped_matches_legacy_formula(self):
         setup_points_531(self.fs)            # loss_cap defaults to None
         self._score_three_holes()

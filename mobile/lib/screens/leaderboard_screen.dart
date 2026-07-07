@@ -4772,19 +4772,28 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
   // 531 was the only game grid that never followed play (it sat on hole 1, so
   // finishing at 18 left you stuck looking at the front nine).
   void _scheduleScroll() {
-    // Target the current hole (last played in play order); fall back to the
-    // highest scored hole number when the backend didn't supply it.
-    int lastHole = widget.currentHole;
-    if (lastHole == 0) {
+    // The grid renders holes in PLAY ORDER, so scroll by the current hole's
+    // POSITION in that sequence (not its hole number) — ~7 columns from the left.
+    final order = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay
+        : (widget.holes
+            .map((h) => ((h as Map)['hole'] as num?)?.toInt() ?? 0)
+            .toList()
+          ..sort());
+    int pos = order.indexOf(widget.currentHole);
+    if (pos < 0) {
+      // Fallback: position of the highest scored hole.
+      int lastHole = 0;
       for (final h in widget.holes) {
         final n = ((h as Map)['hole'] as num?)?.toInt() ?? 0;
         if (n > lastHole) lastHole = n;
       }
+      pos = order.indexOf(lastHole);
     }
-    if (lastHole == 0) return;
+    if (pos < 0) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_ctrl.hasClients) return;
-      final target = (_labelColW + (lastHole - 7) * _cellW)
+      final target = (_labelColW + (pos - 7) * _cellW)
           .clamp(0.0, _ctrl.position.maxScrollExtent);
       _ctrl.jumpTo(target);
     });
@@ -4822,12 +4831,12 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
       byHole[hole] = inner;
     }
 
-    // Render every hole the round plays (blanks for not-yet-played), so a
-    // mid-course start shows the skipped-by-number holes as empty columns
-    // instead of collapsing 5–18,1 into a gapless strip. Fall back to scored
-    // holes when the caller doesn't supply the range.
-    final sortedHoles = widget.holesInPlay.isNotEmpty
-        ? (widget.holesInPlay.toList()..sort())
+    // Render every hole the round plays, IN PLAY ORDER (the backend supplies
+    // holesInPlay play-ordered) — a points grid reads chronologically, with
+    // not-yet-played holes as blank columns at the end. Fall back to scored
+    // holes by number when the caller doesn't supply the range.
+    final renderHoles = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay.toList()
         : (byHole.keys.toList()..sort());
 
     // Column spec
@@ -4852,7 +4861,7 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
               ),
             ),
-            for (final h in sortedHoles)
+            for (final h in renderHoles)
               SizedBox(
                 width: cellW,
                 height: rowH,
@@ -4878,7 +4887,7 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
                       overflow: TextOverflow.ellipsis),
                 ),
               ),
-              for (final h in sortedHoles) _PointsCell(
+              for (final h in renderHoles) _PointsCell(
                 entry: byHole[h]?[pid],
                 cellW: cellW,
                 rowH: rowH,
