@@ -3327,7 +3327,15 @@ class RoundCompleteView(APIView):
     @staticmethod
     def _expected_holes(fs) -> set:
         """Holes a foursome must have a score on to be 'done', accounting
-        for mid-round withdrawals (killed holes + game-over holes excluded)."""
+        for mid-round withdrawals (killed holes + game-over holes excluded).
+
+        The base set is the round's holes in play (services/hole_plan) rather
+        than a hardcoded 1..18, so a 9-hole / partial / shotgun round completes
+        on exactly the holes it plays. (Withdrawal bookkeeping still compares by
+        hole number, which matches play order for ascending partial rounds; a
+        withdrawal inside a wrapped shotgun order is a rare combined edge case.)
+        """
+        from services.hole_plan import holes_in_play
         members = list(fs.memberships.all())
         # Holes abandoned at a withdrawal — voided for everyone.
         killed = {
@@ -3338,7 +3346,7 @@ class RoundCompleteView(APIView):
             and m.withdrew_after_hole + 1 <= 18
         }
         expected = set()
-        for h in range(1, 19):
+        for h in holes_in_play(fs.round, fs):
             if h in killed:
                 continue
             # At least one member must still be active on this hole.
