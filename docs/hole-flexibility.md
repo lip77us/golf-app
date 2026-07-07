@@ -161,11 +161,15 @@ copy of 1–9 with interleaved SIs) at import/paste time, so downstream code see
 
 ## Leaderboard / scorecard rendering
 
-- **Scorecard grid** (`mobile/lib/widgets/scorecard_grid.dart`) hardcodes columns
-  1–9 = OUT, 10–18 = IN, sum = TOT. Generalize to render the holes **in play
-  order** with the OUT/IN break at the play-order midpoint: a group starting on 8
-  shows holes 8→16, **OUT**, then 17→7, **IN**, then **TOT**. Reduces to today's
-  layout when start=1. A 9-hole round shows a single 9-hole total (no IN split).
+- **Scorecard grid** (`mobile/lib/widgets/scorecard_grid.dart`) and the Stroke-Play
+  strip render **by hole NUMBER** — OUT = holes 1–9, IN = 10–18, TOT — with
+  **blanks for not-yet-played holes** (REVISED 2026-07-07: this matches a physical
+  scorecard and reads naturally even for a mid-course start; we do NOT re-order the
+  card by play order). Done for the Stroke-Play strip (`_holeStrip` renders
+  `holes_in_play` with blank+par for unplayed holes; OUT/IN/TOT appear only once
+  their by-number segment is fully scored). Still TODO for the landscape grid and
+  the Skins/other leaderboard cards. A 9-hole round on a 9-hole course shows one
+  9-hole total (no IN split).
 - **Watch pages** (`api/watch_views.py::_seg_len` returns 9/18) and Nassau labels
   — same play-order generalization for shotgun; segment games are hidden on
   sub-18 rounds anyway. In a shotgun, label segment bets by their actual holes
@@ -173,6 +177,10 @@ copy of 1–9 with interleaved SIs) at import/paste time, so downstream code see
   player doesn't read it as holes 1–9.
 
 ### Personal course-nines summary (Front 9 / Back 9 by hole number)
+
+**SUPERSEDED (2026-07-07):** now that the scorecard DISPLAY is by hole number
+(decision 5), the by-number Front 9 / Back 9 is just the normal card — no separate
+summary is needed. Kept below for history.
 
 Separate from the play-order OUT/IN above: at the **end of an 18-hole round** the
 summary also reports **Front 9 (holes 1–9) and Back 9 (holes 10–18) by hole
@@ -256,10 +264,18 @@ opt-in and nothing changes for existing flows.
    **A/B slot labels are IN scope** as display-only "tee-slot" designators
    (`Foursome.shotgun_slot`, renders "7A"/"7B"; no scoring effect). Auto-assign
    presets + split-tee deferred.
-4. **Segments follow play order** — OUT/IN, Nassau front/back, and Sixes/Triple
-   Cup thirds are defined by position in the play sequence, so a group starting on
-   8 has OUT = 8→16, IN = 17→7, Sixes = 8–13 / 14–1 / 2–7. Reduces to hole-number
-   segments when start=1.
-5. **Personal Front 9 / Back 9 by hole number** — in addition to the play-order
-   OUT/IN, the end-of-round summary reports holes 1–9 and 10–18 totals by number
-   (display-only, no game effect; 18-hole rounds only). See rendering section.
+4. **Segment BET math follows play order** — a segment *game's* thirds/halves are
+   defined by position in the play sequence: Nassau front/back and Sixes/Triple
+   Cup thirds for a group starting on 8 are 8→16 / 17→7 and 8–13 / 14–1 / 2–7.
+   Reduces to hole-number segments when start=1.
+5. **The scorecard/leaderboard DISPLAY stays by hole NUMBER** — REVISED
+   2026-07-07 after testing. The scorecard grid and Stroke-Play strip render
+   holes in NUMBER order with gaps (blanks) for not-yet-played holes, and OUT/IN
+   are holes 1–9 / 10–18 by number — this matches a physical scorecard and reads
+   naturally even for a round started mid-course. So the play-order OUT/IN idea
+   from decision 4 applies ONLY to a segment game's bet math, NOT to how the card
+   is drawn. This makes the old "personal Front 9 / Back 9 summary" moot: the
+   by-number card already IS that view.
+   **OPEN — Fourball / match-style games:** a 2v2 match's running "thru N / n up"
+   state is inherently play-order. Paul is testing whether Fourball's DISPLAY
+   wants play order (match state) while the raw scorecard stays by number. TBD.
