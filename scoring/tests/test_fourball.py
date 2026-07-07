@@ -244,6 +244,8 @@ class FourballMidCourseTests(FourballBase):
         self.assertEqual(self._hole(7)['winner'], 'T1')
         # "thru N" is a COUNT — 2 holes played, not hole number 8.
         self.assertEqual(s['holes_played'], 2)
+        # current_hole = last hole played in PLAY ORDER (7, 8) = 8.
+        self.assertEqual(s['current_hole'], 8)
 
     def test_early_closeout_notation_uses_play_order(self):
         # Start on 13 → play order 13..18,1..12. Team 1 wins the first 6 played

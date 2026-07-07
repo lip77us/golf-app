@@ -1531,6 +1531,9 @@ class FourballSummary {
   /// Holes COMPLETED — the match-play "thru N" count (not a hole number), so it
   /// reads right on a mid-course / shotgun start. Falls back to holes.length.
   final int     holesPlayed;
+  /// The group's CURRENT hole number (last hole played in play order) — drives
+  /// the leaderboard grid's scroll/highlight so it follows play after wrapping.
+  final int     currentHole;
   final FourballTeamInfo team1;
   final FourballTeamInfo team2;
   final List<FourballHole> holes;
@@ -1547,6 +1550,7 @@ class FourballSummary {
     required this.holesUp,
     this.leader,
     required this.holesPlayed,
+    required this.currentHole,
     required this.team1,
     required this.team2,
     required this.holes,
@@ -1583,6 +1587,11 @@ class FourballSummary {
       leader:         overall['leader'] as String?,
       holesPlayed:    j['holes_played'] as int? ??
                       (j['holes'] as List? ?? const []).length,
+      currentHole:    j['current_hole'] as int? ??
+                      ((j['holes'] as List?)?.isNotEmpty == true
+                          ? ((j['holes'] as List).last
+                              as Map<String, dynamic>)['hole'] as int? ?? 0
+                          : 0),
       team1: FourballTeamInfo.fromJson(j['team1'] as Map<String, dynamic>? ?? {}),
       team2: FourballTeamInfo.fromJson(j['team2'] as Map<String, dynamic>? ?? {}),
       holes: (j['holes'] as List? ?? [])

@@ -4720,10 +4720,55 @@ class _RabbitGroupCard extends StatelessWidget {
 /// Compact per-hole points grid for Points 5-3-1.  Each row is a player,
 /// each column a hole.  Points are rendered as small numbers (bold for
 /// the hole winner).  Horizontally scrollable on narrow screens.
-class _Points531HoleGrid extends StatelessWidget {
+class _Points531HoleGrid extends StatefulWidget {
   final List holes;
   final List players;
   const _Points531HoleGrid({required this.holes, required this.players});
+
+  @override
+  State<_Points531HoleGrid> createState() => _Points531HoleGridState();
+}
+
+class _Points531HoleGridState extends State<_Points531HoleGrid> {
+  final ScrollController _ctrl = ScrollController();
+  static const double _labelColW = 48.0;
+  static const double _cellW     = 30.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleScroll();
+  }
+
+  @override
+  void didUpdateWidget(covariant _Points531HoleGrid old) {
+    super.didUpdateWidget(old);
+    _scheduleScroll();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  // Auto-scroll so the latest-scored hole shows (~7 columns from the left) —
+  // 531 was the only game grid that never followed play (it sat on hole 1, so
+  // finishing at 18 left you stuck looking at the front nine).
+  void _scheduleScroll() {
+    int lastHole = 0;
+    for (final h in widget.holes) {
+      final n = ((h as Map)['hole'] as num?)?.toInt() ?? 0;
+      if (n > lastHole) lastHole = n;
+    }
+    if (lastHole == 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_ctrl.hasClients) return;
+      final target = (_labelColW + (lastHole - 7) * _cellW)
+          .clamp(0.0, _ctrl.position.maxScrollExtent);
+      _ctrl.jumpTo(target);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4731,11 +4776,11 @@ class _Points531HoleGrid extends StatelessWidget {
 
     // Pull the player list off the summary (which is already sorted by
     // money desc) so the order is stable and matches the card header.
-    final playerIds = players
+    final playerIds = widget.players
         .map((p) => (p as Map<String, dynamic>)['player_id'] as int)
         .toList();
     final shortByPid = <int, String>{
-      for (final p in players)
+      for (final p in widget.players)
         (p as Map<String, dynamic>)['player_id'] as int:
             ((p)['short_name'] as String?)?.isNotEmpty == true
                 ? (p)['short_name'] as String
@@ -4744,7 +4789,7 @@ class _Points531HoleGrid extends StatelessWidget {
 
     // Lookup: hole_number → {player_id → entry}
     final byHole = <int, Map<int, Map<String, dynamic>>>{};
-    for (final h in holes) {
+    for (final h in widget.holes) {
       final m    = h as Map<String, dynamic>;
       final hole = (m['hole'] as num?)?.toInt() ?? 0;
       final entries = (m['entries'] as List? ?? const []);
@@ -4765,6 +4810,7 @@ class _Points531HoleGrid extends StatelessWidget {
     const rowH      = 26.0;
 
     return SingleChildScrollView(
+      controller: _ctrl,
       scrollDirection: Axis.horizontal,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9068,12 +9114,11 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
     final s2 = join(summary.team2.shortNames, summary.team2.players);
 
     final margin  = summary.holesUp;          // + = team 1 up
-    // thru = highest hole NUMBER played — used only to scroll/highlight the
-    // by-number grid. thruCount = holes COMPLETED, the "Thru N" the golfer reads
-    // (reads right on a mid-course start: played 7–12 = thru 6, not 12).
-    final thru      = summary.holes.isEmpty
-        ? 0
-        : summary.holes.map((h) => h.hole).reduce((a, b) => a > b ? a : b);
+    // thru = the group's CURRENT hole number (last hole played in play order),
+    // so the grid scrolls/highlights the hole just posted even after wrapping
+    // (7…18 → 1). thruCount = holes COMPLETED, the "Thru N" the golfer reads
+    // (played 7–12 = thru 6, not 12).
+    final thru      = summary.currentHole;
     final thruCount = summary.holesPlayed;
     final decided = summary.status == 'complete' || summary.status == 'halved';
     final leaderColor = margin > 0

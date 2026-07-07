@@ -450,6 +450,10 @@ def fourball_summary(foursome) -> dict | None:
         # Holes COMPLETED (match-play "thru N") — a count, not a hole number, so
         # it reads right for a mid-course / shotgun start (played 7–12 = thru 6).
         'holes_played'     : len(holes_out),
+        # The group's CURRENT hole number = the last hole played in PLAY ORDER
+        # (robust vs. relying on hole_results row order). Drives the leaderboard
+        # grid's scroll/highlight so it follows play even after wrapping (…18→1).
+        'current_hole'     : _order[len(holes_out) - 1] if holes_out else 0,
         'handicap'         : {
             'mode'        : game.handicap_mode,
             'net_percent' : game.net_percent,
