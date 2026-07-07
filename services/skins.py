@@ -680,6 +680,9 @@ def skins_summary(foursome) -> dict:
             'junk'        : junk_entries,
         })
 
+    from services.hole_plan import play_order as _play_order
+    in_play = _play_order(foursome.round, foursome)
+
     return {
         'status'    : game.status,
         'handicap'  : {
@@ -690,6 +693,10 @@ def skins_summary(foursome) -> dict:
         'allow_junk': game.allow_junk,
         'players'   : players_out,
         'holes'     : holes_out,
+        # The holes this round plays, IN PLAY ORDER, so the leaderboard grid
+        # renders exactly those (14,15,…,18,1 for a shotgun; 10-18 for a back 9)
+        # instead of a hardcoded 1..18.
+        'holes_in_play': in_play,
         # Withdrawal context for the UI (empty list = normal round). Lets the
         # leaderboard explain a shrunken pool / voided holes.
         'withdrawals': plan['withdrawals'],

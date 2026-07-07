@@ -2563,11 +2563,16 @@ class _MsScorecard extends StatefulWidget {
   /// games with no skin-winner highlight, e.g. Sixes / Wolf).
   final String? legend;
 
+  /// The round's holes IN PLAY ORDER — render exactly these columns (10-18 for a
+  /// back 9; 14,15,…,18,1 for a shotgun). Empty falls back to 1..18.
+  final List<int> holesInPlay;
+
   const _MsScorecard({
     required this.holes,
     required this.participants,
     this.showPoints = false,
     this.legend = 'green = skin winner',
+    this.holesInPlay = const [],
   });
 
   @override
@@ -2606,9 +2611,16 @@ class _MsScorecardState extends State<_MsScorecard> {
   void _scheduleScroll() {
     final hole = _lastScoredHole;
     if (hole == 0) return;
+    // Scroll by the hole's POSITION in play order (columns render in that order),
+    // not its hole number.
+    final order = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay
+        : List.generate(18, (i) => i + 1);
+    final pos = order.indexOf(hole);
+    if (pos < 0) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_ctrl.hasClients) return;
-      final target = (_labelColW + (hole - 7) * _cellW)
+      final target = (_labelColW + (pos - 7) * _cellW)
           .clamp(0.0, _ctrl.position.maxScrollExtent);
       _ctrl.animateTo(target,
           duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
@@ -2630,7 +2642,9 @@ class _MsScorecardState extends State<_MsScorecard> {
     final deadBg = Colors.grey.shade200;
 
     final holeMap = {for (final h in holes) (h['hole'] as int): h};
-    final visibleHoles = List.generate(18, (i) => i + 1);
+    final visibleHoles = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay
+        : List.generate(18, (i) => i + 1);
 
     Widget headerCell(int h) {
       final entry  = holeMap[h];
@@ -2965,6 +2979,8 @@ class _SkinsGroupCard extends StatelessWidget {
             _MsScorecard(
               holes:        holes,
               participants: players,
+              holesInPlay:  (summary['holes_in_play'] as List? ?? const [])
+                  .map((e) => e as int).toList(),
             ),
           ],
         ]),
@@ -9402,9 +9418,7 @@ class _VegasGroupCard extends StatelessWidget {
     // Replace the wall of per-hole bubbles with the genuinely useful stuff:
     // how far along we are, the biggest single-hole swing, and the last hole.
     final scored = summary.holes;
-    final thru = scored.isEmpty
-        ? 0
-        : scored.map((h) => h.hole).reduce((a, b) => a > b ? a : b);
+    final thru = scored.length;   // holes PLAYED (count), not the hole number
     VegasHole? big;
     for (final h in scored) {
       if (h.winner != 'team1' && h.winner != 'team2') continue;
