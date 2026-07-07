@@ -1576,8 +1576,7 @@ class _LowNetViewState extends State<_LowNetView> {
       final n = m['hole'] as int?;
       if (n != null) hm[n] = m;
     }
-    final holeNums = hm.keys.toList()..sort();
-    if (holeNums.isEmpty) {
+    if (hm.isEmpty) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         child: Text('No scores yet.',
@@ -1585,15 +1584,34 @@ class _LowNetViewState extends State<_LowNetView> {
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
       );
     }
-    final front    = holeNums.where((n) => n <= 9).toList();
-    final back     = holeNums.where((n) => n > 9).toList();
-    final allFront = [for (int i = 1; i <= 9; i++) i].every(hm.containsKey);
-    final allBack  = [for (int i = 10; i <= 18; i++) i].every(hm.containsKey);
-    final allDone  = allFront && allBack;
+    // Render EVERY hole the round plays (not just the scored ones) so this
+    // strip matches the score-entry card — a not-yet-played hole shows as a
+    // blank column. holes_in_play + hole_pars come from the backend low-net
+    // block; fall back to only the scored holes for a legacy payload.
+    final holePars = <int, int>{};
+    for (final e in (widget.data['hole_pars'] as Map? ?? const {}).entries) {
+      final k = e.key is int ? e.key as int : int.tryParse('${e.key}');
+      final v = e.value is int ? e.value as int : int.tryParse('${e.value}');
+      if (k != null && v != null) holePars[k] = v;
+    }
+    final inPlay = (widget.data['holes_in_play'] as List?)
+        ?.map((e) => e as int)
+        .toList();
+    final renderHoles = (inPlay == null || inPlay.isEmpty)
+        ? (hm.keys.toList()..sort())
+        : (inPlay..sort());
+    final front    = renderHoles.where((n) => n <= 9).toList();
+    final back     = renderHoles.where((n) => n > 9).toList();
+    // A segment subtotal shows only once EVERY in-play hole in it is scored —
+    // unplayed holes keep it hidden, exactly like the entry strip.
+    final showOut = front.isNotEmpty && front.every(hm.containsKey);
+    final showIn  = back.isNotEmpty && back.every(hm.containsKey);
+    final showTot = renderHoles.every(hm.containsKey);
+    int parOf(int n) => (hm[n]?['par'] as int?) ?? holePars[n] ?? 0;
     int grossSum(List<int> hs) =>
         hs.fold<int>(0, (s, n) => s + ((hm[n]?['gross'] as int?) ?? 0));
     int parSum(List<int> hs) =>
-        hs.fold<int>(0, (s, n) => s + ((hm[n]?['par'] as int?) ?? 0));
+        hs.fold<int>(0, (s, n) => s + parOf(n));
     final netTot = row['total_net'] as int?;
     final ntp    = row['net_to_par'] as int?;
 
@@ -1656,29 +1674,31 @@ class _LowNetViewState extends State<_LowNetView> {
           // Hole-number header
           Row(children: [
             for (final n in front) headCell('$n', holeW),
-            if (allFront) headCell('Out', sumW),
+            if (showOut) headCell('Out', sumW),
             for (final n in back) headCell('$n', holeW),
-            if (allBack) headCell('In', sumW),
-            if (allDone) headCell('Tot', sumW),
-            if (allDone && showNet) headCell('Net', sumW),
+            if (showIn) headCell('In', sumW),
+            if (showTot) headCell('Tot', sumW),
+            if (showTot && showNet) headCell('Net', sumW),
           ]),
           // Par row
           Row(children: [
-            for (final n in front) parCell('${hm[n]?['par'] ?? '-'}', holeW),
-            if (allFront) parCell('${parSum(front)}', sumW),
-            for (final n in back) parCell('${hm[n]?['par'] ?? '-'}', holeW),
-            if (allBack) parCell('${parSum(back)}', sumW),
-            if (allDone) parCell('${parSum(holeNums)}', sumW),
-            if (allDone && showNet) parCell('', sumW),
+            for (final n in front)
+              parCell('${parOf(n) > 0 ? parOf(n) : '-'}', holeW),
+            if (showOut) parCell('${parSum(front)}', sumW),
+            for (final n in back)
+              parCell('${parOf(n) > 0 ? parOf(n) : '-'}', holeW),
+            if (showIn) parCell('${parSum(back)}', sumW),
+            if (showTot) parCell('${parSum(renderHoles)}', sumW),
+            if (showTot && showNet) parCell('', sumW),
           ]),
           // Score row
           Row(children: [
             for (final n in front) scoreCell(n),
-            if (allFront) sumCell('${grossSum(front)}', sumW),
+            if (showOut) sumCell('${grossSum(front)}', sumW),
             for (final n in back) scoreCell(n),
-            if (allBack) sumCell('${grossSum(back)}', sumW),
-            if (allDone) sumCell('${grossSum(holeNums)}', sumW),
-            if (allDone && showNet)
+            if (showIn) sumCell('${grossSum(back)}', sumW),
+            if (showTot) sumCell('${grossSum(renderHoles)}', sumW),
+            if (showTot && showNet)
               sumCell('${netTot ?? ''}', sumW, color: toParColor(ntp)),
           ]),
         ]),

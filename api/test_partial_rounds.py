@@ -87,6 +87,28 @@ class RoundCreateHolesTests(TestCase):
         self.assertEqual(resp.data['num_holes'], 9)   # clamped to the 9-hole course
 
 
+class LowNetHolesInPlayTests(TestCase):
+    """The low-net block declares every hole the round plays (with pars) so the
+    leaderboard strip can render not-yet-played holes as blanks — matching the
+    score-entry card."""
+
+    def test_summary_lists_all_holes_with_pars(self):
+        from services.low_net_round import low_net_round_summary
+        course = make_course()
+        make_tee(course=course, holes=DEFAULT_HOLES)
+        r = make_round(course=course, active_games=['low_net_round'])
+        fs = make_foursome(r, [('Amy', 0), ('Bob', 0)])
+        # Full 18-hole round with holes 10 & 11 left unplayed.
+        for h in list(range(1, 10)) + list(range(12, 19)):
+            submit_hole(fs, h, [(m.player_id, 4) for m in fs.memberships.all()])
+
+        summ = low_net_round_summary(r)
+        self.assertEqual(summ['holes_in_play'], list(range(1, 19)))
+        # Par is available for the unplayed holes too (so they render, not vanish).
+        self.assertIn(10, summ['hole_pars'])
+        self.assertIn(11, summ['hole_pars'])
+
+
 class BackNineCompletionTests(TestCase):
     def test_back_nine_completes_on_10_to_18(self):
         course = make_course()

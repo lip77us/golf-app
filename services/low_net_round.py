@@ -297,11 +297,33 @@ def low_net_round_summary(round_obj) -> dict:
 
     standings = low_net_round_standings(round_obj)
 
+    # The holes this round actually plays (see services/hole_plan) + a
+    # representative par per hole, so the client can render the FULL scorecard
+    # strip — including not-yet-played holes as blanks — instead of only the
+    # holes that happen to have scores. For a normal round this is 1..18.
+    from services.hole_plan import holes_in_play as _holes_in_play
+    in_play = sorted(_holes_in_play(round_obj))
+    rep_tee = None
+    for fs in round_obj.foursomes.all():
+        m = fs.memberships.exclude(tee__isnull=True).first()
+        if m is not None:
+            rep_tee = m.tee
+            break
+    hole_pars: dict = {}
+    if rep_tee is not None:
+        for h in in_play:
+            try:
+                hole_pars[h] = rep_tee.hole(h).get('par')
+            except StopIteration:
+                pass
+
     return {
         'handicap_mode': hmode,
         'net_percent'  : npct,
         'entry_fee'    : entry_fee,
         'payouts'      : payouts_cfg,
+        'holes_in_play': in_play,
+        'hole_pars'    : hole_pars,
         'results'      : [
             {
                 'rank'        : s['rank'],
