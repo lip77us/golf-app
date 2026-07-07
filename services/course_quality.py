@@ -21,9 +21,19 @@ The same SI-permutation rule already guards the manual paste path
 (services/course_paste.py); this brings the API import path up to parity.
 """
 
-EXPECTED_HOLES = 18
+# Hole counts we accept into the catalog: full 18 or a short 9-hole course.
+# Odd counts (e.g. Bandon Preserve 13, Shorty's 19) are deferred — see
+# docs/hole-flexibility.md.
+ALLOWED_HOLE_COUNTS = (9, 18)
 MIN_PAR, MAX_PAR = 3, 6
-MIN_TOTAL_PAR, MAX_TOTAL_PAR = 62, 78
+# Plausible total-par band for an 18-hole course; scaled by hole count so a
+# 9-hole course is checked against ~half (31–39).
+_TOTAL_PAR_18 = (62, 78)
+
+
+def _total_par_band(n):
+    lo, hi = _TOTAL_PAR_18
+    return round(lo * n / 18), round(hi * n / 18)
 
 
 class CourseQualityError(Exception):
@@ -55,8 +65,10 @@ def validate_tee_holes(holes, *, label='tee'):
         return errors  # gross-only tee; handled as a soft warning upstream
 
     n = len(holes)
-    if n != EXPECTED_HOLES:
-        errors.append(f'{label}: expected {EXPECTED_HOLES} holes, got {n}.')
+    if n not in ALLOWED_HOLE_COUNTS:
+        errors.append(
+            f'{label}: expected 9 or 18 holes, got {n}.'
+        )
 
     nums = [h.get('number') for h in holes]
     if not all(isinstance(x, int) for x in nums) or sorted(nums) != list(range(1, n + 1)):
@@ -74,10 +86,11 @@ def validate_tee_holes(holes, *, label='tee'):
         )
     else:
         total_par = sum(h['par'] for h in holes)
-        if not (MIN_TOTAL_PAR <= total_par <= MAX_TOTAL_PAR):
+        min_total, max_total = _total_par_band(n)
+        if not (min_total <= total_par <= max_total):
             errors.append(
                 f'{label}: total par {total_par} is outside the plausible '
-                f'{MIN_TOTAL_PAR}-{MAX_TOTAL_PAR} range.'
+                f'{min_total}-{max_total} range.'
             )
 
     # The headline check: stroke index must be a permutation of 1..n.  This is

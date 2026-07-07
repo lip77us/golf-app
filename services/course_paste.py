@@ -53,6 +53,11 @@ from django.db import models
 from rest_framework import serializers
 
 
+# Hole counts a pasted course may have: a full 18 or a short 9-hole course.
+# Odd counts are deferred — see docs/hole-flexibility.md.
+ALLOWED_HOLE_COUNTS = (9, 18)
+
+
 # ---------------------------------------------------------------------------
 # Token splitting
 # ---------------------------------------------------------------------------
@@ -252,9 +257,10 @@ def _parse_holes_header(line: str) -> list[str]:
 
 def _parse_hole_rows(lines: list[str],
                      tee_columns: list[str]) -> list[dict]:
-    if len(lines) != 18:
+    n = len(lines)
+    if n not in ALLOWED_HOLE_COUNTS:
         raise CoursePasteError(
-            f'Expected 18 hole rows, got {len(lines)}.'
+            f'Expected 9 or 18 hole rows, got {n}.'
         )
     expected_cols = 3 + len(tee_columns)
     holes = []
@@ -278,16 +284,16 @@ def _parse_hole_rows(lines: list[str],
             )
         if hole_num != idx:
             raise CoursePasteError(
-                f'Hole rows must be ordered 1..18.  Row {idx} starts '
+                f'Hole rows must be ordered 1..{n}.  Row {idx} starts '
                 f'with hole number {hole_num}.'
             )
         if not (3 <= par <= 6):
             raise CoursePasteError(
                 f'Hole {idx}: par {par} must be 3-6.'
             )
-        if not (1 <= si <= 18):
+        if not (1 <= si <= n):
             raise CoursePasteError(
-                f'Hole {idx}: stroke index {si} must be 1-18.'
+                f'Hole {idx}: stroke index {si} must be 1-{n}.'
             )
         for tee, y in yards.items():
             if not (50 <= y <= 800):
@@ -301,11 +307,11 @@ def _parse_hole_rows(lines: list[str],
             'yards_by_tee': yards,
         })
 
-    # SI uniqueness check — every stroke index 1-18 should appear once.
+    # SI uniqueness check — every stroke index 1-n should appear once.
     si_seen = sorted(h['stroke_index'] for h in holes)
-    if si_seen != list(range(1, 19)):
+    if si_seen != list(range(1, n + 1)):
         raise CoursePasteError(
-            'Stroke indexes must be 1..18 with each value appearing '
+            f'Stroke indexes must be 1..{n} with each value appearing '
             f'exactly once.  Got: {si_seen}.'
         )
 
@@ -343,9 +349,10 @@ def parse_single_tee_holes(text: str) -> list[dict]:
                 and _split_tokens(lines[0])[0].casefold() == 'hole'):
         lines = lines[1:]
 
-    if len(lines) != 18:
+    n = len(lines)
+    if n not in ALLOWED_HOLE_COUNTS:
         raise CoursePasteError(
-            f'Expected 18 hole rows (one per line), got {len(lines)}.'
+            f'Expected 9 or 18 hole rows (one per line), got {n}.'
         )
 
     holes = []
@@ -368,16 +375,16 @@ def parse_single_tee_holes(text: str) -> list[dict]:
             )
         if hole_num != idx:
             raise CoursePasteError(
-                f'Hole rows must be ordered 1..18.  Row {idx} starts '
+                f'Hole rows must be ordered 1..{n}.  Row {idx} starts '
                 f'with hole number {hole_num}.'
             )
         if not (3 <= par <= 6):
             raise CoursePasteError(
                 f'Hole {idx}: par {par} must be 3-6.'
             )
-        if not (1 <= si <= 18):
+        if not (1 <= si <= n):
             raise CoursePasteError(
-                f'Hole {idx}: stroke index {si} must be 1-18.'
+                f'Hole {idx}: stroke index {si} must be 1-{n}.'
             )
         if not (50 <= yards <= 800):
             raise CoursePasteError(
@@ -391,9 +398,9 @@ def parse_single_tee_holes(text: str) -> list[dict]:
         })
 
     si_seen = sorted(h['stroke_index'] for h in holes)
-    if si_seen != list(range(1, 19)):
+    if si_seen != list(range(1, n + 1)):
         raise CoursePasteError(
-            'Stroke indexes must be 1..18 with each value appearing '
+            f'Stroke indexes must be 1..{n} with each value appearing '
             f'exactly once.  Got: {si_seen}.'
         )
     return holes
