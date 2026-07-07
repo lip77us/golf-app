@@ -9603,7 +9603,8 @@ class _VegasHoleGridState extends State<_VegasHoleGrid> {
                           : FontWeight.normal,
                       fontFeatures: const [FontFeature.tabularFigures()])),
               const SizedBox(height: 2),
-              Text(h.winner == 'halved' ? '½' : '+${h.points}',
+              // Halved Vegas hole = 0 points (a push), not the match-play "½".
+              Text(h.winner == 'halved' ? '0' : '+${h.points}',
                   style: theme.textTheme.labelSmall?.copyWith(
                       color: winColor(h.winner),
                       fontWeight: FontWeight.w700,

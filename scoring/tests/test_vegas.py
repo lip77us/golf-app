@@ -87,6 +87,26 @@ class VegasFlipTests(VegasBase):
         self.assertEqual(h['winner'], 'team1')
         self.assertEqual(h['points'], 11)
 
+    def test_three_on_a_par_three_is_par_not_a_birdie_no_flip(self):
+        # Hole 3 is a PAR 3, so a gross 3 is PAR — NOT a birdie — and nothing
+        # flips: a straight 45-35 = 10, exactly what a mid-round par-3 shows.
+        self._setup(birdie_mode='flip')
+        self._play(3, 4, 5, 3, 5)                # t1 45, t2 35; C's 3 = par
+        h = self._hole(3)
+        self.assertEqual((h['team1_number'], h['team2_number']), (45, 35))
+        self.assertEqual(h['winner'], 'team2')
+        self.assertEqual(h['points'], 10)        # no flip → straight difference
+
+    def test_flip_works_on_a_mid_course_start(self):
+        # Vegas is per-hole, so a mid-course / shotgun start changes nothing —
+        # a birdie on a par-4 hole still flips the other team's number.
+        self.round.starting_hole = 14
+        self.round.num_holes = 18
+        self.round.save(update_fields=['starting_hole', 'num_holes'])
+        self._setup(birdie_mode='flip')
+        self._play(1, 4, 5, 3, 6)                # hole 1 par 4, C birdie 3
+        self.assertEqual(self._hole(1)['team1_number'], 54)   # flipped anyway
+
 
 class VegasMultiplierTests(VegasBase):
     def test_winner_birdie_doubles(self):

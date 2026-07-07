@@ -9501,8 +9501,10 @@ class _VegasStatusCard extends StatelessWidget {
                             : winColor(h.winner).withValues(alpha: 0.4)),
                   ),
                   child: Text(
+                    // A halved Vegas hole is worth 0 points (a push), not the
+                    // match-play "½" — the equal numbers already show the tie.
                     h.winner == 'halved'
-                        ? 'H${h.hole} ${h.team1Number}-${h.team2Number} ½'
+                        ? 'H${h.hole} ${h.team1Number}-${h.team2Number}'
                         : 'H${h.hole} ${h.team1Number}-${h.team2Number} '
                           '+${h.points}',
                     style: theme.textTheme.labelSmall?.copyWith(
