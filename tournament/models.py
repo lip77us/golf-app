@@ -71,6 +71,24 @@ class Round(models.Model):
     round_number        = models.PositiveSmallIntegerField(default=1)
     date                = models.DateField(default=timezone.now)
     course              = models.ForeignKey(Course, on_delete=models.PROTECT, related_name='rounds')
+    # --- Holes played (see docs/hole-flexibility.md) ----------------------
+    # A round plays `num_holes` consecutive holes starting at `starting_hole`,
+    # wrapping around the course's hole count. Defaults (18 from hole 1)
+    # reproduce a standard round exactly. For shotgun starts each Foursome
+    # overrides starting_hole; this is the round-level default. Derived play
+    # order + segments live in services/hole_plan.py.
+    num_holes           = models.PositiveSmallIntegerField(
+                            default=18,
+                            help_text="How many holes are played (e.g. 9 or 18).",
+                        )
+    starting_hole       = models.PositiveSmallIntegerField(
+                            default=1,
+                            help_text=(
+                                "Hole the round starts on (1 = normal). "
+                                "Foursome.starting_hole overrides per group for "
+                                "shotgun starts."
+                            ),
+                        )
     status              = models.CharField(max_length=20, choices=RoundStatus.choices, default=RoundStatus.PENDING)
     active_games        = models.JSONField(
                             default=list,
@@ -215,6 +233,24 @@ class Foursome(models.Model):
     tee_time            = models.TimeField(
                             null=True, blank=True,
                             help_text="Scheduled tee time for this group (HH:MM)."
+                        )
+    # Shotgun start (see docs/hole-flexibility.md): this group's starting hole
+    # (null = inherit the round's starting_hole). shotgun_slot is a DISPLAY-ONLY
+    # tee-slot label (e.g. "A"/"B") rendered as "7A"/"7B" when more than one
+    # group starts on the same hole; it has no effect on play order or scoring.
+    starting_hole       = models.PositiveSmallIntegerField(
+                            null=True, blank=True,
+                            help_text=(
+                                "Per-group shotgun start; null inherits the "
+                                "round's starting_hole."
+                            ),
+                        )
+    shotgun_slot        = models.CharField(
+                            max_length=2, blank=True, default='',
+                            help_text=(
+                                "Display-only tee-slot label (e.g. 'A'/'B') when "
+                                "multiple groups start on the same hole."
+                            ),
                         )
 
     class Meta:
