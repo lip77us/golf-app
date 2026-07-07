@@ -309,7 +309,8 @@ def fourball_summary(foursome) -> dict | None:
                           'player_ids':[...], 'is_winner': bool},
       'holes'        : [{'hole', 't1_net', 't2_net', 'winner':'T1'|'T2'|'Halved',
                          'margin'}],
-      'money'        : {'bet_amount': float, 'by_player': [{'name','amount'}]},
+      'money'        : {'bet_amount': float,
+                        'by_player': [{'player_id','name','amount'}]},
       'players'      : [{'player_id','name','short_name'}],   # scorecard order
       'scorecard'    : [{'hole','par','scores':[{player_id,gross,strokes}]}],
     }
@@ -360,7 +361,8 @@ def fourball_summary(foursome) -> dict | None:
         for p in team.players.all():
             if p.is_phantom:
                 continue
-            money.setdefault(p.id, {'name': p.name, 'amount': 0.0})
+            money.setdefault(
+                p.id, {'player_id': p.id, 'name': p.name, 'amount': 0.0})
     if game.result in ('team1', 'team2'):
         win_team  = t1 if game.result == 'team1' else t2
         lose_team = t2 if game.result == 'team1' else t1

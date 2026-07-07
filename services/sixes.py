@@ -845,12 +845,12 @@ def sixes_summary(foursome) -> dict:
             for p in winning_team.players.all():
                 if p.is_phantom:
                     continue
-                entry = money_totals.setdefault(p.id, {'name': p.name, 'amount': 0.0})
+                entry = money_totals.setdefault(p.id, {'player_id': p.id, 'name': p.name, 'amount': 0.0})
                 entry['amount'] += bet_unit
             for p in losing_team.players.all():
                 if p.is_phantom:
                     continue
-                entry = money_totals.setdefault(p.id, {'name': p.name, 'amount': 0.0})
+                entry = money_totals.setdefault(p.id, {'player_id': p.id, 'name': p.name, 'amount': 0.0})
                 entry['amount'] -= bet_unit
 
         extra_label = ', extra' if seg.is_extra else ''
@@ -928,8 +928,9 @@ def sixes_summary(foursome) -> dict:
     for m in foursome.memberships.select_related('player').all():
         if m.player.is_phantom:
             continue
-        money_totals.setdefault(m.player_id,
-                                {'name': m.player.name, 'amount': 0.0})
+        money_totals.setdefault(
+            m.player_id,
+            {'player_id': m.player_id, 'name': m.player.name, 'amount': 0.0})
     money_out = sorted(
         money_totals.values(),
         key=lambda e: (-e['amount'], e['name']),

@@ -133,3 +133,59 @@ class SettlementTests(TestCase):
         s = round_settlement(self.round)
         self.assertIn('nassau', s['uncovered_games'])
         self.assertEqual({g['game'] for g in s['per_game']}, {'skins'})
+
+
+class FourballSixesSettlementRegressionTests(TestCase):
+    """Fourball AND Sixes money.by_player entries must carry player_id, or the
+    cross-game Settlement tab 500s (shipped 2.3.0 bug: KeyError 'player_id' in
+    settlement._pid_nets_for_game). A team wins outright so real money moves."""
+
+    def _round(self, game):
+        tee = make_tee()
+        rnd = make_round(tee.course, active_games=[game])
+        rnd.bet_unit = Decimal('5.00')
+        rnd.save(update_fields=['bet_unit'])
+        fs = make_foursome(
+            rnd, [('A', 0), ('B', 0), ('C', 0), ('D', 0)], tee=tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        # Team A/B beat C/D on every hole.
+        submit_round(fs, {
+            h: [(pid['A'], 4), (pid['B'], 4), (pid['C'], 6), (pid['D'], 6)]
+            for h in range(1, 19)
+        })
+        return tee, rnd, fs, pid
+
+    def test_fourball_round_settles(self):
+        from services.fourball import setup_fourball, calculate_fourball
+        tee, rnd, fs, pid = self._round('fourball')
+        setup_fourball(fs, [pid['A'], pid['B']], [pid['C'], pid['D']],
+                       handicap_mode='gross')
+        calculate_fourball(fs)
+
+        s = round_settlement(rnd)                       # must NOT raise
+        self.assertIsNotNone(s)
+        self.assertIn('fourball', {g['game'] for g in s['per_game']})
+        got = {p['player_id']: p['net'] for p in s['players']}
+        self.assertAlmostEqual(sum(got.values()), 0.0, places=2)
+        self.assertGreater(got[pid['A']], 0)            # winners collect
+        self.assertLess(got[pid['C']], 0)               # losers pay
+
+    def test_sixes_round_settles(self):
+        from services.sixes import setup_sixes, calculate_sixes
+        tee, rnd, fs, pid = self._round('sixes')
+        base = {'team_select_method': 'long_drive',
+                'team1_player_ids': [pid['A'], pid['B']],
+                'team2_player_ids': [pid['C'], pid['D']]}
+        setup_sixes(fs, [
+            {**base, 'start_hole':  1, 'end_hole':  6},
+            {**base, 'start_hole':  7, 'end_hole': 12},
+            {**base, 'start_hole': 13, 'end_hole': 18},
+        ], handicap_mode='gross')
+        calculate_sixes(fs)
+
+        s = round_settlement(rnd)                       # must NOT raise
+        self.assertIsNotNone(s)
+        self.assertIn('sixes', {g['game'] for g in s['per_game']})
+        got = {p['player_id']: p['net'] for p in s['players']}
+        self.assertAlmostEqual(sum(got.values()), 0.0, places=2)

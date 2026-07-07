@@ -806,10 +806,19 @@ def _build_leaderboard(round_obj: Round) -> dict:
     # Cross-game settlement ("who owes whom") — nets every per-player-settleable
     # game into one summary.  None when the round has no nettable game (e.g. a
     # team-only Nassau round), in which case there's no Settlement tab.
+    # Wrapped defensively: settlement is a derived convenience view, so a bug in
+    # one game's money shape must never 500 the leaderboard / score submission
+    # (it did: a Fourball/Sixes money entry missing player_id) — degrade to no
+    # Settlement tab and log instead.
     from services.settlement import round_settlement
-    settlement = round_settlement(round_obj)
-    if settlement is not None:
-        games['settlement'] = {'label': 'Settlement', **settlement}
+    try:
+        settlement = round_settlement(round_obj)
+        if settlement is not None:
+            games['settlement'] = {'label': 'Settlement', **settlement}
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            'round_settlement failed for round %s', round_obj.id)
 
     return games
 
