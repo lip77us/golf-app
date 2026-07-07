@@ -229,9 +229,15 @@ opt-in and nothing changes for existing flows.
 - ✅ **Phase 2b** — casual Advanced tab (holes + starting hole) + play-order
   score entry. **Casual 9-hole / back-9 rounds are now creatable and playable
   end-to-end for per-hole GROSS games.**
-- ⏳ **Next: Phase 2c** — handicap halving + re-rank (net games over-allocate
-  strokes on a 9-hole round until this lands). Then per-hole games, then segment
-  games (2e) + rendering (Phase 5).
+- ✅ **Phase 2c** — partial-round handicap (scale + re-rank) via
+  `scoring.handicap.make_strokes_fn`, wired through build_score_index / low_net /
+  stableford / `handicap_strokes_on_hole` (submit + scorecard). Full rounds
+  byte-identical (430 tests). **NET games now score correctly on a 9-hole /
+  partial round.** FOLLOW-UP: the mobile score-entry stroke DOTS + net preview for
+  the *current unsaved* hole still compute a full-18 allocation locally (cosmetic;
+  self-corrects on save since the scorecard's handicap_strokes are partial-aware).
+- ⏳ **Next:** segment games (2e — gate Nassau/Sixes/Triple Cup off sub-18; play-
+  order thirds for shotgun) + Phase 5 rendering leftovers + tournament shotgun.
 
 ## Phased plan
 
