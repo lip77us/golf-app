@@ -9550,19 +9550,20 @@ class _FourballStatusCard extends StatelessWidget {
     String shortNames(FourballTeamInfo t) =>
         (t.shortNames.isNotEmpty ? t.shortNames : t.players).join(' & ');
 
-    final thru = summary.holes.isEmpty
-        ? 0
-        : summary.holes.map((h) => h.hole).reduce((a, b) => a > b ? a : b);
+    // "thru N" is holes COMPLETED (a count), not a hole number — reads right on
+    // a mid-course / shotgun start (played 7–12 = thru 6, not 12).
+    final thru = summary.holesPlayed;
     final margin    = summary.holesUp.abs();
     final leadTeam  = summary.holesUp > 0 ? summary.team1 : summary.team2;
     // Live status line, led by the leading/winning team's short names:
     //   "Paul & Mike 2 UP thru 5" / "All Square thru 5" / "Paul & Mike win 3&2".
     final String statusLine;
     if (summary.status == 'complete') {
-      final closed = summary.finishedOnHole != null &&
-          summary.finishedOnHole! < 18;
-      statusLine = closed
-          ? '${shortNames(leadTeam)} win $margin&${18 - summary.finishedOnHole!}'
+      // Holes remaining at close-out = 18 − holes played (count-based, so a
+      // mid-course start still yields the right "&M").
+      final toPlay = 18 - summary.holesPlayed;
+      statusLine = toPlay > 0
+          ? '${shortNames(leadTeam)} win $margin&$toPlay'
           : '${shortNames(leadTeam)} win $margin UP';
     } else if (summary.status == 'halved') {
       statusLine = 'All Square';

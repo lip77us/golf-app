@@ -447,6 +447,9 @@ def fourball_summary(foursome) -> dict | None:
         'result'           : game.result,
         'result_label'     : _result_label(game, _holes_to_play),
         'finished_on_hole' : game.finished_on_hole,
+        # Holes COMPLETED (match-play "thru N") — a count, not a hole number, so
+        # it reads right for a mid-course / shotgun start (played 7–12 = thru 6).
+        'holes_played'     : len(holes_out),
         'handicap'         : {
             'mode'        : game.handicap_mode,
             'net_percent' : game.net_percent,

@@ -1528,6 +1528,9 @@ class FourballSummary {
   final int     netPercent;
   final int     holesUp;          // positive = team 1 up
   final String? leader;           // 'team1' | 'team2' | null
+  /// Holes COMPLETED — the match-play "thru N" count (not a hole number), so it
+  /// reads right on a mid-course / shotgun start. Falls back to holes.length.
+  final int     holesPlayed;
   final FourballTeamInfo team1;
   final FourballTeamInfo team2;
   final List<FourballHole> holes;
@@ -1543,6 +1546,7 @@ class FourballSummary {
     required this.netPercent,
     required this.holesUp,
     this.leader,
+    required this.holesPlayed,
     required this.team1,
     required this.team2,
     required this.holes,
@@ -1577,6 +1581,8 @@ class FourballSummary {
       netPercent:     hcap['net_percent'] as int? ?? 100,
       holesUp:        overall['holes_up'] as int? ?? 0,
       leader:         overall['leader'] as String?,
+      holesPlayed:    j['holes_played'] as int? ??
+                      (j['holes'] as List? ?? const []).length,
       team1: FourballTeamInfo.fromJson(j['team1'] as Map<String, dynamic>? ?? {}),
       team2: FourballTeamInfo.fromJson(j['team2'] as Map<String, dynamic>? ?? {}),
       holes: (j['holes'] as List? ?? [])

@@ -9068,9 +9068,13 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
     final s2 = join(summary.team2.shortNames, summary.team2.players);
 
     final margin  = summary.holesUp;          // + = team 1 up
-    final thru    = summary.holes.isEmpty
+    // thru = highest hole NUMBER played — used only to scroll/highlight the
+    // by-number grid. thruCount = holes COMPLETED, the "Thru N" the golfer reads
+    // (reads right on a mid-course start: played 7–12 = thru 6, not 12).
+    final thru      = summary.holes.isEmpty
         ? 0
         : summary.holes.map((h) => h.hole).reduce((a, b) => a > b ? a : b);
+    final thruCount = summary.holesPlayed;
     final decided = summary.status == 'complete' || summary.status == 'halved';
     final leaderColor = margin > 0
         ? t1Color
@@ -9173,11 +9177,11 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
               ),
             ),
           ),
-          if (thru > 0 && thru < 18)
+          if (thruCount > 0 && thruCount < 18)
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Text('Thru $thru',
+                child: Text('Thru $thruCount',
                     style: theme.textTheme.labelSmall
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
               ),
