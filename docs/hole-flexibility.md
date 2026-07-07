@@ -232,10 +232,12 @@ opt-in and nothing changes for existing flows.
 - ✅ **Phase 2c** — partial-round handicap (scale + re-rank) via
   `scoring.handicap.make_strokes_fn`, wired through build_score_index / low_net /
   stableford / `handicap_strokes_on_hole` (submit + scorecard). Full rounds
-  byte-identical (430 tests). **NET games now score correctly on a 9-hole /
-  partial round.** FOLLOW-UP: the mobile score-entry stroke DOTS + net preview for
-  the *current unsaved* hole still compute a full-18 allocation locally (cosmetic;
-  self-corrects on save since the scorecard's handicap_strokes are partial-aware).
+  byte-identical (434 tests). **NET games now score correctly on a 9-hole /
+  partial round.** Mobile score-entry stroke DOTS + net preview are partial-aware
+  too (net@100% reads the scorecard's predicted strokes; net@custom% uses
+  `partialStrokesOnHole`, mirroring the backend). Remaining gap: Wolf/Rabbit
+  DEDICATED play screens still compute full-18 locally (also not play-order aware
+  on partial rounds yet — a combined follow-up).
 - ⏳ **Next:** segment games (2e — gate Nassau/Sixes/Triple Cup off sub-18; play-
   order thirds for shotgun) + Phase 5 rendering leftovers + tournament shotgun.
 
