@@ -62,13 +62,23 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
     // Non-admins get a read-only view; only admins can add/edit.  The
     // backend enforces this too, so this is just to avoid showing an
     // editable form that would fail to save with a 403.
+    final isNew    = player == null;
     final readOnly = !context.read<AuthProvider>().isAdmin;
     final saved = await Navigator.of(context).push<PlayerProfile>(
       MaterialPageRoute(
         builder: (_) => PlayerFormScreen(player: player, readOnly: readOnly),
       ),
     );
-    if (saved != null) _load();
+    if (saved == null) return;
+    // Reload so the roster (and the `is_on_app` flag) is fresh before we decide
+    // whether to offer an invite — the create response doesn't compute it.
+    await _load();
+    // A newly-added golfer with a phone who isn't on Halved yet: offer to text
+    // them a personalized invite (same one-tap flow as round setup).
+    if (isNew && mounted) {
+      final fresh = _all.firstWhere((p) => p.id == saved.id, orElse: () => saved);
+      await maybeOfferGolferSmsInvite(context, fresh);
+    }
   }
 
   Future<bool> _confirmDelete(PlayerProfile p) async {

@@ -64,6 +64,44 @@ Future<void> inviteGolfer(BuildContext context, PlayerProfile golfer) async {
   }
 }
 
+/// After adding a golfer to the My Golfers roster (NOT a round), offer to text
+/// them a personalized invite. No-op when the golfer has no phone on file or is
+/// already on Halved (nothing to invite). Unlike [maybeOfferRoundSmsInvite] the
+/// copy has no round framing — the golfer isn't being added to a round here.
+Future<void> maybeOfferGolferSmsInvite(
+  BuildContext context,
+  PlayerProfile golfer,
+) async {
+  if (golfer.phone.trim().isEmpty || golfer.isOnApp || !context.mounted) return;
+  final auth      = context.read<AuthProvider>();
+  final messenger = ScaffoldMessenger.of(context);
+
+  final send = await showDialog<bool>(
+    context: context,
+    builder: (dctx) => AlertDialog(
+      title: Text('Text ${golfer.name} an invite?'),
+      content: Text(
+        'Open Messages with a ready-to-send invite to ${golfer.name} '
+        '(${golfer.phone.trim()}). When they join Halved and verify this '
+        "number, they'll connect to you automatically.",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dctx).pop(false),
+          child: const Text('Not now'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(dctx).pop(true),
+          icon: const Icon(Icons.sms_outlined),
+          label: const Text('Text invite'),
+        ),
+      ],
+    ),
+  );
+  if (send != true || !context.mounted) return;
+  await sendGolferSmsInvite(auth, messenger, golfer: golfer);
+}
+
 /// After inline-adding a golfer during round setup, offer to text them a
 /// pre-seeded invite. No-op when the golfer has no phone on file or is already
 /// on Halved (nothing to invite). When [courseName] is supplied it's woven into
@@ -126,13 +164,14 @@ Future<void> sendGolferSmsInvite(
   }
 
   final first = golfer.name.trim().split(RegExp(r'\s+')).first;
-  final where = (courseName != null && courseName.trim().isNotEmpty)
-      ? 'our round at ${courseName.trim()}'
-      : 'our round';
-  final body =
-      'Hi $first! I added you to $where on Halved — the easiest way to track '
-      "our golf bets. Get the app and verify this number and you'll see our "
-      'round: $url';
+  final hasCourse = courseName != null && courseName.trim().isNotEmpty;
+  final body = hasCourse
+      ? 'Hi $first! I added you to our round at ${courseName.trim()} on Halved '
+          "— the easiest way to track our golf bets. Get the app and verify "
+          "this number and you'll see our round: $url"
+      : 'Hi $first! I use Halved to track our golf bets — the easiest way to '
+          'settle up. Get the app and verify this number so we\'re connected: '
+          '$url';
 
   final ok = await _launchSmsInvite(phone: golfer.phone, body: body);
   if (!ok) {
