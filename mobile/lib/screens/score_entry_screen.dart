@@ -1074,6 +1074,34 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (p != null) setState(() => _selectedHole = p);
   }
 
+  /// Whether [h] may be navigated to from the hole strip. You can tap BACK to any
+  /// hole already reached, or the CURRENT hole (the first unplayed in play order),
+  /// but NOT jump ahead to a future unplayed hole — scores are always entered in
+  /// play order, so the round stays gapless.
+  bool _canSelectHole(int h) {
+    final rp = context.read<RoundProvider>();
+    final sc = rp.scorecard;
+    if (sc == null) return true;
+    for (final ph in _playOrderFor(rp)) {
+      if (ph == h) return true;                       // reached it at/before frontier
+      if (_effectiveScores(sc, ph).isEmpty) return false;  // an earlier hole is unplayed
+    }
+    return false;
+  }
+
+  /// Guarded hole selection used by the hole-number strip. Jumping ahead to an
+  /// unplayed hole is refused (with a hint) so entry stays in play order.
+  void _selectHole(int h) {
+    if (_canSelectHole(h)) {
+      setState(() => _selectedHole = h);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Enter holes in order — finish the current hole first.'),
+        duration: Duration(seconds: 2),
+      ));
+    }
+  }
+
   // ── Save & advance ───────────────────────────────────────────────────────────
 
   Future<void> _saveAndAdvance(
@@ -2128,7 +2156,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 loadingVegas:            rp.loadingVegas,
                 loadingMatchPlay:        rp.loadingMatchPlay,
                 loadingThreePersonMatch: rp.loadingThreePersonMatch,
-                onTapHole:               (h) => setState(() => _selectedHole = h),
+                onTapHole:               _selectHole,
                 irBallsConfig:           games.contains('irish_rumble')
                     ? (rp.round?.irBallsConfig ?? const [])
                     : const [],
