@@ -43,3 +43,28 @@ int strokesOnHole(int effectiveHandicap, int strokeIndex) {
   final rem   = effectiveHandicap %  18;
   return full + (strokeIndex <= rem ? 1 : 0);
 }
+
+/// Partial-round-aware allocation (mirrors scoring.handicap.make_strokes_fn).
+/// Full round (n >= universe): identical to [strokesOnHole]. Partial round:
+/// SCALE the handicap to the holes played (round(hcp * n / universe)) and
+/// RE-RANK by stroke index WITHIN them, so the entry-screen dots match the
+/// leaderboard on a 9-hole / partial round. [siFor] returns a hole's stroke
+/// index (per this player's tee).
+int partialStrokesOnHole(
+  int effectiveHandicap,
+  int hole,
+  List<int> holesInPlay,
+  int universe,
+  int Function(int hole) siFor,
+) {
+  final n = holesInPlay.length;
+  if (n == 0 || n >= universe) {
+    return strokesOnHole(effectiveHandicap, siFor(hole));
+  }
+  final hcpN = (effectiveHandicap * n / universe).round();
+  if (hcpN <= 0) return 0;
+  final ranked = [...holesInPlay]..sort((a, b) => siFor(a).compareTo(siFor(b)));
+  final idx = ranked.indexOf(hole);          // 0 = hardest played
+  if (idx < 0) return 0;
+  return (hcpN ~/ n) + (idx < (hcpN % n) ? 1 : 0);
+}

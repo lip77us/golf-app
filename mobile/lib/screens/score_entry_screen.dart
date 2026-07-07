@@ -2007,6 +2007,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 holeNumber:      _selectedHole,
                 players:         players,
                 scorecard:       sc,
+                holesInPlay:     _playOrderFor(rp),
                 merged:          merged,
                 scores:          scores,
                 hotSpotIdx:      hotSpot,
@@ -2247,7 +2248,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           scorecard:   sc,
         );
       } else {
-        strokes = strokesOnHole(effective, si);
+        // Partial-round aware (scale + re-rank); identical to strokesOnHole on a
+        // full round, so the picker's net preview matches the leaderboard.
+        final universe = (sc == null || sc.holes.isEmpty)
+            ? 18
+            : sc.holes.map((x) => x.holeNumber).reduce((a, b) => a > b ? a : b);
+        strokes = partialStrokesOnHole(
+          effective, hole, _playOrderFor(rp), universe,
+          (hh) => sc?.holeData(hh)?.scoreFor(player.player.id)?.strokeIndex
+              ?? sc?.holeData(hh)?.strokeIndex ?? 18,
+        );
       }
     }
 
@@ -2290,6 +2300,9 @@ class _HoleScoreCard extends StatelessWidget {
   final int                     holeNumber;
   final List<Membership>        players;
   final Scorecard               scorecard;
+  /// The round's holes in play order — lets the net<100% stroke dots do the
+  /// partial-round scale + re-rank. Empty = treat as a full round.
+  final List<int>               holesInPlay;
   final Map<int, Map<int, int>> merged;
   final Map<int, int>           scores;
   final int                     hotSpotIdx;
@@ -2352,6 +2365,7 @@ class _HoleScoreCard extends StatelessWidget {
     required this.holeNumber,
     required this.players,
     required this.scorecard,
+    this.holesInPlay = const [],
     required this.merged,
     required this.scores,
     required this.hotSpotIdx,
@@ -2632,9 +2646,18 @@ class _HoleScoreCard extends StatelessWidget {
     }
 
     if (handicapMode == 'net') {
+      // @100% the backend already stored/predicted the (partial-aware) strokes.
       if (netPercent == 100 && entry != null) return entry.handicapStrokes;
+      // Custom % → derive locally, partial-round aware (scale + re-rank).
       final effective = (m.playingHandicap * netPercent / 100.0).round();
-      return strokesOnHole(effective, mySi);
+      final universe = scorecard.holes.isEmpty
+          ? 18
+          : scorecard.holes.map((x) => x.holeNumber).reduce((a, b) => a > b ? a : b);
+      return partialStrokesOnHole(
+        effective, h.holeNumber, holesInPlay, universe,
+        (hh) => scorecard.holeData(hh)?.scoreFor(m.player.id)?.strokeIndex
+            ?? scorecard.holeData(hh)?.strokeIndex ?? 18,
+      );
     }
     if (handicapMode == 'strokes_off') {
       // Match Play single-elim brackets compute SO vs the per-match
