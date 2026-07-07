@@ -2168,6 +2168,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     rp.lowNetConfig?['net_percent']   as int?    ?? 100,
                 stablefordResult:
                     games.contains('stableford') ? rp.stablefordResult : null,
+                holesInPlay:             _playOrderFor(rp),
               ),
 
               const SizedBox(height: 16),
@@ -4381,6 +4382,8 @@ class _GameStatusSection extends StatelessWidget {
   // stableford) render in entry ONLY when they are the primary; as side games
   // they live on the leaderboard, not here.
   final String?                     primaryGame;
+  // Ordered holes actually in play (play order, wraparound). Empty = full 1-18.
+  final List<int>                   holesInPlay;
 
   const _GameStatusSection({
     required this.games,
@@ -4415,6 +4418,7 @@ class _GameStatusSection extends StatelessWidget {
     this.strokePlayNetPercent   = 100,
     this.stablefordResult,
     this.primaryGame,
+    this.holesInPlay = const [],
   });
 
   @override
@@ -4571,6 +4575,7 @@ class _GameStatusSection extends StatelessWidget {
             onTapHole:    onTapHole,
             handicapMode: strokePlayHandicapMode,
             netPercent:   strokePlayNetPercent,
+            holesInPlay:  holesInPlay,
           ),
           const SizedBox(height: 12),
         ],
@@ -5870,6 +5875,7 @@ class _StrokePlayProgressGrid extends StatefulWidget {
   final void Function(int hole)? onTapHole;
   final String           handicapMode;   // 'net' | 'gross' | 'strokes_off'
   final int              netPercent;
+  final List<int>        holesInPlay;     // play order; empty = full 1-18
 
   const _StrokePlayProgressGrid({
     required this.players,
@@ -5878,6 +5884,7 @@ class _StrokePlayProgressGrid extends StatefulWidget {
     this.onTapHole,
     required this.handicapMode,
     required this.netPercent,
+    this.holesInPlay = const [],
   });
 
   @override
@@ -5915,7 +5922,14 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
 
   void _scrollToHole(int hole) {
     if (!_scrollCtrl.hasClients) return;
-    final target = (_labelColW + (hole - 7) * _cellW)
+    // Scroll by POSITION in the played sequence, not by hole number, so a
+    // back-9 / partial round centres the current hole correctly.
+    final range = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay
+        : List.generate(18, (i) => i + 1);
+    final pos = range.indexOf(hole);
+    if (pos < 0) return;
+    final target = (_labelColW + (pos - 6) * _cellW)
         .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
     _scrollCtrl.animateTo(
       target,
@@ -5932,7 +5946,16 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
     final hole = widget.scorecard.holeData(h);
     if (hole == null) return 0;
     final entry = hole.scoreFor(m.player.id);
-    final si    = entry?.strokeIndex ?? hole.strokeIndex;
+
+    final universe = widget.scorecard.holes.isEmpty
+        ? 18
+        : widget.scorecard.holes
+            .map((x) => x.holeNumber)
+            .reduce((a, b) => a > b ? a : b);
+    int siFor(int hh) =>
+        widget.scorecard.holeData(hh)?.scoreFor(m.player.id)?.strokeIndex ??
+        widget.scorecard.holeData(hh)?.strokeIndex ??
+        18;
 
     if (widget.handicapMode == 'net') {
       if (widget.netPercent == 100 && entry != null) {
@@ -5940,7 +5963,8 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
       }
       final effective =
           (m.playingHandicap * widget.netPercent / 100.0).round();
-      return strokesOnHole(effective, si);
+      return partialStrokesOnHole(
+          effective, h, widget.holesInPlay, universe, siFor);
     }
     // strokes_off — anchored on the foursome low.
     if (widget.players.isEmpty) return 0;
@@ -5951,7 +5975,7 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
     if (rawSo <= 0) return 0;
     final so = (rawSo * widget.netPercent / 100.0).round();
     if (so <= 0) return 0;
-    return strokesOnHole(so, si);
+    return partialStrokesOnHole(so, h, widget.holesInPlay, universe, siFor);
   }
 
   @override
@@ -5961,7 +5985,11 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
     final scorecard   = widget.scorecard;
     final currentHole = widget.currentHole;
     final onTapHole   = widget.onTapHole;
-    final holeRange   = List.generate(18, (i) => i + 1);
+    // Only the holes actually in play (play order, wraparound) — a back-9 /
+    // partial round shows just those columns, not a blank 1-9.
+    final holeRange   = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay
+        : List.generate(18, (i) => i + 1);
 
     Widget holeCell(int h, {required Widget child, Color? bg}) {
       final isCurrent = h == currentHole;

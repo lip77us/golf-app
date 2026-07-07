@@ -671,7 +671,10 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
           _netPercent = inherited.$2;
         }
         _numPlayers        = cfg['num_players'] as int? ?? 0;
-        _entryCtrl.text    = _fmtAmount(cfg['entry_fee'] as num? ?? 5.0);
+        // Leave the entry-fee field BLANK when there's no fee yet, so the user
+        // types straight in instead of erasing a pre-filled "0".
+        final fee          = (cfg['entry_fee'] as num?)?.toDouble() ?? 0.0;
+        _entryCtrl.text    = fee > 0 ? _fmtAmount(fee) : '';
         _payoutPlaces      = placesCount;
         for (int i = 0; i < 4; i++) {
           _payoutCtrls[i].text = amounts[i] > 0 ? _fmtAmount(amounts[i]) : '';

@@ -58,7 +58,12 @@ def tally_spots(foursome, hole_number: int, entries: list) -> SpotsGame:
     entries: [{'player_id': int, 'count': int}, ...]. A count of 0 deletes the
     row. Unmentioned players are left untouched.
     """
-    game = foursome.spots_game  # caller guarantees it exists
+    # Auto-create with defaults if Spots was added but never configured, so the
+    # first tap in score entry just works (the hub's "Edit Spots" tunes it later).
+    try:
+        game = foursome.spots_game
+    except SpotsGame.DoesNotExist:
+        game = setup_spots(foursome)
     real_ids = {
         m.player_id for m in foursome.memberships.filter(player__is_phantom=False)
     }
@@ -99,10 +104,26 @@ def spots_summary(foursome) -> dict:
     try:
         game = foursome.spots_game
     except SpotsGame.DoesNotExist:
+        # Spots was added to the round but not yet configured. Still surface the
+        # roster (zero counts) so the ⊖ 0 ⊕ capture control shows in score entry
+        # — the first tally auto-creates the game (see tally_spots).
+        real_members = list(
+            foursome.memberships.select_related('player')
+            .filter(player__is_phantom=False)
+        )
+        players = sorted(
+            ({'player_id': m.player_id,
+              'name'      : m.player.name,
+              'short_name': m.player.short_name or m.player.name,
+              'spots'     : 0,
+              'payout'    : 0.0,
+              'net'       : 0.0}
+             for m in real_members),
+            key=lambda p: p['name'])
         return {
             'status'      : MatchStatus.PENDING,
-            'payout_style': 'pay_around',
-            'players'     : [],
+            'payout_style': 'per_point',
+            'players'     : players,
             'holes'       : [],
             'money'       : {'bet_unit': bet_unit_default, 'total_spots': 0},
         }

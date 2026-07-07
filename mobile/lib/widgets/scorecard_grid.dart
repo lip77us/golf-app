@@ -215,9 +215,23 @@ class _ScorecardGridState extends State<ScorecardGrid> {
   }
 
   /// First hole not yet scored by everyone — used to auto-scroll + highlight.
+  /// Ordered holes actually in play (play order, wraparound). Empty list means
+  /// a full 1-18 round — callers keep their unchanged 18-hole path.
+  List<int> _holesInPlay(Scorecard sc, RoundProvider rp) {
+    final universe = sc.holes.isEmpty
+        ? 18
+        : sc.holes.map((h) => h.holeNumber).reduce((a, b) => a > b ? a : b);
+    final start = rp.round?.startingHole ?? 1;
+    final n = (rp.round?.numHoles ?? universe).clamp(1, universe);
+    if (n >= universe) return const [];
+    return [for (int i = 0; i < n; i++) ((start - 1 + i) % universe) + 1];
+  }
+
   int _firstUnplayedHole(Scorecard sc, List<Membership> players) {
     final rp = context.read<RoundProvider>();
-    for (int h = 1; h <= 18; h++) {
+    final order = _holesInPlay(sc, rp);
+    final seq = order.isEmpty ? [for (int h = 1; h <= 18; h++) h] : order;
+    for (final h in seq) {
       if (rp.localPendingByHole.containsKey(h)) continue;
       final hd = sc.holeData(h);
       if (hd == null ||
@@ -225,7 +239,7 @@ class _ScorecardGridState extends State<ScorecardGrid> {
         return h;
       }
     }
-    return 18;
+    return seq.last;
   }
 
   /// Mode + percentage that should drive stroke-dot display.  Mirrors
@@ -469,6 +483,7 @@ class _ScorecardGridState extends State<ScorecardGrid> {
                   currentHole:    _firstUnplayedHole(sc, players),
                   totals:         sc.totals,
                   strokesForHole: _strokesForHole,
+                  holesInPlay:    _holesInPlay(sc, rp),
                 ),
               );
             }(),
@@ -532,6 +547,8 @@ class _LandscapeGrid extends StatefulWidget {
   final int currentHole;
   final List<PlayerTotals> totals;
   final int Function(Membership, ScorecardHole?) strokesForHole;
+  /// Ordered holes in play (play order). Empty = full 1-18 round.
+  final List<int> holesInPlay;
 
   const _LandscapeGrid({
     required this.scorecard,
@@ -540,6 +557,7 @@ class _LandscapeGrid extends StatefulWidget {
     required this.currentHole,
     required this.totals,
     required this.strokesForHole,
+    this.holesInPlay = const [],
   });
 
   @override
@@ -552,6 +570,18 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
   static const double _nameW    = 80.0;
   static const double _summaryW = 34.0;
   static const double _colW     = 40.0;
+
+  // Holes to render, split by nine. On a full round these are 1-9 / 10-18; on a
+  // partial / back-9 round only the played holes appear (display by number), so
+  // there's no blank front-nine. An empty nine drops its OUT / IN subtotal.
+  List<int> get _front => widget.holesInPlay.isEmpty
+      ? [for (int h = 1; h <= 9; h++) h]
+      : (widget.holesInPlay.where((h) => h <= 9).toList()..sort());
+  List<int> get _back => widget.holesInPlay.isEmpty
+      ? [for (int h = 10; h <= 18; h++) h]
+      : (widget.holesInPlay.where((h) => h >= 10).toList()..sort());
+  bool get _showOut => _front.isNotEmpty;
+  bool get _showIn  => _back.isNotEmpty;
 
   @override
   void initState() {
@@ -578,10 +608,16 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
   void _scrollToHole(int hole) {
     if (!_scroll.hasClients) return;
     final double holeLeft;
-    if (hole <= 9) {
-      holeLeft = _nameW + (hole - 1) * _colW;
+    final fi = _front.indexOf(hole);
+    if (fi >= 0) {
+      holeLeft = _nameW + fi * _colW;
     } else {
-      holeLeft = _nameW + 9 * _colW + _summaryW + (hole - 10) * _colW;
+      final bi = _back.indexOf(hole);
+      if (bi < 0) return;
+      holeLeft = _nameW +
+          _front.length * _colW +
+          (_showOut ? _summaryW : 0) +
+          bi * _colW;
     }
     final viewport = _scroll.position.viewportDimension;
     double offset  = holeLeft - viewport / 2 + _colW / 2;
@@ -604,16 +640,17 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
     const hdrH  = 22.0;
     const rowH  = 38.0;
 
-    final colWidths = <int, TableColumnWidth>{
-      0:  FixedColumnWidth(_nameW),
-      10: FixedColumnWidth(_summaryW),
-      20: FixedColumnWidth(_summaryW),
-      21: FixedColumnWidth(_summaryW),
-      22: FixedColumnWidth(_summaryW),
-      23: FixedColumnWidth(_summaryW),
-    };
-    for (int i = 1;  i <= 9;  i++) colWidths[i] = FixedColumnWidth(_colW);
-    for (int i = 11; i <= 19; i++) colWidths[i] = FixedColumnWidth(_colW);
+    // Column widths, built to match the dynamic column layout: name, front
+    // holes, [OUT], back holes, [IN], TOT, NET, STBL.
+    final colWidths = <int, TableColumnWidth>{0: FixedColumnWidth(_nameW)};
+    int idx = 1;
+    for (final _ in _front) { colWidths[idx++] = FixedColumnWidth(_colW); }
+    if (_showOut) colWidths[idx++] = FixedColumnWidth(_summaryW);
+    for (final _ in _back) { colWidths[idx++] = FixedColumnWidth(_colW); }
+    if (_showIn) colWidths[idx++] = FixedColumnWidth(_summaryW);
+    colWidths[idx++] = FixedColumnWidth(_summaryW); // TOT
+    colWidths[idx++] = FixedColumnWidth(_summaryW); // NET
+    colWidths[idx++] = FixedColumnWidth(_summaryW); // STBL
 
     return Table(
       defaultColumnWidth: FixedColumnWidth(_colW),
@@ -638,12 +675,14 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
           BoxDecoration(color: theme.colorScheme.surfaceContainerHighest),
       children: [
         _cell('Hole', height: h, bold: true),
-        for (int hole = 1; hole <= 9; hole++)
+        for (final hole in _front)
           _cell('$hole', height: h, bold: true, bg: selBg(hole)),
-        _cell('OUT',  height: h, bold: true, italic: true, bg: sumBg),
-        for (int hole = 10; hole <= 18; hole++)
+        if (_showOut)
+          _cell('OUT',  height: h, bold: true, italic: true, bg: sumBg),
+        for (final hole in _back)
           _cell('$hole', height: h, bold: true, bg: selBg(hole)),
-        _cell('IN',   height: h, bold: true, italic: true, bg: sumBg),
+        if (_showIn)
+          _cell('IN',   height: h, bold: true, italic: true, bg: sumBg),
         _cell('TOT',  height: h, bold: true, italic: true, bg: sumBg),
         _cell('NET',  height: h, bold: true, italic: true, bg: sumBg),
         _cell('STBL', height: h, bold: true, italic: true, bg: sumBg),
@@ -653,22 +692,22 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
 
   TableRow _parRow(ThemeData theme, double h) {
     int parOut = 0, parIn = 0;
-    for (int hole = 1;  hole <= 9;  hole++) {
+    for (final hole in _front) {
       parOut += widget.scorecard.holeData(hole)?.par ?? 0;
     }
-    for (int hole = 10; hole <= 18; hole++) {
+    for (final hole in _back) {
       parIn  += widget.scorecard.holeData(hole)?.par ?? 0;
     }
     return TableRow(
       decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow),
       children: [
         _cell('Par', height: h, italic: true),
-        for (int hole = 1;  hole <= 9;  hole++)
+        for (final hole in _front)
           _cell('${widget.scorecard.holeData(hole)?.par ?? '-'}', height: h),
-        _cell('$parOut', height: h, bold: true),
-        for (int hole = 10; hole <= 18; hole++)
+        if (_showOut) _cell('$parOut', height: h, bold: true),
+        for (final hole in _back)
           _cell('${widget.scorecard.holeData(hole)?.par ?? '-'}', height: h),
-        _cell('$parIn',            height: h, bold: true),
+        if (_showIn) _cell('$parIn',   height: h, bold: true),
         _cell('${parOut + parIn}', height: h, bold: true),
         _cell('—', height: h),
         _cell('—', height: h),
@@ -686,14 +725,14 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
       bool allOutGross = true, allInGross = true;
       bool hasOutNet   = true,  hasInNet   = true;
 
-      for (int hole = 1; hole <= 9; hole++) {
+      for (final hole in _front) {
         final gross = widget.pendingScores[hole]?[m.player.id]
             ?? widget.scorecard.holeData(hole)?.scoreFor(m.player.id)?.grossScore;
         if (gross != null) { outGross += gross; } else { allOutGross = false; }
         final net = widget.scorecard.holeData(hole)?.scoreFor(m.player.id)?.netScore;
         if (net == null) hasOutNet = false; else outNetSum += net;
       }
-      for (int hole = 10; hole <= 18; hole++) {
+      for (final hole in _back) {
         final gross = widget.pendingScores[hole]?[m.player.id]
             ?? widget.scorecard.holeData(hole)?.scoreFor(m.player.id)?.grossScore;
         if (gross != null) { inGross += gross; } else { allInGross = false; }
@@ -728,10 +767,10 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
             ),
           ),
         ),
-        for (int hole = 1; hole <= 9; hole++) _scoreCell(hole, m, h),
-        _summaryCell(allOutGross ? '$outGross' : '—', h),
-        for (int hole = 10; hole <= 18; hole++) _scoreCell(hole, m, h),
-        _summaryCell(allInGross ? '$inGross' : '—', h),
+        for (final hole in _front) _scoreCell(hole, m, h),
+        if (_showOut) _summaryCell(allOutGross ? '$outGross' : '—', h),
+        for (final hole in _back) _scoreCell(hole, m, h),
+        if (_showIn) _summaryCell(allInGross ? '$inGross' : '—', h),
         _summaryCell(
             (allOutGross && allInGross) ? '${outGross + inGross}' : '—', h),
         _summaryCell(hasNet ? '$netTot' : '—', h),
