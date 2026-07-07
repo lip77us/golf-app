@@ -533,6 +533,22 @@ def points_531_summary(foursome) -> dict:
     # Leaderboard: money desc, then name for stable ordering.
     players_out.sort(key=lambda e: (-e['money'], e['name']))
 
+    # The holes this round plays (by number) so the leaderboard grid can render
+    # the FULL card — including not-yet-played holes as blank columns — instead
+    # of only the scored holes. For a normal round this is 1..18; for a
+    # mid-course start it's still 1..18 (played in a different order).
+    from services.hole_plan import (
+        holes_in_play as _holes_in_play, play_order as _play_order,
+    )
+    in_play = sorted(_holes_in_play(foursome.round))
+    # The group's CURRENT hole = the last hole played in PLAY ORDER, so the grid
+    # scrolls to it (and the upcoming blanks) even after wrapping (…18 → 1).
+    _played = {h['hole'] for h in holes_out}
+    current_hole = 0
+    for _h in _play_order(foursome.round, foursome):
+        if _h in _played:
+            current_hole = _h
+
     return {
         'status'  : game.status,
         'handicap': {
@@ -541,6 +557,8 @@ def points_531_summary(foursome) -> dict:
         },
         'players' : players_out,
         'holes'   : holes_out,
+        'holes_in_play' : in_play,
+        'current_hole'  : current_hole,
         'money'   : {
             'bet_unit'      : bet_unit,
             'par_per_hole'  : par_per_hole,

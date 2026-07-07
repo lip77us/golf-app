@@ -54,6 +54,15 @@ class Points531SettlementTests(TestCase):
     def _money(self, summary):
         return {p["name"]: p["money"] for p in summary["players"]}
 
+    def test_summary_declares_holes_in_play_and_current_hole(self):
+        # The leaderboard grid needs the full hole set (to show unplayed holes
+        # as blank columns) + the current hole (last played in play order).
+        setup_points_531(self.fs)
+        self._score_three_holes()            # scores holes 1, 2, 5
+        s = points_531_summary(self.fs)
+        self.assertEqual(s["holes_in_play"], list(range(1, 19)))
+        self.assertEqual(s["current_hole"], 5)
+
     def test_uncapped_matches_legacy_formula(self):
         setup_points_531(self.fs)            # loss_cap defaults to None
         self._score_three_holes()

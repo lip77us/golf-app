@@ -4305,6 +4305,10 @@ class _Points531GroupCard extends StatelessWidget {
             _Points531HoleGrid(
               holes:   holes,
               players: players,
+              holesInPlay: (summary['holes_in_play'] as List? ?? const [])
+                  .map((e) => e as int)
+                  .toList(),
+              currentHole: summary['current_hole'] as int? ?? 0,
             ),
           ],
 
@@ -4723,7 +4727,19 @@ class _RabbitGroupCard extends StatelessWidget {
 class _Points531HoleGrid extends StatefulWidget {
   final List holes;
   final List players;
-  const _Points531HoleGrid({required this.holes, required this.players});
+  /// The holes the round plays (by number). Renders these as columns — blank
+  /// for not-yet-played — so a mid-course start shows the skipped-by-number
+  /// holes. Empty = fall back to only the scored holes.
+  final List<int> holesInPlay;
+  /// The group's current hole (last played in play order) — the auto-scroll
+  /// target. 0 = fall back to the highest scored hole number.
+  final int currentHole;
+  const _Points531HoleGrid({
+    required this.holes,
+    required this.players,
+    this.holesInPlay = const [],
+    this.currentHole = 0,
+  });
 
   @override
   State<_Points531HoleGrid> createState() => _Points531HoleGridState();
@@ -4756,10 +4772,14 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
   // 531 was the only game grid that never followed play (it sat on hole 1, so
   // finishing at 18 left you stuck looking at the front nine).
   void _scheduleScroll() {
-    int lastHole = 0;
-    for (final h in widget.holes) {
-      final n = ((h as Map)['hole'] as num?)?.toInt() ?? 0;
-      if (n > lastHole) lastHole = n;
+    // Target the current hole (last played in play order); fall back to the
+    // highest scored hole number when the backend didn't supply it.
+    int lastHole = widget.currentHole;
+    if (lastHole == 0) {
+      for (final h in widget.holes) {
+        final n = ((h as Map)['hole'] as num?)?.toInt() ?? 0;
+        if (n > lastHole) lastHole = n;
+      }
     }
     if (lastHole == 0) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4802,7 +4822,13 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
       byHole[hole] = inner;
     }
 
-    final sortedHoles = byHole.keys.toList()..sort();
+    // Render every hole the round plays (blanks for not-yet-played), so a
+    // mid-course start shows the skipped-by-number holes as empty columns
+    // instead of collapsing 5–18,1 into a gapless strip. Fall back to scored
+    // holes when the caller doesn't supply the range.
+    final sortedHoles = widget.holesInPlay.isNotEmpty
+        ? (widget.holesInPlay.toList()..sort())
+        : (byHole.keys.toList()..sort());
 
     // Column spec
     const labelColW = 48.0;
