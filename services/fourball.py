@@ -203,11 +203,19 @@ def calculate_fourball(foursome) -> FourballGame | None:
 
     FourballHoleResult.objects.filter(game=game).delete()
 
+    # Walk the holes in PLAY ORDER (start hole + wraparound), not 1→18, so a
+    # mid-course / shotgun / partial round accrues match state from the first
+    # hole actually played. Reduces to 1..18 for a normal round. The match-play
+    # loop still stops at the first hole not yet scored (in play order).
+    from services.hole_plan import play_order
+    order = play_order(foursome.round, foursome)
+    n = len(order)
+
     holes_up    = 0          # positive = Team 1 up
     finished_on = None
     results     = []
 
-    for hole in range(1, 19):
+    for pos, hole in enumerate(order):
         t1_net = _team_best(t1_pids, hole, index)
         t2_net = _team_best(t2_pids, hole, index)
         if t1_net is None or t2_net is None:
@@ -222,7 +230,7 @@ def calculate_fourball(foursome) -> FourballGame | None:
         else:
             winner = None
 
-        remaining = 18 - hole
+        remaining = n - 1 - pos          # holes left to play after this one
         if abs(holes_up) > remaining:
             finished_on = hole
 
@@ -246,7 +254,7 @@ def calculate_fourball(foursome) -> FourballGame | None:
     if holes_played == 0:
         game.status = MatchStatus.PENDING
         game.result = None
-    elif holes_played < 18 and finished_on is None:
+    elif holes_played < n and finished_on is None:
         game.status = MatchStatus.IN_PROGRESS
         game.result = None
     else:
@@ -274,8 +282,13 @@ def calculate_fourball(foursome) -> FourballGame | None:
 # Summary
 # ---------------------------------------------------------------------------
 
-def _result_label(game: FourballGame) -> str:
-    """Match-play notation: '3&2', '1 up', 'All Square', or '—' in progress."""
+def _result_label(game: FourballGame, holes_to_play: int | None = None) -> str:
+    """Match-play notation: '3&2', '1 up', 'All Square', or '—' in progress.
+
+    ``holes_to_play`` is the number of holes left when the match closed out,
+    computed from PLAY ORDER by the caller (so a mid-course start gets the right
+    '&M'). Falls back to ``18 - finished_on_hole`` (correct for a normal round).
+    """
     if game.status == MatchStatus.PENDING:
         return '—'
     margin = abs(game.holes_up_after_final)
@@ -288,9 +301,11 @@ def _result_label(game: FourballGame) -> str:
         side = 'Team 1' if game.holes_up_after_final > 0 else 'Team 2'
         return f'{side} {margin} up'
     side = 'Team 1' if game.holes_up_after_final > 0 else 'Team 2'
-    if game.finished_on_hole is not None and game.finished_on_hole < 18:
-        to_play = 18 - game.finished_on_hole
-        return f'{side} wins {margin}&{to_play}'
+    if game.finished_on_hole is not None:
+        to_play = (holes_to_play if holes_to_play is not None
+                   else 18 - game.finished_on_hole)
+        if to_play > 0:
+            return f'{side} wins {margin}&{to_play}'
     return f'{side} wins {margin} up'
 
 
@@ -326,6 +341,17 @@ def fourball_summary(foursome) -> dict | None:
 
     teams = {t.team_number: t for t in game.teams.all()}
     t1, t2 = teams.get(1), teams.get(2)
+
+    # Holes remaining when the match closed out, in PLAY ORDER, for the '&M'
+    # close-out notation (right even for a mid-course / shotgun start).
+    from services.hole_plan import play_order
+    _order = play_order(foursome.round, foursome)
+    _holes_to_play = None
+    if game.finished_on_hole is not None:
+        try:
+            _holes_to_play = len(_order) - 1 - _order.index(game.finished_on_hole)
+        except ValueError:
+            _holes_to_play = max(0, 18 - game.finished_on_hole)
 
     def _team_block(team):
         players = list(team.players.all()) if team else []
@@ -419,7 +445,7 @@ def fourball_summary(foursome) -> dict | None:
     return {
         'status'           : game.status,
         'result'           : game.result,
-        'result_label'     : _result_label(game),
+        'result_label'     : _result_label(game, _holes_to_play),
         'finished_on_hole' : game.finished_on_hole,
         'handicap'         : {
             'mode'        : game.handicap_mode,

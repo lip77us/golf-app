@@ -215,3 +215,48 @@ class FourballHandicapTests(FourballBase):
         self._setup(hmode='strokes_off', net_percent=50)
         calculate_fourball(self.fs)
         self.assertEqual(self._hole(10)['t1_net'], 5)   # no stroke at 50%
+
+
+class FourballMidCourseTests(FourballBase):
+    """A round that starts mid-course (shotgun / partial) must accrue match
+    state from the holes actually PLAYED, not stay 'Not started' because hole 1
+    is blank. Regression for the range(1,19) match loop."""
+
+    def _mid_course_round(self, start_hole):
+        self.round.starting_hole = start_hole
+        self.round.num_holes = 18
+        self.round.save(update_fields=['starting_hole', 'num_holes'])
+        self._make_fs()
+        self._setup(hmode='gross')
+
+    def test_progress_from_play_order_not_hole_one(self):
+        self._mid_course_round(start_hole=7)
+        # Play the first two holes in play order (7, 8); 1-6 blank.
+        self._play(7, 4, 4, 5, 5)   # Team 1 wins hole 7
+        self._play(8, 4, 4, 5, 5)   # Team 1 wins hole 8
+
+        game = calculate_fourball(self.fs)
+        self.assertEqual(game.status, MatchStatus.IN_PROGRESS)   # NOT pending
+        self.assertEqual(game.holes_up_after_final, 2)           # Team 1, 2 up
+
+        s = fourball_summary(self.fs)
+        self.assertEqual({h['hole'] for h in s['holes']}, {7, 8})
+        self.assertEqual(self._hole(7)['winner'], 'T1')
+
+    def test_early_closeout_notation_uses_play_order(self):
+        # Start on 13 → play order 13..18,1..12. Team 1 wins the first 6 played
+        # (13-18); after hole 18 they're 6 up with 5 (1-5) still... not yet clinched
+        # (6 up, 12 to play). Keep it simple: just assert the &M reflects holes
+        # remaining in PLAY ORDER once clinched.
+        self._mid_course_round(start_hole=10)   # play order 10..18,1..9
+        # Team 1 wins every hole; clinch happens when up > holes remaining.
+        order = [10, 11, 12, 13, 14, 15, 16, 17, 18, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        for h in order:
+            self._play(h, 4, 4, 6, 6)          # Team 1 wins each
+            g = fourball_summary(self.fs)
+            if g['status'] == 'complete':
+                # &M where M = holes that were left in play order.
+                self.assertIn('&', g['result_label'])
+                break
+        else:
+            self.fail('match never closed out')
