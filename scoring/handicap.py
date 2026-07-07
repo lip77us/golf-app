@@ -96,6 +96,57 @@ def _strokes_on_hole(effective_hcp: int, stroke_index: int) -> int:
     return full + extra
 
 
+def make_strokes_fn(foursome):
+    """Return ``strokes(effective_hcp, tee, hole_number) -> int`` — the per-hole
+    handicap-stroke allocator for THIS round, correct for partial rounds.
+
+    Full round (num_holes == course size): standard 18-hole allocation, so this
+    is exactly ``_strokes_on_hole`` — no behavior change.
+
+    Partial round (e.g. a 9-hole / back-9 round): WHS 9-hole style — the handicap
+    is SCALED to the holes actually played (``round(hcp * n / universe)``) and
+    RE-RANKED by stroke index WITHIN those n holes (so a stroke lands on each
+    played hole, extra on the hardest), rather than allocating a full 18-hole
+    handicap onto the 9 holes played (which roughly doubles the strokes).
+
+    Plans are cached per (effective_hcp, tee) so the closure is cheap to call
+    per hole. See docs/hole-flexibility.md (decision 1).
+    """
+    from services.hole_plan import holes_in_play, course_hole_count
+    universe = course_hole_count(foursome.round)
+    in_play  = sorted(holes_in_play(foursome.round, foursome))
+    n        = len(in_play)
+    partial  = 0 < n < universe
+
+    def _tsi(tee, h):
+        try:
+            return tee.hole(h).get('stroke_index', 18)
+        except StopIteration:
+            return 18
+
+    if not partial:
+        return lambda eff, tee, hole: _strokes_on_hole(eff, _tsi(tee, hole))
+
+    cache: dict = {}
+
+    def strokes(effective_hcp, tee, hole_number):
+        key = (effective_hcp, getattr(tee, 'pk', None))
+        plan = cache.get(key)
+        if plan is None:
+            hcp_n = int(round(effective_hcp * n / universe))
+            if hcp_n <= 0:
+                plan = {}
+            else:
+                ranked = sorted(in_play, key=lambda h: _tsi(tee, h))  # hardest first
+                full, rem = hcp_n // n, hcp_n % n
+                plan = {h: full + (1 if rank <= rem else 0)
+                        for rank, h in enumerate(ranked, start=1)}
+            cache[key] = plan
+        return plan.get(hole_number, 0)
+
+    return strokes
+
+
 # ---------------------------------------------------------------------------
 # Net-double-bogey cap (USGA-style max score) — tournament-level rule
 # ---------------------------------------------------------------------------
@@ -385,6 +436,7 @@ def build_score_index(
         'player_id', 'hole_number', 'gross_score'
     )
     par_by_hole = _par_by_hole(foursome) if cap_enabled else {}
+    strokes_fn  = make_strokes_fn(foursome)   # partial-round aware (scale+re-rank)
     index = {}
     for r in rows:
         m = membership_by_player.get(r['player_id'])
@@ -392,8 +444,7 @@ def build_score_index(
             # Shouldn't normally happen, but don't crash if it does.
             continue
         effective = _effective_hcp(m.playing_handicap, net_percent)
-        stroke_index = m.tee.hole(r['hole_number']).get('stroke_index', 18)
-        strokes = _strokes_on_hole(effective, stroke_index)
+        strokes = strokes_fn(effective, m.tee, r['hole_number'])
         adjusted = r['gross_score'] - strokes
         adjusted = _cap_value(
             adjusted, par_by_hole.get(r['hole_number']), cap_enabled,

@@ -27,7 +27,7 @@ Public API
 
 from core.models import HandicapMode
 from scoring.models import HoleScore
-from scoring.handicap import _effective_hcp, _strokes_on_hole
+from scoring.handicap import _effective_hcp, _strokes_on_hole, make_strokes_fn
 from tournament.models import Foursome
 
 
@@ -70,6 +70,10 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
         if first_m:
             par_index[fs.pk] = {h['number']: h['par'] for h in first_m.tee.holes}
 
+    # Partial-round-aware per-hole stroke allocators (scale + re-rank on a
+    # 9-hole / back-9 round); a full round reduces to the standard allocation.
+    strokes_fns = {fs.pk: make_strokes_fn(fs) for fs in foursomes}
+
     # For strokes_off: round-wide lowest playing_handicap (real players only)
     low_hcp = 0
     if handicap_mode == HandicapMode.STROKES_OFF:
@@ -105,9 +109,9 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
             else:
                 if membership.tee_id is None:
                     continue
-                si  = membership.tee.hole(hole).get('stroke_index', 18)
                 eff = _effective_hcp(membership.playing_handicap, net_percent)
-                adjusted = hs['gross_score'] - _strokes_on_hole(eff, si)
+                adjusted = hs['gross_score'] - strokes_fns[fid](
+                    eff, membership.tee, hole)
 
         else:  # STROKES_OFF
             if membership.tee_id is None:

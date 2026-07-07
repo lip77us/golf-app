@@ -247,6 +247,11 @@ def _build_scorecard(foursome: Foursome) -> dict:
         }
     tee = first_with_tee.tee
 
+    # Partial-round-aware stroke allocator, built once (predicting strokes on
+    # unplayed holes below would otherwise rebuild it per cell = N+1).
+    from scoring.handicap import make_strokes_fn
+    strokes_fn = make_strokes_fn(foursome)
+
     score_map = {}
     for hs in HoleScore.objects.filter(foursome=foursome).select_related('player'):
         score_map[(hs.player_id, hs.hole_number)] = hs
@@ -284,7 +289,9 @@ def _build_scorecard(foursome: Foursome) -> dict:
                 'par'              : m_par,
                 'yards'            : m_yards,
                 'gross_score'      : hs.gross_score       if hs else None,
-                'handicap_strokes' : hs.handicap_strokes  if hs else m.handicap_strokes_on_hole(m_si),
+                'handicap_strokes' : hs.handicap_strokes  if hs
+                                     else (strokes_fn(m.playing_handicap, m.tee, hole_num)
+                                           if m.tee_id is not None else 0),
                 'net_score'        : hs.net_score         if hs else None,
                 'stableford_points': hs.stableford_points if hs else None,
             })
@@ -321,7 +328,7 @@ def _build_scorecard(foursome: Foursome) -> dict:
                         hole_num   = h['hole_number']
                         gross      = phantom_gross.get(hole_num)
                         ph_si      = phantom_si_map.get(hole_num, 18)
-                        ph_strokes = phantom_m.handicap_strokes_on_hole(ph_si)
+                        ph_strokes = phantom_m.handicap_strokes_on_hole(ph_si, hole_num)
                         h['scores'].append({
                             'player_id'        : phantom_m.player_id,
                             'player_name'      : phantom_m.player.name,
@@ -3193,7 +3200,8 @@ class ScoreSubmitView(APIView):
             # Per-player SI: pulled from THIS player's tee, not a shared one.
             player_hole_info = m.tee.hole(hole_number)
             stroke_index     = player_hole_info.get('stroke_index', 18)
-            hcp_strokes = m.handicap_strokes_on_hole(stroke_index)
+            # Pass hole_number so a partial round scales + re-ranks the handicap.
+            hcp_strokes = m.handicap_strokes_on_hole(stroke_index, hole_number)
 
             hs, _ = HoleScore.objects.get_or_create(
                 foursome    = foursome,

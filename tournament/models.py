@@ -333,17 +333,27 @@ class FoursomeMembership(models.Model):
     class Meta:
         unique_together = ('foursome', 'player')
 
-    def handicap_strokes_on_hole(self, stroke_index):
+    def handicap_strokes_on_hole(self, stroke_index, hole_number=None):
         """
         Returns the number of handicap strokes this player receives on a hole
         given the hole's stroke_index (1=hardest, 18=easiest).
         A playing handicap of 20 gives 1 stroke on holes SI 1–18 and
         2 strokes on holes SI 1–2.
 
+        When ``hole_number`` is supplied, the allocation is PARTIAL-ROUND aware
+        (a 9-hole / back-9 round scales + re-ranks the handicap over the holes
+        played — see scoring.handicap.make_strokes_fn); for a full round this is
+        identical to the plain SI formula. Callers that don't pass hole_number
+        get the legacy full-round formula.
+
         Plus-handicappers (playing_handicap < 0) can produce a negative raw
         value; we clamp to 0 because the HoleScore field is non-negative and
         plus-handicap adjustments are handled separately if needed.
         """
+        if hole_number is not None and self.tee_id is not None:
+            from scoring.handicap import make_strokes_fn
+            fn = make_strokes_fn(self.foursome)
+            return max(0, fn(self.playing_handicap, self.tee, hole_number))
         full_strokes = self.playing_handicap // 18
         remainder = self.playing_handicap % 18
         extra = 1 if stroke_index <= remainder else 0

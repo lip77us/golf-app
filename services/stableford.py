@@ -115,6 +115,10 @@ def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
         for fs in foursomes for m in fs.memberships.all()
         if not m.player.is_phantom
     }
+    # Partial-round-aware per-hole stroke allocators (scale + re-rank on a
+    # 9-hole / back-9 round); a full round reduces to the standard allocation.
+    from scoring.handicap import make_strokes_fn
+    strokes_fns = {fs.pk: make_strokes_fn(fs) for fs in foursomes}
 
     def _points(diff):
         return points_fn(diff)
@@ -148,9 +152,9 @@ def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
             if net_pct == 100 and hs['net_score'] is not None:
                 adjusted = hs['net_score']
             else:
-                si  = hole_info.get('stroke_index', 18)
                 eff = round((m.playing_handicap or 0) * net_pct / 100)
-                adjusted = hs['gross_score'] - _strokes_on_hole(eff, si)
+                adjusted = hs['gross_score'] - strokes_fns[m.foursome_id](
+                    eff, m.tee, hole)
         if par is None:
             par = (m.tee.hole(hole).get('par') if m.tee_id else 4) or 4
 
