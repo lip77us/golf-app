@@ -110,6 +110,10 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Load the real build version from the bundle so Config.appVersion matches
+  // pubspec (drives the About dialog + the force-upgrade compatibility check).
+  await Config.init();
+
   // sqflite's method channel only works on iOS/Android.
   // On macOS / Windows / Linux we need the FFI implementation instead.
   if (!Platform.isAndroid && !Platform.isIOS) {
