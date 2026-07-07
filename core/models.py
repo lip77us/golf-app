@@ -204,6 +204,14 @@ class Player(models.Model):
                     )
     email           = models.EmailField(blank=True)
     phone           = models.CharField(max_length=20, blank=True)
+    # GHIN (Golf Handicap and Information Network) number — the golfer's
+    # national handicap id.  Blank for golfers without one.  Populated by the
+    # Golf Genius roster import (services/genius_import.py) and a natural key
+    # for future handicap-service sync / re-import matching.
+    ghin            = models.CharField(
+                        max_length=10, blank=True, db_index=True,
+                        help_text="GHIN number; blank if the golfer has none.",
+                    )
     handicap_index  = models.DecimalField(
                         max_digits=4, decimal_places=1,
                         validators=[MinValueValidator(-10), MaxValueValidator(54)]

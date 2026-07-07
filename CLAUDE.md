@@ -632,6 +632,46 @@ catalog→account propagation safe.
 
 ---
 
+## Golf Genius roster import — Slice 1+2 implemented (engine + CLI)
+
+Bulk-import a **Golf Genius roster export** (`.xlsx` or `.csv`) into an account's
+`Player` roster: match each row to an existing golfer by **normalized phone**
+(falling back to **GHIN**), updating their index + GHIN (+ backfilling blank
+email/phone), or create a new login-less golfer. **Account-scoped** — imports
+into the acting account only (fits the one-account-per-tenant model; no
+cross-account plumbing).
+- **Model:** `Player.ghin` (CharField(10), blank, db_index) — the golfer's GHIN
+  number; natural key for re-import + future handicap-service sync. Migration
+  `core/0011`.
+- **Engine:** `services/genius_import.py` — dependency-free reader (stdlib
+  `zipfile`+XML for xlsx, handles both shared-string AND inline-string storage;
+  no `openpyxl`). Four steps: `read_rows(filename, data)` → `parse_rows(rows)`
+  (finds the header row BELOW Golf Genius's title banner by scanning for "First
+  Name"+"Last Name"; normalizes; `parse_index` handles `+2.3`→−2.3 plus-handicaps
+  and `NH`/`WD`/blank→None) → `build_plan(account, parsed)` (diff:
+  create/update/unchanged/skipped, **no writes**) → `apply_plan(account, plan)`
+  (atomic). Parsing half imports without `django.setup()` (Django only touched in
+  build/apply) so it's unit-testable standalone. Skips a new golfer with no index
+  (Player.handicap_index is required) but still UPDATES a matched one.
+- **CLI:** `python manage.py import_genius_roster <path> --account "<name>"`
+  (dry-run preview by default; `--apply` to commit; `--account-id` alt). Prints a
+  bucketed diff. `core/management/commands/import_genius_roster.py`.
+- **Cols consumed** (Golf Genius export, matched case-insensitively): First Name +
+  Last Name → `name`, Index → `handicap_index`, GHIN Id → `ghin`, Phone Number →
+  match key, Email → `email`, Gender (M/F) → `sex` (M/W). All other columns
+  (DOB/city/tee/affiliation/…) ignored.
+- Tests: `api/test_genius_import.py` (plus-handicap/sentinel parsing, header
+  below banner, phone-match + GHIN-match update, new-without-index skip,
+  create-with-plus-handicap, idempotent re-import).
+- **Deferred — Slice 3 (TD-facing):** account-scoped API endpoints
+  (`POST /api/roster/import/{preview,apply}/`, upload → diff → commit) + a mobile
+  "Import roster" screen in the TD flow, **gated behind the paywall** when billing
+  lands. The engine + command already share the exact functions the endpoint will
+  call, so Slice 3 is pure surface. (Verified against a real 213-golfer Tilden
+  Seniors export: 211 phones, 188 GHINs, 176 indexes, 0 parse errors.)
+
+---
+
 ## App Store readiness
 
 ### In-app account deletion (Guideline 5.1.1(v)) — implemented
