@@ -466,7 +466,8 @@ class PhantomScoreProvider:
 # ---------------------------------------------------------------------------
 
 def propagate_phantom_score(round_obj, hole_number: int,
-                            donor_player_id: int, gross_score: int) -> None:
+                            donor_player_id: int,
+                            gross_score: int | None) -> None:
     """
     Called after a real player (donor) saves a HoleScore.
 
@@ -522,6 +523,14 @@ def propagate_phantom_score(round_obj, hole_number: int,
 
         # Phantom carries the donor's raw GROSS; strokes-off is recomputed
         # per hole by the scoring layer.
+        # Donor score cleared → clear the phantom's mirrored row too, so a
+        # cleared donor never leaves a stale phantom score behind.
+        if gross_score is None:
+            HoleScore.objects.filter(
+                foursome=pm.foursome, player=pm.player, hole_number=hole_number,
+            ).delete()
+            continue
+
         hs, _ = HoleScore.objects.get_or_create(
             foursome    = pm.foursome,
             player      = pm.player,

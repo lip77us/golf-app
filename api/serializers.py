@@ -690,9 +690,15 @@ class TournamentSerializer(serializers.ModelSerializer):
 # ===========================================================================
 
 class SingleScoreSerializer(serializers.Serializer):
-    """One player's gross score for a hole."""
+    """One player's gross score for a hole.
+
+    ``gross_score`` may be null to CLEAR a previously-entered score (the client
+    sends this only for the trailing/current hole, so it never leaves a gap) —
+    the view deletes that HoleScore.
+    """
     player_id   = serializers.IntegerField()
-    gross_score = serializers.IntegerField(min_value=1, max_value=20)
+    gross_score = serializers.IntegerField(
+        min_value=1, max_value=20, allow_null=True)
 
 
 class ScoreSubmitSerializer(serializers.Serializer):

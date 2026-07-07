@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from accounts.models import Account
 from api.views import RoundCompleteView
-from core.models import Course, Tee
+from core.models import Course, Player, Tee
 from scoring.tests._helpers import (
     DEFAULT_HOLES, make_course, make_foursome, make_round, make_tee, submit_hole,
 )
@@ -85,6 +85,52 @@ class RoundCreateHolesTests(TestCase):
     def test_num_holes_clamped_to_short_course(self):
         resp = self._create(self._course(DEFAULT_HOLES[:9]), num_holes=18, starting_hole=1)
         self.assertEqual(resp.data['num_holes'], 9)   # clamped to the 9-hole course
+
+
+class ClearScoreTests(TestCase):
+    """gross_score=null clears (deletes) a HoleScore — the trailing-only Clear."""
+
+    def setUp(self):
+        from core.models import Tee
+        from tournament.models import Round, Foursome, FoursomeMembership
+        from scoring.models import HoleScore
+        self.HoleScore = HoleScore
+        self.account = Account.objects.create(name='Clear Test')
+        self.user = User.objects.create_user(username='cs', account=self.account)
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.course = Course.objects.create(name='CS GC', account=self.account)
+        tee = Tee.objects.create(course=self.course, tee_name='White', slope=113,
+                                 course_rating=Decimal('72.0'), par=72,
+                                 holes=DEFAULT_HOLES)
+        self.round = Round.objects.create(
+            account=self.account, course=self.course, status='in_progress',
+            active_games=['low_net_round'])
+        self.fs = Foursome.objects.create(round=self.round, group_number=1)
+        self.amy = Player.objects.create(account=self.account, name='Amy',
+                                         handicap_index=Decimal('10.0'))
+        FoursomeMembership.objects.create(
+            foursome=self.fs, player=self.amy, tee=tee,
+            course_handicap=10, playing_handicap=10)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = reverse('api-score-submit', args=[self.fs.id])
+
+    def _submit(self, gross):
+        return self.client.post(self.url, {
+            'hole_number': 1,
+            'scores': [{'player_id': self.amy.id, 'gross_score': gross}],
+        }, format='json')
+
+    def test_null_gross_clears_the_score(self):
+        self.assertEqual(self._submit(5).status_code, 200)
+        self.assertTrue(self.HoleScore.objects.filter(
+            foursome=self.fs, player=self.amy, hole_number=1,
+            gross_score__isnull=False).exists())
+        # Clear it.
+        self.assertEqual(self._submit(None).status_code, 200)
+        self.assertFalse(self.HoleScore.objects.filter(
+            foursome=self.fs, player=self.amy, hole_number=1).exists())
 
 
 class LowNetHolesInPlayTests(TestCase):

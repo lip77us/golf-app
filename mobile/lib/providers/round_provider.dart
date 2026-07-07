@@ -347,7 +347,7 @@ class RoundProvider extends ChangeNotifier {
   Future<bool> submitHole({
     required int foursomeId,
     required int holeNumber,
-    required List<Map<String, int>> scores,
+    required List<Map<String, int?>> scores,  // gross_score null = clear
     bool pinkBallLost = false,
   }) async {
     _submitting = true;

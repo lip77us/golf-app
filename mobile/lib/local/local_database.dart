@@ -24,8 +24,9 @@ class PendingScore {
   final int    id;
   final int    foursomeId;
   final int    holeNumber;
-  /// Raw list of {player_id, gross_score} maps.
-  final List<Map<String, int>> scores;
+  /// Raw list of {player_id, gross_score} maps. gross_score may be null — a
+  /// queued CLEAR that deletes the player's score for this hole on sync.
+  final List<Map<String, int?>> scores;
   final bool   pinkBallLost;
   final DateTime createdAt;
   final int    retryCount;
@@ -50,7 +51,7 @@ class PendingScore {
                       .cast<Map<String, dynamic>>()
                       .map((s) => {
                             'player_id':   s['player_id']   as int,
-                            'gross_score': s['gross_score'] as int,
+                            'gross_score': s['gross_score'] as int?,
                           })
                       .toList(),
       pinkBallLost: (row['pink_ball_lost'] as int) == 1,
@@ -186,7 +187,7 @@ class LocalDatabase {
   Future<int> enqueueScore({
     required int foursomeId,
     required int holeNumber,
-    required List<Map<String, int>> scores,
+    required List<Map<String, int?>> scores,  // gross_score null = clear
     bool pinkBallLost = false,
   }) async {
     final db = await _database;
@@ -242,7 +243,9 @@ class LocalDatabase {
     for (final row in rows.map(PendingScore.fromRow)) {
       final byPlayer = <int, int>{};
       for (final s in row.scores) {
-        byPlayer[s['player_id']!] = s['gross_score']!;
+        final gross = s['gross_score'];
+        if (gross == null) continue;   // a queued CLEAR isn't an overlay score
+        byPlayer[s['player_id']!] = gross;
       }
       // If multiple pending rows for the same hole, the latest wins.
       result[row.holeNumber] = byPlayer;

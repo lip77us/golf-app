@@ -1016,7 +1016,8 @@ class ApiClient {
   Future<Map<String, dynamic>> submitScores({
     required int foursomeId,
     required int holeNumber,
-    required List<Map<String, int>> scores, // [{player_id, gross_score}, ...]
+    required List<Map<String, int?>> scores, // [{player_id, gross_score?}, ...]
+                                             // gross_score null = clear (delete)
     bool pinkBallLost = false,
   }) async {
     final data = await _post('/foursomes/$foursomeId/scores/', {

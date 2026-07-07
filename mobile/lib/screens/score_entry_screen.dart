@@ -841,6 +841,23 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return (i <= 0) ? null : order[i - 1];
   }
 
+  /// True when [hole] is at the frontier of play — no LATER hole in play order
+  /// has any score. Only the trailing hole may be cleared, so clearing can
+  /// never punch a gap into the middle of the round (no-gaps model). Earlier
+  /// holes are corrected by overwriting the value instead.
+  bool _isTrailingHole(int hole) {
+    final rp = context.read<RoundProvider>();
+    final sc = rp.scorecard;
+    if (sc == null) return true;
+    final order = _playOrderFor(rp);
+    final idx = order.indexOf(hole);
+    if (idx < 0) return true;
+    for (int i = idx + 1; i < order.length; i++) {
+      if (_effectiveScores(sc, order[i]).isNotEmpty) return false;
+    }
+    return true;
+  }
+
   void _jumpToFirstUnplayed(RoundProvider rp) {
     final sc = rp.scorecard;
     if (sc == null) return;
@@ -886,6 +903,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return false;
   }
 
+  /// Sentinel stored in [_pending] for a CLEARED score (the trailing-only Clear
+  /// via the edit sheet). Dropped from effective scores so the cell reads blank,
+  /// and mapped to a null gross on save so the server deletes the row.
+  static const int _kClearedScore = -1;
+
   Map<int, int> _effectiveScores(Scorecard sc, int hole) {
     final saved = <int, int>{};
     final hd = sc.holeData(hole);
@@ -894,7 +916,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         if (s.grossScore != null) saved[s.playerId] = s.grossScore!;
       }
     }
-    return {...saved, ...(_pending[hole] ?? {})};
+    final merged = {...saved, ...(_pending[hole] ?? {})};
+    merged.removeWhere((_, v) => v == _kClearedScore);   // cleared → blank
+    return merged;
   }
 
   int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
@@ -1071,7 +1095,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // Submit scores if any.
     if (scoreEdits != null && scoreEdits.isNotEmpty) {
       final scores = scoreEdits.entries
-          .map((e) => {'player_id': e.key, 'gross_score': e.value})
+          .map((e) => <String, int?>{
+                'player_id': e.key,
+                // Cleared sentinel → null gross so the server deletes the row.
+                'gross_score': e.value == _kClearedScore ? null : e.value,
+              })
           .toList();
       final ok = await rp.submitHole(
         foursomeId: widget.foursomeId,
@@ -1151,7 +1179,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
     if (scoreEdits != null && scoreEdits.isNotEmpty) {
       final scores = scoreEdits.entries
-          .map((e) => {'player_id': e.key, 'gross_score': e.value})
+          .map((e) => <String, int?>{
+                'player_id': e.key,
+                // Cleared sentinel → null gross so the server deletes the row.
+                'gross_score': e.value == _kClearedScore ? null : e.value,
+              })
           .toList();
       final ok = await rp.submitHole(
         foursomeId: widget.foursomeId,
@@ -2191,6 +2223,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       }
     }
 
+    // Clear is offered only on the trailing hole, so it never leaves a gap.
+    final canClear = _isTrailingHole(hole);
     final score = await showModalBottomSheet<int>(
       context: ctx,
       useRootNavigator: true,
@@ -2200,20 +2234,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         holeNumber: hole,
         strokes:    strokes,
         current:    current,
+        canClear:   canClear,
       ),
     );
     if (!mounted || score == null) return;
     setState(() {
-      if (score == -1) {
-        _pending[hole]?.remove(player.player.id);
-        if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
-      } else {
-        _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
-      }
+      // -1 = clear → store the sentinel: the cell blanks and the save sends a
+      // null gross so the server deletes the row (persisted, survives reload).
+      _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] =
+          score == -1 ? _kClearedScore : score;
     });
-    // Commit a past-hole correction immediately (save without advancing) — no
-    // separate save+advance step needed for an edit.
-    if (score != -1) await _saveCurrentHole(ctx, players, par);
+    // Commit immediately (save without advancing) — for both an edit and a clear.
+    await _saveCurrentHole(ctx, players, par);
   }
 }
 
@@ -4168,6 +4200,9 @@ class _ScorePickerSheet extends StatelessWidget {
   final int    holeNumber;
   final int    strokes;
   final int?   current;
+  /// Whether to offer "Clear score" — true only on the trailing hole (no-gaps).
+  /// On an earlier hole the score is corrected by picking a new value instead.
+  final bool   canClear;
 
   const _ScorePickerSheet({
     required this.playerName,
@@ -4175,6 +4210,7 @@ class _ScorePickerSheet extends StatelessWidget {
     required this.holeNumber,
     required this.strokes,
     this.current,
+    this.canClear = true,
   });
 
   @override
@@ -4231,7 +4267,7 @@ class _ScorePickerSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          if (current != null)
+          if (current != null && canClear)
             TextButton(
               onPressed: () => Navigator.of(context).pop(-1),
               child: const Text('Clear score'),

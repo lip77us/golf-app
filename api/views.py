@@ -3179,6 +3179,17 @@ class ScoreSubmitView(APIView):
             pid         = s['player_id']
             gross       = s['gross_score']
             m           = membership_map[pid]
+
+            # gross_score=None → CLEAR this player's score on this hole. The
+            # client only sends this for the trailing/current hole, so the round
+            # stays a contiguous run (no mid-round gap). Deleting the row (rather
+            # than nulling gross) keeps "scored?" checks simple everywhere.
+            if gross is None:
+                HoleScore.objects.filter(
+                    foursome=foursome, player_id=pid, hole_number=hole_number,
+                ).delete()
+                continue
+
             # Per-player SI: pulled from THIS player's tee, not a shared one.
             player_hole_info = m.tee.hole(hole_number)
             stroke_index     = player_hole_info.get('stroke_index', 18)
