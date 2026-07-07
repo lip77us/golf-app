@@ -213,6 +213,18 @@ get an **Advanced** section:
 Defaults (start=1, holes=18) reproduce today's behavior exactly, so the tab is
 opt-in and nothing changes for existing flows.
 
+## Progress (2026-07-07)
+
+- ✅ **Phase 0** — fields + `services/hole_plan.py` + tests (no-op).
+- ✅ **Phase 1** — 9-hole course storage (quality gate + paste accept 9/18).
+- ✅ **Phase 2a** — round completion on `holes_in_play`.
+- ✅ **Phase 2b** — casual Advanced tab (holes + starting hole) + play-order
+  score entry. **Casual 9-hole / back-9 rounds are now creatable and playable
+  end-to-end for per-hole GROSS games.**
+- ⏳ **Next: Phase 2c** — handicap halving + re-rank (net games over-allocate
+  strokes on a 9-hole round until this lands). Then per-hole games, then segment
+  games (2e) + rendering (Phase 5).
+
 ## Phased plan
 
 - **Phase 0 — foundation (no behavior change).** Add the three fields + migration;
