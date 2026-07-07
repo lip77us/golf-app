@@ -198,8 +198,12 @@ def round_settlement(round_obj) -> dict | None:
         for pid, v in pid_net.items():
             nets[pid] += v
 
-    # Nothing actually settled (e.g. only an as-yet-undecided bracket) → no tab.
-    if not per_game:
+    # The Settlement tab is a CROSS-GAME view — only worth showing when 2+ games
+    # actually settled. A single game's payouts already live on its own tab, so a
+    # one-game round (or a round where only one game has settled so far) gets no
+    # Settlement tab rather than one that just restates that game. (Also covers
+    # the "nothing settled yet" case, e.g. only an as-yet-undecided bracket.)
+    if len(per_game) < 2:
         return None
 
     players = sorted(

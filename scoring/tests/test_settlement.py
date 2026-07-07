@@ -11,7 +11,7 @@ from django.test import TestCase
 
 from services.skins import setup_skins, calculate_skins, skins_summary
 from services.spots import setup_spots, tally_spots, spots_summary
-from services.settlement import round_settlement
+from services.settlement import _pid_nets_for_game, round_settlement
 from ._helpers import make_tee, make_round, make_foursome, submit_round
 
 
@@ -102,14 +102,15 @@ class SettlementTests(TestCase):
         money = tournament_match_play_summary(fs)['money']
         self.assertTrue(all('player_id' in p for p in money['payouts']))
 
-        s = round_settlement(rnd)
-        nets = {p['player_id']: p['net'] for p in s['players']}
+        # match_play alone is a single game → no cross-game Settlement tab now;
+        # exercise the per-game net math directly.
+        self.assertIsNone(round_settlement(rnd))
+        nets = _pid_nets_for_game('match_play', rnd, [fs])
         self.assertEqual(nets[final.player1_id], 14.0)   # 1st: 24 − 10
         self.assertEqual(nets[final.player2_id], 0.0)    # 2nd: 10 − 10
         self.assertEqual(nets[third.player1_id], -4.0)   # 3rd:  6 − 10
         self.assertEqual(nets[third.player2_id], -10.0)  # 4th:  0 − 10
         self.assertAlmostEqual(sum(nets.values()), 0.0, places=2)
-        self.assertEqual({g['game'] for g in s['per_game']}, {'match_play'})
 
     def test_match_play_incomplete_nets_nothing(self):
         from services.tournament_match_play import setup_tournament_match_play
@@ -122,17 +123,22 @@ class SettlementTests(TestCase):
         self.assertIsNone(round_settlement(rnd))
 
     def test_uncovered_game_reported(self):
-        # Skins is nettable; a hypothetical team game rides along as uncovered.
-        self.round.active_games = ['skins', 'nassau']
+        # Two nettable games (skins + spots) produce a tab; a team game (nassau)
+        # rides along as uncovered. (Needs 2+ nettable now that the tab is
+        # cross-game only.)
+        self.round.active_games = ['skins', 'spots', 'nassau']
         self.round.save(update_fields=['active_games'])
         setup_skins(self.fs)
+        setup_spots(self.fs, bet_unit=Decimal('1'),
+                    payout_style='per_point', per_point_mode='all')
         submit_round(self.fs, {
             1: [(self.pid['A'], 4), (self.pid['B'], 5), (self.pid['C'], 6)],
         })
         calculate_skins(self.fs)
+        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': 1}])
         s = round_settlement(self.round)
         self.assertIn('nassau', s['uncovered_games'])
-        self.assertEqual({g['game'] for g in s['per_game']}, {'skins'})
+        self.assertEqual({g['game'] for g in s['per_game']}, {'skins', 'spots'})
 
 
 class FourballSixesSettlementRegressionTests(TestCase):
@@ -156,22 +162,21 @@ class FourballSixesSettlementRegressionTests(TestCase):
         })
         return tee, rnd, fs, pid
 
-    def test_fourball_round_settles(self):
+    def test_fourball_nets_by_player_id(self):
+        # Exercise the exact crash site directly (gate-independent): the fourball
+        # branch must return {player_id: net} without KeyError 'player_id'.
         from services.fourball import setup_fourball, calculate_fourball
         tee, rnd, fs, pid = self._round('fourball')
         setup_fourball(fs, [pid['A'], pid['B']], [pid['C'], pid['D']],
                        handicap_mode='gross')
         calculate_fourball(fs)
 
-        s = round_settlement(rnd)                       # must NOT raise
-        self.assertIsNotNone(s)
-        self.assertIn('fourball', {g['game'] for g in s['per_game']})
-        got = {p['player_id']: p['net'] for p in s['players']}
-        self.assertAlmostEqual(sum(got.values()), 0.0, places=2)
-        self.assertGreater(got[pid['A']], 0)            # winners collect
-        self.assertLess(got[pid['C']], 0)               # losers pay
+        nets = _pid_nets_for_game('fourball', rnd, [fs])   # must NOT raise
+        self.assertAlmostEqual(sum(nets.values()), 0.0, places=2)
+        self.assertGreater(nets[pid['A']], 0)              # winners collect
+        self.assertLess(nets[pid['C']], 0)                 # losers pay
 
-    def test_sixes_round_settles(self):
+    def test_sixes_nets_by_player_id(self):
         from services.sixes import setup_sixes, calculate_sixes
         tee, rnd, fs, pid = self._round('sixes')
         base = {'team_select_method': 'long_drive',
@@ -184,8 +189,41 @@ class FourballSixesSettlementRegressionTests(TestCase):
         ], handicap_mode='gross')
         calculate_sixes(fs)
 
-        s = round_settlement(rnd)                       # must NOT raise
+        nets = _pid_nets_for_game('sixes', rnd, [fs])      # must NOT raise
+        self.assertAlmostEqual(sum(nets.values()), 0.0, places=2)
+        self.assertIn(pid['A'], nets)                      # keyed by player_id
+
+
+class SettlementTabGateTests(TestCase):
+    """The Settlement tab is cross-game — it appears only when 2+ games settle."""
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, active_games=['skins', 'spots'])
+        self.round.bet_unit = Decimal('1.00')
+        self.round.save(update_fields=['bet_unit'])
+        self.fs = make_foursome(
+            self.round, [('A', 0), ('B', 0), ('C', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        submit_round(self.fs, {
+            h: [(self.pid['A'], 4), (self.pid['B'], 5), (self.pid['C'], 6)]
+            for h in range(1, 19)
+        })
+
+    def test_single_game_has_no_tab(self):
+        self.round.active_games = ['skins']
+        self.round.save(update_fields=['active_games'])
+        setup_skins(self.fs)
+        calculate_skins(self.fs)
+        self.assertIsNone(round_settlement(self.round))
+
+    def test_two_games_show_tab(self):
+        setup_skins(self.fs)
+        setup_spots(self.fs, bet_unit=Decimal('1'),
+                    payout_style='per_point', per_point_mode='all')
+        calculate_skins(self.fs)
+        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': 1}])
+        s = round_settlement(self.round)
         self.assertIsNotNone(s)
-        self.assertIn('sixes', {g['game'] for g in s['per_game']})
-        got = {p['player_id']: p['net'] for p in s['players']}
-        self.assertAlmostEqual(sum(got.values()), 0.0, places=2)
+        self.assertEqual({g['game'] for g in s['per_game']}, {'skins', 'spots'})
