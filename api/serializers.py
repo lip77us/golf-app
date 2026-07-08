@@ -842,8 +842,13 @@ class NassauSetupSerializer(serializers.Serializer):
     play_front   = serializers.BooleanField(default=True)
     play_back    = serializers.BooleanField(default=True)
     play_overall = serializers.BooleanField(default=True)
+    # Nassau Nine: one match over all played holes (the setup forces the bet
+    # layout, so the play_* flags above are ignored when this is set).
+    single_match = serializers.BooleanField(default=False)
 
     def validate(self, data):
+        if data.get('single_match'):
+            return data  # bet layout is forced in setup_nassau
         if not (data.get('play_front') or data.get('play_back')
                 or data.get('play_overall')):
             raise serializers.ValidationError(

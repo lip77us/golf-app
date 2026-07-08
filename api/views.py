@@ -552,7 +552,11 @@ def _build_leaderboard(round_obj: Round) -> dict:
             ],
         }
 
-    if 'nassau' in active_games:
+    # Nassau + Nassau Nine share the engine/summary; the block key tracks
+    # whichever the round selected so the leaderboard renders the right tab.
+    _nassau_key = ('nassau_nine' if 'nassau_nine' in active_games
+                   else 'nassau' if 'nassau' in active_games else None)
+    if _nassau_key is not None:
         from services.nassau import nassau_summary
         nassau_groups = []
         for fs in foursomes:
@@ -581,8 +585,9 @@ def _build_leaderboard(round_obj: Round) -> dict:
                 group_entry['team1_colour']     = (t1.colour or 'Red')  if t1 else 'Red'
                 group_entry['team2_colour']     = (t2.colour or 'Blue') if t2 else 'Blue'
             nassau_groups.append(group_entry)
-        games['nassau'] = {
-            'label'   : 'Four Ball',
+        games[_nassau_key] = {
+            'label'   : 'Nassau Nine' if _nassau_key == 'nassau_nine'
+                        else 'Four Ball',
             'by_group': nassau_groups,
         }
 
@@ -4301,6 +4306,7 @@ class NassauSetupView(APIView):
             play_front    = d.get('play_front', True),
             play_back     = d.get('play_back', True),
             play_overall  = d.get('play_overall', True),
+            single_match  = d.get('single_match', False),
             loss_cap      = d.get('loss_cap'),
         )
         calculate_nassau(foursome)

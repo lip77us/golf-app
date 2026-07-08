@@ -12,6 +12,9 @@ from accounts.scoping import AccountScopedManager
 class GameType(models.TextChoices):
     IRISH_RUMBLE    = 'irish_rumble',    'Irish Rumble'
     NASSAU          = 'nassau',          'Nassau'
+    # Nassau over the holes actually played, as ONE match (no F9/B9 split) with
+    # presses — the Nassau to reach for on a 9-hole / partial round.
+    NASSAU_NINE     = 'nassau_nine',     'Nassau Nine'
     SIXES           = 'sixes',           'Sixes'
     PINK_BALL       = 'pink_ball',       'Pink Ball'
     SCRAMBLE        = 'scramble',        'Scramble'
