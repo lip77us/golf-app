@@ -142,3 +142,32 @@ class RabbitTests(TestCase):
         assert money == {self.sn['Ann']: 12.0, self.sn['Ben']: -6.0, self.sn['Cal']: -6.0}, money
         # pot = max a player can lose = stake × segments = 6 × 1.
         assert s['money']['pot'] == 6.0, s['money']
+
+    def test_back_nine_three_segments_split_by_position(self):
+        # Back 9 (holes 10-18) with 3 segments → three 3-hole segments in play
+        # order: [10,11,12], [13,14,15], [16,17,18]. Ann wins every hole → holds
+        # the rabbit through all three segments.
+        self.round.num_holes = 9
+        self.round.starting_hole = 10
+        self.round.save(update_fields=['num_holes', 'starting_hole'])
+        setup_rabbit(self.fs, handicap_mode='gross', accumulate=True,
+                     num_segments=3)
+        for h in range(10, 19):
+            submit_hole(self.fs, h, [(self.pid['Ann'], 3), (self.pid['Ben'], 4),
+                                      (self.pid['Cal'], 4)])
+        calculate_rabbit(self.fs)
+        s = rabbit_summary(self.fs)
+
+        # Segments are the three played 3-hole runs, not 1-6/7-12/13-18.
+        segs = {x['index']: (x['start_hole'], x['end_hole']) for x in s['segments']}
+        assert segs == {1: (10, 12), 2: (13, 15), 3: (16, 18)}, segs
+        # Only the 9 played holes appear, in play order.
+        assert [h['hole'] for h in s['holes']] == list(range(10, 19))
+        # Round completes on 9 holes (not stuck waiting for 18).
+        assert s['status'] == 'complete', s['status']
+        # Ann sweeps all three segments: +12 each × 3 = +36; Ben/Cal −18 each.
+        money = {p['short_name']: p['money'] for p in s['players']}
+        assert money[self.sn['Ann']] == 36.0, money
+        assert money[self.sn['Ben']] == -18.0, money
+        assert money[self.sn['Cal']] == -18.0, money
+        assert abs(sum(money.values())) < 1e-9

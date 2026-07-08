@@ -41,6 +41,7 @@ from django.db import transaction
 from core.models import HandicapMode, MatchStatus
 from games.models import RabbitGame, RabbitHoleResult
 from services.points_531 import _build_so_score_index
+from services.hole_plan import play_order, segment as _hole_segment
 from scoring.handicap import build_score_index
 from scoring.models import HoleScore
 
@@ -96,20 +97,22 @@ def _score_index(game, foursome) -> dict:
     )
 
 
-def segment_ranges(num_segments: int) -> list:
-    """Return [(start_hole, end_hole), ...] for the chosen segment count."""
-    if num_segments == 3:
-        return [(1, 6), (7, 12), (13, 18)]
-    if num_segments == 2:
-        return [(1, 9), (10, 18)]
-    return [(1, 18)]
+def segment_hole_lists(foursome, num_segments: int) -> list:
+    """Return [[hole, ...], ...] — the holes in each segment, split by POSITION
+    in the group's play order (via services.hole_plan.segment), not by absolute
+    hole number.
+
+    A full 18 starting on hole 1 reproduces the classic ranges:
+    1 → [1..18]; 2 → [1..9][10..18]; 3 → [1..6][7..12][13..18]. A back-9 / 9-hole
+    round splits its 9 played holes the same way (1 → all 9; 3 → three 3-hole
+    segments); a shotgun follows the group's wrapped play order.
+    """
+    return _hole_segment(foursome.round, foursome, max(1, num_segments))
 
 
-def _segment_of(hole: int, ranges: list) -> int:
-    for i, (lo, hi) in enumerate(ranges, start=1):
-        if lo <= hole <= hi:
-            return i
-    return 1
+def _segment_of_map(seg_lists: list) -> dict:
+    """{hole_number: 1-based segment index} from the segment hole lists."""
+    return {h: i for i, holes in enumerate(seg_lists, start=1) for h in holes}
 
 
 def _outright_winner(nets: dict):
@@ -143,15 +146,16 @@ def calculate_rabbit(foursome) -> list:
         return []
 
     score_index = _score_index(game, foursome)
-    ranges      = segment_ranges(game.num_segments)
+    seg_lists   = segment_hole_lists(foursome, game.num_segments)
+    holes_total = sum(len(s) for s in seg_lists)
     accumulate  = game.accumulate
 
     rows = []
     fully_scored = 0
-    for seg_index, (lo, hi) in enumerate(ranges, start=1):
+    for seg_index, seg_holes in enumerate(seg_lists, start=1):
         holder = None     # player_id or None (loose)
         lead   = 0
-        for hole in range(lo, hi + 1):
+        for hole in seg_holes:          # play order within the segment
             nets = {}
             complete = True
             for pid in real_ids:
@@ -209,7 +213,7 @@ def calculate_rabbit(foursome) -> list:
 
     if fully_scored == 0:
         game.status = MatchStatus.PENDING
-    elif fully_scored >= 18:
+    elif fully_scored >= holes_total:
         game.status = MatchStatus.COMPLETE
     else:
         game.status = MatchStatus.IN_PROGRESS
@@ -253,8 +257,10 @@ def rabbit_summary(foursome) -> dict:
     by_pid   = {m.player_id: m.player for m in members}
     real_ids = list(by_pid.keys())
     score_index = _score_index(game, foursome)
-    ranges      = segment_ranges(game.num_segments)
-    nseg        = game.num_segments or 1
+    order       = play_order(foursome.round, foursome)   # holes in play order
+    seg_lists   = segment_hole_lists(foursome, game.num_segments)
+    seg_of      = _segment_of_map(seg_lists)
+    nseg        = len(seg_lists) or 1
 
     # bet_unit is the per-segment stake (Sixes-style — each segment is its own
     # match, not a share of one pot).  On every completed segment each loser
@@ -279,7 +285,7 @@ def rabbit_summary(foursome) -> dict:
     sample_tee = next((m.tee for m in members if m.tee_id is not None), None)
     par_by_hole: dict = {}
     if sample_tee is not None:
-        for h in range(1, 19):
+        for h in order:
             par_by_hole[h] = sample_tee.hole(h).get('par')
 
     phcps    = [(m.playing_handicap or 0) for m in members
@@ -297,11 +303,11 @@ def rabbit_summary(foursome) -> dict:
 
     results = {r.hole_number: r for r in game.hole_results.all()}
 
-    # Per-hole grid.
+    # Per-hole grid, in play order.
     holes_out: list = []
-    for hole in range(1, 19):
+    for hole in order:
         r = results.get(hole)
-        seg = _segment_of(hole, ranges)
+        seg = seg_of.get(hole, 1)
         entries = []
         for pid in real_ids:
             net = score_index.get(pid, {}).get(hole)
@@ -330,12 +336,13 @@ def rabbit_summary(foursome) -> dict:
     # Segments: holder at the last scored hole; complete when all holes scored.
     money_by_pid = {pid: 0.0 for pid in real_ids}
     seg_out: list = []
-    for i, (lo, hi) in enumerate(ranges, start=1):
-        seg_holes = [results.get(h) for h in range(lo, hi + 1)]
-        complete  = all(results.get(h) is not None for h in range(lo, hi + 1))
-        # Holder is the state after the last scored hole in the segment.
+    for i, seg_holes in enumerate(seg_lists, start=1):
+        complete  = bool(seg_holes) and all(
+            results.get(h) is not None for h in seg_holes)
+        # Holder is the state after the last scored hole in the segment (play
+        # order), so a partial / wraparound segment settles on its real last hole.
         holder_id, lead = None, 0
-        for h in range(hi, lo - 1, -1):
+        for h in reversed(seg_holes):
             if results.get(h) is not None:
                 holder_id = results[h].holder_id
                 lead      = results[h].lead
@@ -349,8 +356,8 @@ def rabbit_summary(foursome) -> dict:
                     money_by_pid[pid] -= per_loser
         seg_out.append({
             'index'       : i,
-            'start_hole'  : lo,
-            'end_hole'    : hi,
+            'start_hole'  : seg_holes[0] if seg_holes else None,
+            'end_hole'    : seg_holes[-1] if seg_holes else None,
             'holder_id'   : holder_id,
             'holder_short': short(holder_id) if holder_id else None,
             'lead'        : lead,
@@ -358,9 +365,9 @@ def rabbit_summary(foursome) -> dict:
             'payout'      : payout,        # to the holder; others split −payout
         })
 
-    # Current live state — the latest scored hole overall.
+    # Current live state — the latest scored hole overall (play order).
     cur_holder, cur_lead, cur_seg = None, 0, 1
-    for h in range(18, 0, -1):
+    for h in reversed(order):
         if results.get(h) is not None:
             cur_holder = results[h].holder_id
             cur_lead   = results[h].lead
