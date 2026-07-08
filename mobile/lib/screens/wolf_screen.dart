@@ -25,6 +25,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
+import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
@@ -222,11 +223,16 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     });
   }
 
+  /// Holes this group plays, in order (back-9 / 9-hole / shotgun aware).
+  List<int> _playOrder(RoundProvider rp) =>
+      roundPlayOrder(rp.round, rp.scorecard);
+
   void _jumpToFirstUnplayed(RoundProvider rp) {
     final sc = rp.scorecard;
     if (sc == null) return;
     final realIds = _realMembers(rp.round).map((m) => m.player.id).toSet();
-    for (int h = 1; h <= 18; h++) {
+    final order = _playOrder(rp);
+    for (final h in order) {
       final hd = sc.holeData(h);
       if (hd == null) continue;
       final allScored = hd.scores
@@ -237,14 +243,18 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
         return;
       }
     }
-    setState(() { _selectedHole = 18; _ready = true; });
+    setState(() { _selectedHole = order.isEmpty ? 18 : order.last; _ready = true; });
   }
 
   void _advance() {
-    if (_selectedHole < 18) setState(() { _selectedHole++; _editingPlayerId = null; });
+    final next = nextInOrder(
+        _playOrder(context.read<RoundProvider>()), _selectedHole);
+    if (next != null) setState(() { _selectedHole = next; _editingPlayerId = null; });
   }
   void _retreat() {
-    if (_selectedHole > 1)  setState(() { _selectedHole--; _editingPlayerId = null; });
+    final prev = prevInOrder(
+        _playOrder(context.read<RoundProvider>()), _selectedHole);
+    if (prev != null) setState(() { _selectedHole = prev; _editingPlayerId = null; });
   }
 
   // ── Wolf decision ─────────────────────────────────────────────────────────
@@ -394,7 +404,7 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     final sc = rp.scorecard;
     int unscored = 0;
     if (sc != null) {
-      for (int h = 1; h <= 18; h++) {
+      for (final h in _playOrder(rp)) {
         if (_effectiveScores(sc, h).isEmpty) unscored++;
       }
     }
@@ -787,6 +797,9 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     final scores   = _effectiveScores(sc, _selectedHole);
     final allDone  = _allScored(players, scores);
     final isComplete = rp.round?.status == 'complete';
+    final order    = _playOrder(rp);
+    final prevHole = prevInOrder(order, _selectedHole);
+    final nextHole = nextInOrder(order, _selectedHole);
 
     return SafeArea(
       child: Padding(
@@ -794,15 +807,15 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
         child: Row(children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: _selectedHole > 1 ? _retreat : null,
+              onPressed: prevHole != null ? _retreat : null,
               icon: const Icon(Icons.chevron_left, size: 20),
               label: Text(
-                  _selectedHole > 1 ? 'Hole ${_selectedHole - 1}' : 'Previous'),
+                  prevHole != null ? 'Hole $prevHole' : 'Previous'),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: _selectedHole == 18 || isComplete
+            child: nextHole == null || isComplete
                 ? FilledButton.icon(
                     onPressed: rp.submitting
                         ? null : () => _finishRound(ctx, players),
@@ -819,7 +832,7 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                                 strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.chevron_right, size: 20),
                     label: Text(rp.submitting
-                        ? 'Saving…' : 'Hole ${_selectedHole + 1}'),
+                        ? 'Saving…' : 'Hole $nextHole'),
                     iconAlignment: IconAlignment.end,
                   ),
           ),
@@ -1618,7 +1631,11 @@ class _WolfGrid extends StatelessWidget {
     const double labelColW = 60.0;
     const double cellW     = 34.0;
     const double rowH      = 26.0;
-    final holeRange = List.generate(18, (i) => i + 1);
+    // Only the holes in play, in the backend's play order — no blank 1-9 on a
+    // back-9 round.
+    final holeRange = summary.holes.isNotEmpty
+        ? summary.holes.map((h) => h.hole).toList()
+        : List.generate(18, (i) => i + 1);
 
     // hole → playerId → points
     final pointsByHole = <int, Map<int, double>>{};
