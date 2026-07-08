@@ -625,13 +625,21 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
           );
         }),
 
-        const SizedBox(height: 16),
-        Text(
-          'Net strokes are capped at double-bogey (par + 2) per hole.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant),
-        ),
+        // The net-double-bogey cap only bites at FULL net (100%) — it caps the
+        // NET, not the raw score. Explain it in stroke terms so "par + 2" isn't
+        // read as a gross ceiling: a hole counts up to par + 2 PLUS strokes.
+        if (hmode != 'gross' &&
+            (widget.data['net_percent'] as int? ?? 100) == 100) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Net double-bogey cap: each hole’s net is limited to par + 2 — '
+            'so it counts for at most par + 2 plus any handicap strokes you get '
+            'on that hole.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ],
       ],
     );
   }
