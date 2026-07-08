@@ -2701,6 +2701,20 @@ class _HoleScoreCard extends StatelessWidget {
         lowestPlayingHandicap: _lowPlayingHandicap,
       );
 
+  /// Strokes a player actually GETS over the holes in play — the full-18
+  /// effective handicap scaled to a partial / 9-hole round, so the "gets N"
+  /// label matches the halved per-hole dots (a back-9 shows "gets 5", not 10).
+  int _effectiveHcapForRound(Membership m) {
+    final full = _effectiveHcap(m);
+    if (full <= 0) return 0;
+    final universe = scorecard.holes.isEmpty
+        ? 18
+        : scorecard.holes.map((x) => x.holeNumber).reduce((a, b) => a > b ? a : b);
+    final n = holesInPlay.isEmpty ? universe : holesInPlay.length;
+    if (n >= universe) return full;
+    return (full * n / universe).round();
+  }
+
   // ── Match Play (single_elim) per-opponent SO helpers ────────────────────
   // For regular match-play brackets in Strokes-Off-Low mode we show each
   // player's strokes relative to their actual head-to-head opponent — not
@@ -3108,7 +3122,7 @@ class _HoleScoreCard extends StatelessWidget {
                               matchPlayData?['bracket_type'] == 'single_elim')
                     ? _matchPlaySo(m.player.id, holeNumber)
                     : null;
-                final displayHcap = mpSo ?? _effectiveHcap(m);
+                final displayHcap = mpSo ?? _effectiveHcapForRound(m);
                 if (displayHcap > 0) hcapLabel = 'gets $displayHcap';
               }
             }
@@ -4561,6 +4575,7 @@ class _GameStatusSection extends StatelessWidget {
             scorecard:   scorecard,
             currentHole: currentHole,
             onTapHole:   onTapHole,
+            holesInPlay: holesInPlay,
           ),
           const SizedBox(height: 12),
         ],
@@ -5589,6 +5604,7 @@ class _FourballProgressGrid extends StatefulWidget {
   final Scorecard        scorecard;
   final int              currentHole;
   final void Function(int hole)? onTapHole;
+  final List<int>        holesInPlay;   // play order; empty = full 1-18
 
   const _FourballProgressGrid({
     required this.summary,
@@ -5596,6 +5612,7 @@ class _FourballProgressGrid extends StatefulWidget {
     required this.scorecard,
     required this.currentHole,
     this.onTapHole,
+    this.holesInPlay = const [],
   });
 
   @override
@@ -5632,7 +5649,13 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
 
   void _scrollToHole(int hole) {
     if (!_scrollCtrl.hasClients) return;
-    final target = (_labelColW + (hole - 7) * _cellW)
+    // Scroll by POSITION in the played sequence (back-9 / partial aware).
+    final range = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay
+        : List.generate(18, (i) => i + 1);
+    final pos = range.indexOf(hole);
+    if (pos < 0) return;
+    final target = (_labelColW + (pos - 6) * _cellW)
         .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
     _scrollCtrl.animateTo(target,
         duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
@@ -5646,13 +5669,24 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
     final hole  = widget.scorecard.holeData(h);
     if (hole == null) return 0;
     final entry = hole.scoreFor(m.player.id);
-    final si    = entry?.strokeIndex ?? hole.strokeIndex;
+
+    final universe = widget.scorecard.holes.isEmpty
+        ? 18
+        : widget.scorecard.holes
+            .map((x) => x.holeNumber)
+            .reduce((a, b) => a > b ? a : b);
+    int siFor(int hh) =>
+        widget.scorecard.holeData(hh)?.scoreFor(m.player.id)?.strokeIndex ??
+        widget.scorecard.holeData(hh)?.strokeIndex ??
+        18;
+
     if (s.isNet) {
       if (s.netPercent == 100 && entry != null) return entry.handicapStrokes;
       final effective = (m.playingHandicap * s.netPercent / 100.0).round();
-      return strokesOnHole(effective, si);
+      return partialStrokesOnHole(
+          effective, h, widget.holesInPlay, universe, siFor);
     }
-    // strokes-off — anchored on the foursome low (full-round allocation).
+    // strokes-off — anchored on the foursome low.
     if (widget.players.isEmpty) return 0;
     final low = widget.players
         .map((p) => p.playingHandicap)
@@ -5661,7 +5695,7 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
     if (rawSo <= 0) return 0;
     final so = (rawSo * s.netPercent / 100.0).round();
     if (so <= 0) return 0;
-    return strokesOnHole(so, si);
+    return partialStrokesOnHole(so, h, widget.holesInPlay, universe, siFor);
   }
 
   FourballHole? _holeResult(int h) =>
@@ -5689,7 +5723,10 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
     final scorecard = widget.scorecard;
     final current   = widget.currentHole;
     final onTapHole = widget.onTapHole;
-    final holeRange = List.generate(18, (i) => i + 1);
+    // Only the holes in play (play order) — no blank 1-9 on a back-9 round.
+    final holeRange = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay
+        : List.generate(18, (i) => i + 1);
 
     Color teamColor(int? t) => t == 1
         ? GameColors.team1
@@ -5839,9 +5876,11 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
                     if (hr == null) {
                       label = '·';
                     } else if (hr.winner == 'T1') {
-                      bg = GameColors.team1Bg; fg = GameColors.team1; label = 'T1';
+                      bg = GameColors.team1Bg; fg = GameColors.team1;
+                      label = teamInitialsFromNames(summary.team1.players);
                     } else if (hr.winner == 'T2') {
-                      bg = GameColors.team2Bg; fg = GameColors.team2; label = 'T2';
+                      bg = GameColors.team2Bg; fg = GameColors.team2;
+                      label = teamInitialsFromNames(summary.team2.players);
                     } else {
                       bg = Colors.grey.shade100; fg = Colors.grey.shade600;
                       label = '=';
@@ -9640,9 +9679,11 @@ class _FourballStatusCard extends StatelessWidget {
     //   "Paul & Mike 2 UP thru 5" / "All Square thru 5" / "Paul & Mike win 3&2".
     final String statusLine;
     if (summary.status == 'complete') {
-      // Holes remaining at close-out = 18 − holes played (count-based, so a
-      // mid-course start still yields the right "&M").
-      final toPlay = 18 - summary.holesPlayed;
+      // Holes remaining at close-out = holes AFTER finished_on_hole (a hole
+      // NUMBER), mirroring the leaderboard. Recomputing "18 − holesPlayed" (a
+      // COUNT) here gave a bogus "3&11" on a back-9 — 16 played thru 7 → 18−16=2.
+      final toPlay =
+          summary.finishedOnHole != null ? 18 - summary.finishedOnHole! : 0;
       statusLine = toPlay > 0
           ? '${shortNames(leadTeam)} win $margin&$toPlay'
           : '${shortNames(leadTeam)} win $margin UP';
