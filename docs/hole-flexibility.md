@@ -254,7 +254,24 @@ opt-in and nothing changes for existing flows.
   new shared `utils/play_order.dart` drives both dedicated play screens' nav +
   grids; Rabbit setup offers only even segment splits for the hole count.
   Full-round behavior byte-identical (Wolf 21, Rabbit 7 tests).
-- ⏳ **Next:** back-9 rendering leftovers (Phase 5) + tournament shotgun (Phase 4).
+- ✅ **Segmented games — play-order segments (shotgun engine prep).** Nassau,
+  Sixes, and Triple Cup now segment by POSITION in the group's play order
+  (`hole_plan.play_order`/`segment`) instead of absolute hole number, so a
+  shotgun start puts the right holes in each nine / third:
+  - **Nassau** tracks play-order position for nines, decided margins, and the
+    whole press system (advance, holes-remaining replay, add_manual_press).
+  - **Sixes** rewrote calculate_sixes' boundary tracker + early-finish
+    re-segmentation + SO-stroke overlay in position space (a segment's stored
+    start/end are its actual first/last holes, possibly wrapped).
+  - **Triple Cup** computes segment boundaries from play-order thirds/halves at
+    setup and slices each match's play-order holes for scoring (new
+    `_match_hole_list`).
+  All three byte-identical for a normal round (start hole 1 → position == hole-1);
+  each has new shotgun tests; full scoring suite green (241). **Not app-testable
+  until Phase 4** (no shotgun setup UI yet). Known gap: Sixes mid-round
+  withdrawal segment selection still keys off hole number.
+- ⏳ **Next:** back-9 rendering leftovers (Phase 5) + tournament shotgun setup UI
+  (Phase 4) — which finally makes all the above clickable.
 
 ## Phased plan
 
