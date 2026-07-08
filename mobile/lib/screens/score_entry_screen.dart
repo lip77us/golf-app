@@ -569,6 +569,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     NassauSummary? nas, {
     TripleCupSummary? tripleCup,
     FourballSummary? fourball,
+    VegasSummary? vegas,
   }) {
     final foursome = round?.foursomes
         .where((f) => f.id == widget.foursomeId)
@@ -631,6 +632,20 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       ]) {
         final m = members.where((m) => m.player.id == id).firstOrNull;
         if (m != null) ordered.add(m);
+      }
+      for (final m in members) {
+        if (!ordered.any((o) => o.player.id == m.player.id)) ordered.add(m);
+      }
+      return ordered;
+    }
+
+    // Vegas: group teammates together — team 1 first, team 2 below.
+    if (vegas != null && vegas.teams.length == 2) {
+      final ordered = <Membership>[];
+      for (final tn in [1, 2]) {
+        for (final m in members) {
+          if (vegas.teamOf(m.player.id) == tn) ordered.add(m);
+        }
       }
       for (final m in members) {
         if (!ordered.any((o) => o.player.id == m.player.id)) ordered.add(m);
@@ -1659,6 +1674,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     fourball: games.contains('fourball')
                         ? rp.fourballSummary
                         : null,
+                    vegas: games.contains('vegas') ? rp.vegasSummary : null,
                   );
                   final par = sc.holeData(_selectedHole)?.par ?? 4;
                   _completeRound(context, players, par);
@@ -1754,7 +1770,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   ) {
     final players    = _orderedPlayers(sc, rp.round, nas,
         tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null,
-        fourball: games.contains('fourball') ? rp.fourballSummary : null);
+        fourball: games.contains('fourball') ? rp.fourballSummary : null,
+        vegas: games.contains('vegas') ? rp.vegasSummary : null);
     final scores     = _effectiveScores(sc, _selectedHole);
     final allDone    = _allScored(players, scores, _selectedHole);
     final isComplete = rp.round?.status == 'complete';
@@ -1950,7 +1967,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
     final players  = _orderedPlayers(sc, rp.round, nas,
         tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null,
-        fourball: games.contains('fourball') ? rp.fourballSummary : null);
+        fourball: games.contains('fourball') ? rp.fourballSummary : null,
+        vegas: games.contains('vegas') ? rp.vegasSummary : null);
     final merged   = _mergePending(rp.localPendingByHole, _pending);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
