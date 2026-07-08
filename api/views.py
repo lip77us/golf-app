@@ -2874,22 +2874,61 @@ class FoursomeDetailView(APIView):
         return Response(FoursomeSerializer(foursome).data)
 
     def patch(self, request, pk):
-        """Set this group's custom name (TD action).  Body: {"name": "..."}.
-        An empty/blank name clears it — the group falls back to 'Group N'."""
+        """TD action — update this group's editable fields. Body may include:
+          * "name": custom group name (blank clears → 'Group N')
+          * "starting_hole": this group's SHOTGUN start (1..course holes;
+            null/blank clears → inherit the round's default)
+          * "shotgun_slot": display-only tee-slot label (e.g. "A"/"B") shown as
+            "7A"/"7B" when two groups share a hole; blank clears
+        Only the keys present in the body are touched."""
         if not (request.user.is_staff or request.user.is_account_admin):
             return Response(
-                {'detail': 'Only the organizer can rename a group.'},
+                {'detail': 'Only the organizer can edit a group.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         foursome = foursome_for_scorer(request.user, pk)
-        name = (request.data.get('name') or '').strip()
-        if len(name) > 50:
-            return Response(
-                {'detail': 'Group name must be 50 characters or fewer.'},
-                status=status.HTTP_400_BAD_REQUEST,
+        updated = []
+
+        if 'name' in request.data:
+            name = (request.data.get('name') or '').strip()
+            if len(name) > 50:
+                return Response(
+                    {'detail': 'Group name must be 50 characters or fewer.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            foursome.name = name
+            updated.append('name')
+
+        if 'starting_hole' in request.data:
+            raw = request.data.get('starting_hole')
+            if raw in (None, ''):
+                foursome.starting_hole = None
+            else:
+                from services.hole_plan import course_hole_count
+                universe = course_hole_count(foursome.round)
+                try:
+                    sh = int(raw)
+                except (TypeError, ValueError):
+                    return Response(
+                        {'detail': 'starting_hole must be a whole number.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if not (1 <= sh <= universe):
+                    return Response(
+                        {'detail': f'starting_hole must be 1–{universe}.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                foursome.starting_hole = sh
+            updated.append('starting_hole')
+
+        if 'shotgun_slot' in request.data:
+            foursome.shotgun_slot = (
+                (request.data.get('shotgun_slot') or '').strip().upper()[:2]
             )
-        foursome.name = name
-        foursome.save(update_fields=['name'])
+            updated.append('shotgun_slot')
+
+        if updated:
+            foursome.save(update_fields=updated)
         return Response(FoursomeSerializer(foursome).data)
 
 

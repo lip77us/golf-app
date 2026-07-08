@@ -538,6 +538,10 @@ class FoursomeSerializer(serializers.ModelSerializer):
             'id', 'group_number', 'name', 'display_name', 'has_phantom',
             'pink_ball_order', 'active_games', 'configured_games',
             'tee_time', 'memberships', 'has_any_score', 'you_score',
+            # Shotgun start (see docs/hole-flexibility.md): this group's per-group
+            # starting hole (null = inherit the round's) + a display-only tee-slot
+            # label (e.g. "A"/"B") rendered as "7A"/"7B" on a shared hole.
+            'starting_hole', 'shotgun_slot',
         ]
         read_only_fields = ['id']
 

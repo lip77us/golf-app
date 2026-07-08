@@ -168,3 +168,51 @@ class BackNineCompletionTests(TestCase):
         for h in range(10, 19):
             submit_hole(fs, h, [(m.player_id, 4) for m in fs.memberships.all()])
         self.assertTrue(RoundCompleteView._all_foursomes_done(r))
+
+
+class ShotgunAssignmentTests(TestCase):
+    """The TD sets a group's per-group starting hole + tee-slot label via
+    PATCH /api/foursomes/{id}/ (shotgun start)."""
+
+    def setUp(self):
+        from tournament.models import Round, Foursome
+        self.account = Account.objects.create(name='Shotgun GC')
+        self.user = User.objects.create_user(username='sgtd', account=self.account)
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.course = Course.objects.create(name='SG', account=self.account)
+        Tee.objects.create(course=self.course, tee_name='White', slope=113,
+                           course_rating=Decimal('72.0'), par=72, holes=DEFAULT_HOLES)
+        self.round = Round.objects.create(
+            account=self.account, course=self.course, status='in_progress',
+            active_games=['sixes'])
+        self.fs = Foursome.objects.create(round=self.round, group_number=1)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = reverse('api-foursome-detail', args=[self.fs.id])
+
+    def test_set_starting_hole_and_slot(self):
+        resp = self.client.patch(
+            self.url, {'starting_hole': 8, 'shotgun_slot': 'a'}, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['starting_hole'], 8)
+        self.assertEqual(resp.data['shotgun_slot'], 'A')   # upper-cased
+        self.fs.refresh_from_db()
+        self.assertEqual(self.fs.starting_hole, 8)
+
+    def test_out_of_range_starting_hole_is_400(self):
+        resp = self.client.patch(self.url, {'starting_hole': 19}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_null_starting_hole_clears_to_inherit(self):
+        self.fs.starting_hole = 8
+        self.fs.save(update_fields=['starting_hole'])
+        resp = self.client.patch(self.url, {'starting_hole': None}, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertIsNone(resp.data['starting_hole'])
+
+    def test_non_admin_forbidden(self):
+        other = User.objects.create_user(username='plain', account=self.account)
+        c = APIClient(); c.force_authenticate(other)
+        resp = c.patch(self.url, {'starting_hole': 8}, format='json')
+        self.assertEqual(resp.status_code, 403)
