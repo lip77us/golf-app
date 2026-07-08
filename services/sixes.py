@@ -236,10 +236,15 @@ def _high_low_nets_for_team(team: SixesTeam, hole_number: int, score_index: dict
 
 
 def _score_segment(seg: SixesSegment, score_index: dict,
-                   withdrawn: dict | None = None) -> tuple:
+                   withdrawn: dict | None = None,
+                   seg_holes: list | None = None) -> tuple:
     """
     Score all playable holes in *seg*, persist SixesHoleResult rows, and
     update the segment's status field.
+
+    ``seg_holes`` is the segment's holes IN PLAY ORDER (shotgun-aware). When
+    omitted it falls back to the contiguous ``start_hole..end_hole`` range, so
+    a normal round is unchanged.
 
     Returns (results, finished_on) where finished_on is the hole number
     where the match ended early, or None if it ran to completion / is still
@@ -282,7 +287,10 @@ def _score_segment(seg: SixesSegment, score_index: dict,
     finished_on      = None
     results          = []
 
-    for hole_num in range(seg.start_hole, seg.end_hole + 1):
+    if seg_holes is None:
+        seg_holes = list(range(seg.start_hole, seg.end_hole + 1))
+
+    for _i, hole_num in enumerate(seg_holes):
         if is_high_low:
             t1_best, t1_worst = _high_low_nets_for_team(t1, hole_num, score_index, withdrawn)
             t2_best, t2_worst = _high_low_nets_for_team(t2, hole_num, score_index, withdrawn)
@@ -341,7 +349,7 @@ def _score_segment(seg: SixesSegment, score_index: dict,
         # one (finished_on = hole_num) but keep looping in high_low so the
         # leftover holes still get score entry rows.
         if counts and finished_on is None:
-            holes_left      = seg.end_hole - hole_num
+            holes_left      = len(seg_holes) - 1 - _i     # by play position
             max_pts_remain  = points_per_hole * holes_left
             if abs(points_up) > max_pts_remain:
                 finished_on = hole_num
@@ -370,7 +378,7 @@ def _score_segment(seg: SixesSegment, score_index: dict,
 
     # ── Update segment status ──────────────────────────────────────────────
     holes_played = len(results)
-    holes_in_seg = seg.end_hole - seg.start_hole + 1
+    holes_in_seg = len(seg_holes)
 
     if holes_played == 0:
         seg.status = 'pending'
@@ -405,15 +413,16 @@ def _score_segment(seg: SixesSegment, score_index: dict,
 # Strokes-Off overlay helpers (see calculate_sixes below for why they exist)
 # ---------------------------------------------------------------------------
 
-def _overlay_so_strokes_for_segment(seg, segment_idx, player_so, member_by_pid, score_index):
+def _overlay_so_strokes_for_segment(seg, segment_idx, player_so, member_by_pid,
+                                    score_index, seg_holes=None):
     """
     Apply this standard segment's SO strokes to *score_index* in place.
 
     For each player with SO > 0 we compute how many strokes they receive
     in this match — floor(SO/3), plus 1 for the first SO%3 matches — and
     allocate those strokes to the hardest holes (lowest stroke index) in
-    this segment's *actual* range (seg.start_hole..seg.end_hole), then
-    subtract from the player's per-hole score.
+    this segment's holes (``seg_holes``, in play order; falls back to the
+    contiguous start..end range), then subtract from the player's per-hole score.
 
     Returns a {player_id: {hole_number: strokes_applied}} dict so the
     caller can undo strokes on holes that were never reached if the match
@@ -429,9 +438,11 @@ def _overlay_so_strokes_for_segment(seg, segment_idx, player_so, member_by_pid, 
         strokes_this_seg = _strokes_for_segment_index(so, segment_idx)
         if strokes_this_seg <= 0:
             continue
+        _holes = seg_holes if seg_holes is not None else list(
+            range(seg.start_hole, seg.end_hole + 1))
         holes_with_si = [
             (h, member.tee.hole(h).get('stroke_index', 18))
-            for h in range(seg.start_hole, seg.end_hole + 1)
+            for h in _holes
         ]
         allocation = _allocate_segment_strokes(strokes_this_seg, holes_with_si)
         player_entries = score_index.get(pid)
@@ -444,13 +455,15 @@ def _overlay_so_strokes_for_segment(seg, segment_idx, player_so, member_by_pid, 
     return applied
 
 
-def _overlay_so_strokes_for_extras(start_hole, player_so, member_by_pid, score_index):
+def _overlay_so_strokes_for_extras(remaining_holes, player_so, member_by_pid,
+                                   score_index):
     """
     Apply the extras SO rule to every remaining hole in one shot.
 
-    For holes start_hole..18, any hole whose stroke_index <= the player's
-    SO grants that player one stroke (subtracted from score_index in
-    place).  Used once, just before the extras chain scores.
+    ``remaining_holes`` is the list of holes still to play (in play order). Any
+    hole whose stroke_index <= the player's SO grants that player one stroke
+    (subtracted from score_index in place). Used once, just before the extras
+    chain scores.
     """
     for pid, so in player_so.items():
         if so <= 0:
@@ -461,7 +474,7 @@ def _overlay_so_strokes_for_extras(start_hole, player_so, member_by_pid, score_i
         player_entries = score_index.get(pid)
         if not player_entries:
             continue
-        for h in range(start_hole, 19):
+        for h in remaining_holes:
             if h in player_entries:
                 si = member.tee.hole(h).get('stroke_index', 18)
                 if si <= so:
@@ -493,6 +506,18 @@ def calculate_sixes(foursome) -> list:
     )
     if not segments:
         return []
+
+    # Play-order scaffolding (shotgun-aware): everything below tracks the group's
+    # play sequence by POSITION and maps back to hole numbers via `order`, so a
+    # shotgun third can wrap (e.g. holes 14-18,1). Normal round (start hole 1) →
+    # order == [1..18] and position == hole-1, so it's byte-identical.
+    from services.hole_plan import play_order as _play_order
+    order  = _play_order(foursome.round, foursome)
+    if not order:
+        order = list(range(1, 19))
+    n      = len(order)
+    pos_of = {h: i for i, h in enumerate(order)}
+    seg_len = n // 3 if n >= 3 else n              # 6 for a standard 18
 
     # All segments of the same foursome share the same handicap settings —
     # setup_sixes writes the same values to each one — so reading them off
@@ -563,11 +588,11 @@ def calculate_sixes(foursome) -> list:
         member_by_pid = {m.player_id: m for m in memberships}
 
         if handicap_allocation == 'full_round':
-            # Apply strokes to every hole (1-18) where SI <= player_so.
+            # Apply strokes to every played hole where SI <= player_so.
             # Same shape as the extras overlay — re-using its logic here
             # gives full_round mode a single source of truth.
             _overlay_so_strokes_for_extras(
-                1, player_so, member_by_pid, score_index
+                order, player_so, member_by_pid, score_index
             )
             # Now that strokes are baked into the index we can skip the
             # per-segment overlay/undo dance below — flip player_so to
@@ -586,66 +611,61 @@ def calculate_sixes(foursome) -> list:
         member_by_pid = {}
 
     all_results = []
-    current_hole = 1  # tracks the first hole of the next match
+    current_pos = 0  # play-order position of the next match's first hole
 
     # ── Score standard segments ────────────────────────────────────────────
-    # High-Low locks the three segments to fixed 1-6 / 7-12 / 13-18 ranges
-    # (no shifting after a closeout — the TD told us "always 3 matches").
-    # Classic dynamically repositions each segment so that an early finish
-    # collapses into immediately-following matches + extras.
-    high_low_ranges = [(1, 6), (7, 12), (13, 18)]
-
+    # High-Low locks the three segments to fixed play-order thirds (positions
+    # 0-5 / 6-11 / 12-17 — no shifting after a closeout). Classic dynamically
+    # repositions each segment so an early finish collapses into the
+    # immediately-following matches + extras.
     for idx, seg in enumerate(standard_segs):
         if is_high_low:
-            start, end = high_low_ranges[idx] if idx < 3 else (1, 18)
-            if seg.start_hole != start or seg.end_hole != end:
-                seg.start_hole = start
-                seg.end_hole   = end
-                seg.save(update_fields=['start_hole', 'end_hole'])
+            sp = idx * seg_len if idx < 3 else 0
+            ep = (min(sp + seg_len - 1, n - 1)) if idx < 3 else (n - 1)
         else:
             # Reposition this segment so it starts right after the previous one.
-            expected_end = min(current_hole + 5, 18)
-            if seg.start_hole != current_hole or seg.end_hole != expected_end:
-                seg.start_hole = current_hole
-                seg.end_hole   = expected_end
-                seg.save(update_fields=['start_hole', 'end_hole'])
+            sp = current_pos
+            ep = min(sp + seg_len - 1, n - 1)
+        seg_holes = order[sp:ep + 1]
+        start_hole, end_hole = order[sp], order[ep]
+        if seg.start_hole != start_hole or seg.end_hole != end_hole:
+            seg.start_hole = start_hole
+            seg.end_hole   = end_hole
+            seg.save(update_fields=['start_hole', 'end_hole'])
 
         # SO mode: overlay this segment's strokes on the gross score_index
-        # *after* repositioning, so we allocate strokes against the range
-        # the match is actually playing (not the canonical/pre-reposition
-        # range).  Skipped in full_round handicap_allocation since strokes
-        # are already baked into the index (so_mode flipped False above).
+        # *after* repositioning, so we allocate strokes against the holes
+        # the match is actually playing.  Skipped in full_round allocation.
         so_applied: dict = {}
         if so_mode:
             so_applied = _overlay_so_strokes_for_segment(
-                seg, idx, player_so, member_by_pid, score_index
+                seg, idx, player_so, member_by_pid, score_index, seg_holes
             )
 
-        results, finished_on = _score_segment(seg, score_index, withdrawn)
+        results, finished_on = _score_segment(seg, score_index, withdrawn,
+                                               seg_holes)
         all_results.extend(results)
 
-        # Classic format advances the pointer: next match starts right
-        # after this one ends.  High-Low always uses fixed ranges, so the
-        # pointer is irrelevant — but we still update it for the
-        # post-loop "extras chain" check (which is a no-op in high_low).
+        # Classic advances the pointer to the position right after this match
+        # ends.  High-Low uses fixed thirds, so the pointer only feeds the
+        # post-loop extras check (a no-op in high_low).
         if is_high_low:
-            current_hole = seg.end_hole + 1
+            current_pos = ep + 1
         elif finished_on:
-            # Undo SO strokes on holes that were never played.  Without this,
-            # the next segment would inherit those strokes in the shared
-            # score_index and then add its own — producing a double discount
-            # on the first hole of the new segment.
+            # Undo SO strokes on holes that were never played (by play order),
+            # so the next segment doesn't inherit a double discount.
+            fin_pos = pos_of.get(finished_on, ep)
             if so_mode and so_applied:
                 for pid, hole_strokes in so_applied.items():
                     player_entries = score_index.get(pid)
                     if not player_entries:
                         continue
                     for h, strokes in hole_strokes.items():
-                        if h > finished_on and h in player_entries:
+                        if pos_of.get(h, -1) > fin_pos and h in player_entries:
                             player_entries[h] += strokes  # undo
-            current_hole = finished_on + 1   # early finish — start immediately
+            current_pos = fin_pos + 1   # early finish — start immediately
         else:
-            current_hole = seg.end_hole + 1  # normal end
+            current_pos = ep + 1        # normal end
 
     # ── Extra match chain ─────────────────────────────────────────────────────
     # Any holes freed by early finishes are collected into one or more extra
@@ -654,26 +674,28 @@ def calculate_sixes(foursome) -> list:
     #
     # High-Low has no extras by spec (3 segments only, locked ranges), so
     # we skip this entire block in that variant.
-    if not is_high_low and current_hole <= 18:
-        # SO mode: apply the extras SI-threshold rule to every remaining
-        # hole before we score any extra segment.  A player with SO=N gets
-        # one stroke on any hole whose stroke_index <= N.
+    if not is_high_low and current_pos < n:
+        last_hole = order[n - 1]     # the group's final hole (18 on a normal round)
+        # SO mode: apply the extras SI-threshold rule to every remaining hole
+        # (in play order) before we score any extra segment.
         if so_mode:
             _overlay_so_strokes_for_extras(
-                current_hole, player_so, member_by_pid, score_index
+                order[current_pos:], player_so, member_by_pid, score_index
             )
         extra_segs_sorted = sorted(extra_segs, key=lambda s: s.segment_number)
         extra_idx     = 0
-        extra_current = current_hole
+        extra_pos     = current_pos
         processed_ids: set = set()
 
-        while extra_current <= 18:
+        while extra_pos < n:
+            extra_holes = order[extra_pos:]          # to the last hole played
+            extra_start = order[extra_pos]
             if extra_idx < len(extra_segs_sorted):
                 # Reuse an existing extra segment, repositioning if needed.
                 extra = extra_segs_sorted[extra_idx]
-                if extra.start_hole != extra_current or extra.end_hole != 18:
-                    extra.start_hole = extra_current
-                    extra.end_hole   = 18
+                if extra.start_hole != extra_start or extra.end_hole != last_hole:
+                    extra.start_hole = extra_start
+                    extra.end_hole   = last_hole
                     extra.save(update_fields=['start_hole', 'end_hole'])
             else:
                 # Create a new extra segment.  It inherits handicap_mode /
@@ -684,8 +706,8 @@ def calculate_sixes(foursome) -> list:
                 extra = SixesSegment.objects.create(
                     foursome       = foursome,
                     segment_number = max_seg_num + 1,
-                    start_hole     = extra_current,
-                    end_hole       = 18,
+                    start_hole     = extra_start,
+                    end_hole       = last_hole,
                     is_extra       = True,
                     status         = 'pending',
                     handicap_mode  = handicap_mode,
@@ -693,13 +715,15 @@ def calculate_sixes(foursome) -> list:
                 )
 
             processed_ids.add(extra.id)
-            results, finished_on = _score_segment(extra, score_index, withdrawn)
+            results, finished_on = _score_segment(extra, score_index, withdrawn,
+                                                  extra_holes)
             all_results.extend(results)
 
             # Chain: if this extra ended early, start another immediately after.
-            if finished_on is not None and finished_on < 18:
-                extra_current = finished_on + 1
-                extra_idx    += 1
+            fin_pos = pos_of.get(finished_on, -1) if finished_on is not None else -1
+            if finished_on is not None and fin_pos < n - 1:
+                extra_pos  = fin_pos + 1
+                extra_idx += 1
             else:
                 break  # pending, in-progress, or used all remaining holes
 

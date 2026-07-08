@@ -231,3 +231,62 @@ class SixesTests(TestCase):
         hr = SixesHoleResult.objects.get(segment__foursome=self.fs, hole_number=10)
         assert hr.team2_best_net == 3, hr.team2_best_net
         assert hr.team2_worst_net == 3, hr.team2_worst_net
+
+
+class SixesRessegmentTests(TestCase):
+    """The classic early-finish → extra-segment chain, and shotgun thirds —
+    both driven by play-order POSITION, not absolute hole number."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round,
+            [('T1A', 0), ('T1B', 0), ('T2A', 0), ('T2B', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _td(self):
+        return _team_data(self.pid['T1A'], self.pid['T1B'],
+                          self.pid['T2A'], self.pid['T2B'])
+
+    def _halve(self, h):
+        par = self.tee.hole(h)['par']
+        submit_hole(self.fs, h, [(self.pid['T1A'], par), (self.pid['T1B'], par),
+                                  (self.pid['T2A'], par), (self.pid['T2B'], par)])
+
+    def _t1_wins(self, h):
+        par = self.tee.hole(h)['par']
+        submit_hole(self.fs, h, [(self.pid['T1A'], par), (self.pid['T1B'], par),
+                                  (self.pid['T2A'], par + 1), (self.pid['T2B'], par + 1)])
+
+    def test_early_finish_spawns_extra_segment(self):
+        # Normal round. Segment 1 (holes 1-6): T1 wins holes 1-4 → 4 up with 2
+        # to play → clinched at hole 4. Classic collapses the freed holes: the
+        # next matches shift left and a final extra match covers 17-18.
+        setup_sixes(self.fs, self._td(), handicap_mode='gross')
+        for h in range(1, 5):
+            self._t1_wins(h)
+        for h in range(5, 19):
+            self._halve(h)
+        calculate_sixes(self.fs)
+        s = sixes_summary(self.fs)
+        starts = sorted(seg['start_hole'] for seg in s['segments'])
+        # seg1 1-6 (closed early), seg2 5-10, seg3 11-16, extra 17-18.
+        self.assertEqual(starts, [1, 5, 11, 17], s['segments'])
+
+    def test_shotgun_thirds_by_play_order(self):
+        # Shotgun from hole 8: play order 8..18,1..7. Thirds by POSITION are
+        # 8-13 / 14-1 / 2-7, not 1-6 / 7-12 / 13-18.
+        self.round.num_holes = 18
+        self.round.starting_hole = 8
+        self.round.save(update_fields=['num_holes', 'starting_hole'])
+        setup_sixes(self.fs, self._td(), handicap_mode='gross')
+        for h in list(range(8, 19)) + list(range(1, 8)):
+            self._halve(h)                       # all halved → no extras
+        calculate_sixes(self.fs)
+        s = sixes_summary(self.fs)
+        bounds = {(seg['start_hole'], seg['end_hole']) for seg in s['segments']}
+        self.assertEqual(bounds, {(8, 13), (14, 1), (2, 7)}, s['segments'])
