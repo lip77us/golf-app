@@ -4476,6 +4476,7 @@ class _GameStatusSection extends StatelessWidget {
               summary:     sixesSummary!,
               members:     players,
               currentHole: currentHole,
+              holesInPlay: holesInPlay,
             )
           else if (loadingSixes)
             const Center(
@@ -7356,16 +7357,79 @@ String _sixesInitials(String name) {
   return parts.take(2).map((p) => p.isEmpty ? '' : p[0].toUpperCase()).join();
 }
 
-class _SixesMatchGrid extends StatelessWidget {
+class _SixesMatchGrid extends StatefulWidget {
   final SixesSummary     summary;
   final List<Membership> members;
   final int              currentHole;
+  /// Play order (shotgun-aware) so we can tell which match the current hole is
+  /// in — used to auto-scroll that card into view.
+  final List<int>        holesInPlay;
 
   const _SixesMatchGrid({
     required this.summary,
     required this.members,
     required this.currentHole,
+    this.holesInPlay = const [],
   });
+
+  @override
+  State<_SixesMatchGrid> createState() => _SixesMatchGridState();
+}
+
+class _SixesMatchGridState extends State<_SixesMatchGrid> {
+  final ScrollController _scroll = ScrollController();
+  final GlobalKey        _activeKey = GlobalKey();
+
+  SixesSummary     get summary     => widget.summary;
+  List<Membership> get members     => widget.members;
+  int              get currentHole => widget.currentHole;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleScrollToActive();
+  }
+
+  @override
+  void didUpdateWidget(_SixesMatchGrid old) {
+    super.didUpdateWidget(old);
+    if (old.currentHole != widget.currentHole) _scheduleScrollToActive();
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scheduleScrollToActive() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _activeKey.currentContext;
+      if (ctx == null || !mounted) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.5,               // centre the active match card
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  /// True when [seg] is the match the current hole is being played in — by
+  /// POSITION in play order, so a wrapped shotgun segment matches correctly.
+  bool _isActive(SixesSegment seg) {
+    final order = widget.holesInPlay;
+    if (order.isEmpty) {
+      return currentHole >= seg.startHole && currentHole <= seg.endHole;
+    }
+    final sp = order.indexOf(seg.startHole);
+    final ep = order.indexOf(seg.endHole);
+    final hp = order.indexOf(currentHole);
+    if (sp < 0 || ep < 0 || hp < 0 || ep < sp) {
+      return currentHole >= seg.startHole && currentHole <= seg.endHole;
+    }
+    return hp >= sp && hp <= ep;
+  }
 
   int _position(String name) {
     final idx = members.indexWhere((m) => m.player.name == name);
@@ -7420,7 +7484,13 @@ class _SixesMatchGrid extends StatelessWidget {
       p1Name = members[0].player.name;
     }
 
+    // The first visible segment the current hole falls in gets the key we
+    // scroll into view (so on later holes the active/extra match isn't
+    // stranded off-screen).
+    final activeSeg = visible.firstWhere(_isActive, orElse: () => visible.last);
+
     return SingleChildScrollView(
+      controller: _scroll,
       scrollDirection: Axis.horizontal,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -7433,6 +7503,7 @@ class _SixesMatchGrid extends StatelessWidget {
           final topColor    = p1InTeam2 ? GameColors.team2 : GameColors.team1;
           final bottomColor = p1InTeam2 ? GameColors.team1 : GameColors.team2;
           return _SixesSegmentCard(
+            key:          identical(seg, activeSeg) ? _activeKey : null,
             matchNumber:  matchNum,
             segment:      seg,
             team1Label:   _teamLabel(topTeam),
@@ -7459,6 +7530,7 @@ class _SixesSegmentCard extends StatelessWidget {
   final int           currentHole;
 
   const _SixesSegmentCard({
+    super.key,
     required this.matchNumber,
     required this.segment,
     required this.team1Label,
