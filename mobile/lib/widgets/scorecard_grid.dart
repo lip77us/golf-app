@@ -5,6 +5,7 @@ import '../game_catalog.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
+import '../utils/play_order.dart';
 import '../utils/sixes_handicap.dart';
 import 'net_score_button.dart' show scoreCellWithDots;
 import 'score_mark.dart';
@@ -388,6 +389,7 @@ class _ScorecardGridState extends State<ScorecardGrid> {
         strokeIndex: si,
         summary:     rp.sixesSummary!,
         scorecard:   rp.scorecard!,
+        holesInPlay: roundPlayOrder(rp.round, rp.scorecard),
       );
     }
 

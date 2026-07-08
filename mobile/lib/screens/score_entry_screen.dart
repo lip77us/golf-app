@@ -30,6 +30,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/nassau_team_style.dart';
+import '../utils/sixes_handicap.dart';
 import '../utils/round_complete.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
@@ -83,81 +84,25 @@ int _effectiveHandicap({
 /// potential range.  If the segment ended early (next segment starts before
 /// seg.endHole+1), any stroke planned on an unreached hole dies.
 /// Extras: one stroke on any hole in the segment whose SI <= player's SO.
+// Delegates to the shared, play-order-aware allocator in utils/sixes_handicap.dart
+// (a shotgun's wrapped segment needs position-based membership). Kept as a thin
+// wrapper so the many call sites don't all change their argument shape.
 int _sixesSoStrokesOnHole({
   required int playerSo,
   required int holeNumber,
   required int strokeIndex,
   required SixesSummary summary,
   required Scorecard scorecard,
-}) {
-  if (playerSo <= 0) return 0;
-
-  final segments = summary.segments;
-
-  // Extra (tiebreak) segment: simple SI-threshold rule.
-  for (final s in segments) {
-    if (s.isExtra && holeNumber >= s.startHole && holeNumber <= s.endHole) {
-      return strokeIndex <= playerSo ? 1 : 0;
-    }
-  }
-
-  // Standard segment: find the segment this hole belongs to.
-  // Iterate in reverse so that when an earlier match ends early and the next
-  // segment's startHole shifts left, the later segment wins the overlap.
-  final standard = segments.where((s) => !s.isExtra).toList();
-  int? stdIdx;
-  SixesSegment? seg;
-  for (int i = standard.length - 1; i >= 0; i--) {
-    final s = standard[i];
-    if (holeNumber >= s.startHole && holeNumber <= s.endHole) {
-      stdIdx = i;
-      seg = s;
-      break;
-    }
-  }
-  if (seg == null || stdIdx == null) return 0;
-
-  final base             = playerSo ~/ 3;
-  final rem              = playerSo %  3;
-  final strokesThisMatch = base + (stdIdx < rem ? 1 : 0);
-  if (strokesThisMatch <= 0) return 0;
-
-  // Actual last hole played: one before the next segment's start, or 18.
-  final segListIdx = segments.indexOf(seg);
-  int actualEnd = 18;
-  for (int i = segListIdx + 1; i < segments.length; i++) {
-    if (segments[i].startHole > seg.startHole) {
-      actualEnd = segments[i].startHole - 1;
-      break;
-    }
-  }
-
-  // Rank holes in this segment's potential range hardest-first (lowest SI);
-  // hole number is the deterministic tiebreak, matching the backend.
-  final holes = [for (int h = seg.startHole; h <= seg.endHole; h++) h];
-  holes.sort((a, b) {
-    final aSi = scorecard.holeData(a)?.strokeIndex ?? 18;
-    final bSi = scorecard.holeData(b)?.strokeIndex ?? 18;
-    if (aSi != bSi) return aSi.compareTo(bSi);
-    return a.compareTo(b);
-  });
-  final rank    = holes.indexOf(holeNumber);
-  if (rank < 0) return 0;
-
-  final segSize = holes.length;
-  int planned;
-  if (strokesThisMatch <= segSize) {
-    planned = rank < strokesThisMatch ? 1 : 0;
-  } else {
-    // More strokes than holes: everyone gets 1, extras go to hardest holes.
-    final extra = strokesThisMatch - segSize;
-    planned = 1 + (rank < extra ? 1 : 0);
-  }
-
-  // Dying strokes: match ended before this hole.
-  if (holeNumber > actualEnd) return 0;
-  return planned;
-}
+  List<int> holesInPlay = const [],
+}) =>
+    sixesSoStrokesOnHole(
+      playerSo:     playerSo,
+      holeNumber:   holeNumber,
+      strokeIndex:  strokeIndex,
+      summary:      summary,
+      scorecard:    scorecard,
+      holesInPlay:  holesInPlay,
+    );
 
 String _fmtPoints(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
@@ -2265,6 +2210,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           strokeIndex: si,
           summary:     rp.sixesSummary!,
           scorecard:   sc,
+          holesInPlay: _playOrderFor(rp),
         );
       } else {
         // Partial-round aware (scale + re-rank); identical to strokesOnHole on a
@@ -2718,6 +2664,7 @@ class _HoleScoreCard extends StatelessWidget {
           strokeIndex: mySi,
           summary:     sixesSummary!,
           scorecard:   scorecard,
+          holesInPlay: holesInPlay,
         );
       }
       // Non-Sixes SO: 18-hole SI threshold.
