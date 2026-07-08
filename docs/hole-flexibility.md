@@ -246,8 +246,15 @@ opt-in and nothing changes for existing flows.
   still num_holes 18, so it keeps them. **Deferred:** a backend guard on
   `RoundCreateView` (the picker is the only creation path today) and play-order
   thirds for shotgun segment bets.
-- ⏳ **Next:** back-9 rendering leftovers (Phase 5) + tournament shotgun (Phase 4)
-  + Wolf/Rabbit partial play screens.
+- ✅ **Wolf / Rabbit partial rounds** — both now play-order aware end-to-end.
+  Rabbit segments split by POSITION via `hole_plan.segment` (9-hole → one 9-hole
+  rabbit or three 3-hole rabbits); Wolf rotates by play-order position (first
+  hole played = first rotation pick), with the last-place-Wolf twist on the last
+  TWO holes played and the require-lone rule on every hole before those. Mobile:
+  new shared `utils/play_order.dart` drives both dedicated play screens' nav +
+  grids; Rabbit setup offers only even segment splits for the hole count.
+  Full-round behavior byte-identical (Wolf 21, Rabbit 7 tests).
+- ⏳ **Next:** back-9 rendering leftovers (Phase 5) + tournament shotgun (Phase 4).
 
 ## Phased plan
 
