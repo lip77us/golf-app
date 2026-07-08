@@ -33,6 +33,11 @@ class NassauSetupScreen extends StatefulWidget {
   /// used by the "18-Hole Match" casual game shortcut.
   final bool overallOnly;
 
+  /// When true, this is "Nassau Nine": ONE match over the holes actually played
+  /// (no F9/B9 split), with presses — the Nassau for a 9-hole / back-9 round.
+  /// Posts single_match=true; the UI collapses to one bet like overallOnly.
+  final bool singleMatch;
+
   /// When true, this screen was opened from round creation or the launch
   /// page's "Edit Configuration" action: it stays on the form even when the
   /// game is already configured (instead of bouncing to score entry), and
@@ -41,6 +46,7 @@ class NassauSetupScreen extends StatefulWidget {
 
   const NassauSetupScreen({
     super.key, required this.foursomeId, this.overallOnly = false,
+    this.singleMatch = false,
     this.returnToHub = false,
   });
 
@@ -62,9 +68,13 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   bool _advancedOpen = false;
 
   /// Which of the three bets are live (Front+Back off = an 18-hole match).
-  late bool _playFront   = !widget.overallOnly;
-  late bool _playBack    = !widget.overallOnly;
+  late bool _playFront   = !(widget.overallOnly || widget.singleMatch);
+  late bool _playBack    = !(widget.overallOnly || widget.singleMatch);
   bool      _playOverall = true;
+
+  /// Nassau Nine — one match over the played holes (posts single_match=true).
+  /// Tracked in state so re-editing a saved nine keeps the mode.
+  late bool _singleMatch = widget.singleMatch;
 
   final _pressUnitCtrl = TextEditingController();
   final _betCtrl       = TextEditingController();
@@ -86,7 +96,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   /// saved overall-only config when re-editing — so editing a match18 round
   /// keeps the simplified UI instead of falling back to full Nassau.
   bool get _overallOnly =>
-      widget.overallOnly || (!_playFront && !_playBack && _playOverall);
+      widget.overallOnly || _singleMatch ||
+      (!_playFront && !_playBack && _playOverall);
 
   /// Independent base bets a side can lose with no escalation.
   int get _baseMultiple => _overallOnly ? 1 : 3;
@@ -181,6 +192,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           _playFront   = existing.playFront;
           _playBack    = existing.playBack;
           _playOverall = existing.playOverall;
+          _singleMatch = existing.singleMatch || widget.singleMatch;
           _pressUnitCtrl.text = existing.pressUnit.truncate().toString();
           _capEnabled = existing.lossCap != null;
           _advancedOpen = existing.pressMode != 'none' ||
@@ -246,6 +258,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         playFront:    _playFront,
         playBack:     _playBack,
         playOverall:  _playOverall,
+        singleMatch:  _singleMatch,
         lossCap: (_canEscalate && _capEnabled)
             ? double.tryParse(_capCtrl.text.trim())
             : null,
@@ -297,9 +310,10 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     return Scaffold(
       appBar: AppBar(
           title: Text(_editing
-              ? (_overallOnly ? 'Edit Singles Match' : 'Edit Nassau')
-              : (_overallOnly
-                  ? 'Singles Match — Setup'
+              ? (_singleMatch ? 'Edit Nassau Nine'
+                  : _overallOnly ? 'Edit Singles Match' : 'Edit Nassau')
+              : (_singleMatch ? 'Nassau Nine — Setup'
+                  : _overallOnly ? 'Singles Match — Setup'
                   : 'Nassau — Setup'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

@@ -677,6 +677,7 @@ class _GameView extends StatelessWidget {
       case 'multi_skins':
         return _MultiSkinsView(data: data);
       case 'nassau':
+      case 'nassau_nine':
         return _ByGroupView(data: data, builder: _NassauGroupCard.new);
       case 'quota_nassau':
         return _ByGroupView(data: data, builder: _QuotaNassauGroupCard.new);
@@ -3399,7 +3400,11 @@ class _NassauGroupCard extends StatelessWidget {
             ),
           // Only show the live bets — an Overall-only game is an 18-hole match.
           if (nas.playFront) ...[
-            _betRow(nas.isClaremont ? 'F9' : 'Front 9', nas.front9,  t1Names, t2Names, theme, team2Color: team2Color),
+            // Nassau Nine: the single match rides the 'front' bet — label it
+            // "Match" (it covers the whole round, not a front nine).
+            _betRow(nas.singleMatch ? 'Match'
+                    : nas.isClaremont ? 'F9' : 'Front 9',
+                nas.front9,  t1Names, t2Names, theme, team2Color: team2Color),
             const SizedBox(height: 4),
           ],
           if (nas.playBack) ...[

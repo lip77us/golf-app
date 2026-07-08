@@ -1059,6 +1059,7 @@ class ApiClient {
     bool   playFront    = true,
     bool   playBack     = true,
     bool   playOverall  = true,
+    bool   singleMatch  = false,   // Nassau Nine: one match over played holes
     double? lossCap,               // presses/Claremont only; null = uncapped
   }) async {
     final data = await _post('/foursomes/$foursomeId/nassau/setup/', {
@@ -1072,6 +1073,7 @@ class ApiClient {
       'play_front'      : playFront,
       'play_back'       : playBack,
       'play_overall'    : playOverall,
+      'single_match'    : singleMatch,
       'loss_cap'        : lossCap?.toStringAsFixed(2),
     });
     return NassauSummary.fromJson(data as Map<String, dynamic>);

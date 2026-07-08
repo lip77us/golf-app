@@ -104,6 +104,11 @@ int _sixesSoStrokesOnHole({
       holesInPlay:  holesInPlay,
     );
 
+/// True when the round runs a Nassau-family game — full Nassau or Nassau Nine
+/// (both drive the same score-entry team tinting, ordering, and press strip).
+bool _nassauActive(Iterable<String> games) =>
+    games.contains('nassau') || games.contains('nassau_nine');
+
 String _fmtPoints(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
@@ -294,8 +299,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // round is re-fetched, so without active_games as a fallback the
     // handicap chip falls back to round-level 'net' for the rest of the
     // session.
-    if (games.contains('nassau') ||
-        configured.contains('nassau') ||
+    if (_nassauActive(games) ||
+        _nassauActive(configured) ||
         rp.nassauSummary != null) {
       futures.add(rp.loadNassau(widget.foursomeId));
     }
@@ -416,7 +421,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       final pct  = rp.lowNetConfig!['net_percent']  as int?    ?? 100;
       return (mode, pct);
     }
-    if (games.contains('nassau') && rp.nassauSummary != null) {
+    if (_nassauActive(games) && rp.nassauSummary != null) {
       return (rp.nassauSummary!.handicapMode, rp.nassauSummary!.netPercent);
     }
     if (primary == 'skins' && rp.skinsSummary != null) {
@@ -1490,7 +1495,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final parts = <String>[];
     for (final g in games) {
       String label = gameDisplayName(g);
-      if (g == 'nassau' && nas != null) {
+      if ((g == 'nassau' || g == 'nassau_nine') && nas != null) {
         final modeStr = _modeLabel(nas.handicapMode, nas.netPercent);
         final base = nas.isEighteenHoleMatch ? 'Singles Match' : label;
         label = '$base ($modeStr)';
@@ -1520,7 +1525,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final games      = _activeGames(rp.round);
     // Gate summaries on the active game list so stale summaries from a prior
     // game in the same session never bleed into unrelated games.
-    final nas        = games.contains('nassau') ? rp.nassauSummary : null;
+    final nas        = _nassauActive(games) ? rp.nassauSummary : null;
     final skins      = games.contains('skins')  ? rp.skinsSummary  : null;
 
     // Jump to first unplayed hole once scorecard is loaded.  When
@@ -4424,7 +4429,7 @@ class _GameStatusSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Nassau round progress grid
-        if (games.contains('nassau')) ...[
+        if (_nassauActive(games)) ...[
           if (nassau != null)
             _NassauProgressGrid(
               nassau:      nassau!,

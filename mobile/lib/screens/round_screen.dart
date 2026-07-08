@@ -325,6 +325,10 @@ class _RoundScreenState extends State<RoundScreen> {
                         !fs.configuredGames.contains('nassau')) {
                       // Nassau needs team assignment + handicap config.
                       route = '/nassau-setup';
+                    } else if (fsGames.contains('nassau_nine') &&
+                        !fs.configuredGames.contains('nassau_nine')) {
+                      // Nassau Nine: same team + handicap setup as Nassau.
+                      route = '/nassau-nine-setup';
                     } else if (fsGames.contains('vegas') &&
                         !fs.configuredGames.contains('vegas')) {
                       // Vegas needs team assignment + options.
@@ -769,6 +773,7 @@ List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
   const routes = {
     'skins':      '/skins-setup',
     'nassau':     '/nassau-setup',
+    'nassau_nine':'/nassau-nine-setup',
     'points_531': '/points-531-setup',
     'vegas':      '/vegas-setup',
     'fourball':   '/fourball-setup',

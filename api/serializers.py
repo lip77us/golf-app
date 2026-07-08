@@ -486,11 +486,18 @@ class FoursomeSerializer(serializers.ModelSerializer):
         foursome (game model row exists), independent of active_games.
         """
         games = []
+        # Nassau + Nassau Nine share the NassauGame row; report the key that
+        # matches how it was set up so the hub's "needs setup vs play" routing
+        # and the leaderboard tab resolve to the right game.
+        try:
+            games.append('nassau_nine' if obj.nassau_game.single_match
+                         else 'nassau')
+        except Exception:
+            pass
         # OneToOne relationships — safe to check via hasattr
         for attr, key in [
             ('skins_game',         'skins'),
             ('spots_game',         'spots'),
-            ('nassau_game',        'nassau'),
             ('points_531_game',    'points_531'),
             ('vegas_game',         'vegas'),
             ('fourball_game',      'fourball'),

@@ -86,6 +86,8 @@ class CasualRoundLaunch {
       return ('/nassau-setup', fsArg());
     case GameIds.match18:
       return ('/nassau-setup-18', fsArg()); // Overall-only Nassau
+    case GameIds.nassauNine:
+      return ('/nassau-nine-setup', fsArg()); // single match over played holes
     case GameIds.strokePlay:
       return ('/low-net-setup', roundArg());
     case GameIds.stableford:

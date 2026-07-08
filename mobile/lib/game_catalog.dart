@@ -15,6 +15,7 @@ class GameIds {
   static const String sixes      = 'sixes';
   static const String points531  = 'points_531';
   static const String nassau     = 'nassau';
+  static const String nassauNine = 'nassau_nine';
   /// Las Vegas — 2v2 team game; each team's two net scores form a number
   /// (low=tens, high=ones), lower number wins by the difference.  Owns the
   /// 2-digit scoring model, so it's mutually exclusive with the other games.
@@ -267,7 +268,22 @@ const List<GameMeta> kGameCatalog = [
     casual      : true,
     // A straight heads-up 18-hole match — runs on Nassau (Overall bet only).
     sizes       : {2},
-    excludes    : {GameIds.nassau, GameIds.sixes, GameIds.points531},
+    excludes    : {GameIds.nassau, GameIds.nassauNine,
+                   GameIds.sixes, GameIds.points531},
+  ),
+  GameMeta(
+    id          : GameIds.nassauNine,
+    displayName : 'Nassau Nine',
+    casual      : true,
+    // One match over the holes actually played (no F9/B9 split), with presses —
+    // the Nassau to use on a 9-hole / back-9 round. Runs on partial rounds
+    // (unlike full Nassau, which needs 18 for its front/back bets).
+    allowsSideGames: false,
+    minPlayers  : 2,
+    maxPlayers  : 4,
+    sizes       : {2, 4},
+    excludes    : {GameIds.nassau, GameIds.match18,
+                   GameIds.sixes, GameIds.points531},
   ),
   GameMeta(
     id          : GameIds.skins,

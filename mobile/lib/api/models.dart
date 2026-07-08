@@ -3390,6 +3390,9 @@ class NassauSummary {
   final bool playFront;
   final bool playBack;
   final bool playOverall;
+  /// Nassau Nine: one match over the holes played (the match rides `front9`;
+  /// back9/overall are unused). Drives the single-"Match" leaderboard rendering.
+  final bool singleMatch;
 
   // Teams
   final List<NassauPlayerInfo> team1;
@@ -3451,6 +3454,7 @@ class NassauSummary {
     this.playFront   = true,
     this.playBack    = true,
     this.playOverall = true,
+    this.singleMatch = false,
     required this.team1,
     required this.team2,
     required this.front9,
@@ -3522,6 +3526,7 @@ class NassauSummary {
       playFront:    j['play_front']    as bool?   ?? true,
       playBack:     j['play_back']     as bool?   ?? true,
       playOverall:  j['play_overall']  as bool?   ?? true,
+      singleMatch:  j['single_match']  as bool?   ?? false,
       team1: ((teams['team1'] as List?) ?? [])
           .map((p) => NassauPlayerInfo.fromJson(p as Map<String, dynamic>))
           .toList(),

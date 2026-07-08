@@ -1026,6 +1026,7 @@ class RoundProvider extends ChangeNotifier {
     bool   playFront    = true,
     bool   playBack     = true,
     bool   playOverall  = true,
+    bool   singleMatch  = false,
     double? lossCap,
   }) async {
     _submitting = true;
@@ -1044,6 +1045,7 @@ class RoundProvider extends ChangeNotifier {
         playFront:    playFront,
         playBack:     playBack,
         playOverall:  playOverall,
+        singleMatch:  singleMatch,
         lossCap:      lossCap,
       );
       return true;
