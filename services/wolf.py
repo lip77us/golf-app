@@ -68,6 +68,7 @@ from games.models import (
     WolfGame, WolfHoleDecision, WolfPlayerHoleResult,
 )
 from services.points_531 import _build_so_score_index
+from services.hole_plan import play_order as _play_order
 from scoring.handicap import build_score_index
 from scoring.models import HoleScore
 
@@ -162,15 +163,25 @@ def _played_holes(foursome, game) -> set:
     return played
 
 
+def _play_sequence(foursome) -> list:
+    """The ordered holes this group plays (back-9 / 9-hole / shotgun aware).
+    Defaults (num_holes=18, start=1) return 1..18, so a normal round is
+    unchanged. The Wolf rotates by POSITION in this sequence, not hole number,
+    so the first hole played is always the first rotation pick."""
+    return _play_order(foursome.round, foursome)
+
+
 def locked_wolf_positions(foursome) -> set:
     """Rotation positions (0-based) whose Wolf is fixed because the hole that
-    uses them (hole = position + 1, + n, …) has already been played."""
+    uses them has already been played. Position is the hole's index in play
+    order mod n (so a back-9 / shotgun locks the right rotation slots)."""
     game = foursome.wolf_game
     order = _clean_order(foursome, game.wolf_order)
     n = len(order)
     if n == 0:
         return set()
-    return {(h - 1) % n for h in _played_holes(foursome, game)}
+    pos_of = {h: i for i, h in enumerate(_play_sequence(foursome))}
+    return {pos_of[h] % n for h in _played_holes(foursome, game) if h in pos_of}
 
 
 def set_wolf_order(foursome, wolf_order: list) -> 'WolfGame':
@@ -354,13 +365,15 @@ def calculate_wolf(foursome) -> list:
     n           = len(real_ids)
     score_index = _score_index(game, foursome)
     decisions   = {d.hole_number: d for d in game.decisions.all()}
+    sequence    = _play_sequence(foursome)
+    last_two    = set(sequence[-2:])          # last-place-Wolf holes (was 17/18)
 
     running_points = {pid: Decimal('0') for pid in real_ids}
     running_net    = {pid: 0 for pid in real_ids}
 
     rows = []
     resolved_holes = 0
-    for hole in range(1, 19):
+    for pos, hole in enumerate(sequence):
         # Net scores for the hole (None if any real player hasn't scored).
         net = {}
         complete = True
@@ -371,11 +384,12 @@ def calculate_wolf(foursome) -> list:
                 break
             net[pid] = s
 
-        # Resolve the Wolf for this hole.
-        if n == 4 and hole in (17, 18) and game.last_place_wolf_1718:
+        # Resolve the Wolf for this hole — rotate by POSITION in play order, so
+        # the first hole played is the first rotation pick (back-9 / shotgun).
+        if n == 4 and hole in last_two and game.last_place_wolf_1718:
             wolf = _last_place(real_ids, order, running_points, running_net)
         else:
-            wolf = order[(hole - 1) % n]
+            wolf = order[pos % n] if n else None
 
         decision = decisions.get(hole)
         decided  = decision is not None and decision.decision in (
@@ -428,7 +442,7 @@ def calculate_wolf(foursome) -> list:
 
     if resolved_holes == 0:
         game.status = MatchStatus.PENDING
-    elif resolved_holes >= 18:
+    elif resolved_holes >= len(sequence):
         game.status = MatchStatus.COMPLETE
     else:
         game.status = MatchStatus.IN_PROGRESS
@@ -441,22 +455,24 @@ def calculate_wolf(foursome) -> list:
 # Wolf-per-hole resolution from persisted results (for summary / validation)
 # ---------------------------------------------------------------------------
 
-def _wolf_by_hole(game, real_ids, order, score_index, points_by_hole) -> dict:
+def _wolf_by_hole(game, real_ids, order, score_index, points_by_hole,
+                  sequence) -> dict:
     """
-    Return {hole_number: wolf_player_id} for all 18 holes, replaying the
-    same rotation + 17/18 last-place logic calculate_wolf uses.  Standings
-    are reconstructed from persisted results (points) plus the score index
-    (net totals), so this stays consistent with the calculator.
+    Return {hole_number: wolf_player_id} for the holes in play, replaying the
+    same position-based rotation + last-two last-place logic calculate_wolf
+    uses.  Standings are reconstructed from persisted results (points) plus the
+    score index (net totals), so this stays consistent with the calculator.
     """
     n = len(real_ids)
+    last_two = set(sequence[-2:])
     running_points = {pid: Decimal('0') for pid in real_ids}
     running_net    = {pid: 0 for pid in real_ids}
     out = {}
-    for hole in range(1, 19):
-        if n == 4 and hole in (17, 18) and game.last_place_wolf_1718:
+    for pos, hole in enumerate(sequence):
+        if n == 4 and hole in last_two and game.last_place_wolf_1718:
             out[hole] = _last_place(real_ids, order, running_points, running_net)
         else:
-            out[hole] = order[(hole - 1) % n] if n else None
+            out[hole] = order[pos % n] if n else None
         # Advance standings for the NEXT hole's last-place calc.
         for pid in real_ids:
             s = score_index.get(pid, {}).get(hole)
@@ -480,7 +496,9 @@ def resolve_wolf_for_hole(foursome, hole_number: int):
     order       = _clean_order(foursome, game.wolf_order)
     score_index = _score_index(game, foursome)
     points_by_hole = _points_by_hole(game)
-    return _wolf_by_hole(game, real_ids, order, score_index, points_by_hole).get(hole_number)
+    sequence    = _play_sequence(foursome)
+    return _wolf_by_hole(game, real_ids, order, score_index, points_by_hole,
+                         sequence).get(hole_number)
 
 
 def _points_by_hole(game) -> dict:
@@ -495,23 +513,30 @@ def _points_by_hole(game) -> dict:
 # "Require a Lone/Blind by hole 16" rule
 # ---------------------------------------------------------------------------
 
-def _partner_locked(game, real_ids, order, decisions, hole, wolf) -> bool:
+def _partner_locked(game, real_ids, order, decisions, hole, wolf,
+                    sequence) -> bool:
     """
     True when the require-lone-or-blind rule forces the Wolf to go solo on
-    this hole: a 4-player game, hole ≤ 16, and the Wolf has already been the
-    Wolf on >= 3 prior holes (1-16) all as partner — never solo.  On a
-    player's 4th (and final) Wolf turn within the first 16 holes this leaves
-    Lone/Blind as the only options.  (For holes ≤ 16 the Wolf is always the
-    plain rotation pick, so prior-hole Wolves are read straight off `order`.)
+    this hole: a 4-player game, the hole is NOT one of the last two (those are
+    the last-place-Wolf holes), and the Wolf has already been the Wolf on >= 3
+    prior holes all as partner — never solo.  On a player's final rotation Wolf
+    turn this leaves Lone/Blind as the only options.  Prior-hole Wolves are read
+    by POSITION in play order, so a back-9 / shotgun locks the right holes.
     """
     if not game.require_lone_or_blind:
         return False
     n = len(real_ids)
-    if n != 4 or hole > 16 or wolf is None:
+    if n != 4 or wolf is None:
+        return False
+    pos_of = {h: i for i, h in enumerate(sequence)}
+    pos = pos_of.get(hole)
+    # Only the plain-rotation holes (everything before the last two) qualify.
+    if pos is None or pos >= len(sequence) - 2:
         return False
     partner_count = 0
-    for h in range(1, hole):
-        if order[(h - 1) % n] != wolf:
+    for i in range(pos):
+        h = sequence[i]
+        if (order[i % n] if n else None) != wolf:
             continue
         d = decisions.get(h)
         if d is None:
@@ -535,9 +560,15 @@ def partner_locked_for_hole(foursome, hole_number: int) -> bool:
     if n == 0:
         return False
     order = _clean_order(foursome, game.wolf_order)
-    wolf = order[(hole_number - 1) % n] if hole_number <= 16 else None
+    sequence = _play_sequence(foursome)
+    pos_of = {h: i for i, h in enumerate(sequence)}
+    pos = pos_of.get(hole_number)
+    # Plain rotation pick on non-last-two holes; last-place holes → no partner rule.
+    wolf = (order[pos % n] if (pos is not None and pos < len(sequence) - 2 and n)
+            else None)
     decisions = {d.hole_number: d for d in game.decisions.all()}
-    return _partner_locked(game, real_ids, order, decisions, hole_number, wolf)
+    return _partner_locked(game, real_ids, order, decisions, hole_number, wolf,
+                           sequence)
 
 
 # ---------------------------------------------------------------------------
@@ -552,21 +583,23 @@ def _phcp_in_play(mode, npct, phcp, low_phcp) -> int:
     return round(phcp * npct / 100)
 
 
-def _tee_order(hole, wolf, real_ids, score_index, phcp_by_pid, order) -> list:
+def _tee_order(hole, wolf, real_ids, score_index, phcp_by_pid, order,
+               sequence) -> list:
     """
     Reverse-honors order for a hole: the non-Wolf player who scored worst
-    (highest net) on the PREVIOUS hole tees first; ties break by the hole
-    before that, and so on back to hole 1; final fallback is higher
-    handicap first, then rotation order.  The Wolf is always last.
+    (highest net) on the PREVIOUS hole (in play order) tees first; ties break by
+    the hole before that, and so on back to the first hole played; final
+    fallback is higher handicap first, then rotation order.  The Wolf is always
+    last.
     """
     non_wolf = [pid for pid in real_ids if pid != wolf]
+    pos = sequence.index(hole) if hole in sequence else 0
+    prior = list(reversed(sequence[:pos]))     # previous holes, most-recent first
 
     def key(pid):
-        # Descending net on H-1, H-2, … 1  → negate so 'worst first' sorts
-        # ascending.  Missing scores contribute 0 (only matters for future
-        # holes; in normal sequential play all prior holes are scored).
-        prev = tuple(-score_index.get(pid, {}).get(k, 0)
-                     for k in range(hole - 1, 0, -1))
+        # Descending net on the prior holes (most recent first) → negate so
+        # 'worst first' sorts ascending.  Missing scores contribute 0.
+        prev = tuple(-score_index.get(pid, {}).get(k, 0) for k in prior)
         return prev + (-phcp_by_pid.get(pid, 0),
                        order.index(pid) if pid in order else 99)
 
@@ -604,6 +637,7 @@ def wolf_summary(foursome) -> dict:
     real_ids = list(by_pid.keys())
     order    = _clean_order(foursome, game.wolf_order)
     n        = len(real_ids)
+    sequence = _play_sequence(foursome)         # holes in play order
 
     score_index = _score_index(game, foursome)
 
@@ -622,7 +656,7 @@ def wolf_summary(foursome) -> dict:
     )
     par_by_hole: dict = {}
     if sample_tee is not None:
-        for h in range(1, 19):
+        for h in sequence:
             par_by_hole[h] = sample_tee.hole(h).get('par')
 
     # Handicap-in-play per player (tee-order tiebreak + display).
@@ -647,7 +681,8 @@ def wolf_summary(foursome) -> dict:
         points_by_hole.setdefault(r.hole_number, {})[r.player_id] = r.points
         res_by_hole.setdefault(r.hole_number, []).append(r)
 
-    wolf_by_hole = _wolf_by_hole(game, real_ids, order, score_index, points_by_hole)
+    wolf_by_hole = _wolf_by_hole(game, real_ids, order, score_index,
+                                 points_by_hole, sequence)
     decisions    = {d.hole_number: d for d in game.decisions.all()}
 
     def short(pid):
@@ -659,7 +694,7 @@ def wolf_summary(foursome) -> dict:
         return p.name if p else ''
 
     holes_out: list = []
-    for hole in range(1, 19):
+    for hole in sequence:
         wolf = wolf_by_hole.get(hole)
         decision = decisions.get(hole)
         dstr = decision.decision if decision else WolfHoleDecision.PENDING
@@ -667,7 +702,8 @@ def wolf_summary(foursome) -> dict:
                       if decision and decision.decision == WolfHoleDecision.PARTNER
                       else None)
 
-        tee = _tee_order(hole, wolf, real_ids, score_index, phcp_by_pid, order)
+        tee = _tee_order(hole, wolf, real_ids, score_index, phcp_by_pid, order,
+                         sequence)
         tee_order_out = []
         pos = 0
         for pid in tee:
@@ -716,7 +752,7 @@ def wolf_summary(foursome) -> dict:
             'partner_id'   : partner_id,
             'partner_short': short(partner_id) if partner_id else None,
             'partner_locked': _partner_locked(game, real_ids, order,
-                                              decisions, hole, wolf),
+                                              decisions, hole, wolf, sequence),
             'winning_side' : winning_side,
             'pot'          : pot,
             'tee_order'    : tee_order_out,

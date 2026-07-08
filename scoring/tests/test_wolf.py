@@ -315,3 +315,51 @@ class WolfTests(TestCase):
                                   (self.pid['Carol'], 5), (self.pid['Dave'], 5)])
         calculate_wolf(self.fs)
         assert wolf_summary(self.fs)['locked_positions'] == [0, 1]
+
+    def test_back_nine_rotates_by_play_position(self):
+        # Back 9 (holes 10-18): the Wolf rotates by POSITION in play order, so
+        # the first hole played (10) is order[0]=Alice, not order[(10-1)%4]=Bob.
+        self.round.num_holes = 9
+        self.round.starting_hole = 10
+        self.round.save(update_fields=['num_holes', 'starting_hole'])
+        self._setup(last_place_wolf_1718=False)   # pure rotation, no 17/18 twist
+        order = self._order('Alice', 'Bob', 'Carol', 'Dave')
+        for i, h in enumerate(range(10, 19)):
+            self._decide(h, 'lone')
+            submit_hole(self.fs, h, [(self.pid['Alice'], 4), (self.pid['Bob'], 4),
+                                      (self.pid['Carol'], 4), (self.pid['Dave'], 4)])
+        calculate_wolf(self.fs)
+        s = wolf_summary(self.fs)
+        wolf_of = {hh['hole']: hh['wolf_id'] for hh in s['holes']}
+        # Only the 9 played holes appear, in play order.
+        assert [hh['hole'] for hh in s['holes']] == list(range(10, 19))
+        for i, h in enumerate(range(10, 19)):
+            assert wolf_of[h] == order[i % 4], (h, wolf_of[h])
+        # Round completes on 9 holes, not stuck waiting for 18.
+        assert s['status'] == 'complete', s['status']
+
+    def test_back_nine_last_place_applies_to_last_two_played(self):
+        # With the last-place-Wolf option on, the last TWO holes played (17, 18
+        # here) go to last place — the generalization of the old holes-17/18 rule.
+        self.round.num_holes = 9
+        self.round.starting_hole = 10
+        self.round.save(update_fields=['num_holes', 'starting_hole'])
+        self._setup(last_place_wolf_1718=True)
+        order = self._order('Alice', 'Bob', 'Carol', 'Dave')
+        # Make Dave the clear last place: he loses every lone hole he's Wolf and
+        # scores worst throughout. Simpler: give Dave the worst net every hole so
+        # he's last place going into 17/18.
+        for i, h in enumerate(range(10, 19)):
+            self._decide(h, 'lone')
+            scores = [(self.pid['Alice'], 4), (self.pid['Bob'], 4),
+                      (self.pid['Carol'], 4), (self.pid['Dave'], 8)]
+            submit_hole(self.fs, h, scores)
+        calculate_wolf(self.fs)
+        s = wolf_summary(self.fs)
+        wolf_of = {hh['hole']: hh['wolf_id'] for hh in s['holes']}
+        # Holes 10-16 are plain rotation.
+        for i, h in enumerate(range(10, 17)):
+            assert wolf_of[h] == order[i % 4], (h, wolf_of[h])
+        # Holes 17 & 18 (the last two played) go to the last-place player (Dave).
+        assert wolf_of[17] == self.pid['Dave'], wolf_of[17]
+        assert wolf_of[18] == self.pid['Dave'], wolf_of[18]
