@@ -270,8 +270,20 @@ opt-in and nothing changes for existing flows.
   each has new shotgun tests; full scoring suite green (241). **Not app-testable
   until Phase 4** (no shotgun setup UI yet). Known gap: Sixes mid-round
   withdrawal segment selection still keys off hole number.
-- ⏳ **Next:** back-9 rendering leftovers (Phase 5) + tournament shotgun setup UI
-  (Phase 4) — which finally makes all the above clickable.
+- ✅ **Phase 4 (core) — tournament shotgun setup.** The TD assigns each group a
+  starting hole, so the shotgun engine work above is usable end to end.
+  - Backend: `FoursomeSerializer` exposes `starting_hole` + `shotgun_slot`;
+    `FoursomeDetailView.patch` sets them (validated 1..course holes; null clears
+    → inherit round; slot upper-cased). Tests in `api/test_partial_rounds.py`.
+  - Mobile: `Foursome.startingHole`/`shotgunSlot`; `play_order` resolves the
+    FOURSOME's start (falls back to the round's) so score entry + Sixes dots
+    follow each group's wrapped sequence; round-hub TD menu "Set starting hole"
+    (hole picker + A/B slot) on multi-group non-cup rounds; card shows "Starts 7A".
+  - **Deferred:** auto-assign presets (sequential / split-tee); cup-round shotgun
+    (the per-foursome TD menu is hidden on cup rounds — same limit as scorer
+    designation); casual Sixes shotgun already works via the round Advanced tab.
+- ⏳ **Next:** back-9 rendering leftovers (Phase 5) — watch pages + any grids that
+  still assume 1-18.
 
 ## Phased plan
 
