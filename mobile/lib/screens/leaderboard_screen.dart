@@ -15,8 +15,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../utils/watcher_invite.dart';
 import '../utils/golf_colors.dart';
-import '../widgets/score_mark.dart';
-import '../widgets/net_score_button.dart' show scoreCellWithDots;
+import '../widgets/stroke_play_strip.dart';
 import '../widgets/borrowed_fourth.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
@@ -1046,7 +1045,19 @@ class _StablefordPointsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme     = Theme.of(context);
-    final holeRange = List.generate(18, (i) => i + 1);
+    // Render only the holes actually played (union of the per-player point maps),
+    // sorted — so a back-9 / partial round shows 10-18, not a blank 1-9.
+    final holeSet = <int>{};
+    for (final e in results) {
+      final holes = ((e as Map)['holes'] as Map?) ?? const {};
+      for (final k in holes.keys) {
+        final h = int.tryParse(k.toString());
+        if (h != null) holeSet.add(h);
+      }
+    }
+    final holeRange = holeSet.isEmpty
+        ? List.generate(18, (i) => i + 1)
+        : (holeSet.toList()..sort());
 
     Widget cell(Widget child, double w) =>
         SizedBox(width: w, height: _rowH, child: Center(child: child));
@@ -1308,26 +1319,8 @@ class _LowNetViewState extends State<_LowNetView> {
 
   // Score colours (under par = red, par/over = default) live in
   // utils/golf_colors.dart — scoreColor() / toParColor() — so the convention is
-  // shared and changed in one place.
-
-  /// One hole cell: GROSS score with handicap-stroke dots in the corner —
-  /// mirrors the score-entry stroke-play grid so the user reads the raw score
-  /// and the strokes and can figure the net.  The number is COLOURED by net vs
-  /// par (under = green, over = red) — the part not shown on the score screen.
-  static Widget _scoreCell(
-      ThemeData theme, Map h, bool showNet, TextStyle cellStyle) {
-    final gross    = h['gross'] as int?;
-    final par      = h['par'] as int?;
-    // Gross digit coloured by NET (or gross) vs par, with circle/square
-    // scorecard notation.  No stroke dots — the shape carries the result.
-    final colourBy = showNet ? ((h['capped'] ?? h['net']) as int?) : gross;
-    return scoreMark(
-      text: gross == null ? '–' : '$gross',
-      diff: (colourBy != null && par != null) ? colourBy - par : null,
-      baseStyle: cellStyle.copyWith(fontWeight: FontWeight.w600),
-      theme: theme,
-    );
-  }
+  // shared and changed in one place. The per-hole strip lives in
+  // widgets/stroke_play_strip.dart (shared with the championship view).
 
   @override
   Widget build(BuildContext context) {
@@ -1570,24 +1563,7 @@ class _LowNetViewState extends State<_LowNetView> {
   /// round is done — matching the landscape grid.
   Widget _holeStrip(ThemeData theme, Map<String, dynamic> row,
       {required bool showNet}) {
-    final hm = <int, Map>{};
-    for (final h in (row['holes'] as List? ?? [])) {
-      final m = h as Map;
-      final n = m['hole'] as int?;
-      if (n != null) hm[n] = m;
-    }
-    if (hm.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Text('No scores yet.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      );
-    }
-    // Render EVERY hole the round plays (not just the scored ones) so this
-    // strip matches the score-entry card — a not-yet-played hole shows as a
-    // blank column. holes_in_play + hole_pars come from the backend low-net
-    // block; fall back to only the scored holes for a legacy payload.
+    // Round-level pars + holes-in-play let unplayed holes render as blanks.
     final holePars = <int, int>{};
     for (final e in (widget.data['hole_pars'] as Map? ?? const {}).entries) {
       final k = e.key is int ? e.key as int : int.tryParse('${e.key}');
@@ -1597,112 +1573,14 @@ class _LowNetViewState extends State<_LowNetView> {
     final inPlay = (widget.data['holes_in_play'] as List?)
         ?.map((e) => e as int)
         .toList();
-    final renderHoles = (inPlay == null || inPlay.isEmpty)
-        ? (hm.keys.toList()..sort())
-        : (inPlay..sort());
-    final front    = renderHoles.where((n) => n <= 9).toList();
-    final back     = renderHoles.where((n) => n > 9).toList();
-    // A segment subtotal shows only once EVERY in-play hole in it is scored —
-    // unplayed holes keep it hidden, exactly like the entry strip.
-    final showOut = front.isNotEmpty && front.every(hm.containsKey);
-    final showIn  = back.isNotEmpty && back.every(hm.containsKey);
-    final showTot = renderHoles.every(hm.containsKey);
-    int parOf(int n) => (hm[n]?['par'] as int?) ?? holePars[n] ?? 0;
-    int grossSum(List<int> hs) =>
-        hs.fold<int>(0, (s, n) => s + ((hm[n]?['gross'] as int?) ?? 0));
-    int parSum(List<int> hs) =>
-        hs.fold<int>(0, (s, n) => s + parOf(n));
-    final netTot = row['total_net'] as int?;
-    final ntp    = row['net_to_par'] as int?;
-
-    const double holeW = 32, sumW = 40, headH = 20, parH = 18, scoreH = 32;
-    const cellStyle = TextStyle(fontSize: 12);
-    final headerStyle = theme.textTheme.labelSmall?.copyWith(
-        fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
-    final parStyle = theme.textTheme.labelSmall
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    final border = Border.all(
-        color: theme.colorScheme.outlineVariant, width: 0.5);
-
-    Widget headCell(String t, double w) => Container(
-          width: w, height: headH, alignment: Alignment.center,
-          decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest, border: border),
-          child: Text(t, style: headerStyle),
-        );
-    Widget parCell(String t, double w) => Container(
-          width: w, height: parH, alignment: Alignment.center,
-          decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLow, border: border),
-          child: Text(t, style: parStyle),
-        );
-    Widget scoreCell(int n) {
-      final hole    = hm[n];
-      final gross   = hole?['gross'] as int?;
-      final net     = hole?['net'] as int?;
-      final raw     = (gross != null && net != null) ? gross - net : 0;
-      final strokes = raw < 0 ? 0 : (raw > 9 ? 9 : raw);
-      return Container(
-        width: holeW, height: scoreH, alignment: Alignment.center,
-        decoration: BoxDecoration(border: border),
-        child: scoreCellWithDots(
-          Center(
-            child: gross == null
-                ? const Text('–', style: cellStyle)
-                : _scoreCell(theme, hole!, showNet, cellStyle),
-          ),
-          strokes,
-          theme.colorScheme.primary,
-        ),
-      );
-    }
-    Widget sumCell(String t, double w, {Color? color}) => Container(
-          width: w, height: scoreH, alignment: Alignment.center,
-          decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLow, border: border),
-          child: Text(t,
-              style: cellStyle.copyWith(
-                  fontWeight: FontWeight.bold, color: color)),
-        );
-
-    return Container(
-      color: theme.colorScheme.surface,
-      padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Hole-number header
-          Row(children: [
-            for (final n in front) headCell('$n', holeW),
-            if (showOut) headCell('Out', sumW),
-            for (final n in back) headCell('$n', holeW),
-            if (showIn) headCell('In', sumW),
-            if (showTot) headCell('Tot', sumW),
-            if (showTot && showNet) headCell('Net', sumW),
-          ]),
-          // Par row
-          Row(children: [
-            for (final n in front)
-              parCell('${parOf(n) > 0 ? parOf(n) : '-'}', holeW),
-            if (showOut) parCell('${parSum(front)}', sumW),
-            for (final n in back)
-              parCell('${parOf(n) > 0 ? parOf(n) : '-'}', holeW),
-            if (showIn) parCell('${parSum(back)}', sumW),
-            if (showTot) parCell('${parSum(renderHoles)}', sumW),
-            if (showTot && showNet) parCell('', sumW),
-          ]),
-          // Score row
-          Row(children: [
-            for (final n in front) scoreCell(n),
-            if (showOut) sumCell('${grossSum(front)}', sumW),
-            for (final n in back) scoreCell(n),
-            if (showIn) sumCell('${grossSum(back)}', sumW),
-            if (showTot) sumCell('${grossSum(renderHoles)}', sumW),
-            if (showTot && showNet)
-              sumCell('${netTot ?? ''}', sumW, color: toParColor(ntp)),
-          ]),
-        ]),
-      ),
+    return strokePlayHoleStrip(
+      context,
+      holes:       (row['holes'] as List? ?? const []),
+      holesInPlay: inPlay,
+      holePars:    holePars,
+      showNet:     showNet,
+      netTotal:    row['total_net'] as int?,
+      netToPar:    row['net_to_par'] as int?,
     );
   }
 }
@@ -9213,6 +9091,11 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
         : '$leaderName  +\$${bet.formatBet()} each';
 
     final byHole = {for (final h in summary.holes) h.hole: h};
+    // The holes actually in play, in the backend's play order (fourball_summary
+    // walks play order) — no blank 1-9 on a back-9 / shotgun round.
+    final holeRange = summary.holes.isNotEmpty
+        ? summary.holes.map((h) => h.hole).toList()
+        : List.generate(18, (i) => i + 1);
 
     Widget cell(Widget child, {Color? bg, bool current = false}) => Container(
           width: _cellW, height: _rowH,
@@ -9240,7 +9123,7 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
     Widget scoreRow(String label, Color color, int? Function(FourballHole) get) =>
         Row(children: [
           labelCell(label, color: color),
-          for (var h = 1; h <= 18; h++)
+          for (final h in holeRange)
             cell(
               Text(
                 byHole[h] != null && get(byHole[h]!) != null
@@ -9311,7 +9194,7 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 labelCell('Hole'),
-                for (var h = 1; h <= 18; h++)
+                for (final h in holeRange)
                   cell(
                     Text('$h',
                         style: theme.textTheme.labelSmall
@@ -9325,7 +9208,7 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
               Row(children: [
                 labelCell('Won by', style: FontStyle.italic,
                     color: theme.colorScheme.onSurfaceVariant),
-                for (var h = 1; h <= 18; h++)
+                for (final h in holeRange)
                   Builder(builder: (_) {
                     final d = byHole[h];
                     if (d == null) {

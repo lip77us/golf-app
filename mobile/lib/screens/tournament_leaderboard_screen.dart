@@ -14,6 +14,7 @@ import '../utils/golf_colors.dart';
 import '../utils/watcher_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
+import '../widgets/stroke_play_strip.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'tournament_stableford_setup_screen.dart';
 
@@ -338,125 +339,6 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
     }
   }
 
-  /// Compact F9/B9 scorecard grid for one round's hole data.
-  Widget _nineGrid(BuildContext context, List holes,
-      {required bool isFront, required String label}) {
-    final theme = Theme.of(context);
-    const double cHole = 26, cPar = 24, cGross = 28, cNet = 28;
-
-    final headerStyle = theme.textTheme.labelSmall!.copyWith(
-      fontWeight: FontWeight.bold,
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    const cellStyle = TextStyle(fontSize: 11);
-
-    Widget cell(double w, Widget child) =>
-        SizedBox(width: w, child: Center(child: child));
-
-    Widget gridRow({
-      required String hole, required String par,
-      required String gross, required String net,
-      Color? grossColor, Color? netColor, bool bold = false,
-    }) {
-      final st = bold ? cellStyle.copyWith(fontWeight: FontWeight.bold) : cellStyle;
-      return Row(children: [
-        cell(cHole,  Text(hole,  style: st)),
-        cell(cPar,   Text(par,   style: st)),
-        cell(cGross, Text(gross, style: st.copyWith(color: grossColor))),
-        cell(cNet,   Text(net,   style: st.copyWith(color: netColor))),
-      ]);
-    }
-
-    final segment = holes
-        .where((h) {
-          final n = (h as Map)['hole'] as int? ?? 0;
-          return isFront ? n <= 9 : n > 9;
-        })
-        .cast<Map>()
-        .toList();
-
-    int totPar = 0, totGross = 0, totNet = 0;
-    for (final h in segment) {
-      totPar   += (h['par']    as int? ?? 0);
-      totGross += (h['gross']  as int? ?? 0);
-      totNet   += (h['capped'] as int? ?? 0);
-    }
-    final totNtp = segment.isEmpty ? null : totNet - totPar;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(isFront ? 'Front 9' : 'Back 9',
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-        const SizedBox(height: 4),
-        Row(children: [
-          cell(cHole,  const SizedBox.shrink()),
-          cell(cPar,   Text('Par',  style: headerStyle)),
-          cell(cGross, Text('Grs',  style: headerStyle)),
-          cell(cNet,   Text('Net',  style: headerStyle)),
-        ]),
-        const Divider(height: 5, thickness: 0.5),
-        ...segment.map((h) {
-          final hNum   = h['hole']   as int? ?? 0;
-          final par    = h['par']    as int? ?? 0;
-          final gross  = h['gross']  as int? ?? 0;
-          final capped = h['capped'] as int? ?? 0;
-          final gDiff  = gross  - par;
-          final nDiff  = capped - par;
-          return gridRow(
-            hole: '$hNum', par: '$par', gross: '$gross', net: '$capped',
-            // Golf convention: under par red, par/over default (no green/red flip).
-            grossColor: toParColor(gDiff),
-            netColor:   toParColor(nDiff),
-          );
-        }),
-        const Divider(height: 6, thickness: 0.5),
-        gridRow(
-          hole: isFront ? 'Out' : 'In',
-          par: '$totPar', gross: '$totGross',
-          net: _ntpLabel(totNtp),
-          netColor: _ntpColor(totNtp, theme),
-          bold: true,
-        ),
-      ],
-    );
-  }
-
-  /// Full 18-hole totals row shown below the F9/B9 grids.
-  Widget _totalsRow(BuildContext context, List holes) {
-    final theme = Theme.of(context);
-    const double cHole = 26, cPar = 24, cGross = 28, cNet = 28;
-    const cellStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.bold);
-
-    Widget cell(double w, Widget child) =>
-        SizedBox(width: w, child: Center(child: child));
-
-    int totPar = 0, totGross = 0, totNet = 0;
-    for (final h in holes.cast<Map>()) {
-      totPar   += (h['par']    as int? ?? 0);
-      totGross += (h['gross']  as int? ?? 0);
-      totNet   += (h['capped'] as int? ?? 0);
-    }
-    final ntp    = holes.isEmpty ? null : totNet - totPar;
-    final ntpCol = _ntpColor(ntp, theme);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-      child: Row(children: [
-        cell(cHole,  Text('Tot', style: cellStyle.copyWith(
-            color: theme.colorScheme.onSurfaceVariant))),
-        cell(cPar,   Text('$totPar',  style: cellStyle)),
-        cell(cGross, Text('$totGross', style: cellStyle)),
-        cell(cNet,   Text(_ntpLabel(ntp),
-            style: cellStyle.copyWith(color: ntpCol))),
-      ]),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -525,7 +407,10 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                         textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 10,
                             fontWeight: FontWeight.w600))),
-            const SizedBox(width: 46, child: Text('Total',
+            const SizedBox(width: 46, child: Text('Net',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
+            const SizedBox(width: 46, child: Text('Gross',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
             if (hasPrize)
@@ -549,6 +434,20 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
           final roundLabels = (r['round_labels'] as List? ?? [])
               .map((v) => v.toString()).toList();
           final payout      = (r['payout'] as num?)?.toDouble();
+          // Gross-to-par total (gross is uncapped; only net caps at double
+          // bogey) — summed from the round hole detail, to match the per-round
+          // Stroke Play tab which shows both Net and Gross to par.
+          int grossToPar = 0;
+          bool anyGross  = false;
+          for (final rh in roundHoles) {
+            for (final h in (rh as List)) {
+              final m = h as Map;
+              final g = m['gross'] as int?;
+              if (g == null) continue;
+              anyGross = true;
+              grossToPar += g - (m['par'] as int? ?? 0);
+            }
+          }
           final isLeading   = rank == 1;
           final hasHoles    = roundHoles.isNotEmpty &&
               (roundHoles.first as List?)?.isNotEmpty == true;
@@ -651,6 +550,14 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                                 fontWeight: FontWeight.bold, fontSize: 15,
                                 color: _ntpColor(ntp, theme))),
                       ),
+                      SizedBox(
+                        width: 46,
+                        child: Text(anyGross ? _ntpLabel(grossToPar) : '—',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                color: _ntpColor(
+                                    anyGross ? grossToPar : null, theme))),
+                      ),
                       if (hasPrize)
                         SizedBox(
                           width: 46,
@@ -699,30 +606,14 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                                     fontWeight: FontWeight.bold),
                               ),
                             ),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _nineGrid(
-                                  context,
-                                  (roundHoles[ri] as List),
-                                  isFront: true,
-                                  label: 'Front 9',
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _nineGrid(
-                                  context,
-                                  (roundHoles[ri] as List),
-                                  isFront: false,
-                                  label: 'Back 9',
-                                ),
-                              ),
-                            ],
+                          // Same colored per-hole strip as the per-round Stroke
+                          // Play tab (net/gross vs par + stroke dots), so the
+                          // championship reads identically.
+                          strokePlayHoleStrip(
+                            context,
+                            holes:   (roundHoles[ri] as List),
+                            showNet: hmode != 'gross',
                           ),
-                          const SizedBox(height: 6),
-                          _totalsRow(context, (roundHoles[ri] as List)),
                           if (ri < roundHoles.length - 1)
                             const SizedBox(height: 12),
                         ],

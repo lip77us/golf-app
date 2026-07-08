@@ -1,0 +1,159 @@
+/// widgets/stroke_play_strip.dart
+/// ------------------------------
+/// The horizontal per-player scorecard strip shown when you tap a row in the
+/// Stroke Play leaderboard tab — hole numbers, par, and the gross score coloured
+/// net/gross vs par (circle/square notation + stroke dots), with Out / In / Tot
+/// (/ Net) subtotals.
+///
+/// Extracted from leaderboard_screen.dart's `_LowNetView._holeStrip` so the
+/// Stroke Play *championship* view (tournament_leaderboard_screen.dart) can
+/// render the exact same strip on expand instead of the old F9/B9 grid.
+
+import 'package:flutter/material.dart';
+
+import '../utils/golf_colors.dart';
+import 'net_score_button.dart' show scoreCellWithDots;
+import 'score_mark.dart';
+
+/// One hole's cell: the gross digit coloured by NET (or gross) vs par with
+/// circle/square scorecard notation. Net cap comes from `capped` (falls back to
+/// `net`). No stroke dots here — the wrapping strip adds those.
+Widget _scoreCell(ThemeData theme, Map h, bool showNet, TextStyle cellStyle) {
+  final gross    = h['gross'] as int?;
+  final par      = h['par'] as int?;
+  final colourBy = showNet ? ((h['capped'] ?? h['net']) as int?) : gross;
+  return scoreMark(
+    text: gross == null ? '–' : '$gross',
+    diff: (colourBy != null && par != null) ? colourBy - par : null,
+    baseStyle: cellStyle.copyWith(fontWeight: FontWeight.w600),
+    theme: theme,
+  );
+}
+
+/// [holes] — each a map with `hole`, `par`, `gross`, `net` (and optionally
+/// `capped`). [holesInPlay] renders unplayed holes as blanks (defaults to the
+/// scored holes). [holePars] supplies pars for unplayed holes (else each hole's
+/// own `par`). [netTotal] / [netToPar] feed the trailing Net subtotal.
+Widget strokePlayHoleStrip(
+  BuildContext context, {
+  required List holes,
+  List<int>? holesInPlay,
+  Map<int, int>? holePars,
+  bool showNet = true,
+  int? netTotal,
+  int? netToPar,
+}) {
+  final theme = Theme.of(context);
+  final hm = <int, Map>{};
+  for (final h in holes) {
+    final m = h as Map;
+    final n = m['hole'] as int?;
+    if (n != null) hm[n] = m;
+  }
+  if (hm.isEmpty) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: Text('No scores yet.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+    );
+  }
+
+  final pars = holePars ?? const <int, int>{};
+  final inPlay = (holesInPlay == null || holesInPlay.isEmpty) ? null : holesInPlay;
+  final renderHoles = (inPlay == null)
+      ? (hm.keys.toList()..sort())
+      : ([...inPlay]..sort());
+  final front = renderHoles.where((n) => n <= 9).toList();
+  final back  = renderHoles.where((n) => n > 9).toList();
+  final showOut = front.isNotEmpty && front.every(hm.containsKey);
+  final showIn  = back.isNotEmpty && back.every(hm.containsKey);
+  final showTot = renderHoles.every(hm.containsKey);
+  int parOf(int n) => (hm[n]?['par'] as int?) ?? pars[n] ?? 0;
+  int grossSum(List<int> hs) =>
+      hs.fold<int>(0, (s, n) => s + ((hm[n]?['gross'] as int?) ?? 0));
+  int parSum(List<int> hs) => hs.fold<int>(0, (s, n) => s + parOf(n));
+
+  const double holeW = 32, sumW = 40, headH = 20, parH = 18, scoreH = 32;
+  const cellStyle = TextStyle(fontSize: 12);
+  final headerStyle = theme.textTheme.labelSmall?.copyWith(
+      fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
+  final parStyle = theme.textTheme.labelSmall
+      ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+  final border = Border.all(color: theme.colorScheme.outlineVariant, width: 0.5);
+
+  Widget headCell(String t, double w) => Container(
+        width: w, height: headH, alignment: Alignment.center,
+        decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest, border: border),
+        child: Text(t, style: headerStyle),
+      );
+  Widget parCell(String t, double w) => Container(
+        width: w, height: parH, alignment: Alignment.center,
+        decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow, border: border),
+        child: Text(t, style: parStyle),
+      );
+  Widget scoreCell(int n) {
+    final hole    = hm[n];
+    final gross   = hole?['gross'] as int?;
+    final net     = hole?['net'] as int?;
+    final raw     = (gross != null && net != null) ? gross - net : 0;
+    final strokes = raw < 0 ? 0 : (raw > 9 ? 9 : raw);
+    return Container(
+      width: holeW, height: scoreH, alignment: Alignment.center,
+      decoration: BoxDecoration(border: border),
+      child: scoreCellWithDots(
+        Center(
+          child: gross == null
+              ? const Text('–', style: cellStyle)
+              : _scoreCell(theme, hole!, showNet, cellStyle),
+        ),
+        strokes,
+        theme.colorScheme.primary,
+      ),
+    );
+  }
+  Widget sumCell(String t, double w, {Color? color}) => Container(
+        width: w, height: scoreH, alignment: Alignment.center,
+        decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow, border: border),
+        child: Text(t,
+            style: cellStyle.copyWith(fontWeight: FontWeight.bold, color: color)),
+      );
+
+  return Container(
+    color: theme.colorScheme.surface,
+    padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          for (final n in front) headCell('$n', holeW),
+          if (showOut) headCell('Out', sumW),
+          for (final n in back) headCell('$n', holeW),
+          if (showIn) headCell('In', sumW),
+          if (showTot) headCell('Tot', sumW),
+          if (showTot && showNet) headCell('Net', sumW),
+        ]),
+        Row(children: [
+          for (final n in front) parCell('${parOf(n) > 0 ? parOf(n) : '-'}', holeW),
+          if (showOut) parCell('${parSum(front)}', sumW),
+          for (final n in back) parCell('${parOf(n) > 0 ? parOf(n) : '-'}', holeW),
+          if (showIn) parCell('${parSum(back)}', sumW),
+          if (showTot) parCell('${parSum(renderHoles)}', sumW),
+          if (showTot && showNet) parCell('', sumW),
+        ]),
+        Row(children: [
+          for (final n in front) scoreCell(n),
+          if (showOut) sumCell('${grossSum(front)}', sumW),
+          for (final n in back) scoreCell(n),
+          if (showIn) sumCell('${grossSum(back)}', sumW),
+          if (showTot) sumCell('${grossSum(renderHoles)}', sumW),
+          if (showTot && showNet)
+            sumCell('${netTotal ?? ''}', sumW, color: toParColor(netToPar)),
+        ]),
+      ]),
+    ),
+  );
+}
