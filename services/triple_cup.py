@@ -67,6 +67,30 @@ SEGMENT_RANGES = [
 ]
 
 
+def _match_hole_list(match, order: list[int] | None = None) -> list[int]:
+    """The holes a Triple Cup match covers, IN PLAY ORDER (shotgun-aware).
+
+    A match stores its first/last hole NUMBERS (start_hole/end_hole), which may
+    wrap on a shotgun (e.g. 14..1); in play order the span is always contiguous
+    by position, so we slice the play sequence. Falls back to the contiguous
+    hole-number range when the play order is unavailable — so a normal round
+    (start hole 1) is byte-identical.
+    """
+    if order is None:
+        from services.hole_plan import play_order as _play_order
+        order = _play_order(match.game.foursome.round, match.game.foursome)
+    if not order:
+        return list(range(match.start_hole, match.end_hole + 1))
+    try:
+        sp = order.index(match.start_hole)
+        ep = order.index(match.end_hole)
+    except ValueError:
+        return list(range(match.start_hole, match.end_hole + 1))
+    if ep < sp:
+        return list(range(match.start_hole, match.end_hole + 1))
+    return order[sp:ep + 1]
+
+
 def _is_cup_round(round_obj) -> bool:
     """True when the round has a RyderCupRoundConfig attached.  Cup
     rounds always have ≥1 sibling foursome on the opposing team,
@@ -241,8 +265,7 @@ def _singles_pair_so_index(
     pair_pids: list[int],
     gross_index: dict,
     members_by_pid: dict,
-    start_hole: int,
-    end_hole: int,
+    hole_list: list[int],
     net_percent: int,
 ) -> dict:
     """Build a {pid: {hole: net}} score index for *just these two
@@ -271,7 +294,7 @@ def _singles_pair_so_index(
                    for pid, so in pair_so.items()}
 
     out: dict = {}
-    seg_range = range(start_hole, end_hole + 1)
+    seg_range = hole_list
     for pid in pair_pids:
         m = members_by_pid[pid]
         strokes_per_hole = _allocate_whs(pair_so[pid], seg_range, m.tee)
@@ -496,6 +519,7 @@ def _build_match_plan(
     *,
     phantom_pid: int | None = None,
     foursomes_first: bool = False,
+    order: list[int] | None = None,
 ) -> list[dict]:
     """
     Decide which matches to create for the given player IDs.
@@ -504,6 +528,10 @@ def _build_match_plan(
         {'match_number': 1, 'segment': 'fourball', 'label': 'Fourball',
          'start_hole': 1, 'end_hole': 6,
          'team1_ids': [...], 'team2_ids': [...]}
+
+    ``order`` is the group's play sequence (shotgun-aware); the three segments
+    are its play-order thirds (halves + overall for 1v1). Defaults to 1..18, so
+    a normal round keeps the classic 1-6 / 7-12 / 13-18 ranges.
 
     In 2v1, *phantom_pid* (when supplied) is appended to the solo's
     side for the fourball match only — the phantom acts as the solo's
@@ -522,14 +550,29 @@ def _build_match_plan(
 
     plan = []
 
-    # Fourball / foursomes occupy holes 1-6 and 7-12; which comes first is
-    # configurable (singles is always 13-18).  match_number = play order.
+    # Segment hole ranges by POSITION in play order: thirds for the 3-segment
+    # formats, halves + overall for 1v1. A normal round (order 1..18) yields the
+    # classic 1-6 / 7-12 / 13-18 and 1-9 / 10-18 / 1-18.
+    order = order or list(range(1, 19))
+    _n    = len(order)
+    _t    = _n // 3
+    first_third  = (order[0],      order[_t - 1])
+    second_third = (order[_t],     order[2 * _t - 1])
+    singles_seg  = (order[2 * _t], order[_n - 1])
+    _h           = _n // 2
+    f9_seg       = (order[0],  order[_h - 1])
+    b9_seg       = (order[_h], order[_n - 1])
+    overall_seg  = (order[0],  order[_n - 1])
+
+    # Fourball / foursomes take the first two thirds; which comes first is
+    # configurable (singles is always the last third).  match_number = play order.
     if foursomes_first:
-        fb_no, fb_lo, fb_hi = 2, 7, 12
-        fo_no, fo_lo, fo_hi = 1, 1, 6
+        fb_no, (fb_lo, fb_hi) = 2, second_third
+        fo_no, (fo_lo, fo_hi) = 1, first_third
     else:
-        fb_no, fb_lo, fb_hi = 1, 1, 6
-        fo_no, fo_lo, fo_hi = 2, 7, 12
+        fb_no, (fb_lo, fb_hi) = 1, first_third
+        fo_no, (fo_lo, fo_hi) = 2, second_third
+    si_lo, si_hi = singles_seg
 
     # ── 2v2 (canonical): 1 fourball + 1 foursomes + 2 singles ─────────────
     if n1 == 2 and n2 == 2:
@@ -548,12 +591,12 @@ def _build_match_plan(
         # or by personal preference at setup time.
         plan.append({
             'match_number': 3, 'segment': 'singles', 'label': 'Singles 1',
-            'start_hole': 13, 'end_hole': 18,
+            'start_hole': si_lo, 'end_hole': si_hi,
             'team1_ids': [team1_ids[0]], 'team2_ids': [team2_ids[0]],
         })
         plan.append({
             'match_number': 4, 'segment': 'singles', 'label': 'Singles 2',
-            'start_hole': 13, 'end_hole': 18,
+            'start_hole': si_lo, 'end_hole': si_hi,
             'team1_ids': [team1_ids[1]], 'team2_ids': [team2_ids[1]],
         })
         return plan
@@ -600,11 +643,11 @@ def _build_match_plan(
             singles_m4 = {'team1_ids': solo, 'team2_ids': [pair[1]]}
         plan.append({
             'match_number': 3, 'segment': 'singles', 'label': 'Singles 1',
-            'start_hole': 13, 'end_hole': 18, **singles_m3,
+            'start_hole': si_lo, 'end_hole': si_hi, **singles_m3,
         })
         plan.append({
             'match_number': 4, 'segment': 'singles', 'label': 'Singles 2',
-            'start_hole': 13, 'end_hole': 18, **singles_m4,
+            'start_hole': si_lo, 'end_hole': si_hi, **singles_m4,
         })
         return plan
 
@@ -619,17 +662,17 @@ def _build_match_plan(
     if n1 == 1 and n2 == 1:
         plan.append({
             'match_number': 1, 'segment': 'singles', 'label': 'Front 9',
-            'start_hole': 1, 'end_hole': 9,
+            'start_hole': f9_seg[0], 'end_hole': f9_seg[1],
             'team1_ids': team1_ids, 'team2_ids': team2_ids,
         })
         plan.append({
             'match_number': 2, 'segment': 'singles', 'label': 'Back 9',
-            'start_hole': 10, 'end_hole': 18,
+            'start_hole': b9_seg[0], 'end_hole': b9_seg[1],
             'team1_ids': team1_ids, 'team2_ids': team2_ids,
         })
         plan.append({
             'match_number': 3, 'segment': 'singles', 'label': 'Overall',
-            'start_hole': 1, 'end_hole': 18,
+            'start_hole': overall_seg[0], 'end_hole': overall_seg[1],
             'team1_ids': team1_ids, 'team2_ids': team2_ids,
         })
         return plan
@@ -707,9 +750,11 @@ def setup_triple_cup(
         sorted_t1 = _sort_by_handicap(team1_ids, members_by_pid)
         sorted_t2 = _sort_by_handicap(team2_ids, members_by_pid)
 
+    from services.hole_plan import play_order as _play_order
     plan = _build_match_plan(
         sorted_t1, sorted_t2, phantom_pid=phantom_pid,
         foursomes_first=foursomes_first,
+        order=_play_order(foursome.round, foursome),
     )
 
     game = TripleCupGame.objects.create(
@@ -898,7 +943,7 @@ def _fourball_donor_so_by_hole(
         if m is None:
             continue
         is_ph = m.player.is_phantom
-        for h in range(match.start_hole, match.end_hole + 1):
+        for h in _match_hole_list(match):
             donor_hcp = algo.donor_handicap(h, cfg)
             if donor_hcp is None:
                 low, hcp = low_real, (m.playing_handicap or 0)
@@ -943,7 +988,7 @@ def _expected_strokes_per_match(
       • derived `strokes` in scored-hole rows (so the value the user
         sees on a scored hole matches what they saw before scoring).
     """
-    seg_range = range(match.start_hole, match.end_hole + 1)
+    seg_range = _match_hole_list(match)
     result: dict = {pid: {h: 0 for h in seg_range}
                     for pid in t1_pids + t2_pids}
 
@@ -1087,7 +1132,8 @@ def _score_fourball_or_singles(
     finished_on = None
     results     = []
 
-    for h in range(match.start_hole, match.end_hole + 1):
+    _holes = _match_hole_list(match)
+    for _i, h in enumerate(_holes):
         t1_nets = [net_index[p][h] for p in team1_pids
                    if p in net_index and h in net_index[p]]
         t2_nets = [net_index[p][h] for p in team2_pids
@@ -1108,7 +1154,7 @@ def _score_fourball_or_singles(
         else:
             winner = None
 
-        remaining = match.end_hole - h
+        remaining = len(_holes) - 1 - _i     # holes left by play position
         if abs(holes_up) > remaining:
             finished_on = h
 
@@ -1142,7 +1188,7 @@ def _score_foursomes(
     team_gross − team_strokes_for_hole, where the team's combined
     handicap is allocated by stroke index across this 6-hole window.
     """
-    seg_range = range(match.start_hole, match.end_hole + 1)
+    seg_range = _match_hole_list(match)
     t1_strokes, t2_strokes = _foursomes_team_strokes(
         game, team1_pids, team2_pids, members_by_pid, seg_range,
     )
@@ -1151,7 +1197,7 @@ def _score_foursomes(
     finished_on = None
     results     = []
 
-    for h in seg_range:
+    for _i, h in enumerate(seg_range):
         t1_grosses = [gross_index[p][h] for p in team1_pids
                       if p in gross_index and h in gross_index[p]]
         t2_grosses = [gross_index[p][h] for p in team2_pids
@@ -1171,7 +1217,7 @@ def _score_foursomes(
         else:
             winner = None
 
-        remaining = match.end_hole - h
+        remaining = len(seg_range) - 1 - _i     # holes left by play position
         if abs(holes_up) > remaining:
             finished_on = h
 
@@ -1253,7 +1299,7 @@ def calculate_triple_cup(foursome) -> list[TripleCupHoleResult]:
         all_results.extend(results)
 
         holes_played = len(results)
-        holes_in_seg = match.end_hole - match.start_hole + 1
+        holes_in_seg = len(_match_hole_list(match))
         holes_up     = results[-1].holes_up_after if results else 0
 
         if holes_played == 0:
@@ -1352,7 +1398,7 @@ def _build_score_indexes(game, foursome, matches, members_by_pid):
     if include_phantom:
         for m in matches:
             if m.segment == 'fourball':
-                fourball_holes.update(range(m.start_hole, m.end_hole + 1))
+                fourball_holes.update(_match_hole_list(m))
 
     # SO mode: build our own WHS-based net index (foursome low plays
     # to 0, everyone else gets net = gross − strokes where strokes is
@@ -1393,7 +1439,7 @@ def _build_score_indexes(game, foursome, matches, members_by_pid):
                     continue
                 pair_indexes[match.id] = _singles_pair_so_index(
                     t1p + t2p, gross_index, members_by_pid,
-                    match.start_hole, match.end_hole, game.net_percent,
+                    _match_hole_list(match), game.net_percent,
                 )
     return gross_index, net_index, pair_indexes
 
@@ -1553,7 +1599,7 @@ def triple_cup_summary(foursome) -> dict | None:
         t1_team_strokes_by_hole: dict = {}
         t2_team_strokes_by_hole: dict = {}
         if match.segment == 'foursomes':
-            seg_range = range(match.start_hole, match.end_hole + 1)
+            seg_range = _match_hole_list(match)
             t1_team_strokes_by_hole, t2_team_strokes_by_hole = (
                 _foursomes_team_strokes(
                     game, team1_pids, team2_pids, members_by_pid, seg_range,

@@ -608,3 +608,62 @@ class TripleCupSegmentOrderPoCTests(TestCase):
         self.assertEqual(
             (seg['fourball'].start_hole, seg['fourball'].end_hole), (7, 12))
         self.assertTrue(triple_cup_summary(fs)['foursomes_first'])
+
+
+class TripleCupShotgunTests(TestCase):
+    """Segments follow the group's play order (thirds by POSITION), so a shotgun
+    start puts the right holes in fourball / foursomes / singles."""
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, handicap_mode='gross')
+        self.round.num_holes = 18
+        self.round.starting_hole = 8          # play order 8..18,1..7
+        self.round.save(update_fields=['num_holes', 'starting_hole'])
+        self.fs = make_foursome(
+            self.round,
+            [('T1A', 0), ('T1B', 0), ('T2A', 0), ('T2B', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def test_shotgun_segments_are_play_order_thirds(self):
+        game = setup_triple_cup(
+            self.fs,
+            team1_ids=[self.pid['T1A'], self.pid['T1B']],
+            team2_ids=[self.pid['T2A'], self.pid['T2B']],
+            handicap_mode='gross',
+        )
+        by_seg = {}
+        for m in game.matches.all():
+            by_seg.setdefault(m.segment, []).append((m.start_hole, m.end_hole))
+        # Thirds by play position: 8-13 / 14-1 / 2-7 (not 1-6 / 7-12 / 13-18).
+        self.assertEqual(by_seg['fourball'], [(8, 13)], by_seg)
+        self.assertEqual(by_seg['foursomes'], [(14, 1)], by_seg)
+        self.assertEqual(sorted(by_seg['singles']), [(2, 7), (2, 7)], by_seg)
+
+    def test_shotgun_fourball_scores_over_its_played_holes(self):
+        setup_triple_cup(
+            self.fs,
+            team1_ids=[self.pid['T1A'], self.pid['T1B']],
+            team2_ids=[self.pid['T2A'], self.pid['T2B']],
+            handicap_mode='gross',
+        )
+        # Fourball is holes 8-13. T1 wins 8,9,10,11 outright → 4 up with 2 to
+        # play → clinched (a 4&2 close-out) within the shotgun third.
+        for h in [8, 9, 10, 11]:
+            par = self.tee.hole(h)['par']
+            _score_hole(self.fs, self.pid, h, par, [
+                ('T1A', par), ('T1B', par),
+                ('T2A', par + 1), ('T2B', par + 1),
+            ])
+        for h in [12, 13]:
+            par = self.tee.hole(h)['par']
+            _score_hole(self.fs, self.pid, h, par, [
+                ('T1A', par), ('T1B', par), ('T2A', par), ('T2B', par),
+            ])
+        calculate_triple_cup(self.fs)
+        s = triple_cup_summary(self.fs)
+        fourball = next(m for m in s['matches'] if m['segment'] == 'fourball')
+        self.assertEqual(fourball['result'], 'team1', fourball)
