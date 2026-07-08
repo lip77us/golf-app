@@ -238,8 +238,16 @@ opt-in and nothing changes for existing flows.
   `partialStrokesOnHole`, mirroring the backend). Remaining gap: Wolf/Rabbit
   DEDICATED play screens still compute full-18 locally (also not play-order aware
   on partial rounds yet — a combined follow-up).
-- ⏳ **Next:** segment games (2e — gate Nassau/Sixes/Triple Cup off sub-18; play-
-  order thirds for shotgun) + Phase 5 rendering leftovers + tournament shotgun.
+- ✅ **Phase 2e (gate half)** — segment games are hidden from the CASUAL picker on
+  a partial round. `GameMeta.requiresFullRound` (Nassau, Sixes, Triple Cup, Match
+  brackets / Three-Person Match) drops them from `_filteredCasualGames` when
+  `_numHoles < 18`, and dropping holes below 18 prunes an already-picked segment
+  primary (`_setHoles`) + its side games, with an explanatory note. A shotgun is
+  still num_holes 18, so it keeps them. **Deferred:** a backend guard on
+  `RoundCreateView` (the picker is the only creation path today) and play-order
+  thirds for shotgun segment bets.
+- ⏳ **Next:** back-9 rendering leftovers (Phase 5) + tournament shotgun (Phase 4)
+  + Wolf/Rabbit partial play screens.
 
 ## Phased plan
 

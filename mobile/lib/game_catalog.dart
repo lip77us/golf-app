@@ -149,6 +149,14 @@ class GameMeta {
   /// side games, so they're excluded from [tournamentRoundGames].
   final bool cupOnly;
 
+  /// This game's bets are tied to fixed hole ranges — front-9 / back-9 / overall
+  /// (Nassau, Match brackets) or 6-hole thirds (Sixes, Triple Cup) — so it only
+  /// makes sense over a full 18 holes. It's hidden from the CASUAL picker on a
+  /// partial round (num_holes < 18). A shotgun is still a full 18, so it stays
+  /// available there. Per-hole games (Skins, Stroke Play, Vegas, Points, …) and
+  /// single whole-round matches (Fourball, Singles Match) run on any hole count.
+  final bool requiresFullRound;
+
   const GameMeta({
     required this.id,
     required this.displayName,
@@ -168,6 +176,7 @@ class GameMeta {
     this.capturesInScoreEntry = false,
     this.sideGameOnly         = false,
     this.cupOnly              = false,
+    this.requiresFullRound    = false,
   });
 
   /// True if this game can be played with exactly [n] real players.
@@ -190,6 +199,8 @@ const List<GameMeta> kGameCatalog = [
     displayName  : 'Sixes',
     casual       : true,
     exactPlayers : 4,
+    // Three 6-hole segments — needs a full 18.
+    requiresFullRound: true,
     // Sixes owns the foursome's rotating-team structure — no side games.
     allowsSideGames: false,
     // Sixes owns its own handicap allocation (per-segment SO spreading) and
@@ -238,6 +249,8 @@ const List<GameMeta> kGameCatalog = [
     id          : GameIds.nassau,
     displayName : 'Nassau',
     casual      : true,
+    // F9 / B9 / Overall bets + presses — needs a full 18.
+    requiresFullRound: true,
     // Owns the F9/B9/Overall team-bet structure — no side games.
     allowsSideGames: false,
     // Heads-up (2) or 2-v-2 best-ball (4) — three players doesn't form sides.
@@ -316,6 +329,8 @@ const List<GameMeta> kGameCatalog = [
     id           : GameIds.tripleCup,
     displayName  : 'One-Round Triple Cup',
     casual       : true,
+    // Three segments (fourball / foursomes / singles) — needs a full 18.
+    requiresFullRound: true,
     // Owns the foursome's 3-segment match structure — no side games.
     allowsSideGames: false,
     // Casual requires exactly 4 — 2v1 needs cross-foursome donors (cup
@@ -344,6 +359,8 @@ const List<GameMeta> kGameCatalog = [
     tournament   : true,
     minPlayers   : 3,
     maxPlayers   : 4,
+    // Bracket splits on holes 1-9 vs 10-18 — needs a full 18.
+    requiresFullRound: true,
     // Match Play owns the foursome's 9-hole match structure so it can't
     // combine with games that own the same hole ranges.  Skins and
     // Nassau read the same per-hole gross scores independently and so
@@ -360,6 +377,8 @@ const List<GameMeta> kGameCatalog = [
     enabled      : false,
     tournament   : true,
     exactPlayers : 3,
+    // Points 5-3-1 on holes 1-9, then a 1v1 match on 10-18 — needs a full 18.
+    requiresFullRound: true,
     excludes     : {GameIds.sixes, GameIds.points531, GameIds.nassau,
                     GameIds.skins, GameIds.tripleCup, GameIds.matchPlay,
                     GameIds.strokePlay, GameIds.stableford},

@@ -100,8 +100,20 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// invisible (e.g. an 18-Hole Match after switching off "2").
   List<GameMeta> get _filteredCasualGames =>
       // Side-game-only add-ons (Spots) are never primary candidates — they
-      // appear only in the side-games list.
-      casualGames.where((m) => !m.sideGameOnly && _fitsSizeFilter(m)).toList();
+      // appear only in the side-games list. Segment games (Nassau / Sixes /
+      // Triple Cup / brackets) are hidden on a partial round — their F9/B9 or
+      // 6-hole-third bets need a full 18.
+      casualGames
+          .where((m) =>
+              !m.sideGameOnly &&
+              !(_isPartial && m.requiresFullRound) &&
+              _fitsSizeFilter(m))
+          .toList();
+
+  /// A partial round (fewer than 18 holes) — a back-9, wine-and-9, etc.
+  /// Segment games are hidden here (a shotgun is still num_holes 18, so it keeps
+  /// them). Casual 9-hole courses are also < 18, which is the intended behavior.
+  bool get _isPartial => _numHoles < 18;
 
   /// True when the user picked Multi-Group Skins — turns on the per-player
   /// Group dropdown and lets the foursome count exceed one.
@@ -568,7 +580,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             const SizedBox(height: 12),
           ],
           _stepperRow('Holes', _numHoles, 1, size,
-              (v) => setState(() => _numHoles = v)),
+              (v) => _setHoles(v)),
           const SizedBox(height: 4),
           _stepperRow('Starting hole', _startingHole, 1, size,
               (v) => setState(() => _startingHole = v)),
@@ -589,9 +601,23 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      onSelected: (_) =>
-          setState(() { _numHoles = holes; _startingHole = start; }),
+      onSelected: (_) => _setHoles(holes, start: start),
     );
+  }
+
+  /// Set the hole count (and optionally the starting hole), pruning a segment
+  /// primary (Nassau / Sixes / Triple Cup / bracket) that no longer fits once
+  /// the round drops below 18 holes — and any side games tied to it.
+  void _setHoles(int holes, {int? start}) {
+    setState(() {
+      _numHoles = holes;
+      if (start != null) _startingHole = start;
+      final p = _primaryGame;
+      if (p != null && holes < 18 && (gameMeta(p)?.requiresFullRound ?? false)) {
+        _primaryGame = null;
+        _sideGames.clear();
+      }
+    });
   }
 
   Widget _stepperRow(
@@ -687,6 +713,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 _buildPrimaryChip(meta),
             ],
           ),
+          if (_isPartial) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Nassau, Sixes, Triple Cup and match brackets are hidden — their '
+              'front-9 / back-9 bets need a full 18 holes.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
           // Side games — overlays when the primary allows them, plus capture
           // add-ons (Spots) that ride structure-owning primaries too.
           // sideGamesFor() encodes that, so just gate on the eligible list.
