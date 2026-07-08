@@ -954,6 +954,11 @@ class Foursome {
   /// True when the viewer is a designated (phone-matched) scorer of THIS
   /// foursome — so a cross-account scorer can score + edit tees for their group.
   final bool youScore;
+  /// Shotgun start: this group's own starting hole (null = inherit the round's
+  /// starting_hole), and a display-only tee-slot label ("A"/"B") shown as
+  /// "7A"/"7B" when two groups share a hole.
+  final int? startingHole;
+  final String shotgunSlot;
 
   const Foursome({
     required this.id,
@@ -967,6 +972,8 @@ class Foursome {
     this.teeTime,
     this.hasAnyScore     = false,
     this.youScore        = false,
+    this.startingHole,
+    this.shotgunSlot     = '',
   });
 
   factory Foursome.fromJson(Map<String, dynamic> j) => Foursome(
@@ -980,6 +987,8 @@ class Foursome {
         teeTime:         j['tee_time'] as String?,
         hasAnyScore:     j['has_any_score'] as bool? ?? false,
         youScore:        j['you_score'] as bool? ?? false,
+        startingHole:    j['starting_hole'] as int?,
+        shotgunSlot:     (j['shotgun_slot'] as String?)?.trim() ?? '',
         memberships:     (j['memberships'] as List? ?? [])
             .map((m) => Membership.fromJson(m as Map<String, dynamic>))
             .toList(),

@@ -1283,6 +1283,68 @@ class _FoursomeCard extends StatelessWidget {
     }
   }
 
+  /// Shotgun start: pick this group's starting hole (1..18, or inherit the
+  /// round default) + an optional tee-slot label. The scoring engines read
+  /// foursome.starting_hole via play order, so the group immediately plays its
+  /// wrapped sequence.
+  Future<void> _setStartingHole(BuildContext context, Foursome fs) async {
+    int? hole = fs.startingHole;
+    final slotCtrl = TextEditingController(text: fs.shotgunSlot);
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => StatefulBuilder(
+        builder: (dctx, setLocal) => AlertDialog(
+          title: Text('Starting hole — ${fs.label}'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            DropdownButtonFormField<int?>(
+              initialValue: hole,
+              decoration: const InputDecoration(labelText: 'Starts on hole'),
+              items: [
+                const DropdownMenuItem<int?>(
+                    value: null, child: Text('Inherit (round default)')),
+                for (int h = 1; h <= 18; h++)
+                  DropdownMenuItem<int?>(value: h, child: Text('Hole $h')),
+              ],
+              onChanged: (v) => setLocal(() => hole = v),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: slotCtrl,
+              maxLength: 2,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Tee slot (optional)',
+                hintText: 'A / B',
+                helperText: 'Shown as "7A" when two groups share a hole.',
+              ),
+            ),
+          ]),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dctx, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(dctx, true),
+                child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (save != true || !context.mounted) return;
+    try {
+      final client = context.read<AuthProvider>().client;
+      await client.setFoursomeShotgun(
+        fs.id, startingHole: hole, shotgunSlot: slotCtrl.text.trim());
+      onGamesChanged();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not set starting hole: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _showGameSheet(BuildContext context) async {
     // Only offer games that are active at the round level and can be per-foursome
     final eligible = roundActiveGames
@@ -1399,6 +1461,16 @@ class _FoursomeCard extends StatelessWidget {
               Text(foursome.teeTime!,
                   style: theme.textTheme.bodySmall),
             ],
+            // Shotgun start assignment — "Starts 7A".
+            if (foursome.startingHole != null) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.flag_outlined,
+                  size: 14, color: theme.colorScheme.primary),
+              const SizedBox(width: 2),
+              Text('Starts ${foursome.startingHole}${foursome.shotgunSlot}',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.primary)),
+            ],
             // TD action menu — consolidates the per-foursome admin
             // TD action menu — only "Configure group games" is exposed
             // today.  Roster-change actions (remove no-show, move player,
@@ -1430,6 +1502,9 @@ class _FoursomeCard extends StatelessWidget {
                     case 'rename_group':
                       _renameGroup(context, foursome);
                       break;
+                    case 'set_start':
+                      _setStartingHole(context, foursome);
+                      break;
                   }
                 },
                 itemBuilder: (_) => [
@@ -1453,6 +1528,21 @@ class _FoursomeCard extends StatelessWidget {
                       const Flexible(child: Text('Rename group')),
                     ]),
                   ),
+                  // Shotgun start — per-group starting hole. Only meaningful
+                  // with more than one group (casual single-foursome rounds set
+                  // the start on the round's Advanced tab instead).
+                  if (allFoursomes.length > 1)
+                    PopupMenuItem(
+                      value: 'set_start',
+                      child: Row(children: [
+                        Icon(Icons.flag_outlined, size: 18,
+                            color: foursome.startingHole != null
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 12),
+                        const Flexible(child: Text('Set starting hole')),
+                      ]),
+                    ),
                 ],
               ),
             ],

@@ -389,7 +389,12 @@ class _ScorecardGridState extends State<ScorecardGrid> {
         strokeIndex: si,
         summary:     rp.sixesSummary!,
         scorecard:   rp.scorecard!,
-        holesInPlay: roundPlayOrder(rp.round, rp.scorecard),
+        holesInPlay: roundPlayOrder(
+          rp.round, rp.scorecard,
+          foursome: rp.round?.foursomes
+              .where((f) => f.id == widget.foursomeId)
+              .firstOrNull,
+        ),
       );
     }
 

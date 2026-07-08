@@ -775,14 +775,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// The holes this foursome plays, IN PLAY ORDER — starting at the round's
   /// starting hole and wrapping around the course size. Reduces to 1..18 for a
   /// normal round. Mirrors services/hole_plan.play_order. (Per-group shotgun
-  /// starts are a later slice; casual rounds use the round-level start.)
+  /// starts override on the FOURSOME; casual rounds fall back to the round.)
   List<int> _playOrderFor(RoundProvider rp) {
     final r  = rp.round;
     final sc = rp.scorecard;
     final universe = (sc == null || sc.holes.isEmpty)
         ? 18
         : sc.holes.map((h) => h.holeNumber).reduce((a, b) => a > b ? a : b);
-    final start = r?.startingHole ?? 1;
+    // A shotgun group starts on its foursome's own hole (else the round's).
+    final fs = r?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    final start = fs?.startingHole ?? r?.startingHole ?? 1;
     final n = (r?.numHoles ?? universe).clamp(1, universe);
     return [for (int i = 0; i < n; i++) ((start - 1 + i) % universe) + 1];
   }

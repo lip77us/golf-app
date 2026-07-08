@@ -18,9 +18,14 @@ int courseHoleCount(Scorecard? sc) {
 
 /// Ordered holes this group plays. Defaults (start 1, num = universe) reduce to
 /// 1..18. A back-9 is 10..18; a shotgun from 8 is 8..18,1..7.
-List<int> roundPlayOrder(Round? round, Scorecard? sc) {
+///
+/// A tournament shotgun sets each group's start on the FOURSOME
+/// (`foursome.startingHole`); when supplied and non-null it overrides the
+/// round's default, so each group plays its own wrapped sequence.
+List<int> roundPlayOrder(Round? round, Scorecard? sc, {Foursome? foursome}) {
   final universe = courseHoleCount(sc);
-  final start = (round?.startingHole ?? 1).clamp(1, universe);
+  final start = ((foursome?.startingHole) ?? round?.startingHole ?? 1)
+      .clamp(1, universe);
   final n = (round?.numHoles ?? universe).clamp(1, universe);
   return [for (int i = 0; i < n; i++) ((start - 1 + i) % universe) + 1];
 }

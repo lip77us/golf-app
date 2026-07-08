@@ -1678,6 +1678,20 @@ class ApiClient {
     return Foursome.fromJson(data as Map<String, dynamic>);
   }
 
+  /// Set this group's SHOTGUN start (TD action): [startingHole] (1..course
+  /// holes; null clears → inherit the round's), and an optional display-only
+  /// tee-slot label ([shotgunSlot], e.g. "A"/"B"). Returns the updated foursome.
+  Future<Foursome> setFoursomeShotgun(
+    int foursomeId, {
+    required int? startingHole,
+    String? shotgunSlot,
+  }) async {
+    final body = <String, dynamic>{'starting_hole': startingHole};
+    if (shotgunSlot != null) body['shotgun_slot'] = shotgunSlot;
+    final data = await _patch('/foursomes/$foursomeId/', body);
+    return Foursome.fromJson(data as Map<String, dynamic>);
+  }
+
   /// Reassign each player's tee for a foursome.  Server-side this also
   /// recomputes course_handicap + playing_handicap from the new tee.
   /// Returns the updated scorecard payload.  Throws ApiException(400)
