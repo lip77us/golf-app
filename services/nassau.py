@@ -360,8 +360,16 @@ def add_manual_press(foursome, start_hole: int) -> NassauPress:
     if not (1 <= start_hole <= 18):
         raise ValueError(f"start_hole must be 1–18, got {start_hole}.")
 
-    nine     = 'front' if start_hole <= 9 else 'back'
-    end_hole = 9       if nine == 'front' else 18
+    # Determine the nine by POSITION in the group's play order (shotgun-aware),
+    # and the nine's last hole NUMBER for the press's end_hole. Normal round
+    # (start 1) → front = holes 1-9 (end 9), back = 10-18 (end 18), unchanged.
+    from services.hole_plan import play_order as _play_order
+    _order = _play_order(foursome.round, foursome)
+    _half  = (len(_order) or 18) // 2
+    _pos   = _order.index(start_hole) if start_hole in _order else (start_hole - 1)
+    nine     = 'front' if _pos < _half else 'back'
+    _last    = (_half - 1) if nine == 'front' else (len(_order) - 1)
+    end_hole = _order[_last] if _order else (9 if nine == 'front' else 18)
 
     # Prevent duplicate manual presses with the same start_hole
     if NassauPress.objects.filter(
@@ -465,6 +473,23 @@ def calculate_nassau(foursome) -> NassauGame | None:
 
     score_index = _get_score_index(foursome, game)
 
+    # Play-order scaffolding (shotgun-aware): the "front" nine is the first 9
+    # holes this group PLAYS and the "back" nine the last 9, split by POSITION in
+    # play order — not by absolute hole number. For a normal round (start hole 1)
+    # this is holes 1-9 / 10-18 and every position equals hole_num - 1, so the
+    # math below is byte-identical. Nassau is 18-hole only (gated off partial
+    # rounds), so n == 18 and half == 9.
+    from services.hole_plan import play_order as _play_order
+    order          = _play_order(foursome.round, foursome)
+    n              = len(order) or 18
+    half           = n // 2
+    pos_of         = {h: i for i, h in enumerate(order)}
+    front_last_pos = half - 1
+    back_last_pos  = n - 1
+    # Hole NUMBERS of each nine's last hole (for press end_hole display).
+    front_end_hole = order[front_last_pos] if order else 9
+    back_end_hole  = order[back_last_pos]  if order else 18
+
     is_claremont    = game.variant == 'claremont'
     is_tiebreak_2nd = game.variant == 'tiebreak_2nd'
     needs_2nd_ball  = is_claremont or is_tiebreak_2nd
@@ -494,8 +519,8 @@ def calculate_nassau(foursome) -> NassauGame | None:
     top_active_presses:    list = []
     top_completed_presses: list = []
 
-    front_holes = set(range(1, 10))
-    back_holes  = set(range(10, 19))
+    front_holes = set(order[:half])       # first 9 played (play order)
+    back_holes  = set(order[half:])        # last 9 played
 
     manual_front = sorted([s for s in manual_press_starts if s in front_holes])
     manual_back  = sorted([s for s in manual_press_starts if s in back_holes])
@@ -563,12 +588,12 @@ def calculate_nassau(foursome) -> NassauGame | None:
         return (game.loss_cap is not None
                 and _press_blocked_by_cap(game, _concluded_net(), nine_margin))
 
-    for hole_num in range(1, 19):
+    for pos, hole_num in enumerate(order):
         t1_net = _best_ball(t1, hole_num, score_index)
         t2_net = _best_ball(t2, hole_num, score_index)
 
         if t1_net is None or t2_net is None:
-            break  # stop at first incomplete hole
+            break  # stop at first incomplete hole (in play order)
 
         # ── 2nd ball scores ───────────────────────────────────────────────
         t1_2nd: int | None = None
@@ -596,13 +621,14 @@ def calculate_nassau(foursome) -> NassauGame | None:
 
         overall_up += delta
 
-        if hole_num in front_holes:
+        if pos < half:
             nine_key = 'front'
             front9_up += delta
             top_nine_margin = front9_up
-            nine_end        = 9
+            nine_end        = front_end_hole      # hole NUMBER of front's last hole
+            nine_last_pos   = front_last_pos
             if front9_decided_margin is None:
-                _rem = 9 - hole_num
+                _rem = front_last_pos - pos        # holes left in the front nine
                 if abs(front9_up) > _rem:
                     front9_decided_margin    = front9_up
                     front9_decided_remaining = _rem
@@ -610,15 +636,16 @@ def calculate_nassau(foursome) -> NassauGame | None:
             nine_key = 'back'
             back9_up += delta
             top_nine_margin = back9_up
-            nine_end        = 18
+            nine_end        = back_end_hole
+            nine_last_pos   = back_last_pos
             if back9_decided_margin is None:
-                _rem = 18 - hole_num
+                _rem = back_last_pos - pos         # holes left in the back nine
                 if abs(back9_up) > _rem:
                     back9_decided_margin    = back9_up
                     back9_decided_remaining = _rem
 
         if overall_decided_margin is None:
-            _ov_rem = 18 - hole_num
+            _ov_rem = (n - 1) - pos
             if abs(overall_up) > _ov_rem:
                 overall_decided_margin    = overall_up
                 overall_decided_remaining = _ov_rem
@@ -630,8 +657,8 @@ def calculate_nassau(foursome) -> NassauGame | None:
                 still_top.append(press)
                 continue
             press['margin'] += delta
-            holes_left = press['end'] - hole_num
-            if hole_num >= press['end'] or abs(press['margin']) > holes_left:
+            holes_left = press['end_pos'] - pos
+            if pos >= press['end_pos'] or abs(press['margin']) > holes_left:
                 press['is_active'] = False   # definitively closed
                 top_completed_presses.append(press)
             else:
@@ -650,13 +677,13 @@ def calculate_nassau(foursome) -> NassauGame | None:
                         top_active_presses.append({
                             'nine': nine_key, 'press_type': 'manual', 'side': 'top',
                             'trigger_hole': hole_num - 1, 'start': hole_num,
-                            'end': nine_end, 'margin': delta,
+                            'end': nine_end, 'end_pos': nine_last_pos, 'margin': delta,
                             'is_active': True,
                         })
 
         # ── Trigger top auto-press ────────────────────────────────────────
         if auto_enabled:
-            holes_left_in_nine = nine_end - hole_num
+            holes_left_in_nine = nine_last_pos - pos
             if holes_left_in_nine > 0 and top_nine_margin in AUTO_TOP_THRESHOLDS:
                 tf = top_front9_thresholds_fired if nine_key == 'front' else top_back9_thresholds_fired
                 # Suppress (without marking fired, so it can re-open) when the
@@ -665,8 +692,9 @@ def calculate_nassau(foursome) -> NassauGame | None:
                     tf.add(top_nine_margin)
                     top_active_presses.append({
                         'nine': nine_key, 'press_type': 'auto', 'side': 'top',
-                        'trigger_hole': hole_num, 'start': hole_num + 1,
-                        'end': nine_end, 'margin': 0,
+                        'trigger_hole': hole_num,
+                        'start': order[pos + 1] if pos + 1 < n else hole_num,
+                        'end': nine_end, 'end_pos': nine_last_pos, 'margin': 0,
                         'is_active': True,
                     })
 
@@ -687,12 +715,12 @@ def calculate_nassau(foursome) -> NassauGame | None:
             bot_delta_val  = p1 + p2
             bot_overall_up += bot_delta_val
 
-            if hole_num in front_holes:
+            if pos < half:
                 bot_front9_up   += bot_delta_val
                 bot_nine_margin  = bot_front9_up
                 bot_front9_up_val = bot_front9_up
                 if bot_front9_decided_margin is None:
-                    _rem = 9 - hole_num
+                    _rem = front_last_pos - pos
                     # Remaining potential swing = _rem * 2 (max 2 pts/hole)
                     if abs(bot_front9_up) > _rem * 2:
                         bot_front9_decided_margin    = bot_front9_up
@@ -702,13 +730,13 @@ def calculate_nassau(foursome) -> NassauGame | None:
                 bot_nine_margin  = bot_back9_up
                 bot_back9_up_val = bot_back9_up
                 if bot_back9_decided_margin is None:
-                    _rem = 18 - hole_num
+                    _rem = back_last_pos - pos
                     if abs(bot_back9_up) > _rem * 2:
                         bot_back9_decided_margin    = bot_back9_up
                         bot_back9_decided_remaining = _rem
 
             if bot_overall_decided_margin is None:
-                _ov_rem = 18 - hole_num
+                _ov_rem = (n - 1) - pos
                 if abs(bot_overall_up) > _ov_rem * 2:
                     bot_overall_decided_margin    = bot_overall_up
                     bot_overall_decided_remaining = _ov_rem
@@ -722,8 +750,8 @@ def calculate_nassau(foursome) -> NassauGame | None:
                     still_bot.append(press)
                     continue
                 press['margin'] += bot_delta_val
-                pts_left = (press['end'] - hole_num) * 2  # max bottom swing remaining
-                if hole_num >= press['end'] or abs(press['margin']) > pts_left:
+                pts_left = (press['end_pos'] - pos) * 2  # max bottom swing remaining
+                if pos >= press['end_pos'] or abs(press['margin']) > pts_left:
                     press['is_active'] = False   # definitively closed
                     bot_completed_presses.append(press)
                 else:
@@ -739,7 +767,7 @@ def calculate_nassau(foursome) -> NassauGame | None:
             # is crossed per hole.  `bf` tracks the signed band level already
             # pressed so a recovery-then-relapse doesn't re-press the same band.
             if auto_enabled:
-                pts_left_in_nine = (nine_end - hole_num) * 2
+                pts_left_in_nine = (nine_last_pos - pos) * 2
                 if pts_left_in_nine > 0 and abs(bot_nine_margin) >= 4:
                     bf = bot_front9_thresholds_fired if nine_key == 'front' else bot_back9_thresholds_fired
                     sign        = 1 if bot_nine_margin > 0 else -1
@@ -748,8 +776,9 @@ def calculate_nassau(foursome) -> NassauGame | None:
                         bf.add(band_level)
                         bot_active_presses.append({
                             'nine': nine_key, 'press_type': 'auto', 'side': 'bottom',
-                            'trigger_hole': hole_num, 'start': hole_num + 1,
-                            'end': nine_end, 'margin': 0,
+                            'trigger_hole': hole_num,
+                            'start': order[pos + 1] if pos + 1 < n else hole_num,
+                            'end': nine_end, 'end_pos': nine_last_pos, 'margin': 0,
                             'is_active': True,
                         })
 
@@ -802,14 +831,15 @@ def calculate_nassau(foursome) -> NassauGame | None:
     }
     for ms in manual_press_starts:
         if ms not in triggered_manual_starts:
-            ms_nine     = 'front' if ms <= 9 else 'back'
-            ms_end_hole = 9       if ms_nine == 'front' else 18
+            ms_pos      = pos_of.get(ms)
+            ms_nine     = 'front' if (ms_pos is not None and ms_pos < half) else 'back'
+            ms_end_hole = front_end_hole if ms_nine == 'front' else back_end_hole
             press_objs.append(NassauPress(
                 game              = game,
                 nine              = ms_nine,
                 side              = 'top',
                 press_type        = 'manual',
-                triggered_on_hole = ms - 1,
+                triggered_on_hole = order[ms_pos - 1] if ms_pos else max(ms - 1, 0),
                 start_hole        = ms,
                 end_hole          = ms_end_hole,
                 result            = None,
@@ -1072,17 +1102,39 @@ def nassau_summary(foursome) -> dict | None:
          if h['bottom_overall_margin'] is not None), 0
     )
 
-    holes_front = sum(1 for h in holes_out if h['hole'] <= 9)
-    holes_back  = sum(1 for h in holes_out if h['hole'] > 9)
+    # Count each nine by its per-hole marker (play-order correct for a shotgun),
+    # not by hole number — front9_margin/back9_margin is set only on that nine.
+    holes_front = sum(1 for h in holes_out if h['front9_margin'] is not None)
+    holes_back  = sum(1 for h in holes_out if h['back9_margin'] is not None)
 
     # ── Presses ───────────────────────────────────────────────────────────
     winner_by_hole = {h['hole']: h['winner'] for h in holes_out}
     bot_delta_by_hole = {h['hole']: (h['bottom_delta'] or 0) for h in holes_out}
 
+    # Play-order scaffolding so a press's "holes remaining" replay follows the
+    # group's actual sequence (a shotgun nine wraps, e.g. 17,18,1..7), not a
+    # contiguous hole-number range. Normal round (start 1) → identical.
+    from services.hole_plan import play_order as _play_order
+    _order  = _play_order(foursome.round, foursome)
+    _half   = (len(_order) or 18) // 2
+    _pos_of = {h: i for i, h in enumerate(_order)}
+
+    def _press_hole_seq(p) -> list:
+        """The holes a press covers, in play order: from its start hole to the
+        end of its nine."""
+        if not _order:
+            return list(range(p.start_hole, p.end_hole + 1))
+        start_pos = _pos_of.get(p.start_hole)
+        if start_pos is None:
+            return []
+        last_pos = (_half - 1) if start_pos < _half else (len(_order) - 1)
+        return _order[start_pos:last_pos + 1]
+
     def _top_press_holes_remaining(p) -> int:
         """Replay top press margin → holes remaining when it closed."""
+        seq = _press_hole_seq(p)
         press_margin = 0
-        for h in range(p.start_hole, p.end_hole + 1):
+        for i, h in enumerate(seq):
             w = winner_by_hole.get(h)
             if w is None:
                 return 0
@@ -1090,22 +1142,24 @@ def nassau_summary(foursome) -> dict | None:
                 press_margin += 1
             elif w == 'team2':
                 press_margin -= 1
-            holes_left = p.end_hole - h
-            if h >= p.end_hole or abs(press_margin) > holes_left:
+            holes_left = len(seq) - 1 - i
+            if i >= len(seq) - 1 or abs(press_margin) > holes_left:
                 return holes_left
         return 0
 
     def _bot_press_holes_remaining(p) -> int:
         """Replay bottom press points margin → holes remaining when it closed."""
+        seq = _press_hole_seq(p)
         press_margin = 0
-        for h in range(p.start_hole, p.end_hole + 1):
+        for i, h in enumerate(seq):
             d = bot_delta_by_hole.get(h)
             if d is None:
                 return 0
             press_margin += d
-            pts_left = (p.end_hole - h) * 2
-            if h >= p.end_hole or abs(press_margin) > pts_left:
-                return p.end_hole - h
+            holes_left = len(seq) - 1 - i
+            pts_left = holes_left * 2
+            if i >= len(seq) - 1 or abs(press_margin) > pts_left:
+                return holes_left
         return 0
 
     all_presses_qs = NassauPress.objects.filter(game=game).order_by('side', 'triggered_on_hole')

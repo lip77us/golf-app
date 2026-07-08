@@ -299,3 +299,74 @@ class NassauPressTests(TestCase):
         presses = s.get('presses', [])
         assert len(presses) == 1, presses
         assert presses[0]['start_hole'] == 4, presses[0]
+
+
+class NassauShotgunTests(TestCase):
+    """Play-order segmentation: a shotgun start splits the nines by POSITION in
+    the group's play sequence, not by absolute hole number."""
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, handicap_mode='net',
+                                net_max_double_bogey=False)
+        # Shotgun: start on hole 8 → play order 8..18,1..7.
+        self.round.num_holes = 18
+        self.round.starting_hole = 8
+        self.round.save(update_fields=['num_holes', 'starting_hole'])
+        self.fs = make_foursome(
+            self.round,
+            [('T1A', 0), ('T1B', 0), ('T2A', 0), ('T2B', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.team1 = [self.pid['T1A'], self.pid['T1B']]
+        self.team2 = [self.pid['T2A'], self.pid['T2B']]
+
+    def _play(self, hole, t1, t2):
+        submit_hole(self.fs, hole, [(self.team1[0], t1), (self.team1[1], t1),
+                                     (self.team2[0], t2), (self.team2[1], t2)])
+
+    def test_front_nine_is_first_nine_played(self):
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross')
+        order = [8, 9, 10, 11, 12, 13, 14, 15, 16,   # front (first 9 played)
+                 17, 18, 1, 2, 3, 4, 5, 6, 7]         # back  (last 9 played)
+        for i, h in enumerate(order):
+            # T1 wins the first 5 front holes (8-12), everything else halved.
+            if i < 5:
+                self._play(h, 3, 4)
+            else:
+                self._play(h, 4, 4)
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+
+        # Front nine = holes 8-16, settled +5 for team1; back nine pushed.
+        self.assertEqual(s['front9']['margin'], 5, s['front9'])
+        self.assertEqual(s['front9']['holes_played'], 9)
+        self.assertEqual(s['back9']['margin'], 0, s['back9'])
+        self.assertEqual(s['back9']['holes_played'], 9)
+
+        holes = {h['hole']: h for h in s['holes']}
+        # Hole 8 (first played) is FRONT; hole 1 (played 12th) is BACK.
+        self.assertIsNotNone(holes[8]['front9_margin'])
+        self.assertIsNone(holes[8]['back9_margin'])
+        self.assertIsNotNone(holes[1]['back9_margin'])
+        self.assertIsNone(holes[1]['front9_margin'])
+
+    def test_manual_press_on_shotgun_back_nine(self):
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross',
+                     press_mode='manual')
+        # Play the whole front nine (8-16) halved, then start the back (17).
+        for h in [8, 9, 10, 11, 12, 13, 14, 15, 16, 17]:
+            self._play(h, 4, 4)
+        calculate_nassau(self.fs)
+        # T2 calls a press on hole 18 (the 2nd hole of the back nine in play order).
+        add_manual_press(self.fs, start_hole=18)
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+        presses = s.get('presses', [])
+        self.assertEqual(len(presses), 1, presses)
+        # The press is on the BACK nine and ends on hole 7 (the last hole played).
+        self.assertEqual(presses[0]['nine'], 'back', presses[0])
+        self.assertEqual(presses[0]['start_hole'], 18, presses[0])
+        self.assertEqual(presses[0]['end_hole'], 7, presses[0])
