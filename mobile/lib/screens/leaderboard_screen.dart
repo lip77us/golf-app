@@ -4036,7 +4036,9 @@ class _SixesGroupCard extends StatelessWidget {
         ? 0
         : (((holes.last as Map<String, dynamic>)['margin'] as num?)?.toInt() ?? 0);
     final absMarg  = lastMarg.abs();
-    final totalH   = endH - startH + 1;
+    // num_holes is the segment's true length (wrap-aware for a shotgun); fall
+    // back to end-start+1 for older payloads / normal rounds.
+    final totalH   = (seg['num_holes'] as num?)?.toInt() ?? (endH - startH + 1);
     final holesLeft = totalH - played;
 
     if (status == 'complete' || status == 'halved') {

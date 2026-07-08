@@ -818,6 +818,19 @@ def sixes_summary(foursome) -> dict:
     seg_out = []
     t1_total_wins = t2_total_wins = halves = 0
 
+    # Play-order positions so a segment's true hole COUNT is correct even when
+    # its range wraps on a shotgun (e.g. holes 14..1 → 6 holes, not end-start+1).
+    from services.hole_plan import play_order as _play_order
+    _order  = _play_order(foursome.round, foursome)
+    _pos_of = {h: i for i, h in enumerate(_order)}
+
+    def _seg_hole_count(seg):
+        sp = _pos_of.get(seg.start_hole)
+        ep = _pos_of.get(seg.end_hole)
+        if sp is None or ep is None or ep < sp:
+            return seg.end_hole - seg.start_hole + 1
+        return ep - sp + 1
+
     # All segments share the same handicap config; read it off the first.
     first = segments.first() if hasattr(segments, 'first') else (list(segments)[0] if segments else None)
     handicap_mode       = getattr(first, 'handicap_mode', HandicapMode.NET) if first else HandicapMode.NET
@@ -924,6 +937,7 @@ def sixes_summary(foursome) -> dict:
             'label'      : label,
             'start_hole' : seg.start_hole,
             'end_hole'   : seg.end_hole,
+            'num_holes'  : _seg_hole_count(seg),   # true count (wrap-aware)
             'is_extra'   : seg.is_extra,
             'is_void'    : seg.is_void,
             'status'     : seg.status,

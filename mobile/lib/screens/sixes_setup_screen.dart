@@ -24,6 +24,7 @@ import '../widgets/golf_primary_button.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/section_card.dart';
 import '../widgets/max_liability_note.dart';
+import '../utils/play_order.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
 
@@ -59,6 +60,24 @@ class SixesSetupScreen extends StatefulWidget {
 class _SixesSetupScreenState extends State<SixesSetupScreen> {
   /// Players in drag order — positions 0 & 1 = Team A, 2 & 3 = Team B.
   late List<Membership> _orderedPlayers;
+
+  /// The group's 18 holes in play order (shotgun-aware: a casual round starting
+  /// on hole 8 plays 8..18,1..7). Sixes is full-18 only, so this is always 18.
+  List<int> get _order {
+    final rp = context.read<RoundProvider>();
+    final o = roundPlayOrder(rp.round, rp.scorecard);
+    return o.length == 18 ? o : [for (int i = 0; i < 18; i++) i + 1];
+  }
+
+  /// The three Sixes segments as play-order thirds: [[8-13],[14-1],[2-7]] for a
+  /// shotgun from hole 8; [[1-6],[7-12],[13-18]] for a normal start.
+  List<List<int>> get _thirds {
+    final o = _order;
+    return [o.sublist(0, 6), o.sublist(6, 12), o.sublist(12, 18)];
+  }
+
+  /// The group's first hole played (the round's starting hole).
+  int get _firstHole => _order.first;
 
   bool _initialized   = false;
   bool _checkingSetup = true; // true while we're checking for an existing match
@@ -227,27 +246,29 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     final int p1Partner3 = p2Partner2; // whoever P1 didn't partner in Match 2
     final int p2Partner3 = p1Partner2;
 
-    // All three standard segments are submitted up front with their default
-    // hole ranges.  calculate_sixes will dynamically reposition them if any
-    // match ends early.
+    // All three standard segments are submitted up front as the round's
+    // play-order thirds (shotgun-aware — a start on hole 8 gives 8-13/14-1/2-7).
+    // calculate_sixes re-derives these from play order too and will reposition
+    // them if a match ends early.
+    final thirds = _thirds;
     final segmentData = [
       {
-        'start_hole': 1,
-        'end_hole': 6,
+        'start_hole': thirds[0].first,
+        'end_hole': thirds[0].last,
         'team_select_method': 'long_drive',
         'team1_player_ids': [p[0].player.id, p[1].player.id],
         'team2_player_ids': [p[2].player.id, p[3].player.id],
       },
       {
-        'start_hole': 7,
-        'end_hole': 12,
+        'start_hole': thirds[1].first,
+        'end_hole': thirds[1].last,
         'team_select_method': 'random',
         'team1_player_ids': [p[0].player.id, p[p1Partner2].player.id],
         'team2_player_ids': [p[1].player.id, p[p2Partner2].player.id],
       },
       {
-        'start_hole': 13,
-        'end_hole': 18,
+        'start_hole': thirds[2].first,
+        'end_hole': thirds[2].last,
         'team_select_method': 'remainder',
         'team1_player_ids': [p[0].player.id, p[p1Partner3].player.id],
         'team2_player_ids': [p[1].player.id, p[p2Partner3].player.id],
@@ -374,7 +395,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
       }
     }
 
-    final holeData = rp.scorecard?.holeData(widget.startHole);
+    final holeData = rp.scorecard?.holeData(_firstHole);
 
     return Scaffold(
       appBar: GolfAppBar(title: _editing ? 'Edit Sixes' : 'Sixes Setup'),
@@ -390,7 +411,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       // ── Hole info card with drag-reorderable players ──
                       _HolePlayerCard(
                         holeData:       holeData,
-                        startHole:      widget.startHole,
+                        startHole:      _firstHole,
                         orderedPlayers: _orderedPlayers,
                         onOrderChanged: (ordered) {
                           setState(() => _orderedPlayers = ordered);
@@ -448,7 +469,8 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                       if (_orderedPlayers.length >= 4)
                         _MatchPreview(
                           matchNumber:  widget.matchNumber,
-                          startHole:    widget.startHole,
+                          startHole:    _thirds[0].first,
+                          endHole:      _thirds[0].last,
                           teamAPlayers: _orderedPlayers.take(2).toList(),
                           teamBPlayers: _orderedPlayers.skip(2).take(2).toList(),
                           handicapMode: _handicapMode,
@@ -688,6 +710,7 @@ class _HolePlayerCard extends StatelessWidget {
 class _MatchPreview extends StatelessWidget {
   final int              matchNumber;
   final int              startHole;
+  final int?             endHole;        // last hole of this match (play order)
   final List<Membership> teamAPlayers;
   final List<Membership> teamBPlayers;
   final String           handicapMode;   // 'net' | 'gross'
@@ -696,6 +719,7 @@ class _MatchPreview extends StatelessWidget {
   const _MatchPreview({
     required this.matchNumber,
     required this.startHole,
+    this.endHole,
     required this.teamAPlayers,
     required this.teamBPlayers,
     required this.handicapMode,
@@ -713,7 +737,7 @@ class _MatchPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme    = Theme.of(context);
-    final endHole  = (startHole + 5).clamp(1, 18);
+    final segEnd   = endHole ?? (startHole + 5).clamp(1, 18);
     final teamA    = _teamLine(teamAPlayers, [1, 2]);
     final teamB    = _teamLine(teamBPlayers, [3, 4]);
 
@@ -745,7 +769,7 @@ class _MatchPreview extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Text(
-            'Holes $startHole–$endHole  •  Best ball, '
+            'Holes $startHole–$segEnd  •  Best ball, '
             '${handicapMode == 'gross' ? 'gross' : 'net ($netPercent%)'}  •  '
             'Match ends early if a team wins more holes than remain',
             style: theme.textTheme.labelSmall

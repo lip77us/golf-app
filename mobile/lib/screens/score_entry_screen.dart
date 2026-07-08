@@ -2524,11 +2524,25 @@ class _HoleScoreCard extends StatelessWidget {
   /// The Sixes segment that owns [hole] — extras own overlapping holes, and a
   /// later (shifted) standard segment wins, mirroring the strokes logic.
   SixesSegment? _sixesSegmentForHole(SixesSummary sx, int hole) {
+    // Membership by POSITION in play order, so a wrapped shotgun segment
+    // (e.g. start 14 → end 1) matches correctly. Falls back to the hole-number
+    // range when play order is unknown (normal round → identical).
+    final order = holesInPlay;
+    bool inSeg(SixesSegment s) {
+      if (order.isEmpty) return hole >= s.startHole && hole <= s.endHole;
+      final sp = order.indexOf(s.startHole);
+      final ep = order.indexOf(s.endHole);
+      final hp = order.indexOf(hole);
+      if (sp < 0 || ep < 0 || hp < 0 || ep < sp) {
+        return hole >= s.startHole && hole <= s.endHole;
+      }
+      return hp >= sp && hp <= ep;
+    }
     for (final s in sx.segments) {
-      if (s.isExtra && hole >= s.startHole && hole <= s.endHole) return s;
+      if (s.isExtra && inSeg(s)) return s;
     }
     for (final s in sx.segments.where((s) => !s.isExtra).toList().reversed) {
-      if (hole >= s.startHole && hole <= s.endHole) return s;
+      if (inSeg(s)) return s;
     }
     return null;
   }
