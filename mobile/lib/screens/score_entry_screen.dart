@@ -5509,6 +5509,18 @@ class _GridPlayerRow extends StatelessWidget {
   /// scorecard notation.  Off by default (e.g. Nassau keeps plain digits).
   final bool         scoreMarks;
 
+  /// Gross-total columns (OUT / IN / TOT), mirroring the leaderboard. When all
+  /// three flags are false (the default), the row renders the flat [holeRange]
+  /// with no totals — the historic Nassau behaviour. When enabled, [frontHoles]
+  /// (≤9) and [backHoles] (>9) drive the two nine subtotals; a subtotal shows
+  /// only once every hole in that nine is scored.
+  final List<int>    frontHoles;
+  final List<int>    backHoles;
+  final bool         showOut;
+  final bool         showIn;
+  final bool         showTot;
+  final double       summaryW;
+
   const _GridPlayerRow({
     required this.member,
     required this.scorecard,
@@ -5521,26 +5533,51 @@ class _GridPlayerRow extends StatelessWidget {
     required this.strokesOnHole,
     this.nameColor,
     this.scoreMarks = false,
+    this.frontHoles = const [],
+    this.backHoles  = const [],
+    this.showOut    = false,
+    this.showIn     = false,
+    this.showTot    = false,
+    this.summaryW   = 34.0,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Row(children: [
-      SizedBox(
-        width: labelColW, height: rowH,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(member.player.displayShort,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: nameColor)),
-        ),
-      ),
-      for (final h in holeRange)
-        GestureDetector(
+    // Gross total over a set of holes — null (shows '—') until every hole in
+    // the set is scored, so a subtotal only appears once its nine is complete.
+    int? grossSum(List<int> holes) {
+      var total = 0;
+      for (final h in holes) {
+        final g = scorecard.holeData(h)?.scoreFor(member.player.id)?.grossScore;
+        if (g == null) return null;
+        total += g;
+      }
+      return total;
+    }
+
+    Widget summaryCell(int? val) => SizedBox(
+          width: summaryW, height: rowH,
+          child: Center(
+            child: Text(val == null ? '—' : '$val',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    Widget nameCell() => SizedBox(
+          width: labelColW, height: rowH,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(member.player.displayShort,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600, color: nameColor)),
+          ),
+        );
+
+    Widget holeCellWidget(int h) => GestureDetector(
           onTap: onTapHole == null ? null : () => onTapHole!(h),
           behavior: HitTestBehavior.opaque,
           child: Container(
@@ -5604,7 +5641,23 @@ class _GridPlayerRow extends StatelessWidget {
               ),
             ]),
           ),
-        ),
+        );
+
+    // No totals requested → the historic flat row (Nassau).
+    if (!showOut && !showIn && !showTot) {
+      return Row(children: [
+        nameCell(),
+        for (final h in holeRange) holeCellWidget(h),
+      ]);
+    }
+    // Totals: front nine, OUT, back nine, IN, TOT — mirroring the leaderboard.
+    return Row(children: [
+      nameCell(),
+      for (final h in frontHoles) holeCellWidget(h),
+      if (showOut) summaryCell(grossSum(frontHoles)),
+      for (final h in backHoles) holeCellWidget(h),
+      if (showIn) summaryCell(grossSum(backHoles)),
+      if (showTot) summaryCell(grossSum([...frontHoles, ...backHoles])),
     ]);
   }
 }
@@ -6048,6 +6101,39 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
         ? widget.holesInPlay
         : List.generate(18, (i) => i + 1);
 
+    // Nine-based gross totals, matching the leaderboard. OUT/IN show for a nine
+    // that's in play; TOT only when BOTH nines are (a full round) — on a single
+    // nine its OUT/IN already IS the round total, so a separate TOT is noise.
+    final front    = holeRange.where((h) => h <= 9).toList();
+    final back     = holeRange.where((h) => h > 9).toList();
+    final showOut  = front.isNotEmpty;
+    final showIn   = back.isNotEmpty;
+    final showTot  = front.isNotEmpty && back.isNotEmpty;
+    const summaryW = 34.0;
+
+    int parSum(List<int> holes) {
+      var t = 0;
+      for (final h in holes) t += scorecard.holeData(h)?.par ?? 0;
+      return t;
+    }
+
+    Widget headSummary(String label) => SizedBox(
+          width: summaryW, height: _rowH,
+          child: Center(
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+        );
+    Widget parSummary(List<int> holes) => SizedBox(
+          width: summaryW, height: _rowH,
+          child: Center(
+            child: Text('${parSum(holes)}',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
     Widget holeCell(int h, {required Widget child, Color? bg}) {
       final isCurrent = h == currentHole;
       return GestureDetector(
@@ -6118,11 +6204,19 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
                                 fontSize: 11, fontWeight: FontWeight.bold)),
                       ),
                     ),
-                    for (final h in holeRange)
+                    for (final h in front)
                       holeCell(h,
                           child: Text('$h',
                               style: const TextStyle(
                                   fontSize: 11, fontWeight: FontWeight.bold))),
+                    if (showOut) headSummary('OUT'),
+                    for (final h in back)
+                      holeCell(h,
+                          child: Text('$h',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.bold))),
+                    if (showIn) headSummary('IN'),
+                    if (showTot) headSummary('TOT'),
                   ]),
                   // Par row
                   Row(children: [
@@ -6135,20 +6229,35 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
                                 ?.copyWith(fontStyle: FontStyle.italic)),
                       ),
                     ),
-                    for (final h in holeRange)
+                    for (final h in front)
                       holeCell(h,
                           child: Text(
                             '${scorecard.holeData(h)?.par ?? "-"}',
                             style: theme.textTheme.bodySmall,
                           )),
+                    if (showOut) parSummary(front),
+                    for (final h in back)
+                      holeCell(h,
+                          child: Text(
+                            '${scorecard.holeData(h)?.par ?? "-"}',
+                            style: theme.textTheme.bodySmall,
+                          )),
+                    if (showIn) parSummary(back),
+                    if (showTot) parSummary([...front, ...back]),
                   ]),
                   Container(
                     height: 1,
-                    width: _labelColW + _cellW * holeRange.length,
+                    width: _labelColW +
+                        _cellW * holeRange.length +
+                        summaryW *
+                            ((showOut ? 1 : 0) +
+                                (showIn ? 1 : 0) +
+                                (showTot ? 1 : 0)),
                     color: theme.colorScheme.outlineVariant,
                     margin: const EdgeInsets.symmetric(vertical: 2),
                   ),
-                  // Per-player gross scores with stroke-dot indicators.
+                  // Per-player gross scores with stroke-dot indicators + the
+                  // OUT / IN / TOT gross totals (matching the leaderboard).
                   for (final m in players)
                     _GridPlayerRow(
                       member:        m,
@@ -6161,6 +6270,12 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
                       rowH:          _rowH,
                       strokesOnHole: (h) => _strokesOnHoleFor(m, h),
                       scoreMarks:    true,
+                      frontHoles:    front,
+                      backHoles:     back,
+                      showOut:       showOut,
+                      showIn:        showIn,
+                      showTot:       showTot,
+                      summaryW:      summaryW,
                     ),
                 ],
               ),
