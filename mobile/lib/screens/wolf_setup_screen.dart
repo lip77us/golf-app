@@ -175,6 +175,12 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
 
   bool get _isFourPlayer => _realMembers.length == 4;
 
+  /// A partial round (< 18 holes) — the 18-hole-specific catch-up rules
+  /// (last-place Wolf on 17 & 18, require Lone/Blind by hole 16) are hidden and
+  /// forced off, since those hole numbers don't exist on a 9-hole / back-9 round.
+  bool get _isPartial =>
+      (context.read<RoundProvider>().round?.numHoles ?? 18) < 18;
+
   Membership? _memberById(int id) {
     for (final m in _realMembers) {
       if (m.player.id == id) return m;
@@ -205,8 +211,10 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
         teamWinPoints:     _teamPoints,
         wolfLosesTies:     _wolfLosesTies,
         nonWolfBonus:      _nonWolfBonus,
-        lastPlaceWolf1718: _lastPlace1718,
-        requireLoneOrBlind: _requireLoneOrBlind,
+        // The 18-hole catch-up rules don't apply to a partial round — force off
+        // (their toggles are hidden there).
+        lastPlaceWolf1718: _isPartial ? false : _lastPlace1718,
+        requireLoneOrBlind: _isPartial ? false : _requireLoneOrBlind,
         lossCap: _capEnabled ? double.tryParse(_capCtrl.text.trim()) : null,
       );
       rp.setWolfSummary(summary);
@@ -376,7 +384,7 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
                   value: _nonWolfBonus,
                   onChanged: (v) => setState(() => _nonWolfBonus = v),
                 ),
-              if (_isFourPlayer)
+              if (_isFourPlayer && !_isPartial)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Last place is Wolf on 17 & 18'),
@@ -386,7 +394,7 @@ class _WolfSetupScreenState extends State<WolfSetupScreen> {
                   value: _lastPlace1718,
                   onChanged: (v) => setState(() => _lastPlace1718 = v),
                 ),
-              if (_isFourPlayer)
+              if (_isFourPlayer && !_isPartial)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Must go Lone/Blind by hole 16'),
