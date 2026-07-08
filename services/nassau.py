@@ -283,6 +283,7 @@ def setup_nassau(
     play_front:    bool  = True,
     play_back:     bool  = True,
     play_overall:  bool  = True,
+    single_match:  bool  = False,
     loss_cap             = None,
 ) -> NassauGame:
     """
@@ -305,6 +306,11 @@ def setup_nassau(
         if loss_cap < 0:
             loss_cap = None
 
+    # Nassau Nine: one match over all played holes. The match rides the 'front'
+    # bet (the engine puts every hole in the front segment); back/overall are off.
+    if single_match:
+        play_front, play_back, play_overall = True, False, False
+
     game = NassauGame.objects.create(
         foursome      = foursome,
         handicap_mode = handicap_mode,
@@ -315,6 +321,7 @@ def setup_nassau(
         play_front    = play_front,
         play_back     = play_back,
         play_overall  = play_overall,
+        single_match  = single_match,
         loss_cap      = loss_cap,
         status        = MatchStatus.PENDING,
     )
@@ -482,7 +489,9 @@ def calculate_nassau(foursome) -> NassauGame | None:
     from services.hole_plan import play_order as _play_order
     order          = _play_order(foursome.round, foursome)
     n              = len(order) or 18
-    half           = n // 2
+    # Nassau Nine: the whole played round is ONE segment (all holes "front"), so
+    # the single match + its presses run over every hole rather than a nine.
+    half           = n if game.single_match else n // 2
     pos_of         = {h: i for i, h in enumerate(order)}
     front_last_pos = half - 1
     back_last_pos  = n - 1
@@ -1279,6 +1288,8 @@ def nassau_summary(foursome) -> dict | None:
         'play_front'    : game.play_front,
         'play_back'     : game.play_back,
         'play_overall'  : game.play_overall,
+        'single_match'  : game.single_match,
+        'variant'       : game.variant,
         'teams'         : {
             'team1': _team_players(1),
             'team2': _team_players(2),

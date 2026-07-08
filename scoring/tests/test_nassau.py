@@ -370,3 +370,58 @@ class NassauShotgunTests(TestCase):
         self.assertEqual(presses[0]['nine'], 'back', presses[0])
         self.assertEqual(presses[0]['start_hole'], 18, presses[0])
         self.assertEqual(presses[0]['end_hole'], 7, presses[0])
+
+
+class NassauNineTests(TestCase):
+    """Nassau Nine: one match over all played holes (no F9/B9 split), with the
+    press engine running over the whole match."""
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, handicap_mode='net',
+                                net_max_double_bogey=False)
+        # A 9-hole round (holes 1-9).
+        self.round.num_holes = 9
+        self.round.starting_hole = 1
+        self.round.save(update_fields=['num_holes', 'starting_hole'])
+        self.fs = make_foursome(
+            self.round, [('A', 0), ('B', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _play(self, hole, a, b):
+        submit_hole(self.fs, hole, [(self.pid['A'], a), (self.pid['B'], b)])
+
+    def test_single_match_over_nine_no_nine_split(self):
+        setup_nassau(self.fs, [self.pid['A']], [self.pid['B']],
+                     handicap_mode='gross', single_match=True)
+        # A wins holes 1-5 (5 up with 4 to play → clinched); rest halved.
+        for h in range(1, 6):
+            self._play(h, 3, 4)
+        for h in range(6, 10):
+            self._play(h, 4, 4)
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+        # One match on the 'front' bet over all 9 holes; back/overall are off.
+        self.assertTrue(s['single_match'])
+        self.assertFalse(s['play_back'])
+        self.assertFalse(s['play_overall'])
+        self.assertEqual(s['front9']['holes_played'], 9, s['front9'])
+        # A wins 5&4 → decided; team1 up.
+        self.assertEqual(s['front9']['margin'], 5, s['front9'])
+        self.assertIsNotNone(s['front9']['result'])
+
+    def test_auto_press_fires_over_the_single_match(self):
+        setup_nassau(self.fs, [self.pid['A']], [self.pid['B']],
+                     handicap_mode='gross', single_match=True,
+                     press_mode='auto', press_unit='5.00')
+        # B goes 2 down by hole 2 → an auto-press fires on the single match.
+        self._play(1, 4, 5)
+        self._play(2, 4, 5)
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+        presses = s.get('presses', [])
+        autos = [p for p in presses if p['press_type'] == 'auto']
+        self.assertTrue(autos, presses)
+        # The press covers the rest of the 9-hole match (ends on hole 9).
+        self.assertEqual(autos[0]['end_hole'], 9, autos[0])

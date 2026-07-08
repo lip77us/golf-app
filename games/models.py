@@ -1071,6 +1071,10 @@ class NassauGame(models.Model):
     play_front          = models.BooleanField(default=True)
     play_back           = models.BooleanField(default=True)
     play_overall        = models.BooleanField(default=True)
+    # "Nassau Nine": treat every hole PLAYED as one match segment (no front/back
+    # split), so a single match + its presses run over the whole (often 9-hole)
+    # round. The match is carried on the 'front' bet; back/overall are unused.
+    single_match        = models.BooleanField(default=False)
     # Top (standard Nassau) results
     front9_result       = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
     back9_result        = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
