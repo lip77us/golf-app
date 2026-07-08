@@ -79,9 +79,16 @@ class SpotsEndpointTests(TestCase):
         got = self.client.get(reverse('api-spots-result', args=[self.fs.id]))
         self.assertEqual(got.data['money']['total_spots'], 2)
 
-    def test_tally_without_setup_is_400(self):
+    def test_tally_without_setup_auto_creates_and_credits(self):
+        # Spots added but never configured: the first tally auto-creates the game
+        # with defaults and credits the spot (was a 400 before — which silently
+        # dropped a spot recorded on an unconfigured side game).
         resp = self.client.post(
             reverse('api-spots-tally', args=[self.fs.id]),
             {'hole_number': 1, 'entries': [{'player_id': self.ids[0], 'count': 1}]},
             format='json')
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['status'], 'in_progress')
+        self.assertEqual(resp.data['money']['total_spots'], 1)
+        winner = next(p for p in resp.data['players'] if p['spots'] == 1)
+        self.assertEqual(winner['player_id'], self.ids[0])

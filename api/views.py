@@ -4704,14 +4704,10 @@ class SpotsTallyView(APIView):
         from api.serializers import SpotsTallySerializer
         ser = SpotsTallySerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        from games.models import SpotsGame
-        try:
-            foursome.spots_game
-        except SpotsGame.DoesNotExist:
-            return Response(
-                {'detail': 'Spots game not set up for this foursome.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # No pre-check for an existing SpotsGame: tally_spots auto-creates it with
+        # defaults on the first tally, so recording a spot on a Spots side game
+        # that was added but never explicitly configured just works (the hub's
+        # "Edit Spots" tunes stake/payout later).
         from services.spots import tally_spots, spots_summary
         tally_spots(
             foursome,
