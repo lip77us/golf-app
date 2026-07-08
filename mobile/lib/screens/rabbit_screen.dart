@@ -27,6 +27,7 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
+import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 
 String _fmtMoney(double v) {
@@ -192,11 +193,16 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     });
   }
 
+  /// Holes this group plays, in order (back-9 / 9-hole / shotgun aware).
+  List<int> _playOrder(RoundProvider rp) =>
+      roundPlayOrder(rp.round, rp.scorecard);
+
   void _jumpToFirstUnplayed(RoundProvider rp) {
     final sc = rp.scorecard;
     if (sc == null) return;
     final realIds = _realMembers(rp.round).map((m) => m.player.id).toSet();
-    for (int h = 1; h <= 18; h++) {
+    final order = _playOrder(rp);
+    for (final h in order) {
       final hd = sc.holeData(h);
       if (hd == null) continue;
       final allScored = hd.scores
@@ -207,14 +213,18 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
         return;
       }
     }
-    setState(() => _selectedHole = 18);
+    setState(() => _selectedHole = order.isEmpty ? 18 : order.last);
   }
 
   void _advance() {
-    if (_selectedHole < 18) setState(() { _selectedHole++; _editingPlayerId = null; });
+    final next = nextInOrder(
+        _playOrder(context.read<RoundProvider>()), _selectedHole);
+    if (next != null) setState(() { _selectedHole = next; _editingPlayerId = null; });
   }
   void _retreat() {
-    if (_selectedHole > 1)  setState(() { _selectedHole--; _editingPlayerId = null; });
+    final prev = prevInOrder(
+        _playOrder(context.read<RoundProvider>()), _selectedHole);
+    if (prev != null) setState(() { _selectedHole = prev; _editingPlayerId = null; });
   }
 
   /// Persist whatever is pending for [hole] without changing the selected hole.
@@ -252,7 +262,7 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     final sc = rp.scorecard;
     int unscored = 0;
     if (sc != null) {
-      for (int h = 1; h <= 18; h++) {
+      for (final h in _playOrder(rp)) {
         if (_effectiveScores(sc, h).isEmpty) unscored++;
       }
     }
@@ -446,8 +456,12 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     String? rabHolderShort;
     int    rabLead = 0;
     if (summary != null) {
-      for (int h = _selectedHole; h >= 1; h--) {
-        final hi = summary.holeFor(h);
+      // Walk backwards from the selected hole in PLAY ORDER (back-9 / shotgun
+      // aware) to find the holder state at this point in its segment.
+      final order = _playOrder(rp);
+      final startIdx = order.indexOf(_selectedHole);
+      for (int i = startIdx; i >= 0; i--) {
+        final hi = summary.holeFor(order[i]);
         if (hi == null) continue;
         if (hi.segment != rabSegment) break;   // crossed into the prior segment
         if (hi.isScored) {
@@ -592,20 +606,23 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     final scores  = _effectiveScores(sc, _selectedHole);
     final allDone = _allScored(players, scores);
     final isComplete = rp.round?.status == 'complete';
+    final order   = _playOrder(rp);
+    final prevHole = prevInOrder(order, _selectedHole);
+    final nextHole = nextInOrder(order, _selectedHole);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
         child: Row(children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: _selectedHole > 1 ? _retreat : null,
+              onPressed: prevHole != null ? _retreat : null,
               icon: const Icon(Icons.chevron_left, size: 20),
-              label: Text('Hole ${_selectedHole - 1}'),
+              label: Text(prevHole != null ? 'Hole $prevHole' : 'Hole'),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: _selectedHole == 18 || isComplete
+            child: nextHole == null || isComplete
                 ? FilledButton.icon(
                     onPressed: rp.submitting ? null : () => _finishRound(ctx, players),
                     icon: const Icon(Icons.emoji_events, size: 20),
@@ -619,7 +636,7 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.chevron_right, size: 20),
-                    label: Text(rp.submitting ? 'Saving…' : 'Hole ${_selectedHole + 1}'),
+                    label: Text(rp.submitting ? 'Saving…' : 'Hole $nextHole'),
                     iconAlignment: IconAlignment.end,
                   ),
           ),
@@ -1131,7 +1148,11 @@ class _RabbitGrid extends StatelessWidget {
     const double labelColW = 56.0;
     const double cellW = 34.0;
     const double rowH = 26.0;
-    final holeRange = List.generate(18, (i) => i + 1);
+    // The holes actually in play, in play order (the backend emits them ordered
+    // and wraparound-aware) — no blank 1-9 on a back-9 round.
+    final holeRange = summary.holes.isNotEmpty
+        ? summary.holes.map((h) => h.hole).toList()
+        : List.generate(18, (i) => i + 1);
 
     final holderByHole = <int, String?>{};
     final leadByHole   = <int, int>{};

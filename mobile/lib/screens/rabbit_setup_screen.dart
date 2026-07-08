@@ -111,6 +111,13 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
           _accumulate = _summary!.accumulate;
           _segments   = _summary!.numSegments;
         }
+        // Keep the segment count valid for this round's hole count (a 9-hole
+        // round can't split into 2 even matches; fall back to 3 → three 3-hole
+        // rabbits, else 1 → one match).
+        final valid = _segmentOptions(_holeCount).map((o) => o.$1).toSet();
+        if (!valid.contains(_segments)) {
+          _segments = valid.contains(3) ? 3 : 1;
+        }
         _loading = false;
       });
     } catch (e) {
@@ -129,6 +136,28 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
   }
 
   bool get _rosterValid => _realMembers.length == 3;
+
+  /// The round's hole count (partial rounds < 18). Drives which segment splits
+  /// are offered — a 9-hole round is one 9-hole rabbit or three 3-hole rabbits.
+  int get _holeCount =>
+      (context.read<RoundProvider>().round?.numHoles ?? 18).clamp(1, 18);
+
+  /// Valid (segments, title, subtitle) options for [holes] — only even splits.
+  List<(int, String, String)> _segmentOptions(int holes) {
+    const words = {1: 'One', 2: 'Two', 3: 'Three'};
+    const fracs = {2: 'half the pot', 3: 'a third of the pot'};
+    final out = <(int, String, String)>[];
+    for (final k in const [1, 2, 3]) {
+      if (holes % k != 0) continue;          // no uneven segments
+      final seg = holes ~/ k;
+      out.add((
+        k,
+        k == 1 ? 'One $holes-hole match' : '${words[k]} $seg-hole matches',
+        k == 1 ? 'Winner takes the whole pot.' : 'Each match is ${fracs[k]}.',
+      ));
+    }
+    return out;
+  }
 
   Future<void> _start() async {
     if (!_rosterValid) return;
@@ -272,11 +301,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
             subtitle: 'The rabbit resets each segment; the holder at the end '
                 'of a segment wins that share of the pot.',
             child: Column(children: [
-              for (final opt in const [
-                (1, 'One 18-hole match', 'Winner takes the whole pot.'),
-                (2, 'Two 9-hole matches', 'Each match is half the pot.'),
-                (3, 'Three 6-hole matches', 'Each match is a third of the pot.'),
-              ])
+              for (final opt in _segmentOptions(_holeCount))
                 RadioListTile<int>(
                   contentPadding: EdgeInsets.zero,
                   value: opt.$1,
