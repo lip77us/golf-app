@@ -118,7 +118,9 @@ def _recalculate_games(foursome: Foursome) -> None:
         from services.sixes import calculate_sixes
         calculate_sixes(foursome)
 
-    if 'nassau' in active_games:
+    # Nassau Nine shares the NassauGame model (single_match flag) but registers
+    # under the 'nassau_nine' key, so both must trigger the recalc.
+    if 'nassau' in active_games or 'nassau_nine' in active_games:
         from services.nassau import calculate_nassau
         calculate_nassau(foursome)
 
