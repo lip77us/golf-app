@@ -262,6 +262,11 @@ class SixesRessegmentTests(TestCase):
         submit_hole(self.fs, h, [(self.pid['T1A'], par), (self.pid['T1B'], par),
                                   (self.pid['T2A'], par + 1), (self.pid['T2B'], par + 1)])
 
+    def _t2_wins(self, h):
+        par = self.tee.hole(h)['par']
+        submit_hole(self.fs, h, [(self.pid['T1A'], par + 1), (self.pid['T1B'], par + 1),
+                                  (self.pid['T2A'], par), (self.pid['T2B'], par)])
+
     def test_early_finish_spawns_extra_segment(self):
         # Normal round. Segment 1 (holes 1-6): T1 wins holes 1-4 → 4 up with 2
         # to play → clinched at hole 4. Classic collapses the freed holes: the
@@ -290,3 +295,34 @@ class SixesRessegmentTests(TestCase):
         s = sixes_summary(self.fs)
         bounds = {(seg['start_hole'], seg['end_hole']) for seg in s['segments']}
         self.assertEqual(bounds, {(8, 13), (14, 1), (2, 7)}, s['segments'])
+
+    def test_wrapping_segment_emits_holes_in_play_order(self):
+        # Shotgun from hole 16 → play order 16,17,18,1..15. Segment 1 WRAPS:
+        # holes 16,17,18,1,2,3. Team 1 wins it (+2 final), but the last hole BY
+        # NUMBER (18) sits at an intermediate running margin of 0. The summary
+        # must emit holes in PLAY order so holes[-1] is the truly-last-played
+        # hole 3 (final margin +2) — otherwise mobile's statusDisplay reads
+        # hole 18's margin and shows "Halved" on a decided segment.
+        self.round.num_holes = 18
+        self.round.starting_hole = 16
+        self.round.save(update_fields=['num_holes', 'starting_hole'])
+        setup_sixes(self.fs, self._td(), handicap_mode='gross')
+        # Play-order running margin: 16:+1, 17:0, 18:0, 1:+1, 2:+1, 3:+2.
+        self._t1_wins(16)
+        self._t2_wins(17)
+        self._halve(18)
+        self._t1_wins(1)
+        self._halve(2)
+        self._t1_wins(3)
+        for h in range(4, 16):
+            self._halve(h)                       # segments 2 & 3 halved
+        calculate_sixes(self.fs)
+        s = sixes_summary(self.fs)
+        seg1 = next(seg for seg in s['segments'] if seg['start_hole'] == 16)
+        self.assertEqual(seg1['winner'], 'Team 1', seg1)
+        self.assertEqual([h['hole'] for h in seg1['holes']],
+                         [16, 17, 18, 1, 2, 3], seg1)
+        # holes[-1] is the last-PLAYED hole (3) with the FINAL margin, not
+        # hole 18's intermediate 0.
+        self.assertEqual(seg1['holes'][-1]['hole'], 3, seg1)
+        self.assertEqual(seg1['holes'][-1]['margin'], 2, seg1)

@@ -892,14 +892,24 @@ def sixes_summary(foursome) -> dict:
 
         extra_label = ', extra' if seg.is_extra else ''
 
+        # Hole results in PLAY ORDER (not the model's hole_number ordering),
+        # so on a shotgun segment whose range wraps (e.g. 16,17,18,1,2,3) the
+        # last element is the hole actually played last — the mobile
+        # statusDisplay reads holes.last.margin as the FINAL margin, and a
+        # hole_number ordering would hand it an intermediate running total
+        # (showing "Halved" on a decided segment).
+        hole_results_list = sorted(
+            seg.hole_results.all(),
+            key=lambda hr: _pos_of.get(hr.hole_number, hr.hole_number),
+        )
         # For completed matches that ended early, show the actually-played
         # range rather than the potential range.  seg.end_hole is still the
         # potential end (we don't trim it during repositioning) so we reach
-        # into hole_results for the last hole that was scored.
-        hole_results_list = list(seg.hole_results.all())
+        # into hole_results for the last hole that was scored.  Detect "ended
+        # early" by hole COUNT (wrap-safe), not a hole-number comparison.
         if (seg.status in ('complete', 'halved')
                 and hole_results_list
-                and hole_results_list[-1].hole_number < seg.end_hole):
+                and len(hole_results_list) < _seg_hole_count(seg)):
             display_end = hole_results_list[-1].hole_number
         else:
             display_end = seg.end_hole
