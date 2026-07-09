@@ -1535,8 +1535,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // "incomplete" and the jump misfires to hole 7.
     final waitForTc = games.contains('triple_cup') &&
         rp.tripleCupSummary == null;
+    // Also wait for the ROUND to load — the jump reads its starting hole /
+    // hole count to build the play order. On a cold restart the scorecard can
+    // arrive first; without this the play order defaults to 1-18 and a back-9 /
+    // shotgun round opens on hole 1 instead of the first unplayed hole.
     if (!_initialJumpDone &&
         sc != null &&
+        rp.round != null &&
         rp.activeFoursomeId == widget.foursomeId &&
         !waitForTc) {
       _initialJumpDone = true;
