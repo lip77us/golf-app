@@ -2087,13 +2087,17 @@ class SharedRoundsView(APIView):
         def _status_ok(s):
             return status not in ('in_progress', 'complete', 'pending') or s == status
 
-        # Completed follows drop off the observing lists once they're from a
-        # PREVIOUS date (yesterday or earlier) — no point carrying a round you
-        # only watched after the day it finished.  Live (in_progress / pending)
-        # follows always stay, regardless of date.
-        today = timezone.now().date()
+        # Completed follows drop off the observing lists SHARED_WATCH_RETENTION_DAYS
+        # after the round's play date — not the same day it ended.  A short window
+        # (rather than "before today") also absorbs the client/server timezone skew
+        # that was dropping a round the instant it finished: a game played in the
+        # evening Pacific time carries today's LOCAL date, but the server's UTC
+        # clock has already rolled to tomorrow, so a "d >= today" test failed
+        # immediately.  Live (in_progress / pending) follows always stay.
+        import datetime as _dt
+        cutoff = timezone.now().date() - _dt.timedelta(days=SHARED_WATCH_RETENTION_DAYS)
         def _recent_enough(s, d):
-            return s != 'complete' or (d is not None and d >= today)
+            return s != 'complete' or (d is not None and d >= cutoff)
 
         results = []
         seen_rounds = set()
