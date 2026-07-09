@@ -5166,6 +5166,7 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
     final target = (_labelColW + (pos - 6) * _cellW)
         .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
     _scrollCtrl.animateTo(
+      target,
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
     );
