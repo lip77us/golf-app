@@ -79,6 +79,7 @@ from scoring.handicap import (
     build_score_index,
     _strokes_for_segment_index,
     _allocate_segment_strokes,
+    _strokes_on_hole,
 )
 from tournament.models import Foursome
 
@@ -781,6 +782,136 @@ def apply_withdrawal_to_sixes(foursome, player_id: int, after_hole: int,
 
 
 # ---------------------------------------------------------------------------
+# Per-hole stroke allocation (for the scorecard's stroke dots)
+# ---------------------------------------------------------------------------
+
+def sixes_player_hole_strokes(foursome) -> dict:
+    """
+    ``{player_id: {hole_number: strokes}}`` — the handicap strokes each player
+    receives on each hole AS SIXES ISSUES THEM, so the scorecard stroke dots
+    match the game (not the generic round-wide ``HoleScore.handicap_strokes``).
+
+    Mirrors ``calculate_sixes``: play-order aware (a shotgun segment's strokes
+    fall on its wrapped range, e.g. 16,17,18,1,2,3) and reads the already
+    repositioned segment ranges, so no re-scoring is needed.
+
+    * Gross → empty (no strokes).
+    * Net → standard per-hole allocation from the effective handicap.
+    * Strokes-Off, ``per_segment`` → the per-match spread (``_strokes_for_segment_index``
+      + hardest-holes-in-segment), reusing ``_overlay_so_strokes_for_segment``.
+    * Strokes-Off, ``full_round`` → one stroke on every hole whose SI <= SO.
+
+    Only holes a player has actually scored appear (dots render on played holes).
+    """
+    segments = list(
+        SixesSegment.objects.filter(foursome=foursome)
+        .prefetch_related('teams__players')
+        .order_by('segment_number', 'start_hole')
+    )
+    if not segments:
+        return {}
+
+    first       = segments[0]
+    mode        = first.handicap_mode or HandicapMode.NET
+    net_percent = first.net_percent or 100
+    allocation  = first.handicap_allocation or 'per_segment'
+
+    if mode == HandicapMode.GROSS:
+        return {}
+
+    memberships = list(
+        foursome.memberships.select_related('player', 'tee')
+        .filter(player__is_phantom=False)
+    )
+    member_by_pid = {m.player_id: m for m in memberships}
+
+    # Holes each player has a score on — dots only show on played holes.
+    from scoring.models import HoleScore
+    scored: dict = {}
+    for hs in HoleScore.objects.filter(
+            foursome=foursome,
+            player_id__in=[m.player_id for m in memberships],
+            gross_score__isnull=False):
+        scored.setdefault(hs.player_id, set()).add(hs.hole_number)
+
+    out: dict = {}
+
+    if mode == HandicapMode.NET:
+        for m in memberships:
+            if m.tee_id is None:
+                continue
+            eff = round((m.playing_handicap or 0) * net_percent / 100)
+            if eff <= 0:
+                continue
+            for h in scored.get(m.player_id, ()):
+                si = m.tee.hole(h).get('stroke_index', 18)
+                s  = _strokes_on_hole(eff, si)
+                if s > 0:
+                    out.setdefault(m.player_id, {})[h] = s
+        return out
+
+    # ── Strokes-Off ─────────────────────────────────────────────────────────
+    phcps = [m.playing_handicap for m in memberships
+             if m.playing_handicap is not None]
+    low = min(phcps) if phcps else 0
+    player_so = {
+        m.player_id: round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
+        for m in memberships
+    }
+
+    if allocation == 'full_round':
+        for m in memberships:
+            so = player_so.get(m.player_id, 0)
+            if so <= 0 or m.tee_id is None:
+                continue
+            for h in scored.get(m.player_id, ()):
+                si = m.tee.hole(h).get('stroke_index', 18)
+                if si <= so:
+                    out.setdefault(m.player_id, {})[h] = 1
+        return out
+
+    # per_segment: mirror calculate_sixes using play-order segment ranges.
+    from services.hole_plan import play_order as _play_order
+    order  = _play_order(foursome.round, foursome) or list(range(1, 19))
+    pos_of = {h: i for i, h in enumerate(order)}
+    standard = [s for s in segments if not s.is_extra]
+    extras   = [s for s in segments if s.is_extra]
+
+    def _seg_holes(seg):
+        sp = pos_of.get(seg.start_hole)
+        ep = pos_of.get(seg.end_hole)
+        if sp is None or ep is None or ep < sp:
+            return list(range(seg.start_hole, seg.end_hole + 1))
+        return order[sp:ep + 1]
+
+    # Gross index so the overlay helper only applies strokes on scored holes.
+    gross_index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
+
+    for idx, seg in enumerate(standard):
+        applied = _overlay_so_strokes_for_segment(
+            seg, idx, player_so, member_by_pid,
+            {pid: dict(hs) for pid, hs in gross_index.items()},
+            _seg_holes(seg),
+        )
+        for pid, hs in applied.items():
+            out.setdefault(pid, {}).update(hs)
+
+    for seg in extras:
+        for m in memberships:
+            so = player_so.get(m.player_id, 0)
+            if so <= 0 or m.tee_id is None:
+                continue
+            for h in _seg_holes(seg):
+                if h not in scored.get(m.player_id, ()):
+                    continue
+                si = m.tee.hole(h).get('stroke_index', 18)
+                if si <= so:
+                    out.setdefault(m.player_id, {})[h] = 1
+
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 
@@ -1002,15 +1133,18 @@ def sixes_summary(foursome) -> dict:
     tee         = real_members[0].tee if real_members else None
     par_by_hole = {h.get('number'): h.get('par')
                    for h in ((tee.holes if tee else None) or [])}
+    # Stroke dots reflect how SIXES allocates strokes (per-segment SO spread,
+    # net, or none for gross) — NOT the generic stored HoleScore.handicap_strokes,
+    # which is the round-wide net allocation and wrong for a strokes-off game.
+    strokes_by = sixes_player_hole_strokes(foursome)
     score_by = {}
     for hs in HoleScore.objects.filter(foursome=foursome,
                                        player_id__in=real_pids):
-        score_by[(hs.player_id, hs.hole_number)] = (
-            hs.gross_score, hs.handicap_strokes or 0)
+        score_by[(hs.player_id, hs.hole_number)] = hs.gross_score
     holes_grid = []
     for hn in range(1, 19):
         scored = [pid for pid in real_pids
-                  if score_by.get((pid, hn), (None, 0))[0]]
+                  if score_by.get((pid, hn))]
         if not scored:
             continue
         holes_grid.append({
@@ -1019,8 +1153,8 @@ def sixes_summary(foursome) -> dict:
             'winner_id' : None,
             'scores'    : [
                 {'player_id': pid,
-                 'gross'    : score_by[(pid, hn)][0],
-                 'strokes'  : score_by[(pid, hn)][1]}
+                 'gross'    : score_by[(pid, hn)],
+                 'strokes'  : strokes_by.get(pid, {}).get(hn, 0)}
                 for pid in scored
             ],
         })
