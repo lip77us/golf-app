@@ -425,3 +425,39 @@ class NassauNineTests(TestCase):
         self.assertTrue(autos, presses)
         # The press covers the rest of the 9-hole match (ends on hole 9).
         self.assertEqual(autos[0]['end_hole'], 9, autos[0])
+
+
+class NassauNineBackNineTests(TestCase):
+    """Nassau Nine on a BACK-nine round (holes 10-18): the match must count the
+    holes actually played and show live progress after just a couple of holes —
+    reproduces the "no match progress / Not started" report."""
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, handicap_mode='gross',
+                                net_max_double_bogey=False)
+        self.round.num_holes = 9
+        self.round.starting_hole = 10   # back nine: holes 10..18
+        self.round.save(update_fields=['num_holes', 'starting_hole'])
+        self.fs = make_foursome(
+            self.round, [('A', 0), ('B', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _play(self, hole, a, b):
+        submit_hole(self.fs, hole, [(self.pid['A'], a), (self.pid['B'], b)])
+
+    def test_partial_back_nine_shows_live_progress(self):
+        setup_nassau(self.fs, [self.pid['A']], [self.pid['B']],
+                     handicap_mode='gross', single_match=True)
+        # Only 2 of the 9 holes played (10 and 11); A wins both → 2 up thru 2.
+        self._play(10, 3, 4)
+        self._play(11, 3, 4)
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+        self.assertTrue(s['single_match'])
+        # The single match rides the 'front' bet and must count the 2 back-nine
+        # holes actually played (NOT 0 → the "Not started" bug).
+        self.assertEqual(s['front9']['holes_played'], 2, s['front9'])
+        self.assertEqual(s['front9']['margin'], 2, s['front9'])
+        self.assertIsNone(s['front9']['result'])   # still in progress

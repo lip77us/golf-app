@@ -3433,11 +3433,15 @@ class _NassauGroupCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: theme.colorScheme.primary)),
             ),
-            _bottomBetRow('F9',  nas.bottomFront9!,  t1Names, t2Names, theme, team2Color: team2Color),
-            const SizedBox(height: 4),
-            _bottomBetRow('B9',  nas.bottomBack9!,   t1Names, t2Names, theme, team2Color: team2Color),
-            const SizedBox(height: 4),
-            _bottomBetRow('All', nas.bottomOverall!, t1Names, t2Names, theme, team2Color: team2Color),
+            if (nas.singleMatch)
+              _bottomBetRow('Match', nas.bottomFront9!, t1Names, t2Names, theme, team2Color: team2Color)
+            else ...[
+              _bottomBetRow('F9',  nas.bottomFront9!,  t1Names, t2Names, theme, team2Color: team2Color),
+              const SizedBox(height: 4),
+              _bottomBetRow('B9',  nas.bottomBack9!,   t1Names, t2Names, theme, team2Color: team2Color),
+              const SizedBox(height: 4),
+              _bottomBetRow('All', nas.bottomOverall!, t1Names, t2Names, theme, team2Color: team2Color),
+            ],
             if (nas.bottomPresses.isNotEmpty) ...[
               const Divider(height: 14),
               ..._pressRows(nas.bottomPresses, t1Names, t2Names, theme,

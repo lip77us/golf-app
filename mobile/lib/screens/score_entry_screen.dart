@@ -1964,6 +1964,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           presses:       nas.presses,
           bottomPresses: nas.bottomPresses,
           currentHole:   _selectedHole,
+          singleMatch:   nas.singleMatch,
         ),
 
       Expanded(
@@ -4442,6 +4443,7 @@ class _GameStatusSection extends StatelessWidget {
               scorecard:   scorecard,
               currentHole: currentHole,
               onTapHole:   onTapHole,
+              holesInPlay: holesInPlay,
             )
           else if (loadingNassau)
             const Center(
@@ -5109,6 +5111,7 @@ class _NassauProgressGrid extends StatefulWidget {
   final Scorecard        scorecard;
   final int              currentHole;
   final void Function(int hole)? onTapHole;
+  final List<int>        holesInPlay;   // play order; empty = full 1-18
 
   const _NassauProgressGrid({
     required this.nassau,
@@ -5116,6 +5119,7 @@ class _NassauProgressGrid extends StatefulWidget {
     required this.scorecard,
     required this.currentHole,
     this.onTapHole,
+    this.holesInPlay = const [],
   });
 
   @override
@@ -5153,10 +5157,15 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
 
   void _scrollToHole(int hole) {
     if (!_scrollCtrl.hasClients) return;
-    final target = (_labelColW + (hole - 7) * _cellW)
+    // Scroll by POSITION in the played sequence (back-9 / shotgun aware).
+    final range = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay
+        : List.generate(18, (i) => i + 1);
+    final pos = range.indexOf(hole);
+    if (pos < 0) return;
+    final target = (_labelColW + (pos - 6) * _cellW)
         .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
     _scrollCtrl.animateTo(
-      target,
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
     );
@@ -5204,7 +5213,11 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
     final scorecard   = widget.scorecard;
     final currentHole = widget.currentHole;
     final onTapHole   = widget.onTapHole;
-    final holeRange   = List.generate(18, (i) => i + 1);
+    // Only the holes in play (play order) — no blank/irrelevant 1-9 on a back-9,
+    // so the player-name column stays visible.
+    final holeRange   = widget.holesInPlay.isNotEmpty
+        ? widget.holesInPlay
+        : List.generate(18, (i) => i + 1);
 
     Widget holeCell(int h, {required Widget child, Color? bg}) {
       final isCurrent = h == currentHole;
@@ -6828,16 +6841,20 @@ class _PressesStrip extends StatelessWidget {
   final List<NassauPressResult> presses;
   final List<NassauPressResult> bottomPresses;
   final int currentHole;
+  final bool singleMatch;
   const _PressesStrip({
     required this.presses,
     this.bottomPresses = const [],
     required this.currentHole,
+    this.singleMatch = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme       = Theme.of(context);
-    final currentNine = currentHole <= 9 ? 'front' : 'back';
+    // Nassau Nine is a single match riding the 'front' bet, so its presses are
+    // always tagged 'front' regardless of which physical nine is being played.
+    final currentNine = singleMatch ? 'front' : (currentHole <= 9 ? 'front' : 'back');
 
     // Combine top + bottom, tag each with isBottom flag.
     final allTagged = [
@@ -6867,7 +6884,7 @@ class _PressesStrip extends StatelessWidget {
           for (int k = 0; k < i; k++) {
             if (visible[k].isBottom == isBottom) pressNo++;
           }
-          final ninePrefix = currentNine == 'front' ? 'F9' : 'B9';
+          final ninePrefix = singleMatch ? 'Match' : (currentNine == 'front' ? 'F9' : 'B9');
           final label      = '$ninePrefix ${isBottom ? 'Bot ' : ''}Press $pressNo';
           final result   = p.result;
           final m        = p.margin ?? 0;
@@ -6961,24 +6978,28 @@ class _MatchStatusBar extends StatelessWidget {
         // An 18-hole match has a single bet: show one "Match" chip.
         betRow(
           hasBottom ? 'Top' : null,
-          summary.isEighteenHoleMatch
-              ? [_betChip(context, 'Match', summary.overall, isNine: false)]
-              : [
-                  _betChip(context, 'F9',  summary.front9,  isNine: true),
-                  _betChip(context, 'B9',  summary.back9,   isNine: true),
-                  _betChip(context, 'ALL', summary.overall, isNine: false),
-                ],
+          summary.singleMatch
+              ? [_betChip(context, 'Match', summary.front9, isNine: false)]
+              : summary.isEighteenHoleMatch
+                  ? [_betChip(context, 'Match', summary.overall, isNine: false)]
+                  : [
+                      _betChip(context, 'F9',  summary.front9,  isNine: true),
+                      _betChip(context, 'B9',  summary.back9,   isNine: true),
+                      _betChip(context, 'ALL', summary.overall, isNine: false),
+                    ],
         ),
         // Bottom bet row (Claremont only).
         if (hasBottom) ...[
           const SizedBox(height: 4),
           betRow(
             'Bot',
-            [
-              _bottomChip(context, 'F9',  summary.bottomFront9!),
-              _bottomChip(context, 'B9',  summary.bottomBack9!),
-              _bottomChip(context, 'ALL', summary.bottomOverall!),
-            ],
+            summary.singleMatch
+                ? [_bottomChip(context, 'Match', summary.bottomFront9!)]
+                : [
+                    _bottomChip(context, 'F9',  summary.bottomFront9!),
+                    _bottomChip(context, 'B9',  summary.bottomBack9!),
+                    _bottomChip(context, 'ALL', summary.bottomOverall!),
+                  ],
           ),
         ],
         if (onPress != null) ...[
