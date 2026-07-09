@@ -99,6 +99,11 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
       widget.overallOnly || _singleMatch ||
       (!_playFront && !_playBack && _playOverall);
 
+  /// The stripped-down "Singles Match" (match18): heads-up, one bet, no teams,
+  /// no presses. Nassau Nine also collapses to one bet (_overallOnly) but KEEPS
+  /// teams (for 4-player / Claremont) and the Advanced press/variant section.
+  bool get _isMatch18 => _overallOnly && !_singleMatch;
+
   /// Independent base bets a side can lose with no escalation.
   int get _baseMultiple => _overallOnly ? 1 : 3;
 
@@ -370,7 +375,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           //     are no teams to pick, each golfer is simply a side, so the
           //     colour toggle adds no value — and for the 1-v-1 18-hole match.
           //     Shown for 3-4 players, where the pairing actually matters.
-          if (!_overallOnly && members.length >= 3) ...[
+          if (!_isMatch18 && members.length >= 3) ...[
           SectionCard(
             title: 'Teams',
             child: Column(
@@ -498,7 +503,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           // ── Advanced (Nassau only): presses, game variant, and — once the
           //     match can escalate — the loss cap.  Collapsed by default so the
           //     common case (teams + handicap + stake) stays simple. ──
-          if (!_overallOnly) ...[
+          if (!_isMatch18) ...[
             const SizedBox(height: 16),
             _advancedCard(theme, members),
           ],
