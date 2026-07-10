@@ -54,7 +54,7 @@ from django.db import transaction
 
 from core.models import HandicapMode, MatchStatus
 from games.models import SkinsGame, SkinsHoleResult, SkinsPlayerHoleResult
-from scoring.handicap import build_score_index
+from scoring.handicap import build_score_index, _strokes_on_hole
 from scoring.models import HoleScore
 
 
@@ -634,22 +634,26 @@ def skins_summary(foursome) -> dict:
     # Holes the group abandoned at a withdrawal — voided for everyone, their
     # pot fraction evaporates. Surfaced so the UI can label them.
     killed_holes = plan['killed_holes']
+    # Each player's in-play stroke count (net% / strokes-off number), allocated
+    # by stroke index. Matches how skins actually issues strokes, but computed
+    # PROSPECTIVELY so the scorecard shows a player's stroke holes up front
+    # (dots on every stroke hole, not only the ones already played).
+    phcp_by_pid = {
+        m.player_id: _phcp_in_play(m.playing_handicap or 0)
+        for m in real_members
+    }
+    from services.hole_plan import play_order as _play_order
+    in_play = _play_order(foursome.round, foursome) or list(range(1, 19))
     holes_out: list = []
-    for hole_num in range(1, 19):
-        hr            = hr_by_hole.get(hole_num)
-        scored_pids   = [
-            pid for pid in real_pids
-            if hole_num in gross_index.get(pid, {})
-        ]
+    for hole_num in in_play:
+        hr        = hr_by_hole.get(hole_num)
         is_killed = hole_num in killed_holes
-        if hr is None and not scored_pids and not is_killed:
-            continue   # nobody has played this hole yet
+        si        = si_by_hole.get(hole_num) or 18
 
         scores = []
-        for pid in scored_pids:
-            gross   = gross_index[pid][hole_num]
-            net     = score_index.get(pid, {}).get(hole_num)
-            strokes = max(0, gross - net) if net is not None else 0
+        for pid in real_pids:
+            gross   = gross_index.get(pid, {}).get(hole_num)   # None until scored
+            strokes = _strokes_on_hole(phcp_by_pid.get(pid, 0), si)
             scores.append({
                 'player_id': pid,
                 'gross'    : gross,
@@ -682,9 +686,6 @@ def skins_summary(foursome) -> dict:
             'scores'      : scores,
             'junk'        : junk_entries,
         })
-
-    from services.hole_plan import play_order as _play_order
-    in_play = _play_order(foursome.round, foursome)
 
     return {
         'status'    : game.status,

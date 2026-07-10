@@ -59,6 +59,24 @@ class SkinsTests(TestCase):
         totals = {p['name']: p['skins_won'] for p in summary['players']}
         assert totals == {'Alice': 1, 'Bob': 0, 'Carol': 0, 'Dave': 0}, totals
 
+    def test_scorecard_prospective_strokes_off_before_any_score(self):
+        # The scorecard shows a player's strokes-off stroke holes UP FRONT
+        # (before any hole is played), so you can see where strokes fall.
+        setup_skins(self.fs, handicap_mode='strokes_off')
+        summary = skins_summary(self.fs)   # nothing scored yet
+
+        def stroke_holes(name):
+            pid = self.pid[name]
+            return [h['hole'] for h in summary['holes']
+                    for s in h['scores']
+                    if s['player_id'] == pid and s['strokes'] > 0]
+
+        self.assertGreater(len(stroke_holes('Dave')), 0)   # high hcp gets strokes
+        self.assertEqual(stroke_holes('Alice'), [])        # low plays to 0
+        # Prospective: every gross is still null.
+        self.assertTrue(all(s['gross'] is None
+                            for h in summary['holes'] for s in h['scores']))
+
     def test_summary_holes_carry_stroke_index(self):
         # The scorecard grid needs each hole's stroke index so the leaderboard
         # can render an "Index" row (which holes get strokes in strokes-off).
