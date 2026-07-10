@@ -1128,6 +1128,8 @@ def sixes_summary(foursome) -> dict:
     tee         = real_members[0].tee if real_members else None
     par_by_hole = {h.get('number'): h.get('par')
                    for h in ((tee.holes if tee else None) or [])}
+    si_by_hole  = {h.get('number'): h.get('stroke_index')
+                   for h in ((tee.holes if tee else None) or [])}
     # Stroke dots reflect how SIXES allocates strokes (per-segment SO spread,
     # net, or none for gross) — NOT the generic stored HoleScore.handicap_strokes,
     # which is the round-wide net allocation and wrong for a strokes-off game.
@@ -1145,9 +1147,10 @@ def sixes_summary(foursome) -> dict:
     holes_grid = []
     for hn in holes_in_play:
         holes_grid.append({
-            'hole'      : hn,
-            'par'       : par_by_hole.get(hn),
-            'winner_id' : None,
+            'hole'         : hn,
+            'par'          : par_by_hole.get(hn),
+            'stroke_index' : si_by_hole.get(hn),
+            'winner_id'    : None,
             'scores'    : [
                 {'player_id': pid,
                  'gross'    : score_by.get((pid, hn)),   # None until scored

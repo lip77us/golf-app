@@ -345,6 +345,9 @@ class SixesRessegmentTests(TestCase):
         self.assertEqual(_t2b(18)['strokes'], 1)      # unplayed stroke hole
         self.assertIsNone(_t2b(18)['gross'])          # ...with no score yet
         self.assertEqual(_t2b(16)['gross'], par + 3)  # the one played hole
+        # Each hole carries its stroke index for the scorecard's Index row.
+        self.assertEqual(grid[18]['stroke_index'],
+                         self.tee.hole(18)['stroke_index'])
 
     def test_wrapping_segment_emits_holes_in_play_order(self):
         # Shotgun from hole 16 → play order 16,17,18,1..15. Segment 1 WRAPS:

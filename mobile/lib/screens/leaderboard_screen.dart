@@ -2561,6 +2561,25 @@ class _MsScorecardState extends State<_MsScorecard> {
       );
     }
 
+    // Stroke index (hole handicap 1–18) — shown so an observer can see which
+    // holes are hardest and read off where strokes fall. Only rendered when the
+    // backend supplies it (Sixes does; older/other cards may not).
+    final hasStrokeIndex =
+        holes.any((h) => h['stroke_index'] != null);
+    Widget siCell(int h) {
+      final si = holeMap[h]?['stroke_index'] as int?;
+      return SizedBox(
+        width: _cellW, height: _rowH,
+        child: Center(
+          child: Text(
+            si == null ? '–' : '$si',
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
     Widget scoreCell(int playerId, int h) {
       final entry = holeMap[h];
       if (entry == null) {
@@ -2718,6 +2737,20 @@ class _MsScorecardState extends State<_MsScorecard> {
                 ),
                 for (final h in visibleHoles) parCell(h),
               ]),
+              // Stroke-index (hole handicap) row
+              if (hasStrokeIndex)
+                Row(children: [
+                  SizedBox(
+                    width: _labelColW, height: _rowH,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Index',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
+                    ),
+                  ),
+                  for (final h in visibleHoles) siCell(h),
+                ]),
               Container(
                 height: 1,
                 width: _labelColW + _cellW * visibleHoles.length,
