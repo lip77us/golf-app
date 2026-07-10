@@ -9122,8 +9122,18 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
   @override
   Widget build(BuildContext context) {
     final theme   = Theme.of(context);
-    final summary = FourballSummary.fromJson(
-        (widget.group['summary'] as Map).cast<String, dynamic>());
+    final summaryRaw = (widget.group['summary'] as Map).cast<String, dynamic>();
+    final summary = FourballSummary.fromJson(summaryRaw);
+
+    // Per-player scorecard (dots + stroke-index row + hole-winner tint) — shows
+    // WHERE handicap strokes fall, which the team-net match grid above doesn't.
+    final scHoles = (summaryRaw['scorecard'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scPlayers = (summaryRaw['players'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scHolesInPlay = (summaryRaw['holes_in_play'] as List? ?? const [])
+        .map((e) => e as int)
+        .toList();
 
     final t1Color = GameColors.team1;
     final t2Color = GameColors.team2;
@@ -9331,6 +9341,13 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
               ]),
             ]),
           ),
+
+          // Per-player scorecard: stroke dots + Index row + hole-winner tint.
+          if (scHoles.isNotEmpty) ...[
+            const Divider(height: 20),
+            _MsScorecard(holes: scHoles, participants: scPlayers,
+                legend: null, holesInPlay: scHolesInPlay),
+          ],
         ]),
       ),
     );

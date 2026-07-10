@@ -264,3 +264,40 @@ class FourballMidCourseTests(FourballBase):
                 break
         else:
             self.fail('match never closed out')
+
+
+class FourballScorecardTests(FourballBase):
+    """The leaderboard scorecard block: stroke index + hole-winner team +
+    per-player teams, over every hole in play."""
+
+    def test_scorecard_has_index_teams_and_hole_winner(self):
+        self._make_fs(hcps=(0, 0, 0, 0))
+        self._setup(hmode='gross')
+        # Team 1 (A,B) beats Team 2 (C,D) on hole 1.
+        self._play(1, 3, 4, 5, 5)
+        s = fourball_summary(self.fs)
+        self.assertEqual(len(s['scorecard']), 18)        # whole round listed
+        self.assertEqual(s['holes_in_play'][0], 1)
+        # Players carry their team number for tinting.
+        self.assertEqual({p['team'] for p in s['players']}, {1, 2})
+        h1 = next(h for h in s['scorecard'] if h['hole'] == 1)
+        self.assertEqual(h1['stroke_index'], self.tee.hole(1)['stroke_index'])
+        self.assertEqual(h1['winner_team'], 1)
+        # An unplayed hole still carries par + index with null gross.
+        h2 = next(h for h in s['scorecard'] if h['hole'] == 2)
+        self.assertIsNotNone(h2['stroke_index'])
+        self.assertTrue(all(sco['gross'] is None for sco in h2['scores']))
+
+    def test_scorecard_strokes_off_puts_strokes_on_hardest_holes(self):
+        # D has 4 more than the low → SO 4 → strokes on the 4 hardest holes.
+        self._make_fs(hcps=(0, 0, 0, 4))
+        self._setup(hmode='strokes_off')
+        self._play(1, 4, 4, 4, 4)
+        s = fourball_summary(self.fs)
+        d_id = self.p[3].id
+        # Collect D's strokes across the played hole(s); on a hole with SI <= 4
+        # D should show a stroke.
+        h1 = next(h for h in s['scorecard'] if h['hole'] == 1)
+        d_row = next(sc for sc in h1['scores'] if sc['player_id'] == d_id)
+        si1 = self.tee.hole(1)['stroke_index']
+        self.assertEqual(d_row['strokes'], 1 if si1 <= 4 else 0, (si1, d_row))

@@ -400,40 +400,60 @@ def fourball_summary(foursome) -> dict | None:
                 money[p.id]['amount'] -= bet_amount
     money_out = sorted(money.values(), key=lambda e: (-e['amount'], e['name']))
 
-    # ── Per-hole gross scorecard grid (mirrors the Sixes card) ─────────────
+    # ── Per-hole scorecard grid (dots + stroke index + hole-winner tint) ────
+    # Mirrors Nassau: every hole in play (play order) with par + stroke index
+    # (so an observer sees where strokes fall), per-player gross + strokes for
+    # the dots, and the winning team per hole so the card can tint it.
     real_members = [
         m for m in foursome.memberships.select_related('player', 'tee').all()
         if not m.player.is_phantom
     ]
+    real_pids = [m.player_id for m in real_members]
+    team_of = {}
+    for _tn, _tm in teams.items():
+        if _tm:
+            for _p in _tm.players.all():
+                team_of[_p.id] = _tn
     players_out = [
         {'player_id': m.player_id, 'name': m.player.name,
-         'short_name': m.player.short_name}
+         'short_name': m.player.short_name,
+         'team': team_of.get(m.player_id)}
         for m in real_members
     ]
-    real_pids = [m.player_id for m in real_members]
     tee       = real_members[0].tee if real_members else None
     par_by_hole = {h.get('number'): h.get('par')
                    for h in ((tee.holes if tee else None) or [])}
-    score_by = {}
+    si_by_hole  = {h.get('number'): h.get('stroke_index')
+                   for h in ((tee.holes if tee else None) or [])}
+    # Net honours the game's handicap mode (incl. strokes-off), so gross − net
+    # is the real per-hole allocation — not the generic stored handicap_strokes.
+    net_index = _fourball_score_index(
+        foursome, game.handicap_mode, game.net_percent)
+    gross_by = {}
     for hs in HoleScore.objects.filter(foursome=foursome,
                                        player_id__in=real_pids):
-        score_by[(hs.player_id, hs.hole_number)] = (
-            hs.gross_score, hs.handicap_strokes or 0)
+        gross_by[(hs.player_id, hs.hole_number)] = hs.gross_score
+    winner_by_hole = {
+        h['hole']: (1 if h['winner'] == 'T1'
+                    else 2 if h['winner'] == 'T2' else None)
+        for h in holes_out
+    }
+    holes_in_play = _order or list(range(1, 19))
     scorecard = []
-    for hn in range(1, 19):
-        scored = [pid for pid in real_pids
-                  if score_by.get((pid, hn), (None, 0))[0]]
-        if not scored:
-            continue
+    for hn in holes_in_play:
+        row_scores = []
+        for pid in real_pids:
+            g   = gross_by.get((pid, hn))
+            net = net_index.get(pid, {}).get(hn)
+            strokes = max(0, g - net) if (g is not None and net is not None) else 0
+            row_scores.append({'player_id': pid, 'gross': g, 'strokes': strokes})
         scorecard.append({
-            'hole'  : hn,
-            'par'   : par_by_hole.get(hn),
-            'scores': [
-                {'player_id': pid,
-                 'gross'    : score_by[(pid, hn)][0],
-                 'strokes'  : score_by[(pid, hn)][1]}
-                for pid in scored
-            ],
+            'hole'        : hn,
+            'par'         : par_by_hole.get(hn),
+            'stroke_index': si_by_hole.get(hn),
+            'winner_id'   : None,
+            'winner_team' : winner_by_hole.get(hn),
+            'scores'      : row_scores,
         })
 
     leader = None
@@ -471,4 +491,5 @@ def fourball_summary(foursome) -> dict | None:
         },
         'players'          : players_out,
         'scorecard'        : scorecard,
+        'holes_in_play'    : holes_in_play,
     }
