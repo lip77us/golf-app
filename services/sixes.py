@@ -825,14 +825,12 @@ def sixes_player_hole_strokes(foursome) -> dict:
     )
     member_by_pid = {m.player_id: m for m in memberships}
 
-    # Holes each player has a score on — dots only show on played holes.
-    from scoring.models import HoleScore
-    scored: dict = {}
-    for hs in HoleScore.objects.filter(
-            foursome=foursome,
-            player_id__in=[m.player_id for m in memberships],
-            gross_score__isnull=False):
-        scored.setdefault(hs.player_id, set()).add(hs.hole_number)
+    # Prospective plan: strokes are allocated over EVERY hole in play (in play
+    # order), not just holes already scored, so the scorecard can show the whole
+    # stroke plan up front — "you get a stroke on the 2nd and 4th of this six".
+    from services.hole_plan import play_order as _play_order
+    order  = _play_order(foursome.round, foursome) or list(range(1, 19))
+    pos_of = {h: i for i, h in enumerate(order)}
 
     out: dict = {}
 
@@ -843,7 +841,7 @@ def sixes_player_hole_strokes(foursome) -> dict:
             eff = round((m.playing_handicap or 0) * net_percent / 100)
             if eff <= 0:
                 continue
-            for h in scored.get(m.player_id, ()):
+            for h in order:
                 si = m.tee.hole(h).get('stroke_index', 18)
                 s  = _strokes_on_hole(eff, si)
                 if s > 0:
@@ -864,16 +862,13 @@ def sixes_player_hole_strokes(foursome) -> dict:
             so = player_so.get(m.player_id, 0)
             if so <= 0 or m.tee_id is None:
                 continue
-            for h in scored.get(m.player_id, ()):
+            for h in order:
                 si = m.tee.hole(h).get('stroke_index', 18)
                 if si <= so:
                     out.setdefault(m.player_id, {})[h] = 1
         return out
 
     # per_segment: mirror calculate_sixes using play-order segment ranges.
-    from services.hole_plan import play_order as _play_order
-    order  = _play_order(foursome.round, foursome) or list(range(1, 19))
-    pos_of = {h: i for i, h in enumerate(order)}
     standard = [s for s in segments if not s.is_extra]
     extras   = [s for s in segments if s.is_extra]
 
@@ -884,13 +879,15 @@ def sixes_player_hole_strokes(foursome) -> dict:
             return list(range(seg.start_hole, seg.end_hole + 1))
         return order[sp:ep + 1]
 
-    # Gross index so the overlay helper only applies strokes on scored holes.
-    gross_index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
+    # A placeholder index carrying every hole in play, so the overlay helper
+    # allocates each segment's strokes across ITS holes whether or not they've
+    # been scored yet (prospective).
+    placeholder = {m.player_id: {h: 0 for h in order} for m in memberships}
 
     for idx, seg in enumerate(standard):
         applied = _overlay_so_strokes_for_segment(
             seg, idx, player_so, member_by_pid,
-            {pid: dict(hs) for pid, hs in gross_index.items()},
+            {pid: dict(hs) for pid, hs in placeholder.items()},
             _seg_holes(seg),
         )
         for pid, hs in applied.items():
@@ -902,8 +899,6 @@ def sixes_player_hole_strokes(foursome) -> dict:
             if so <= 0 or m.tee_id is None:
                 continue
             for h in _seg_holes(seg):
-                if h not in scored.get(m.player_id, ()):
-                    continue
                 si = m.tee.hole(h).get('stroke_index', 18)
                 if si <= so:
                     out.setdefault(m.player_id, {})[h] = 1
@@ -1141,21 +1136,23 @@ def sixes_summary(foursome) -> dict:
     for hs in HoleScore.objects.filter(foursome=foursome,
                                        player_id__in=real_pids):
         score_by[(hs.player_id, hs.hole_number)] = hs.gross_score
+    # Emit EVERY hole in play (play order), not just scored ones, so the
+    # scorecard shows the whole stroke plan up front — a player's stroke dot
+    # appears on its hole even before that hole is scored (gross is null until
+    # then). Play order groups a shotgun segment's holes together (16,17,18,…).
+    from services.hole_plan import play_order as _play_order
+    holes_in_play = _play_order(foursome.round, foursome) or list(range(1, 19))
     holes_grid = []
-    for hn in range(1, 19):
-        scored = [pid for pid in real_pids
-                  if score_by.get((pid, hn))]
-        if not scored:
-            continue
+    for hn in holes_in_play:
         holes_grid.append({
             'hole'      : hn,
             'par'       : par_by_hole.get(hn),
             'winner_id' : None,
             'scores'    : [
                 {'player_id': pid,
-                 'gross'    : score_by[(pid, hn)],
+                 'gross'    : score_by.get((pid, hn)),   # None until scored
                  'strokes'  : strokes_by.get(pid, {}).get(hn, 0)}
-                for pid in scored
+                for pid in real_pids
             ],
         })
 
@@ -1163,6 +1160,7 @@ def sixes_summary(foursome) -> dict:
         'segments': seg_out,
         'players' : players_out,
         'holes'   : holes_grid,
+        'holes_in_play' : holes_in_play,
         'overall' : {
             'team1_wins' : t1_total_wins,
             'team2_wins' : t2_total_wins,

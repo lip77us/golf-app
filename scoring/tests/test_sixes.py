@@ -297,15 +297,17 @@ class SixesRessegmentTests(TestCase):
         bounds = {(seg['start_hole'], seg['end_hole']) for seg in s['segments']}
         self.assertEqual(bounds, {(8, 13), (14, 1), (2, 7)}, s['segments'])
 
-    def test_strokes_off_dots_follow_play_order_segments(self):
-        # Shotgun from hole 16 → play order 16,17,18,1..15; segment 1 WRAPS to
-        # holes 16,17,18,1,2,3. A player with SO=4 gets floor(4/3)=1 per
-        # segment plus a +1 on the FIRST segment (4%3=1) → 2 strokes in
-        # segment 1, on its two hardest holes (SI 3 = hole 2, SI 6 = hole 18),
-        # then 1 in segment 2 (SI 1 = hole 5) and 1 in segment 3 (SI 2 =
-        # hole 14). Hole 18 only earns a stroke because segment 1 wraps to
-        # include it — a hole-number allocation would miss it entirely. This is
-        # the allocation the scorecard stroke dots must show.
+    def test_strokes_off_dots_are_prospective_and_play_order(self):
+        # User's scenario: shotgun from hole 16 (play order 16,17,18,1..15),
+        # only the FIRST hole (16) entered so far. The WHOLE stroke plan must
+        # still be visible — dots on the not-yet-played stroke holes.
+        #
+        # A player with SO=4 gets floor(4/3)=1 per segment plus a +1 on the
+        # FIRST segment (4%3=1) → 2 strokes in segment 1 (its two hardest holes
+        # SI 3 = hole 2 and SI 6 = hole 18), then 1 in segment 2 (SI 1 = hole 5)
+        # and 1 in segment 3 (SI 2 = hole 14). Hole 18 only earns a stroke
+        # because segment 1 WRAPS to include it — a hole-number allocation
+        # would miss it.
         self.round.num_holes = 18
         self.round.starting_hole = 16
         self.round.save(update_fields=['num_holes', 'starting_hole'])
@@ -318,20 +320,31 @@ class SixesRessegmentTests(TestCase):
         self.pid = {m.player.name: m.player_id
                     for m in self.fs.memberships.select_related('player')}
         setup_sixes(self.fs, self._td(), handicap_mode='strokes_off')
-        # T2B scores high enough that its SO strokes never win a hole (T2A
-        # carries the team net), so every hole halves — no closeout, thirds
-        # stay put. The stroke ALLOCATION still credits T2B (handicap-based).
-        for h in range(1, 19):
-            par = self.tee.hole(h)['par']
-            submit_hole(self.fs, h, [
-                (self.pid['T1A'], par), (self.pid['T1B'], par),
-                (self.pid['T2A'], par), (self.pid['T2B'], par + 3)])
+        # Only the first hole (16) is played.
+        par = self.tee.hole(16)['par']
+        submit_hole(self.fs, 16, [
+            (self.pid['T1A'], par), (self.pid['T1B'], par),
+            (self.pid['T2A'], par), (self.pid['T2B'], par + 3)])
         calculate_sixes(self.fs)
+
         strokes = sixes_player_hole_strokes(self.fs)
         t2b = {h: s for h, s in strokes.get(self.pid['T2B'], {}).items() if s}
         self.assertEqual(t2b, {2: 1, 18: 1, 5: 1, 14: 1}, t2b)
-        # The scratch players get no dots.
-        self.assertEqual(strokes.get(self.pid['T1A'], {}), {})
+        self.assertEqual(strokes.get(self.pid['T1A'], {}), {})  # scratch = no dots
+
+        # The summary grid carries those strokes on the UNPLAYED holes (with a
+        # null gross), and renders columns in play order.
+        summary = sixes_summary(self.fs)
+        self.assertEqual(summary['holes_in_play'][0], 16)       # play order
+        grid = {h['hole']: h for h in summary['holes']}
+
+        def _t2b(hole):
+            return next(s for s in grid[hole]['scores']
+                        if s['player_id'] == self.pid['T2B'])
+
+        self.assertEqual(_t2b(18)['strokes'], 1)      # unplayed stroke hole
+        self.assertIsNone(_t2b(18)['gross'])          # ...with no score yet
+        self.assertEqual(_t2b(16)['gross'], par + 3)  # the one played hole
 
     def test_wrapping_segment_emits_holes_in_play_order(self):
         # Shotgun from hole 16 → play order 16,17,18,1..15. Segment 1 WRAPS:

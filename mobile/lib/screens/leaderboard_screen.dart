@@ -2465,11 +2465,13 @@ class _MsScorecardState extends State<_MsScorecard> {
 
   final ScrollController _ctrl = ScrollController();
 
-  // Last hole that actually has scores — so the auto-scroll lands on the
-  // latest *played* hole, not the highest hole present in the data (Wolf
-  // lists all 18 up front, including unplayed ones).
+  // Last hole that actually has a score — so the auto-scroll lands on the
+  // latest *played* hole, not the highest hole present in the data (Wolf and
+  // Sixes list every hole up front — Sixes carries null-gross rows so the
+  // prospective stroke dots can render before a hole is played).
   int get _lastScoredHole => widget.holes
-      .where((h) => ((h['scores'] as List?) ?? const []).isNotEmpty)
+      .where((h) => ((h['scores'] as List?) ?? const [])
+          .any((s) => (s as Map)['gross'] != null))
       .map((h) => (h['hole'] as int?) ?? 0)
       .fold(0, (a, b) => a > b ? a : b);
 
@@ -2569,12 +2571,14 @@ class _MsScorecardState extends State<_MsScorecard> {
         (s) => s['player_id'] == playerId,
         orElse: () => const {},
       );
-      if (mine.isEmpty) {
-        // Participant didn't score this hole yet.
+      final gross   = mine['gross'] as int?;   // null until this hole is scored
+      final strokes = mine['strokes'] as int? ?? 0;
+      // Unplayed hole with no stroke planned → nothing to show. A planned
+      // stroke on an unplayed hole still renders (blank digit + dot) so the
+      // whole stroke plan is visible up front.
+      if (mine.isEmpty || (gross == null && strokes == 0)) {
         return SizedBox(width: _cellW, height: _rowH);
       }
-      final gross   = mine['gross'] as int;
-      final strokes = mine['strokes'] as int? ?? 0;
       final isWinner = entry['winner_id'] == playerId;
 
       return Container(
@@ -2589,7 +2593,7 @@ class _MsScorecardState extends State<_MsScorecard> {
         child: Stack(children: [
           Center(
             child: Text(
-              '$gross',
+              gross == null ? '' : '$gross',
               style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: isWinner ? FontWeight.bold : FontWeight.w500,
                 color: isWinner ? winFg : null,
@@ -3954,6 +3958,9 @@ class _SixesGroupCard extends StatelessWidget {
         .cast<Map<String, dynamic>>();
     final players  = (summary['players'] as List? ?? const [])
         .cast<Map<String, dynamic>>();
+    final holesInPlay = (summary['holes_in_play'] as List? ?? const [])
+        .map((e) => e as int)
+        .toList();
 
     // In a single-foursome round the "Group N" header is pointless.
     // _ByGroupView injects this flag so we can hide it.
@@ -4054,7 +4061,8 @@ class _SixesGroupCard extends StatelessWidget {
           // with no single per-hole player winner).
           if (holes.isNotEmpty) ...[
             const Divider(height: 20),
-            _MsScorecard(holes: holes, participants: players, legend: null),
+            _MsScorecard(holes: holes, participants: players, legend: null,
+                holesInPlay: holesInPlay),
           ],
         ]),
       ),
