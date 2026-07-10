@@ -353,6 +353,24 @@ class NassauShotgunTests(TestCase):
         self.assertIsNotNone(holes[1]['back9_margin'])
         self.assertIsNone(holes[1]['front9_margin'])
 
+    def test_summary_scorecard_has_index_and_play_order(self):
+        # The leaderboard card's scorecard needs each hole's stroke index (for
+        # the "Index" row) and holes in play order (shotgun from 8 → 8 first).
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross')
+        self._play(8, 4, 4)
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+        sc = s['scorecard']
+        self.assertEqual(sc['holes_in_play'][0], 8)          # play order
+        self.assertEqual(len(sc['holes']), 18)               # whole round listed
+        h8 = next(h for h in sc['holes'] if h['hole'] == 8)
+        self.assertEqual(h8['stroke_index'], self.tee.hole(8)['stroke_index'])
+        self.assertEqual(len(sc['players']), 4)
+        # An unplayed hole still appears (par + index) with null gross.
+        h1 = next(h for h in sc['holes'] if h['hole'] == 1)
+        self.assertIsNotNone(h1['stroke_index'])
+        self.assertTrue(all(sco['gross'] is None for sco in h1['scores']))
+
     def test_manual_press_on_shotgun_back_nine(self):
         setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross',
                      press_mode='manual')

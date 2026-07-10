@@ -3285,6 +3285,17 @@ class _NassauGroupCard extends StatelessWidget {
     final summaryRaw  = group['summary'] as Map<String, dynamic>? ?? {};
     final nas         = NassauSummary.fromJson(summaryRaw);
 
+    // Scorecard grid (dots + stroke-index row) — Nassau has no scorecard of its
+    // own otherwise, so a strokes-off player couldn't see where strokes fall.
+    final scorecard   = summaryRaw['scorecard'] as Map<String, dynamic>? ?? const {};
+    final scHoles     = (scorecard['holes'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scPlayers   = (scorecard['players'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scHolesInPlay = (scorecard['holes_in_play'] as List? ?? const [])
+        .map((e) => e as int)
+        .toList();
+
     // Cup match metadata
     final isCupMatch    = group['is_cup_match'] == true;
     final cupPointValue = (group['cup_point_value'] as num?)?.toDouble() ?? 1.0;
@@ -3604,6 +3615,14 @@ class _NassauGroupCard extends StatelessWidget {
                 ],
               ),
             ]),
+          ],
+
+          // Scorecard: dots show where handicap strokes fall; the "Index" row
+          // shows the whole-round stroke plan (which holes get strokes).
+          if (scHoles.isNotEmpty) ...[
+            const Divider(height: 20),
+            _MsScorecard(holes: scHoles, participants: scPlayers,
+                legend: null, holesInPlay: scHolesInPlay),
           ],
         ]),
       ),

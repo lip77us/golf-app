@@ -1277,7 +1277,43 @@ def nassau_summary(foursome) -> dict | None:
             for p in teams[team_num].players.all()
         ]
 
+    # Scorecard grid for the leaderboard card (Nassau has no scorecard otherwise).
+    # Every hole in play (play order) carries par + stroke index so an observer
+    # can see which holes get strokes in strokes-off, plus per-player gross +
+    # strokes for the dots. score_index already honours the game's handicap mode,
+    # so gross − net is the real per-hole allocation. Dots are retrospective (on
+    # scored holes); the Index row conveys the whole-round stroke plan.
+    from services.hole_plan import play_order as _play_order
+    holes_in_play = _play_order(foursome.round, foursome) or list(range(1, 19))
+    scorecard_players = [
+        {'player_id': m.player_id, 'name': m.player.name,
+         'short_name': m.player.short_name,
+         'phcp_in_play': phcp_by_pid.get(m.player_id)}
+        for m in real_memberships
+    ]
+    scorecard_holes = []
+    for hn in holes_in_play:
+        row_scores = []
+        for m in real_memberships:
+            pid = m.player_id
+            g   = gross_index.get(pid, {}).get(hn)
+            net = score_index.get(pid, {}).get(hn)
+            strokes = max(0, g - net) if (g is not None and net is not None) else 0
+            row_scores.append({'player_id': pid, 'gross': g, 'strokes': strokes})
+        scorecard_holes.append({
+            'hole'         : hn,
+            'par'          : par_by_hole.get(hn),
+            'stroke_index' : si_by_hole.get(hn),
+            'winner_id'    : None,
+            'scores'       : row_scores,
+        })
+
     return {
+        'scorecard'     : {
+            'players'      : scorecard_players,
+            'holes'        : scorecard_holes,
+            'holes_in_play': holes_in_play,
+        },
         'status'        : game.status,
         'variant'       : game.variant,
         'handicap_mode' : effective_hcp_mode,
