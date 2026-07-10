@@ -1,6 +1,8 @@
 /// providers/auth_provider.dart
 /// Manages login state and persists the auth token across restarts.
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/client.dart';
@@ -72,19 +74,53 @@ class AuthProvider extends ChangeNotifier {
     }
     _token = saved;
     try {
-      final result = await ApiClient(token: saved).me();
-      _username       = result.username;
-      _player         = result.player;
-      _account        = result.account;
-      _isStaff        = result.isStaff;
-      _isAccountAdmin = result.isAccountAdmin;
-      _isSupport      = result.isSupport;
-    } catch (_) {
-      // Token expired or server unreachable — clear it.
+      _applyProfile(await ApiClient(token: saved).me());
+    } on AuthException {
+      // Genuine 401 — the saved token is dead. Clear it so the user re-auths.
       _token = null;
       await prefs.remove(_tokenKey);
+    } catch (_) {
+      // Transient network/server error — do NOT log the user out. A flaky
+      // connection on cold-start (e.g. launching from a tapped watch link)
+      // would otherwise wipe a perfectly valid session and force an OTP
+      // re-login. Keep the token and refresh the profile in the background
+      // once connectivity returns.
+      unawaited(_refreshProfileInBackground());
     }
     notifyListeners();
+  }
+
+  void _applyProfile(dynamic result) {
+    _username       = result.username;
+    _player         = result.player;
+    _account        = result.account;
+    _isStaff        = result.isStaff;
+    _isAccountAdmin = result.isAccountAdmin;
+    _isSupport      = result.isSupport;
+  }
+
+  /// Recover the profile after `restoreSession` kept the token but couldn't
+  /// fetch `me()` (transient failure). Retries with backoff until it succeeds,
+  /// hits a real 401 (then logs out), or the user logs out meanwhile.
+  Future<void> _refreshProfileInBackground() async {
+    for (var attempt = 0; attempt < 5; attempt++) {
+      await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
+      final token = _token;
+      if (token == null) return;   // logged out in the meantime
+      try {
+        _applyProfile(await ApiClient(token: token).me());
+        notifyListeners();
+        return;
+      } on AuthException {
+        _token = null;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_tokenKey);
+        notifyListeners();
+        return;
+      } catch (_) {
+        // still offline — keep retrying
+      }
+    }
   }
 
   Future<void> login(String accountName, String username, String password) async {
