@@ -2566,6 +2566,13 @@ class _MsScorecardState extends State<_MsScorecard> {
     // backend supplies it (Sixes does; older/other cards may not).
     final hasStrokeIndex =
         holes.any((h) => h['stroke_index'] != null);
+    // Player → team number (Nassau supplies `team`; Skins/Multi-Skins don't).
+    // Used to tint the winning team's cells on each hole (`winner_team`).
+    final teamOf = <int, int>{
+      for (final p in widget.participants)
+        if (p['player_id'] is int && p['team'] is int)
+          p['player_id'] as int: p['team'] as int,
+    };
     Widget siCell(int h) {
       final si = holeMap[h]?['stroke_index'] as int?;
       return SizedBox(
@@ -2598,15 +2605,30 @@ class _MsScorecardState extends State<_MsScorecard> {
       if (mine.isEmpty || (gross == null && strokes == 0)) {
         return SizedBox(width: _cellW, height: _rowH);
       }
-      final isWinner = entry['winner_id'] == playerId;
+      final isWinner = entry['winner_id'] == playerId;   // Skins per-player win
+      // Nassau: the whole winning TEAM's cells get tinted in their colour.
+      final winnerTeam = entry['winner_team'] as int?;
+      final myTeam     = teamOf[playerId];
+      final teamWin    = winnerTeam != null && myTeam != null && myTeam == winnerTeam;
+
+      Color? cellBg;
+      Color? cellFg;
+      Border? cellBorder;
+      if (teamWin) {
+        cellBg = winnerTeam == 1 ? GameColors.team1Bg : GameColors.team2Bg;
+        cellFg = winnerTeam == 1 ? GameColors.team1   : GameColors.team2;
+      } else if (isWinner) {
+        cellBg     = winBg;
+        cellFg     = winFg;
+        cellBorder = Border.all(color: Colors.green.shade400, width: 1);
+      }
+      final highlight = teamWin || isWinner;
 
       return Container(
         width: _cellW, height: _rowH,
         decoration: BoxDecoration(
-          color: isWinner ? winBg : null,
-          border: isWinner
-              ? Border.all(color: Colors.green.shade400, width: 1)
-              : null,
+          color: cellBg,
+          border: cellBorder,
           borderRadius: BorderRadius.circular(3),
         ),
         child: Stack(children: [
@@ -2614,8 +2636,8 @@ class _MsScorecardState extends State<_MsScorecard> {
             child: Text(
               gross == null ? '' : '$gross',
               style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: isWinner ? FontWeight.bold : FontWeight.w500,
-                color: isWinner ? winFg : null,
+                fontWeight: highlight ? FontWeight.bold : FontWeight.w500,
+                color: cellFg,
               ),
             ),
           ),

@@ -366,10 +366,21 @@ class NassauShotgunTests(TestCase):
         h8 = next(h for h in sc['holes'] if h['hole'] == 8)
         self.assertEqual(h8['stroke_index'], self.tee.hole(8)['stroke_index'])
         self.assertEqual(len(sc['players']), 4)
+        # Players carry their team number so the card can tint team wins.
+        self.assertEqual({p['team'] for p in sc['players']}, {1, 2})
         # An unplayed hole still appears (par + index) with null gross.
         h1 = next(h for h in sc['holes'] if h['hole'] == 1)
         self.assertIsNotNone(h1['stroke_index'])
         self.assertTrue(all(sco['gross'] is None for sco in h1['scores']))
+
+    def test_scorecard_marks_hole_winner_team(self):
+        # Team 1 wins hole 8 outright (net) → the scorecard flags winner_team=1.
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross')
+        self._play(8, 3, 5)   # team1 gross 3, team2 gross 5 → team1 wins
+        calculate_nassau(self.fs)
+        sc = nassau_summary(self.fs)['scorecard']
+        h8 = next(h for h in sc['holes'] if h['hole'] == 8)
+        self.assertEqual(h8['winner_team'], 1, h8)
 
     def test_manual_press_on_shotgun_back_nine(self):
         setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross',

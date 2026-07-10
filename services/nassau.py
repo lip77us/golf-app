@@ -1285,10 +1285,27 @@ def nassau_summary(foursome) -> dict | None:
     # scored holes); the Index row conveys the whole-round stroke plan.
     from services.hole_plan import play_order as _play_order
     holes_in_play = _play_order(foursome.round, foursome) or list(range(1, 19))
+    # Per-hole winner by NET best ball (lower team best net wins; a tie is
+    # halved). Lets the scorecard tint the winning team's cells so you can see
+    # who won each hole.
+    winner_by_hole: dict = {}
+    for h in holes_out:
+        t1n, t2n = h.get('t1_net'), h.get('t2_net')
+        if t1n is None or t2n is None:
+            continue
+        if t1n < t2n:
+            winner_by_hole[h['hole']] = 1
+        elif t2n < t1n:
+            winner_by_hole[h['hole']] = 2
+    team_of: dict = {}
+    for _tnum, _tm in teams.items():
+        for _p in _tm.players.all():
+            team_of[_p.id] = _tnum
     scorecard_players = [
         {'player_id': m.player_id, 'name': m.player.name,
          'short_name': m.player.short_name,
-         'phcp_in_play': phcp_by_pid.get(m.player_id)}
+         'phcp_in_play': phcp_by_pid.get(m.player_id),
+         'team': team_of.get(m.player_id)}
         for m in real_memberships
     ]
     scorecard_holes = []
@@ -1305,6 +1322,7 @@ def nassau_summary(foursome) -> dict | None:
             'par'          : par_by_hole.get(hn),
             'stroke_index' : si_by_hole.get(hn),
             'winner_id'    : None,
+            'winner_team'  : winner_by_hole.get(hn),
             'scores'       : row_scores,
         })
 
