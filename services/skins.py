@@ -624,9 +624,11 @@ def skins_summary(foursome) -> dict:
         (m.tee for m in real_members if m.tee_id is not None),
         None,
     )
+    si_by_hole: dict = {}
     if sample_tee is not None:
         for h in range(1, 19):
             par_by_hole[h] = sample_tee.hole(h).get('par')
+            si_by_hole[h]  = sample_tee.hole(h).get('stroke_index')
 
     # ---- Holes grid ---------------------------------------------------------
     # Holes the group abandoned at a withdrawal — voided for everyone, their
@@ -668,9 +670,10 @@ def skins_summary(foursome) -> dict:
         is_dead = (hr is not None and winner_id is None and not is_carry)
 
         holes_out.append({
-            'hole'        : hole_num,
-            'par'         : par_by_hole.get(hole_num),
-            'winner_id'   : winner_id,
+            'hole'         : hole_num,
+            'par'          : par_by_hole.get(hole_num),
+            'stroke_index' : si_by_hole.get(hole_num),
+            'winner_id'    : winner_id,
             'winner_short': hr.winner.short_name if hr and hr.winner else None,
             'skins_value' : hr.skins_value if hr else 0,
             'is_carry'    : is_carry,

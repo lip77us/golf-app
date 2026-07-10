@@ -59,6 +59,17 @@ class SkinsTests(TestCase):
         totals = {p['name']: p['skins_won'] for p in summary['players']}
         assert totals == {'Alice': 1, 'Bob': 0, 'Carol': 0, 'Dave': 0}, totals
 
+    def test_summary_holes_carry_stroke_index(self):
+        # The scorecard grid needs each hole's stroke index so the leaderboard
+        # can render an "Index" row (which holes get strokes in strokes-off).
+        setup_skins(self.fs, handicap_mode='strokes_off')
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 4), (self.pid['Bob'], 5),
+                                 (self.pid['Carol'], 5), (self.pid['Dave'], 5)])
+        calculate_skins(self.fs)
+        summary = skins_summary(self.fs)
+        h1 = next(h for h in summary['holes'] if h['hole'] == 1)
+        self.assertEqual(h1['stroke_index'], self.tee.hole(1)['stroke_index'])
+
     # ── Carryover ──────────────────────────────────────────────────────────
 
     def test_carryover_resolves_with_three_skins_on_winning_hole(self):
