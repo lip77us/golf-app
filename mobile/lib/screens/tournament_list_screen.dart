@@ -25,7 +25,8 @@ class TournamentListScreen extends StatefulWidget {
   State<TournamentListScreen> createState() => _TournamentListScreenState();
 }
 
-class _TournamentListScreenState extends State<TournamentListScreen> {
+class _TournamentListScreenState extends State<TournamentListScreen>
+    with WidgetsBindingObserver {
   List<Tournament>? _tournaments;
   /// Tournament rounds in OTHER accounts a friend/TD added me to.
   List<ScoringRound> _shared = [];
@@ -43,7 +44,24 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Foregrounding the app (warm launch from the home screen) doesn't re-run
+  /// initState — the widget is still mounted — so without this the list would
+  /// show whatever was loaded last time it was visible. Silently re-fetch on
+  /// resume so a tournament you were added to while the app was backgrounded
+  /// appears without a manual pull-to-refresh.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load(silent: true);
   }
 
   /// A tournament is "complete" when it has at least one round and every
@@ -57,8 +75,10 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     setState(() { _showCompleted = showCompleted; });
   }
 
-  Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+  /// [silent] refreshes WITHOUT the full-screen spinner — used on app resume so
+  /// foregrounding doesn't flash a loader over the existing list.
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() { _loading = true; _error = null; });
     try {
       final client = context.read<AuthProvider>().client;
       final data   = await client.getTournaments();
@@ -100,9 +120,11 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         }
       }
     } catch (e) {
-      if (mounted) setState(() { _error = friendlyError(e); _networkError = isNetworkError(e); });
+      // A silent (background) refresh that fails leaves the existing list in
+      // place rather than replacing it with a full-screen error.
+      if (mounted && !silent) setState(() { _error = friendlyError(e); _networkError = isNetworkError(e); });
     } finally {
-      if (mounted) setState(() { _loading = false; });
+      if (mounted && !silent) setState(() { _loading = false; });
     }
   }
 
