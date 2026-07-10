@@ -26,7 +26,7 @@ class CasualRoundsListScreen extends StatefulWidget {
 }
 
 class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
-    with RouteAware {
+    with RouteAware, WidgetsBindingObserver {
   List<CasualRoundSummary>? _rounds;
   /// Rounds in OTHER accounts a friend added me to as a player (any size).
   List<ScoringRound> _shared = [];
@@ -46,6 +46,7 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
@@ -58,8 +59,20 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     appRouteObserver.unsubscribe(this);
     super.dispose();
+  }
+
+  /// Foregrounding the app (warm launch from the home screen) does NOT re-run
+  /// initState — the widget is still mounted from before — so without this the
+  /// list would show whatever was loaded last time it was visible. Silently
+  /// re-fetch on resume so a round that started while the app was backgrounded
+  /// (e.g. a partner adding you to a casual game) shows up without a manual
+  /// pull-to-refresh.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load(silent: true);
   }
 
   /// Returning to this screen (a round/score screen on top was popped) — the
