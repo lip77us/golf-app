@@ -26,9 +26,10 @@ vegas,wolf,sixes,stableford,spots,handicap,foursome,matchplay,scorecard,tourname
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
-## Promotional text (170 max, editable without review)
+## Promotional text (170 max, editable without review) — 168 chars
 Now see exactly where every player's handicap strokes fall — hole by hole, all
-18, in every game. Plus live results, group chat, and a one-tap settle-up.
+18, in every game. Plus live results, group chat, and a one-tap settle-up & 9
+hole games.
 
 ## Description (4000 max)
 Halved keeps score for the games golfers really play. Set up a round, pick your
@@ -98,6 +99,7 @@ See where every stroke falls:
 • The Stroke Play tab now lays out each player's full-round strokes hole by
   hole — all 18 — even before you tee off.
 • Wolf: the tee shows who's getting a stroke before the Wolf picks a partner.
+• Support for nine-hole play as well as shotgun starts.
 • Set a home course once and it's ready every time you start a round.
 • The leaderboard refreshes the moment you open it.
 • Fixes: correct strokes when men and women play different tees, Strokes-Off-Low
