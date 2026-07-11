@@ -190,6 +190,18 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             _playerTees[authPlayer.id]   = 0; // 0 means unassigned tee
             _playerGroups[authPlayer.id] = 1;
           }
+
+          // Default to the golfer's home course (if set and present in this
+          // account's course list). The course search field / pencil can still
+          // swap it; tee suggestions are applied on the tee step as usual.
+          if (_selectedCourse == null && authPlayer.homeCourseId != null) {
+            for (final c in _courses) {
+              if (c.id == authPlayer.homeCourseId) {
+                _selectedCourse = c;
+                break;
+              }
+            }
+          }
         }
 
         _loading = false;

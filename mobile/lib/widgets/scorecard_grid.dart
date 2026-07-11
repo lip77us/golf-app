@@ -389,6 +389,7 @@ class _ScorecardGridState extends State<ScorecardGrid> {
         strokeIndex: si,
         summary:     rp.sixesSummary!,
         scorecard:   rp.scorecard!,
+        playerId:    m.player.id,
         holesInPlay: roundPlayOrder(
           rp.round, rp.scorecard,
           foursome: rp.round?.foursomes

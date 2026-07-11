@@ -216,3 +216,34 @@ class ShotgunAssignmentTests(TestCase):
         c = APIClient(); c.force_authenticate(other)
         resp = c.patch(self.url, {'starting_hole': 8}, format='json')
         self.assertEqual(resp.status_code, 403)
+
+
+class LowNetProspectiveStrokePlanTests(TestCase):
+    """The Stroke Play summary carries a prospective full-round stroke plan for
+    EVERY real player — including before any score is entered — so the scorecard
+    can show where each player's handicap strokes fall up front."""
+
+    def test_stroke_plan_present_before_any_scores(self):
+        from services.low_net_round import low_net_round_summary
+        course = make_course()
+        make_tee(course=course, holes=DEFAULT_HOLES)
+        r = make_round(course=course, active_games=['low_net_round'])
+        # Amy scratch, Bob playing handicap 9 (net 100% default).
+        make_foursome(r, [('Amy', 0), ('Bob', 9)])
+
+        summ = low_net_round_summary(r)          # no holes submitted yet
+        rows = {x['name']: x for x in summ['results']}
+        # Both players appear before the round starts.
+        self.assertIn('Amy', rows)
+        self.assertIn('Bob', rows)
+
+        # Bob (hcp 9) gets 9 strokes — on every hole with SI ≤ 9. In DEFAULT_HOLES
+        # hole 5 is SI 1 (stroke) and hole 3 is SI 15 (no stroke).
+        self.assertEqual(rows['Bob']['total_strokes'], 9)
+        self.assertEqual(rows['Bob']['stroke_plan'].get(5), 1)
+        self.assertIsNone(rows['Bob']['stroke_plan'].get(3))
+        self.assertEqual(rows['Bob']['holes_played'], 0)   # nothing scored
+
+        # Scratch Amy gets no strokes anywhere, and (unscored) wins no money.
+        self.assertEqual(rows['Amy']['total_strokes'], 0)
+        self.assertEqual(rows['Amy']['stroke_plan'], {})

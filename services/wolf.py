@@ -69,7 +69,7 @@ from games.models import (
 )
 from services.points_531 import _build_so_score_index
 from services.hole_plan import play_order as _play_order
-from scoring.handicap import build_score_index
+from scoring.handicap import build_score_index, make_strokes_fn, _effective_hcp
 from scoring.models import HoleScore
 
 _CENT = Decimal('0.01')
@@ -251,6 +251,61 @@ def _score_index(game, foursome) -> dict:
         handicap_mode=game.handicap_mode,
         net_percent=game.net_percent,
     )
+
+
+def wolf_player_hole_strokes(foursome, game) -> dict:
+    """``{player_id: {hole_number: strokes}}`` — the handicap strokes each real
+    player receives on each hole AS WOLF ISSUES THEM.
+
+    PROSPECTIVE: strokes are allocated over EVERY hole in play (play order),
+    not just holes already scored, so the tee-box partner picker (and the
+    leaderboard scorecard) can show who gets a stroke on a hole before it is
+    played — the Wolf needs that to choose a partner. Mirrors ``_score_index``:
+
+    * Gross → empty (no strokes).
+    * Net (100% or custom %) → the partial-round-aware allocation from the
+      effective handicap (same allocator ``build_score_index`` uses).
+    * Strokes-Off-Low → the low playing handicap plays to 0; everyone else
+      gets ``round((phcp − low) × net% / 100)`` strokes on the hardest holes
+      (SI ≤ remainder), identical to ``_build_so_score_index``.
+    """
+    if game.handicap_mode == HandicapMode.GROSS:
+        return {}
+
+    order   = _play_sequence(foursome) or list(range(1, 19))
+    members = _real_members(foursome)
+    out: dict = {}
+
+    if game.handicap_mode != HandicapMode.STROKES_OFF:
+        strokes_fn = make_strokes_fn(foursome)
+        for m in members:
+            if m.tee_id is None:
+                continue
+            eff = _effective_hcp(m.playing_handicap or 0, game.net_percent or 100)
+            if eff <= 0:
+                continue
+            for h in order:
+                s = strokes_fn(eff, m.tee, h)
+                if s > 0:
+                    out.setdefault(m.player_id, {})[h] = s
+        return out
+
+    # Strokes-Off-Low
+    phcps = [m.playing_handicap for m in members if m.playing_handicap is not None]
+    low = min(phcps) if phcps else 0
+    for m in members:
+        if m.tee_id is None:
+            continue
+        so = round(max(0, (m.playing_handicap or 0) - low) * (game.net_percent or 100) / 100)
+        if so <= 0:
+            continue
+        full, rem = so // 18, so % 18
+        for h in order:
+            si = m.tee.hole(h).get('stroke_index', 18)
+            s = full + (1 if si <= rem else 0)
+            if s > 0:
+                out.setdefault(m.player_id, {})[h] = s
+    return out
 
 
 def _last_place(real_ids, order, running_points: dict, running_net: dict):
@@ -655,9 +710,17 @@ def wolf_summary(foursome) -> dict:
         (m.tee for m in members if m.tee_id is not None), None,
     )
     par_by_hole: dict = {}
+    si_by_hole:  dict = {}
     if sample_tee is not None:
         for h in sequence:
-            par_by_hole[h] = sample_tee.hole(h).get('par')
+            hd = sample_tee.hole(h)
+            par_by_hole[h] = hd.get('par')
+            si_by_hole[h]  = hd.get('stroke_index')
+
+    # Prospective per-hole handicap strokes (as Wolf issues them) so the tee-box
+    # partner picker and the leaderboard scorecard can show who gets a stroke on
+    # each hole in advance of playing it.
+    strokes_by = wolf_player_hole_strokes(foursome, game)
 
     # Handicap-in-play per player (tee-order tiebreak + display).
     phcps = [(m.playing_handicap or 0) for m in members
@@ -716,6 +779,9 @@ def wolf_summary(foursome) -> dict:
                 'name'      : name(pid),
                 'is_wolf'   : is_wolf,
                 'order_num' : None if is_wolf else pos,
+                # Handicap strokes this player gets on THIS hole (Wolf's mode),
+                # so the partner picker can see who's getting a shot.
+                'strokes'   : strokes_by.get(pid, {}).get(hole, 0),
             })
 
         rows = res_by_hole.get(hole, [])
@@ -746,6 +812,7 @@ def wolf_summary(foursome) -> dict:
         holes_out.append({
             'hole'         : hole,
             'par'          : par_by_hole.get(hole),
+            'stroke_index' : si_by_hole.get(hole),
             'wolf_id'      : wolf,
             'wolf_short'   : short(wolf),
             'decision'     : dstr,
@@ -790,8 +857,41 @@ def wolf_summary(foursome) -> dict:
         })
     players_out.sort(key=lambda e: (-e['money'], e['name']))
 
+    # ── Scorecard grid (dots + stroke-index row) for the leaderboard ─────────
+    # Wolf has no scorecard of its own, so a strokes-off / net player couldn't
+    # otherwise see which holes they get strokes on. Strokes are prospective
+    # (all holes in play), so the whole plan shows before the holes are played.
+    scorecard_players = [
+        {'player_id': pid, 'name': by_pid[pid].name,
+         'short_name': by_pid[pid].short_name}
+        for pid in real_ids
+    ]
+    scorecard_holes = [
+        {
+            'hole'         : hole,
+            'par'          : par_by_hole.get(hole),
+            'stroke_index' : si_by_hole.get(hole),
+            'winner_id'    : None,
+            'scores'       : [
+                {'player_id': pid,
+                 'gross'    : gross_index.get(pid, {}).get(hole),
+                 'strokes'  : strokes_by.get(pid, {}).get(hole, 0),
+                 'points'   : (float(points_by_hole[hole][pid])
+                               if hole in points_by_hole
+                               and pid in points_by_hole[hole] else None)}
+                for pid in real_ids
+            ],
+        }
+        for hole in sequence
+    ]
+
     return {
         'status'    : game.status,
+        'scorecard' : {
+            'players'      : scorecard_players,
+            'holes'        : scorecard_holes,
+            'holes_in_play': sequence,
+        },
         'handicap'  : {'mode': game.handicap_mode, 'net_percent': game.net_percent},
         'points'    : {
             'lone_wolf'           : game.lone_wolf_points,

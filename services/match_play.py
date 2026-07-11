@@ -25,7 +25,9 @@ Public API
 
 from django.db import transaction
 
+from core.models import HandicapMode
 from games.models import MatchPlayBracket, MatchPlayMatch, MatchPlayHoleResult
+from scoring.handicap import make_strokes_fn, build_score_index, _strokes_on_hole
 from scoring.models import HoleScore
 from tournament.models import Foursome, FoursomeMembership
 
@@ -138,6 +140,59 @@ def setup_match_play(foursome) -> MatchPlayBracket:
 # Calculator helpers
 # ---------------------------------------------------------------------------
 
+def _so_pair_strokes(hcp, low_pair, net_percent, tee, hole):
+    """Strokes-Off-Low strokes for one player in a 1-v-1 match: the LOWER
+    handicap of the pair plays to scratch, the other gets ``round((hcp − low)
+    × net% / 100)`` strokes allocated by stroke index (the standard match-play
+    handicap)."""
+    if tee is None:
+        return 0
+    so = round(max(0, hcp - low_pair) * (net_percent or 100) / 100)
+    if so <= 0:
+        return 0
+    si = tee.hole(hole).get('stroke_index', 18)
+    return _strokes_on_hole(so, si)
+
+
+def _match_score_index(foursome, match, bracket, gross_index, net_index):
+    """{player_id: {hole: adjusted_score}} for the two players in *match*,
+    honouring the bracket's handicap mode:
+
+      * gross        → raw gross (no strokes).
+      * net          → each player's full playing-handicap net.
+      * strokes_off  → per-pair Strokes-Off-Low (lower plays scratch, higher
+                       gets the difference) — the common match-play allowance.
+
+    ``gross_index`` / ``net_index`` are the pre-built foursome-wide indexes so
+    the non-SO modes don't rebuild per match.
+    """
+    mode = bracket.handicap_mode or HandicapMode.NET
+    if mode == HandicapMode.GROSS:
+        return gross_index
+    if mode != HandicapMode.STROKES_OFF:
+        return net_index
+
+    p1, p2 = match.player1_id, match.player2_id
+    members = {
+        m.player_id: m
+        for m in foursome.memberships.select_related('tee')
+        .filter(player_id__in=[p1, p2])
+    }
+    m1, m2 = members.get(p1), members.get(p2)
+    if not m1 or not m2:
+        return net_index
+    h1, h2 = (m1.playing_handicap or 0), (m2.playing_handicap or 0)
+    low = min(h1, h2)
+    npct = bracket.net_percent or 100
+    idx = {}
+    for pid, m, h in ((p1, m1, h1), (p2, m2, h2)):
+        per = {}
+        for hole, g in gross_index.get(pid, {}).items():
+            per[hole] = g - _so_pair_strokes(h, low, npct, m.tee, hole)
+        idx[pid] = per
+    return idx
+
+
 def _play_match(match: MatchPlayMatch, score_index: dict) -> list:
     """
     Calculate MatchPlayHoleResult rows for one match.
@@ -223,16 +278,18 @@ def calculate_match_play(foursome) -> MatchPlayBracket | None:
     except MatchPlayBracket.DoesNotExist:
         return None
 
-    # Build score index
-    hole_scores = (
-        HoleScore.objects
-        .filter(foursome=foursome, player__is_phantom=False)
-        .exclude(net_score=None)
-        .values('player_id', 'hole_number', 'net_score')
+    # Build the handicap indexes ONCE per mode. The per-hole comparison honours
+    # the bracket's handicap_mode: gross / full-net / Strokes-Off-Low (per-pair).
+    # SO is resolved per match (the low of each pairing plays scratch), so we
+    # only pre-build the shared gross + net indexes here.
+    gross_index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
+    net_index   = build_score_index(
+        foursome, handicap_mode=HandicapMode.NET,
+        net_percent=bracket.net_percent or 100,
     )
-    score_index: dict = {}
-    for hs in hole_scores:
-        score_index.setdefault(hs['player_id'], {})[hs['hole_number']] = hs['net_score']
+
+    def _index_for(match):
+        return _match_score_index(foursome, match, bracket, gross_index, net_index)
 
     # Delete existing hole results
     MatchPlayHoleResult.objects.filter(match__bracket=bracket).delete()
@@ -245,7 +302,7 @@ def calculate_match_play(foursome) -> MatchPlayBracket | None:
 
     # ---- Round 1 ----
     for match in r1_matches:
-        results = _play_match(match, score_index)
+        results = _play_match(match, _index_for(match))
         all_hole_results.extend(results)
         match.save(update_fields=['status', 'result', 'finished_on_hole'])
 
@@ -303,7 +360,7 @@ def calculate_match_play(foursome) -> MatchPlayBracket | None:
 
     # ---- Round 2 ----
     for match in r2_matches:
-        results = _play_match(match, score_index)
+        results = _play_match(match, _index_for(match))
         all_hole_results.extend(results)
         match.save(update_fields=['status', 'result', 'finished_on_hole'])
 
@@ -376,6 +433,101 @@ def match_play_summary(foursome) -> dict | None:
     r1 = [m for m in matches if m.round_number == 1]
     r2 = [m for m in matches if m.round_number == 2]
 
+    # Round-2 (final / consolation) players aren't known until both semis
+    # finish, so their scorecard stays empty until then.
+    r1_complete = bool(r1) and all(m.status == 'complete' for m in r1)
+
+    # ── Scoring-detail scaffolding (par / stroke index / gross / strokes) ────
+    # The per-hole stroke dots follow the bracket's handicap mode — gross,
+    # full-net, or Strokes-Off-Low (per-pair: the lower handicap of the match
+    # plays to scratch). Prospective: strokes fall on every base hole in the
+    # match's 9-hole range up front (dots show before the hole is scored), with
+    # any sudden-death holes appended as they're played.
+    mp_mode = bracket.handicap_mode or HandicapMode.NET
+    mp_npct = bracket.net_percent or 100
+    real_members = [
+        m for m in foursome.memberships.select_related('player', 'tee').all()
+        if not m.player.is_phantom
+    ]
+    member_by_pid = {m.player_id: m for m in real_members}
+    sample_tee = next((m.tee for m in real_members if m.tee_id is not None), None)
+    par_by, si_by = {}, {}
+    if sample_tee is not None:
+        for h in range(1, 19):
+            hd = sample_tee.hole(h)
+            par_by[h] = hd.get('par')
+            si_by[h]  = hd.get('stroke_index')
+    gross_by = {}
+    for hs in (
+        HoleScore.objects
+        .filter(foursome=foursome, player__is_phantom=False)
+        .exclude(gross_score=None)
+        .values('player_id', 'hole_number', 'gross_score')
+    ):
+        gross_by[(hs['player_id'], hs['hole_number'])] = hs['gross_score']
+    strokes_fn = make_strokes_fn(foursome)
+
+    def _match_scorecard(match):
+        """Per-match scoring detail — every hole in the 9-hole range (plus any
+        sudden-death holes) with par, stroke index, each player's gross +
+        prospective handicap strokes (per the bracket's mode), and the hole
+        winner id."""
+        p1id, p2id = match.player1_id, match.player2_id
+        m1, m2 = member_by_pid.get(p1id), member_by_pid.get(p2id)
+
+        # Per-player strokes on a hole, in the bracket's handicap mode.
+        if mp_mode == HandicapMode.GROSS:
+            def _strokes(pid, hole):
+                return 0
+        elif mp_mode == HandicapMode.STROKES_OFF:
+            h1 = (m1.playing_handicap or 0) if m1 else 0
+            h2 = (m2.playing_handicap or 0) if m2 else 0
+            low, hcp_by = min(h1, h2), {p1id: h1, p2id: h2}
+
+            def _strokes(pid, hole):
+                m = member_by_pid.get(pid)
+                if m is None or m.tee_id is None:
+                    return 0
+                return _so_pair_strokes(hcp_by.get(pid, 0), low, mp_npct,
+                                        m.tee, hole)
+        else:  # NET — each player's full playing handicap × net%.
+            def _strokes(pid, hole):
+                m = member_by_pid.get(pid)
+                if m is None or m.tee_id is None:
+                    return 0
+                eff = round((m.playing_handicap or 0) * mp_npct / 100)
+                return strokes_fn(eff, m.tee, hole)
+
+        base = list(range(match.start_hole, match.start_hole + 9))
+        hr_by_hole = {hr.hole_number: hr for hr in match.hole_results.all()}
+        extra = sorted(h for h in hr_by_hole if h not in base)  # sudden death
+        holes = []
+        for h in base + extra:
+            hr = hr_by_hole.get(h)
+            holes.append({
+                'hole'         : h,
+                'par'          : par_by.get(h),
+                'stroke_index' : si_by.get(h),
+                'winner_id'    : hr.winner_id if hr else None,
+                'is_sd'        : h not in base,
+                'scores'       : [
+                    {'player_id': p1id, 'gross': gross_by.get((p1id, h)),
+                     'strokes': _strokes(p1id, h)},
+                    {'player_id': p2id, 'gross': gross_by.get((p2id, h)),
+                     'strokes': _strokes(p2id, h)},
+                ],
+            })
+        return {
+            'players': [
+                {'player_id': p1id, 'name': match.player1.name,
+                 'short_name': match.player1.short_name},
+                {'player_id': p2id, 'name': match.player2.name,
+                 'short_name': match.player2.short_name},
+            ],
+            'holes'        : holes,
+            'holes_in_play': base + extra,
+        }
+
     def _label(match, idx, total_r1, round_num):
         if round_num == 1:
             if total_r1 == 2:
@@ -412,10 +564,15 @@ def match_play_summary(foursome) -> dict | None:
             'label'       : _label(m, i, len(r1), 1),
             'player1'     : m.player1.name,
             'player2'     : m.player2.name,
+            'player1_id'  : m.player1_id,
+            'player2_id'  : m.player2_id,
             'status'      : m.status,
             'result'      : m.result,
             'winner_name' : _winner_name(m),
             'holes'       : holes_out,
+            # Semis' players are always known → always show the scoring detail.
+            'players_tbd' : False,
+            'scorecard'   : _match_scorecard(m),
         })
 
     for i, m in enumerate(r2):
@@ -429,20 +586,29 @@ def match_play_summary(foursome) -> dict | None:
             }
             for hr in m.hole_results.all()
         ]
+        # single_elim final/consolation players are placeholders until both
+        # semis finish; suppress their scoring detail (and flag TBD) until then.
+        confirmed = (bracket.bracket_type != 'single_elim') or r1_complete
         matches_out.append({
             'round'       : 2,
             'label'       : _label(m, i, len(r1), 2),
             'player1'     : m.player1.name,
             'player2'     : m.player2.name,
+            'player1_id'  : m.player1_id,
+            'player2_id'  : m.player2_id,
             'status'      : m.status,
             'result'      : m.result,
             'winner_name' : _winner_name(m),
             'holes'       : holes_out,
+            'players_tbd' : not confirmed,
+            'scorecard'   : _match_scorecard(m) if confirmed else None,
         })
 
     return {
         'bracket_type' : bracket.bracket_type,
         'status'       : bracket.status,
         'winner'       : bracket.winner.name if bracket.winner else None,
+        'handicap'     : {'mode': bracket.handicap_mode,
+                          'net_percent': bracket.net_percent},
         'matches'      : matches_out,
     }

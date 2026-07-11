@@ -1688,7 +1688,7 @@ class TripleCupHole {
   final int? t2TeamGross;
   final int? t1TeamStrokes; // foursomes only — alt-shot team allocation
   final int? t2TeamStrokes;
-  final String winner;  // 'T1' | 'T2' | 'Halved'
+  final String? winner;  // 'T1' | 'T2' | 'Halved'; null = not yet played
   final int margin;
   final List<TripleCupPlayerHoleScore> scores;
 
@@ -1717,7 +1717,7 @@ class TripleCupHole {
         t2TeamGross:   j['t2_team_gross']   as int?,
         t1TeamStrokes: j['t1_team_strokes'] as int?,
         t2TeamStrokes: j['t2_team_strokes'] as int?,
-        winner:        j['winner']          as String? ?? 'Halved',
+        winner:        j['winner']          as String?,
         margin:        j['margin']          as int? ?? 0,
         scores: (j['scores'] as List? ?? [])
             .map((s) => TripleCupPlayerHoleScore.fromJson(
@@ -2009,7 +2009,10 @@ class TripleCupSummary {
   });
 
   bool get isPending  => status == 'pending';
-  bool get isStarted  => matches.any((m) => m.holes.isNotEmpty);
+  // Started once ANY hole has a result. `holes` now lists every hole in each
+  // match's range up front (so the leaderboard can show the stroke plan), so
+  // "has a played hole" — not "holes is non-empty" — is what means "started".
+  bool get isStarted  => matches.any((m) => m.holes.any((h) => h.winner != null));
 
   /// Team 1 accent colour for this summary.  In cup mode this resolves
   /// to the configured cup TournamentTeam.colour; in casual mode it
@@ -2633,6 +2636,9 @@ class WolfTeeSlot {
   final String name;
   final bool   isWolf;
   final int?   orderNum;
+  /// Handicap strokes this player gets on this hole (in Wolf's handicap mode) —
+  /// shown in the partner picker so the Wolf can see who's getting a shot.
+  final int    strokes;
 
   const WolfTeeSlot({
     required this.playerId,
@@ -2640,6 +2646,7 @@ class WolfTeeSlot {
     required this.name,
     required this.isWolf,
     required this.orderNum,
+    this.strokes = 0,
   });
 
   factory WolfTeeSlot.fromJson(Map<String, dynamic> j) => WolfTeeSlot(
@@ -2648,6 +2655,7 @@ class WolfTeeSlot {
         name:      j['name']       as String? ?? '',
         isWolf:    j['is_wolf']    as bool? ?? false,
         orderNum:  j['order_num']  as int?,
+        strokes:   j['strokes']    as int? ?? 0,
       );
 }
 
@@ -2687,6 +2695,7 @@ class WolfHoleEntry {
 class WolfHole {
   final int    hole;
   final int?   par;
+  final int?   strokeIndex;
   final int    wolfId;
   final String wolfShort;
   final String decision;        // 'pending' | 'partner' | 'lone' | 'blind'
@@ -2701,6 +2710,7 @@ class WolfHole {
   const WolfHole({
     required this.hole,
     required this.par,
+    this.strokeIndex,
     required this.wolfId,
     required this.wolfShort,
     required this.decision,
@@ -2719,6 +2729,7 @@ class WolfHole {
   factory WolfHole.fromJson(Map<String, dynamic> j) => WolfHole(
         hole:         j['hole'] as int? ?? 0,
         par:          j['par']  as int?,
+        strokeIndex:  j['stroke_index'] as int?,
         wolfId:       j['wolf_id'] as int? ?? 0,
         wolfShort:    j['wolf_short'] as String? ?? '',
         decision:     j['decision'] as String? ?? 'pending',

@@ -363,3 +363,62 @@ class WolfTests(TestCase):
         # Holes 17 & 18 (the last two played) go to the last-place player (Dave).
         assert wolf_of[17] == self.pid['Dave'], wolf_of[17]
         assert wolf_of[18] == self.pid['Dave'], wolf_of[18]
+
+
+class WolfScorecardStrokesTests(TestCase):
+    """Prospective per-hole handicap strokes surfaced for the tee-box partner
+    picker (tee_order[*].strokes) and the leaderboard scorecard block, so a
+    strokes-off / net player can see where strokes fall before playing."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        # Playing handicaps: Alice/Bob low (0). Carol gets 5 off the low, Dave 2.
+        self.fs = make_foursome(
+            self.round,
+            [('Alice', 0), ('Bob', 0), ('Carol', 5), ('Dave', 2)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_wolf(
+            self.fs, handicap_mode='strokes_off',
+            wolf_order=[self.pid[n] for n in ('Alice', 'Bob', 'Carol', 'Dave')])
+        calculate_wolf(self.fs)   # no scores yet — everything prospective
+
+    def _hole(self, holes, n):
+        return next(h for h in holes if h['hole'] == n)
+
+    def _sc_strokes(self, sc, hole, pid):
+        h = self._hole(sc['holes'], hole)
+        return next(r for r in h['scores'] if r['player_id'] == pid)
+
+    def test_scorecard_block_is_prospective(self):
+        sc = wolf_summary(self.fs)['scorecard']
+        self.assertEqual(len(sc['holes']), 18)
+        self.assertEqual(sc['holes_in_play'], list(range(1, 19)))
+        # DEFAULT_HOLES SI: hole 5=SI1, 14=SI2, 2=SI3, 11=SI4, 9=SI5, 16=SI18.
+        # Carol SO=5 → a stroke on the 5 hardest, none on the easiest.
+        for hole in (5, 14, 2, 11, 9):
+            row = self._sc_strokes(sc, hole, self.pid['Carol'])
+            self.assertEqual(row['strokes'], 1, f'Carol hole {hole}')
+            self.assertIsNone(row['gross'])            # unplayed
+        self.assertEqual(self._sc_strokes(sc, 16, self.pid['Carol'])['strokes'], 0)
+        # Dave SO=2 → only the two hardest (holes 5, 14).
+        self.assertEqual(self._sc_strokes(sc, 5,  self.pid['Dave'])['strokes'], 1)
+        self.assertEqual(self._sc_strokes(sc, 2,  self.pid['Dave'])['strokes'], 0)
+        # Alice is the low → no strokes anywhere.
+        self.assertEqual(self._sc_strokes(sc, 5,  self.pid['Alice'])['strokes'], 0)
+        # Stroke index carried per hole (for the Index row).
+        self.assertEqual(self._hole(sc['holes'], 5)['stroke_index'], 1)
+
+    def test_tee_order_carries_strokes(self):
+        holes = wolf_summary(self.fs)['holes']
+        # Hole 5 (hardest): Carol and Dave each get a shot; Alice/Bob none.
+        slots = {s['player_id']: s['strokes']
+                 for s in self._hole(holes, 5)['tee_order']}
+        self.assertEqual(slots[self.pid['Carol']], 1)
+        self.assertEqual(slots[self.pid['Dave']],  1)
+        self.assertEqual(slots[self.pid['Alice']], 0)
+        # The per-hole stroke index rides along on the hole record too.
+        self.assertEqual(self._hole(holes, 5)['stroke_index'], 1)

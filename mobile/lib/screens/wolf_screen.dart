@@ -75,12 +75,6 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
   // the inline picker re-opens for that row (a completed hole has no hot-spot).
   int? _editingPlayerId;
   bool _sheetOpen       = false;
-  bool _ready           = false;   // true once the initial hole-jump settled
-
-  /// Holes for which the decision overlay has already auto-opened this
-  /// session — so dismissing it doesn't immediately re-pop the same hole.
-  final Set<int> _promptedHoles = {};
-
   @override
   void initState() {
     super.initState();
@@ -239,11 +233,11 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
           .where((s) => realIds.contains(s.playerId))
           .every((s) => s.grossScore != null);
       if (!allScored && !rp.localPendingByHole.containsKey(h)) {
-        setState(() { _selectedHole = h; _ready = true; });
+        setState(() { _selectedHole = h; });
         return;
       }
     }
-    setState(() { _selectedHole = order.isEmpty ? 18 : order.last; _ready = true; });
+    setState(() { _selectedHole = order.isEmpty ? 18 : order.last; });
   }
 
   void _advance() {
@@ -694,21 +688,9 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
     final par      = holeData?.par ?? 4;
 
-    // Auto-present the decision overlay the first time we land on an
-    // undecided hole (once per hole, so dismissing it doesn't re-pop).
-    // Gated on _ready so it waits until the initial hole-jump has settled
-    // (otherwise it could pop hole 1's sheet while resuming mid-round).
-    if (_ready &&
-        holeInfo != null &&
-        !holeInfo.isDecided &&
-        !isComplete &&
-        !_decisionBusy &&
-        !_anyScoreEntered(sc, _selectedHole) &&
-        _promptedHoles.add(_selectedHole)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _openDecisionSheet(_selectedHole);
-      });
-    }
+    // The Wolf decision overlay is opened only when the user taps the "Choose
+    // play" bar (or the score card's decide button) — never auto-popped on
+    // landing on a hole, so the group can review the last hole's result first.
 
     return Column(children: [
       Expanded(
@@ -1169,6 +1151,24 @@ class _WolfDecisionSheet extends StatelessWidget {
                           ? FontWeight.bold : FontWeight.w500,
                       color: isWolf ? theme.colorScheme.primary : null)),
             ),
+            // Handicap strokes this player gets on THIS hole — so the Wolf can
+            // see who's getting a shot before choosing a partner.
+            if (slot.strokes > 0) ...[
+              const SizedBox(width: 6),
+              ...List.generate(
+                slot.strokes.clamp(0, 3),
+                (_) => Container(
+                  width: 5, height: 5,
+                  margin: const EdgeInsets.only(left: 2),
+                  decoration: BoxDecoration(
+                      color: Colors.red.shade700, shape: BoxShape.circle),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text('gets ${slot.strokes}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.red.shade700, fontWeight: FontWeight.w600)),
+            ],
             if (isWolf) ...[
               const SizedBox(width: 6),
               Text('tees last',

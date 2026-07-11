@@ -667,3 +667,51 @@ class TripleCupShotgunTests(TestCase):
         s = triple_cup_summary(self.fs)
         fourball = next(m for m in s['matches'] if m['segment'] == 'fourball')
         self.assertEqual(fourball['result'], 'team1', fourball)
+
+
+class TripleCupDetailProspectiveStrokesTests(TestCase):
+    """The leaderboard detail grid (`match['holes']`) lists EVERY hole in a
+    match's 6-hole range up front — with par, stroke index, and each player's
+    prospective handicap strokes — so a strokes-off player can see where their
+    strokes fall over the whole round before any hole is played."""
+
+    def test_detail_holes_are_prospective(self):
+        tee = make_tee()  # DEFAULT_HOLES holes 1-6 SIs = 7,3,15,9,1,13
+        round_ = make_round(tee.course, handicap_mode='strokes_off')
+        fs = make_foursome(
+            round_,
+            [('Low', 0), ('Hi9A', 9), ('Hi9B', 9), ('Hi5', 5)],
+            tee=tee,
+        )
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        setup_triple_cup(
+            fs,
+            team1_ids=[pid['Low'], pid['Hi9A']],
+            team2_ids=[pid['Hi9B'], pid['Hi5']],
+            handicap_mode='strokes_off',
+        )
+        # No scores submitted — everything is prospective.
+        s = triple_cup_summary(fs)
+        fourball = next(m for m in s['matches'] if m['segment'] == 'fourball')
+        holes = fourball['holes']
+
+        # All 6 holes present, with par + stroke index for the Par/SI rows.
+        self.assertEqual([h['hole'] for h in holes], [1, 2, 3, 4, 5, 6])
+        self.assertTrue(all(h['par'] is not None for h in holes))
+        self.assertTrue(all(h['stroke_index'] is not None for h in holes))
+        # Nothing played yet → null winner and null gross everywhere.
+        self.assertTrue(all(h['winner'] is None for h in holes))
+
+        def cell(hole, who):
+            h = next(x for x in holes if x['hole'] == hole)
+            return next(sc for sc in h['scores'] if sc['player_id'] == pid[who])
+
+        self.assertIsNone(cell(1, 'Hi9A')['gross'])
+        # Hi9A SO=9 → a stroke on holes 1,2,4,5 (SI 7,3,9,1); none on 3,6.
+        self.assertEqual(cell(1, 'Hi9A')['strokes'], 1)
+        self.assertEqual(cell(4, 'Hi9A')['strokes'], 1)
+        self.assertEqual(cell(3, 'Hi9A')['strokes'], 0)
+        self.assertEqual(cell(6, 'Hi9A')['strokes'], 0)
+        # Low is the scratch baseline → no strokes anywhere.
+        self.assertEqual(cell(1, 'Low')['strokes'], 0)

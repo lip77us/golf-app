@@ -138,9 +138,12 @@ def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
         if m is None:
             continue
         hole = hs['hole_number']
-        # Adjusted score per the game's handicap mode.
+        # Adjusted score per the game's handicap mode. `strokes_this` is the
+        # handicap strokes the player received on this hole — surfaced so the
+        # points grid can show a stroke dot where a net player got a shot.
         if mode == 'gross':
             adjusted = hs['gross_score']
+            strokes_this = 0
             par = None
             if m.tee_id is not None:
                 par = m.tee.hole(hole).get('par')
@@ -151,21 +154,24 @@ def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
             par = hole_info.get('par')
             if net_pct == 100 and hs['net_score'] is not None:
                 adjusted = hs['net_score']
+                strokes_this = hs['gross_score'] - hs['net_score']
             else:
                 eff = round((m.playing_handicap or 0) * net_pct / 100)
-                adjusted = hs['gross_score'] - strokes_fns[m.foursome_id](
-                    eff, m.tee, hole)
+                strokes_this = strokes_fns[m.foursome_id](eff, m.tee, hole)
+                adjusted = hs['gross_score'] - strokes_this
         if par is None:
             par = (m.tee.hole(hole).get('par') if m.tee_id else 4) or 4
 
         pts = _points(adjusted - par)
         d = totals.setdefault(pid, {
             'name': hs['player__name'], 'points': 0, 'holes_played': 0,
-            'foursome_id': hs['foursome_id'], 'holes': {},
+            'foursome_id': hs['foursome_id'], 'holes': {}, 'strokes': {},
         })
         d['points'] += pts
         d['holes_played'] += 1
         d['holes'][hole] = pts
+        if strokes_this:
+            d['strokes'][hole] = strokes_this
     return totals
 
 
@@ -259,8 +265,28 @@ def stableford_standings(round_obj) -> list:
             'excluded'    : is_excluded,
             'payout'      : payout,
             'holes'       : data['holes'],
+            'strokes'     : data.get('strokes', {}),
         })
     return standings
+
+
+def _stableford_stroke_index(round_obj) -> dict:
+    """{hole: stroke_index} from a representative tee, so the points grid can
+    show an 'Index' row — where net strokes fall."""
+    from tournament.models import Foursome
+    for fs in (Foursome.objects.filter(round=round_obj)
+               .prefetch_related('memberships__tee')):
+        for m in fs.memberships.all():
+            if m.tee_id is None:
+                continue
+            out = {}
+            for h in range(1, 19):
+                si = m.tee.hole(h).get('stroke_index')
+                if si is not None:
+                    out[h] = si
+            if out:
+                return out
+    return {}
 
 
 def stableford_summary(round_obj) -> dict:
@@ -291,4 +317,7 @@ def stableford_summary(round_obj) -> dict:
                            if style == 'pool' else 0.0),
         'table'         : table,
         'results'       : standings,
+        # Stroke index per hole (representative tee) so the points grid can
+        # render an 'Index' row + dots on the holes where net strokes fall.
+        'stroke_index'  : _stableford_stroke_index(round_obj),
     }

@@ -184,6 +184,14 @@ class MatchPlayDetailView extends StatelessWidget {
     return null;
   }
 
+  static String _hcapLabel(Map<String, dynamic>? h) {
+    final mode = h?['mode']?.toString() ?? 'net';
+    if (mode == 'gross') return 'Gross — no strokes';
+    if (mode == 'strokes_off') return 'Strokes-Off-Low';
+    final pct = (h?['net_percent'] as num?)?.toInt() ?? 100;
+    return pct == 100 ? 'Net — full handicap' : 'Net $pct%';
+  }
+
   Widget _sectionHeader(ThemeData theme, String title, {String? subtitle}) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -209,7 +217,18 @@ class MatchPlayDetailView extends StatelessWidget {
     final children = <Widget>[
       // ── Status banner ─────────────────────────────────────────────────
       _StatusBanner(status: status, winner: winner),
-      const SizedBox(height: 20),
+      const SizedBox(height: 8),
+      // Handicap mode — so it's clear whether strokes are Strokes-Off-Low,
+      // full net, or gross (the scorecard dots below follow this).
+      Row(children: [
+        Icon(Icons.flag_outlined,
+            size: 14, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Text(_hcapLabel(data['handicap'] as Map<String, dynamic>?),
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      ]),
+      const SizedBox(height: 16),
 
       // ── Front 9 — Semis ───────────────────────────────────────────────
       _sectionHeader(theme, 'Front 9 — Semis',
@@ -284,21 +303,10 @@ class _StatusBanner extends StatelessWidget {
     }
 
     if (status == 'in_progress') {
-      return Card(
-        color: theme.colorScheme.tertiaryContainer,
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(children: [
-            Icon(Icons.sports_golf,
-                color: theme.colorScheme.onTertiaryContainer, size: 20),
-            const SizedBox(width: 10),
-            Text('Match play in progress — pull to refresh',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onTertiaryContainer)),
-          ]),
-        ),
-      );
+      // No banner while live — the leaderboard refreshes on entry (and Refresh
+      // stays in the ⋯ menu / pull-to-refresh), and the per-match "Live" chips
+      // plus status lines already convey that play is under way.
+      return const SizedBox.shrink();
     }
 
     return Card(
@@ -448,9 +456,185 @@ class _MatchCard extends StatelessWidget {
               // ── Hole strip ──────────────────────────────────────────────
               const SizedBox(height: 10),
               _HoleStrip(match: match),
+
+              // ── Scoring detail (par / SI / gross + stroke dots) ─────────
+              // Present only once a match's players are known (semis always;
+              // final/consolation after both semis finish). Dots are the
+              // prospective full-net handicap strokes the bracket scores on.
+              if (match['scorecard'] != null)
+                _MatchScoreDetail(match: match),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Scoring detail grid ─────────────────────────────────────────────────────
+
+/// Compact hole-by-hole scorecard for a single match: Hole / Par / SI rows
+/// plus one row per player showing gross + stroke dots, the winner's cell
+/// tinted in their colour. Strokes show PROSPECTIVELY (before a hole is
+/// scored) so a player can see where their strokes fall over the 9 holes.
+class _MatchScoreDetail extends StatelessWidget {
+  final Map<String, dynamic> match;
+  const _MatchScoreDetail({required this.match});
+
+  static const double _labelW = 42.0;
+  static const double _cellW  = 28.0;
+  static const double _rowH   = 22.0;
+
+  int? _p1() => match['player1_id'] as int?;
+  int? _p2() => match['player2_id'] as int?;
+
+  String _short(Map sc, int? pid, String fallback) {
+    for (final p in (sc['players'] as List? ?? const [])) {
+      if ((p as Map)['player_id'] == pid) {
+        final s = p['short_name'] as String?;
+        if (s != null && s.isNotEmpty) return s;
+      }
+    }
+    return fallback;
+  }
+
+  Map _scoreOf(Map hole, int? pid) => ((hole['scores'] as List? ?? const [])
+      .cast<Map>()
+      .firstWhere((s) => s['player_id'] == pid, orElse: () => const {}));
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final sc    = match['scorecard'] as Map<String, dynamic>?;
+    if (sc == null) return const SizedBox.shrink();
+    final holes = (sc['holes'] as List? ?? const [])
+        .map((h) => Map<String, dynamic>.from(h as Map))
+        .toList();
+    if (holes.isEmpty) return const SizedBox.shrink();
+
+    final p1id = _p1();
+    final p2id = _p2();
+    final p1short = _short(sc, p1id, match['player1'] as String? ?? 'P1');
+    final p2short = _short(sc, p2id, match['player2'] as String? ?? 'P2');
+
+    Widget cell(Widget child, {Color? bg}) => Container(
+          width: _cellW, height: _rowH, alignment: Alignment.center,
+          decoration: bg == null ? null : BoxDecoration(color: bg),
+          child: child,
+        );
+    Widget label(String s, {bool italic = false, Color? color}) => SizedBox(
+          width: _labelW, height: _rowH,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(s,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+                    color: color)),
+          ),
+        );
+
+    Widget playerRow(int? pid, Color color, String short) => Row(children: [
+          label(short, color: color),
+          for (final h in holes) Builder(builder: (_) {
+            final s       = _scoreOf(h, pid);
+            final gross   = s['gross'] as int?;
+            final strokes = (s['strokes'] as int?) ?? 0;
+            final isWin   = h['winner_id'] == pid;
+            if (gross == null && strokes == 0) {
+              return cell(const Text('·',
+                  style: TextStyle(fontSize: 10, color: Colors.grey)));
+            }
+            return cell(
+              Stack(alignment: Alignment.topCenter, children: [
+                if (strokes > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(
+                        strokes.clamp(0, 3),
+                        (_) => Container(
+                          width: 3, height: 3,
+                          margin: const EdgeInsets.symmetric(horizontal: 1),
+                          decoration:
+                              BoxDecoration(color: color, shape: BoxShape.circle),
+                        ),
+                      ),
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.center,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      gross == null ? '·' : '$gross',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: isWin ? FontWeight.bold : FontWeight.w500,
+                        color: gross == null
+                            ? Colors.grey
+                            : (isWin ? color : null),
+                      ),
+                    ),
+                  ),
+                ),
+              ]),
+              bg: isWin ? color.withValues(alpha: 0.14) : null,
+            );
+          }),
+        ]);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Scorecard  ·  dots = strokes',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 4),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  label('Hole', color: theme.colorScheme.onSurfaceVariant),
+                  for (final h in holes)
+                    cell(Text('${h['hole']}${h['is_sd'] == true ? '*' : ''}',
+                        style: const TextStyle(
+                            fontSize: 10, fontWeight: FontWeight.bold))),
+                ]),
+                Row(children: [
+                  label('Par', italic: true),
+                  for (final h in holes)
+                    cell(Text('${h['par'] ?? '-'}',
+                        style: const TextStyle(fontSize: 10))),
+                ]),
+                Row(children: [
+                  label('SI', italic: true,
+                      color: theme.colorScheme.onSurfaceVariant),
+                  for (final h in holes)
+                    cell(Text('${h['stroke_index'] ?? '-'}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            fontSize: 9,
+                            color: theme.colorScheme.onSurfaceVariant))),
+                ]),
+                Container(
+                  height: 1,
+                  width: _labelW + _cellW * holes.length,
+                  margin: const EdgeInsets.symmetric(vertical: 2),
+                  color: theme.colorScheme.outlineVariant,
+                ),
+                playerRow(p1id, _kP1Color, p1short),
+                playerRow(p2id, _kP2Color, p2short),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1468,6 +1468,12 @@ class _LowNetViewState extends State<_LowNetView> {
     final grossTp  = _grossToPar(row);
     final expanded = pid != null && _expandedPids.contains(pid);
     final showPay  = showMoney && payout != null;
+    // Total handicap strokes this player receives over the round (prospective),
+    // and whether there's a scorecard strip to expand — a not-yet-started
+    // player still has a strip (all holes blank + prospective stroke dots).
+    final totalStrokes = row['total_strokes'] as int? ?? 0;
+    final hasStrip = pid != null &&
+        (holes.isNotEmpty || (row['stroke_plan'] as Map? ?? const {}).isNotEmpty);
 
     Widget toParCell(int? v) => SizedBox(
           width: _colW,
@@ -1481,7 +1487,7 @@ class _LowNetViewState extends State<_LowNetView> {
     final thruLabel = holes.isEmpty ? '—' : (thru >= 18 ? 'F' : '$thru');
 
     final rowWidget = InkWell(
-      onTap: holes.isEmpty || pid == null
+      onTap: !hasStrip
           ? null
           : () => setState(() =>
               expanded ? _expandedPids.remove(pid) : _expandedPids.add(pid)),
@@ -1517,6 +1523,18 @@ class _LowNetViewState extends State<_LowNetView> {
                           style: TextStyle(
                               fontSize: 10,
                               color: theme.colorScheme.onSurfaceVariant)),
+                    // Total handicap strokes over the round — the "gets N".
+                    if (showNet && totalStrokes > 0) ...[
+                      Text('  ·  ',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: theme.colorScheme.onSurfaceVariant)),
+                      Text('gets $totalStrokes',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary)),
+                    ],
                     if (showNet && showPay)
                       Text('  ·  ',
                           style: TextStyle(
@@ -1542,7 +1560,7 @@ class _LowNetViewState extends State<_LowNetView> {
           ),
           SizedBox(
             width: 24,
-            child: holes.isEmpty
+            child: !hasStrip
                 ? const SizedBox()
                 : Icon(expanded ? Icons.expand_less : Icons.expand_more,
                     size: 20, color: theme.colorScheme.onSurfaceVariant),
@@ -1553,7 +1571,7 @@ class _LowNetViewState extends State<_LowNetView> {
 
     return [
       rowWidget,
-      if (expanded) _holeStrip(theme, row, showNet: showNet),
+      if (expanded && hasStrip) _holeStrip(theme, row, showNet: showNet),
     ];
   }
 
@@ -1574,6 +1592,14 @@ class _LowNetViewState extends State<_LowNetView> {
     final inPlay = (widget.data['holes_in_play'] as List?)
         ?.map((e) => e as int)
         .toList();
+    // Prospective full-round stroke allocation ({hole: strokes}) — drives the
+    // dots so they show on every stroke hole, even before it's played.
+    final strokePlan = <int, int>{};
+    for (final e in (row['stroke_plan'] as Map? ?? const {}).entries) {
+      final k = e.key is int ? e.key as int : int.tryParse('${e.key}');
+      final v = e.value is int ? e.value as int : int.tryParse('${e.value}');
+      if (k != null && v != null && v > 0) strokePlan[k] = v;
+    }
     return strokePlayHoleStrip(
       context,
       holes:       (row['holes'] as List? ?? const []),
@@ -1582,6 +1608,7 @@ class _LowNetViewState extends State<_LowNetView> {
       showNet:     showNet,
       netTotal:    row['total_net'] as int?,
       netToPar:    row['net_to_par'] as int?,
+      strokePlan:  showNet ? strokePlan : null,
     );
   }
 }
@@ -4372,6 +4399,18 @@ class _WolfGroupCard extends StatelessWidget {
     final betUnit = (money['bet_unit']  as num?)?.toDouble() ?? 0.0;
     final lossCap = (money['loss_cap']  as num?)?.toDouble();
 
+    // Scorecard grid (prospective stroke dots + Index row + per-hole points),
+    // so a strokes-off / net player can see which holes get strokes over the
+    // whole round — including before they're played.
+    final scorecard   = summary['scorecard'] as Map<String, dynamic>? ?? const {};
+    final scHoles     = (scorecard['holes'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scPlayers   = (scorecard['players'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scHolesInPlay = (scorecard['holes_in_play'] as List? ?? const [])
+        .map((e) => e as int)
+        .toList();
+
     final singleGroup = group['_single_group'] == true;
 
     String statusLabel;
@@ -4480,36 +4519,18 @@ class _WolfGroupCard extends StatelessWidget {
               ),
             ),
 
-          // Per-hole gross scorecard + a second block of per-hole points,
-          // built from each hole's per-player entries (only entries that have
-          // actually been scored). No winner highlight.
-          if (holes.isNotEmpty) ...[
+          // Per-hole gross scorecard + a second block of per-hole points.
+          // Prospective: the stroke dots + the "Index" row show which holes get
+          // strokes across the whole round (including unplayed ones), so a
+          // strokes-off / net player can see the plan up front.
+          if (scHoles.isNotEmpty) ...[
             const Divider(height: 20),
             _MsScorecard(
-              showPoints: true,
-              legend: null,
-              holes: <Map<String, dynamic>>[
-                for (final h in holes)
-                  <String, dynamic>{
-                    'hole'     : (h as Map)['hole'],
-                    'par'      : h['par'],
-                    'winner_id': null,
-                    'scores'   : <Map<String, dynamic>>[
-                      for (final e in (h['entries'] as List? ?? const []))
-                        if ((e as Map)['gross'] != null)
-                          <String, dynamic>{
-                            'player_id': e['player_id'],
-                            'gross'    : e['gross'],
-                            'strokes'  : (((e['gross'] as int?) ?? 0) -
-                                    ((e['net_score'] as int?) ??
-                                        (e['gross'] as int?) ?? 0))
-                                .clamp(0, 9),
-                            'points'   : e['points'],
-                          },
-                    ],
-                  },
-              ],
-              participants: players.cast<Map<String, dynamic>>(),
+              holes:       scHoles,
+              participants: scPlayers,
+              showPoints:  true,
+              legend:      null,
+              holesInPlay: scHolesInPlay,
             ),
           ],
         ]),
@@ -8841,17 +8862,13 @@ class _TripleCupHoleDetail extends StatelessWidget {
     required Color highlight,
     required bool isWin,
   }) {
-    if (gross == null) {
-      return _cell(const Text('·',
-          style: TextStyle(fontSize: 11, color: Colors.grey)));
-    }
-    return _cell(
-      Stack(alignment: Alignment.topCenter, children: [
-        // Strokes ribbon along the top of the cell — one solid dot
-        // per stroke in the team color so it's visible without
-        // hunting (Sixes-style corner dots were too easy to miss).
-        if (strokes > 0)
-          Padding(
+    // Strokes ribbon along the top of the cell — one solid dot per stroke in
+    // the team color so it's visible without hunting (Sixes-style corner dots
+    // were too easy to miss). Shown PROSPECTIVELY: a hole a player gets a
+    // stroke on shows its dot even before the hole is scored, so the whole
+    // match's stroke plan reads at a glance.
+    final Widget? dots = strokes > 0
+        ? Padding(
             padding: const EdgeInsets.only(top: 1),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -8868,21 +8885,32 @@ class _TripleCupHoleDetail extends StatelessWidget {
                 ),
               ),
             ),
-          ),
+          )
+        : null;
+
+    // Unplayed hole: a faint centre '·' with the stroke dots above it (or just
+    // the '·' when no stroke falls here).
+    final bool played = gross != null;
+
+    return _cell(
+      Stack(alignment: Alignment.topCenter, children: [
+        if (dots != null) dots,
         Align(
           alignment: Alignment.center,
           child: Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Text('$gross',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isWin ? FontWeight.bold : FontWeight.w600,
-                  color: isWin ? teamColor : null,
-                )),
+            child: Text(
+              played ? '$gross' : '·',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: played && isWin ? FontWeight.bold : FontWeight.w600,
+                color: played ? (isWin ? teamColor : null) : Colors.grey,
+              ),
+            ),
           ),
         ),
       ]),
-      bg: isWin ? highlight : null,
+      bg: played && isWin ? highlight : null,
     );
   }
 
@@ -9371,8 +9399,21 @@ class _VegasGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final summary =
-        VegasSummary.fromJson((group['summary'] as Map).cast<String, dynamic>());
+    final summaryRaw = (group['summary'] as Map).cast<String, dynamic>();
+    final summary = VegasSummary.fromJson(summaryRaw);
+
+    // Scorecard grid (dots + stroke-index row) — Vegas is a digit game with no
+    // scorecard of its own, so a strokes-off / net player couldn't otherwise
+    // see which holes they get strokes on. Strokes are prospective (all holes
+    // in play), so the plan is visible before the holes are played.
+    final scorecard   = summaryRaw['scorecard'] as Map<String, dynamic>? ?? const {};
+    final scHoles     = (scorecard['holes'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scPlayers   = (scorecard['players'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scHolesInPlay = (scorecard['holes_in_play'] as List? ?? const [])
+        .map((e) => e as int)
+        .toList();
 
     Color winColor(String? w) => w == 'team1' ? GameColors.team1
         : w == 'team2' ? GameColors.team2
@@ -9531,6 +9572,15 @@ class _VegasGroupCard extends StatelessWidget {
             ]),
             const SizedBox(height: 5),
             _VegasHoleGrid(holes: scored),
+          ],
+
+          // Scorecard: dots show where handicap strokes fall; the "Index" row
+          // conveys the whole-round stroke plan (which holes get strokes),
+          // visible in advance of playing them.
+          if (scHoles.isNotEmpty) ...[
+            const Divider(height: 20),
+            _MsScorecard(holes: scHoles, participants: scPlayers,
+                legend: null, holesInPlay: scHolesInPlay),
           ],
         ]),
       ),

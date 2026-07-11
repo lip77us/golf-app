@@ -177,3 +177,27 @@ class StablefordTests(TestCase):
         self.assertIsNone(rows['A']['payout'])
         self.assertTrue(rows['A']['excluded'])
         self.assertEqual(rows['B']['payout'], 30.0)
+
+    # ---- stroke visibility on the points grid (Index row + per-cell dots) ----
+    def test_summary_exposes_stroke_index_and_net_strokes(self):
+        # Give A a handicap; net at 50% → effective 5 → strokes on SI 1..5
+        # (HOLES stroke_index == hole number).
+        m = FoursomeMembership.objects.get(foursome=self.fs, player=self.pa)
+        m.playing_handicap = 10
+        m.save(update_fields=['playing_handicap'])
+        self._setup(handicap_mode='net', net_percent=50)
+        res = self._result()
+
+        # Stroke-index map is always present (drives the "Index" row). Keys are
+        # ints in the DRF response data (JSON-stringified only over the wire).
+        self.assertEqual(res['stroke_index'][1], 1)
+        self.assertEqual(res['stroke_index'][18], 18)
+
+        rows = {r['player_name']: r for r in res['results']}
+        # A (hcp 10 @ 50% = 5) gets a stroke on holes 1-5, none on 6+.
+        a_strokes = rows['A']['strokes']
+        self.assertEqual(a_strokes.get(1), 1)
+        self.assertEqual(a_strokes.get(5), 1)
+        self.assertIsNone(a_strokes.get(6))
+        # Scratch B gets no strokes at all.
+        self.assertEqual(rows['B']['strokes'], {})

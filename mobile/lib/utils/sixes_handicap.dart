@@ -31,10 +31,25 @@ int sixesSoStrokesOnHole({
   required SixesSummary summary,
   required Scorecard scorecard,
   List<int> holesInPlay = const [],
+  int? playerId,
 }) {
   if (playerSo <= 0) return 0;
 
   final segments = summary.segments;
+
+  // This player's OWN stroke index for a hole. In a mixed men's/women's
+  // foursome a hole's SI differs by tee, so a player's strokes must be ranked
+  // against THEIR tee's SI — not the shared first-player card SI (which would,
+  // e.g., hand a man the women's-tee allocation when a woman is listed first).
+  // The scorecard carries each player's own per-hole SI on every hole (scored
+  // or not); fall back to the shared card SI on legacy payloads.
+  int siOf(int h) {
+    if (playerId != null) {
+      final own = scorecard.holeData(h)?.scoreFor(playerId)?.strokeIndex;
+      if (own != null) return own;
+    }
+    return scorecard.holeData(h)?.strokeIndex ?? 18;
+  }
 
   // A segment's range is contiguous by POSITION in play order, so on a shotgun
   // it can wrap by hole NUMBER (e.g. start 16 → end 3). Resolve membership and
@@ -111,8 +126,8 @@ int sixesSoStrokesOnHole({
   // is the deterministic tiebreak, matching the backend.
   final holes = segHoles(seg);
   holes.sort((a, b) {
-    final aSi = scorecard.holeData(a)?.strokeIndex ?? 18;
-    final bSi = scorecard.holeData(b)?.strokeIndex ?? 18;
+    final aSi = siOf(a);
+    final bSi = siOf(b);
     if (aSi != bSi) return aSi.compareTo(bSi);
     return a.compareTo(b);
   });

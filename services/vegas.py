@@ -20,7 +20,10 @@ from django.db import transaction
 
 from core.models import HandicapMode, MatchStatus
 from games.models import VegasGame, VegasTeam, VegasHoleResult
-from scoring.handicap import build_score_index, _par_by_hole, _cap_value
+from scoring.handicap import (
+    build_score_index, _par_by_hole, _cap_value,
+    make_strokes_fn, _effective_hcp,
+)
 from services import wager
 
 
@@ -107,6 +110,73 @@ def _net_index(foursome, game) -> dict:
             per_player[hole_num] = _cap_value(
                 value, par_by_hole.get(hole_num), game.net_max_double_bogey)
     return index
+
+
+# ---------------------------------------------------------------------------
+# Per-hole stroke allocation (for the leaderboard scorecard's stroke dots)
+# ---------------------------------------------------------------------------
+
+def vegas_player_hole_strokes(foursome, game) -> dict:
+    """``{player_id: {hole_number: strokes}}`` — the handicap strokes each real
+    player receives on each hole AS VEGAS ISSUES THEM.
+
+    PROSPECTIVE: strokes are allocated over EVERY hole in play (play order),
+    not just holes already scored, so the leaderboard scorecard can show the
+    whole stroke plan up front — "you get a stroke on these holes" before the
+    round is played. Mirrors ``_net_index``:
+
+    * Gross → empty (no strokes).
+    * Net (100% or custom %) → the partial-round-aware allocation from the
+      effective handicap (same allocator ``build_score_index`` uses).
+    * Strokes-Off-Low → the low playing handicap plays to 0; everyone else
+      gets ``round((phcp − low) × net% / 100)`` strokes on the hardest holes
+      (SI ≤ remainder), identical to ``_net_index``'s SO branch.
+
+    The net-double-bogey cap is deliberately NOT applied here — it adjusts a
+    blow-up hole's score, not the count of handicap strokes the dots represent.
+    """
+    if game.handicap_mode == HandicapMode.GROSS:
+        return {}
+
+    from services.hole_plan import play_order
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+
+    members = list(
+        foursome.memberships.select_related('player', 'tee')
+        .filter(player__is_phantom=False))
+
+    out: dict = {}
+
+    if game.handicap_mode != HandicapMode.STROKES_OFF:
+        strokes_fn = make_strokes_fn(foursome)
+        for m in members:
+            if m.tee_id is None:
+                continue
+            eff = _effective_hcp(m.playing_handicap or 0, game.net_percent)
+            if eff <= 0:
+                continue
+            for h in order:
+                s = strokes_fn(eff, m.tee, h)
+                if s > 0:
+                    out.setdefault(m.player_id, {})[h] = s
+        return out
+
+    # Strokes-Off-Low
+    phcps = [m.playing_handicap for m in members if m.playing_handicap is not None]
+    low = min(phcps) if phcps else 0
+    for m in members:
+        if m.tee_id is None:
+            continue
+        so = round(max(0, (m.playing_handicap or 0) - low) * game.net_percent / 100)
+        if so <= 0:
+            continue
+        full, rem = so // 18, so % 18
+        for h in order:
+            si = m.tee.hole(h).get('stroke_index', 18)
+            s = full + (1 if si <= rem else 0)
+            if s > 0:
+                out.setdefault(m.player_id, {})[h] = s
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -302,8 +372,65 @@ def vegas_summary(foursome) -> dict:
     # in the order the holes were played. Also puts the current hole last, so the
     # grid's scroll-to-end lands there.
     from services.hole_plan import play_order
-    _pos = {h: i for i, h in enumerate(play_order(foursome.round, foursome))}
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    _pos = {h: i for i, h in enumerate(order)}
     holes_out.sort(key=lambda e: _pos.get(e['hole'], 999))
+
+    # ── Scorecard grid ────────────────────────────────────────────────────
+    # Vegas is a digit game with no scorecard of its own, so a strokes-off /
+    # net player couldn't otherwise see where their handicap strokes fall.
+    # Emit a play-order grid (par + stroke index + per-player gross + strokes)
+    # so the leaderboard can render the SAME dots+Index scorecard the other
+    # games show. Strokes are PROSPECTIVE (every hole in play) so the plan is
+    # visible before the holes are played; the winning team's cells tint per
+    # hole once scored.
+    from scoring.models import HoleScore
+    real_members = [
+        m for m in foursome.memberships.select_related('player', 'tee').all()
+        if not m.player.is_phantom
+    ]
+    team_of = {}
+    for tnum, tobj in team_objs.items():
+        for p in tobj.players.all():
+            team_of[p.id] = tnum
+    sample_tee = next((m.tee for m in real_members if m.tee_id is not None), None)
+    par_by_hole, si_by_hole = {}, {}
+    if sample_tee is not None:
+        for h in order:
+            hd = sample_tee.hole(h)
+            par_by_hole[h] = hd.get('par')
+            si_by_hole[h]  = hd.get('stroke_index')
+    gross_by = {}
+    for hs in HoleScore.objects.filter(
+        foursome=foursome, player_id__in=[m.player_id for m in real_members]
+    ).exclude(gross_score=None).values('player_id', 'hole_number', 'gross_score'):
+        gross_by[(hs['player_id'], hs['hole_number'])] = hs['gross_score']
+    strokes_by = vegas_player_hole_strokes(foursome, game)
+    winner_by_hole = {
+        h.hole_number: (1 if h.winner == 'team1' else 2 if h.winner == 'team2' else None)
+        for h in holes
+    }
+    scorecard_players = [
+        {'player_id': m.player_id, 'name': m.player.name,
+         'short_name': m.player.short_name, 'team': team_of.get(m.player_id)}
+        for m in real_members
+    ]
+    scorecard_holes = [
+        {
+            'hole'         : hn,
+            'par'          : par_by_hole.get(hn),
+            'stroke_index' : si_by_hole.get(hn),
+            'winner_id'    : None,
+            'winner_team'  : winner_by_hole.get(hn),
+            'scores'       : [
+                {'player_id': m.player_id,
+                 'gross'    : gross_by.get((m.player_id, hn)),
+                 'strokes'  : strokes_by.get(m.player_id, {}).get(hn, 0)}
+                for m in real_members
+            ],
+        }
+        for hn in order
+    ]
 
     return {
         'status': game.status,
@@ -313,5 +440,10 @@ def vegas_summary(foursome) -> dict:
         'carryover': game.carryover,
         'teams': teams_out,
         'holes': holes_out,
+        'scorecard': {
+            'players'      : scorecard_players,
+            'holes'        : scorecard_holes,
+            'holes_in_play': order,
+        },
         'money': {'bet_unit': bet_unit},
     }

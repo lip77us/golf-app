@@ -24,6 +24,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
+import '../widgets/net_score_button.dart' show scoreCellWithDots;
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
@@ -989,21 +990,27 @@ class _PlayerRow extends StatelessWidget {
           ),
         ),
         // Tapping a scored row opens its inline editor (no pencil affordance —
-        // consistent with the other score screens).
+        // consistent with the other score screens). Handicap stroke dots sit
+        // in a strip above the box (shared scoreCellWithDots) so a net / SO
+        // player can see where their strokes fall — matching the other screens.
         const SizedBox(width: 8),
-        Container(
-          width: 40, height: 36,
-          decoration: BoxDecoration(
-            color: boxBg, border: boxBorder,
-            borderRadius: BorderRadius.circular(6),
+        scoreCellWithDots(
+          Container(
+            width: 40, height: 36,
+            decoration: BoxDecoration(
+              color: boxBg, border: boxBorder,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: gross != null
+                  ? Text('$gross',
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.bold))
+                  : const SizedBox.shrink(),
+            ),
           ),
-          child: Center(
-            child: gross != null
-                ? Text('$gross',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold))
-                : const SizedBox.shrink(),
-          ),
+          strokes,
+          theme.colorScheme.primary,
         ),
       ]),
     );
@@ -1142,12 +1149,40 @@ class _RabbitGrid extends StatelessWidget {
     required this.summary, required this.players, required this.scorecard,
     required this.currentHole, required this.onTapHole});
 
+  String get _mode       => summary.handicapMode;
+  int    get _netPercent => summary.netPercent;
+
+  int? get _lowPlaying {
+    if (_mode != 'strokes_off' || players.isEmpty) return null;
+    return players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b);
+  }
+
+  /// Prospective handicap strokes for [m] on [hole] (all 18 holes, whether or
+  /// not scored) — same allocation the per-hole score card uses, so the "Rabbit
+  /// by hole" grid shows where each player's strokes fall over the whole round.
+  int _strokesFor(Membership m, int hole) {
+    if (_mode == 'gross') return 0;
+    final entry = scorecard.holeData(hole)?.scoreFor(m.player.id);
+    final si    = entry?.strokeIndex ?? scorecard.holeData(hole)?.strokeIndex ?? 18;
+    if (_mode == 'net') {
+      if (_netPercent == 100 && entry != null) return entry.handicapStrokes;
+      final eff = (m.playingHandicap * _netPercent / 100.0).round();
+      return strokesOnHole(eff, si);
+    }
+    final low = _lowPlaying;
+    if (low == null) return 0;
+    final so = m.playingHandicap - low;
+    if (so <= 0) return 0;
+    return strokesOnHole(so, si);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     const double labelColW = 56.0;
     const double cellW = 34.0;
-    const double rowH = 26.0;
+    // Tall enough for the stroke-dot strip that sits above each gross digit.
+    const double rowH = 32.0;
     // The holes actually in play, in play order (the backend emits them ordered
     // and wraparound-aware) — no blank 1-9 on a back-9 round.
     final holeRange = summary.holes.isNotEmpty
@@ -1219,12 +1254,17 @@ class _RabbitGrid extends StatelessWidget {
                     cell(h, Builder(builder: (_) {
                       final g = scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
                       final isWinner = winnerByHole[h] == m.player.id;
-                      return Text(g == null ? '–' : '$g',
+                      final digit = Text(g == null ? '–' : '$g',
                           style: theme.textTheme.bodySmall?.copyWith(
                               fontWeight: isWinner ? FontWeight.bold : FontWeight.w500,
                               color: isWinner ? Colors.green.shade700
                                   : g == null ? theme.colorScheme.onSurfaceVariant
                                               : null));
+                      // Handicap-stroke dots in a reserved strip ABOVE the digit
+                      // (the whole-round stroke plan, on every hole a player gets
+                      // a shot) — clear of the number, aligned across rows.
+                      return scoreCellWithDots(digit, _strokesFor(m, h),
+                          Colors.red.shade700);
                     })),
                 ]),
               Container(height: 1, width: labelColW + cellW * holeRange.length,

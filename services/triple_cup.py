@@ -1611,9 +1611,19 @@ def triple_cup_summary(foursome) -> dict | None:
                        if p in gross_index and hole in gross_index[p]]
             return min(grosses) if grosses else None
 
+        # Emit EVERY hole in the match's segment (in play order), not just the
+        # scored ones, so the leaderboard detail grid shows each player's
+        # handicap-stroke dots across all 6 holes UP FRONT (prospective) — the
+        # `expected` allocation carries a value for every hole in the range.
+        # Persisted result rows (gross/net/winner/margin) merge in as they're
+        # played; unplayed holes carry null gross with the stroke dots still on.
+        hr_by_hole = {hr.hole_number: hr for hr in hole_rows}
         holes_out = []
-        for hr in hole_rows:
-            if hr.winning_team_number == 1:
+        for hole_num in _match_hole_list(match):
+            hr = hr_by_hole.get(hole_num)
+            if hr is None:
+                hole_winner = None
+            elif hr.winning_team_number == 1:
                 hole_winner = 'T1'
             elif hr.winning_team_number == 2:
                 hole_winner = 'T2'
@@ -1621,14 +1631,14 @@ def triple_cup_summary(foursome) -> dict | None:
                 hole_winner = 'Halved'
             scores_for_hole = []
             for pid in match_pids:
-                gross = gross_index.get(pid, {}).get(hr.hole_number)
-                net   = match_index.get(pid, {}).get(hr.hole_number)
+                gross = gross_index.get(pid, {}).get(hole_num)
+                net   = match_index.get(pid, {}).get(hole_num)
                 # Strokes reflect the segment-specific expected
                 # allocation (matches what the entry-screen dots
                 # showed before scoring) — not gross−net, which can
                 # disagree when alt-shot mixes player gross with
-                # team handicap.
-                strokes = expected.get(pid, {}).get(hr.hole_number, 0)
+                # team handicap.  Prospective: present on unplayed holes too.
+                strokes = expected.get(pid, {}).get(hole_num, 0)
                 scores_for_hole.append({
                     'player_id': pid,
                     'gross'    : gross,
@@ -1636,21 +1646,21 @@ def triple_cup_summary(foursome) -> dict | None:
                     'net'      : net,
                 })
             holes_out.append({
-                'hole'           : hr.hole_number,
-                'par'            : par_by_hole.get(hr.hole_number),
-                'stroke_index'   : si_by_hole.get(hr.hole_number),
-                't1_net'         : hr.team1_net,
-                't2_net'         : hr.team2_net,
-                't1_team_gross'  : _team_gross_for(team1_pids, hr.hole_number)
+                'hole'           : hole_num,
+                'par'            : par_by_hole.get(hole_num),
+                'stroke_index'   : si_by_hole.get(hole_num),
+                't1_net'         : hr.team1_net if hr else None,
+                't2_net'         : hr.team2_net if hr else None,
+                't1_team_gross'  : _team_gross_for(team1_pids, hole_num)
                                     if match.segment == 'foursomes' else None,
-                't2_team_gross'  : _team_gross_for(team2_pids, hr.hole_number)
+                't2_team_gross'  : _team_gross_for(team2_pids, hole_num)
                                     if match.segment == 'foursomes' else None,
-                't1_team_strokes': t1_team_strokes_by_hole.get(hr.hole_number)
+                't1_team_strokes': t1_team_strokes_by_hole.get(hole_num)
                                     if match.segment == 'foursomes' else None,
-                't2_team_strokes': t2_team_strokes_by_hole.get(hr.hole_number)
+                't2_team_strokes': t2_team_strokes_by_hole.get(hole_num)
                                     if match.segment == 'foursomes' else None,
                 'winner'         : hole_winner,
-                'margin'         : hr.holes_up_after,
+                'margin'         : hr.holes_up_after if hr else None,
                 'scores'         : scores_for_hole,
             })
 

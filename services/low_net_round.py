@@ -90,6 +90,44 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
 
     totals: dict = {}  # {player_id: {'name', 'total', 'holes_played'}}
 
+    # ── Seed every real player with a PROSPECTIVE stroke plan ────────────────
+    # So the Stroke Play scorecard shows where each player's handicap strokes
+    # fall over the WHOLE round — including before the round starts / on holes
+    # not yet played. Gross/net fill in per hole from the scores below.
+    from services.hole_plan import holes_in_play as _holes_in_play
+    in_play_by_fs = {}
+    for fs in foursomes:
+        hs_set = _holes_in_play(round_obj, fs)
+        in_play_by_fs[fs.pk] = sorted(hs_set) if hs_set else list(range(1, 19))
+    for fs in foursomes:
+        holes_fs = in_play_by_fs.get(fs.pk) or list(range(1, 19))
+        for m in fs.memberships.all():
+            if m.player.is_phantom or m.player_id in totals:
+                continue
+            plan = {}
+            if handicap_mode != HandicapMode.GROSS and m.tee_id is not None:
+                for hole in holes_fs:
+                    if handicap_mode == HandicapMode.NET:
+                        eff = _effective_hcp(m.playing_handicap, net_percent)
+                        s = strokes_fns[fs.pk](eff, m.tee, hole)
+                    else:  # STROKES_OFF
+                        si = m.tee.hole(hole).get('stroke_index', 18)
+                        s = _strokes_on_hole(
+                            max(0, m.playing_handicap - low_hcp), si)
+                    if s > 0:
+                        plan[hole] = s
+            totals[m.player_id] = {
+                'name'         : m.player.name,
+                'total'        : 0,
+                'holes_played' : 0,
+                'par_played'   : 0,
+                'foursome_id'  : fs.pk,
+                'handicap'     : m.playing_handicap,
+                'holes'        : {},
+                'stroke_plan'  : plan,
+                'total_strokes': sum(plan.values()),
+            }
+
     for hs in qs:
         pid  = hs['player_id']
         hole = hs['hole_number']
@@ -224,7 +262,11 @@ def low_net_round_standings(round_obj) -> list:
     # *eligible* player, $2nd to the next, and so on.
     from collections import defaultdict
 
-    eligible_rows = [(pid, data) for pid, data in rows if pid not in excluded_ids]
+    # Only players who have actually scored compete for prizes — the roster is
+    # now seeded with not-yet-started players (so their prospective scorecard
+    # shows), and those must not be handed money.
+    eligible_rows = [(pid, data) for pid, data in rows
+                     if pid not in excluded_ids and data['holes_played'] > 0]
 
     prize_rank = 1
     eligible_ranked: list = []   # [(pid, prize_rank)]
@@ -269,6 +311,11 @@ def low_net_round_standings(round_obj) -> list:
             'payout'      : payout,
             'handicap'    : data.get('handicap', 0),  # raw playing handicap
             'holes'       : data.get('holes', {}),   # {hole_number: hole_data}
+            # Prospective full-round stroke allocation (all holes in play) +
+            # the total strokes this player receives — drives the scorecard
+            # dots that show before/independent of scores.
+            'stroke_plan'    : data.get('stroke_plan', {}),
+            'total_strokes'  : data.get('total_strokes', 0),
         })
 
     return standings
@@ -344,6 +391,8 @@ def low_net_round_summary(round_obj) -> dict:
                     {'hole': h, **v}
                     for h, v in sorted(s.get('holes', {}).items())
                 ],
+                'stroke_plan'  : s.get('stroke_plan', {}),
+                'total_strokes': s.get('total_strokes', 0),
             }
             for s in standings
         ],

@@ -107,34 +107,37 @@ class TeeAssignmentList extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Mirror the per-player row layout: the "Set all" label sits on
+              // the LEFT (beside the group title) and its picker is right-
+              // aligned so it lines up with the per-player tee pickers below —
+              // and has room not to ellipsize on a narrow phone (13 mini).
               Row(children: [
-                Text(title(sex),
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                const Spacer(),
-                if (group.length > 1) ...[
-                  Text('Set all',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 12),
-                  // Flexible + isExpanded so a wide tee name ellipsizes
-                  // instead of overflowing the header on a narrow phone.
-                  Flexible(
-                    child: TeePicker(
-                      tees: groupTees,
-                      value: commonId,
-                      hint: 'Choose',
-                      warn: false, // null here = "mixed", not an error
-                      isExpanded: true,
-                      onChanged: (id) {
-                        for (final p in group) {
-                          onChanged(p.id, id);
-                        }
-                      },
-                    ),
+                Expanded(
+                  child: Row(children: [
+                    Text(title(sex),
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    if (group.length > 1) ...[
+                      const SizedBox(width: 12),
+                      Text('Set all',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ]),
+                ),
+                if (group.length > 1)
+                  TeePicker(
+                    tees: groupTees,
+                    value: commonId,
+                    hint: 'Choose',
+                    warn: false, // null here = "mixed", not an error
+                    onChanged: (id) {
+                      for (final p in group) {
+                        onChanged(p.id, id);
+                      }
+                    },
                   ),
-                ],
               ]),
               const Divider(),
               ...group.map(playerRow),

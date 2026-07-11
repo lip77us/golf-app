@@ -214,3 +214,71 @@ class VegasSettlementTests(VegasBase):
         self.assertEqual(t1['points'], 5)
         self.assertEqual(t2['money'], -2.0)      # clipped at the cap
         self.assertEqual(t1['money'], 2.0)       # winners reduced to stay zero-sum
+
+
+class VegasScorecardTests(TestCase):
+    """The leaderboard scorecard block: prospective per-hole handicap strokes
+    so a strokes-off / net player can see where their strokes fall before the
+    holes are played."""
+
+    def setUp(self):
+        self.tee = make_tee(make_course())
+        self.round = make_round(self.tee.course, active_games=['vegas'])
+        self.round.bet_unit = Decimal('1.00')
+        self.round.save(update_fields=['bet_unit'])
+        self.p = [make_player(n, 0, short_name=n) for n in ('A', 'B', 'C', 'D')]
+        # Playing handicaps: A/B are the low (0). C gets 5 strokes off the low,
+        # D gets 2. Teams: A&B (1) vs C&D (2).
+        self.fs = make_foursome(
+            self.round,
+            [(self.p[0], 0), (self.p[1], 0), (self.p[2], 5), (self.p[3], 2)],
+            tee=self.tee)
+
+    def _sc(self):
+        setup_vegas(
+            self.fs, [self.p[0].id, self.p[1].id], [self.p[2].id, self.p[3].id],
+            handicap_mode='strokes_off', net_percent=100)
+        calculate_vegas(self.fs)
+        return vegas_summary(self.fs)['scorecard']
+
+    def _cell(self, sc, hole, pid):
+        h   = next(x for x in sc['holes'] if x['hole'] == hole)
+        row = next(r for r in h['scores'] if r['player_id'] == pid)
+        return row['strokes'], row['gross']
+
+    def test_strokes_off_dots_are_prospective(self):
+        sc = self._sc()
+        # All 18 holes present even before any score is entered.
+        self.assertEqual(len(sc['holes']), 18)
+        self.assertEqual(sc['holes_in_play'], list(range(1, 19)))
+        # C: SO=5 → a stroke on the 5 hardest holes (SI 1..5 = holes 5,14,2,11,9),
+        # and nothing on an easy hole (SI 18 = hole 16). Gross null (unplayed).
+        for hole in (5, 14, 2, 11, 9):
+            st, gross = self._cell(sc, hole, self.p[2].id)
+            self.assertEqual(st, 1, f'C should get a stroke on hole {hole}')
+            self.assertIsNone(gross)
+        self.assertEqual(self._cell(sc, 16, self.p[2].id)[0], 0)
+        # D: SO=2 → strokes only on SI 1,2 (holes 5,14).
+        self.assertEqual(self._cell(sc, 5, self.p[3].id)[0], 1)
+        self.assertEqual(self._cell(sc, 14, self.p[3].id)[0], 1)
+        self.assertEqual(self._cell(sc, 2, self.p[3].id)[0], 0)
+        # A is the low → no strokes anywhere.
+        self.assertEqual(self._cell(sc, 5, self.p[0].id)[0], 0)
+
+    def test_scorecard_carries_par_index_and_teams(self):
+        sc = self._sc()
+        h5 = next(x for x in sc['holes'] if x['hole'] == 5)
+        self.assertEqual(h5['stroke_index'], 1)
+        self.assertEqual(h5['par'], 4)
+        teams = {p['player_id']: p['team'] for p in sc['players']}
+        self.assertEqual(teams[self.p[0].id], 1)
+        self.assertEqual(teams[self.p[2].id], 2)
+
+    def test_gross_mode_has_no_dots(self):
+        setup_vegas(
+            self.fs, [self.p[0].id, self.p[1].id], [self.p[2].id, self.p[3].id],
+            handicap_mode='gross', net_percent=100)
+        calculate_vegas(self.fs)
+        sc = vegas_summary(self.fs)['scorecard']
+        self.assertTrue(all(
+            r['strokes'] == 0 for h in sc['holes'] for r in h['scores']))

@@ -42,6 +42,10 @@ Widget strokePlayHoleStrip(
   bool showNet = true,
   int? netTotal,
   int? netToPar,
+  /// Prospective full-round stroke allocation ({hole: strokes}). When supplied,
+  /// the dots come from this (so they show on EVERY hole a player gets a shot,
+  /// even before it's played) rather than being derived from gross − net.
+  Map<int, int>? strokePlan,
 }) {
   final theme = Theme.of(context);
   final hm = <int, Map>{};
@@ -50,7 +54,13 @@ Widget strokePlayHoleStrip(
     final n = m['hole'] as int?;
     if (n != null) hm[n] = m;
   }
-  if (hm.isEmpty) {
+  // With a prospective plan + holes-in-play we can render the whole card even
+  // before a single score is entered (all holes blank, dots on stroke holes);
+  // only bail when there's genuinely nothing to show.
+  final _canRenderEmpty =
+      (strokePlan != null && strokePlan.isNotEmpty) ||
+      (holesInPlay != null && holesInPlay.isNotEmpty);
+  if (hm.isEmpty && !_canRenderEmpty) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       child: Text('No scores yet.',
@@ -98,8 +108,15 @@ Widget strokePlayHoleStrip(
     final hole    = hm[n];
     final gross   = hole?['gross'] as int?;
     final net     = hole?['net'] as int?;
-    final raw     = (gross != null && net != null) ? gross - net : 0;
-    final strokes = raw < 0 ? 0 : (raw > 9 ? 9 : raw);
+    // Prefer the prospective plan (shows a dot on every stroke hole up front);
+    // fall back to gross − net for callers that don't supply a plan.
+    final int strokes;
+    if (strokePlan != null) {
+      strokes = (strokePlan[n] ?? 0).clamp(0, 9);
+    } else {
+      final raw = (gross != null && net != null) ? gross - net : 0;
+      strokes = raw < 0 ? 0 : (raw > 9 ? 9 : raw);
+    }
     return Container(
       width: holeW, height: scoreH, alignment: Alignment.center,
       decoration: BoxDecoration(border: border),

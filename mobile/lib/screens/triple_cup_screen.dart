@@ -288,7 +288,7 @@ class _MatchCard extends StatelessWidget {
                   color: kTripleCupTeam1Color)),
             ]),
 
-            if (match.holes.isNotEmpty) ...[
+            if (match.holes.any((h) => h.winner != null)) ...[
               const SizedBox(height: 12),
               _holesGrid(theme),
             ],
@@ -331,7 +331,9 @@ class _MatchCard extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: match.holes.map((h) {
+        // Only holes with a result — this is the play screen's per-hole
+        // outcome strip, not the (prospective) leaderboard stroke plan.
+        children: match.holes.where((h) => h.winner != null).map((h) {
           final bg = switch (h.winner) {
             'T1'     => GameColors.team1Bg,
             'T2'     => GameColors.team2Bg,

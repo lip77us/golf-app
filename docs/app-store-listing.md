@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.3.0)
+# App Store listing copy — Halved (v2.3.2)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -27,8 +27,8 @@ vegas,wolf,sixes,stableford,spots,handicap,foursome,matchplay,scorecard,tourname
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
 ## Promotional text (170 max, editable without review)
-Score Skins, Nassau, Vegas, Wolf and more — then let the new Settlement tab show
-exactly who owes whom. Live results, group chat, and a one-tap settle-up.
+Now see exactly where every player's handicap strokes fall — hole by hole, all
+18, in every game. Plus live results, group chat, and a one-tap settle-up.
 
 ## Description (4000 max)
 Halved keeps score for the games golfers really play. Set up a round, pick your
@@ -76,7 +76,9 @@ shared catalog, and a full course database, all in a single search.
 
 HANDICAPS YOUR WAY
 Score net (with an adjustable handicap percentage), gross, or
-strokes-off-the-low-player — set per game to match how your group plays.
+strokes-off-the-low-player — set per game to match how your group plays. Every
+scorecard shows exactly where each player gets a stroke, hole by hole, so the
+handicap is never a mystery.
 
 SETTLE UP
 At the end of the round, the Settlement tab nets every game into one summary and
@@ -86,7 +88,23 @@ seconds, with no spreadsheets and no napkin math.
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
 
-## What's New (v2.3.0)
+## What's New (v2.3.2)
+See where every stroke falls:
+
+• Stroke dots, everywhere — every scorecard and score-entry screen now shows
+  exactly which holes each player gets a handicap stroke on, across all your
+  games: Vegas, Wolf, Rabbit, Sixes, Stableford, the Mini Singles Bracket and
+  the one-round cup.
+• The Stroke Play tab now lays out each player's full-round strokes hole by
+  hole — all 18 — even before you tee off.
+• Wolf: the tee shows who's getting a stroke before the Wolf picks a partner.
+• Set a home course once and it's ready every time you start a round.
+• The leaderboard refreshes the moment you open it.
+• Fixes: correct strokes when men and women play different tees, Strokes-Off-Low
+  scoring in the Mini Singles Bracket, and the final match no longer starts
+  before the semifinals are decided.
+
+## What's New (v2.3.0) — previous
 See exactly who owes whom:
 
 • New Settlement tab — nets every game in your round into one who-owes-whom

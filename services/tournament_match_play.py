@@ -55,7 +55,11 @@ Public API
 from django.db import transaction
 
 from games.models import MatchPlayBracket, MatchPlayMatch, MatchPlayHoleResult
-from scoring.handicap import build_score_index, build_match_play_score_index
+from scoring.handicap import (
+    build_score_index, build_match_play_score_index,
+    make_strokes_fn, _strokes_on_hole,
+)
+from scoring.models import HoleScore
 from tournament.models import FoursomeMembership
 
 
@@ -430,68 +434,39 @@ def calculate_tournament_match_play(foursome) -> MatchPlayBracket | None:
     r2_matches = [m for m in matches if m.round_number == 2]
 
     all_hole_results: list = []
-    # holes_up and result lists per semi — used for tentative leader and
-    # detecting whether each semi has entered SD (hole > 9 scored).
-    semi_holes_up: dict[int, int]  = {}
-    semi_results:  dict[int, list] = {}
 
     # ── Round 1: score semis ─────────────────────────────────────────────
     for match in r1_matches:
         idx = _index_for(match)
-        results, holes_up = _play_semi(match, idx)
-        semi_holes_up[match.id] = holes_up
-        semi_results[match.id]  = results
+        results, _holes_up = _play_semi(match, idx)
         all_hole_results.extend(results)
         match.save(update_fields=['status', 'result', 'finished_on_hole'])
 
     MatchPlayHoleResult.objects.bulk_create(all_hole_results)
     all_hole_results = []
 
-    r1_complete     = all(m.status == 'complete' for m in r1_matches)
+    r1_complete = all(m.status == 'complete' for m in r1_matches)
 
-    # A semi is "past the front 9" when it is either complete (outright winner)
-    # OR actively in sudden death (has scored at least one hole beyond hole 9).
-    # A semi that is merely tied after hole 9 with no SD holes yet entered is
-    # NOT past the front 9.  semi_results captures the in-memory result list
-    # from each _play_semi() call so we don't need an extra DB query here.
+    def _semi_winner(semi):
+        return semi.player1 if semi.result == 'player1' else semi.player2
 
-    def _semi_past_front_9(match, result_list: list) -> bool:
-        """True if the semi has a confirmed winner OR is actively in SD."""
-        if match.status == 'complete':
-            return True
-        return any(r.hole_number > 9 for r in result_list)
-
-    def _tentative_winner(semi, holes_up: int):
-        """Return the confirmed winner, or the current SD leader (player1 on tie)."""
-        if semi.result == 'player1': return semi.player1
-        if semi.result == 'player2': return semi.player2
-        return semi.player1 if holes_up >= 0 else semi.player2
-
-    def _tentative_loser(semi, holes_up: int):
-        winner = _tentative_winner(semi, holes_up)
-        return semi.player2 if winner.id == semi.player1_id else semi.player1
-
-    # Back-9 tracking only starts when ALL semis are past the front 9.
-    # This prevents prematurely assigning finalists when one semi is still
-    # tied at hole 9 with no SD holes played yet.
-    r1_ready = all(
-        _semi_past_front_9(m, semi_results.get(m.id, []))
-        for m in r1_matches
-    )
+    def _semi_loser(semi):
+        return semi.player2 if semi.result == 'player1' else semi.player1
 
     # ── Assign round-2 players ───────────────────────────────────────────
-    # Assign as soon as all semis are past hole 9.  If any semi is still in
-    # sudden death, the unresolved side uses the current SD leader as a
-    # tentative assignment — corrected automatically on the next recalculation
-    # once the SD resolves.
-    if r1_ready and len(r1_matches) == 2 and len(r2_matches) >= 1:
+    # The Final / 3rd-Place only begin once BOTH semis are DECIDED (complete).
+    # A semi tied after hole 9 goes to sudden death on holes 10+, which share
+    # the back-9 holes the Final would use — so assigning finalists (or scoring
+    # the back 9) while a semi is still in SD starts the Final before the
+    # bracket is settled. Waiting for r1_complete keeps "begins after both
+    # semis resolve" literally true.
+    if r1_complete and len(r1_matches) == 2 and len(r2_matches) >= 1:
         s1, s2 = r1_matches[0], r1_matches[1]
-        hu1, hu2 = semi_holes_up.get(s1.id, 0), semi_holes_up.get(s2.id, 0)
 
-        s1_winner = _tentative_winner(s1, hu1)
-        s2_winner = _tentative_winner(s2, hu2)
-        s1_loser  = _tentative_loser(s1, hu1)
-        s2_loser  = _tentative_loser(s2, hu2)
+        s1_winner = _semi_winner(s1)
+        s2_winner = _semi_winner(s2)
+        s1_loser  = _semi_loser(s1)
+        s2_loser  = _semi_loser(s2)
 
         # r2_matches[0] = Final, r2_matches[1] = 3rd Place
         final = r2_matches[0]
@@ -507,9 +482,11 @@ def calculate_tournament_match_play(foursome) -> MatchPlayBracket | None:
 
     # ── Round 2: score back-9 matches ────────────────────────────────────
     # For SO mode each round-2 match needs a freshly-built pair index —
-    # the player1/player2 just got assigned above.
+    # the player1/player2 just got assigned above. Only score once both semis
+    # are decided (see above), so a tied semi's SD holes never leak into the
+    # Final before its players are known.
     for match in r2_matches:
-        if r1_ready:
+        if r1_complete:
             idx = _index_for(match)
             results = _play_back9_match(match, idx)
             all_hole_results.extend(results)
@@ -627,6 +604,99 @@ def tournament_match_play_summary(foursome) -> dict | None:
     r1_matches = [m for m in matches if m.round_number == 1]
     r2_matches = [m for m in matches if m.round_number == 2]
 
+    # ── Scoring-detail scaffolding (par / SI / gross / prospective strokes) ──
+    # The stroke dots follow the bracket's handicap mode, matching how the
+    # bracket is actually scored: gross, full-net, or Strokes-Off-Low (per-pair
+    # — the lower handicap in the match plays scratch, exactly as
+    # build_match_play_score_index and the score-entry "gets" bubble do).
+    round_obj = foursome.round
+    mp_mode = bracket.handicap_mode or round_obj.handicap_mode
+    mp_npct = (bracket.net_percent if bracket.net_percent is not None
+               else round_obj.net_percent) or 100
+    sc_members = list(
+        foursome.memberships.select_related('player', 'tee')
+        .filter(player__is_phantom=False))
+    member_by_pid = {m.player_id: m for m in sc_members}
+    sample_tee = next((m.tee for m in sc_members if m.tee_id is not None), None)
+    par_by, si_by = {}, {}
+    if sample_tee is not None:
+        for h in range(1, 19):
+            hd = sample_tee.hole(h)
+            par_by[h] = hd.get('par')
+            si_by[h]  = hd.get('stroke_index')
+    gross_by = {}
+    for hs in (
+        HoleScore.objects
+        .filter(foursome=foursome, player__is_phantom=False)
+        .exclude(gross_score=None)
+        .values('player_id', 'hole_number', 'gross_score')
+    ):
+        gross_by[(hs['player_id'], hs['hole_number'])] = hs['gross_score']
+    strokes_fn = make_strokes_fn(foursome)
+
+    def _match_scorecard(match):
+        """Per-match scoring detail: every hole in the 9-hole range (plus any
+        sudden-death holes), with par, stroke index, each player's gross +
+        prospective handicap strokes (per the bracket mode) and the hole
+        winner id. Prospective — dots show before a hole is scored."""
+        p1id, p2id = match.player1_id, match.player2_id
+        m1, m2 = member_by_pid.get(p1id), member_by_pid.get(p2id)
+
+        if mp_mode == 'gross':
+            def _strokes(pid, hole):
+                return 0
+        elif mp_mode == 'strokes_off':
+            h1 = (m1.playing_handicap or 0) if m1 else 0
+            h2 = (m2.playing_handicap or 0) if m2 else 0
+            low, hcp_by = min(h1, h2), {p1id: h1, p2id: h2}
+
+            def _strokes(pid, hole):
+                m = member_by_pid.get(pid)
+                if m is None or m.tee_id is None:
+                    return 0
+                so = max(0, hcp_by.get(pid, 0) - low)   # per-pair, 100%
+                if so <= 0:
+                    return 0
+                si = m.tee.hole(hole).get('stroke_index', 18)
+                return _strokes_on_hole(so, si)
+        else:  # net — each player's full playing handicap × net%.
+            def _strokes(pid, hole):
+                m = member_by_pid.get(pid)
+                if m is None or m.tee_id is None:
+                    return 0
+                eff = round((m.playing_handicap or 0) * mp_npct / 100)
+                return strokes_fn(eff, m.tee, hole)
+
+        base = list(range(match.start_hole, match.start_hole + 9))
+        hr_by_hole = {hr.hole_number: hr for hr in match.hole_results.all()}
+        extra = sorted(h for h in hr_by_hole if h not in base)  # sudden death
+        holes = []
+        for h in base + extra:
+            hr = hr_by_hole.get(h)
+            holes.append({
+                'hole'         : h,
+                'par'          : par_by.get(h),
+                'stroke_index' : si_by.get(h),
+                'winner_id'    : hr.winner_id if hr else None,
+                'is_sd'        : h not in base,
+                'scores'       : [
+                    {'player_id': p1id, 'gross': gross_by.get((p1id, h)),
+                     'strokes': _strokes(p1id, h)},
+                    {'player_id': p2id, 'gross': gross_by.get((p2id, h)),
+                     'strokes': _strokes(p2id, h)},
+                ],
+            })
+        return {
+            'players': [
+                {'player_id': p1id, 'name': match.player1.name,
+                 'short_name': match.player1.short_name},
+                {'player_id': p2id, 'name': match.player2.name,
+                 'short_name': match.player2.short_name},
+            ],
+            'holes'        : holes,
+            'holes_in_play': base + extra,
+        }
+
     # Derive current seed order from the round-1 match stubs.
     #
     # 4-player single-elim layout:
@@ -698,18 +768,11 @@ def tournament_match_play_summary(foursome) -> dict | None:
                     return 'last_hole_won'
         return None
 
-    # Whether all Round-1 semis are decided.
+    # Whether all Round-1 semis are DECIDED. The Final / 3rd-Place stay "TBD"
+    # (Semi N Winner) until this is true — a semi tied after 9 is still in
+    # sudden death and its winner isn't known, so the back-9 matches haven't
+    # really started (mirrors calculate_tournament_match_play's r1_complete gate).
     r1_complete = all(m.status == 'complete' for m in r1_matches) if r1_matches else True
-
-    # Back-9 tracking is active when ALL semis are past the front 9 —
-    # i.e. each semi is either complete OR has at least one SD hole scored.
-    # We use the prefetched hole_results to avoid extra queries.
-    def _semi_past_front_9_summary(match) -> bool:
-        if match.status == 'complete':
-            return True
-        return any(hr.hole_number > 9 for hr in match.hole_results.all())
-
-    r1_ready = all(_semi_past_front_9_summary(m) for m in r1_matches) if r1_matches else True
 
     matches_out = []
     r2_idx = 0
@@ -737,11 +800,10 @@ def tournament_match_play_summary(foursome) -> dict | None:
             for hr in hole_results
         ]
 
-        # players_tbd: not all semis are past hole 9 yet (e.g. one semi tied at
-        #   hole 9 with no SD holes entered) — show "Semi 1 Winner / Semi 2 Winner".
-        # players_tentative: all semis past hole 9 but not all complete (SD
-        #   still active) — show real names with a "tracking live" note.
-        if r == 2 and not r1_ready:
+        # players_tbd: the semis aren't all decided yet — show "Semi 1 Winner /
+        #   Semi 2 Winner" so the Final/3rd-Place don't appear to have started
+        #   while a semi is still in sudden death.
+        if r == 2 and not r1_complete:
             players_tbd       = True
             players_tentative = False
             if idx == 0:   # Final
@@ -756,7 +818,7 @@ def tournament_match_play_summary(foursome) -> dict | None:
                 p2_short   = 'S2 L'
         else:
             players_tbd       = False
-            players_tentative = r == 2 and not r1_complete
+            players_tentative = False   # no tentative tracking — see r1_complete
             p1_display        = match.player1.name
             p2_display        = match.player2.name
             p1_short          = match.player1.short_name
@@ -781,6 +843,9 @@ def tournament_match_play_summary(foursome) -> dict | None:
             'tie_break'        : tie_break,
             'finished_hole'    : match.finished_on_hole,
             'holes'            : holes_out,
+            # Scoring detail — present once the match's players are known
+            # (semis always; final/consolation after both semis resolve).
+            'scorecard'        : None if players_tbd else _match_scorecard(match),
         })
 
     # ── Money block ───────────────────────────────────────────────────────

@@ -94,6 +94,7 @@ int _sixesSoStrokesOnHole({
   required SixesSummary summary,
   required Scorecard scorecard,
   List<int> holesInPlay = const [],
+  int? playerId,
 }) =>
     sixesSoStrokesOnHole(
       playerSo:     playerSo,
@@ -102,6 +103,7 @@ int _sixesSoStrokesOnHole({
       summary:      summary,
       scorecard:    scorecard,
       holesInPlay:  holesInPlay,
+      playerId:     playerId,
     );
 
 /// True when the round runs a Nassau-family game — full Nassau or Nassau Nine
@@ -419,6 +421,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         rp.lowNetConfig != null) {
       final mode = rp.lowNetConfig!['handicap_mode'] as String? ?? 'net';
       final pct  = rp.lowNetConfig!['net_percent']  as int?    ?? 100;
+      return (mode, pct);
+    }
+    // Stableford (primary) carries its own handicap mode/% in its config —
+    // read it so the per-hole stroke dots reflect the Stableford game, not the
+    // round default (which for a casual Stableford round is often gross → no
+    // dots at all).
+    if (primary == 'stableford' && rp.stablefordResult != null) {
+      final mode = rp.stablefordResult!['handicap_mode'] as String? ?? 'net';
+      final pct  = rp.stablefordResult!['net_percent']  as int?    ?? 100;
       return (mode, pct);
     }
     if (_nassauActive(games) && rp.nassauSummary != null) {
@@ -2226,6 +2237,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           summary:     rp.sixesSummary!,
           scorecard:   sc,
           holesInPlay: _playOrderFor(rp),
+          playerId:    player.player.id,
         );
       } else {
         // Partial-round aware (scale + re-rank); identical to strokesOnHole on a
@@ -2680,6 +2692,7 @@ class _HoleScoreCard extends StatelessWidget {
           summary:     sixesSummary!,
           scorecard:   scorecard,
           holesInPlay: holesInPlay,
+          playerId:    m.player.id,
         );
       }
       // Non-Sixes SO: 18-hole SI threshold.
