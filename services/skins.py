@@ -526,9 +526,6 @@ def skins_summary(foursome) -> dict:
         seg_pot      = len(seg['holes']) * len(seg['roster']) * bet_unit / 18.0
         pool_at_risk += seg_pot
         per_player_ante = len(seg['holes']) * bet_unit / 18.0
-        for pid in seg['roster']:
-            if pid in contribution_by_pid:
-                contribution_by_pid[pid] += per_player_ante
         seg_skins: dict = {}
         seg_total = 0
         for hole_num in seg['holes']:
@@ -541,7 +538,14 @@ def skins_summary(foursome) -> dict:
                     if hn == hole_num:
                         seg_skins[pid] = seg_skins.get(pid, 0) + entry['count']
                         seg_total     += entry['count']
+        # Only settle a segment once its pot is actually AWARDED (a skin has
+        # been won).  Until then the pot is undecided and nobody is charged —
+        # charging the ante while distributing nothing breaks zero-sum (each
+        # player shows −ante with no offsetting winner).
         if seg_total > 0:
+            for pid in seg['roster']:
+                if pid in contribution_by_pid:
+                    contribution_by_pid[pid] += per_player_ante
             for pid, sk in seg_skins.items():
                 if pid in payout_by_pid:
                     payout_by_pid[pid] += seg_pot * sk / seg_total

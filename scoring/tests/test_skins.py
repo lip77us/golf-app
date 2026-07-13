@@ -129,6 +129,20 @@ class SkinsTests(TestCase):
         assert nets['Alice'] > 0, nets
         assert all(nets[n] < 0 for n in ('Bob', 'Carol', 'Dave')), nets
 
+    def test_no_skins_won_yet_is_zero_not_ante_loss(self):
+        """In progress with no skin decided (a tie carries): nobody has won the
+        pot, so every player nets 0 — not −ante, which would break zero-sum."""
+        setup_skins(self.fs, handicap_mode='gross', carryover=True,
+                    payout_style='pool')
+        # All tied → the skin carries, nothing awarded yet.
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 5), (self.pid['Bob'], 5),
+                                 (self.pid['Carol'], 5), (self.pid['Dave'], 5)])
+        calculate_skins(self.fs)
+        s = skins_summary(self.fs)
+        nets = {p['name']: p['net'] for p in s['players']}
+        assert all(v == 0 for v in nets.values()), nets
+        assert round(sum(nets.values()), 2) == 0.0, nets
+
     def test_per_point_pay_leader(self):
         """Per-skin 'first' — the leader collects the margin from everyone."""
         setup_skins(self.fs, handicap_mode='gross', carryover=True,
