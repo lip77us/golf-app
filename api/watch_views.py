@@ -23,6 +23,7 @@ from __future__ import annotations
 from django.http       import Http404
 from django.shortcuts  import render
 
+from services.catalog  import normalize_course_name
 from tournament.models import Round
 
 
@@ -559,7 +560,7 @@ def _render_casual_wolf(request, round_obj, token: str, tabs: list):
         groups.append({'group_number': fs.group_number, 'summary': s})
     return render(request, 'watch/casual_wolf.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'thru':         _round_thru(round_obj),
         'groups':       groups,
@@ -628,7 +629,7 @@ def _render_casual_vegas(request, round_obj, token: str, tabs: list):
         })
     return render(request, 'watch/casual_vegas.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'thru':         _round_thru(round_obj),
         'groups':       groups,
@@ -714,7 +715,7 @@ def _render_casual_triple_cup(request, round_obj, token: str, tabs: list):
         })
     return render(request, 'watch/casual_triple_cup.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'thru':         _round_thru(round_obj),
         'groups':       groups,
@@ -806,7 +807,7 @@ def _render_casual_match_play(request, round_obj, token: str, tabs: list):
         })
     return render(request, 'watch/casual_match_play.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'thru':         _round_thru(round_obj),
         'groups':       groups,
@@ -1171,7 +1172,7 @@ def _render_matches(request, round_obj, token: str, tabs: list):
     summary['to_win'] = round(total_possible / 2 + 0.5, 2) if total_possible > 0 else None
     return render(request, 'watch/cup_round.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'cup_name':     _cup_name(round_obj),
         'summary':      summary,
@@ -1191,7 +1192,7 @@ def _render_low_net(request, round_obj, token: str, tabs: list):
         _enrich_low_net(summary, 'round')
     return render(request, 'watch/low_net.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'summary':      summary,
         'scope':        'round',
@@ -1210,7 +1211,7 @@ def _render_tournament_stroke_play(request, round_obj, token: str, tabs: list):
         _enrich_low_net(summary, 'championship')
     return render(request, 'watch/low_net.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   tourney,
         'summary':      summary,
         'scope':        'championship',
@@ -1225,7 +1226,7 @@ def _render_casual_stableford(request, round_obj, token: str, tabs: list):
     return render(request, 'watch/stableford.html', {
         'thru':         _round_thru(round_obj),
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'summary':      stableford_summary(round_obj),
         'refresh_secs': 30,
@@ -1240,7 +1241,7 @@ def _render_stableford_championship(request, round_obj, token: str, tabs: list):
     summary = stableford_championship_summary(tourney) if tourney else None
     return render(request, 'watch/stableford_championship.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   tourney,
         'summary':      summary,
         'refresh_secs': 30,
@@ -1256,7 +1257,7 @@ def _render_casual_red_ball(request, round_obj, token: str, tabs: list):
     return render(request, 'watch/casual_red_ball.html', {
         'thru':         _round_thru(round_obj),
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'summary':      summary,
         'refresh_secs': 30,
@@ -1273,7 +1274,7 @@ def _render_casual_irish_rumble(request, round_obj, token: str, tabs: list):
     return render(request, 'watch/casual_irish_rumble.html', {
         'thru':         _round_thru(round_obj),
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'summary':      summary,
         'refresh_secs': 30,
@@ -1304,7 +1305,7 @@ def _render_cup_standings(request, round_obj, token: str, tabs: list):
 
     return render(request, 'watch/cup_standings.html', {
         'round':             round_obj,
-        'course_name':       round_obj.course.name,
+        'course_name':       normalize_course_name(round_obj.course.name),
         'tournament':        tourney,
         'cup_name':          _cup_name(round_obj),
         'summary':           summary,
@@ -1341,7 +1342,7 @@ def _render_casual_skins(request, round_obj, token: str, tabs: list):
         })
     return render(request, 'watch/casual_skins.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'groups':       groups,
         'thru':         _round_thru(round_obj),
@@ -1418,7 +1419,7 @@ def _render_casual_multi_skins(request, round_obj, token: str, tabs: list):
     return render(request, 'watch/casual_multi_skins.html', {
         'thru':         _round_thru(round_obj),
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'summary':      summary,
         'refresh_secs': 30,
@@ -1549,7 +1550,7 @@ def _render_casual_sixes(request, round_obj, token: str, tabs: list):
     return render(request, 'watch/casual_sixes.html', {
         'thru':         _round_thru(round_obj),
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'groups':       groups,
         'refresh_secs': 30,
@@ -1628,7 +1629,7 @@ def _render_casual_points_531(request, round_obj, token: str, tabs: list):
     return render(request, 'watch/casual_points_531.html', {
         'thru':         _round_thru(round_obj),
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'groups':       groups,
         'refresh_secs': 30,
@@ -1713,7 +1714,7 @@ def _render_casual_nassau(request, round_obj, token: str, tabs: list):
     return render(request, 'watch/casual_nassau.html', {
         'thru':         _round_thru(round_obj),
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'is_match':     _nassau_is_match(round_obj),
         'groups':       groups,
@@ -1830,7 +1831,7 @@ def _render_cup_four_ball(request, round_obj, token: str, tabs: list):
 
     return render(request, 'watch/cup_four_ball.html', {
         'round':        round_obj,
-        'course_name':  round_obj.course.name,
+        'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'summary':      summary,
         'cards':        cards,

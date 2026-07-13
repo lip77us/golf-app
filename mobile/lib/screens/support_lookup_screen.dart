@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../api/client.dart';
+import '../api/models.dart' show prettyCourseName;
 import '../providers/auth_provider.dart';
 
 class SupportLookupScreen extends StatefulWidget {
@@ -118,7 +119,7 @@ class _SupportLookupScreenState extends State<SupportLookupScreen> {
                       style: theme.textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text('${r['course_name'] ?? '—'} · ${r['date'] ?? ''}'),
+                  Text('${prettyCourseName((r['course_name'] as String?) ?? '—')} · ${r['date'] ?? ''}'),
                   Text('Status: ${r['status']} · '
                       '${r['num_foursomes']} foursome(s) · round #${r['round_id']}'),
                   if ((r['is_tournament'] ?? false) == true)

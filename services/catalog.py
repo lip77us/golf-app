@@ -16,6 +16,30 @@ Two operations:
 from django.db import transaction
 
 
+# Golf-name abbreviations GolfCourseAPI title-cases into mixed case
+# ("Tilden Park Gc" ← "GC").  Uppercase these when they appear as whole tokens.
+# Kept conservative (golf-specific) to avoid re-casing legitimate words; mirrors
+# the mobile `prettyCourseName` helper.  DISPLAY-ONLY — never write the result
+# back to Course.name (the course is matched to the API by golf_api_id).
+_GOLF_ABBREVS = {'gc', 'cc', 'gcc', 'g&cc', 'g&c', 'tpc'}
+
+
+def normalize_course_name(name: str) -> str:
+    """
+    Tidy a course name for DISPLAY.  GolfCourseAPI title-cases everything, so
+    "Tilden Park GC" arrives as "Tilden Park Gc"; uppercase the known golf
+    abbreviations when they stand as their own token.  Idempotent; leaves the
+    stored name untouched.
+    """
+    if not name:
+        return name
+
+    def fix(token: str) -> str:
+        return token.upper() if token.lower() in _GOLF_ABBREVS else token
+
+    return ' '.join(fix(t) for t in name.split())
+
+
 def _normalize_holes(holes):
     return [
         {
