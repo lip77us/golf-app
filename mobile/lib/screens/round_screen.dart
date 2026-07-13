@@ -217,15 +217,35 @@ class _RoundScreenState extends State<RoundScreen> {
           if (hasMultiSkins && canManage) ...[
             const SizedBox(height: 12),
             Card(
-              child: ListTile(
-                leading: const Icon(Icons.attach_money),
-                title: const Text('Multi-Group Skins'),
-                subtitle: const Text('Round-level pool across all groups'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).pushNamed(
-                  '/multi-skins', arguments: widget.roundId,
+              child: Column(children: [
+                ListTile(
+                  leading: const Icon(Icons.attach_money),
+                  title: const Text('Multi-Group Skins'),
+                  subtitle: const Text('Round-level pool across all groups'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).pushNamed(
+                    '/multi-skins', arguments: widget.roundId,
+                  ),
                 ),
-              ),
+                // Edit the pool config + roster (add/remove players). Stays
+                // available mid-round so a late golfer can be added
+                // (docs/multi-skins-cross-round.md, multi-skins-mid-round-roster).
+                if (!isComplete)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).pushNamed(
+                          '/multi-skins-setup',
+                          arguments: {'id': widget.roundId, 'returnToHub': true},
+                        ).then((_) => _reloadRound()),
+                        icon: const Icon(Icons.tune, size: 18),
+                        label: const Text('Edit configuration'),
+                      ),
+                    ),
+                  ),
+              ]),
             ),
           ],
           if (hasSetupGames && !isComplete && canManage && !round.isCupRound) ...[

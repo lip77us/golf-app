@@ -259,6 +259,20 @@ class MultiSkinsCrossRoundTests(TestCase):
         overlap = pool_overlap(self.game, self.g)
         assert overlap == sorted([self.m2.id, self.m4.id]), overlap
 
+    def test_editing_roster_keeps_linked_rounds(self):
+        """Re-running setup to edit the roster must NOT unlink joined rounds
+        (setup updates in place instead of delete+recreate)."""
+        self._link_guest()
+        assert self.game.linked_rounds.count() == 1
+        # Edit: same roster minus M4.
+        setup_multi_skins(self.h,
+                          participant_ids=[self.o.id, self.m2.id],
+                          handicap_mode='gross', bet_unit=10.00)
+        self.game.refresh_from_db()
+        assert self.game.linked_rounds.count() == 1, 'linked round was dropped'
+        assert set(self.game.participants.values_list('id', flat=True)) == \
+            {self.o.id, self.m2.id}
+
     def test_scores_flow_from_linked_round_into_the_pool(self):
         """O (host round) birdies hole 1; M2/M4 (via g2/g4 in the linked
         round) make par → O takes the skin across rounds."""

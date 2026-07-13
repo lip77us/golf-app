@@ -171,21 +171,32 @@ def setup_multi_skins(
     in this round (single-round pool, login-less golfers allowed) OR an
     on-app (Halved) member selected from connected golfers (federated pool
     — they play in a linked round).  Anything else is filtered out.
-    """
-    MultiSkinsGame.objects.filter(round=round_obj).delete()
 
+    Re-running this on an existing pool UPDATES it in place — it does NOT
+    delete+recreate, which would cascade-delete every MultiSkinsLinkedRound
+    (unlinking joined rounds) and drop the hole results.  So editing the
+    roster mid-round is safe.
+    """
     net_percent = max(0, min(200, int(net_percent)))
 
-    game = MultiSkinsGame.objects.create(
-        round         = round_obj,
-        handicap_mode = handicap_mode,
-        net_percent   = net_percent,
-        bet_unit      = bet_unit if bet_unit is not None else round_obj.bet_unit,
-        status        = MatchStatus.PENDING,
+    game, created = MultiSkinsGame.objects.get_or_create(
+        round    = round_obj,
+        defaults = {
+            'handicap_mode': handicap_mode,
+            'net_percent'  : net_percent,
+            'bet_unit'     : bet_unit if bet_unit is not None else round_obj.bet_unit,
+            'status'       : MatchStatus.PENDING,
+        },
     )
+    if not created:
+        game.handicap_mode = handicap_mode
+        game.net_percent   = net_percent
+        if bet_unit is not None:
+            game.bet_unit = bet_unit
+        game.save(update_fields=['handicap_mode', 'net_percent', 'bet_unit'])
+
     pids = valid_participant_ids(round_obj, participant_ids)
-    if pids:
-        game.participants.set(pids)
+    game.participants.set(pids)
     return game
 
 
