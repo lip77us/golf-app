@@ -209,7 +209,7 @@ class _InlineScorePickerState extends State<InlineScorePicker> {
                     // (a dark ring reads bogey-like) and no glow (net par has no
                     // golf shape of its own).
                     decoration: BoxDecoration(
-                      color: Colors.green.shade300,
+                      color: Colors.green.shade400,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: NetScoreButton(
