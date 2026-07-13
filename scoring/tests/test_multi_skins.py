@@ -298,3 +298,57 @@ class MultiSkinsCrossRoundTests(TestCase):
     def pid_g(self, name):
         return next(m.player_id for m in self.gg.memberships.select_related('player')
                     if m.player.name == name)
+
+
+class MultiSkinsParticipantInBothRoundsTests(TestCase):
+    """Repro for the reported bug: a pool participant who is a login-less golfer
+    placed in the HOST round's foursome (the only way to add a non-Halved player)
+    AND also plays in a linked round. Scores entered in the LINKED round must
+    still reach the pool."""
+    def setUp(self):
+        self.tee    = make_tee()
+        self.course = self.tee.course
+
+        # Two login-less golfers X, Y (same Player rows used in both rounds).
+        self.x = make_player('X', 0)
+        self.y = make_player('Y', 0)
+
+        # Host pool round H: the roster (X, Y) sits in H's foursome, because a
+        # login-less golfer can only be added to the roster as a host-round member.
+        self.h  = make_round(self.course, handicap_mode='gross',
+                             net_max_double_bogey=False)
+        self.hg = make_foursome(self.h, [(self.x, 0), (self.y, 0)],
+                                tee=self.tee, group_number=1)
+
+        # Sixes round G where X and Y actually PLAY (same rows) + two others.
+        self.g  = make_round(self.course, handicap_mode='gross',
+                             net_max_double_bogey=False, active_games=['sixes'])
+        self.gg = make_foursome(
+            self.g,
+            [(self.x, 0), (self.y, 0), ('G3', 6), ('G4', 12)],
+            tee=self.tee, group_number=1,
+        )
+
+        setup_multi_skins(self.h, participant_ids=[self.x.id, self.y.id],
+                          handicap_mode='gross', bet_unit=10.00)
+        self.game = self.h.multi_skins_game
+        MultiSkinsLinkedRound.objects.create(game=self.game, round=self.g)
+
+    def test_scores_entered_in_linked_round_reach_the_pool(self):
+        # Score hole 1 ONLY in the Sixes round G: X birdie, Y par.
+        submit_hole(self.gg, 1, [
+            (self.x, 3), (self.y, 4),
+            (self.pid_g('G3'), 4), (self.pid_g('G4'), 4),
+        ])
+        recalc_pools_for_round(self.g)
+        s = multi_skins_summary(self.h)
+        thru = {p['name']: p['thru'] for p in s['players']}
+        skins = {p['name']: p['skins_won'] for p in s['players']}
+        # X and Y both played hole 1 in the linked round → thru should be 1,
+        # and X (birdie) should take the skin over Y (par).
+        assert thru == {'X': 1, 'Y': 1}, thru
+        assert skins == {'X': 1, 'Y': 0}, skins
+
+    def pid_g(self, name):
+        return next(m.player_id for m in self.gg.memberships.select_related('player')
+                    if m.player.name == name)

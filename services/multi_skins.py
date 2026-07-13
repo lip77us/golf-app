@@ -91,9 +91,14 @@ def _resolve_participant_memberships(game: MultiSkinsGame) -> dict:
     linked rounds.  Canonical id = the roster Player's id; the membership's
     own player_id may differ (a phone-matched copy in another account).
 
-    A participant present in more than one source round (shouldn't happen —
-    a golfer plays one round) keeps the first match, host round preferred.
+    A participant can be a member of more than one source round (e.g. a
+    login-less roster golfer parked in the host round who actually PLAYS in a
+    linked Sixes round).  Bind them to the source round where they have the
+    most gross scores — that's where they're really playing — so the pool
+    reads the scores that were actually entered.  When no source round has
+    scores yet, fall back to source order (host round first).
     """
+    from django.db.models import Count
     from tournament.models import FoursomeMembership
 
     part_ids = set(game.participants.values_list('id', flat=True))
@@ -107,16 +112,25 @@ def _resolve_participant_memberships(game: MultiSkinsGame) -> dict:
     order = {r.id: i for i, r in enumerate(source_rounds)}
     source_ids = list(order.keys())
 
+    # Scored-hole counts per (round, player) — the tie-breaker that binds a
+    # participant to the round they actually played.
+    score_counts: dict = {}
+    for r in (
+        HoleScore.objects
+        .filter(foursome__round_id__in=source_ids)
+        .exclude(gross_score=None)
+        .values('foursome__round_id', 'player_id')
+        .annotate(n=Count('id'))
+    ):
+        score_counts[(r['foursome__round_id'], r['player_id'])] = r['n']
+
     memberships = (
         FoursomeMembership.objects
         .filter(foursome__round_id__in=source_ids, player__is_phantom=False)
         .select_related('player', 'player__user', 'foursome', 'tee')
     )
-    # Host round (order 0) first so a same-account participant binds to their
-    # own round before any accidental phone collision in a linked round.
-    memberships = sorted(memberships, key=lambda m: order.get(m.foursome.round_id, 99))
 
-    out: dict = {}
+    candidates: dict = defaultdict(list)   # canon_id -> [membership]
     for m in memberships:
         canon = None
         if m.player_id in part_ids:
@@ -125,8 +139,16 @@ def _resolve_participant_memberships(game: MultiSkinsGame) -> dict:
             ph = _identity_phone(m.player)
             if ph and ph in part_by_phone:
                 canon = part_by_phone[ph]
-        if canon is not None and canon not in out:
-            out[canon] = m
+        if canon is not None:
+            candidates[canon].append(m)
+
+    out: dict = {}
+    for canon, ms in candidates.items():
+        ms.sort(key=lambda m: (
+            -score_counts.get((m.foursome.round_id, m.player_id), 0),
+            order.get(m.foursome.round_id, 99),
+        ))
+        out[canon] = ms[0]
     return out
 
 
