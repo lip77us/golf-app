@@ -1548,6 +1548,58 @@ class ApiClient {
     return MultiSkinsSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  // ---- Cross-round Multi-Group Skins pool (docs/multi-skins-cross-round.md) ----
+
+  /// Extract the pool token from a pasted spectator link OR a bare token.
+  /// Accepts `https://halved.golf/watch/<TOKEN>/`, `.../watch/<TOKEN>`, or just
+  /// `<TOKEN>`. Returns the uppercased token, or null if nothing usable.
+  static String? parsePoolToken(String raw) {
+    var s = raw.trim();
+    if (s.isEmpty) return null;
+    // Pull the segment after "watch" if it's a URL/path; else treat as a token.
+    final uri = Uri.tryParse(s);
+    if (uri != null && uri.pathSegments.isNotEmpty) {
+      final segs = uri.pathSegments;
+      final i = segs.indexOf('watch');
+      if (i >= 0 && i + 1 < segs.length) s = segs[i + 1];
+    }
+    s = s.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
+    return s.isEmpty ? null : s;
+  }
+
+  /// GET /api/skins-pool/<token>/ — resolve a pool by the host round's watch
+  /// token. Pass [roundId] to also get the overlap of that round with the roster.
+  Future<SkinsPoolResolve> resolveSkinsPool(String token, {int? roundId}) async {
+    final q = roundId != null ? '?round_id=$roundId' : '';
+    final data = await _get('/skins-pool/$token/$q');
+    return SkinsPoolResolve.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/skins-pool/<token>/join/ — link one of MY rounds into the pool.
+  /// Returns the refreshed pool summary. Throws ApiException on 400/404 (wrong
+  /// course, no overlap, foreign round).
+  Future<MultiSkinsSummary> joinSkinsPool(String token, int roundId) async {
+    final data = await _post('/skins-pool/$token/join/', {'round_id': roundId});
+    final map = data as Map<String, dynamic>;
+    return MultiSkinsSummary.fromJson(map['summary'] as Map<String, dynamic>);
+  }
+
+  /// POST /api/skins-pool/<token>/unlink/ — remove my round from the pool.
+  Future<MultiSkinsSummary> unlinkSkinsPool(String token, int roundId) async {
+    final data = await _post('/skins-pool/$token/unlink/', {'round_id': roundId});
+    final map = data as Map<String, dynamic>;
+    return MultiSkinsSummary.fromJson(map['summary'] as Map<String, dynamic>);
+  }
+
+  /// GET /api/skins-pool/mine/ — pools my account hosts or is linked into.
+  Future<List<MySkinsPool>> getMySkinsPools() async {
+    final data = await _get('/skins-pool/mine/');
+    final map = data as Map<String, dynamic>;
+    return (map['pools'] as List? ?? [])
+        .map((p) => MySkinsPool.fromJson(p as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---- Match Play ----
 
   Future<Map<String, dynamic>> getMatchPlay(int foursomeId) async {

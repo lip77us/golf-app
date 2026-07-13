@@ -3075,6 +3075,9 @@ class MultiSkinsPlayerTotal {
   /// Highest hole number with a gross_score on file for this player.
   /// 0 means no scores yet.
   final int    thru;
+  /// The source round this player enters their scores in — the pool's host
+  /// round or a linked round (cross-round pool). Null for legacy payloads.
+  final int?   roundId;
 
   const MultiSkinsPlayerTotal({
     required this.playerId,
@@ -3085,6 +3088,7 @@ class MultiSkinsPlayerTotal {
     required this.skinsWon,
     required this.payout,
     this.thru = 0,
+    this.roundId,
   });
 
   factory MultiSkinsPlayerTotal.fromJson(Map<String, dynamic> j) =>
@@ -3097,6 +3101,7 @@ class MultiSkinsPlayerTotal {
         skinsWon:    j['skins_won']    as int?    ?? 0,
         payout:      (j['payout']      as num?)?.toDouble() ?? 0.0,
         thru:        j['thru']         as int?    ?? 0,
+        roundId:     j['round_id']     as int?,
       );
 }
 
@@ -3166,6 +3171,11 @@ class MultiSkinsSummary {
   final double betUnit;
   final double pool;
   final int    totalSkins;
+  /// Round ids linked into this cross-round pool (empty for a single-round pool).
+  final List<int> linkedRounds;
+  /// Set when this summary is surfaced on a LINKED round's leaderboard — the
+  /// pool's host round. Null when viewed on the host round itself.
+  final int? hostRoundId;
 
   const MultiSkinsSummary({
     required this.status,
@@ -3176,11 +3186,16 @@ class MultiSkinsSummary {
     required this.betUnit,
     required this.pool,
     required this.totalSkins,
+    this.linkedRounds = const [],
+    this.hostRoundId,
   });
 
   bool get isNet        => handicapMode == 'net';
   bool get isGross      => handicapMode == 'gross';
   bool get isStrokesOff => handicapMode == 'strokes_off';
+
+  /// True when the pool draws on more than the host round (a linked pool).
+  bool get isCrossRound => linkedRounds.isNotEmpty || hostRoundId != null;
 
   factory MultiSkinsSummary.fromJson(Map<String, dynamic> j) {
     final hcap  = j['handicap'] as Map<String, dynamic>? ?? {};
@@ -3198,8 +3213,115 @@ class MultiSkinsSummary {
       betUnit:    (money['bet_unit']    as num?)?.toDouble() ?? 0.0,
       pool:       (money['pool']        as num?)?.toDouble() ?? 0.0,
       totalSkins: (money['total_skins'] as num?)?.toInt()    ?? 0,
+      linkedRounds: (j['linked_rounds'] as List? ?? [])
+          .map((e) => e as int).toList(),
+      hostRoundId: j['host_round_id'] as int?,
     );
   }
+}
+
+/// A cross-round Multi-Group Skins pool resolved from a host round's watch
+/// token (docs/multi-skins-cross-round.md). Returned by the paste-link flow.
+class SkinsPoolResolve {
+  final int    hostRoundId;
+  final int    courseId;
+  final String courseName;
+  final double betUnit;
+  final String handicapMode;
+  final int    netPercent;
+  final List<SkinsPoolRosterMember> roster;
+  final List<int> linkedRoundIds;
+  /// Canonical participant ids of MY round that overlap the pool roster — only
+  /// present when the resolve was called with a round_id. Null otherwise.
+  final List<int>? overlapIds;
+  final MultiSkinsSummary summary;
+
+  const SkinsPoolResolve({
+    required this.hostRoundId,
+    required this.courseId,
+    required this.courseName,
+    required this.betUnit,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.roster,
+    required this.linkedRoundIds,
+    required this.overlapIds,
+    required this.summary,
+  });
+
+  factory SkinsPoolResolve.fromJson(Map<String, dynamic> j) {
+    final course = j['course'] as Map<String, dynamic>? ?? {};
+    final hcap   = j['handicap'] as Map<String, dynamic>? ?? {};
+    return SkinsPoolResolve(
+      hostRoundId:  j['host_round_id'] as int,
+      courseId:     course['id']       as int?    ?? 0,
+      courseName:   course['name']     as String? ?? '',
+      betUnit:      (j['bet_unit']      as num?)?.toDouble() ?? 0.0,
+      handicapMode: hcap['mode']        as String? ?? 'net',
+      netPercent:   hcap['net_percent'] as int?    ?? 100,
+      roster: (j['roster'] as List? ?? [])
+          .map((r) => SkinsPoolRosterMember.fromJson(r as Map<String, dynamic>))
+          .toList(),
+      linkedRoundIds: (j['linked_round_ids'] as List? ?? [])
+          .map((e) => e as int).toList(),
+      overlapIds: (j['overlap_ids'] as List?)?.map((e) => e as int).toList(),
+      summary: MultiSkinsSummary.fromJson(
+          j['summary'] as Map<String, dynamic>? ?? {}),
+    );
+  }
+
+  /// The roster members my round would contribute (overlap), for the confirm UI.
+  List<SkinsPoolRosterMember> get overlapMembers {
+    final ids = overlapIds;
+    if (ids == null) return const [];
+    final set = ids.toSet();
+    return roster.where((m) => set.contains(m.playerId)).toList();
+  }
+}
+
+class SkinsPoolRosterMember {
+  final int    playerId;
+  final String name;
+  final String shortName;
+
+  const SkinsPoolRosterMember({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+  });
+
+  factory SkinsPoolRosterMember.fromJson(Map<String, dynamic> j) =>
+      SkinsPoolRosterMember(
+        playerId:  j['player_id']  as int,
+        name:      j['name']       as String? ?? '',
+        shortName: j['short_name'] as String? ?? '',
+      );
+}
+
+/// A pool my account hosts or is linked into (GET /api/skins-pool/mine/).
+class MySkinsPool {
+  final int    hostRoundId;
+  final String watchToken;
+  final String course;
+  final String status;
+  final MultiSkinsSummary summary;
+
+  const MySkinsPool({
+    required this.hostRoundId,
+    required this.watchToken,
+    required this.course,
+    required this.status,
+    required this.summary,
+  });
+
+  factory MySkinsPool.fromJson(Map<String, dynamic> j) => MySkinsPool(
+        hostRoundId: j['host_round_id'] as int,
+        watchToken:  j['watch_token']   as String? ?? '',
+        course:      j['course']        as String? ?? '',
+        status:      j['status']        as String? ?? 'pending',
+        summary: MultiSkinsSummary.fromJson(
+            j['summary'] as Map<String, dynamic>? ?? {}),
+      );
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import '../widgets/game_chip.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
 import '../utils/primary_handicap.dart';
+import '../utils/skins_pool_link.dart';
 
 /// Handicap label for the hub. Shows the Course Handicap and, when it differs,
 /// the **Playing Handicap the player actually plays to** — the strokes received
@@ -1889,6 +1890,26 @@ class _FoursomeCard extends StatelessWidget {
                     ),
                   );
                 }),
+              // "Link to a Skins pool" — feed THIS round's scores into a
+              // cross-round Multi-Group Skins pool by pasting its share link
+              // (docs/multi-skins-cross-round.md). Round-level, so shown once
+              // (group 1) and hidden on a round that already hosts a pool.
+              if (!isCupRound &&
+                  canManage &&
+                  foursome.groupNumber == 1 &&
+                  !roundActiveGames.contains('multi_skins'))
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          linkRoundToPoolFlow(context, roundId: roundId),
+                      icon: const Icon(Icons.link, size: 18),
+                      label: const Text('Link to a Skins pool'),
+                    ),
+                  ),
+                ),
             ],
           ],
         ]),
