@@ -118,11 +118,14 @@ def _recalculate_games(foursome: Foursome) -> None:
         from services.sixes import calculate_sixes
         calculate_sixes(foursome)
 
-    # Nassau Nine shares the NassauGame model (single_match flag) but registers
-    # under the 'nassau_nine' key, so both must trigger the recalc.
-    if 'nassau' in active_games or 'nassau_nine' in active_games:
-        from services.nassau import calculate_nassau
-        calculate_nassau(foursome)
+    # A foursome may hold more than one Nassau-family match (team Nassau +
+    # Singles Match + Nassau Nine all share the NassauGame model, keyed by
+    # game_type).  Recompute every configured match, driven off the rows so we
+    # don't have to enumerate slugs here.
+    if ('nassau' in active_games or 'nassau_nine' in active_games
+            or 'match_18' in active_games):
+        from services.nassau import calculate_all_nassau
+        calculate_all_nassau(foursome)
 
     # Tournament-level games (match_play, three_person_match) live on
     # tournament.active_games rather than the round or foursome, so they may
@@ -554,27 +557,35 @@ def _build_leaderboard(round_obj: Round) -> dict:
             ],
         }
 
-    # Nassau + Nassau Nine share the engine/summary; the block key tracks
-    # whichever the round selected so the leaderboard renders the right tab.
-    _nassau_key = ('nassau_nine' if 'nassau_nine' in active_games
-                   else 'nassau' if 'nassau' in active_games else None)
-    if _nassau_key is not None:
-        from services.nassau import nassau_summary
+    # A foursome can hold more than one Nassau-family match (team Nassau +
+    # Singles Match + Nassau Nine), each a NassauGame row keyed by game_type.
+    # Emit one leaderboard block/tab per configured type — driven off the rows,
+    # so it works whether or not the client has split match_18 into its own
+    # active_games slug yet.
+    from services.nassau import nassau_summary
+    for _gt, _label in (('nassau',      'Four Ball'),
+                        ('match_18',    'Singles Match'),
+                        ('nassau_nine', 'Nassau Nine')):
         nassau_groups = []
         for fs in foursomes:
-            # For cup rounds, skip foursomes assigned to a different game type
+            # For cup rounds, skip foursomes assigned to a different game type.
             cup_cfg = None
-            try:
-                cup_cfg = fs.ryder_cup_foursome_config
-                if cup_cfg.game_type != GameType.NASSAU:
-                    continue  # Skip; this foursome plays singles/IR/skins/etc.
-            except Exception:
-                pass  # Not a cup foursome — include normally
+            if _gt == 'nassau':
+                try:
+                    cup_cfg = fs.ryder_cup_foursome_config
+                    if cup_cfg.game_type != GameType.NASSAU:
+                        continue  # Skip; plays singles/IR/skins/etc.
+                except Exception:
+                    cup_cfg = None  # Not a cup foursome — include normally
+
+            summary = nassau_summary(fs, _gt)
+            if summary is None:
+                continue  # this foursome isn't playing this match type
 
             group_entry = {
                 'foursome_id' : fs.id,
                 'group_number': fs.group_number,
-                'summary'     : nassau_summary(fs),
+                'summary'     : summary,
             }
             # Augment with cup metadata if this is a cup nassau match
             if cup_cfg is not None:
@@ -587,11 +598,8 @@ def _build_leaderboard(round_obj: Round) -> dict:
                 group_entry['team1_colour']     = (t1.colour or 'Red')  if t1 else 'Red'
                 group_entry['team2_colour']     = (t2.colour or 'Blue') if t2 else 'Blue'
             nassau_groups.append(group_entry)
-        games[_nassau_key] = {
-            'label'   : 'Nassau Nine' if _nassau_key == 'nassau_nine'
-                        else 'Four Ball',
-            'by_group': nassau_groups,
-        }
+        if nassau_groups:
+            games[_gt] = {'label': _label, 'by_group': nassau_groups}
 
     # Quota Nassau — also check per-foursome active_games for cup rounds
     _qn_active = 'quota_nassau' in active_games or any(
@@ -2087,9 +2095,8 @@ def _round_is_eighteen_hole_match(rnd, foursome=None):
     fs = foursome or rnd.foursomes.first()
     if fs is None:
         return False
-    try:
-        ng = fs.nassau_game
-    except Exception:
+    ng = fs.nassau_games.filter(game_type='nassau').first()
+    if ng is None:
         return False
     if not (ng.play_overall and not ng.play_front and not ng.play_back):
         return False
@@ -4342,6 +4349,11 @@ class NassauSetupView(APIView):
         d = ser.validated_data
 
         from services.nassau import setup_nassau, calculate_nassau, nassau_summary
+        # Which match this is: a team Nassau (default), a Singles Match, or a
+        # Nassau Nine.  A foursome can hold one of each at once, so setup only
+        # replaces the SAME game_type.
+        single_match = d.get('single_match', False)
+        game_type = d.get('game_type') or ('nassau_nine' if single_match else 'nassau')
         setup_nassau(
             foursome,
             team1_ids     = d['team1_player_ids'],
@@ -4354,11 +4366,12 @@ class NassauSetupView(APIView):
             play_front    = d.get('play_front', True),
             play_back     = d.get('play_back', True),
             play_overall  = d.get('play_overall', True),
-            single_match  = d.get('single_match', False),
+            single_match  = single_match,
             loss_cap      = d.get('loss_cap'),
+            game_type     = game_type,
         )
-        calculate_nassau(foursome)
-        return Response(nassau_summary(foursome), status=status.HTTP_201_CREATED)
+        calculate_nassau(foursome, game_type)
+        return Response(nassau_summary(foursome, game_type), status=status.HTTP_201_CREATED)
 
 
 class NassauPressView(APIView):
@@ -4375,26 +4388,37 @@ class NassauPressView(APIView):
         ser = NassauPressSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        from services.nassau import add_manual_press, nassau_summary
+        from services.nassau import (add_manual_press, nassau_summary,
+                                      resolve_nassau_game_type)
         start_hole = ser.validated_data['start_hole']
+        game_type  = resolve_nassau_game_type(
+            foursome, ser.validated_data.get('game_type'))
         try:
-            add_manual_press(foursome, start_hole)
+            add_manual_press(foursome, start_hole, game_type=game_type)
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         # Announce the new press to the round feed (best-effort — never blocks).
         from services.messaging_events import emit_nassau_press_called
-        emit_nassau_press_called(foursome, start_hole)
+        emit_nassau_press_called(foursome, start_hole, game_type=game_type)
 
-        return Response(nassau_summary(foursome))
+        return Response(nassau_summary(foursome, game_type))
 
 
 class NassauResultView(APIView):
-    """GET /api/foursomes/{id}/nassau/"""
+    """
+    GET /api/foursomes/{id}/nassau/?game=<nassau|match_18|nassau_nine>
+
+    `game` selects which of the foursome's Nassau-family matches to return
+    (defaults to the team Nassau).  Legacy clients omit it → 'nassau'.
+    """
     def get(self, request, pk):
         foursome = foursome_for_scorer(request.user, pk)
         from services.nassau import nassau_summary
-        summary = nassau_summary(foursome)
+        # None → the resolver picks the foursome's primary Nassau match, so a
+        # legacy client with no ?game still resolves a Nassau-Nine-only round.
+        game_type = request.query_params.get('game')
+        summary = nassau_summary(foursome, game_type)
         if summary is None:
             return Response(
                 {'detail': 'No Nassau game set up for this foursome.'},
@@ -7199,9 +7223,12 @@ class RyderCupRoundSetupView(APIView):
                 else:
                     phantom_team = None
 
-                # Delete any existing Nassau game for this foursome to avoid duplicates
+                # Delete any existing team Nassau for this foursome to avoid
+                # duplicates (scoped to game_type so a coexisting Singles Match
+                # survives; setup_nassau re-creates the 'nassau' row).
                 from games.models import NassauGame
-                NassauGame.objects.filter(foursome=foursome).delete()
+                NassauGame.objects.filter(foursome=foursome,
+                                          game_type='nassau').delete()
                 setup_nassau(
                     foursome,
                     t1_ids,

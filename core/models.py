@@ -15,6 +15,11 @@ class GameType(models.TextChoices):
     # Nassau over the holes actually played, as ONE match (no F9/B9 split) with
     # presses — the Nassau to reach for on a 9-hole / partial round.
     NASSAU_NINE     = 'nassau_nine',     'Nassau Nine'
+    # Singles Match: a 1-v-1, 18-hole Overall-only Nassau.  Rides on the same
+    # NassauGame model as NASSAU (distinguished by NassauGame.game_type), so a
+    # foursome can run a Singles Match AND a team Nassau at once with different
+    # teams — see NassauGame.
+    MATCH_18        = 'match_18',        'Singles Match'
     SIXES           = 'sixes',           'Sixes'
     PINK_BALL       = 'pink_ball',       'Pink Ball'
     SCRAMBLE        = 'scramble',        'Scramble'

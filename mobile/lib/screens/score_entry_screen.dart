@@ -109,7 +109,14 @@ int _sixesSoStrokesOnHole({
 /// True when the round runs a Nassau-family game — full Nassau or Nassau Nine
 /// (both drive the same score-entry team tinting, ordering, and press strip).
 bool _nassauActive(Iterable<String> games) =>
-    games.contains('nassau') || games.contains('nassau_nine');
+    games.contains('nassau') ||
+    games.contains('nassau_nine') ||
+    games.contains('match_18');
+
+/// True for any Nassau-family game slug (team Nassau, Nassau Nine, or the
+/// 1-v-1 Singles Match — all backed by the Nassau engine).
+bool _isNassauFamily(String? g) =>
+    g == 'nassau' || g == 'nassau_nine' || g == 'match_18';
 
 String _fmtPoints(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
@@ -435,8 +442,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // PRIMARY-gated like the others: a subset SIDE Nassau has its own (often
     // gross) handicap that must NOT override the primary's stroke dots
     // (docs/parallel-games.md).
-    if ((primary == 'nassau' || primary == 'nassau_nine') &&
-        rp.nassauSummary != null) {
+    if (_isNassauFamily(primary) && rp.nassauSummary != null) {
       return (rp.nassauSummary!.handicapMode, rp.nassauSummary!.netPercent);
     }
     if (primary == 'skins' && rp.skinsSummary != null) {
@@ -1510,7 +1516,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final parts = <String>[];
     for (final g in games) {
       String label = gameDisplayName(g);
-      if ((g == 'nassau' || g == 'nassau_nine') && nas != null) {
+      if (_isNassauFamily(g) && nas != null) {
         final modeStr = _modeLabel(nas.handicapMode, nas.netPercent);
         final base = nas.isEighteenHoleMatch ? 'Singles Match' : label;
         label = '$base ($modeStr)';
@@ -1546,7 +1552,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // as the Stableford strip.
     final nassauIsPrimary = () {
       final p = resolvePrimary(rp.round?.primaryGame, games);
-      return p == 'nassau' || p == 'nassau_nine';
+      return _isNassauFamily(p);
     }();
     final nas        = nassauIsPrimary ? rp.nassauSummary : null;
     final skins      = games.contains('skins')  ? rp.skinsSummary  : null;
@@ -4461,8 +4467,7 @@ class _GameStatusSection extends StatelessWidget {
       children: [
         // Nassau round progress grid — PRIMARY only. As a subset side game
         // Nassau is leaderboard-tab-only (docs/parallel-games.md).
-        if (_nassauActive(games) &&
-            (primaryGame == 'nassau' || primaryGame == 'nassau_nine')) ...[
+        if (_nassauActive(games) && _isNassauFamily(primaryGame)) ...[
           if (nassau != null)
             _NassauProgressGrid(
               nassau:      nassau!,

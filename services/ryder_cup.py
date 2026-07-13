@@ -117,7 +117,8 @@ def _extract_foursome_points(
     # ── Nassau (four-ball or singles) ──────────────────────────────────────
     if gtype == GameType.NASSAU:
         try:
-            game = NassauGame.objects.get(foursome=foursome)
+            game = NassauGame.objects.get(foursome=foursome,
+                                          game_type=GameType.NASSAU)
         except NassauGame.DoesNotExist:
             return []
 

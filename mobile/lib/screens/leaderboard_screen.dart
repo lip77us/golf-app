@@ -541,10 +541,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     // Triple Cup is split into an Overview (cup score) + Details (matches).
     if (g == '__triple_cup_overview__') return 'Overview';
     if (g == 'triple_cup') return 'Details';
+    if (g == 'match_18') return 'Singles Match';
     // A heads-up, Overall-only Nassau is a Singles Match — label it as such.
     // (2-v-2 Overall-only is Fourball, not a Singles Match, so require one
-    // player per side.)
-    if (g == 'nassau') {
+    // player per side.)  Skipped when a real match_18 tab is present, so the
+    // two tabs don't both read "Singles Match".
+    if (g == 'nassau' && !(lb?.games.containsKey('match_18') ?? false)) {
       final groups =
           ((lb?.games['nassau']?.data as Map?)?['by_group'] as List?) ?? const [];
       final s = groups.isNotEmpty
@@ -608,7 +610,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
   }
 
   bool _viewerIsInAnyFoursome(Leaderboard lb, int playerId) {
-    for (final key in const ['triple_cup', 'nassau', 'quota_nassau',
+    for (final key in const ['triple_cup', 'nassau', 'match_18', 'quota_nassau',
                               'skins', 'sixes']) {
       final g = lb.games[key];
       if (g == null) continue;
@@ -678,6 +680,7 @@ class _GameView extends StatelessWidget {
         return _MultiSkinsView(data: data);
       case 'nassau':
       case 'nassau_nine':
+      case 'match_18':
         return _ByGroupView(data: data, builder: _NassauGroupCard.new);
       case 'quota_nassau':
         return _ByGroupView(data: data, builder: _QuotaNassauGroupCard.new);
@@ -8980,6 +8983,7 @@ class _MyFoursomeTabView extends StatelessWidget {
   static const Map<String, GroupCardBuilder> _cardBuilders = {
     'triple_cup' : _TripleCupGroupCard.new,
     'nassau'     : _NassauGroupCard.new,
+    'match_18'   : _NassauGroupCard.new,
     'quota_nassau': _QuotaNassauGroupCard.new,
     'skins'      : _SkinsGroupCard.new,
     'sixes'      : _SixesGroupCard.new,

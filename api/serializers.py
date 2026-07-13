@@ -486,12 +486,14 @@ class FoursomeSerializer(serializers.ModelSerializer):
         foursome (game model row exists), independent of active_games.
         """
         games = []
-        # Nassau + Nassau Nine share the NassauGame row; report the key that
-        # matches how it was set up so the hub's "needs setup vs play" routing
-        # and the leaderboard tab resolve to the right game.
+        # A foursome can hold more than one Nassau-family match (team Nassau +
+        # Singles Match + Nassau Nine), each a NassauGame row keyed by
+        # game_type.  Report every one so the hub's "needs setup vs play"
+        # routing and the leaderboard tabs resolve each game.
         try:
-            games.append('nassau_nine' if obj.nassau_game.single_match
-                         else 'nassau')
+            games.extend(
+                obj.nassau_games.values_list('game_type', flat=True)
+            )
         except Exception:
             pass
         # OneToOne relationships — safe to check via hasattr
@@ -866,6 +868,13 @@ class NassauSetupSerializer(serializers.Serializer):
     # Nassau Nine: one match over all played holes (the setup forces the bet
     # layout, so the play_* flags above are ignored when this is set).
     single_match = serializers.BooleanField(default=False)
+    # Which Nassau-family match this configures — lets a foursome hold a team
+    # Nassau AND a Singles Match at once.  Optional: legacy clients omit it and
+    # the view derives 'nassau' (or 'nassau_nine' when single_match is set).
+    game_type = serializers.ChoiceField(
+        choices=['nassau', 'nassau_nine', 'match_18'],
+        required=False, allow_null=True, default=None,
+    )
 
     def validate(self, data):
         if data.get('single_match'):
@@ -883,8 +892,13 @@ class NassauPressSerializer(serializers.Serializer):
     Called by the losing team to declare a manual press.
 
     start_hole: hole number (1–18) at which the press begins.
+    game_type:  which Nassau-family match to press (default 'nassau').
     """
     start_hole = serializers.IntegerField(min_value=1, max_value=18)
+    game_type  = serializers.ChoiceField(
+        choices=['nassau', 'nassau_nine', 'match_18'],
+        required=False, allow_null=True, default=None,
+    )
 
 
 class SixesSetupSerializer(serializers.Serializer):

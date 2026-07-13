@@ -108,6 +108,24 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   /// Independent base bets a side can lose with no escalation.
   int get _baseMultiple => _overallOnly ? 1 : 3;
 
+  /// Which Nassau-family match this screen configures — taken from the ROUTE
+  /// flags (its active_games slug), NOT runtime toggles, so a team Nassau the
+  /// user happens to set Overall-only still saves as 'nassau'.  This is the
+  /// game_type sent to the server so a Singles Match and a team Nassau can
+  /// coexist on one foursome.
+  String get _gameType => widget.singleMatch
+      ? 'nassau_nine'
+      : widget.overallOnly
+          ? 'match_18'
+          : 'nassau';
+
+  /// Display name for this match, driven by its slug (not the bet layout).
+  String get _gameTitle => widget.singleMatch
+      ? 'Nassau Nine'
+      : widget.overallOnly
+          ? 'Singles Match'
+          : 'Nassau';
+
   /// playerId → team number (1 or 2)
   final Map<int, int> _teamMap = {};
 
@@ -150,7 +168,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   bool get _isSideGame {
     final round = context.read<RoundProvider>().round;
     if (round == null) return false;
-    return resolvePrimary(round.primaryGame, round.activeGames) != 'nassau';
+    // A side game when THIS match isn't the round's primary — e.g. a Singles
+    // Match riding alongside a team Nassau primary (the "Larry case").
+    return resolvePrimary(round.primaryGame, round.activeGames) != _gameType;
   }
 
   bool get _rosterValid {
@@ -159,6 +179,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     if (n < 2 || n > 4) return false;
     final t1 = _teamMap.values.where((v) => v == 1).length;
     final t2 = _teamMap.values.where((v) => v == 2).length;
+    // A Singles Match is strictly 1-v-1 — exactly one player a side, any others
+    // left Out.  (A team Nassau just needs ≥1 a side.)
+    if (_isMatch18) return t1 == 1 && t2 == 1;
     return t1 >= 1 && t2 >= 1;
   }
 
@@ -183,7 +206,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
       // Try to fetch an existing Nassau summary to pre-populate the form.
       final client = context.read<AuthProvider>().client;
       try {
-        final existing = await client.getNassauSummary(widget.foursomeId);
+        final existing =
+            await client.getNassauSummary(widget.foursomeId, gameType: _gameType);
 
         // If a game is already in progress jump straight to score entry —
         // unless we're in edit mode (returnToHub: round creation / "Edit
@@ -257,6 +281,19 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     // participants; don't pre-assign the whole foursome to teams.
     if (_isSideGame) return;
     final members = _realMembers;
+    // A Singles Match is ALWAYS 1-v-1: seed the first two players as the duel
+    // and leave the rest OUT (the user re-picks via the participant rows).  A
+    // 2-v-2 here would be a doubles match mislabelled as a Singles Match.
+    if (_isMatch18) {
+      for (var i = 0; i < members.length; i++) {
+        if (i == 0) {
+          _teamMap[members[i].player.id] = 1;
+        } else if (i == 1) {
+          _teamMap[members[i].player.id] = 2;
+        }
+      }
+      return;
+    }
     for (var i = 0; i < members.length; i++) {
       _teamMap[members[i].player.id] = i < (members.length / 2).ceil() ? 1 : 2;
     }
@@ -351,6 +388,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         lossCap: (_canEscalate && _capEnabled)
             ? double.tryParse(_capCtrl.text.trim())
             : null,
+        gameType:     _gameType,
       );
 
       if (ok && widget.returnToHub) {
@@ -398,12 +436,12 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(
+          // Title follows the game's SLUG (_gameType), not its bet layout — a
+          // side Nassau defaults to Overall-only but is still "Nassau", not a
+          // "Singles Match".
           title: Text(_editing
-              ? (_singleMatch ? 'Edit Nassau Nine'
-                  : _overallOnly ? 'Edit Singles Match' : 'Edit Nassau')
-              : (_singleMatch ? 'Nassau Nine — Setup'
-                  : _overallOnly ? 'Singles Match — Setup'
-                  : 'Nassau — Setup'))),
+              ? 'Edit $_gameTitle'
+              : '$_gameTitle — Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -461,51 +499,58 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
 
-          // ── Team assignment card. Hidden for SINGLES (2 players) — there
-          //     are no teams to pick, each golfer is simply a side, so the
-          //     colour toggle adds no value — and for the 1-v-1 18-hole match.
-          //     Shown for 3-4 players, where the pairing actually matters.
-          // A subset side game always needs its participant picker (even as an
-          // overall-only 18-hole match, where _isMatch18 would otherwise hide
-          // the card). Primary games hide it for a 1-v-1 straight match.
-          if (_isSideGame || (!_isMatch18 && members.length >= 3)) ...[
+          // ── Team assignment card. Hidden for a 2-player game (each golfer is
+          //     simply a side — nothing to pick).  Shown when there's a choice:
+          //     a subset side game (always), a Singles Match with MORE than 2
+          //     players (pick which two duel — never a 2-v-2), or a 3-4 player
+          //     team Nassau (pick the pairing).
+          if (_isSideGame ||
+              (_isMatch18 && members.length > 2) ||
+              (!_isMatch18 && members.length >= 3)) ...[
           SectionCard(
             title: 'Teams',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Subset SIDE Nassau: an independent bet over a chosen subset
-                // (e.g. 2 of 4) — each player is Out / Blue / Orange, so players
-                // can be left out of the bet entirely. See docs/parallel-games.md.
-                if (_isSideGame) ...[
+                // Participant picker (Out / Blue / Orange).  Used by a subset
+                // SIDE Nassau (an independent bet over a chosen subset) AND by a
+                // Singles Match with more than two players (pick which two
+                // duel).  See docs/parallel-games.md.
+                if (_isSideGame || (_isMatch18 && members.length > 2)) ...[
                   Text(
-                    'Pick the players in this Nassau — set anyone not in the bet '
-                    'to “Out.”',
+                    _isMatch18
+                        ? 'Pick the two players in the singles match — set the '
+                            'rest to “Out.”'
+                        : 'Pick the players in this Nassau — set anyone not in '
+                            'the bet to “Out.”',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 12),
                   ...members.map((m) => _sideParticipantRow(m, theme)),
-                  const SizedBox(height: 14),
-                  Text('Match type',
-                      style: theme.textTheme.labelLarge
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  // 18-hole match (Singles Match) vs a full F9/B9/Overall Nassau.
-                  SegmentedButton<bool>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: true,  label: Text('18-hole match')),
-                      ButtonSegment(value: false, label: Text('F9·B9·Overall')),
-                    ],
-                    selected: {_overallOnly},
-                    onSelectionChanged: (s) => setState(() {
-                      final overallOnly = s.first;
-                      _playFront   = !overallOnly;
-                      _playBack    = !overallOnly;
-                      _playOverall = true;
-                    }),
-                  ),
+                  // Match-type toggle only for a subset SIDE Nassau; a Singles
+                  // Match is always an Overall-only 18-hole match.
+                  if (_isSideGame) ...[
+                    const SizedBox(height: 14),
+                    Text('Match type',
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    SegmentedButton<bool>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(value: true,  label: Text('18-hole match')),
+                        ButtonSegment(value: false, label: Text('F9·B9·Overall')),
+                      ],
+                      selected: {_overallOnly},
+                      onSelectionChanged: (s) => setState(() {
+                        final overallOnly = s.first;
+                        _playFront   = !overallOnly;
+                        _playBack    = !overallOnly;
+                        _playOverall = true;
+                      }),
+                    ),
+                  ],
                 ]
                 // 4-player foursomes use the shared TeamSplitter4 widget so
                 // the team-picking gesture matches Sixes and Sixes-extras.

@@ -56,7 +56,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from core.models import HandicapMode, MatchStatus
+from core.models import HandicapMode, MatchStatus, GameType
 from games.models import NassauGame, NassauTeam, NassauHoleScore, NassauPress
 from scoring.handicap import build_score_index
 from scoring.models import HoleScore
@@ -285,9 +285,18 @@ def setup_nassau(
     play_overall:  bool  = True,
     single_match:  bool  = False,
     loss_cap             = None,
+    game_type:     str   = None,
 ) -> NassauGame:
     """
-    Create (or replace) the NassauGame and its two fixed teams.
+    Create (or replace) THIS foursome's Nassau match of `game_type` and its two
+    fixed teams.
+
+    game_type: 'nassau' (team Nassau, default), 'nassau_nine' (single-segment
+    partial-round match), or 'match_18' (1-v-1 Overall-only Singles Match).
+    A foursome can hold one row per game_type at once, so replacing (say) the
+    Nassau leaves a coexisting Singles Match untouched — only the SAME game_type
+    is deleted first.  When omitted it's derived from single_match for backward
+    compatibility.
 
     team1_ids / team2_ids: lists of Player PKs (1 or 2 each for head-to-head
     or 2v2).  Deleting the old NassauGame cascades to teams, hole scores, and
@@ -295,7 +304,9 @@ def setup_nassau(
 
     variant: 'none' | 'tiebreak_2nd' | 'claremont'
     """
-    NassauGame.objects.filter(foursome=foursome).delete()
+    if game_type is None:
+        game_type = GameType.NASSAU_NINE if single_match else GameType.NASSAU
+    NassauGame.objects.filter(foursome=foursome, game_type=game_type).delete()
 
     net_percent = max(0, min(200, int(net_percent)))
     if variant not in ('none', 'tiebreak_2nd', 'claremont'):
@@ -313,6 +324,7 @@ def setup_nassau(
 
     game = NassauGame.objects.create(
         foursome      = foursome,
+        game_type     = game_type,
         handicap_mode = handicap_mode,
         net_percent   = net_percent,
         press_mode    = press_mode,
@@ -339,7 +351,8 @@ def setup_nassau(
 # Manual press
 # ---------------------------------------------------------------------------
 
-def add_manual_press(foursome, start_hole: int) -> NassauPress:
+def add_manual_press(foursome, start_hole: int,
+                     game_type: str = None) -> NassauPress:
     """
     Record a manual press called by the losing team.  The press starts on
     start_hole and runs to the end of the nine that contains start_hole.
@@ -356,8 +369,9 @@ def add_manual_press(foursome, start_hole: int) -> NassauPress:
     After creating the press row, recalculates the game so its running
     margin is populated immediately.
     """
+    game_type = resolve_nassau_game_type(foursome, game_type)
     try:
-        game = NassauGame.objects.get(foursome=foursome)
+        game = NassauGame.objects.get(foursome=foursome, game_type=game_type)
     except NassauGame.DoesNotExist:
         raise ValueError("No Nassau game set up for this foursome.")
 
@@ -471,7 +485,41 @@ def _effective_variant(game) -> str:
     return game.variant if (t1n == 2 and t2n == 2) else 'none'
 
 
-def calculate_nassau(foursome) -> NassauGame | None:
+def nassau_game_types_for(foursome) -> list:
+    """
+    The game_type slugs this foursome has a Nassau-family match configured for
+    (0, 1, or 2 of 'nassau' / 'nassau_nine' / 'match_18').
+    """
+    return list(
+        NassauGame.objects.filter(foursome=foursome)
+        .values_list('game_type', flat=True)
+    )
+
+
+def calculate_all_nassau(foursome) -> None:
+    """Recompute every Nassau-family match on this foursome."""
+    for gt in nassau_game_types_for(foursome):
+        calculate_nassau(foursome, gt)
+
+
+def resolve_nassau_game_type(foursome, requested=None) -> str:
+    """
+    Read-path resolver.  Returns `requested` when given; otherwise the
+    foursome's PRIMARY Nassau-family match — the team Nassau / Nassau Nine
+    before a Singles Match.  This keeps callers (and legacy clients) that don't
+    name a game_type working: on a Nassau-Nine-only round the bare read still
+    finds the row, and on a Larry round it finds the team Nassau.
+    """
+    if requested:
+        return requested
+    types = set(nassau_game_types_for(foursome))
+    for t in (GameType.NASSAU, GameType.NASSAU_NINE, GameType.MATCH_18):
+        if t in types:
+            return t
+    return GameType.NASSAU
+
+
+def calculate_nassau(foursome, game_type: str = None) -> NassauGame | None:
     """
     Recompute all NassauHoleScore rows, detect auto-presses, update manual
     press results, and resolve the three standard bets (and Claremont bottom
@@ -481,11 +529,12 @@ def calculate_nassau(foursome) -> NassauGame | None:
     calls — only their result / holes_up are updated.  Auto presses (top and
     bottom) are rebuilt from scratch each call.
 
-    Returns the updated NassauGame, or None if no game exists.
+    Returns the updated NassauGame, or None if no game of `game_type` exists.
     """
+    game_type = resolve_nassau_game_type(foursome, game_type)
     try:
         game = NassauGame.objects.prefetch_related('teams__players').get(
-            foursome=foursome
+            foursome=foursome, game_type=game_type
         )
     except NassauGame.DoesNotExist:
         return None
@@ -953,7 +1002,7 @@ def _build_phantom_info(foursome, net_percent: int = 100) -> 'dict | None':
 # Summary
 # ---------------------------------------------------------------------------
 
-def nassau_summary(foursome) -> dict | None:
+def nassau_summary(foursome, game_type: str = None) -> dict | None:
     """
     Return a full JSON summary for the UI and leaderboard.
 
@@ -1006,9 +1055,10 @@ def nassau_summary(foursome) -> dict | None:
         'press_available_nine': str|None,  # 'front'|'back' if can_press, else None
     }
     """
+    game_type = resolve_nassau_game_type(foursome, game_type)
     try:
         game = NassauGame.objects.prefetch_related('teams__players').get(
-            foursome=foursome
+            foursome=foursome, game_type=game_type
         )
     except NassauGame.DoesNotExist:
         return None
@@ -1358,6 +1408,7 @@ def nassau_summary(foursome) -> dict | None:
             'holes_in_play': holes_in_play,
         },
         'status'        : game.status,
+        'game_type'     : game.game_type,
         'variant'       : effective_variant,
         'handicap_mode' : effective_hcp_mode,
         'net_percent'   : game.net_percent,

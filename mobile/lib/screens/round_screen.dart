@@ -329,6 +329,13 @@ class _RoundScreenState extends State<RoundScreen> {
                       // hub ("Set up Nassau") and never gates Enter Scores
                       // (docs/parallel-games.md).
                       route = '/nassau-setup';
+                    } else if (fsGames.contains('match_18') &&
+                        resolvePrimary(round.primaryGame, fsGames) == 'match_18' &&
+                        !fs.configuredGames.contains('match_18')) {
+                      // Singles Match AS PRIMARY needs its 1-v-1 + handicap
+                      // config before scoring; as a side game it's set up from
+                      // the hub and never gates Enter Scores.
+                      route = '/nassau-setup-18';
                     } else if (fsGames.contains('nassau_nine') &&
                         !fs.configuredGames.contains('nassau_nine')) {
                       // Nassau Nine: same team + handicap setup as Nassau.
@@ -779,8 +786,10 @@ List<(String, String)> _roundLevelEditTargets(
     case GameIds.skins:
       return ('/skins-setup', {'id': foursomeId, 'returnToHub': true});
     case GameIds.nassau:
-    case GameIds.match18:
       return ('/nassau-setup', {'id': foursomeId, 'returnToHub': true});
+    case GameIds.match18:
+      // Singles Match = Overall-only Nassau; its own route sets game_type.
+      return ('/nassau-setup-18', {'id': foursomeId, 'returnToHub': true});
     case GameIds.spots:
       return ('/spots-setup', {'id': foursomeId, 'returnToHub': true});
     case GameIds.stableford:
@@ -833,10 +842,10 @@ Future<void> _showAddSideGameSheet(
     ),
   );
   if (pick == null) return;
-  // The picker's match_18 shortcut is stored as nassau on the round.
-  final stored = pick == GameIds.match18 ? GameIds.nassau : pick;
+  // match_18 (Singles Match) now persists as its own slug so it can ride
+  // alongside a team Nassau.
   try {
-    await context.read<AuthProvider>().client.addSideGame(roundId, stored);
+    await context.read<AuthProvider>().client.addSideGame(roundId, pick);
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -875,6 +884,7 @@ Future<void> _showAddSideGameSheet(
   const routes = {
     'skins':      '/skins-setup',
     'nassau':     '/nassau-setup',
+    'match_18':   '/nassau-setup-18',
     'nassau_nine':'/nassau-nine-setup',
     'points_531': '/points-531-setup',
     'vegas':      '/vegas-setup',
@@ -917,6 +927,12 @@ List<(String, String)> _sideGamePerFoursomeTargets(
   if (fsGames.contains('nassau') &&
       resolvePrimary(primaryGame, fsGames) != 'nassau') {
     out.add(('/nassau-setup', label('nassau', 'Nassau')));
+  }
+  // A Singles Match riding alongside a team Nassau (the "Larry case") — its own
+  // setup so both matches coexist.
+  if (fsGames.contains('match_18') &&
+      resolvePrimary(primaryGame, fsGames) != 'match_18') {
+    out.add(('/nassau-setup-18', label('match_18', 'Singles Match')));
   }
   // Spots is always a side game (capture add-on) — gets its own setup button.
   if (fsGames.contains('spots')) {
@@ -1868,13 +1884,7 @@ class _FoursomeCard extends StatelessWidget {
                   if (primary == null) return const SizedBox.shrink();
                   final eligible = sideGamesFor(primary,
                           size: foursome.realPlayers.length)
-                      .where((m) {
-                        // match_18 is stored as nassau; treat either as active.
-                        final stored =
-                            m.id == GameIds.match18 ? GameIds.nassau : m.id;
-                        return !active.contains(stored) &&
-                            !active.contains(m.id);
-                      })
+                      .where((m) => !active.contains(m.id))
                       .toList();
                   if (eligible.isEmpty) return const SizedBox.shrink();
                   return Padding(

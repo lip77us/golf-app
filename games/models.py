@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
-from core.models import MatchStatus, TeamSelectMethod, HandicapMode, Player
+from core.models import MatchStatus, TeamSelectMethod, HandicapMode, Player, GameType
 from tournament.models import Round, Foursome
 
 
@@ -1033,7 +1033,23 @@ class NassauGame(models.Model):
     bottom_front9_result / bottom_back9_result / bottom_overall_result:
         Claremont only — set when each bottom bet concludes.
     """
-    foursome            = models.OneToOneField(Foursome, on_delete=models.CASCADE, related_name='nassau_game')
+    # A foursome can hold MORE THAN ONE Nassau-family match at once — e.g. a
+    # team Nassau AND a Singles Match with different teams (the "Larry case").
+    # Each match is one row, discriminated by game_type; at most one row per
+    # (foursome, game_type).  game_type is the same slug carried in
+    # Round.active_games: 'nassau', 'nassau_nine', or 'match_18'.
+    foursome            = models.ForeignKey(Foursome, on_delete=models.CASCADE, related_name='nassau_games')
+    game_type           = models.CharField(
+                            max_length=20,
+                            choices=[
+                                (GameType.NASSAU,      'Nassau'),
+                                (GameType.NASSAU_NINE, 'Nassau Nine'),
+                                (GameType.MATCH_18,    'Singles Match'),
+                            ],
+                            default=GameType.NASSAU,
+                            help_text="Which Nassau-family match this row is; "
+                                      "matches the Round.active_games slug.",
+                        )
     handicap_mode       = models.CharField(
                             max_length=20,
                             choices=HandicapMode.choices,
@@ -1089,8 +1105,13 @@ class NassauGame(models.Model):
     bottom_overall_result = models.CharField(max_length=10, choices=NASSAU_RESULT_CHOICES, null=True, blank=True)
     status              = models.CharField(max_length=20, choices=MatchStatus.choices, default=MatchStatus.PENDING)
 
+    class Meta:
+        # At most one match of each type per foursome (a team Nassau + a Singles
+        # Match can coexist; two team Nassaus cannot).
+        unique_together = ('foursome', 'game_type')
+
     def __str__(self):
-        return f"Nassau — Group {self.foursome.group_number}"
+        return f"{self.get_game_type_display()} — Group {self.foursome.group_number}"
 
 
 class NassauTeam(models.Model):

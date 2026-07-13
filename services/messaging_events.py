@@ -48,9 +48,10 @@ def _emit(round_obj, *, event_key, body, data, push_category=None,
 
 def emit_round_started(round_obj):
     try:
+        from services.catalog import normalize_course_name
         _emit(round_obj,
               event_key=f'round_start:{round_obj.id}',
-              body=f'Round under way at {round_obj.course.name}.',
+              body=f'Round under way at {normalize_course_name(round_obj.course.name)}.',
               data={'type': 'round_started'})
     except Exception:  # pragma: no cover
         logger.exception('emit_round_started failed (round %s)', round_obj.id)
@@ -344,10 +345,13 @@ def _slug(s):
 
 def _emit_match_results(foursome):
     games = _active_games(foursome)
-    if 'nassau' in games:
-        _emit_nassau_results(foursome)
-        _emit_nassau_bottom_results(foursome)
-        _emit_nassau_presses(foursome)
+    # A foursome can hold more than one Nassau-family match (team Nassau +
+    # Singles Match + Nassau Nine); announce each independently.
+    from services.nassau import nassau_game_types_for
+    for _gt in nassau_game_types_for(foursome):
+        _emit_nassau_results(foursome, game_type=_gt)
+        _emit_nassau_bottom_results(foursome, game_type=_gt)
+        _emit_nassau_presses(foursome, game_type=_gt)
     if 'sixes' in games:
         _emit_sixes_results(foursome)
     if 'match_play' in games:
@@ -363,10 +367,10 @@ _NINE = {
 }
 
 
-def _emit_nassau_results(foursome):
+def _emit_nassau_results(foursome, game_type='nassau'):
     """Announce each Nassau nine (front / back / overall) once it's complete."""
     from services.nassau import nassau_summary
-    s = nassau_summary(foursome)
+    s = nassau_summary(foursome, game_type)
     if not s:
         return
     round_obj = foursome.round
@@ -398,9 +402,9 @@ def _emit_nassau_results(foursome):
             else:
                 body = f'{label[0].upper()}{label[1:]} was halved.'
         _emit(round_obj,
-              event_key=f'nassau:{unit}:{round_obj.id}:{foursome.id}',
+              event_key=f'nassau:{game_type}:{unit}:{round_obj.id}:{foursome.id}',
               body=body,
-              data={'type': 'match_result', 'game': 'nassau', 'unit': unit,
+              data={'type': 'match_result', 'game': game_type, 'unit': unit,
                     'result': result or 'halved', 'margin': margin},
               push_category='match_result', push_title='Match result')
 
@@ -412,12 +416,12 @@ _BOTTOM_NINE = {
 }
 
 
-def _emit_nassau_bottom_results(foursome):
+def _emit_nassau_bottom_results(foursome, game_type='nassau'):
     """Announce each Claremont BOTTOM nine (front / back / overall) once
     complete. The bottom bet is worth 2 points/hole, so its margin is in POINTS
     ("4 pts"). No-op unless the game is Claremont (bottom_* blocks are null)."""
     from services.nassau import nassau_summary
-    s = nassau_summary(foursome)
+    s = nassau_summary(foursome, game_type)
     if not s or not s.get('bottom_front9'):   # null unless variant == 'claremont'
         return
     round_obj = foursome.round
@@ -436,9 +440,9 @@ def _emit_nassau_bottom_results(foursome):
         else:
             body = f'{label[0].upper()}{label[1:]} was halved.'
         _emit(round_obj,
-              event_key=f'nassaubot:{unit}:{round_obj.id}:{foursome.id}',
+              event_key=f'nassaubot:{game_type}:{unit}:{round_obj.id}:{foursome.id}',
               body=body,
-              data={'type': 'match_result', 'game': 'nassau_bottom',
+              data={'type': 'match_result', 'game': f'{game_type}_bottom',
                     'unit': unit, 'result': result or 'halved', 'margin': margin},
               push_category='match_result', push_title='Match result')
 
@@ -457,24 +461,25 @@ def _press_labels(presses):
     return labels
 
 
-def _emit_nassau_presses(foursome):
+def _emit_nassau_presses(foursome, game_type='nassau'):
     """Announce each Nassau press once it's decided (won or halved) — both the
     top series and the Claremont BOTTOM series (labelled "Bot …"). Keyed per
     press so re-scanning on every submit posts each once."""
     from services.nassau import nassau_summary
-    s = nassau_summary(foursome)
+    s = nassau_summary(foursome, game_type)
     if not s:
         return
     round_obj = foursome.round
     team1 = s.get('teams', {}).get('team1', [])
     team2 = s.get('teams', {}).get('team2', [])
     _emit_press_group(round_obj, foursome, s.get('presses', []),
-                      team1, team2, is_bottom=False)
+                      team1, team2, is_bottom=False, game_type=game_type)
     _emit_press_group(round_obj, foursome, s.get('bottom_presses', []),
-                      team1, team2, is_bottom=True)
+                      team1, team2, is_bottom=True, game_type=game_type)
 
 
-def _emit_press_group(round_obj, foursome, presses, team1, team2, *, is_bottom):
+def _emit_press_group(round_obj, foursome, presses, team1, team2, *, is_bottom,
+                      game_type='nassau'):
     """Emit one press series. Top margins are in holes ("2&1" / "2 up"); the
     Claremont bottom series is in POINTS ("4 pts") and its label + event key
     carry "Bot" so it's distinct from the top press at the same start hole."""
@@ -502,20 +507,21 @@ def _emit_press_group(round_obj, foursome, presses, team1, team2, *, is_bottom):
         else:
             body = f'{label} was halved.'
         _emit(round_obj,
-              event_key=f'{kind}:{round_obj.id}:{foursome.id}:{nine}:{start}',
+              event_key=f'{kind}:{game_type}:{round_obj.id}:{foursome.id}:{nine}:{start}',
               body=body,
               data={'type': 'match_result', 'game': 'nassau_press',
+                    'game_type': game_type,
                     'nine': nine, 'label': label, 'result': result,
                     'margin': m, 'bottom': is_bottom},
               push_category='match_result', push_title='Press result')
 
 
-def emit_nassau_press_called(foursome, start_hole):
+def emit_nassau_press_called(foursome, start_hole, game_type='nassau'):
     """Announce a manually-called press (from NassauPressView, after the press
     is added). Names the trailing side that pressed, and the press label."""
     try:
         from services.nassau import nassau_summary
-        s = nassau_summary(foursome)
+        s = nassau_summary(foursome, game_type)
         if not s:
             return
         round_obj = foursome.round
@@ -532,9 +538,9 @@ def emit_nassau_press_called(foursome, start_hole):
         lead = f'{who} pressed' if who else 'New press'
         body = f'{lead} on hole {start_hole} — {label} is on.'
         _emit(round_obj,
-              event_key=f'nassaupresscall:{round_obj.id}:{foursome.id}:{nine}:{start_hole}',
+              event_key=f'nassaupresscall:{game_type}:{round_obj.id}:{foursome.id}:{nine}:{start_hole}',
               body=body,
-              data={'type': 'press_called', 'game': 'nassau',
+              data={'type': 'press_called', 'game': game_type,
                     'nine': nine, 'label': label, 'start_hole': start_hole},
               push_category='match_result', push_title='New press')
     except Exception:  # pragma: no cover - defensive

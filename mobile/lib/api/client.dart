@@ -1044,9 +1044,15 @@ class ApiClient {
 
   // ---- Nassau ----
 
-  /// GET /api/foursomes/{id}/nassau/
-  Future<NassauSummary> getNassauSummary(int foursomeId) async {
-    final data = await _get('/foursomes/$foursomeId/nassau/');
+  /// GET /api/foursomes/{id}/nassau/?game=<gameType>
+  ///
+  /// [gameType] selects which of the foursome's Nassau-family matches to fetch
+  /// ('nassau', 'match_18', 'nassau_nine').  Null → the server resolves the
+  /// foursome's primary match (back-compatible).
+  Future<NassauSummary> getNassauSummary(int foursomeId,
+      {String? gameType}) async {
+    final q = gameType == null ? '' : '?game=$gameType';
+    final data = await _get('/foursomes/$foursomeId/nassau/$q');
     return NassauSummary.fromJson(data as Map<String, dynamic>);
   }
 
@@ -1068,6 +1074,7 @@ class ApiClient {
     bool   playOverall  = true,
     bool   singleMatch  = false,   // Nassau Nine: one match over played holes
     double? lossCap,               // presses/Claremont only; null = uncapped
+    String? gameType,              // 'nassau' | 'match_18' | 'nassau_nine'
   }) async {
     final data = await _post('/foursomes/$foursomeId/nassau/setup/', {
       'team1_player_ids': team1Ids,
@@ -1082,6 +1089,7 @@ class ApiClient {
       'play_overall'    : playOverall,
       'single_match'    : singleMatch,
       'loss_cap'        : lossCap?.toStringAsFixed(2),
+      if (gameType != null) 'game_type': gameType,
     });
     return NassauSummary.fromJson(data as Map<String, dynamic>);
   }
@@ -1093,9 +1101,11 @@ class ApiClient {
   Future<NassauSummary> postNassauPress(
     int foursomeId, {
     required int startHole,
+    String? gameType,
   }) async {
     final data = await _post('/foursomes/$foursomeId/nassau/press/', {
       'start_hole': startHole,
+      if (gameType != null) 'game_type': gameType,
     });
     return NassauSummary.fromJson(data as Map<String, dynamic>);
   }

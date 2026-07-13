@@ -125,18 +125,14 @@ Future<CasualRoundLaunch> createCasualRound({
   final multiGroup = activeGames.contains(GameIds.multiSkins);
   final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-  // The picker's `match_18` shortcut becomes `nassau` on the round; mirror that
-  // in the stored primary so it matches active_games.
-  final storedPrimary =
-      primaryGame == GameIds.match18 ? GameIds.nassau : primaryGame;
+  // match_18 (Singles Match) is now its OWN slug + game_type, so it can coexist
+  // with a team Nassau in the same round (the "Larry case").
+  final storedPrimary = primaryGame;
 
-  // "18-Hole Match" is a UI shortcut for an Overall-only Nassau.
   final round = await client.createRound(
     courseId: courseId,
     date: dateStr,
-    activeGames: activeGames
-        .map((g) => g == GameIds.match18 ? GameIds.nassau : g)
-        .toList(),
+    activeGames: activeGames.toList(),
     primaryGame: storedPrimary,
     numHoles: numHoles,
     startingHole: startingHole,

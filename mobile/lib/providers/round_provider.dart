@@ -17,6 +17,7 @@
 import 'package:flutter/foundation.dart';
 import '../api/client.dart';
 import '../api/models.dart';
+import '../game_catalog.dart' show resolvePrimary;
 import '../local/local_database.dart';
 import '../sync/sync_service.dart';
 import '../widgets/error_view.dart';
@@ -94,6 +95,10 @@ class RoundProvider extends ChangeNotifier {
   TripleCupSummary? _tripleCupSummary;
   MultiSkinsSummary? _multiSkinsSummary;
   NassauSummary?         _nassauSummary;
+  // A foursome can hold more than one Nassau-family match (team Nassau +
+  // Singles Match); cache each by game_type.  `_nassauSummary` stays the
+  // PRIMARY match for existing single-Nassau consumers.
+  final Map<String, NassauSummary> _nassauByType = {};
   QuotaNassauSummary?    _quotaNassauSummary;
   Map<String, dynamic>? _matchPlayData;
   ThreePersonMatchSummary? _threePersonMatchSummary;
@@ -147,6 +152,19 @@ class RoundProvider extends ChangeNotifier {
   TripleCupSummary? get tripleCupSummary   => _tripleCupSummary;
   MultiSkinsSummary? get multiSkinsSummary  => _multiSkinsSummary;
   NassauSummary?        get nassauSummary      => _nassauSummary;
+  /// The cached summary for a specific Nassau-family match (e.g. the Singles
+  /// Match side game), or null if not loaded.
+  NassauSummary? nassauFor(String gameType) => _nassauByType[gameType];
+
+  /// The round's PRIMARY Nassau-family game type ('nassau' / 'nassau_nine' /
+  /// 'match_18'), or null when the primary isn't a Nassau game — in which case
+  /// the server resolves a (side) Nassau on its own.
+  String? _primaryNassauType() {
+    final r = _round;
+    if (r == null) return null;
+    final p = resolvePrimary(r.primaryGame, r.activeGames.toSet());
+    return (p == 'nassau' || p == 'nassau_nine' || p == 'match_18') ? p : null;
+  }
   QuotaNassauSummary?   get quotaNassauSummary => _quotaNassauSummary;
   bool                  get loadingQuotaNassau => _loadingQuotaNassau;
   Map<String, dynamic>?       get matchPlayData            => _matchPlayData;
@@ -900,13 +918,23 @@ class RoundProvider extends ChangeNotifier {
 
   // ── Nassau ─────────────────────────────────────────────────────────────────
 
-  /// Load the Nassau summary for the active foursome.
+  /// Load a Nassau-family summary for the active foursome.
+  ///
+  /// [gameType] picks which match ('nassau' / 'match_18' / 'nassau_nine');
+  /// null → the server's primary match, which also updates `nassauSummary`.
+  /// Every load is cached by the returned summary's game_type.
   /// Non-fatal on network errors — keeps the last known state.
-  Future<void> loadNassau(int foursomeId) async {
+  Future<void> loadNassau(int foursomeId, {String? gameType}) async {
     _loadingNassau = true;
     notifyListeners();
     try {
-      _nassauSummary = await _client.getNassauSummary(foursomeId);
+      // A bare load resolves to the ROUND's primary Nassau-family match, so a
+      // match_18 primary isn't shadowed by the server's fixed resolve order
+      // (which prefers a team Nassau side game).
+      final resolved = gameType ?? _primaryNassauType();
+      final s = await _client.getNassauSummary(foursomeId, gameType: resolved);
+      _nassauByType[s.gameType] = s;
+      if (gameType == null) _nassauSummary = s;
     } on NetworkException {
       // Offline — keep the previous summary around.
     } catch (e, st) {
@@ -1028,12 +1056,13 @@ class RoundProvider extends ChangeNotifier {
     bool   playOverall  = true,
     bool   singleMatch  = false,
     double? lossCap,
+    String? gameType,
   }) async {
     _submitting = true;
     _clearError();
     notifyListeners();
     try {
-      _nassauSummary = await _client.postNassauSetup(
+      final s = await _client.postNassauSetup(
         foursomeId,
         team1Ids:     team1Ids,
         team2Ids:     team2Ids,
@@ -1047,7 +1076,13 @@ class RoundProvider extends ChangeNotifier {
         playOverall:  playOverall,
         singleMatch:  singleMatch,
         lossCap:      lossCap,
+        gameType:     gameType,
       );
+      _nassauByType[s.gameType] = s;
+      // Keep the primary-match cache fresh for single-Nassau consumers.
+      if (gameType == null || gameType == 'nassau' || gameType == 'nassau_nine') {
+        _nassauSummary = s;
+      }
       return true;
     } on NetworkException {
       _error = 'No connection — cannot save Nassau setup while offline.';
@@ -1065,15 +1100,21 @@ class RoundProvider extends ChangeNotifier {
   ///
   /// Returns true on success.  On failure (bad state, network, etc.),
   /// [error] is set and false returned.
-  Future<bool> callNassauPress(int foursomeId, {required int startHole}) async {
+  Future<bool> callNassauPress(int foursomeId,
+      {required int startHole, String? gameType}) async {
     _submitting = true;
     _clearError();
     notifyListeners();
     try {
-      _nassauSummary = await _client.postNassauPress(
+      final s = await _client.postNassauPress(
         foursomeId,
         startHole: startHole,
+        gameType:  gameType,
       );
+      _nassauByType[s.gameType] = s;
+      if (gameType == null || gameType == 'nassau' || gameType == 'nassau_nine') {
+        _nassauSummary = s;
+      }
       return true;
     } on NetworkException {
       _error = 'No connection — cannot call press while offline.';

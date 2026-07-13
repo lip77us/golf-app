@@ -262,7 +262,7 @@ class PlayerProfile {
         userId: j['user_id'] as int?,
         isOnApp: j['is_on_app'] as bool? ?? false,
         homeCourseId: j['home_course_id'] as int?,
-        homeCourseName: j['home_course_name'] as String? ?? '',
+        homeCourseName: prettyCourseName(j['home_course_name'] as String? ?? ''),
       );
 
   /// Compute a safe fallback initials string from a full name.  Matches
@@ -3395,6 +3395,9 @@ class NassauBottomBetResult {
 /// Full summary for a Nassau game — mirrors nassau_summary() output.
 class NassauSummary {
   final String status;           // 'pending' | 'in_progress' | 'complete'
+  /// Which Nassau-family match this is: 'nassau' | 'match_18' | 'nassau_nine'.
+  /// Lets a foursome hold a team Nassau and a Singles Match at once.
+  final String gameType;
   final String variant;          // 'none' | 'tiebreak_2nd' | 'claremont'
   final String handicapMode;
   final int    netPercent;
@@ -3461,6 +3464,7 @@ class NassauSummary {
 
   const NassauSummary({
     required this.status,
+    this.gameType = 'nassau',
     required this.variant,
     required this.handicapMode,
     required this.netPercent,
@@ -3533,6 +3537,7 @@ class NassauSummary {
     final bovRaw  = j['bottom_overall'] as Map<String, dynamic>?;
     return NassauSummary(
       status:       j['status']        as String? ?? 'pending',
+      gameType:     j['game_type']     as String? ?? 'nassau',
       variant:      j['variant']       as String? ?? 'none',
       handicapMode: j['handicap_mode'] as String? ?? 'net',
       netPercent:   j['net_percent']   as int?    ?? 100,

@@ -312,12 +312,17 @@ const List<GameMeta> kGameCatalog = [
     id          : GameIds.match18,
     displayName : 'Singles Match',
     casual      : true,
-    // A straight heads-up 18-hole match — runs on Nassau (Overall bet only).
-    sizes       : {2},
-    excludes    : {GameIds.nassau, GameIds.nassauNine,
-                   GameIds.sixes, GameIds.points531},
-    // A 2-man Singles Match can also ride as a subset side bet (e.g. alongside
-    // a Sixes primary) — it's a subset Nassau overall-only (docs/parallel-games.md).
+    // A heads-up 18-hole match (Overall-only Nassau).  Always 1-v-1: in a 3-4
+    // player foursome the setup picks which two duel, so it's offerable across
+    // sizes and can coexist with a team Nassau (the "Larry case").
+    minPlayers  : 2,
+    maxPlayers  : 4,
+    sizes       : {2, 3, 4},
+    // NOT mutually exclusive with Nassau — a Singles Match and a team Nassau
+    // are separate matches (different game_type) that can run together.
+    excludes    : {GameIds.nassauNine, GameIds.sixes, GameIds.points531},
+    // A Singles Match can also ride as a subset side bet (e.g. alongside a Sixes
+    // or Nassau primary) — a subset overall-only match (docs/parallel-games.md).
     canBeSubsetSideGame: true,
   ),
   GameMeta(
