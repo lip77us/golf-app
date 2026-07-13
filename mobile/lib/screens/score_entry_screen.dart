@@ -3241,7 +3241,14 @@ class _HoleScoreCard extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
                   color: washColor,
-                  border: Border.all(color: boxColor, width: 3.0),
+                  // Bold team-colour bar on the LEFT (matching the inactive
+                  // rows' left accent); thin line on top/bottom/right.
+                  border: Border(
+                    top:    BorderSide(color: boxColor, width: 1.0),
+                    bottom: BorderSide(color: boxColor, width: 1.0),
+                    right:  BorderSide(color: boxColor, width: 1.0),
+                    left:   BorderSide(color: boxColor, width: 3.0),
+                  ),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Column(
