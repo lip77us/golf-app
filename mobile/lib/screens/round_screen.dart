@@ -355,17 +355,6 @@ class _RoundScreenState extends State<RoundScreen> {
                       // before scoring. As a side game it's configured from the
                       // hub and never gates Enter Scores.
                       route = '/skins-setup';
-                    } else if (!round.isCupRound &&
-                        resolvePrimary(round.primaryGame, fsGames) == 'skins' &&
-                        fs.configuredGames.contains('skins')) {
-                      // TRIAL: a configured casual Skins primary opens the
-                      // dedicated SkinsScreen, which hosts the vertical
-                      // score-wheel trial (fixed wheel + moving highlight).
-                      // NOTE: side-game overlays (Stableford strip, Spots
-                      // capture) aren't shown on this screen — to end the
-                      // trial, delete this branch so Skins falls through to
-                      // '/score-entry' like every other configured game.
-                      route = '/skins';
                     } else if (fsGames.contains('wolf') &&
                         !fs.configuredGames.contains('wolf')) {
                       // Wolf needs handicap + rotation + point config.

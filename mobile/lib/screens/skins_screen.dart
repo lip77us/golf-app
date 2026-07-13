@@ -5,11 +5,7 @@
 ///   • AppBar: "Skins" title + Scorecard / Leaderboard shortcuts + sync badge.
 ///   • Top card: Hole N header (Par/Yds/SI per tee), one row per player
 ///     showing running gross/net vs par, handicap chip, score box with stroke
-///     dots.  TRIAL: a fixed vertical WheelScorePicker sits to the right of the
-///     rows; the active (highlighted) player is the one it scores.  Spin + tap
-///     a number to commit → the highlight advances to the next golfer and the
-///     wheel snaps back to their net par.  Tapping an already-scored row makes
-///     it active so the wheel edits it (replaces the old edit-score modal).
+///     dots.  Hot-spot player gets the same inline picker as 5-3-1.
 ///     When allow_junk=true, each row also shows junk dots (●) next to the
 ///     score box — tap + / − to adjust.
 ///   • Hole outcome strip: winner / carry → / dead ✗ once all scored.
@@ -24,8 +20,8 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
-import '../widgets/wheel_score_picker.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
@@ -52,10 +48,6 @@ class _SkinsScreenState extends State<SkinsScreen> {
   int  _selectedHole   = 1;
   bool _prevHadPending = false;
   bool _initialJumpDone = false;
-
-  /// When set, the wheel targets this already-scored player for editing
-  /// instead of the auto-advancing hot spot.  Cleared once a score commits.
-  int? _editingPlayerId;
 
   @override
   void initState() {
@@ -186,36 +178,57 @@ class _SkinsScreenState extends State<SkinsScreen> {
     });
   }
 
-  /// Tapping an already-scored row makes the wheel target that player so it can
-  /// be re-scored in place (replaces the old edit-score modal).
-  void _selectActive(int playerId) {
-    setState(() => _editingPlayerId = playerId);
-  }
-
-  /// The wheel committed [score] for [player] (-1 = clear).  Update the pending
-  /// overlay, drop out of edit mode, and — if we were correcting a score that's
-  /// already on the server — persist it immediately (no hole advance).
-  Future<void> _wheelCommit(
+  /// Open the edit-score modal for an already-scored player (non-hot row tap).
+  Future<void> _editScore(
     BuildContext ctx,
     Membership player,
-    int score,
-    List<Membership> players,
     int par,
+    int hole,
+    List<Membership> players,
   ) async {
-    final rp       = context.read<RoundProvider>();
-    final hadSaved = rp.scorecard
-            ?.holeData(_selectedHole)
-            ?.scoreFor(player.player.id)
-            ?.grossScore != null;
+    final rp      = context.read<RoundProvider>();
+    final sc      = rp.scorecard;
+    final summary = rp.skinsSummary;
+    final current = (_pending[hole] ?? {})[player.player.id]
+        ?? sc?.holeData(hole)?.scoreFor(player.player.id)?.grossScore;
 
-    _selectScore(player, score, _selectedHole);
-    if (_editingPlayerId != null) {
-      setState(() => _editingPlayerId = null);
-    }
+    final mode       = summary?.handicapMode ?? 'net';
+    final netPercent = summary?.netPercent   ?? 100;
+    final lowPlaying = mode == 'strokes_off' && players.isNotEmpty
+        ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
+        : null;
+    final effective = effectiveMatchHandicap(
+      mode:                  mode,
+      netPercent:            netPercent,
+      playingHandicap:       player.playingHandicap,
+      lowestPlayingHandicap: lowPlaying,
+    );
+    final si      = sc?.holeData(hole)?.strokeIndex ?? 18;
+    final strokes = strokesOnHole(effective, si);
 
-    if (score != -1 && hadSaved) {
-      await _saveAndAdvance(ctx, players, par, advance: false);
-    }
+    final score = await showModalBottomSheet<int>(
+      context: ctx,
+      useRootNavigator: true,
+      builder: (_) => _SkinsScorePickerSheet(
+        playerName: player.player.name,
+        par:        par,
+        holeNumber: hole,
+        strokes:    strokes,
+        current:    current,
+      ),
+    );
+    if (!mounted) return;
+    if (score == null) return;
+    setState(() {
+      if (score == -1) {
+        _pending[hole]?.remove(player.player.id);
+        if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
+      } else {
+        _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
+      }
+    });
+    // Commit a past-hole correction immediately — no save+advance needed.
+    if (score != -1) await _saveAndAdvance(ctx, players, par, advance: false);
   }
 
   void _advance() {
@@ -512,19 +525,6 @@ class _SkinsScreenState extends State<SkinsScreen> {
     final par      = holeData?.par ?? 4;
     final summary  = rp.skinsSummary;
 
-    // The wheel scores the ACTIVE player: an explicitly-tapped row for editing
-    // if that player is still on this hole, otherwise the auto-advancing hot
-    // spot, otherwise (all scored) the last player so it can still be reviewed.
-    final bool editingValid = _editingPlayerId != null &&
-        players.any((m) => m.player.id == _editingPlayerId);
-    final int activeId = editingValid
-        ? _editingPlayerId!
-        : hotSpot >= 0
-            ? players[hotSpot].player.id
-            : players.isNotEmpty
-                ? players.last.player.id
-                : -1;
-
     return Column(children: [
       Expanded(
         child: RefreshIndicator(
@@ -538,18 +538,18 @@ class _SkinsScreenState extends State<SkinsScreen> {
               _SkinsHoleScoreCard(
                 holeData:        holeData,
                 holeNumber:      _selectedHole,
-                courseName:      rp.round?.course.name,
                 players:         players,
                 scorecard:       sc,
                 merged:          merged,
                 scores:          scores,
-                activePlayerId:  activeId,
+                hotSpotIdx:      hotSpot,
                 par:             par,
                 summary:         summary,
                 pendingJunk:     _pendingJunk[_selectedHole] ?? {},
                 onScoreSelected: (m, score) =>
-                    _wheelCommit(ctx, m, score, players, par),
-                onSelectActive:  (m) => _selectActive(m.player.id),
+                    _selectScore(m, score, _selectedHole),
+                onEditTap: (m) =>
+                    _editScore(ctx, m, par, _selectedHole, players),
                 onJunkChanged: (pid, delta) =>
                     _adjustJunk(pid, _selectedHole, delta),
               ),
@@ -588,33 +588,31 @@ class _SkinsScreenState extends State<SkinsScreen> {
 class _SkinsHoleScoreCard extends StatelessWidget {
   final ScorecardHole?   holeData;
   final int              holeNumber;
-  final String?          courseName;
   final List<Membership> players;
   final Scorecard        scorecard;
   final Map<int, Map<int, int>> merged;
   final Map<int, int>    scores;
-  final int              activePlayerId;
+  final int              hotSpotIdx;
   final int              par;
   final SkinsSummary?    summary;
   final Map<int, int>    pendingJunk; // playerId → count (local unsaved)
   final void Function(Membership, int)       onScoreSelected;
-  final void Function(Membership)            onSelectActive;
+  final void Function(Membership)            onEditTap;
   final void Function(int playerId, int delta) onJunkChanged;
 
   const _SkinsHoleScoreCard({
     required this.holeData,
     required this.holeNumber,
-    this.courseName,
     required this.players,
     required this.scorecard,
     required this.merged,
     required this.scores,
-    required this.activePlayerId,
+    required this.hotSpotIdx,
     required this.par,
     required this.summary,
     required this.pendingJunk,
     required this.onScoreSelected,
-    required this.onSelectActive,
+    required this.onEditTap,
     required this.onJunkChanged,
   });
 
@@ -734,15 +732,6 @@ class _SkinsHoleScoreCard extends StatelessWidget {
                     const BorderRadius.vertical(top: Radius.circular(8)),
               ),
               child: Column(children: [
-                if (courseName != null && courseName!.isNotEmpty) ...[
-                  Text(courseName!,
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 1),
-                ],
                 Text('Hole $holeNumber',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleLarge
@@ -782,56 +771,48 @@ class _SkinsHoleScoreCard extends StatelessWidget {
             ),
           ]),
 
-          // ── Player rows + fixed score wheel ──
-          // The wheel is anchored to the right and scores whichever row is
-          // ACTIVE (highlighted).  Committing a score advances the highlight
-          // and rolls the wheel back to the next player's net par.
-          Builder(builder: (context) {
-            final activeMember = players
-                .where((m) => m.player.id == activePlayerId)
-                .firstOrNull;
-            final activeStrokes = activeMember == null
-                ? 0
-                : _strokesForHole(activeMember, holeData);
-            final activeScore =
-                activeMember == null ? null : scores[activeMember.player.id];
+          // ── Player rows + inline picker ──
+          ...players.asMap().entries.expand((entry) {
+            final idx          = entry.key;
+            final m            = entry.value;
+            final pid          = m.player.id;
+            final gross        = scores[pid];
+            final isHot        = idx == hotSpotIdx;
+            final hasScore     = gross != null;
+            final matchStrokes = _strokesForHole(m, holeData);
 
-            final rows = players.map((m) {
-              final pid          = m.player.id;
-              final gross        = scores[pid];
-              final isActive     = pid == activePlayerId;
-              final matchStrokes = _strokesForHole(m, holeData);
+            // Handicap chip reads "gets N" (strokes this player receives).
+            // The stroke-this-hole indicator now lives in the dot strip above
+            // the score box, so no bullets here. Hidden for a 0-stroke player.
+            String? hcapLabel;
+            if (_mode == 'net' || _mode == 'strokes_off') {
+              final eff = _matchHcapFor(m);
+              if (eff > 0) hcapLabel = 'gets $eff';
+            }
 
-              // Handicap chip reads "gets N" (strokes this player receives).
-              // The stroke-this-hole indicator lives in the dot strip above the
-              // score box, so no bullets here. Hidden for a 0-stroke player.
-              String? hcapLabel;
-              if (_mode == 'net' || _mode == 'strokes_off') {
-                final eff = _matchHcapFor(m);
-                if (eff > 0) hcapLabel = 'gets $eff';
-              }
+            // Running skins total from server summary.
+            final totalSkins = summary?.players
+                    .where((p) => p.playerId == pid)
+                    .firstOrNull
+                    ?.totalSkins ?? 0;
 
-              // Running skins total from server summary.
-              final totalSkins = summary?.players
-                      .where((p) => p.playerId == pid)
-                      .firstOrNull
-                      ?.totalSkins ?? 0;
+            // Did this player win the currently-selected hole?
+            final isHoleWinner = holeOutcome?.winnerId == pid;
 
-              // Did this player win the currently-selected hole?
-              final isHoleWinner = holeOutcome?.winnerId == pid;
+            // Junk count for this player on this hole.
+            final junkCount = pendingJunk[pid]
+                ?? holeOutcome?.junk
+                    .where((j) => j.playerId == pid)
+                    .firstOrNull
+                    ?.count
+                ?? 0;
 
-              // Junk count for this player on this hole.
-              final junkCount = pendingJunk[pid]
-                  ?? holeOutcome?.junk
-                      .where((j) => j.playerId == pid)
-                      .firstOrNull
-                      ?.count
-                  ?? 0;
-
-              return _SkinsPlayerRow(
+            return [
+              _SkinsPlayerRow(
+                position:          idx + 1,
                 member:            m,
                 gross:             gross,
-                isHot:             isActive,
+                isHot:             isHot,
                 matchHcapLabel:    hcapLabel,
                 strokesOnThisHole: matchStrokes,
                 totalSkins:        totalSkins,
@@ -840,58 +821,17 @@ class _SkinsHoleScoreCard extends StatelessWidget {
                 junkCount:         junkCount,
                 onJunkAdd:    () => onJunkChanged(pid,  1),
                 onJunkRemove: () => onJunkChanged(pid, -1),
-                // Tap any non-active row to move the wheel onto that player
-                // (edit-in-place); the active row is already targeted.
-                onTap: isActive ? null : () => onSelectActive(m),
-              );
-            }).toList();
-
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(0, 4, 8, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: rows,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      WheelScorePicker(
-                        par:          par,
-                        strokes:      activeStrokes,
-                        currentScore: activeScore,
-                        onScoreSelected: (score) {
-                          if (activeMember != null) {
-                            onScoreSelected(activeMember, score);
-                          }
-                        },
-                      ),
-                      if (activeScore != null)
-                        TextButton(
-                          onPressed: activeMember == null
-                              ? null
-                              : () => onScoreSelected(activeMember, -1),
-                          style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8),
-                            foregroundColor:
-                                Theme.of(context).colorScheme.error,
-                          ),
-                          child: const Text('Clear',
-                              style: TextStyle(fontSize: 12)),
-                        ),
-                    ],
-                  ),
-                ],
+                onTap: (hasScore && !isHot) ? () => onEditTap(m) : null,
               ),
-            );
-          }),
+              if (isHot)
+                InlineScorePicker(
+                  par:             par,
+                  strokes:         matchStrokes,
+                  currentScore:    gross,
+                  onScoreSelected: (score) => onScoreSelected(m, score),
+                ),
+            ];
+          }).toList(),
 
           // ── Hole outcome strip ──
           if (holeOutcome != null) ...[
@@ -999,6 +939,7 @@ class _SkinsLegendSheet extends StatelessWidget {
 // ===========================================================================
 
 class _SkinsPlayerRow extends StatelessWidget {
+  final int          position;
   final Membership   member;
   final int?         gross;
   final bool         isHot;
@@ -1019,6 +960,7 @@ class _SkinsPlayerRow extends StatelessWidget {
   final VoidCallback onJunkRemove;
 
   const _SkinsPlayerRow({
+    required this.position,
     required this.member,
     required this.gross,
     required this.isHot,
@@ -1044,71 +986,57 @@ class _SkinsPlayerRow extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: isHot
-            ? theme.colorScheme.primaryContainer.withOpacity(0.42)
+            ? theme.colorScheme.primaryContainer.withOpacity(0.08)
             : null,
         border: Border(
           top: BorderSide(color: theme.colorScheme.outlineVariant),
-          // Thick accent bar down the active row's left edge — the clearest
-          // "who's up" cue now that the wheel no longer sits under the row.
-          left: isHot
-              ? BorderSide(color: theme.colorScheme.primary, width: 6)
-              : BorderSide.none,
         ),
       ),
-      padding: EdgeInsets.fromLTRB(isHot ? 8 : 12, 8, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
-        // ── Name (+ handicap chip) over a small "Tee: X" line ──
+        // ── Name + handicap chip ──
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(children: [
-                Flexible(
-                  child: Text(
-                    member.player.name,
-                    overflow: TextOverflow.ellipsis,
-                    // Active row goes bold + primary so the scored golfer is
-                    // obvious; inactive rows stay the default weight/colour.
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: isHot ? FontWeight.w800 : FontWeight.w600,
-                      color: isHot ? theme.colorScheme.primary : null,
-                    ),
+          child: Row(children: [
+            Text('$position)  ',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.primary)),
+            Flexible(
+              child: Text(
+                member.player.name,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  // No team colour here (Skins is per-player).  Keep the
+                  // name in the default theme colour rather than going
+                  // green on the hot row.
+                ),
+              ),
+            ),
+            if (matchHcapLabel != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                ),
+                child: Text(
+                  matchHcapLabel!,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSecondaryContainer,
                   ),
                 ),
-                if (matchHcapLabel != null) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.secondaryContainer
-                          .withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(8),
-                      border:
-                          Border.all(color: theme.colorScheme.outlineVariant),
-                    ),
-                    child: Text(
-                      matchHcapLabel!,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                  ),
-                ],
-              ]),
-              // Tee line — lets the scorer confirm each golfer is on the right
-              // tee, which matters for combo tees (e.g. "Blue/White").
-              if (member.tee != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 1),
-                  child: Text('Tee: ${member.tee!.teeName}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ),
+              ),
             ],
-          ),
+            if (member.tee != null) ...[
+              const SizedBox(width: 6),
+              Text(member.tee!.teeName,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ]),
         ),
 
         // ── Running totals + skins pills ──
@@ -1262,6 +1190,92 @@ class _JunkDots extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ===========================================================================
+// Modal edit-score sheet — copied from _P531ScorePickerSheet
+// ===========================================================================
+
+class _SkinsScorePickerSheet extends StatelessWidget {
+  final String playerName;
+  final int    par;
+  final int    holeNumber;
+  final int    strokes;
+  final int?   current;
+
+  const _SkinsScorePickerSheet({
+    required this.playerName,
+    required this.par,
+    required this.holeNumber,
+    required this.strokes,
+    this.current,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme  = Theme.of(context);
+    final scores = List.generate(12, (i) => i + 1);
+    final netPar = par + strokes;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            playerName,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            strokes > 0
+                ? 'Hole $holeNumber  •  Par $par  •  Net par $netPar'
+                : 'Hole $holeNumber  •  Par $par',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 56,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.zero,
+              itemCount: scores.length,
+              itemBuilder: (_, i) {
+                final s   = scores[i];
+                final sel = s == current;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: NetScoreButton(
+                    score:    s,
+                    par:      par,
+                    strokes:  strokes,
+                    selected: sel,
+                    width:    46,
+                    height:   52,
+                    onTap:    () => Navigator.of(context).pop(s),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (current != null)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(-1),
+              child: const Text('Clear score'),
+            ),
+        ]),
+      ),
     );
   }
 }
