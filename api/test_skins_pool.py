@@ -102,6 +102,24 @@ class SkinsPoolTests(TestCase):
         self.assertEqual(resp.status_code, 201, resp.content)
         self.token = self.round_h.watch_token
 
+    # ── Halved-only roster ──────────────────────────────────────────────────
+
+    def test_setup_rejects_non_halved_member(self):
+        """A login-less golfer (no User carries their phone) can't join a pool
+        — the setup endpoint rejects the roster."""
+        login_less = Player.objects.create(
+            account=self.acct_a, name='Guest', handicap_index=10)  # no phone/user
+        fs = Foursome.objects.create(round=self.round_h, group_number=2)
+        _member(fs, login_less, self.tee_a, 10)
+        resp = self.a.post(
+            reverse('api-multi-skins-setup', args=[self.round_h.id]),
+            {'handicap_mode': 'gross', 'bet_unit': '10.00',
+             'participant_ids': [self.o.id, login_less.id]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertIn(login_less.id, resp.json()['not_on_app_ids'])
+
     # ── Resolve ─────────────────────────────────────────────────────────────
 
     def test_resolve_by_token_returns_roster_and_overlap(self):

@@ -60,6 +60,10 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
   /// across rounds, so login-less golfers are intentionally excluded.
   List<PlayerProfile> _externalGolfers = [];
 
+  /// Player ids that are on Halved — the only golfers eligible for the pool
+  /// (roster is Halved-only; login-less golfers can't be matched cross-round).
+  Set<int> _onAppIds = {};
+
   bool    _loading  = true;
   bool    _starting = false;
   /// True when editing an already-configured game (drives Save vs Start label).
@@ -94,31 +98,33 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
       final configured =
           _summary!.status == 'in_progress' || _summary!.players.isNotEmpty;
 
-      // Pre-populate roster from existing game, or default to all real
-      // players in the round.
-      final existingIds = _summary!.players.map((p) => p.playerId).toSet();
-      final memberIds   = <int>{};
-      for (final m in _allMemberships) {
-        memberIds.add(m.player.id);
-        _participants[m.player.id] =
-            existingIds.isEmpty ? true : existingIds.contains(m.player.id);
-      }
-
-      // Connected golfers who'll play in OTHER rounds — offered as opt-in pool
-      // members (default unchecked; re-checked if already in a saved pool).
-      // Best-effort: a failed roster fetch just hides this section.
+      // Which golfers are on Halved — the pool is Halved-only, so only they are
+      // eligible. Fetch first so the roster defaults + gating below can use it.
+      // Best-effort: a failed fetch leaves _onAppIds empty (nothing eligible),
+      // and hides the external section.
+      final memberIds = _allMemberships.map((m) => m.player.id).toSet();
       try {
         final all = await client.getPlayers();
         if (mounted) {
+          _onAppIds = all.where((p) => p.isOnApp).map((p) => p.id).toSet();
           _externalGolfers = all
               .where((p) => p.isOnApp && !memberIds.contains(p.id))
               .toList()
             ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-          for (final g in _externalGolfers) {
-            _participants[g.id] = existingIds.contains(g.id);
-          }
         }
-      } catch (_) { /* external roster is optional */ }
+      } catch (_) { /* roster fetch is best-effort */ }
+
+      // Pre-populate roster from an existing game, or default to all ELIGIBLE
+      // (on-app) round players. Login-less members are never auto-checked.
+      final existingIds = _summary!.players.map((p) => p.playerId).toSet();
+      for (final m in _allMemberships) {
+        final eligible = _onAppIds.contains(m.player.id);
+        _participants[m.player.id] = eligible &&
+            (existingIds.isEmpty ? true : existingIds.contains(m.player.id));
+      }
+      for (final g in _externalGolfers) {
+        _participants[g.id] = existingIds.contains(g.id);
+      }
 
       setState(() {
         if (configured) _editing = true;
@@ -304,16 +310,25 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                       style: Theme.of(context).textTheme.labelLarge),
                 ),
                 for (final m in fs.memberships.where((m) => !m.player.isPhantom))
-                  CheckboxListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(m.player.name),
-                    subtitle: Text('Index ${m.player.handicapIndex}'),
-                    value: _participants[m.player.id] ?? false,
-                    onChanged: (v) => setState(() {
-                      _participants[m.player.id] = v ?? false;
-                    }),
-                  ),
+                  Builder(builder: (_) {
+                    final onApp = _onAppIds.contains(m.player.id);
+                    return CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(m.player.name),
+                      // Roster is Halved-only: a login-less golfer can't be
+                      // matched across rounds, so they can't join the pool.
+                      subtitle: Text(onApp
+                          ? 'Index ${m.player.handicapIndex}'
+                          : 'Not on Halved — invite them to include them'),
+                      value: onApp && (_participants[m.player.id] ?? false),
+                      onChanged: onApp
+                          ? (v) => setState(() {
+                                _participants[m.player.id] = v ?? false;
+                              })
+                          : null,
+                    );
+                  }),
               ],
               // ── Golfers playing in another round (cross-round pool) ────────
               if (_externalGolfers.isNotEmpty) ...[

@@ -713,6 +713,11 @@ String? primaryGameOf(Iterable<String> active) {
 /// by the per-game `excludes` (e.g. Spots excludes Vegas / Triple Cup).
 List<GameMeta> sideGamesFor(String primaryId,
     {required int size, bool multiGroup = false}) {
+  // A round-wide pool (Multi-Group Skins, `acrossGroups`) owns no per-foursome
+  // entry structure, so it hosts NO side games — not subset matches (a 2-man
+  // Nassau / Singles inside it is meaningless) and no overlays. Its own scores
+  // come from the linked rounds, each of which runs its own games separately.
+  if (_kGameById[primaryId]?.acrossGroups ?? false) return const [];
   // Overlays ride a primary that either allows side games OR is an
   // individual-ball structure-owner that hosts overlays (Sixes/Nassau/Vegas).
   final allowOverlays =

@@ -238,6 +238,30 @@ def _round_player_ids(round_obj) -> list[int]:
     )
 
 
+def not_on_app_ids(participant_ids: list[int]) -> list[int]:
+    """Participant ids that are NOT Halved members — no `User` carries their
+    phone.  A cross-round pool matches players across rounds/accounts by phone
+    identity, so a login-less golfer can't reliably participate; the pool roster
+    is Halved-only (docs/multi-skins-cross-round.md).  Used to reject a bad
+    roster at the API boundary."""
+    from accounts.models import User
+
+    players = {p.id: p for p in Player.objects.filter(id__in=participant_ids)
+                                              .select_related('user')}
+    phones  = {pid: _identity_phone(players[pid]) for pid in players}
+    on_app  = set(
+        User.objects
+        .filter(phone__in=[ph for ph in phones.values() if ph])
+        .values_list('phone', flat=True)
+    )
+    bad: list[int] = []
+    for pid in participant_ids:
+        ph = phones.get(pid)
+        if not ph or ph not in on_app:
+            bad.append(pid)
+    return bad
+
+
 def pool_overlap(game: MultiSkinsGame, round_obj) -> list[int]:
     """
     Canonical participant ids that are present in `round_obj` (matched by
