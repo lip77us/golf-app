@@ -1109,8 +1109,8 @@ Lets a skins pool span **independent rounds** (different foursomes, different
 games, possibly different accounts): each round plays its own primary and enters
 gross once; players in the pool have those same scores fed into a shared skins
 competition. Design + decisions: `docs/multi-skins-cross-round.md`. **Phase 2.1
-(backend) is implemented; mobile (2.2) + tournament-foursome variant (2.3) are
-deferred.**
+(backend) + 2.2 (mobile core) are implemented; the tournament-foursome variant
+(2.3) + list-card/host-primary polish are deferred.**
 
 The pool stays anchored on a **host round's `MultiSkinsGame`** (the "Multi-Group
 Skins" round that appears in the creator's casual list); other foursome rounds
@@ -1155,3 +1155,14 @@ generous, settlement pool-local (no cross-game/-account $ netting).
   nothing) + `api/test_skins_pool.py` (resolve/roster/overlap, cross-account join
   + scoring, no-overlap 400, wrong-course 400, foreign-round 404, unlink, mine).
   Full `api` (224) + `scoring` (283 incl. withdrawal) suites green.
+- **Mobile (2.2 core):** `ApiClient.parsePoolToken` (token from a pasted
+  `/watch/<token>/` link) + `resolveSkinsPool`/`joinSkinsPool`/`unlinkSkinsPool`/
+  `getMySkinsPools`; models `SkinsPoolResolve`/`SkinsPoolRosterMember`/
+  `MySkinsPool` and `MultiSkinsSummary.linkedRounds`/`hostRoundId`/`isCrossRound`
+  + `MultiSkinsPlayerTotal.roundId`; `utils/skins_pool_link.dart`
+  `linkRoundToPoolFlow` (paste → resolve → confirm overlap → join) behind a
+  round-hub **"Link to a Skins pool"** button (`round_screen.dart`, casual +
+  manager + group 1, hidden on a pool host round); `multi_skins_setup_screen`
+  "Playing in another group" section adds connected (on-app) golfers to the
+  roster. The linked round's leaderboard shows the pool tab automatically; the
+  host shares the link via the leaderboard's existing "Share spectator link".

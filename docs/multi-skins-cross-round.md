@@ -202,13 +202,24 @@ overlap, scores flow from a linked round, unlinked contributes nothing) +
 `api/test_skins_pool.py` (resolve/roster/overlap, cross-account join + scoring,
 no-overlap 400, different-course 400, foreign-round 404, unlink, mine).
 
-**Phase 2.2 — Mobile: create + link + pool tab.**
-Broaden the Multi-Group Skins roster picker to connected golfers; **Advanced**
-paste-link resolver + auto-overlap confirm in casual round create (and a
-round-hub "Link to a Skins pool"); pool surfaced in the casual list; the pool
-leaderboard tab spanning rounds, visible to all participants. `multiSkins`
-reclassified so a round with its own primary can also link to a pool (it's no
-longer that round's main game — it's an external pool the round feeds).
+**Phase 2.2 — Mobile: create + link + pool tab. ✅ CORE DONE.**
+Shipped: (1) client + models — `ApiClient.parsePoolToken` /
+`resolveSkinsPool` / `joinSkinsPool` / `unlinkSkinsPool` / `getMySkinsPools`;
+`SkinsPoolResolve` / `SkinsPoolRosterMember` / `MySkinsPool`;
+`MultiSkinsSummary.linkedRounds`/`hostRoundId`/`isCrossRound` +
+`MultiSkinsPlayerTotal.roundId`. (2) `utils/skins_pool_link.dart`
+`linkRoundToPoolFlow` — paste `/watch/<token>/` → resolve → confirm the exact
+roster overlap → join; wired to a round-hub **"Link to a Skins pool"** button
+(casual, manager, group 1, hidden on a pool host round). (3) Roster picker
+broadened to connected golfers ("Playing in another group" in
+`multi_skins_setup_screen`). (4) The linked round's leaderboard renders the pool
+tab automatically (`_leaderboard_active_games` surfaces `games['multi_skins']`).
+The host shares the pool link via the existing leaderboard "Share spectator
+link". **Deferred (polish):** a dedicated pool card in the casual list
+(`getMySkinsPools` endpoint exists, unused); reclassifying `multiSkins` so the
+HOST can play its own primary AND host the pool in one round (today the host
+round is a dedicated Multi-Group Skins round); relabeling the share action
+"Share pool link" on a pool round.
 
 **Phase 2.3 — Tournament-foursome side game (design-now, build-later).**
 A tournament foursome links its four into a pool on the **tournament's** gross
