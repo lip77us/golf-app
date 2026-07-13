@@ -54,6 +54,12 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
   /// player_id → checked
   final Map<int, bool> _participants = {};
 
+  /// Connected (on-app) golfers NOT in this round — they ante into the pool but
+  /// play in their own round, which the host links to this pool from its hub
+  /// (docs/multi-skins-cross-round.md). Only Halved members can be matched
+  /// across rounds, so login-less golfers are intentionally excluded.
+  List<PlayerProfile> _externalGolfers = [];
+
   bool    _loading  = true;
   bool    _starting = false;
   /// True when editing an already-configured game (drives Save vs Start label).
@@ -91,10 +97,28 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
       // Pre-populate roster from existing game, or default to all real
       // players in the round.
       final existingIds = _summary!.players.map((p) => p.playerId).toSet();
+      final memberIds   = <int>{};
       for (final m in _allMemberships) {
+        memberIds.add(m.player.id);
         _participants[m.player.id] =
             existingIds.isEmpty ? true : existingIds.contains(m.player.id);
       }
+
+      // Connected golfers who'll play in OTHER rounds — offered as opt-in pool
+      // members (default unchecked; re-checked if already in a saved pool).
+      // Best-effort: a failed roster fetch just hides this section.
+      try {
+        final all = await client.getPlayers();
+        if (mounted) {
+          _externalGolfers = all
+              .where((p) => p.isOnApp && !memberIds.contains(p.id))
+              .toList()
+            ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          for (final g in _externalGolfers) {
+            _participants[g.id] = existingIds.contains(g.id);
+          }
+        }
+      } catch (_) { /* external roster is optional */ }
 
       setState(() {
         if (configured) _editing = true;
@@ -288,6 +312,31 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                     value: _participants[m.player.id] ?? false,
                     onChanged: (v) => setState(() {
                       _participants[m.player.id] = v ?? false;
+                    }),
+                  ),
+              ],
+              // ── Golfers playing in another round (cross-round pool) ────────
+              if (_externalGolfers.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 16, bottom: 2),
+                  child: Text('Playing in another group',
+                      style: Theme.of(context).textTheme.labelLarge),
+                ),
+                Text(
+                  'These Halved golfers ante in but play in their own round. '
+                  'Link that round to this pool from its hub so their scores '
+                  'count.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                for (final g in _externalGolfers)
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(g.name),
+                    subtitle: Text('Index ${g.handicapIndex}'),
+                    value: _participants[g.id] ?? false,
+                    onChanged: (v) => setState(() {
+                      _participants[g.id] = v ?? false;
                     }),
                   ),
               ],
