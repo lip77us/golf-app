@@ -195,9 +195,11 @@ def _recalculate_games(foursome: Foursome) -> None:
         calculate_three_person_match(foursome)
 
     # ---- Per-round ----
-    if 'multi_skins' in active_games:
-        from services.multi_skins import calculate_multi_skins
-        calculate_multi_skins(round_obj)
+    # Recompute every Multi-Skins pool this round feeds — the one it hosts
+    # AND any cross-round pool it's LINKED into (docs/multi-skins-cross-round.md),
+    # even when this round's own active_games doesn't list multi_skins.
+    from services.multi_skins import recalc_pools_for_round
+    recalc_pools_for_round(round_obj)
 
     # Stableford standings are computed on the fly (config-aware) in
     # stableford_summary() below — no persisted recompute needed here.
@@ -431,6 +433,20 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'label': 'Multi-Group Skins',
             **multi_skins_summary(round_obj),
         }
+    else:
+        # Cross-round pool: if this round is LINKED into a pool hosted
+        # elsewhere, surface that pool's summary here too so linked-foursome
+        # members see the tab (visibility-generous, docs/multi-skins-cross-round.md).
+        from games.models import MultiSkinsLinkedRound
+        _lr = (MultiSkinsLinkedRound.objects
+               .filter(round=round_obj).select_related('game').first())
+        if _lr is not None:
+            from services.multi_skins import _summary_for_game
+            games['multi_skins'] = {
+                'label'         : 'Multi-Group Skins',
+                'host_round_id' : _lr.game.round_id,
+                **_summary_for_game(_lr.game),
+            }
 
     if 'stableford' in active_games:
         from services.stableford import stableford_summary
@@ -5221,6 +5237,166 @@ class MultiSkinsResultView(APIView):
         round_obj = round_for_reader(request.user, pk)
         from services.multi_skins import multi_skins_summary
         return Response(multi_skins_summary(round_obj))
+
+
+# ---------------------------------------------------------------------------
+# Cross-round Multi-Group Skins pool (docs/multi-skins-cross-round.md)
+# The pool is hosted on a round's MultiSkinsGame; other rounds LINK into it by
+# pasting the host round's /watch/<token>/ spectator link.  Token possession
+# grants access (not account-scoped) — the join record is the read grant.
+# ---------------------------------------------------------------------------
+
+def _same_course(round_a, round_b) -> bool:
+    """True if two rounds are on the same real-world course.  Same account →
+    same Course row; cross-account → the account clones share a golf_api_id
+    (copy-on-add keeps that catalog identity).  Manual (non-catalog) courses
+    only match within an account."""
+    if round_a.course_id == round_b.course_id:
+        return True
+    ga = round_a.course.golf_api_id
+    gb = round_b.course.golf_api_id
+    return bool(ga) and ga == gb
+
+
+def _pool_by_token(token):
+    """Resolve the host round + its MultiSkinsGame from a watch token, or 404
+    (also 404 if the round exists but hosts no pool)."""
+    from django.http import Http404
+    from games.models import MultiSkinsGame
+    round_obj = Round.objects.filter(watch_token=token).first()
+    if round_obj is None:
+        raise Http404('No such pool.')
+    try:
+        game = round_obj.multi_skins_game
+    except MultiSkinsGame.DoesNotExist:
+        raise Http404('That round is not a Multi-Group Skins pool.')
+    return round_obj, game
+
+
+class SkinsPoolResolveView(APIView):
+    """GET /api/skins-pool/<token>/ — resolve a pool by the host round's watch
+    token.  Optional ?round_id= previews the overlap a link would bring in."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, token):
+        from services.multi_skins import _summary_for_game, pool_overlap
+        host_round, game = _pool_by_token(token)
+
+        overlap_ids = None
+        rid = request.query_params.get('round_id')
+        if rid:
+            mine = account_get_or_404(Round, request.user.account, pk=rid)
+            overlap_ids = pool_overlap(game, mine)
+
+        roster = [
+            {'player_id': p.id, 'name': p.name, 'short_name': p.short_name}
+            for p in game.participants.all()
+        ]
+        return Response({
+            'host_round_id'   : host_round.id,
+            'course'          : {'id': host_round.course_id,
+                                 'name': host_round.course.name},
+            'bet_unit'        : float(game.bet_unit),
+            'handicap'        : {'mode': game.handicap_mode,
+                                 'net_percent': game.net_percent},
+            'roster'          : roster,
+            'linked_round_ids': [lr.round_id for lr in game.linked_rounds.all()],
+            'overlap_ids'     : overlap_ids,
+            'summary'         : _summary_for_game(game),
+        })
+
+
+class SkinsPoolJoinView(APIView):
+    """POST /api/skins-pool/<token>/join/  body {round_id}
+    Link one of MY rounds into the pool.  Enforces same-course + ≥1 overlap."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, token):
+        from games.models import MultiSkinsLinkedRound
+        from services.multi_skins import (
+            pool_overlap, recalc_pools_for_round, _summary_for_game,
+        )
+        host_round, game = _pool_by_token(token)
+
+        rid = request.data.get('round_id')
+        if not rid:
+            return Response({'detail': 'round_id is required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        mine = account_get_or_404(Round, request.user.account, pk=rid)
+
+        if mine.id == host_round.id:
+            return Response(
+                {'detail': 'That round already hosts this pool.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        if not _same_course(mine, host_round):
+            return Response(
+                {'detail': 'A linked round must be on the same course as the '
+                           'pool.',
+                 'pool_course': host_round.course.name,
+                 'round_course': mine.course.name},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        overlap = pool_overlap(game, mine)
+        if not overlap:
+            return Response(
+                {'detail': 'None of this round\'s players are in the pool.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        MultiSkinsLinkedRound.objects.get_or_create(
+            game=game, round=mine,
+            defaults={'linked_by': getattr(request.user, 'player_profile', None)},
+        )
+        recalc_pools_for_round(mine)
+        return Response({'overlap_ids': overlap,
+                         'summary': _summary_for_game(game)},
+                        status=status.HTTP_201_CREATED)
+
+
+class SkinsPoolUnlinkView(APIView):
+    """POST /api/skins-pool/<token>/unlink/  body {round_id}"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, token):
+        from games.models import MultiSkinsLinkedRound
+        from services.multi_skins import _calculate_game, _summary_for_game
+        _host, game = _pool_by_token(token)
+
+        rid = request.data.get('round_id')
+        mine = account_get_or_404(Round, request.user.account, pk=rid)
+        MultiSkinsLinkedRound.objects.filter(game=game, round=mine).delete()
+        _calculate_game(game)
+        return Response({'summary': _summary_for_game(game)})
+
+
+class SkinsPoolMineView(APIView):
+    """GET /api/skins-pool/mine/ — pools my account hosts or is linked into."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from games.models import MultiSkinsGame, MultiSkinsLinkedRound
+        from services.multi_skins import _summary_for_game
+        acct = request.user.account
+
+        games = {}
+        for g in (MultiSkinsGame.objects
+                  .filter(round__account=acct)
+                  .select_related('round', 'round__course')):
+            games[g.id] = g
+        for lr in (MultiSkinsLinkedRound.objects
+                   .filter(round__account=acct)
+                   .select_related('game__round', 'game__round__course')):
+            games[lr.game_id] = lr.game
+
+        out = []
+        for g in games.values():
+            out.append({
+                'host_round_id': g.round_id,
+                'watch_token'  : g.round.watch_token,
+                'course'       : g.round.course.name,
+                'status'       : g.status,
+                'summary'      : _summary_for_game(g),
+            })
+        return Response({'pools': out})
 
 
 # ---------------------------------------------------------------------------

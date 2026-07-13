@@ -965,6 +965,44 @@ class MultiSkinsHoleResult(models.Model):
         return f"Hole {self.hole_number} — dead"
 
 
+class MultiSkinsLinkedRound(models.Model):
+    """
+    A foursome round LINKED into a cross-round Multi-Group Skins pool
+    (docs/multi-skins-cross-round.md).
+
+    The pool is anchored on a host round's `MultiSkinsGame`; other foursome
+    rounds attach here so their gross scores feed the shared pool.  Which
+    players in the linked round contribute is NOT stored — it is the
+    phone-matched overlap of the pool roster with the round's players,
+    resolved at scoring time.  The link record itself is the standing
+    read grant for the linked round's scores (possible cross-account).
+
+    Same-course + ≥1-overlap are enforced at creation (join endpoint).
+    """
+    game        = models.ForeignKey(
+                    MultiSkinsGame, on_delete=models.CASCADE,
+                    related_name='linked_rounds',
+                )
+    round       = models.ForeignKey(
+                    Round, on_delete=models.CASCADE,
+                    related_name='linked_skins_pools',
+                    help_text="A round whose scores feed this pool.",
+                )
+    linked_by   = models.ForeignKey(
+                    Player, on_delete=models.SET_NULL,
+                    null=True, blank=True,
+                    related_name='+',
+                    help_text="Player who linked this round to the pool.",
+                )
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('game', 'round')
+
+    def __str__(self):
+        return f"Pool R{self.game.round_id} ← Round {self.round_id}"
+
+
 # ---------------------------------------------------------------------------
 # NASSAU (9-9-18 fixed-team best ball match play with auto-press)
 # ---------------------------------------------------------------------------

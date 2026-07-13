@@ -138,6 +138,12 @@ urlpatterns = [
     path('rounds/<int:pk>/multi-skins/',       views.MultiSkinsResultView.as_view(), name='api-multi-skins-result'),
     path('rounds/<int:pk>/multi-skins/setup/', views.MultiSkinsSetupView.as_view(),  name='api-multi-skins-setup'),
 
+    # ---- Cross-round Multi-Group Skins pool (linked via watch token) ----
+    path('skins-pool/mine/',              views.SkinsPoolMineView.as_view(),    name='api-skins-pool-mine'),
+    path('skins-pool/<str:token>/',       views.SkinsPoolResolveView.as_view(), name='api-skins-pool-resolve'),
+    path('skins-pool/<str:token>/join/',  views.SkinsPoolJoinView.as_view(),    name='api-skins-pool-join'),
+    path('skins-pool/<str:token>/unlink/',views.SkinsPoolUnlinkView.as_view(),  name='api-skins-pool-unlink'),
+
     # ---- Match Play ----
     path('foursomes/<int:pk>/match-play/',        views.MatchPlayResultView.as_view(), name='api-match-play-result'),
     path('foursomes/<int:pk>/match-play/setup/',  views.MatchPlaySetupView.as_view(),  name='api-match-play-setup'),

@@ -1102,3 +1102,56 @@ Two bugs blocked the plays-to PH from responding to a Stroke Play net-% edit:
   etc., so it's distinct from a live lead (the "N&M" close-out notation already
   implies final, so it's left untagged). The Singles-Match status banner already
   says "wins …", so it's unchanged.
+
+## Cross-round Multi-Group Skins — federated pool (Parallel-Games Phase 2) — backend done
+
+Lets a skins pool span **independent rounds** (different foursomes, different
+games, possibly different accounts): each round plays its own primary and enters
+gross once; players in the pool have those same scores fed into a shared skins
+competition. Design + decisions: `docs/multi-skins-cross-round.md`. **Phase 2.1
+(backend) is implemented; mobile (2.2) + tournament-foursome variant (2.3) are
+deferred.**
+
+The pool stays anchored on a **host round's `MultiSkinsGame`** (the "Multi-Group
+Skins" round that appears in the creator's casual list); other foursome rounds
+**link in** by pasting the host round's `/watch/<token>/` spectator link. The
+host plays and is auto-in the pool. Locked rules: **same course only** (matched
+by `Course.golf_api_id` cross-account); **≥1 roster overlap** per linked round;
+**Halved-members-only** roster (login-less golfers can't be phone-matched
+cross-round); **always open-join** (link possession = consent); visibility
+generous, settlement pool-local (no cross-game/-account $ netting).
+
+- **Model:** `games.MultiSkinsLinkedRound(game, round, linked_by)` (migration
+  `games/0055`) — one row per linked foursome round. Which players contribute is
+  NOT stored; it's the phone-matched overlap of the roster with the round's
+  players, resolved at scoring time (the link record is the standing
+  cross-account read grant).
+- **Engine (`services/multi_skins.py`, refactored multi-source):**
+  `_identity_phone` (Player→normalized E.164 match key), `_pool_source_rounds`
+  (host + linked), `_resolve_participant_memberships` (canonical roster id →
+  per-round `FoursomeMembership`, matched by exact id OR phone),
+  `_build_pool_score_index` / `_build_pool_so_index` (net/gross/strokes-off-low,
+  pool-wide SO anchor), `_calculate_game`, `_summary_for_game` (adds each
+  player's `round_id` + top-level `linked_rounds`), `recalc_pools_for_round`
+  (recompute every pool a round hosts OR is linked into), `pool_overlap`,
+  `valid_participant_ids` (host-round members OR on-app Halved members).
+  `calculate_multi_skins(round)` / `multi_skins_summary(round)` keep their
+  signatures (resolve the host game internally) — the single-round multi-group
+  pool is the one-source degenerate case, unchanged.
+- **Endpoints (token = host round's `watch_token`, possession-gated, not
+  account-scoped):** `GET /api/skins-pool/<token>/` (resolve + roster + summary,
+  optional `?round_id=` overlap preview), `POST …/join/` `{round_id}` (link MY
+  round; enforces same-course + ≥1 overlap; `account_get_or_404` on the joined
+  round so you can only link your own), `POST …/unlink/` `{round_id}`,
+  `GET /api/skins-pool/mine/` (pools my account hosts or is linked into).
+- **Wiring:** `api/views.py` `_recalculate_games` now calls
+  `recalc_pools_for_round` (replacing the host-only `calculate_multi_skins`), so
+  a score in a *linked* Sixes/Nassau round updates the pool even though its own
+  `active_games` has no `multi_skins`; `_build_leaderboard` surfaces the pool tab
+  on a linked round (`host_round_id`) for visibility-generous display; new
+  `_same_course` helper (course_id, else shared `golf_api_id`).
+- **Tests:** `scoring/tests/test_multi_skins.py::MultiSkinsCrossRoundTests`
+  (phone-matched overlap, scores flow from a linked round, unlinked contributes
+  nothing) + `api/test_skins_pool.py` (resolve/roster/overlap, cross-account join
+  + scoring, no-overlap 400, wrong-course 400, foreign-round 404, unlink, mine).
+  Full `api` (224) + `scoring` (283 incl. withdrawal) suites green.

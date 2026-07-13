@@ -10,14 +10,20 @@ foursome's roster) — a key difference from single-foursome Skins.
 """
 from django.test import TestCase
 
+from accounts.models import User
+from games.models import MultiSkinsLinkedRound
 from services.multi_skins import (
     calculate_multi_skins,
     multi_skins_summary,
+    pool_overlap,
+    recalc_pools_for_round,
     setup_multi_skins,
 )
 
 from ._helpers import (
+    _test_account,
     make_foursome,
+    make_player,
     make_round,
     make_tee,
     submit_hole,
@@ -196,3 +202,99 @@ class MultiSkinsTests(TestCase):
         # A1: 2/3 × 20 = 13.33;  B1: 1/3 × 20 = 6.67
         assert abs(payouts['A1'] - 13.33) < 0.01, payouts
         assert abs(payouts['B1'] -  6.67) < 0.01, payouts
+
+
+class MultiSkinsCrossRoundTests(TestCase):
+    """A pool hosted on one round, fed by a SEPARATE linked round whose
+    players are phone-matched copies of the roster (docs/multi-skins-cross-round.md).
+    """
+    def setUp(self):
+        self.tee    = make_tee()
+        self.course = self.tee.course
+
+        # Roster members not in the host round must be on-app (a User carries
+        # their phone) for setup to accept them.
+        acct = _test_account()
+        User.objects.create(username='u_m2', phone='+13105550102', account=acct)
+        User.objects.create(username='u_m4', phone='+13105550104', account=acct)
+
+        # Canonical roster.  O plays in the host round; M2/M4 play in a linked
+        # round (as phone-matched copies g2/g4 below).
+        self.o  = make_player('O',  0);  self.o.phone  = '+13105550100'; self.o.save()
+        self.m2 = make_player('M2', 8);  self.m2.phone = '+13105550102'; self.m2.save()
+        self.m4 = make_player('M4', 18); self.m4.phone = '+13105550104'; self.m4.save()
+
+        # Host round H: organizer O + a filler not in the pool.
+        self.h = make_round(self.course, handicap_mode='gross',
+                            net_max_double_bogey=False)
+        self.hg = make_foursome(self.h, [(self.o, 0), ('HFill', 5)],
+                                tee=self.tee, group_number=1)
+
+        # Guest round G (its own foursome, different Player rows). g2/g4 carry
+        # the same phones as M2/M4 → they resolve to those roster members.
+        self.g2 = make_player('g2', 8);  self.g2.phone = '+13105550102'; self.g2.save()
+        self.g4 = make_player('g4', 18); self.g4.phone = '+13105550104'; self.g4.save()
+        self.g = make_round(self.course, handicap_mode='gross',
+                            net_max_double_bogey=False)
+        self.gg = make_foursome(
+            self.g,
+            [(self.g2, 8), (self.g4, 18), ('g1', 0), ('g3', 12)],
+            tee=self.tee, group_number=1,
+        )
+
+        setup_multi_skins(
+            self.h,
+            participant_ids=[self.o.id, self.m2.id, self.m4.id],
+            handicap_mode='gross',
+            bet_unit=10.00,
+        )
+        self.game = self.h.multi_skins_game
+
+    def _link_guest(self):
+        MultiSkinsLinkedRound.objects.create(game=self.game, round=self.g)
+
+    def test_overlap_matches_roster_members_by_phone(self):
+        """The guest round contributes exactly M2 and M4 (canonical ids),
+        matched from g2/g4 by phone — not g1/g3."""
+        overlap = pool_overlap(self.game, self.g)
+        assert overlap == sorted([self.m2.id, self.m4.id]), overlap
+
+    def test_scores_flow_from_linked_round_into_the_pool(self):
+        """O (host round) birdies hole 1; M2/M4 (via g2/g4 in the linked
+        round) make par → O takes the skin across rounds."""
+        self._link_guest()
+        submit_hole(self.hg, 1, [(self.o, 3), (self.pid_h('HFill'), 4)])
+        submit_hole(self.gg, 1, [
+            (self.g2, 4), (self.g4, 4),
+            (self.pid_g('g1'), 4), (self.pid_g('g3'), 4),
+        ])
+        recalc_pools_for_round(self.g)   # a linked-round score submit path
+        s = multi_skins_summary(self.h)
+        totals = {p['name']: p['skins_won'] for p in s['players']}
+        assert totals == {'O': 1, 'M2': 0, 'M4': 0}, totals
+        # Pool spans the 3 roster members regardless of which round they play.
+        assert s['money']['pool'] == 30.0, s['money']
+        assert set(s['linked_rounds']) == {self.g.id}, s['linked_rounds']
+
+    def test_unlinked_guest_round_contributes_nothing(self):
+        """Before the guest round is linked, only the host round's members
+        exist for the pool, so no hole can complete (M2/M4 have no source)."""
+        submit_hole(self.hg, 1, [(self.o, 3), (self.pid_h('HFill'), 4)])
+        submit_hole(self.gg, 1, [
+            (self.g2, 4), (self.g4, 4),
+            (self.pid_g('g1'), 4), (self.pid_g('g3'), 4),
+        ])
+        calculate_multi_skins(self.h)
+        s = multi_skins_summary(self.h)
+        # No hole fully scored (M2/M4 unresolved) → no skins awarded.
+        assert all(p['skins_won'] == 0 for p in s['players']), s['players']
+        assert s['status'] == 'pending', s['status']
+
+    # small helpers to fetch a member player id by name in each foursome
+    def pid_h(self, name):
+        return next(m.player_id for m in self.hg.memberships.select_related('player')
+                    if m.player.name == name)
+
+    def pid_g(self, name):
+        return next(m.player_id for m in self.gg.memberships.select_related('player')
+                    if m.player.name == name)

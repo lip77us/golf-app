@@ -1,8 +1,16 @@
 """
 services/multi_skins.py
 -----------------------
-Multi-Foursome Skins calculator — a Round-level skins pool that crosses
-every participating foursome.
+Multi-Group Skins calculator — a skins pool that can cross **foursomes
+and independent rounds** (docs/multi-skins-cross-round.md).
+
+The pool is anchored on a host round's `MultiSkinsGame`.  Its participant
+roster is an explicit M2M of Players; each participant's gross scores are
+sourced from whichever source round they play in — the **host round** plus
+any **linked rounds** (`MultiSkinsLinkedRound`).  A participant is matched
+to a per-round `FoursomeMembership` by exact player id (same account) or by
+**normalized phone** (cross-account Halved member), so one shared golfer's
+scores flow into the pool from wherever they are entered.
 
 Scoring rules
 ~~~~~~~~~~~~~
@@ -13,12 +21,11 @@ Scoring rules
 
 Handicap modes
 ~~~~~~~~~~~~~~
-* Net (with net_percent) and Gross use scoring.handicap.build_score_index
-  per-foursome and union the results.
-* Strokes-Off-Low is round-wide: the lowest playing handicap across all
-  participants plays to 0; everyone else's SO = own − low.  Strokes are
-  allocated by each player's tee stroke index (each foursome may use a
-  different tee, so SI per player is local to their membership).
+* Net (with net_percent) and Gross delegate to scoring.handicap.build_score_index
+  per-foursome and union the results across every source round.
+* Strokes-Off-Low is pool-wide: the lowest playing handicap across all
+  participants plays to 0; strokes are allocated by each player's own tee
+  stroke index (each source round may use a different tee).
 
 Settlement
 ~~~~~~~~~~
@@ -30,20 +37,97 @@ distributed when at least one skin is won.
 Workflow
 ~~~~~~~~
 1. setup_multi_skins(round, participant_ids, ...) — create or replace
-   the MultiSkinsGame.  Safe to call repeatedly.
-2. calculate_multi_skins(round) — recompute MultiSkinsHoleResult rows.
-   Called from api.views after every score submission in any foursome
-   that touches this round.
+   the host round's MultiSkinsGame.  Safe to call repeatedly.
+2. calculate_multi_skins(round) / recalc_pools_for_round(round) — recompute
+   MultiSkinsHoleResult rows.  Called from api.views after every score
+   submission in any source (host or linked) round.
 3. multi_skins_summary(round) — JSON shape consumed by the mobile UI.
 """
 from __future__ import annotations
 
+from collections import defaultdict
+
 from django.db import transaction
 
-from core.models import HandicapMode, MatchStatus
-from games.models import MultiSkinsGame, MultiSkinsHoleResult
+from accounts.phone import normalize
+from core.models import HandicapMode, MatchStatus, Player
+from games.models import (
+    MultiSkinsGame, MultiSkinsHoleResult, MultiSkinsLinkedRound,
+)
 from scoring.handicap import build_score_index
 from scoring.models import HoleScore
+
+
+# ---------------------------------------------------------------------------
+# Identity helpers
+# ---------------------------------------------------------------------------
+
+def _identity_phone(player) -> str | None:
+    """Normalized E.164 phone for a Player — the cross-account match key.
+
+    Prefers the free-text Player.phone; falls back to the linked verified
+    User.phone (already normalized) when the Player row carries no phone.
+    """
+    if getattr(player, 'phone', None):
+        return normalize(player.phone)
+    u = getattr(player, 'user', None)
+    return getattr(u, 'phone', None) if u is not None else None
+
+
+def _pool_source_rounds(game: MultiSkinsGame) -> list:
+    """Host round + every linked round (deduped, host first)."""
+    rounds = [game.round]
+    seen = {game.round_id}
+    for lr in game.linked_rounds.select_related('round').all():
+        if lr.round_id not in seen:
+            rounds.append(lr.round)
+            seen.add(lr.round_id)
+    return rounds
+
+
+def _resolve_participant_memberships(game: MultiSkinsGame) -> dict:
+    """
+    Map {canonical_participant_id: FoursomeMembership} across the host +
+    linked rounds.  Canonical id = the roster Player's id; the membership's
+    own player_id may differ (a phone-matched copy in another account).
+
+    A participant present in more than one source round (shouldn't happen —
+    a golfer plays one round) keeps the first match, host round preferred.
+    """
+    from tournament.models import FoursomeMembership
+
+    part_ids = set(game.participants.values_list('id', flat=True))
+    part_by_phone: dict = {}
+    for p in game.participants.all():
+        ph = _identity_phone(p)
+        if ph:
+            part_by_phone.setdefault(ph, p.id)
+
+    source_rounds = _pool_source_rounds(game)
+    order = {r.id: i for i, r in enumerate(source_rounds)}
+    source_ids = list(order.keys())
+
+    memberships = (
+        FoursomeMembership.objects
+        .filter(foursome__round_id__in=source_ids, player__is_phantom=False)
+        .select_related('player', 'player__user', 'foursome', 'tee')
+    )
+    # Host round (order 0) first so a same-account participant binds to their
+    # own round before any accidental phone collision in a linked round.
+    memberships = sorted(memberships, key=lambda m: order.get(m.foursome.round_id, 99))
+
+    out: dict = {}
+    for m in memberships:
+        canon = None
+        if m.player_id in part_ids:
+            canon = m.player_id
+        else:
+            ph = _identity_phone(m.player)
+            if ph and ph in part_by_phone:
+                canon = part_by_phone[ph]
+        if canon is not None and canon not in out:
+            out[canon] = m
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -59,10 +143,12 @@ def setup_multi_skins(
     bet_unit:        float | None = None,
 ) -> MultiSkinsGame:
     """
-    Create (or replace) the Multi-Skins game for a Round.
+    Create (or replace) the Multi-Skins pool anchored on this host round.
 
-    participant_ids must reference players that have a FoursomeMembership
-    in this round.  Anyone outside the round is silently filtered out.
+    participant_ids may reference EITHER a player with a FoursomeMembership
+    in this round (single-round pool, login-less golfers allowed) OR an
+    on-app (Halved) member selected from connected golfers (federated pool
+    — they play in a linked round).  Anything else is filtered out.
     """
     MultiSkinsGame.objects.filter(round=round_obj).delete()
 
@@ -75,13 +161,38 @@ def setup_multi_skins(
         bet_unit      = bet_unit if bet_unit is not None else round_obj.bet_unit,
         status        = MatchStatus.PENDING,
     )
-    valid_pids = set(
-        _round_player_ids(round_obj)
-    )
-    pids = [pid for pid in participant_ids if pid in valid_pids]
+    pids = valid_participant_ids(round_obj, participant_ids)
     if pids:
         game.participants.set(pids)
     return game
+
+
+def valid_participant_ids(round_obj, participant_ids: list[int]) -> list[int]:
+    """Filter participant_ids to those eligible for this pool: host-round
+    members (login-less OK) OR on-app Halved members (phone matches a User)."""
+    from accounts.models import User
+
+    host_ids = set(_round_player_ids(round_obj))
+    keep: list[int] = []
+    to_check = [pid for pid in participant_ids if pid not in host_ids]
+    players = {p.id: p for p in Player.objects.filter(id__in=to_check)
+                                              .select_related('user')}
+    # Phones of the non-host candidates → one query for on-app membership.
+    cand_phones = {pid: _identity_phone(players[pid])
+                   for pid in to_check if pid in players}
+    on_app = set(
+        User.objects
+        .filter(phone__in=[ph for ph in cand_phones.values() if ph])
+        .values_list('phone', flat=True)
+    )
+    for pid in participant_ids:
+        if pid in host_ids:
+            keep.append(pid)
+        elif cand_phones.get(pid) in on_app and cand_phones.get(pid):
+            keep.append(pid)
+    # Preserve caller order, dedup.
+    seen: set = set()
+    return [p for p in keep if not (p in seen or seen.add(p))]
 
 
 def _round_player_ids(round_obj) -> list[int]:
@@ -94,96 +205,122 @@ def _round_player_ids(round_obj) -> list[int]:
     )
 
 
-# ---------------------------------------------------------------------------
-# Score index across the whole round
-# ---------------------------------------------------------------------------
-
-def _build_round_score_index(round_obj, game: MultiSkinsGame) -> dict:
+def pool_overlap(game: MultiSkinsGame, round_obj) -> list[int]:
     """
-    Return {player_id: {hole_number: adjusted_score}} unioned across
-    every foursome in the round, for the game's participants only.
+    Canonical participant ids that are present in `round_obj` (matched by
+    exact player id OR normalized phone).  This is the subset of the pool
+    roster that `round_obj` would contribute if linked — used to gate a join
+    (≥ 1 required) and to preview what a link brings in.
+    """
+    from tournament.models import FoursomeMembership
 
-    Net/Gross: delegate to the per-foursome `build_score_index` and merge.
+    part_ids = set(game.participants.values_list('id', flat=True))
+    part_by_phone: dict = {}
+    for p in game.participants.all():
+        ph = _identity_phone(p)
+        if ph:
+            part_by_phone.setdefault(ph, p.id)
+
+    found: set = set()
+    for m in (
+        FoursomeMembership.objects
+        .filter(foursome__round=round_obj, player__is_phantom=False)
+        .select_related('player', 'player__user')
+    ):
+        if m.player_id in part_ids:
+            found.add(m.player_id)
+        else:
+            ph = _identity_phone(m.player)
+            if ph and ph in part_by_phone:
+                found.add(part_by_phone[ph])
+    return sorted(found)
+
+
+# ---------------------------------------------------------------------------
+# Score index across every source round (keyed by canonical participant id)
+# ---------------------------------------------------------------------------
+
+def _build_pool_score_index(game: MultiSkinsGame) -> dict:
+    """
+    Return {canonical_participant_id: {hole_number: adjusted_score}} unioned
+    across the host + every linked round.
+
+    Net/Gross: delegate to per-foursome `build_score_index` and remap the
+    source player ids to canonical participant ids.
     Strokes-Off-Low: anchored on the lowest participant handicap, applied
     using each player's own tee.
     """
-    participant_ids = set(game.participants.values_list('id', flat=True))
-    if not participant_ids:
+    member_by_canon = _resolve_participant_memberships(game)
+    if not member_by_canon:
         return {}
 
-    foursomes = list(round_obj.foursomes.all())
-
     if game.handicap_mode == HandicapMode.STROKES_OFF:
-        return _build_so_round_index(foursomes, participant_ids, game.net_percent)
+        return _build_pool_so_index(game, member_by_canon)
+
+    by_fs: dict = defaultdict(list)   # foursome -> [(canon_id, membership)]
+    for canon, m in member_by_canon.items():
+        by_fs[m.foursome].append((canon, m))
 
     merged: dict = {}
-    for fs in foursomes:
+    for fs, items in by_fs.items():
         per_fs = build_score_index(
             fs,
             handicap_mode = game.handicap_mode,
             net_percent   = game.net_percent,
         )
-        for pid, holes in per_fs.items():
-            if pid in participant_ids:
-                merged.setdefault(pid, {}).update(holes)
+        for canon, m in items:
+            holes = per_fs.get(m.player_id)
+            if holes:
+                merged[canon] = dict(holes)
     return merged
 
 
-def _build_so_round_index(
-    foursomes:        list,
-    participant_ids:  set[int],
-    net_percent:      int,
-) -> dict:
+def _build_pool_so_index(game: MultiSkinsGame, member_by_canon: dict) -> dict:
     """
-    Strokes-Off-Low across the whole round.  Low handicap is the lowest
-    playing_handicap among PARTICIPANTS (not the foursome low).  Each
-    player gets one stroke on every hole whose stroke_index ≤ their SO,
-    using the stroke_index from their OWN membership's tee.
+    Strokes-Off-Low across the whole pool.  Low handicap is the lowest
+    playing_handicap among PARTICIPANTS.  Each player gets one stroke on
+    every hole whose stroke_index ≤ their SO, using the stroke_index from
+    their OWN membership's tee.
     """
-    memberships = []
-    for fs in foursomes:
-        for m in fs.memberships.select_related('player', 'tee').filter(
-            player__is_phantom=False, player_id__in=participant_ids,
-        ):
-            memberships.append(m)
-
-    if not memberships:
-        return {}
-
-    phcps = [m.playing_handicap for m in memberships
+    net_percent = game.net_percent
+    items = list(member_by_canon.items())   # (canon, membership)
+    phcps = [m.playing_handicap for _, m in items
              if m.playing_handicap is not None]
     low = min(phcps) if phcps else 0
 
-    # Pull all gross scores in one query.
+    canon_by_src = {m.player_id: canon for canon, m in items}
+    mem_by_src   = {m.player_id: m     for _,     m in items}
+    source_round_ids = {r.id for r in _pool_source_rounds(game)}
+
     rows = (
         HoleScore.objects
-        .filter(
-            foursome__round__in=[fs.round_id for fs in foursomes],
-            player_id__in=participant_ids,
-        )
+        .filter(player_id__in=list(mem_by_src.keys()))
         .exclude(gross_score=None)
-        .values('player_id', 'hole_number', 'gross_score')
+        .values('player_id', 'hole_number', 'gross_score', 'foursome__round_id')
     )
 
-    by_member = {m.player_id: m for m in memberships}
     out: dict = {}
     for r in rows:
-        pid    = r['player_id']
-        gross  = r['gross_score']
-        member = by_member.get(pid)
-        if member is None or member.tee_id is None:
-            out.setdefault(pid, {})[r['hole_number']] = gross
+        if r['foursome__round_id'] not in source_round_ids:
             continue
-        so = round(max(0, (member.playing_handicap or 0) - low)
-                   * net_percent / 100)
+        pid    = r['player_id']
+        m      = mem_by_src.get(pid)
+        canon  = canon_by_src.get(pid)
+        if m is None or canon is None:
+            continue
+        gross = r['gross_score']
+        if m.tee_id is None:
+            out.setdefault(canon, {})[r['hole_number']] = gross
+            continue
+        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
         if so <= 0:
-            out.setdefault(pid, {})[r['hole_number']] = gross
+            out.setdefault(canon, {})[r['hole_number']] = gross
             continue
         full_laps = so // 18
         remainder = so %  18
-        si        = member.tee.hole(r['hole_number']).get('stroke_index', 18)
+        si        = m.tee.hole(r['hole_number']).get('stroke_index', 18)
         strokes   = full_laps + (1 if si <= remainder else 0)
-        out.setdefault(pid, {})[r['hole_number']] = gross - strokes
+        out.setdefault(canon, {})[r['hole_number']] = gross - strokes
     return out
 
 
@@ -192,16 +329,8 @@ def _build_so_round_index(
 # ---------------------------------------------------------------------------
 
 @transaction.atomic
-def calculate_multi_skins(round_obj) -> list:
-    """
-    Recompute MultiSkinsHoleResult rows for the round's Multi-Skins game.
-    Returns the list of newly-saved rows (or [] if no game exists).
-    """
-    try:
-        game = round_obj.multi_skins_game
-    except MultiSkinsGame.DoesNotExist:
-        return []
-
+def _calculate_game(game: MultiSkinsGame) -> list:
+    """Recompute MultiSkinsHoleResult rows for a pool.  Returns saved rows."""
     participant_ids = list(game.participants.values_list('id', flat=True))
     MultiSkinsHoleResult.objects.filter(game=game).delete()
 
@@ -210,7 +339,7 @@ def calculate_multi_skins(round_obj) -> list:
         game.save(update_fields=['status'])
         return []
 
-    score_index = _build_round_score_index(round_obj, game)
+    score_index = _build_pool_score_index(game)   # keyed by canonical id
 
     rows         = []
     fully_scored = 0
@@ -218,18 +347,18 @@ def calculate_multi_skins(round_obj) -> list:
     for hole_num in range(1, 19):
         scores: dict = {}
         complete = True
-        for pid in participant_ids:
-            s = score_index.get(pid, {}).get(hole_num)
+        for cid in participant_ids:
+            s = score_index.get(cid, {}).get(hole_num)
             if s is None:
                 complete = False
                 break
-            scores[pid] = s
+            scores[cid] = s
         if not complete:
             continue
 
         fully_scored += 1
         min_score = min(scores.values())
-        leaders   = [pid for pid, s in scores.items() if s == min_score]
+        leaders   = [cid for cid, s in scores.items() if s == min_score]
 
         winner_id = leaders[0] if len(leaders) == 1 else None
         rows.append(MultiSkinsHoleResult(
@@ -252,28 +381,40 @@ def calculate_multi_skins(round_obj) -> list:
     return rows
 
 
+def calculate_multi_skins(round_obj) -> list:
+    """Recompute the pool HOSTED on this round (if any)."""
+    try:
+        game = round_obj.multi_skins_game
+    except MultiSkinsGame.DoesNotExist:
+        return []
+    return _calculate_game(game)
+
+
+def recalc_pools_for_round(round_obj) -> None:
+    """
+    Recompute every Multi-Skins pool this round participates in — the pool it
+    HOSTS (if any) plus every pool it is LINKED into.  Called after any score
+    submission in the round.
+    """
+    games: dict = {}
+    try:
+        g = round_obj.multi_skins_game
+        games[g.id] = g
+    except MultiSkinsGame.DoesNotExist:
+        pass
+    for lr in (MultiSkinsLinkedRound.objects
+               .filter(round=round_obj).select_related('game')):
+        games[lr.game_id] = lr.game
+    for g in games.values():
+        _calculate_game(g)
+
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 
 def multi_skins_summary(round_obj) -> dict:
-    """
-    JSON-serialisable summary for the mobile client.
-
-    Shape:
-        {
-            'status'    : 'pending' | 'in_progress' | 'complete',
-            'handicap'  : {'mode': str, 'net_percent': int},
-            'players'   : [
-                {'player_id', 'name', 'short_name', 'foursome_id',
-                 'group_number', 'skins_won', 'payout'},  # sorted by skins_won
-            ],
-            'holes'     : [
-                {'hole', 'winner_id', 'winner_short', 'is_dead'},
-            ],
-            'money'     : {'bet_unit', 'pool', 'total_skins'},
-        }
-    """
+    """Summary for the pool hosted on round_obj (default shape if none)."""
     try:
         game = round_obj.multi_skins_game
     except MultiSkinsGame.DoesNotExist:
@@ -284,23 +425,36 @@ def multi_skins_summary(round_obj) -> dict:
             'players'  : [],
             'holes'    : [],
             'money'    : {'bet_unit': bet_unit, 'pool': 0.0, 'total_skins': 0},
+            'linked_rounds': [],
         }
+    return _summary_for_game(game)
 
+
+def _summary_for_game(game: MultiSkinsGame) -> dict:
+    """
+    JSON-serialisable summary for the mobile client.
+
+    Shape (keys added for cross-round: each player's `round_id`, top-level
+    `linked_rounds`):
+        {
+            'status', 'handicap': {mode, net_percent},
+            'players': [{player_id, name, short_name, foursome_id,
+                         group_number, round_id, skins_won, payout,
+                         thru, phcp_in_play}],   # sorted by skins_won
+            'holes'  : [{hole, par, stroke_index, winner_id, winner_short,
+                         is_dead, scores:[{player_id, gross, strokes}]}],
+            'money'  : {bet_unit, pool, total_skins},
+            'linked_rounds': [round_id, ...],
+        }
+    """
     bet_unit = float(game.bet_unit)
 
-    # Build participant info — group_number/foursome_id come from their
-    # FoursomeMembership in this round.
-    from tournament.models import FoursomeMembership
-    memberships = list(
-        FoursomeMembership.objects
-        .filter(
-            foursome__round=round_obj,
-            player__in=game.participants.all(),
-        )
-        .select_related('player', 'foursome')
-    )
+    canon_players   = {p.id: p for p in game.participants.all()}
+    participant_ids = list(canon_players.keys())
+    member_by_canon = _resolve_participant_memberships(game)
 
-    skins_won: dict = {m.player_id: 0 for m in memberships}
+    # Skins won per canonical participant.
+    skins_won: dict = {cid: 0 for cid in participant_ids}
     hole_results = list(
         MultiSkinsHoleResult.objects
         .filter(game=game)
@@ -311,33 +465,38 @@ def multi_skins_summary(round_obj) -> dict:
         if hr.winner_id and hr.winner_id in skins_won:
             skins_won[hr.winner_id] += 1
 
-    # Compute "Thru N" per participant — the highest hole_number that has
-    # a gross_score on file.  Drives the leaderboard's Thru column.
-    from scoring.models import HoleScore
-    thru_by_pid: dict = {m.player_id: 0 for m in memberships}
-    for r in (
-        HoleScore.objects
-        .filter(foursome__round=round_obj,
-                player_id__in=thru_by_pid.keys())
-        .exclude(gross_score=None)
-        .values('player_id', 'hole_number')
-    ):
-        pid = r['player_id']
-        if r['hole_number'] > thru_by_pid[pid]:
-            thru_by_pid[pid] = r['hole_number']
+    # Adjusted (net-per-hole) + raw gross indexes, keyed by canonical id.
+    score_index = _build_pool_score_index(game)
+
+    inv_src = {m.player_id: cid for cid, m in member_by_canon.items()}
+    source_round_ids = {r.id for r in _pool_source_rounds(game)}
+    gross_index:   dict = {}
+    thru_by_canon: dict = {cid: 0 for cid in participant_ids}
+    if inv_src:
+        for r in (
+            HoleScore.objects
+            .filter(player_id__in=list(inv_src.keys()))
+            .exclude(gross_score=None)
+            .values('player_id', 'hole_number', 'gross_score',
+                    'foursome__round_id')
+        ):
+            if r['foursome__round_id'] not in source_round_ids:
+                continue
+            cid = inv_src[r['player_id']]
+            gross_index.setdefault(cid, {})[r['hole_number']] = r['gross_score']
+            if r['hole_number'] > thru_by_canon[cid]:
+                thru_by_canon[cid] = r['hole_number']
 
     grand_total = sum(skins_won.values())
-    pool        = len(memberships) * bet_unit
+    pool        = len(participant_ids) * bet_unit
 
-    # Net strokes actually in play for each participant — drives the
-    # "(N)" label next to each name on the scorecard.  Mirrors the
-    # arithmetic _build_round_score_index uses (which is what the
-    # calculator already trusts).
     mode = game.handicap_mode
     npct = game.net_percent or 100
     phcps = [
-        (m.playing_handicap or 0) for m in memberships
-        if m.playing_handicap is not None
+        (member_by_canon[cid].playing_handicap or 0)
+        for cid in participant_ids
+        if cid in member_by_canon
+        and member_by_canon[cid].playing_handicap is not None
     ]
     low_phcp = min(phcps) if phcps else 0
 
@@ -349,49 +508,32 @@ def multi_skins_summary(round_obj) -> dict:
         return round(phcp * npct / 100)   # NET
 
     players_out: list = []
-    for m in memberships:
-        pid    = m.player_id
-        won    = skins_won[pid]
+    for cid in participant_ids:
+        p      = canon_players[cid]
+        m      = member_by_canon.get(cid)
+        won    = skins_won[cid]
         payout = (won / grand_total * pool) if grand_total > 0 else 0.0
         players_out.append({
-            'player_id'    : pid,
-            'name'         : m.player.name,
-            'short_name'   : m.player.short_name,
-            'foursome_id'  : m.foursome_id,
-            'group_number' : m.foursome.group_number,
+            'player_id'    : cid,
+            'name'         : p.name,
+            'short_name'   : p.short_name,
+            'foursome_id'  : m.foursome_id if m else None,
+            'group_number' : m.foursome.group_number if m else None,
+            'round_id'     : m.foursome.round_id if m else None,
             'skins_won'    : won,
             'payout'       : round(payout, 2),
-            'thru'         : thru_by_pid[pid],
-            'phcp_in_play' : _phcp_in_play(m.playing_handicap or 0),
+            'thru'         : thru_by_canon[cid],
+            'phcp_in_play' : _phcp_in_play(m.playing_handicap or 0) if m else 0,
         })
     players_out.sort(key=lambda x: (-x['skins_won'], x['name']))
 
-    # Build per-hole per-player gross + strokes (gross − adjusted-net) so the
-    # leaderboard can render a full scorecard grid with stroke dots and a
-    # highlight on the winning cell.  Sourced from raw HoleScore rows and
-    # the multi-skins score_index used by the calculator (which already
-    # applies handicap_mode + net_percent correctly).
-    score_index = _build_round_score_index(round_obj, game)
-    gross_rows = (
-        HoleScore.objects
-        .filter(foursome__round=round_obj,
-                player_id__in=thru_by_pid.keys())
-        .exclude(gross_score=None)
-        .values('player_id', 'hole_number', 'gross_score')
-    )
-    gross_index: dict = {}
-    for r in gross_rows:
-        gross_index.setdefault(r['player_id'], {})[r['hole_number']] = r['gross_score']
-
-    # Pull par + stroke_index per hole from the first foursome's first tee
-    # — the round is on a single course so the layout is shared.
+    # Par + stroke index from any participant's tee — every source round is
+    # on the SAME course (enforced at join), so the layout is shared.
     sample_tee = None
-    for fs in round_obj.foursomes.all():
-        for m in fs.memberships.select_related('tee').all():
-            if m.tee_id is not None:
-                sample_tee = m.tee
-                break
-        if sample_tee is not None:
+    for cid in participant_ids:
+        m = member_by_canon.get(cid)
+        if m is not None and m.tee_id is not None:
+            sample_tee = m.tee
             break
 
     par_by_hole: dict = {}
@@ -407,20 +549,19 @@ def multi_skins_summary(round_obj) -> dict:
     holes_out: list = []
     for hole_num in range(1, 19):
         hr = winner_by_hole.get(hole_num)
-        scored_pids = [
-            pid for pid in thru_by_pid.keys()
-            if hole_num in gross_index.get(pid, {})
+        scored_cids = [
+            cid for cid in participant_ids
+            if hole_num in gross_index.get(cid, {})
         ]
-        # Skip holes nobody has played yet AND that don't have a result row.
-        if hr is None and not scored_pids:
+        if hr is None and not scored_cids:
             continue
         scores = []
-        for pid in scored_pids:
-            gross   = gross_index[pid][hole_num]
-            net     = score_index.get(pid, {}).get(hole_num)
+        for cid in scored_cids:
+            gross   = gross_index[cid][hole_num]
+            net     = score_index.get(cid, {}).get(hole_num)
             strokes = (gross - net) if net is not None else 0
             scores.append({
-                'player_id': pid,
+                'player_id': cid,
                 'gross'    : gross,
                 'strokes'  : max(0, strokes),
             })
@@ -447,4 +588,5 @@ def multi_skins_summary(round_obj) -> dict:
             'pool'       : pool,
             'total_skins': grand_total,
         },
+        'linked_rounds': [lr.round_id for lr in game.linked_rounds.all()],
     }
