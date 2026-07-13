@@ -322,8 +322,12 @@ class _RoundScreenState extends State<RoundScreen> {
                       // Points 531 needs handicap config.
                       route = '/points-531-setup';
                     } else if (fsGames.contains('nassau') &&
+                        resolvePrimary(round.primaryGame, fsGames) == 'nassau' &&
                         !fs.configuredGames.contains('nassau')) {
-                      // Nassau needs team assignment + handicap config.
+                      // Nassau AS PRIMARY needs team + handicap config before
+                      // scoring. As a subset SIDE game it's configured from the
+                      // hub ("Set up Nassau") and never gates Enter Scores
+                      // (docs/parallel-games.md).
                       route = '/nassau-setup';
                     } else if (fsGames.contains('nassau_nine') &&
                         !fs.configuredGames.contains('nassau_nine')) {
@@ -344,6 +348,17 @@ class _RoundScreenState extends State<RoundScreen> {
                       // before scoring. As a side game it's configured from the
                       // hub and never gates Enter Scores.
                       route = '/skins-setup';
+                    } else if (!round.isCupRound &&
+                        resolvePrimary(round.primaryGame, fsGames) == 'skins' &&
+                        fs.configuredGames.contains('skins')) {
+                      // TRIAL: a configured casual Skins primary opens the
+                      // dedicated SkinsScreen, which hosts the vertical
+                      // score-wheel trial (fixed wheel + moving highlight).
+                      // NOTE: side-game overlays (Stableford strip, Spots
+                      // capture) aren't shown on this screen — to end the
+                      // trial, delete this branch so Skins falls through to
+                      // '/score-entry' like every other configured game.
+                      route = '/skins';
                     } else if (fsGames.contains('wolf') &&
                         !fs.configuredGames.contains('wolf')) {
                       // Wolf needs handicap + rotation + point config.
@@ -741,15 +756,102 @@ class _CompleteRoundButton extends StatelessWidget {
 /// bottom buttons on the foursome card so the hub matches the per-foursome
 /// games (no separate "Game Setup" section).  Their setup screens take the
 /// round id.
-List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
+List<(String, String)> _roundLevelEditTargets(
+    List<String> roundActiveGames, Set<String> configuredGames) {
   final out = <(String, String)>[];
+  String label(String key, String name) =>
+      configuredGames.contains(key) ? 'Edit $name' : 'Set up $name';
   if (roundActiveGames.contains('low_net_round')) {
-    out.add(('/low-net-setup', 'Edit Stroke Play'));
+    out.add(('/low-net-setup', label('low_net_round', 'Stroke Play')));
   }
   if (roundActiveGames.contains('stableford')) {
-    out.add(('/stableford-setup', 'Edit Stableford'));
+    out.add(('/stableford-setup', label('stableford', 'Stableford')));
   }
   return out;
+}
+
+/// Setup route + args for a side game added from the hub.  Per-foursome games
+/// take the foursome id; round-level games (Stroke Play / Stableford) take the
+/// round id.  match_18 is configured through the Nassau setup (overall-only).
+(String, Map<String, dynamic>)? _sideGameSetupRoute(
+    String game, int foursomeId, int roundId) {
+  switch (game) {
+    case GameIds.skins:
+      return ('/skins-setup', {'id': foursomeId, 'returnToHub': true});
+    case GameIds.nassau:
+    case GameIds.match18:
+      return ('/nassau-setup', {'id': foursomeId, 'returnToHub': true});
+    case GameIds.spots:
+      return ('/spots-setup', {'id': foursomeId, 'returnToHub': true});
+    case GameIds.stableford:
+      return ('/stableford-setup', {'id': roundId, 'returnToHub': true});
+    case GameIds.strokePlay:
+      return ('/low-net-setup', {'id': roundId, 'returnToHub': true});
+  }
+  return null;
+}
+
+/// Hub "Add side game" flow: pick an eligible side game, append it to the
+/// round's active_games, then open its setup (returnToHub) to configure it.
+Future<void> _showAddSideGameSheet(
+  BuildContext context,
+  List<GameMeta> eligible,
+  int foursomeId,
+  int roundId,
+  VoidCallback onGamesChanged,
+) async {
+  final pick = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (_) => SafeArea(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Add a side game',
+                style: Theme.of(context).textTheme.titleMedium),
+          ),
+        ),
+        // Scrollable so a long eligible list never overflows the capped sheet
+        // height on a small screen.
+        Flexible(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.only(bottom: 8),
+            children: [
+              for (final m in eligible)
+                ListTile(
+                  leading: const Icon(Icons.flag_outlined),
+                  title: Text(m.displayName),
+                  onTap: () => Navigator.of(context).pop(m.id),
+                ),
+            ],
+          ),
+        ),
+      ]),
+    ),
+  );
+  if (pick == null) return;
+  // The picker's match_18 shortcut is stored as nassau on the round.
+  final stored = pick == GameIds.match18 ? GameIds.nassau : pick;
+  try {
+    await context.read<AuthProvider>().client.addSideGame(roundId, stored);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not add game: $e')));
+    }
+    return;
+  }
+  onGamesChanged();
+  if (!context.mounted) return;
+  final target = _sideGameSetupRoute(pick, foursomeId, roundId);
+  if (target != null) {
+    Navigator.of(context)
+        .pushNamed(target.$1, arguments: target.$2)
+        .then((_) => onGamesChanged());
+  }
 }
 
 (String?, Object?) _editConfigTarget(
@@ -801,15 +903,24 @@ List<(String, String)> _roundLevelEditTargets(List<String> roundActiveGames) {
 /// game today. Shown whether or not it's been configured yet, since side-game
 /// Skins no longer gets configured via Enter Scores.
 List<(String, String)> _sideGamePerFoursomeTargets(
-    Set<String> fsGames, String? primaryGame) {
+    Set<String> fsGames, String? primaryGame, Set<String> configuredGames) {
   final out = <(String, String)>[];
+  // "Set up X" until the game has actually been configured, then "Edit X".
+  String label(String key, String name) =>
+      configuredGames.contains(key) ? 'Edit $name' : 'Set up $name';
   if (fsGames.contains('skins') &&
       resolvePrimary(primaryGame, fsGames) != 'skins') {
-    out.add(('/skins-setup', 'Edit Skins'));
+    out.add(('/skins-setup', label('skins', 'Skins')));
+  }
+  // A subset Nassau riding as a side game (docs/parallel-games.md) is configured
+  // from the hub so Enter Scores stays on the primary.
+  if (fsGames.contains('nassau') &&
+      resolvePrimary(primaryGame, fsGames) != 'nassau') {
+    out.add(('/nassau-setup', label('nassau', 'Nassau')));
   }
   // Spots is always a side game (capture add-on) — gets its own setup button.
   if (fsGames.contains('spots')) {
-    out.add(('/spots-setup', 'Edit Spots'));
+    out.add(('/spots-setup', label('spots', 'Spots')));
   }
   return out;
 }
@@ -1676,12 +1787,18 @@ class _FoursomeCard extends StatelessWidget {
             if (canManage && !isComplete && !isCupRound &&
                 !foursome.hasAnyScore) ...[
               Builder(builder: (context) {
+                final merged = {...roundActiveGames, ...foursome.activeGames};
                 final (route, editArgs) = _editConfigTarget(
-                  {...roundActiveGames, ...foursome.activeGames},
+                  merged,
                   foursome,
                   primaryGame,
                 );
                 if (route == null) return const SizedBox.shrink();
+                // "Set up Configuration" until the primary is actually set up,
+                // then "Edit Configuration".
+                final primary = resolvePrimary(primaryGame, merged);
+                final configured = primary != null &&
+                    foursome.configuredGames.contains(primary);
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: SizedBox(
@@ -1693,7 +1810,9 @@ class _FoursomeCard extends StatelessWidget {
                         onGamesChanged();
                       }),
                       icon: const Icon(Icons.tune, size: 18),
-                      label: const Text('Edit Configuration'),
+                      label: Text(configured
+                          ? 'Edit Configuration'
+                          : 'Set up Configuration'),
                     ),
                   ),
                 );
@@ -1702,7 +1821,8 @@ class _FoursomeCard extends StatelessWidget {
               // primary): their own setup button, since they no longer get
               // configured through Enter Scores.  Setup takes the foursome id.
               for (final t in _sideGamePerFoursomeTargets(
-                  {...roundActiveGames, ...foursome.activeGames}, primaryGame))
+                  {...roundActiveGames, ...foursome.activeGames}, primaryGame,
+                  foursome.configuredGames.toSet()))
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: SizedBox(
@@ -1722,7 +1842,8 @@ class _FoursomeCard extends StatelessWidget {
               // instead of a separate "Game Setup" section (that card is only
               // used for multi-foursome rounds).  Setup takes the round id.
               if (allFoursomes.length == 1)
-                for (final t in _roundLevelEditTargets(roundActiveGames))
+                for (final t in _roundLevelEditTargets(
+                    roundActiveGames, foursome.configuredGames.toSet()))
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: SizedBox(
@@ -1737,6 +1858,38 @@ class _FoursomeCard extends StatelessWidget {
                       ),
                     ),
                   ),
+              // "Add side game" — side bets are often agreed at the tee box, and
+              // on a small screen the create-time picker scrolls off, so add one
+              // here too (casual rounds only).
+              if (!isCupRound)
+                Builder(builder: (ctx) {
+                  final active = {...roundActiveGames, ...foursome.activeGames};
+                  final primary = resolvePrimary(primaryGame, active);
+                  if (primary == null) return const SizedBox.shrink();
+                  final eligible = sideGamesFor(primary,
+                          size: foursome.realPlayers.length)
+                      .where((m) {
+                        // match_18 is stored as nassau; treat either as active.
+                        final stored =
+                            m.id == GameIds.match18 ? GameIds.nassau : m.id;
+                        return !active.contains(stored) &&
+                            !active.contains(m.id);
+                      })
+                      .toList();
+                  if (eligible.isEmpty) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showAddSideGameSheet(
+                            ctx, eligible, foursome.id, roundId, onGamesChanged),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add side game'),
+                      ),
+                    ),
+                  );
+                }),
             ],
           ],
         ]),

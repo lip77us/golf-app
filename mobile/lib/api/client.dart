@@ -522,6 +522,13 @@ class ApiClient {
     return Round.fromJson(data as Map<String, dynamic>);
   }
 
+  /// Add a side game to a casual round from the hub (e.g. agreed at the tee
+  /// box). Appends [game] to active_games and returns the updated round.
+  Future<Round> addSideGame(int roundId, String game) async {
+    final data = await _post('/rounds/$roundId/side-games/', {'game': game});
+    return Round.fromJson(data as Map<String, dynamic>);
+  }
+
   /// Casual rounds the authenticated user is part of.
   /// [status] is 'in_progress' (default) or 'complete'.
   Future<List<CasualRoundSummary>> getCasualRounds({
@@ -1270,6 +1277,7 @@ class ApiClient {
     String  perPointMode = 'first',
     double  perPointRate = 0.0,
     double? lossCap,
+    List<int> participantPlayerIds = const [], // [] = all
   }) async {
     final data = await _post('/foursomes/$foursomeId/skins/setup/', {
       'handicap_mode' : handicapMode,
@@ -1280,6 +1288,7 @@ class ApiClient {
       'per_point_mode': perPointMode,
       'per_point_rate': perPointRate,
       if (lossCap != null) 'loss_cap': lossCap,
+      'participant_player_ids': participantPlayerIds,
     });
     return SkinsSummary.fromJson(data as Map<String, dynamic>);
   }
@@ -1737,6 +1746,7 @@ class ApiClient {
     required List<Map<String, dynamic>> payouts,
     required Map<String, int>           pointsTable, // keys: albatross..double
     List<int>                           excludedPlayerIds = const [],
+    List<int>                           participantPlayerIds = const [], // [] = all
     double?                             lossCap, // per_point only; null = uncapped
   }) async {
     final data = await _post('/rounds/$roundId/stableford/setup/', {
@@ -1749,6 +1759,7 @@ class ApiClient {
       'entry_fee'          : entryFee.toStringAsFixed(2),
       'payouts'            : payouts,
       'excluded_player_ids': excludedPlayerIds,
+      'participant_player_ids': participantPlayerIds,
       'pts_albatross'      : pointsTable['albatross'],
       'pts_eagle'          : pointsTable['eagle'],
       'pts_birdie'         : pointsTable['birdie'],
@@ -1766,6 +1777,7 @@ class ApiClient {
     required double                     entryFee,
     required List<Map<String, dynamic>> payouts,
     List<int>                           excludedPlayerIds = const [],
+    List<int>                           participantPlayerIds = const [], // [] = all
   }) async {
     final data = await _post('/rounds/$roundId/low-net/setup/', {
       'handicap_mode'      : handicapMode,
@@ -1773,6 +1785,7 @@ class ApiClient {
       'entry_fee'          : entryFee.toStringAsFixed(2),
       'payouts'            : payouts,
       'excluded_player_ids': excludedPlayerIds,
+      'participant_player_ids': participantPlayerIds,
     });
     return data as Map<String, dynamic>;
   }

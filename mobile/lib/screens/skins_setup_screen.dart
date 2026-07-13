@@ -21,8 +21,6 @@ import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
-import '../utils/primary_handicap.dart';
-import '../widgets/inherited_handicap_note.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
@@ -124,13 +122,6 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       }
 
       final rp = context.read<RoundProvider>();
-
-      // Side games never carry their own handicap config — the PRIMARY game
-      // drives SO/Net/Gross. Inherit it (and force junk off).
-      (String, int)? inherited;
-      if (_isSideGame && rp.round != null) {
-        inherited = await primaryHandicapFor(client, rp.round!, widget.foursomeId);
-      }
       if (!mounted) return;
 
       setState(() {
@@ -163,11 +154,9 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
             _stakeOk = true;
           }
         }
-        if (inherited != null) {
-          _mode       = inherited.$1;
-          _netPercent = inherited.$2;
-          _allowJunk  = false;
-        }
+        // Hydrate the subset picker from the saved config (empty = everyone).
+        final pids = _summary!.participantPlayerIds;
+        _participantIds = pids.isEmpty ? null : pids.toSet();
         _loading    = false;
       });
     } catch (e) {
@@ -192,6 +181,72 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
   bool get _rosterValid {
     final n = _realMembers.length;
     return n >= 2 && n <= 4;
+  }
+
+  /// Players IN the game. null = all real players; a set = a SUBSET side game
+  /// (docs/parallel-games.md).
+  Set<int>? _participantIds;
+
+  bool get _participantsValid =>
+      _participantIds == null || _participantIds!.length >= 2;
+
+  /// The list to POST: empty when everyone's in (= all, backward compatible),
+  /// else the chosen subset.
+  List<int> _participantsToSend() {
+    final all = _realMembers.map((m) => m.player.id).toSet();
+    final sel = _participantIds;
+    if (sel == null || sel.length >= all.length) return const [];
+    return sel.toList();
+  }
+
+  Widget _participantCard(ThemeData theme) {
+    final members = _realMembers;
+    if (members.length < 3) return const SizedBox.shrink(); // 2 → both are in
+    bool isIn(int id) => _participantIds?.contains(id) ?? true;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: theme.colorScheme.outline),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Who's in the bet",
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              Text('Everyone by default — or pick a subset for a side bet.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              for (final m in members)
+                CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: isIn(m.player.id),
+                  title: Text(m.player.name),
+                  onChanged: (v) => setState(() {
+                    final set = _participantIds ??
+                        members.map((e) => e.player.id).toSet();
+                    if (v == true) { set.add(m.player.id); }
+                    else           { set.remove(m.player.id); }
+                    _participantIds =
+                        set.length == members.length ? null : set;
+                  }),
+                ),
+              if (!_participantsValid)
+                Text('Pick at least 2 players.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.error)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _start() async {
@@ -223,6 +278,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
         lossCap: (_payoutStyle == 'per_point' && _capEnabled)
             ? (double.tryParse(_capCtrl.text.trim()) ?? 0.0)
             : null,
+        participantPlayerIds: _participantsToSend(),
       );
 
       // Pre-load the Skins summary so the score-entry status widget
@@ -279,9 +335,14 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       child: GolfPrimaryButton(
-                        label: _editing ? 'Save Configuration' : 'Start Game',
+                        label: (_editing || widget.returnToHub)
+                            ? 'Save Configuration'
+                            : 'Start Game',
                         loading: _starting,
-                        onPressed: (_rosterValid && _moneyOk) ? _start : null,
+                        onPressed:
+                            (_rosterValid && _moneyOk && _participantsValid)
+                                ? _start
+                                : null,
                       ),
                     ),
                   ),
@@ -301,17 +362,16 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 
           const SizedBox(height: 16),
 
-          // Side games inherit the primary game's handicap (no own selector);
-          // the primary drives Strokes-Off / Net / Gross for the round.
-          if (_isSideGame)
-            InheritedHandicapNote(mode: _mode, netPercent: _netPercent)
-          else
-            HandicapModeSelector(
-              mode:             _mode,
-              netPercent:       _netPercent,
-              onModeChanged:    (m) => setState(() => _mode = m),
-              onPercentChanged: (p) => setState(() => _netPercent = p),
-            ),
+          _participantCard(Theme.of(context)),
+
+          // Every side game carries its OWN handicap now (incl. gross) — no
+          // inheritance from the primary (docs/parallel-games.md).
+          HandicapModeSelector(
+            mode:             _mode,
+            netPercent:       _netPercent,
+            onModeChanged:    (m) => setState(() => _mode = m),
+            onPercentChanged: (p) => setState(() => _netPercent = p),
+          ),
 
           const SizedBox(height: 16),
 

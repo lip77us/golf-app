@@ -1573,7 +1573,17 @@ class TournamentDetailView(APIView):
         tournament = account_get_or_404(
             Tournament, request.user.account, pk=pk,
         )
-        tournament.delete()
+        # Round.tournament is on_delete=SET_NULL, so tournament.delete() alone
+        # would ORPHAN the rounds (tournament→NULL) rather than remove them —
+        # and orphaned rounds then resurface in the casual-rounds list
+        # (CasualRoundListView filters tournament__isnull=True).  Explicitly
+        # delete the rounds first so this endpoint honors its "all associated
+        # data / all its rounds" contract (the mobile confirm dialog warns the
+        # user their scores will be permanently lost).  Round deletion cascades
+        # to foursomes / memberships / hole scores / per-game configs.
+        with transaction.atomic():
+            tournament.rounds.all().delete()
+            tournament.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -1923,6 +1933,38 @@ class RoundDetailView(APIView):
             )
         round_obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RoundAddSideGameView(APIView):
+    """
+    POST /api/rounds/<pk>/side-games/  { "game": "skins" }
+
+    Add a SIDE game to a casual round after it's created — side games are often
+    agreed at the tee box, and on a small screen they scroll off the create
+    screen. Appends the game id to `active_games` (idempotent); the caller then
+    routes to that game's setup screen to configure it. Casual rounds only.
+    """
+    def post(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        if round_obj.tournament_id is not None:
+            return Response(
+                {'detail': 'Side games are added per foursome in a tournament.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        game = (request.data.get('game') or '').strip()
+        if not game or game not in set(GameType.values):
+            return Response(
+                {'detail': 'A valid game id is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        games = list(round_obj.active_games or [])
+        if game not in games:
+            games.append(game)
+            round_obj.active_games = games
+            round_obj.save(update_fields=['active_games'])
+        return Response(
+            RoundSerializer(round_obj, context={'request': request}).data,
+        )
 
 
 class CasualRoundListView(APIView):
@@ -4649,6 +4691,7 @@ class SkinsSetupView(APIView):
             per_point_mode = d.get('per_point_mode', 'first'),
             per_point_rate = d.get('per_point_rate', 0),
             loss_cap       = d.get('loss_cap'),
+            participant_player_ids = d.get('participant_player_ids', []),
         )
         calculate_skins(foursome)
         return Response(skins_summary(foursome), status=status.HTTP_201_CREATED)
@@ -5589,6 +5632,7 @@ class LowNetSetupView(APIView):
             'entry_fee'          : float(config.entry_fee),
             'payouts'            : config.payouts or [],
             'excluded_player_ids': config.excluded_player_ids or [],
+            'participant_player_ids': config.participant_player_ids or [],
         }
 
     @staticmethod
@@ -5682,6 +5726,7 @@ class LowNetSetupView(APIView):
                 'entry_fee'          : d['entry_fee'],
                 'payouts'            : d['payouts'],
                 'excluded_player_ids': d.get('excluded_player_ids', []),
+                'participant_player_ids': d.get('participant_player_ids', []),
             },
         )
         return Response(self._config_dict(config), status=status.HTTP_201_CREATED)
@@ -5713,6 +5758,7 @@ class StablefordSetupView(APIView):
             'entry_fee'          : float(config.entry_fee),
             'payouts'            : config.payouts or [],
             'excluded_player_ids': config.excluded_player_ids or [],
+            'participant_player_ids': config.participant_player_ids or [],
             **{k: getattr(config, k) for k in self._PTS},
         }
 
@@ -5768,6 +5814,7 @@ class StablefordSetupView(APIView):
                 'entry_fee'          : d['entry_fee'],
                 'payouts'            : d['payouts'],
                 'excluded_player_ids': d.get('excluded_player_ids', []),
+                'participant_player_ids': d.get('participant_player_ids', []),
                 **{k: d[k] for k in self._PTS},
             },
         )

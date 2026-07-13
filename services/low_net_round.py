@@ -35,12 +35,19 @@ from tournament.models import Foursome
 # Internal helper
 # ---------------------------------------------------------------------------
 
-def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
+def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
+                            participant_ids=None):
     """
     Return {player_id: {'name': str, 'total': int, 'holes_played': int}}
     for all real players in the round, with handicap adjustment and the
     optional net-double-bogey cap applied per Round.net_max_double_bogey.
+
+    `participant_ids` restricts the game to a SUBSET of the foursome — a subset
+    side game (docs/parallel-games.md). None = all real players. ONLY the casual
+    `low_net_round_standings` passes this from the round config; the Championship
+    never does, so its scoring is unaffected.
     """
+    _subset = set(participant_ids) if participant_ids else None
     # The net-double-bogey cap only applies at full Net (100%). It's meaningless
     # for Gross and gets weird with a reduced allowance or Strokes-Off, so it's
     # ignored outside Net-100% regardless of the stored round flag.
@@ -58,7 +65,8 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
     membership_map = {}
     for fs in foursomes:
         for m in fs.memberships.all():
-            if not m.player.is_phantom:
+            if not m.player.is_phantom and (
+                    _subset is None or m.player_id in _subset):
                 membership_map[m.player_id] = m
 
     # par lookup: {foursome_id: {hole_number: par}}
@@ -103,6 +111,9 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent):
         holes_fs = in_play_by_fs.get(fs.pk) or list(range(1, 19))
         for m in fs.memberships.all():
             if m.player.is_phantom or m.player_id in totals:
+                continue
+            # Subset side game: don't seed a prospective plan for non-participants.
+            if _subset is not None and m.player_id not in _subset:
                 continue
             plan = {}
             if handicap_mode != HandicapMode.GROSS and m.tee_id is not None:
@@ -223,13 +234,17 @@ def low_net_round_standings(round_obj) -> list:
         net_percent   = config.net_percent
         payouts_cfg   = {p['place']: float(p['amount']) for p in (config.payouts or [])}
         excluded_ids  = set(config.excluded_player_ids or [])
+        # Subset side game: restrict scoring/ranking/payouts to these players.
+        participant_ids = config.participant_player_ids or None
     except Exception:
         handicap_mode = HandicapMode.NET
         net_percent   = 100
         payouts_cfg   = {}
         excluded_ids  = set()
+        participant_ids = None
 
-    player_totals = _build_ln_player_totals(round_obj, handicap_mode, net_percent)
+    player_totals = _build_ln_player_totals(
+        round_obj, handicap_mode, net_percent, participant_ids=participant_ids)
 
     # Sort by net-to-par (total − par_played) so rankings are always in
     # par-relative order regardless of tee/course-par differences between

@@ -69,15 +69,20 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
   /// Everything sent to the backend = primary + side games. A side game counts
   /// only when it's valid for the primary: an overlay needs `allowsSideGames`,
-  /// while a capture add-on (Spots) rides any primary that hosts it. This keeps
-  /// a live-alone primary (e.g. Multi-Group Skins) from carrying stale picks.
+  /// a capture add-on (Spots) rides any primary that hosts it, and a SUBSET side
+  /// game (e.g. a 2-man Nassau — docs/parallel-games.md) rides ANY primary since
+  /// it's an independent bet over a player subset. This keeps a live-alone
+  /// primary (e.g. Multi-Group Skins) from carrying stale picks.
   Set<String> get _activeGames {
     final p = _primaryGame;
     if (p == null) return {};
     return {
       p,
       ..._sideGames.where((g) =>
-          allowsSideGames(p) || (gameMeta(g)?.capturesInScoreEntry ?? false)),
+          allowsSideGames(p) ||
+          hostsOverlaySideGames(p) ||
+          (gameMeta(g)?.capturesInScoreEntry ?? false) ||
+          canBeSubsetSideGame(g)),
     };
   }
 

@@ -88,13 +88,18 @@ def _strokes_on_hole(hcp: int, stroke_index: int) -> int:
 
 
 def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
-                             points_fn=None) -> dict:
+                             points_fn=None, participant_ids=None) -> dict:
     """{player_id: {name, points, holes_played, foursome_id, holes:{hole:pts}}}.
 
     Computed config-aware from gross scores + a handicap (Net% or Gross — no
     Strokes-Off) and points table, like Low Net. By default reads the round's
     own StablefordGame config (casual). The Championship passes the tournament's
     `mode`/`net_pct`/`points_fn` so every round is scored on the same table.
+
+    `participant_ids` (a set/list of player ids) restricts the game to a SUBSET
+    of the foursome — a subset side game (docs/parallel-games.md). None = all
+    real players. ONLY the casual `stableford_standings` passes this from the
+    round config; the Championship never does, so its scoring is unaffected.
     """
     from tournament.models import Foursome
 
@@ -110,10 +115,12 @@ def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
     foursomes = list(
         Foursome.objects.filter(round=round_obj)
         .prefetch_related('memberships__player', 'memberships__tee'))
+    _subset = set(participant_ids) if participant_ids else None
     membership_map = {
         m.player_id: m
         for fs in foursomes for m in fs.memberships.all()
         if not m.player.is_phantom
+        and (_subset is None or m.player_id in _subset)
     }
     # Partial-round-aware per-hole stroke allocators (scale + re-rank on a
     # 9-hole / back-9 round); a full round reduces to the standard allocation.
@@ -166,10 +173,15 @@ def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
         d = totals.setdefault(pid, {
             'name': hs['player__name'], 'points': 0, 'holes_played': 0,
             'foursome_id': hs['foursome_id'], 'holes': {}, 'strokes': {},
+            'gross': {},
         })
         d['points'] += pts
         d['holes_played'] += 1
         d['holes'][hole] = pts
+        # Gross per hole so the leaderboard can show a real scorecard (a
+        # modified points table makes bare points ambiguous — a "3" could be a
+        # net birdie). Dots come from `strokes`.
+        d['gross'][hole] = hs['gross_score']
         if strokes_this:
             d['strokes'][hole] = strokes_this
     return totals
@@ -188,8 +200,10 @@ def stableford_standings(round_obj) -> list:
     payouts_cfg  = ({p['place']: float(p['amount']) for p in (config.payouts or [])}
                     if config else {})
     excluded_ids = set(config.excluded_player_ids or []) if config else set()
+    # Subset side game: restrict scoring/pool/payouts to the chosen players.
+    participant_ids = (config.participant_player_ids or None) if config else None
 
-    totals = _build_stableford_totals(round_obj)
+    totals = _build_stableford_totals(round_obj, participant_ids=participant_ids)
 
     # Players who haven't scored sort last; otherwise by points descending.
     def _key(kv):
@@ -266,6 +280,7 @@ def stableford_standings(round_obj) -> list:
             'payout'      : payout,
             'holes'       : data['holes'],
             'strokes'     : data.get('strokes', {}),
+            'gross'       : data.get('gross', {}),
         })
     return standings
 
@@ -287,6 +302,53 @@ def _stableford_stroke_index(round_obj) -> dict:
             if out:
                 return out
     return {}
+
+
+def _stableford_scorecard(round_obj, standings) -> dict:
+    """Per-hole GROSS scorecard (players × holes with gross + stroke dots) so the
+    leaderboard can show a real scorecard next to the points — a modified points
+    table makes bare points ambiguous. Shaped for the shared _MsScorecard grid."""
+    from tournament.models import Foursome
+    par_by_hole, si_by_hole = {}, {}
+    for fs in (Foursome.objects.filter(round=round_obj)
+               .prefetch_related('memberships__tee')):
+        for m in fs.memberships.all():
+            if m.tee_id is None:
+                continue
+            for h in range(1, 19):
+                hd = m.tee.hole(h)
+                par_by_hole.setdefault(h, hd.get('par'))
+                si_by_hole.setdefault(h, hd.get('stroke_index'))
+            break
+        if par_by_hole:
+            break
+
+    players = [
+        {'player_id': s['player_id'],
+         'name': s['player_name'],
+         'short_name': (s['player_name'] or '—').split(' ')[0]}
+        for s in standings
+    ]
+    holes_set = set()
+    for s in standings:
+        holes_set.update(int(h) for h in (s.get('gross') or {}).keys())
+    holes_in_play = sorted(holes_set) or list(range(1, 19))
+    holes_out = []
+    for hn in holes_in_play:
+        holes_out.append({
+            'hole'        : hn,
+            'par'         : par_by_hole.get(hn),
+            'stroke_index': si_by_hole.get(hn),
+            'winner_id'   : None,
+            'scores'      : [
+                {'player_id': s['player_id'],
+                 'gross'    : (s.get('gross') or {}).get(hn),
+                 'strokes'  : (s.get('strokes') or {}).get(hn, 0)}
+                for s in standings
+            ],
+        })
+    return {'players': players, 'holes': holes_out,
+            'holes_in_play': holes_in_play}
 
 
 def stableford_summary(round_obj) -> dict:
@@ -320,4 +382,7 @@ def stableford_summary(round_obj) -> dict:
         # Stroke index per hole (representative tee) so the points grid can
         # render an 'Index' row + dots on the holes where net strokes fall.
         'stroke_index'  : _stableford_stroke_index(round_obj),
+        # Real per-hole gross scorecard (gross + stroke dots), so the tab can
+        # show it alongside the points (a modified table makes points ambiguous).
+        'scorecard'     : _stableford_scorecard(round_obj, standings),
     }

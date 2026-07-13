@@ -26,6 +26,7 @@ import '../widgets/max_liability_note.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
 import '../utils/nassau_team_style.dart';
+import '../game_catalog.dart';
 
 class NassauSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -142,6 +143,16 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     return fs.memberships.where((m) => !m.player.isPhantom).toList();
   }
 
+  /// True when this Nassau is a SUBSET SIDE game (not the round's primary): it
+  /// rides alongside another primary over a chosen subset of the foursome, so
+  /// setup lets players be left OUT and restricts presses to auto-only (manual
+  /// presses are a score-entry action). See docs/parallel-games.md.
+  bool get _isSideGame {
+    final round = context.read<RoundProvider>().round;
+    if (round == null) return false;
+    return resolvePrimary(round.primaryGame, round.activeGames) != 'nassau';
+  }
+
   bool get _rosterValid {
     final members = _realMembers;
     final n = members.length;
@@ -155,6 +166,12 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
       _teamMap.entries.where((e) => e.value == 1).map((e) => e.key).toList();
   List<int> get _team2Ids =>
       _teamMap.entries.where((e) => e.value == 2).map((e) => e.key).toList();
+
+  /// 2nd-ball tiebreak + Claremont need two balls per side, so they require a
+  /// real 2-v-2 (two players per team) — not merely a 4-player foursome. A
+  /// subset side Nassau may put only two players in (1-v-1), where those
+  /// variants don't apply.
+  bool get _isTwoVsTwo => _team1Ids.length == 2 && _team2Ids.length == 2;
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -219,6 +236,14 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
       } catch (_) {
         // No existing game — default team split: first half T1, rest T2.
         _defaultSplit(rp);
+        // A fresh subset side game defaults to a straight 18-hole match (overall
+        // only) — the "Singles Match" side intent; the user can switch it to a
+        // full F9/B9/Overall Nassau via the Match type toggle.
+        if (_isSideGame) {
+          _playFront   = false;
+          _playBack    = false;
+          _playOverall = true;
+        }
       }
 
       setState(() { _loading = false; });
@@ -228,10 +253,68 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   }
 
   void _defaultSplit(RoundProvider rp) {
+    // A subset side Nassau starts with everyone OUT — the user picks the
+    // participants; don't pre-assign the whole foursome to teams.
+    if (_isSideGame) return;
     final members = _realMembers;
     for (var i = 0; i < members.length; i++) {
       _teamMap[members[i].player.id] = i < (members.length / 2).ceil() ? 1 : 2;
     }
+  }
+
+  /// Per-player row for a SUBSET side Nassau: Out (not in the bet) / Blue / Orange.
+  /// "Out" removes the player from `_teamMap` so only participants are submitted.
+  Widget _sideParticipantRow(Membership m, ThemeData theme) {
+    final pid  = m.player.id;
+    final team = _teamMap[pid] ?? 0; // 0 = Out
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(m.player.name,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: team == 0
+                          ? theme.colorScheme.onSurfaceVariant
+                          : nassauTeamColor(team))),
+              Text('Course ${m.playingHandicap}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+        SegmentedButton<int>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: 0, label: Text('Out')),
+            ButtonSegment(value: 1, label: Text('Blue')),
+            ButtonSegment(value: 2, label: Text('Orange')),
+          ],
+          selected: {team},
+          onSelectionChanged: (s) => setState(() {
+            final v = s.first;
+            if (v == 0) {
+              _teamMap.remove(pid);
+            } else {
+              _teamMap[pid] = v;
+            }
+            // 2nd-ball / Claremont need a 2v2 — drop them if the subset changes
+            // below that.
+            if (!_isTwoVsTwo) _variant = 'none';
+          }),
+          style: SegmentedButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            selectedBackgroundColor:
+                team == 0 ? null : nassauTeamColor(team),
+            selectedForegroundColor: team == 0 ? null : Colors.white,
+            foregroundColor: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ]),
+    );
   }
 
   // ── Start ────────────────────────────────────────────────────────────────────
@@ -259,7 +342,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         netPercent:   _netPercent,
         pressMode:    _pressMode,
         pressUnit:    pressUnit,
-        variant:      _variant,
+        // 2nd-ball / Claremont require a 2v2; never submit them for a 1-v-1.
+        variant:      _isTwoVsTwo ? _variant : 'none',
         playFront:    _playFront,
         playBack:     _playBack,
         playOverall:  _playOverall,
@@ -346,7 +430,13 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                                   width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
-                              : Text(_editing ? 'Save Configuration' : 'Start Match',
+                              // Hub-configured setups (round creation, "Edit
+                              // Configuration", a side game) save and return —
+                              // they don't launch scoring, so never "Start Match".
+                              : Text(
+                                  (_editing || widget.returnToHub)
+                                      ? 'Save Configuration'
+                                      : 'Start Match',
                                   style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold)),
@@ -375,17 +465,53 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           //     are no teams to pick, each golfer is simply a side, so the
           //     colour toggle adds no value — and for the 1-v-1 18-hole match.
           //     Shown for 3-4 players, where the pairing actually matters.
-          if (!_isMatch18 && members.length >= 3) ...[
+          // A subset side game always needs its participant picker (even as an
+          // overall-only 18-hole match, where _isMatch18 would otherwise hide
+          // the card). Primary games hide it for a 1-v-1 straight match.
+          if (_isSideGame || (!_isMatch18 && members.length >= 3)) ...[
           SectionCard(
             title: 'Teams',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Subset SIDE Nassau: an independent bet over a chosen subset
+                // (e.g. 2 of 4) — each player is Out / Blue / Orange, so players
+                // can be left out of the bet entirely. See docs/parallel-games.md.
+                if (_isSideGame) ...[
+                  Text(
+                    'Pick the players in this Nassau — set anyone not in the bet '
+                    'to “Out.”',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  ...members.map((m) => _sideParticipantRow(m, theme)),
+                  const SizedBox(height: 14),
+                  Text('Match type',
+                      style: theme.textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  // 18-hole match (Singles Match) vs a full F9/B9/Overall Nassau.
+                  SegmentedButton<bool>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: true,  label: Text('18-hole match')),
+                      ButtonSegment(value: false, label: Text('F9·B9·Overall')),
+                    ],
+                    selected: {_overallOnly},
+                    onSelectionChanged: (s) => setState(() {
+                      final overallOnly = s.first;
+                      _playFront   = !overallOnly;
+                      _playBack    = !overallOnly;
+                      _playOverall = true;
+                    }),
+                  ),
+                ]
                 // 4-player foursomes use the shared TeamSplitter4 widget so
                 // the team-picking gesture matches Sixes and Sixes-extras.
                 // Smaller foursomes (1v1, 1v2, 2v1) keep the simple toggle
                 // since drag-and-drop is overkill for ≤3 players.
-                if (members.length == 4)
+                else if (members.length == 4)
                   TeamSplitter4(
                     players: _splitterOrder(members),
                     onChanged: (ordered) {
@@ -619,7 +745,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   //    loss cap.  Collapsed by default; the sub-headings mirror what were
   //    previously separate always-visible cards. ──
   Widget _advancedCard(ThemeData theme, List<Membership> members) {
-    final isFoursome = members.length == 4;
+    // 2nd-ball tiebreak + Claremont need two balls per side → a real 2-v-2, not
+    // merely a 4-player foursome (a subset side Nassau may be 1-v-1).
+    final isTwoVsTwo = _isTwoVsTwo;
     TextStyle? sub() =>
         theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600);
     TextStyle? hint() => theme.textTheme.bodySmall
@@ -652,9 +780,12 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
               spacing: 6, runSpacing: 4,
               children: [
                 _pressChip('none',   'None'),
-                _pressChip('manual', 'Manual'),
+                // Manual presses are a score-entry action, so a SIDE Nassau
+                // (leaderboard-only) offers auto presses only. See
+                // docs/parallel-games.md.
+                if (!_isSideGame) _pressChip('manual', 'Manual'),
                 _pressChip('auto',   'Auto at 2-down'),
-                _pressChip('both',   'Manual + Auto'),
+                if (!_isSideGame) _pressChip('both',   'Manual + Auto'),
               ],
             ),
             const SizedBox(height: 8),
@@ -686,14 +817,14 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
               children: [
                 _variantChip('none',         'Standard'),
                 _variantChip('tiebreak_2nd', '2nd Ball Tiebreak',
-                    disabled: !isFoursome),
+                    disabled: !isTwoVsTwo),
                 _variantChip('claremont',    'Claremont',
-                    disabled: !isFoursome),
+                    disabled: !isTwoVsTwo),
               ],
             ),
-            if (!isFoursome && _variant == 'none') ...[
+            if (!isTwoVsTwo && _variant == 'none') ...[
               const SizedBox(height: 8),
-              Text('Tiebreak and Claremont variants require a 2v2 foursome.',
+              Text('Tiebreak and Claremont require two players per side (2v2).',
                   style: hint()),
             ],
             const SizedBox(height: 10),

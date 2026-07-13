@@ -973,48 +973,40 @@ class _StablefordView extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 8),
-        // Per-hole points detail — mirrors the "Stableford points" grid on the
-        // score-entry screen so the side-game leaderboard isn't too sparse.
-        if (results.isNotEmpty) ...[
+        // ONE card: rank · per-hole Stableford points · Tot · $ payout.
+        // (Replaces the separate per-player standing cards — no more overlap.)
+        if (results.isNotEmpty)
           _StablefordPointsGrid(results: results),
-          const SizedBox(height: 12),
-        ],
-        ...results.map((e) {
-          final r        = e as Map<String, dynamic>;
-          final pts      = r['total_points'] as int? ?? 0;
-          final payout   = (r['payout'] as num?)?.toDouble();
-          final excluded = r['excluded'] as bool? ?? false;
-          final hp       = r['holes_played'] as int? ?? 0;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 6),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-              leading: CircleAvatar(
-                  radius: 16, child: Text('${r['rank'] ?? ''}')),
-              title: Text(r['player_name']?.toString() ?? '—'),
-              subtitle: Text(
-                excluded ? 'Not eligible for prizes'
-                    : (hp > 0 ? 'Thru $hp' : 'Not started'),
-                style: theme.textTheme.bodySmall,
+        // Real gross scorecard (gross + stroke dots) so a modified points table
+        // isn't ambiguous — a "3" could be a net birdie vs a gross par.
+        Builder(builder: (_) {
+          final sc = data['scorecard'] as Map<String, dynamic>?;
+          final scHoles = ((sc?['holes'] as List?) ?? const [])
+              .cast<Map<String, dynamic>>();
+          final scPlayers = ((sc?['players'] as List?) ?? const [])
+              .cast<Map<String, dynamic>>();
+          if (scHoles.isEmpty || scPlayers.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          final scHIP = ((sc?['holes_in_play'] as List?) ?? const [])
+              .map((e) => e as int)
+              .toList();
+          return Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: theme.colorScheme.outline),
               ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('$pts pts',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16)),
-                  if (payout != null && payout != 0)
-                    Text(
-                      payout >= 0 ? '+\$${_num(payout)}' : '−\$${_num(-payout)}',
-                      style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600,
-                          color: payout >= 0
-                              ? Colors.green.shade700
-                              : theme.colorScheme.error),
-                    ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: _MsScorecard(
+                  holes: scHoles,
+                  participants: scPlayers,
+                  holesInPlay: scHIP,
+                  legend: null,
+                ),
               ),
             ),
           );
@@ -1033,10 +1025,11 @@ class _StablefordPointsGrid extends StatelessWidget {
   final List results;
   const _StablefordPointsGrid({required this.results});
 
-  static const double _labelColW = 64.0;
+  static const double _labelColW = 92.0;   // rank + short name
   static const double _cellW     = 28.0;
   static const double _rowH      = 26.0;
-  static const double _totW      = 36.0;
+  static const double _totW      = 34.0;
+  static const double _payoutW   = 50.0;
 
   String _short(String full) {
     final first = full.trim().isEmpty ? '—' : full.trim().split(' ').first;
@@ -1076,6 +1069,19 @@ class _StablefordPointsGrid extends StatelessWidget {
           ),
         );
 
+    // A $ column rides next to Tot when money is in play — so this one card
+    // carries standings + per-hole points + payout (no separate money cards).
+    final hasMoney = results.any((r) =>
+        ((r as Map)['payout'] as num?) != null && (r['payout'] as num) != 0);
+    String money(num? v) {
+      if (v == null || v == 0) return '';
+      final a = v.abs();
+      final s = a == a.roundToDouble()
+          ? a.toStringAsFixed(0)
+          : a.toStringAsFixed(2);
+      return v > 0 ? '+\$$s' : '−\$$s';
+    }
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -1094,7 +1100,7 @@ class _StablefordPointsGrid extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               // Hole numbers + Total
               Row(children: [
-                labelCell('Hole', bold: true),
+                labelCell('Player', bold: true),
                 for (final h in holeRange)
                   cell(Text('$h',
                       style: const TextStyle(
@@ -1102,10 +1108,16 @@ class _StablefordPointsGrid extends StatelessWidget {
                 cell(const Text('Tot',
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     _totW),
+                if (hasMoney)
+                  cell(const Text('\$',
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold)),
+                      _payoutW),
               ]),
               Container(
                 height: 1,
-                width: _labelColW + _cellW * holeRange.length + _totW,
+                width: _labelColW + _cellW * holeRange.length + _totW +
+                    (hasMoney ? _payoutW : 0),
                 color: theme.colorScheme.outlineVariant,
                 margin: const EdgeInsets.symmetric(vertical: 2),
               ),
@@ -1115,15 +1127,28 @@ class _StablefordPointsGrid extends StatelessWidget {
                   final r     = e as Map<String, dynamic>;
                   final holes = (r['holes'] as Map?)?.cast<String, dynamic>()
                       ?? const {};
-                  final total = r['total_points'] ?? 0;
+                  final total  = r['total_points'] ?? 0;
+                  final rank   = r['rank'];
+                  final payout = r['payout'] as num?;
+                  final name   = _short(r['player_name']?.toString() ?? '—');
                   return Row(children: [
-                    labelCell(_short(r['player_name']?.toString() ?? '—')),
+                    labelCell(rank == null ? name : '$rank. $name'),
                     for (final h in holeRange)
                       cell(Text(holes['$h'] == null ? '' : '${holes['$h']}',
                           style: theme.textTheme.bodySmall), _cellW),
                     cell(Text('$total',
                         style: const TextStyle(fontWeight: FontWeight.bold)),
                         _totW),
+                    if (hasMoney)
+                      cell(
+                        Text(money(payout),
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: (payout ?? 0) >= 0
+                                    ? Colors.green.shade700
+                                    : theme.colorScheme.error)),
+                        _payoutW),
                   ]);
                 }(),
             ]),
@@ -3083,39 +3108,24 @@ class _SpotsHoleStrip extends StatelessWidget {
 // status, and the leader's running money (awarded even before the match ends).
 class _MatchLeaderboardCard extends StatefulWidget {
   final NassauSummary nas;
-  const _MatchLeaderboardCard({required this.nas});
+  /// The Nassau summary's `scorecard` block (players + per-hole gross/strokes),
+  /// so the match shows gross + strokes-off dots + hole-winner tint via the
+  /// shared _MsScorecard grid — same as the full Nassau card.
+  final List<Map<String, dynamic>> scHoles;
+  final List<Map<String, dynamic>> scPlayers;
+  final List<int> scHolesInPlay;
+  const _MatchLeaderboardCard({
+    required this.nas,
+    required this.scHoles,
+    required this.scPlayers,
+    required this.scHolesInPlay,
+  });
 
   @override
   State<_MatchLeaderboardCard> createState() => _MatchLeaderboardCardState();
 }
 
 class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
-  final ScrollController _scroll = ScrollController();
-  static const double _labelW = 96;
-  static const double _cellW = 26;
-  static const double _rowH = 24;
-
-  @override
-  void initState() {
-    super.initState();
-    // Scroll the grid so the latest played hole is in view.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final thru = widget.nas.overall.holesPlayed;
-      if (_scroll.hasClients && thru > 7) {
-        _scroll.jumpTo(((thru - 7) * _cellW)
-            .clamp(0.0, _scroll.position.maxScrollExtent));
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  String _clip(String s) => s.length > 5 ? s.substring(0, 5) : s;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -3127,12 +3137,8 @@ class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
     final p2 = nas.team2.isNotEmpty ? nas.team2.first : null;
     String full(p, fallback) =>
         (p?.name.isNotEmpty ?? false) ? p!.name as String : fallback;
-    String short(p, fallback) =>
-        (p?.shortName.isNotEmpty ?? false) ? p!.shortName as String : fallback;
     final n1 = full(p1, 'Player 1');
     final n2 = full(p2, 'Player 2');
-    final s1 = short(p1, n1);
-    final s2 = short(p2, n2);
 
     final margin  = nas.overall.margin;        // + = player 1 up
     final thru    = nas.overall.holesPlayed;
@@ -3158,48 +3164,6 @@ class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
     final money = margin == 0
         ? (decided ? 'Halved — no money' : 'All square — no money')
         : '$leaderName  +\$${bet.formatBet()}';
-
-    final byHole = {for (final h in nas.holes) h.hole: h};
-
-    Widget cell(Widget child, {Color? bg, bool current = false}) => Container(
-          width: _cellW,
-          height: _rowH,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg ??
-                (current
-                    ? theme.colorScheme.primaryContainer.withValues(alpha: .3)
-                    : null),
-          ),
-          child: child,
-        );
-
-    Widget labelCell(String text, {Color? color, FontStyle? style}) => SizedBox(
-          width: _labelW,
-          height: _rowH,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(text,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                    color: color, fontWeight: FontWeight.w600, fontStyle: style)),
-          ),
-        );
-
-    Widget scoreRow(String label, Color color, int? Function(NassauHoleData) get) =>
-        Row(children: [
-          labelCell(label, color: color),
-          for (var h = 1; h <= 18; h++)
-            cell(
-              Text(
-                byHole[h] != null && get(byHole[h]!) != null
-                    ? '${get(byHole[h]!)}'
-                    : '·',
-                style: theme.textTheme.labelSmall,
-              ),
-              current: h == thru,
-            ),
-        ]);
 
     return Card(
       child: Padding(
@@ -3253,68 +3217,14 @@ class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
           ),
           const SizedBox(height: 10),
 
-          // Per-hole grid
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            controller: _scroll,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                labelCell('Hole'),
-                for (var h = 1; h <= 18; h++)
-                  cell(
-                    Text('$h',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(fontWeight: FontWeight.bold)),
-                    current: h == thru,
-                  ),
-              ]),
-              scoreRow(s1, t1Color, (d) => d.t1Net),
-              scoreRow(s2, t2Color, (d) => d.t2Net),
-              // Won-by — colour-coded short name of the hole winner
-              Row(children: [
-                labelCell('Won by', style: FontStyle.italic,
-                    color: theme.colorScheme.onSurfaceVariant),
-                for (var h = 1; h <= 18; h++)
-                  Builder(builder: (_) {
-                    final d = byHole[h];
-                    if (d == null || d.winner == null) {
-                      return cell(Text('·', style: theme.textTheme.labelSmall));
-                    }
-                    if (d.winner == 'team1') {
-                      return cell(
-                        Text(_clip(s1),
-                            maxLines: 1,
-                            overflow: TextOverflow.clip,
-                            softWrap: false,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: t1Color)),
-                        bg: GameColors.team1Bg,
-                      );
-                    }
-                    if (d.winner == 'team2') {
-                      return cell(
-                        Text(_clip(s2),
-                            maxLines: 1,
-                            overflow: TextOverflow.clip,
-                            softWrap: false,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: t2Color)),
-                        bg: GameColors.team2Bg,
-                      );
-                    }
-                    return cell(
-                      Text('=',
-                          style: theme.textTheme.labelSmall
-                              ?.copyWith(color: Colors.grey.shade600)),
-                      bg: Colors.grey.shade100,
-                    );
-                  }),
-              ]),
-            ]),
+          // Per-hole scorecard — gross + strokes-off dots + hole-winner tint,
+          // the same grid the full Nassau card shows, so a strokes-off Singles
+          // Match shows where the strokes fall (docs/parallel-games.md).
+          _MsScorecard(
+            holes: widget.scHoles,
+            participants: widget.scPlayers,
+            holesInPlay: widget.scHolesInPlay,
+            legend: null,
           ),
         ]),
       ),
@@ -3438,7 +3348,12 @@ class _NassauGroupCard extends StatelessWidget {
 
     // ── 18-Hole Match: dedicated 1-v-1 card (full per-hole grid) ──────────
     if (nas.isEighteenHoleMatch) {
-      return _MatchLeaderboardCard(nas: nas);
+      return _MatchLeaderboardCard(
+        nas: nas,
+        scHoles: scHoles,
+        scPlayers: scPlayers,
+        scHolesInPlay: scHolesInPlay,
+      );
     }
 
     // ── Casual match: original layout ─────────────────────────────────────
@@ -4158,8 +4073,8 @@ class _SixesGroupCard extends StatelessWidget {
           ],
 
           // Per-hole gross scorecard — the same table the Skins card shows
-          // under its money box (no winner highlight; Sixes is a team best-ball
-          // with no single per-hole player winner).
+          // under its money box. Each hole highlights the winning best-net
+          // "score" (the low net that won the hole for its team) via winner_id.
           if (holes.isNotEmpty) ...[
             const Divider(height: 20),
             _MsScorecard(holes: holes, participants: players, legend: null,

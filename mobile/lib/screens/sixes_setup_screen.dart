@@ -487,7 +487,11 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   child: GolfPrimaryButton(
-                    label: _editing ? 'Save Configuration' : 'Start Match',
+                    // Hub-configured setups (round creation / "Edit
+                    // Configuration") save and return — never "Start Match".
+                    label: (_editing || widget.returnToHub)
+                        ? 'Save Configuration'
+                        : 'Start Match',
                     loading: rp.submitting,
                     onPressed: (_orderedPlayers.length < 4 || !_stakeOk)
                         ? null

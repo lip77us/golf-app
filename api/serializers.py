@@ -534,6 +534,20 @@ class FoursomeSerializer(serializers.ModelSerializer):
                 games.append(game_key)
         except Exception:
             pass
+        # Round-level casual games (Stroke Play / Stableford) have their config
+        # on the Round, not the foursome — report them here too so the hub can
+        # show "Set up" vs "Edit" consistently across all side games.
+        rnd = obj.round
+        try:
+            rnd.low_net_config
+            games.append('low_net_round')
+        except Exception:
+            pass
+        try:
+            rnd.stableford_config
+            games.append('stableford')
+        except Exception:
+            pass
         return games
 
     # Custom group name + the resolved label ("<name>" or "Group N").
@@ -1106,6 +1120,12 @@ class SkinsSetupSerializer(serializers.Serializer):
     loss_cap       = serializers.DecimalField(
                         max_digits=8, decimal_places=2, required=False,
                         allow_null=True, min_value=0)
+    # Subset side game: which players are IN the game (empty = all real players).
+    participant_player_ids = serializers.ListField(
+                        child=serializers.IntegerField(), default=list)
+
+    def validate(self, data):
+        return _validate_subset_participants(data)
 
 
 class MultiSkinsSetupSerializer(serializers.Serializer):
@@ -1180,6 +1200,21 @@ class IrishRumbleSetupSerializer(serializers.Serializer):
         return attrs
 
 
+def _validate_subset_participants(data):
+    """Shared check for a subset side game: a non-empty participant list needs
+    ≥2 players, and everyone excluded from prizes must be a participant.
+    Empty participant list = all real players (backward compatible)."""
+    participants = set(data.get('participant_player_ids') or [])
+    if participants and len(participants) < 2:
+        raise serializers.ValidationError(
+            {'participant_player_ids': 'A subset game needs at least 2 players.'})
+    excluded = set(data.get('excluded_player_ids') or [])
+    if participants and not excluded.issubset(participants):
+        raise serializers.ValidationError(
+            {'excluded_player_ids': 'Excluded players must be participants.'})
+    return data
+
+
 class LowNetSetupSerializer(serializers.Serializer):
     """POST /api/rounds/{id}/low-net/setup/"""
     handicap_mode       = serializers.ChoiceField(
@@ -1208,6 +1243,12 @@ class LowNetSetupSerializer(serializers.Serializer):
                                   "(e.g. championship Low Net placers)."
                               ),
                           )
+    # Subset side game: which players are IN the game (empty = all real players).
+    participant_player_ids = serializers.ListField(
+                              child=serializers.IntegerField(), default=list)
+
+    def validate(self, data):
+        return _validate_subset_participants(data)
 
 
 class StablefordSetupSerializer(serializers.Serializer):
@@ -1232,6 +1273,9 @@ class StablefordSetupSerializer(serializers.Serializer):
                                           default=list)
     excluded_player_ids = serializers.ListField(
                               child=serializers.IntegerField(), default=list)
+    # Subset side game: which players are IN the game (empty = all real players).
+    participant_player_ids = serializers.ListField(
+                              child=serializers.IntegerField(), default=list)
     # Points table (defaults = standard Stableford; negatives allowed).
     pts_albatross = serializers.IntegerField(default=5)
     pts_eagle     = serializers.IntegerField(default=4)
@@ -1239,6 +1283,9 @@ class StablefordSetupSerializer(serializers.Serializer):
     pts_par       = serializers.IntegerField(default=2)
     pts_bogey     = serializers.IntegerField(default=1)
     pts_double    = serializers.IntegerField(default=0)
+
+    def validate(self, data):
+        return _validate_subset_participants(data)
 
 
 class StablefordChampionshipSetupSerializer(serializers.Serializer):

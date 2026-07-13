@@ -58,6 +58,7 @@ urlpatterns = [
     path('rounds/<int:pk>/join/',        views.RoundJoinView.as_view(),       name='api-round-join'),
     path('tournaments/<int:pk>/join/',   views.TournamentJoinView.as_view(),  name='api-tournament-join'),
     path('rounds/<int:pk>/setup/',       views.RoundSetupView.as_view(),    name='api-round-setup'),
+    path('rounds/<int:pk>/side-games/',  views.RoundAddSideGameView.as_view(), name='api-round-add-side-game'),
     path('rounds/<int:pk>/complete/',    views.RoundCompleteView.as_view(), name='api-round-complete'),
     path('rounds/<int:pk>/reopen/',      views.RoundReopenView.as_view(),   name='api-round-reopen'),
     path('rounds/<int:pk>/move-player/', views.RoundMovePlayerView.as_view(),

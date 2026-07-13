@@ -73,6 +73,7 @@ def setup_skins(
     per_point_mode: str = 'first',
     per_point_rate      = 0,
     loss_cap            = None,
+    participant_player_ids = None,
 ) -> 'SkinsGame':
     """
     Create (or replace) the Skins game for a foursome.
@@ -97,6 +98,7 @@ def setup_skins(
         per_point_mode = per_point_mode if per_point_mode in ('average', 'all', 'first') else 'first',
         per_point_rate = Decimal(str(per_point_rate or 0)),
         loss_cap       = (Decimal(str(loss_cap)) if loss_cap not in (None, '') else None),
+        participant_player_ids = list(participant_player_ids or []),
         status         = MatchStatus.PENDING,
     )
     return game
@@ -266,6 +268,12 @@ def calculate_skins(foursome) -> list:
         .select_related('player')
         .filter(player__is_phantom=False)
     )
+    # Subset side game: restrict Skins to the chosen players (empty = all).
+    # Filtering `real_members` here flows through the pool, per-hole winner,
+    # carryover, junk, and withdrawal segments (docs/parallel-games.md).
+    _subset = set(game.participant_player_ids or [])
+    if _subset:
+        real_members = [m for m in real_members if m.player_id in _subset]
     real_ids = [m.player_id for m in real_members]
 
     if not real_ids:
@@ -449,6 +457,11 @@ def skins_summary(foursome) -> dict:
         .select_related('player')
         .filter(player__is_phantom=False)
     )
+    # Subset side game: restrict to the chosen players (empty = all) so the pool,
+    # standings, and per-hole scores only span participants.
+    _subset = set(game.participant_player_ids or [])
+    if _subset:
+        real_members = [m for m in real_members if m.player_id in _subset]
     bet_unit    = float(foursome.round.bet_unit)
     num_players = len(real_members)
     pool        = num_players * bet_unit
@@ -695,6 +708,7 @@ def skins_summary(foursome) -> dict:
         },
         'carryover' : game.carryover,
         'allow_junk': game.allow_junk,
+        'participant_player_ids': game.participant_player_ids or [],
         'players'   : players_out,
         'holes'     : holes_out,
         # The holes this round plays, IN PLAY ORDER, so the leaderboard grid

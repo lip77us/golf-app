@@ -432,7 +432,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       final pct  = rp.stablefordResult!['net_percent']  as int?    ?? 100;
       return (mode, pct);
     }
-    if (_nassauActive(games) && rp.nassauSummary != null) {
+    // PRIMARY-gated like the others: a subset SIDE Nassau has its own (often
+    // gross) handicap that must NOT override the primary's stroke dots
+    // (docs/parallel-games.md).
+    if ((primary == 'nassau' || primary == 'nassau_nine') &&
+        rp.nassauSummary != null) {
       return (rp.nassauSummary!.handicapMode, rp.nassauSummary!.netPercent);
     }
     if (primary == 'skins' && rp.skinsSummary != null) {
@@ -1536,7 +1540,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final games      = _activeGames(rp.round);
     // Gate summaries on the active game list so stale summaries from a prior
     // game in the same session never bleed into unrelated games.
-    final nas        = _nassauActive(games) ? rp.nassauSummary : null;
+    // Nassau's inline entry-screen elements (team banner, presses strip, hole
+    // outcome, progress grid) show ONLY when Nassau is the PRIMARY. As a subset
+    // SIDE game it's leaderboard-tab-only (docs/parallel-games.md) — same rule
+    // as the Stableford strip.
+    final nassauIsPrimary = () {
+      final p = resolvePrimary(rp.round?.primaryGame, games);
+      return p == 'nassau' || p == 'nassau_nine';
+    }();
+    final nas        = nassauIsPrimary ? rp.nassauSummary : null;
     final skins      = games.contains('skins')  ? rp.skinsSummary  : null;
 
     // Jump to first unplayed hole once scorecard is loaded.  When
@@ -4447,8 +4459,10 @@ class _GameStatusSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Nassau round progress grid
-        if (_nassauActive(games)) ...[
+        // Nassau round progress grid — PRIMARY only. As a subset side game
+        // Nassau is leaderboard-tab-only (docs/parallel-games.md).
+        if (_nassauActive(games) &&
+            (primaryGame == 'nassau' || primaryGame == 'nassau_nine')) ...[
           if (nassau != null)
             _NassauProgressGrid(
               nassau:      nassau!,
@@ -7590,15 +7604,6 @@ class _SixesSegmentCard extends StatelessWidget {
     required this.currentHole,
   });
 
-  Color _statusColor(BuildContext ctx) {
-    switch (segment.status) {
-      case 'complete':    return Colors.green.shade700;
-      case 'halved':      return Colors.blue.shade700;
-      case 'in_progress': return Theme.of(ctx).colorScheme.primary;
-      default:            return Theme.of(ctx).colorScheme.onSurfaceVariant;
-    }
-  }
-
   String _statusLabel() {
     final raw = segment.statusDisplay;
     if (raw == '—') return 'Pending';
@@ -7609,11 +7614,18 @@ class _SixesSegmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme       = Theme.of(context);
     final noTeams     = !segment.team1.hasPlayers || !segment.team2.hasPlayers;
-    final statusColor = _statusColor(context);
     final rawMargin   = segment.holes.isNotEmpty ? segment.holes.last.margin : 0;
     final lastMargin  = teamsSwapped ? -rawMargin : rawMargin;
     final t1Leading   = lastMargin > 0;
     final t2Leading   = lastMargin < 0;
+    // Colour the "N UP / wins" status in the LEADING team's colour so it's clear
+    // WHICH side is up (blue = team1, orange = team2). Green/primary read as a
+    // generic "positive" and never said who. Neutral when All Square / halved.
+    final statusColor = t1Leading
+        ? (team1Color ?? Colors.blue.shade700)
+        : t2Leading
+            ? (team2Color ?? Colors.orange.shade800)
+            : theme.colorScheme.onSurfaceVariant;
 
     final lastPlayed = segment.holes.isNotEmpty ? segment.holes.last.hole : null;
     final decided    = segment.status == 'complete' || segment.status == 'halved';

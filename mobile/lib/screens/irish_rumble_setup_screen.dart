@@ -18,14 +18,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
-import '../utils/primary_handicap.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
-import '../widgets/inherited_handicap_note.dart';
 import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
 import '../widgets/net_double_bogey_card.dart';
@@ -533,6 +530,71 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   // Prize exclusions
   /// Player IDs currently toggled as excluded (cannot win prizes).
   final Set<int> _excludedIds = {};
+
+  /// Players IN the game (casual subset side game). null = all real players.
+  Set<int>? _participantIds;
+
+  /// Real (non-phantom) players in the round — the participant picker roster.
+  List<({int id, String name})> get _realPlayers {
+    final round = context.read<RoundProvider>().round;
+    if (round == null) return const [];
+    final seen = <int>{};
+    final out = <({int id, String name})>[];
+    for (final fs in round.foursomes) {
+      for (final m in fs.memberships) {
+        if (m.player.isPhantom || !seen.add(m.player.id)) continue;
+        out.add((id: m.player.id, name: m.player.name));
+      }
+    }
+    return out;
+  }
+
+  int  get _participantCount => _participantIds?.length ?? _numPlayers;
+  bool get _participantsValid =>
+      _participantIds == null || _participantIds!.length >= 2;
+  List<int> _participantsToSend() {
+    final all = _realPlayers.map((p) => p.id).toSet();
+    final sel = _participantIds;
+    if (sel == null || sel.length >= all.length) return const [];
+    return sel.toList();
+  }
+
+  Widget _participantCard(ThemeData theme) {
+    // Subset only applies to a CASUAL Stroke Play; a tournament round covers
+    // the whole field.
+    if (_isTournamentRound) return const SizedBox.shrink();
+    final players = _realPlayers;
+    if (players.length < 3) return const SizedBox.shrink();
+    bool isIn(int id) => _participantIds?.contains(id) ?? true;
+    return SectionCard(
+      title: "Who's in the bet",
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Everyone by default — or pick a subset for a side bet.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          for (final p in players)
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: isIn(p.id),
+              title: Text(p.name),
+              onChanged: (v) => setState(() {
+                final set = _participantIds ?? players.map((e) => e.id).toSet();
+                if (v == true) { set.add(p.id); } else { set.remove(p.id); }
+                _participantIds = set.length == players.length ? null : set;
+              }),
+            ),
+          if (!_participantsValid)
+            Text('Pick at least 2 players.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.error)),
+        ],
+      ),
+    );
+  }
   /// Players suggested for exclusion because they placed in the championship.
   /// Each entry: {'player_id': int, 'player_name': str, 'rank': int, 'payout': num}
   List<Map<String, dynamic>> _championshipPlacers = [];
@@ -543,15 +605,6 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
   /// True when editing an already-configured game (drives Save label + title).
   bool    _editing           = false;
   bool    _isTournamentRound = false;
-
-  /// True when Stroke Play is a SECONDARY side game (another game owns entry).
-  /// Side games inherit the primary's handicap — no own selector.
-  bool get _isSideGame {
-    final round = context.read<RoundProvider>().round;
-    final games = round?.activeGames ?? const <String>[];
-    return games.contains('low_net_round') &&
-        resolvePrimary(round?.primaryGame, games) != 'low_net_round';
-  }
 
   @override
   void initState() {
@@ -574,7 +627,7 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
 
   double get _pool {
     final fee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
-    return fee * _numPlayers;
+    return fee * _participantCount; // subset side game shrinks the pool
   }
 
   // Casual Stroke Play keeps a fixed list of 4 payout controllers (parity with
@@ -608,19 +661,6 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
       final client = context.read<AuthProvider>().client;
       final cfg    = await client.getLowNetConfig(widget.roundId);
 
-      // Side games inherit the PRIMARY game's handicap. Stroke Play here is
-      // only ever net/gross as a side game, so a strokes-off primary degrades
-      // to net.
-      (String, int)? inherited;
-      if (_isSideGame) {
-        final round = context.read<RoundProvider>().round;
-        final fsId = round?.foursomes.isNotEmpty == true
-            ? round!.foursomes.first.id : null;
-        if (round != null && fsId != null) {
-          final h = await primaryHandicapFor(client, round, fsId);
-          inherited = (h.$1 == 'gross' ? 'gross' : 'net', h.$2);
-        }
-      }
       if (!mounted) return;
 
       // Fixed 4 controllers (shared PayoutConfigField reads the first
@@ -666,10 +706,6 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                                  ? (cfg['round_net_percent'] ?? cfg['net_percent'])
                                  : (cfg['net_percent'] ?? cfg['round_net_percent']))
                                  as int? ?? 100;
-        if (inherited != null) {
-          _mode       = inherited.$1;
-          _netPercent = inherited.$2;
-        }
         _numPlayers        = cfg['num_players'] as int? ?? 0;
         // Leave the entry-fee field BLANK when there's no fee yet, so the user
         // types straight in instead of erasing a pre-filled "0".
@@ -684,6 +720,10 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
           ..clear()
           ..addAll(excludedList);
         _championshipPlacers = placers;
+        // Participant subset (empty/absent = all players).
+        final pids = (cfg['participant_player_ids'] as List?)
+            ?.map((e) => e as int).toList() ?? const <int>[];
+        _participantIds = pids.isEmpty ? null : pids.toSet();
         _loading = false;
       });
     } catch (e) {
@@ -736,6 +776,7 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
         entryFee:          entryFee,
         payouts:           payouts,
         excludedPlayerIds: _excludedIds.toList(),
+        participantPlayerIds: _participantsToSend(),
       );
       if (widget.returnToHub) {
         // Round creation / "Edit Configuration": return to the launch page
@@ -781,14 +822,18 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
                         height: 52,
                         child: FilledButton(
                           onPressed:
-                              (_saving || !_poolBalanced || !_stakeChosen) ? null : _save,
+                              (_saving || !_poolBalanced || !_stakeChosen
+                                      || !_participantsValid)
+                                  ? null : _save,
                           child: _saving
                               ? const SizedBox(
                                   width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
                               : Text(
-                                  _editing ? 'Save Configuration' : 'Save Setup',
+                                  (_editing || widget.returnToHub)
+                                      ? 'Save Configuration'
+                                      : 'Save Setup',
                                   style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold),
@@ -972,11 +1017,10 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
         children: [
           // ── Handicap mode ───────────────────────────────────────────────
           // For tournament rounds the mode is locked at the round level.
-          // Side games inherit the primary game's handicap (no own selector).
+          // Casual (primary OR side) games each pick their own handicap now,
+          // strokes-off included (docs/parallel-games.md).
           if (_isTournamentRound)
             _LockedHandicapChip(mode: _mode, netPercent: _netPercent)
-          else if (_isSideGame)
-            InheritedHandicapNote(mode: _mode, netPercent: _netPercent)
           else
             HandicapModeSelector(
               mode:             _mode,
@@ -988,6 +1032,9 @@ class _LowNetSetupScreenState extends State<LowNetSetupScreen> {
             ),
 
           const SizedBox(height: 16),
+
+          // ── Who's in the bet (casual subset side game) ──
+          _participantCard(theme),
 
           // ── Net double-bogey cap (round-level) ──────────────────────────
           Builder(builder: (ctx) {

@@ -158,6 +158,30 @@ class GameMeta {
   /// single whole-round matches (Fourball, Singles Match) run on any hole count.
   final bool requiresFullRound;
 
+  /// True if this game can be added as a SUBSET side game — an independent bet
+  /// over a chosen subset (e.g. 2 of 4) of the foursome, with its OWN handicap
+  /// (gross included) and its own leaderboard tab. Unlike [canBeSideGame] (a
+  /// full-foursome overlay that inherits the primary's handicap), a subset side
+  /// game shares nothing with the primary's scoring, so it can ride alongside a
+  /// structure-owning primary (e.g. Sixes) and deliberately ignores the
+  /// primary's `excludes`. Participants come from the game's own team structure.
+  /// See docs/parallel-games.md.
+  final bool canBeSubsetSideGame;
+
+  /// True if this game, when the PRIMARY, may host leaderboard-only OVERLAY side
+  /// games (Skins / Stroke Play / Stableford) even though it owns the entry flow
+  /// (`allowsSideGames:false`). Overlays only re-read individual gross, so this
+  /// is set on individual-ball structure-owners (Sixes, Nassau, Vegas) but NOT
+  /// on alt-shot games (Triple Cup) or the cross-group Multi-Skins pool, where a
+  /// per-player gross overlay is meaningless. See docs/parallel-games.md.
+  final bool hostsOverlaySideGames;
+
+  /// True for ALT-SHOT primaries (Triple Cup's foursomes segment, Scramble)
+  /// where partners share ONE ball — there's no per-player gross, so individual
+  /// side games (subset matches, overlays) are physically impossible, not just
+  /// unlikely. Blocks the subset branch of [sideGamesFor].
+  final bool isAltShot;
+
   const GameMeta({
     required this.id,
     required this.displayName,
@@ -173,6 +197,9 @@ class GameMeta {
     this.acrossGroups         = false,
     this.excludes             = const {},
     this.canBeSideGame        = false,
+    this.canBeSubsetSideGame  = false,
+    this.hostsOverlaySideGames = false,
+    this.isAltShot            = false,
     this.allowsSideGames      = true,
     this.capturesInScoreEntry = false,
     this.sideGameOnly         = false,
@@ -202,8 +229,11 @@ const List<GameMeta> kGameCatalog = [
     exactPlayers : 4,
     // Three 6-hole segments — needs a full 18.
     requiresFullRound: true,
-    // Sixes owns the foursome's rotating-team structure — no side games.
+    // Sixes owns the foursome's rotating-team entry structure, so it can't
+    // co-host an ENTRY-owning game — but it CAN host leaderboard-only overlays
+    // (Skins / Stroke Play / Stableford) and subset side bets (docs/parallel-games.md).
     allowsSideGames: false,
+    hostsOverlaySideGames: true,
     // Sixes owns its own handicap allocation (per-segment SO spreading) and
     // cannot be combined with any other game — the stroke colors and
     // calculations would conflict.
@@ -216,6 +246,8 @@ const List<GameMeta> kGameCatalog = [
     casual       : true,
     exactPlayers : 4,
     allowsSideGames: false,
+    // Individual-ball → can host leaderboard-only overlays (docs/parallel-games.md).
+    hostsOverlaySideGames: true,
     // Vegas owns the 2-digit team-number scoring model for the whole
     // foursome, so it can't share the entry flow with another game.
     excludes     : {GameIds.sixes, GameIds.nassau, GameIds.points531,
@@ -227,6 +259,10 @@ const List<GameMeta> kGameCatalog = [
     displayName  : 'Fourball',
     casual       : true,
     exactPlayers : 4,
+    // Individual-ball (each player posts their own gross) → can host
+    // leaderboard-only overlays (Skins / Stroke Play / Stableford). This is the
+    // documented "Fourball + Skins + Stableford" combo (docs/parallel-games.md).
+    hostsOverlaySideGames: true,
     // A single 18-hole 2v2 best-ball match owns the foursome's match
     // structure, so — like Sixes / Vegas / Triple Cup — it can't share the
     // entry flow with another game.  Exclusion is symmetric (gamesCompatible
@@ -242,7 +278,10 @@ const List<GameMeta> kGameCatalog = [
     displayName  : 'Points (5-3-1)',
     casual       : true,
     exactPlayers : 3,
-    // Exclusive with everything: owns the hole-by-hole entry screen.
+    // Owns the hole-by-hole ENTRY screen (can't co-host an entry-owning game),
+    // but individual-ball → can host leaderboard-only overlays over the 3
+    // players' gross (docs/parallel-games.md).
+    hostsOverlaySideGames: true,
     excludes     : {GameIds.sixes, GameIds.nassau, GameIds.skins,
                     GameIds.strokePlay, GameIds.stableford},
   ),
@@ -252,15 +291,22 @@ const List<GameMeta> kGameCatalog = [
     casual      : true,
     // F9 / B9 / Overall bets + presses — needs a full 18.
     requiresFullRound: true,
-    // Owns the F9/B9/Overall team-bet structure — no side games.
+    // Owns the F9/B9/Overall team-bet ENTRY structure, but individual-ball, so
+    // it can host leaderboard-only overlays (docs/parallel-games.md).
     allowsSideGames: false,
+    hostsOverlaySideGames: true,
     // Heads-up (2) or 2-v-2 best-ball (4) — three players doesn't form sides.
     minPlayers  : 2,
     maxPlayers  : 4,
     sizes       : {2, 4},
-    // Nassau and Sixes are mutually exclusive (both are team-bet games that
-    // own the front-9 / back-9 structure).  Skins can run alongside Nassau.
+    // Nassau and Sixes are mutually exclusive AS CO-PRIMARIES (both own the
+    // front-9 / back-9 team-bet structure).  Skins can run alongside Nassau.
     excludes    : {GameIds.sixes, GameIds.points531},
+    // …but a 2-man Nassau can ride as a SUBSET side bet over 2 of the foursome
+    // alongside any primary (e.g. low-stakes Sixes for four + a bigger Nassau
+    // between two gamblers).  It owns its own handicap (gross included) and
+    // leaderboard tab; see docs/parallel-games.md.
+    canBeSubsetSideGame: true,
   ),
   GameMeta(
     id          : GameIds.match18,
@@ -270,6 +316,9 @@ const List<GameMeta> kGameCatalog = [
     sizes       : {2},
     excludes    : {GameIds.nassau, GameIds.nassauNine,
                    GameIds.sixes, GameIds.points531},
+    // A 2-man Singles Match can also ride as a subset side bet (e.g. alongside
+    // a Sixes primary) — it's a subset Nassau overall-only (docs/parallel-games.md).
+    canBeSubsetSideGame: true,
   ),
   GameMeta(
     id          : GameIds.nassauNine,
@@ -279,6 +328,7 @@ const List<GameMeta> kGameCatalog = [
     // the Nassau to use on a 9-hole / back-9 round. Runs on partial rounds
     // (unlike full Nassau, which needs 18 for its front/back bets).
     allowsSideGames: false,
+    hostsOverlaySideGames: true,   // individual-ball → can host overlays
     minPlayers  : 2,
     maxPlayers  : 4,
     sizes       : {2, 4},
@@ -295,9 +345,10 @@ const List<GameMeta> kGameCatalog = [
     // (no junk in that mode, since junk is entered hole-by-hole).
     canBeSideGame: true,
     // Skins CAN combine with Nassau or Sixes.  Only Points 5-3-1 is excluded
-    // because it completely owns the three-player entry model.  Spots is
-    // excluded too — Skins has its own per-hole extras (junk).
-    excludes    : {GameIds.points531, GameIds.spots},
+    // because it completely owns the three-player entry model.  Spots MAY run
+    // alongside Skins — a SIDE Skins has junk suppressed, so there's no
+    // junk-vs-spots overlap (docs/parallel-games.md).
+    excludes    : {GameIds.points531},
   ),
   GameMeta(
     id          : GameIds.spots,
@@ -310,10 +361,10 @@ const List<GameMeta> kGameCatalog = [
     canBeSideGame       : true,
     capturesInScoreEntry: true,
     sideGameOnly        : true,   // never a primary — always an add-on
-    // Excludes Skins (junk is the Skins way), and the team/round-wide games we
-    // deliberately don't host Spots on (Vegas, Triple Cup, Multi-Skins).
-    excludes    : {GameIds.skins, GameIds.vegas, GameIds.tripleCup,
-                   GameIds.multiSkins},
+    // Spots may run alongside Skins now (a side Skins has junk off → no
+    // overlap). Still excluded from the team/round-wide games we don't host
+    // Spots on (Vegas, Triple Cup, Multi-Skins).
+    excludes    : {GameIds.vegas, GameIds.tripleCup, GameIds.multiSkins},
   ),
   GameMeta(
     id          : GameIds.wolf,
@@ -323,7 +374,9 @@ const List<GameMeta> kGameCatalog = [
     maxPlayers  : 4,
     // Wolf owns its own per-hole decision + score-entry screen (who's the
     // Wolf, partner/lone/blind), so — like Points 5-3-1 — it can't share a
-    // foursome's entry flow with another per-foursome game.
+    // foursome's entry flow. But individual-ball → can host leaderboard-only
+    // overlays over each player's gross (docs/parallel-games.md).
+    hostsOverlaySideGames: true,
     excludes    : {GameIds.sixes, GameIds.points531, GameIds.nassau,
                    GameIds.skins, GameIds.strokePlay, GameIds.stableford,
                    GameIds.tripleCup, GameIds.matchPlay,
@@ -334,8 +387,10 @@ const List<GameMeta> kGameCatalog = [
     displayName : 'Rabbit',
     casual      : true,
     exactPlayers: 3,
-    // Rabbit owns its own per-hole score-entry screen, so — like Points
-    // 5-3-1 — it can't share a foursome's entry flow with another game.
+    // Rabbit owns its own per-hole score-entry screen, so — like Points 5-3-1 —
+    // it can't share a foursome's entry flow. But individual-ball → can host
+    // leaderboard-only overlays over each player's gross (docs/parallel-games.md).
+    hostsOverlaySideGames: true,
     excludes    : {GameIds.sixes, GameIds.points531, GameIds.nassau,
                    GameIds.skins, GameIds.wolf, GameIds.strokePlay,
                    GameIds.stableford, GameIds.tripleCup, GameIds.matchPlay,
@@ -347,8 +402,11 @@ const List<GameMeta> kGameCatalog = [
     casual       : true,
     // Three segments (fourball / foursomes / singles) — needs a full 18.
     requiresFullRound: true,
-    // Owns the foursome's 3-segment match structure — no side games.
+    // Owns the foursome's 3-segment match structure — no side games. Its
+    // foursomes segment is ALT-SHOT (shared ball), so individual side games
+    // (subset matches / overlays) can't be scored over the full round.
     allowsSideGames: false,
+    isAltShot      : true,
     // Casual requires exactly 4 — 2v1 needs cross-foursome donors (cup
     // only) and 1v1 lacks the fourball/foursomes-match structure that
     // makes Triple Cup interesting.  Cup-mode 3-player foursomes go
@@ -485,6 +543,7 @@ const List<GameMeta> kGameCatalog = [
     tournament           : true,
     requiresMultiFoursome: true,
     enabled              : false,   // not yet implemented
+    isAltShot            : true,    // one team ball → no individual side games
   ),
 ];
 
@@ -577,10 +636,26 @@ bool gamesCompatible(String gameA, String gameB) {
 /// overlay) in a casual round.
 bool canBeSideGame(String gameId) => _kGameById[gameId]?.canBeSideGame ?? false;
 
+/// True if [gameId] can be added as a SUBSET side game (an independent bet over
+/// a chosen subset of the foursome, with its own handicap + tab).  See
+/// docs/parallel-games.md.
+bool canBeSubsetSideGame(String gameId) =>
+    _kGameById[gameId]?.canBeSubsetSideGame ?? false;
+
 /// True if, when [gameId] is the PRIMARY casual game, the user may add side
 /// games alongside it.
 bool allowsSideGames(String gameId) =>
     _kGameById[gameId]?.allowsSideGames ?? true;
+
+/// True if [gameId] as PRIMARY may host leaderboard-only OVERLAY side games even
+/// though it owns the entry flow (individual-ball structure-owners like Sixes /
+/// Nassau / Vegas). See docs/parallel-games.md.
+bool hostsOverlaySideGames(String gameId) =>
+    _kGameById[gameId]?.hostsOverlaySideGames ?? false;
+
+/// True for an ALT-SHOT primary (shared ball → no per-player gross), so
+/// individual side games can't be scored. See docs/parallel-games.md.
+bool isAltShot(String gameId) => _kGameById[gameId]?.isAltShot ?? false;
 
 /// Priority order used to pick the primary when a casual round contains only
 /// side-game-eligible games (e.g. a Skins-only or Stableford-only round).
@@ -633,12 +708,35 @@ String? primaryGameOf(Iterable<String> active) {
 /// by the per-game `excludes` (e.g. Spots excludes Vegas / Triple Cup).
 List<GameMeta> sideGamesFor(String primaryId,
     {required int size, bool multiGroup = false}) {
-  final allowOverlays = allowsSideGames(primaryId);
+  // Overlays ride a primary that either allows side games OR is an
+  // individual-ball structure-owner that hosts overlays (Sixes/Nassau/Vegas).
+  final allowOverlays =
+      allowsSideGames(primaryId) || hostsOverlaySideGames(primaryId);
   return kGameCatalog.where((g) {
-    if (!g.enabled || !g.canBeSideGame) return false;
+    if (!g.enabled) return false;
     if (g.id == primaryId) return false;
-    // Honor mutual exclusion vs the primary (e.g. Spots ⊥ Skins / Vegas).
-    if (!gamesCompatible(primaryId, g.id)) return false;
+
+    // SUBSET side games (docs/parallel-games.md): an independent bet over a
+    // chosen subset of the foursome, with its own handicap + leaderboard tab.
+    // It shares nothing with the primary's scoring, so it rides alongside ANY
+    // primary (even a structure-owning one like Sixes) and deliberately ignores
+    // the primary's `excludes`.  Gate only on the round having enough players to
+    // form the subset — the actual participants are picked in the game's own
+    // setup screen.
+    if (g.canBeSubsetSideGame) {
+      // Alt-shot primary (shared ball) has no per-player gross → no individual
+      // subset match (docs/parallel-games.md).
+      return !isAltShot(primaryId) && size >= (g.minPlayers ?? 2);
+    }
+
+    // OVERLAY side games (Skins/Stableford/Low Net) + capture add-ons (Spots).
+    if (!g.canBeSideGame) return false;
+    // Honor mutual exclusion vs the primary (e.g. Spots ⊥ Skins / Vegas) —
+    // EXCEPT for a structure-owner that hosts overlays: it lists these overlays
+    // in `excludes` as CO-PRIMARY conflicts, but as leaderboard-only side games
+    // they're fine, so bypass the excludes check there (docs/parallel-games.md).
+    if (!hostsOverlaySideGames(primaryId) &&
+        !gamesCompatible(primaryId, g.id)) return false;
     // Structure-owning primaries still accept capture add-ons, but not overlays.
     if (!allowOverlays && !g.capturesInScoreEntry) return false;
     if (g.acrossGroups) return multiGroup;     // round-wide pools only in multi-group

@@ -2422,6 +2422,8 @@ class SkinsSummary {
   final int    netPercent;
   final bool   carryover;
   final bool   allowJunk;
+  /// Players IN the game (subset side game). Empty = all real players.
+  final List<int> participantPlayerIds;
   final List<SkinsPlayerTotal> players;
   final List<SkinsHole>        holes;
   final double betUnit;
@@ -2439,6 +2441,7 @@ class SkinsSummary {
     required this.netPercent,
     required this.carryover,
     required this.allowJunk,
+    this.participantPlayerIds = const [],
     required this.players,
     required this.holes,
     required this.betUnit,
@@ -2463,6 +2466,8 @@ class SkinsSummary {
       netPercent:   hcap['net_percent'] as int?    ?? 100,
       carryover:    j['carryover']  as bool? ?? true,
       allowJunk:    j['allow_junk'] as bool? ?? false,
+      participantPlayerIds: (j['participant_player_ids'] as List? ?? const [])
+          .map((e) => e as int).toList(),
       players: (j['players'] as List? ?? [])
           .map((p) => SkinsPlayerTotal.fromJson(p as Map<String, dynamic>))
           .toList(),

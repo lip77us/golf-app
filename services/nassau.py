@@ -455,6 +455,22 @@ def _resolve(holes_up: int) -> str:
 # ---------------------------------------------------------------------------
 
 @transaction.atomic
+def _effective_variant(game) -> str:
+    """The Nassau variant that actually applies.
+
+    Claremont and 2nd-ball tiebreak both need a real 2-v-2 (two balls per side),
+    so on a 1-v-1 (or any non-2v2) they can't run.  Ignore a stale `claremont` /
+    `tiebreak_2nd` that a pre-gating client may have saved so it neither scores
+    nor renders on a two-person match (docs/parallel-games.md).
+    """
+    if game.variant not in ('claremont', 'tiebreak_2nd'):
+        return game.variant
+    teams = {t.team_number: t for t in game.teams.all()}
+    t1n = len(teams[1].players.all()) if 1 in teams else 0
+    t2n = len(teams[2].players.all()) if 2 in teams else 0
+    return game.variant if (t1n == 2 and t2n == 2) else 'none'
+
+
 def calculate_nassau(foursome) -> NassauGame | None:
     """
     Recompute all NassauHoleScore rows, detect auto-presses, update manual
@@ -499,8 +515,9 @@ def calculate_nassau(foursome) -> NassauGame | None:
     front_end_hole = order[front_last_pos] if order else 9
     back_end_hole  = order[back_last_pos]  if order else 18
 
-    is_claremont    = game.variant == 'claremont'
-    is_tiebreak_2nd = game.variant == 'tiebreak_2nd'
+    effective_variant = _effective_variant(game)
+    is_claremont    = effective_variant == 'claremont'
+    is_tiebreak_2nd = effective_variant == 'tiebreak_2nd'
     needs_2nd_ball  = is_claremont or is_tiebreak_2nd
 
     # ── Preserve top manual presses ───────────────────────────────────────
@@ -1011,8 +1028,9 @@ def nassau_summary(foursome) -> dict | None:
         if result == 'team2': return -press_unit
         return 0.0
 
-    is_claremont    = game.variant == 'claremont'
-    is_tiebreak_2nd = game.variant == 'tiebreak_2nd'
+    effective_variant = _effective_variant(game)
+    is_claremont    = effective_variant == 'claremont'
+    is_tiebreak_2nd = effective_variant == 'tiebreak_2nd'
 
     # ── Per-player gross + par lookups (for the progress grid) ──────────
     # Gross scores come from HoleScore directly so the summary can render
@@ -1301,17 +1319,24 @@ def nassau_summary(foursome) -> dict | None:
     for _tnum, _tm in teams.items():
         for _p in _tm.players.all():
             team_of[_p.id] = _tnum
+    # Only the game's PARTICIPANTS (team members) belong on this Nassau's
+    # scorecard grid — for a subset side Nassau the other foursome members
+    # aren't in the bet (docs/parallel-games.md). For a full 2v2 this is all
+    # four, unchanged.
+    participant_memberships = [
+        m for m in real_memberships if m.player_id in team_of
+    ]
     scorecard_players = [
         {'player_id': m.player_id, 'name': m.player.name,
          'short_name': m.player.short_name,
          'phcp_in_play': phcp_by_pid.get(m.player_id),
          'team': team_of.get(m.player_id)}
-        for m in real_memberships
+        for m in participant_memberships
     ]
     scorecard_holes = []
     for hn in holes_in_play:
         row_scores = []
-        for m in real_memberships:
+        for m in participant_memberships:
             pid = m.player_id
             g   = gross_index.get(pid, {}).get(hn)
             net = score_index.get(pid, {}).get(hn)
@@ -1333,7 +1358,7 @@ def nassau_summary(foursome) -> dict | None:
             'holes_in_play': holes_in_play,
         },
         'status'        : game.status,
-        'variant'       : game.variant,
+        'variant'       : effective_variant,
         'handicap_mode' : effective_hcp_mode,
         'net_percent'   : game.net_percent,
         'press_mode'    : game.press_mode,
@@ -1343,7 +1368,7 @@ def nassau_summary(foursome) -> dict | None:
         'play_back'     : game.play_back,
         'play_overall'  : game.play_overall,
         'single_match'  : game.single_match,
-        'variant'       : game.variant,
+        'variant'       : effective_variant,
         'teams'         : {
             'team1': _team_players(1),
             'team2': _team_players(2),

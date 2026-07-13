@@ -156,7 +156,9 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       child: GolfPrimaryButton(
-                        label: _editing ? 'Save Configuration' : 'Start Spots',
+                        label: (_editing || widget.returnToHub)
+                            ? 'Save Configuration'
+                            : 'Start Spots',
                         loading: _starting,
                         onPressed:
                             (_rosterValid && _stakeOk) ? _start : null,

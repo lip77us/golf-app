@@ -77,15 +77,15 @@ legacy/tournament rounds (null `primary_game`).
 - **Skins-as-side ⇒ no junk** (`skins_setup_screen.dart`): junk toggle hidden +
   `allow_junk:false` forced when Skins is a side game (junk is a score-entry
   modifier). `_isSideGame` = `primaryGameOf(round.active_games) != 'skins'`.
-- **Side games inherit the primary's handicap, net-only for Stableford/Stroke
-  Play.** A side game has no own handicap selector — `utils/primary_handicap.dart`
-  `primaryHandicapFor()` resolves the primary's (mode, net%) and
-  `widgets/inherited_handicap_note.dart` renders the read-only note. Stableford
-  (`stableford_setup_screen.dart`) and **Stroke Play / Low Net**
-  (`LowNetSetupScreen` in `irish_rumble_setup_screen.dart`) only do net/gross, so
-  a **strokes-off primary degrades to net** there (`_isSideGame` getter +
-  `inherited` fetch in `_load`, `InheritedHandicapNote` in the body). Skins-as-side
-  inherits all three modes verbatim.
+- **Every side game owns its handicap (SUPERSEDES the old inherit-the-primary
+  rule).** As of the parallel-games work (`docs/parallel-games.md`) the handicap
+  INHERITANCE subsystem was removed: `widgets/inherited_handicap_note.dart` is
+  deleted and skins/stableford/`irish_rumble` (LowNet) setup screens now always
+  show a `HandicapModeSelector` — Stableford net/gross, Skins + Stroke Play all
+  three (incl. strokes-off). Each side-game config already stored its own
+  handicap and its summary computes from it, so this was mobile-only.
+  `utils/primary_handicap.dart` `primaryHandicapFor()` is KEPT (only for the hub
+  plays-to Playing Handicap in `round_screen.dart`, not side games).
 - **Validated combo:** Fourball + Skins + Stableford (+ Stroke Play / Low Net as
   a further side game). **Deferred to Phase 2:** cross-group Multi-Skins linkage
   (feed a single foursome's scores into another group's pool); broaden side games

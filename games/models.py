@@ -381,6 +381,10 @@ class SkinsGame(models.Model):
                         max_digits=8, decimal_places=2, null=True, blank=True,
                         help_text="Optional per-player loss cap (per_point "
                                   "style); null = uncapped.")
+    # Player IDs actually IN this Skins game (a SUBSET side game — e.g. 2 of a
+    # 4-some). Empty = all real players in the foursome. Flows through the pool,
+    # per-hole winner, carryover, junk, and WD segments. docs/parallel-games.md.
+    participant_player_ids = models.JSONField(default=list)
     created_at      = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -1368,6 +1372,15 @@ class LowNetRoundConfig(models.Model):
                                 "no payout."
                             ),
                         )
+    participant_player_ids = models.JSONField(
+                            default=list,
+                            help_text=(
+                                "Player IDs actually IN this game (a SUBSET side "
+                                "game — e.g. 2 of a 4-some). Empty = all real "
+                                "players in the round. excluded_player_ids must "
+                                "be a subset of these. See docs/parallel-games.md."
+                            ),
+                        )
 
     def __str__(self):
         return f"Low Net config — {self.round}"
@@ -1442,6 +1455,9 @@ class StablefordGame(models.Model):
                             help_text="Payout per finishing place, e.g. "
                                       "[{'place': 1, 'amount': 60}].")
     excluded_player_ids = models.JSONField(default=list)
+    # Player IDs actually IN this game (a SUBSET side game). Empty = all real
+    # players in the round. excluded_player_ids ⊆ these. docs/parallel-games.md.
+    participant_player_ids = models.JSONField(default=list)
 
     def points_for_diff(self, diff: int) -> int:
         """Stableford points for a net/gross score `diff` strokes over par."""

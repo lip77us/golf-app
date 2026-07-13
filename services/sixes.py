@@ -969,6 +969,10 @@ def sixes_summary(foursome) -> dict:
     # Phantoms are skipped so they never appear in the leaderboard.
     bet_unit    = float(foursome.round.bet_unit)
     money_totals = {}  # player_id → {'name': ..., 'amount': float}
+    # hole_number → player ids on the team that WON that hole. Used to highlight
+    # the winning best-net "score" on the leaderboard scorecard. Teams rotate
+    # every segment, so we key on players (not a fixed team 1/2).
+    winning_team_pids_by_hole = {}
 
     for i, seg in enumerate(segments, start=1):
         teams  = list(seg.teams.all())
@@ -1051,6 +1055,14 @@ def sixes_summary(foursome) -> dict:
                 hole_winner = 'T1'
             else:
                 hole_winner = 'T2'
+            # Record the winning team's players (via the prefetched segment
+            # teams t1/t2, so no extra query) for the scorecard highlight.
+            if hr.winning_team is not None:
+                _wt = t1 if hr.winning_team.team_number == 1 else t2
+                if _wt is not None:
+                    winning_team_pids_by_hole[hr.hole_number] = [
+                        p.id for p in _wt.players.all() if not p.is_phantom
+                    ]
             if hr.counts_for_segment:
                 seg_t1_pts += hr.team1_points
                 seg_t2_pts += hr.team2_points
@@ -1112,8 +1124,9 @@ def sixes_summary(foursome) -> dict:
 
     # ── Per-hole gross scorecard grid ────────────────────────────────────
     # Mirrors the Skins card's _MsScorecard payload so the leaderboard can
-    # show the same table under the money box. No skin-winner highlight —
-    # Sixes is a team best-ball with no single per-hole player winner.
+    # show the same table under the money box. `winner_id` marks the winning
+    # best-net "score" each hole (the low net that won the hole for its team),
+    # which _MsScorecard highlights like a Skins winner.
     from scoring.models import HoleScore
     real_members = [
         m for m in foursome.memberships.select_related('player', 'tee').all()
@@ -1146,11 +1159,27 @@ def sixes_summary(foursome) -> dict:
     holes_in_play = _play_order(foursome.round, foursome) or list(range(1, 19))
     holes_grid = []
     for hn in holes_in_play:
+        # The winning "score" each hole = the winning team's best (lowest) net.
+        # Resolve that player so the scorecard highlights their cell. Halved /
+        # unscored holes have no winner (None → no highlight).
+        winner_id = None
+        _wt_pids = winning_team_pids_by_hole.get(hn)
+        if _wt_pids:
+            _best = None
+            for _pid in _wt_pids:
+                _g = score_by.get((_pid, hn))
+                if _g is None:
+                    continue
+                _net = _g - strokes_by.get(_pid, {}).get(hn, 0)
+                if _best is None or _net < _best[0]:
+                    _best = (_net, _pid)
+            if _best is not None:
+                winner_id = _best[1]
         holes_grid.append({
             'hole'         : hn,
             'par'          : par_by_hole.get(hn),
             'stroke_index' : si_by_hole.get(hn),
-            'winner_id'    : None,
+            'winner_id'    : winner_id,
             'scores'    : [
                 {'player_id': pid,
                  'gross'    : score_by.get((pid, hn)),   # None until scored

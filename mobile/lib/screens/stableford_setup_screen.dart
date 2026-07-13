@@ -7,13 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
-import '../utils/primary_handicap.dart';
 import '../widgets/error_view.dart';
 import '../widgets/handicap_mode_selector.dart';
-import '../widgets/inherited_handicap_note.dart';
 import '../widgets/payout_config_field.dart';
 
 // Bucket order, top (best) to bottom.
@@ -63,6 +60,78 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   bool _noStakes = false;
   int _numPlayers = 0;
 
+  /// Players IN the game. null = all real players (a full-foursome game); a set
+  /// = a SUBSET side game (docs/parallel-games.md).
+  Set<int>? _participantIds;
+
+  /// Real (non-phantom) players in the round — the participant picker roster.
+  List<({int id, String name})> get _realPlayers {
+    final round = context.read<RoundProvider>().round;
+    if (round == null) return const [];
+    final seen = <int>{};
+    final out = <({int id, String name})>[];
+    for (final fs in round.foursomes) {
+      for (final m in fs.memberships) {
+        if (m.player.isPhantom || !seen.add(m.player.id)) continue;
+        out.add((id: m.player.id, name: m.player.name));
+      }
+    }
+    return out;
+  }
+
+  /// Player count the pool/gate use — the subset size, else all.
+  int get _participantCount => _participantIds?.length ?? _numPlayers;
+
+  bool get _participantsValid =>
+      _participantIds == null || _participantIds!.length >= 2;
+
+  /// The list to POST: empty when everyone's in (= all, backward compatible),
+  /// else the chosen subset.
+  List<int> _participantsToSend() {
+    final all = _realPlayers.map((p) => p.id).toSet();
+    final sel = _participantIds;
+    if (sel == null || sel.length >= all.length) return const [];
+    return sel.toList();
+  }
+
+  Widget _participantCard(ThemeData theme) {
+    final players = _realPlayers;
+    if (players.length < 3) return const SizedBox.shrink(); // 2 → both are in
+    bool isIn(int id) => _participantIds?.contains(id) ?? true;
+    return Column(children: [
+      _card(theme, child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Who's in the bet",
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          Text('Everyone by default — or pick a subset for a side bet.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          for (final p in players)
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: isIn(p.id),
+              title: Text(p.name),
+              onChanged: (v) => setState(() {
+                final set = _participantIds ?? players.map((e) => e.id).toSet();
+                if (v == true) { set.add(p.id); } else { set.remove(p.id); }
+                // Collapse to null (= all) when everyone's in.
+                _participantIds = set.length == players.length ? null : set;
+              }),
+            ),
+          if (!_participantsValid)
+            Text('Pick at least 2 players.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.error)),
+        ],
+      )),
+      const SizedBox(height: 16),
+    ]);
+  }
+
   // Optional per-player loss cap (per_point only). Off by default — unlike
   // 5-3-1 the points table is editable, so there's no fixed "max loss" to
   // pre-fill; the player opts in and sets an amount.
@@ -80,15 +149,6 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
   /// True when editing an already-configured game (drives Save label + title).
   bool _editing = false;
   Object? _error;
-
-  /// True when Stableford is a SECONDARY side game (another game owns entry).
-  /// Side games inherit the primary's handicap — no own selector.
-  bool get _isSideGame {
-    final round = context.read<RoundProvider>().round;
-    final games = round?.activeGames ?? const <String>[];
-    return games.contains('stableford') &&
-        resolvePrimary(round?.primaryGame, games) != 'stableford';
-  }
 
   @override
   void initState() {
@@ -126,9 +186,9 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
     super.dispose();
   }
 
-  double get _pool {
+  double get _pool { // uses the participant count (subset side game shrinks it)
     final fee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
-    return fee * _numPlayers;
+    return fee * _participantCount;
   }
 
   Future<void> _load() async {
@@ -137,28 +197,16 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
       final client = context.read<AuthProvider>().client;
       final cfg = await client.getStablefordConfig(widget.roundId);
 
-      // Side games inherit the PRIMARY game's handicap. Stableford only does
-      // net/gross, so a strokes-off primary degrades to net here.
-      (String, int)? inherited;
-      if (_isSideGame) {
-        final round = context.read<RoundProvider>().round;
-        final fsId = round?.foursomes.isNotEmpty == true
-            ? round!.foursomes.first.id : null;
-        if (round != null && fsId != null) {
-          final h = await primaryHandicapFor(client, round, fsId);
-          inherited = (h.$1 == 'gross' ? 'gross' : 'net', h.$2);
-        }
-      }
       if (!mounted) return;
       setState(() {
         _numPlayers = cfg['num_players'] as int? ?? 0;
+        // Hydrate the participant subset (empty/absent = all players).
+        final pids = (cfg['participant_player_ids'] as List?)
+            ?.map((e) => e as int).toList() ?? const <int>[];
+        _participantIds = pids.isEmpty ? null : pids.toSet();
         final mode = (cfg['handicap_mode']?.toString() ?? 'net');
         _mode = (mode == 'gross') ? 'gross' : 'net';
         _netPercent = cfg['net_percent'] as int? ?? 100;
-        if (inherited != null) {
-          _mode       = inherited.$1;
-          _netPercent = inherited.$2;
-        }
         _payoutStyle = (cfg['payout_style']?.toString() == 'per_point')
             ? 'per_point' : 'pool';
         final ppm = cfg['per_point_mode']?.toString();
@@ -179,7 +227,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
         if (payouts.isEmpty) {
           // Fresh round → default to winner-take-all so the pool is visibly
           // allocated; the user bumps places / re-suggests from there.
-          final pool = (double.tryParse(_entryCtrl.text.trim()) ?? 0) * _numPlayers;
+          final pool = (double.tryParse(_entryCtrl.text.trim()) ?? 0) * _participantCount;
           _numPayouts = 1;
           _payoutCtrls[0].text = _fmt(pool);
           for (var i = 1; i < 4; i++) _payoutCtrls[i].text = '0';
@@ -239,6 +287,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
         pointsTable: {
           for (final b in _kBuckets) b: int.tryParse(_points[b]!.text.trim()) ?? 0,
         },
+        participantPlayerIds: _participantsToSend(),
       );
       if (widget.returnToHub) {
         // Round creation / "Edit Configuration": return to the launch page
@@ -289,13 +338,18 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
                         height: 52,
                         child: FilledButton(
                           onPressed:
-                              (_saving || !_stakeChosen) ? null : _save,
+                              (_saving || !_stakeChosen || !_participantsValid)
+                                  ? null : _save,
                           child: _saving
                               ? const SizedBox(width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
                               : Text(
-                                  _editing ? 'Save Configuration' : 'Start Game',
+                                  // Hub-configured (round creation / side game)
+                                  // saves and returns — never "Start Game".
+                                  (_editing || widget.returnToHub)
+                                      ? 'Save Configuration'
+                                      : 'Start Game',
                                   style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold)),
@@ -326,19 +380,19 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── Handicap (Net%/Gross — no Strokes-Off).  Side games inherit the
-        //    primary game's handicap (no own selector). ──
-        if (_isSideGame)
-          InheritedHandicapNote(mode: _mode, netPercent: _netPercent)
-        else
-          HandicapModeSelector(
-            mode: _mode,
-            netPercent: _netPercent,
-            allowStrokesOff: false,
-            onModeChanged: (m) => setState(() => _mode = m),
-            onPercentChanged: (p) => setState(() => _netPercent = p),
-          ),
+        // ── Handicap (Net%/Gross — no Strokes-Off). Every side game carries its
+        //    OWN handicap now; no inheritance (docs/parallel-games.md). ──
+        HandicapModeSelector(
+          mode: _mode,
+          netPercent: _netPercent,
+          allowStrokesOff: false,
+          onModeChanged: (m) => setState(() => _mode = m),
+          onPercentChanged: (p) => setState(() => _netPercent = p),
+        ),
         const SizedBox(height: 16),
+
+        // ── Who's in the bet (subset side game) ──
+        _participantCard(theme),
 
         // ── Points table ──
         _card(theme, child: Column(
@@ -528,7 +582,7 @@ class _StablefordSetupScreenState extends State<StablefordSetupScreen> {
             // Pool: show the pot total and how it splits across the paid places.
             if (_payoutStyle == 'pool') ...[
               const SizedBox(height: 2),
-              Text('Pool: \$${_pool.toStringAsFixed(0)}  ($_numPlayers players)',
+              Text('Pool: \$${_pool.toStringAsFixed(0)}  ($_participantCount players)',
                   style: theme.textTheme.bodySmall),
               const SizedBox(height: 8),
               PayoutConfigField(
