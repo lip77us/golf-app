@@ -21,12 +21,20 @@ class InlineScorePicker extends StatefulWidget {
   final int  strokes;
   final int? currentScore;
   final void Function(int) onScoreSelected;
+  /// Outer box border colour — the active player's team colour (Blue/Orange)
+  /// when on a team; null falls back to dark green.
+  final Color? boxBorderColor;
+  /// Outer box fill (wash) — matches the surrounding entry section; null falls
+  /// back to the standalone light-green wash.
+  final Color? boxFillColor;
 
   const InlineScorePicker({
     super.key,
     required this.par,
     required this.strokes,
     required this.currentScore,
+    this.boxBorderColor,
+    this.boxFillColor,
     required this.onScoreSelected,
   });
 
@@ -136,11 +144,12 @@ class _InlineScorePickerState extends State<InlineScorePicker> {
       // cells peeking in on either side (the fade hints there's more to scroll).
       width: _itemTotal * _viewportCells + 5,  // +5 covers the 2.5px border
       margin: const EdgeInsets.only(top: 6, bottom: 8),
-      // Dark-green border so the picker reads as an anchored control, not
-      // floating on the card.
+      // Light-green fill + bold dark-green border so the picker reads as an
+      // anchored control matching the active player's name box.
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withOpacity(0.18),
-        border: Border.all(color: Colors.green.shade700, width: 2.5),
+        color: widget.boxFillColor ?? Colors.green.shade50,
+        border: Border.all(
+            color: widget.boxBorderColor ?? Colors.green.shade700, width: 3.0),
         borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.antiAlias,

@@ -2012,6 +2012,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               _HoleScoreCard(
                 holeData:        holeData,
                 holeNumber:      _selectedHole,
+                courseName:      rp.round?.course.name ?? '',
                 players:         players,
                 scorecard:       sc,
                 holesInPlay:     _playOrderFor(rp),
@@ -2308,6 +2309,7 @@ void _noopPid(int _) {}
 class _HoleScoreCard extends StatelessWidget {
   final ScorecardHole?          holeData;
   final int                     holeNumber;
+  final String                  courseName;
   final List<Membership>        players;
   final Scorecard               scorecard;
   /// The round's holes in play order — lets the net<100% stroke dots do the
@@ -2373,6 +2375,7 @@ class _HoleScoreCard extends StatelessWidget {
   const _HoleScoreCard({
     required this.holeData,
     required this.holeNumber,
+    this.courseName = '',
     required this.players,
     required this.scorecard,
     this.holesInPlay = const [],
@@ -3028,6 +3031,14 @@ class _HoleScoreCard extends StatelessWidget {
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
               ),
               child: Column(children: [
+                // Course name above the hole number, in the same small font as
+                // the Par/yds/SI line below it.
+                if (courseName.isNotEmpty) ...[
+                  Text(courseName,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 2),
+                ],
                 Text('Hole $holeNumber',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleLarge
@@ -3167,12 +3178,11 @@ class _HoleScoreCard extends StatelessWidget {
             // first-tee-off pick (server-supplied).
             final dimmed = _isInactiveAltShot(m.player.id);
             final withdrawn = m.isWithdrawnOnHole(holeNumber);
-            return [
-              GestureDetector(
-                onLongPress: onWithdrawTap != null
-                    ? () => onWithdrawTap!(m)
-                    : null,
-                child: _PlayerRow(
+            final rowWidget = GestureDetector(
+              onLongPress: onWithdrawTap != null
+                  ? () => onWithdrawTap!(m)
+                  : null,
+              child: _PlayerRow(
                 member:              m,
                 gross:               gross,
                 isHot:               isHot,
@@ -3200,21 +3210,45 @@ class _HoleScoreCard extends StatelessWidget {
                 spotsCount:   spotsActive ? spotsCountFor(m.player.id) : 0,
                 onSpotsAdd:   spotsActive ? () => onSpotsAdd(m.player.id)    : null,
                 onSpotsRemove:spotsActive ? () => onSpotsRemove(m.player.id) : null,
+              ),
+            );
+            if (!isHot) return [rowWidget];
+
+            // Active player: wrap the name row AND the entry control in ONE
+            // "entry section" box.  Border + wash take the player's TEAM colour
+            // (Blue/Orange) when on a team, else neutral grey (skins / the other
+            // side-game golfer in the Larry solution).  The wash is a very light
+            // tint of that same colour, shared with the nested picker.
+            final teamColor  = _nameColorFor(m, holeNumber);
+            final boxColor   = teamColor ?? Colors.grey.shade500;
+            final washColor  = boxColor.withValues(alpha: 0.10);
+            final entryControl = blockedExtraSeg == null
+                ? InlineScorePicker(
+                    par:             par,
+                    strokes:         matchStrok,
+                    currentScore:    gross,
+                    boxBorderColor:  boxColor,
+                    boxFillColor:    Colors.white,
+                    onScoreSelected: (score) => onScoreSelected(m, score),
+                  )
+                : _SetTeamsPrompt(
+                    matchNumber: (sixesSummary?.segments
+                            .indexOf(blockedExtraSeg!) ?? -1) + 1,
+                    onTap: onOpenExtraTeamsPicker,
+                  );
+            return [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: washColor,
+                  border: Border.all(color: boxColor, width: 3.0),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [rowWidget, entryControl],
                 ),
               ),
-              if (isHot)
-                blockedExtraSeg == null
-                  ? InlineScorePicker(
-                      par:             par,
-                      strokes:         matchStrok,
-                      currentScore:    gross,
-                      onScoreSelected: (score) => onScoreSelected(m, score),
-                    )
-                  : _SetTeamsPrompt(
-                      matchNumber: (sixesSummary?.segments
-                              .indexOf(blockedExtraSeg!) ?? -1) + 1,
-                      onTap: onOpenExtraTeamsPicker,
-                    ),
             ];
           }).toList(),
 
@@ -3996,17 +4030,24 @@ class _PlayerRow extends StatelessWidget {
         // Active row gets a clear green highlight (over any faint team tint) so
         // it's obvious whose score is up; the coloured left edge still marks
         // the team.
+        // Active row sits INSIDE the shared green "entry section" box (see the
+        // wrapper below), so it carries no box of its own — transparent fill
+        // lets the section colour show, with just the team-colour left accent.
         color: isHot
-            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.28)
+            ? Colors.transparent
             : (teamTint != null
                 ? teamTint.withValues(alpha: 0.07)
                 : null),
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant),
-          left: teamTint != null
-              ? BorderSide(color: teamTint, width: 4)
-              : BorderSide.none,
-        ),
+        // No border on the active row itself — the surrounding section box
+        // (team-coloured) is the frame; a left accent here would double it.
+        border: isHot
+            ? const Border()
+            : Border(
+                top: BorderSide(color: theme.colorScheme.outlineVariant),
+                left: teamTint != null
+                    ? BorderSide(color: teamTint, width: 4)
+                    : BorderSide.none,
+              ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
@@ -4200,11 +4241,12 @@ class _PlayerRow extends StatelessWidget {
                     width: 40,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: isHot
-                          ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-                          : Colors.transparent,
+                      color: isHot ? Colors.white : Colors.transparent,
+                      // Team-colour box around the active score box (Blue/Orange,
+                      // grey for a no-team golfer) to match the section frame.
                       border: isHot
-                          ? Border.all(color: theme.colorScheme.primary, width: 2)
+                          ? Border.all(
+                              color: teamTint ?? Colors.grey.shade500, width: 2)
                           : Border.all(color: theme.colorScheme.outline),
                       borderRadius: BorderRadius.circular(6),
                     ),
