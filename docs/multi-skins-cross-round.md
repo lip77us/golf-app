@@ -216,6 +216,25 @@ A tournament foursome links its four into a pool on the **tournament's** gross
 wrinkle is that tournament rounds are TD-owned while the pool is a private side
 bet — the link grant must not widen TD control. Built after 2.1/2.2.
 
+**Link + visibility granularity = FOURSOME, not round (the tournament fix).**
+Phase 2.1 links a whole `Round`. In a casual round that IS one foursome, so
+round == foursome and the leaderboard surfacing (below) is exactly scoped. In a
+tournament a round holds many foursomes, so linking/showing at round level would
+expose a private 4-person pool to the WHOLE field. Scoring is already safe (the
+pool sources by phone-matched roster overlap, so only the four match wherever
+they play), but **visibility is too broad**. Fix: add a nullable `foursome` FK to
+`MultiSkinsLinkedRound` (null = whole round, back-compatible with 2.1); the
+join/link is per foursome; and the leaderboard surfacing scopes the pool tab to
+the linked foursome. Casual is unchanged (single foursome).
+
+Confirmed 2.1 behavior this refines: `_build_leaderboard(round_obj)` already
+surfaces a linked pool's tab on that round's `/api/rounds/{id}/leaderboard/`
+(with `host_round_id`), for BOTH casual and tournament rounds — this is the
+too-broad path a tournament needs scoped to the foursome. The tournament-AGGREGATE
+leaderboard (`TournamentLeaderboardView`) does NOT surface pools and shouldn't —
+a private foursome pool lives on that foursome's own round leaderboard, never the
+field-wide standings.
+
 ## Mid-round roster editing
 
 Folds in docs/multi-skins-mid-round-roster.md's rule, generalized: **a linked

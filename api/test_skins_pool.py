@@ -141,6 +141,18 @@ class SkinsPoolTests(TestCase):
         self.assertEqual(totals, {'O': 1, 'M2': 0, 'M4': 0})
         self.assertEqual(result.json()['money']['pool'], 30.0)
 
+    def test_linked_round_leaderboard_shows_the_pool_tab(self):
+        """The guest (Sixes) round's OWN leaderboard surfaces the pool it's
+        linked into — visibility-generous. The block carries host_round_id so
+        the client knows it's a cross-round pool, not this round's own game."""
+        self.b.post(reverse('api-skins-pool-join', args=[self.token]),
+                    {'round_id': self.round_g.id}, format='json')
+        lb = self.b.get(
+            reverse('api-leaderboard', args=[self.round_g.id])).json()
+        self.assertIn('multi_skins', lb['games'])
+        self.assertEqual(lb['games']['multi_skins']['host_round_id'],
+                         self.round_h.id)
+
     def test_join_rejected_when_no_overlap(self):
         # A round whose players share nothing with the roster.
         lone = Player.objects.create(account=self.acct_b, name='Lone',
