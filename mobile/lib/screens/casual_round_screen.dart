@@ -826,6 +826,11 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 // The logged-in player is always locked in as a participant.
                 final authPlayer = context.read<AuthProvider>().player;
                 final isLockedIn = authPlayer != null && player.id == authPlayer.id;
+                // Multi-Group Skins is Halved-only — a login-less golfer can't
+                // join (they'd have no way to be matched / to score). Grey them
+                // out; the invite button stays so they can be brought on.
+                final blockedNonHalved =
+                    _multiGroup && !player.isOnApp && !isLockedIn;
 
                 final scheme = Theme.of(context).colorScheme;
                 return Card(
@@ -843,9 +848,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                         // toggled off.
                         Checkbox(
                           value:    isSelected,
-                          onChanged: isLockedIn
-                              ? null
-                              : (v) => _onPlayerToggle(player.id, v ?? false),
+                          // Blocked golfers can't be ADDED, but one that was
+                          // already selected before switching to skins can still
+                          // be unchecked.
+                          onChanged:
+                              (isLockedIn || (blockedNonHalved && !isSelected))
+                                  ? null
+                                  : (v) => _onPlayerToggle(player.id, v ?? false),
                           fillColor: isLockedIn
                               ? WidgetStateProperty.all(scheme.primary)
                               : null,
@@ -862,9 +871,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                                 Flexible(
                                   child: Text(
                                     player.name,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 16),
+                                        fontSize: 16,
+                                        color: blockedNonHalved
+                                            ? scheme.onSurfaceVariant
+                                            : null),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -907,11 +919,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                                   ),
                                 ],
                               ]),
-                              // Line 2: handicap index. (Tees are set on their
-                              // own step; Multi-Group Skins auto-seats each
-                              // player in their own group, so there's no group
-                              // picker here.)
-                              Text('Index ${player.handicapIndex}',
+                              // Line 2: handicap index — or, for a login-less
+                              // golfer in a Halved-only skins round, why they're
+                              // greyed out. (Tees are set on their own step;
+                              // Multi-Group Skins auto-seats each player in their
+                              // own group, so there's no group picker here.)
+                              Text(
+                                  blockedNonHalved
+                                      ? 'Not on Halved — invite to add'
+                                      : 'Index ${player.handicapIndex}',
                                   style: Theme.of(context)
                                       .textTheme.bodySmall),
                             ],
