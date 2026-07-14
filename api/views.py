@@ -5326,7 +5326,8 @@ class SkinsPoolJoinView(APIView):
     def post(self, request, token):
         from games.models import MultiSkinsLinkedRound
         from services.multi_skins import (
-            pool_overlap, recalc_pools_for_round, _summary_for_game,
+            pool_overlap, recalc_pools_for_round, reconcile_pool_seating,
+            _summary_for_game,
         )
         host_round, game = _pool_by_token(token)
 
@@ -5358,6 +5359,9 @@ class SkinsPoolJoinView(APIView):
             game=game, round=mine,
             defaults={'linked_by': getattr(request.user, 'player_profile', None)},
         )
+        # The overlapping players now play in the linked round — drop the solo
+        # groups the pool auto-made for them in the host round.
+        reconcile_pool_seating(game)
         recalc_pools_for_round(mine)
         return Response({'overlap_ids': overlap,
                          'summary': _summary_for_game(game)},
@@ -5370,12 +5374,17 @@ class SkinsPoolUnlinkView(APIView):
 
     def post(self, request, token):
         from games.models import MultiSkinsLinkedRound
-        from services.multi_skins import _calculate_game, _summary_for_game
+        from services.multi_skins import (
+            _calculate_game, reconcile_pool_seating, _summary_for_game,
+        )
         _host, game = _pool_by_token(token)
 
         rid = request.data.get('round_id')
         mine = account_get_or_404(Round, request.user.account, pk=rid)
         MultiSkinsLinkedRound.objects.filter(game=game, round=mine).delete()
+        # Participants who were only in that round now have nowhere to score —
+        # re-seat them in a host solo group.
+        reconcile_pool_seating(game)
         _calculate_game(game)
         return Response({'summary': _summary_for_game(game)})
 

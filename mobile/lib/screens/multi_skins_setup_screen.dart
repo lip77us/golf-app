@@ -330,17 +330,17 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                     );
                   }),
               ],
-              // ── Golfers playing in another round (cross-round pool) ────────
+              // ── Other Halved golfers (each gets their own group of one) ────
               if (_externalGolfers.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(top: 16, bottom: 2),
-                  child: Text('Playing in another group',
+                  child: Text('Add golfers',
                       style: Theme.of(context).textTheme.labelLarge),
                 ),
                 Text(
-                  'These Halved golfers ante in but play in their own round. '
-                  'Link that round to this pool from its hub so their scores '
-                  'count.',
+                  'Each gets their own group and enters their own score. If '
+                  'they\'re playing a foursome game (e.g. Sixes), link that '
+                  'round to the pool from its hub instead.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 for (final g in _externalGolfers)

@@ -197,7 +197,110 @@ def setup_multi_skins(
 
     pids = valid_participant_ids(round_obj, participant_ids)
     game.participants.set(pids)
+    reconcile_pool_seating(game)
     return game
+
+
+def _default_tee_for(course, player):
+    """Pick a player's default CURRENT tee at a course: lowest sort_priority
+    among tees matching their sex (or unisex), else any current tee."""
+    from django.db.models import Q
+    from core.models import Tee
+    qs = Tee.objects.filter(course=course, superseded_by__isnull=True)
+    sexed = (qs.filter(Q(sex=player.sex) | Q(sex__isnull=True) | Q(sex=''))
+               .order_by('sort_priority', 'tee_name').first())
+    return sexed or qs.order_by('sort_priority', 'tee_name').first()
+
+
+def _participant_source_rounds(game: MultiSkinsGame) -> dict:
+    """{canonical_participant_id: set(round_id)} — every source round (host or
+    linked) each participant is a member of, matched by id or phone."""
+    from tournament.models import FoursomeMembership
+
+    part_ids = set(game.participants.values_list('id', flat=True))
+    part_by_phone: dict = {}
+    for p in game.participants.all():
+        ph = _identity_phone(p)
+        if ph:
+            part_by_phone.setdefault(ph, p.id)
+
+    source_ids = [r.id for r in _pool_source_rounds(game)]
+    out: dict = defaultdict(set)
+    for m in (
+        FoursomeMembership.objects
+        .filter(foursome__round_id__in=source_ids, player__is_phantom=False)
+        .select_related('player', 'player__user', 'foursome')
+    ):
+        canon = (m.player_id if m.player_id in part_ids
+                 else part_by_phone.get(_identity_phone(m.player)))
+        if canon is not None:
+            out[canon].add(m.foursome.round_id)
+    return out
+
+
+@transaction.atomic
+def reconcile_pool_seating(game: MultiSkinsGame, handicap_allowance: float = 1.0):
+    """
+    Keep each participant seated in exactly one scorable place (Halved-only
+    pool; docs/multi-skins-cross-round.md, use-case 4):
+
+    * A participant who plays in a LINKED round is scored there — remove any
+      scoreless host-round SOLO group we auto-made for them.
+    * A participant not in ANY source round gets their OWN new group of one in
+      the host round, so they self-score and the round shows in their login.
+    * A scoreless solo group whose player was dropped from the roster is pruned.
+
+    Only ever deletes a group of ONE real player with NO scores, so a real
+    playing group (the TD's foursome, a shared group) and history are safe.
+    """
+    from django.db.models import Max
+    from scoring.handicap import par_adjusted_playing_handicap
+    from scoring.models import HoleScore
+    from tournament.models import Foursome, FoursomeMembership
+
+    round_obj = game.round
+    host_id   = round_obj.id
+    part_ids  = set(game.participants.values_list('id', flat=True))
+    src       = _participant_source_rounds(game)
+
+    # 1) Prune scoreless SOLO host groups that are no longer needed.
+    for fs in list(round_obj.foursomes.prefetch_related('memberships__player')):
+        reals = [m for m in fs.memberships.all() if not m.player.is_phantom]
+        if len(reals) != 1:
+            continue
+        pid            = reals[0].player_id
+        plays_in_link  = any(r != host_id for r in src.get(pid, set()))
+        dropped        = pid not in part_ids
+        if (plays_in_link or dropped) and \
+                not HoleScore.objects.filter(foursome=fs).exists():
+            fs.delete()
+
+    # 2) Seat participants who are in NO source round in a fresh solo group.
+    src        = _participant_source_rounds(game)   # refresh after prune
+    to_add     = [pid for pid in part_ids if not src.get(pid)]
+    if not to_add:
+        return
+    players    = {p.id: p for p in Player.objects.filter(id__in=to_add)}
+    next_group = (round_obj.foursomes.aggregate(m=Max('group_number'))['m'] or 0)
+    for pid in to_add:
+        player = players.get(pid)
+        if player is None:
+            continue
+        tee = _default_tee_for(round_obj.course, player)
+        if tee is None:
+            continue   # course has no tees — can't seat them
+        next_group += 1
+        fs = Foursome.objects.create(round=round_obj, group_number=next_group)
+        course_hcp  = player.course_handicap(tee)
+        playing_hcp = par_adjusted_playing_handicap(
+            course_hcp, tee.par, tee.par, handicap_allowance)
+        FoursomeMembership.objects.create(
+            foursome         = fs,
+            player           = player,
+            tee              = tee,
+            course_handicap  = course_hcp,
+            playing_handicap = playing_hcp,
+        )
 
 
 def valid_participant_ids(round_obj, participant_ids: list[int]) -> list[int]:

@@ -314,6 +314,62 @@ class MultiSkinsCrossRoundTests(TestCase):
                     if m.player.name == name)
 
 
+class MultiSkinsSoloFoursomeTests(TestCase):
+    """Halved-only pool where each player is put in their OWN group of one and
+    self-scores (docs/multi-skins-cross-round.md, use-case 4)."""
+    def setUp(self):
+        self.tee    = make_tee()
+        self.course = self.tee.course
+        acct = _test_account()
+        # Two Halved golfers, not seated in any foursome yet.
+        self.p1 = make_player('P1', 5);  self.p1.phone = '+13105550201'; self.p1.save()
+        self.p2 = make_player('P2', 12); self.p2.phone = '+13105550202'; self.p2.save()
+        User.objects.create(username='up1', phone='+13105550201', account=acct)
+        User.objects.create(username='up2', phone='+13105550202', account=acct)
+        self.h = make_round(self.course, handicap_mode='gross',
+                            net_max_double_bogey=False)
+
+    def _fs_by_pid(self):
+        out = {}
+        for fs in self.h.foursomes.prefetch_related('memberships'):
+            for m in fs.memberships.all():
+                out[m.player_id] = fs
+        return out
+
+    def test_setup_seats_each_participant_in_their_own_group(self):
+        setup_multi_skins(self.h, participant_ids=[self.p1.id, self.p2.id],
+                          handicap_mode='gross', bet_unit=5.00)
+        fours = list(self.h.foursomes.prefetch_related('memberships'))
+        assert len(fours) == 2, len(fours)
+        for fs in fours:
+            assert fs.memberships.count() == 1
+        assert set(self._fs_by_pid()) == {self.p1.id, self.p2.id}
+
+    def test_solo_scores_feed_the_pool_with_real_group_numbers(self):
+        setup_multi_skins(self.h, participant_ids=[self.p1.id, self.p2.id],
+                          handicap_mode='gross', bet_unit=5.00)
+        fs = self._fs_by_pid()
+        submit_hole(fs[self.p1.id], 1, [(self.p1, 3)])   # birdie
+        submit_hole(fs[self.p2.id], 1, [(self.p2, 4)])   # par
+        recalc_pools_for_round(self.h)
+        s = multi_skins_summary(self.h)
+        skins  = {p['name']: p['skins_won']    for p in s['players']}
+        groups = {p['name']: p['group_number'] for p in s['players']}
+        assert skins == {'P1': 1, 'P2': 0}, skins
+        # No more phantom "Group 0" — each is a real group of one.
+        assert all(g and g > 0 for g in groups.values()), groups
+
+    def test_removing_a_scoreless_participant_prunes_their_group(self):
+        setup_multi_skins(self.h, participant_ids=[self.p1.id, self.p2.id],
+                          handicap_mode='gross', bet_unit=5.00)
+        assert self.h.foursomes.count() == 2
+        # Drop P2 (no scores) → their solo group is cleaned up.
+        setup_multi_skins(self.h, participant_ids=[self.p1.id],
+                          handicap_mode='gross', bet_unit=5.00)
+        assert self.h.foursomes.count() == 1
+        assert set(self._fs_by_pid()) == {self.p1.id}
+
+
 class MultiSkinsParticipantInBothRoundsTests(TestCase):
     """Repro for the reported bug: a pool participant who is a login-less golfer
     placed in the HOST round's foursome (the only way to add a non-Halved player)

@@ -109,7 +109,9 @@ class SkinsPoolTests(TestCase):
         — the setup endpoint rejects the roster."""
         login_less = Player.objects.create(
             account=self.acct_a, name='Guest', handicap_index=10)  # no phone/user
-        fs = Foursome.objects.create(round=self.round_h, group_number=2)
+        fs = Foursome.objects.create(
+            round=self.round_h,
+            group_number=self.round_h.foursomes.count() + 1)
         _member(fs, login_less, self.tee_a, 10)
         resp = self.a.post(
             reverse('api-multi-skins-setup', args=[self.round_h.id]),
