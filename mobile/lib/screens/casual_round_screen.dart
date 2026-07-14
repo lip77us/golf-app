@@ -124,18 +124,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// Group dropdown and lets the foursome count exceed one.
   bool get _multiGroup => _activeGames.contains(GameIds.multiSkins);
 
-  /// Highest group number currently assigned, plus one (so the dropdown
-  /// always offers "create a new group" if there's room).  Capped so the
-  /// menu doesn't grow unbounded.
-  int get _maxGroupOption {
-    final used = _playerGroups.values.toSet();
-    final highest = used.isEmpty ? 0 : used.reduce((a, b) => a > b ? a : b);
-    // Allow one extra slot beyond the current max so users can split off
-    // a new group.  Hard cap at the number of participating players —
-    // there's no point offering more groups than there are players.
-    return (highest + 1).clamp(1, _playerTees.length.clamp(1, 99));
-  }
-
   /// The group a newly-added player should land in by default — the lowest
   /// existing group that still has room (< 4 players), or a brand-new
   /// group when every current group is full.  Keeps the user from having
@@ -151,6 +139,17 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       if (counts[g]! < 4) return g;
     }
     return sortedGroups.last + 1;
+  }
+
+  /// The lowest unused group number — Multi-Group Skins gives every player
+  /// their own group of one, so no two players share a group.
+  int _nextSoloGroup() {
+    final used = _playerGroups.values.toSet();
+    var g = 1;
+    while (used.contains(g)) {
+      g++;
+    }
+    return g;
   }
 
   @override
@@ -368,10 +367,11 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         // default that's easy to miss.  Suggestions are filled in on the tee
         // step via _applyTeeSuggestions().
         _playerTees[playerId] = 0;
-        // Auto-spillover: land in the lowest group with room (< 4
-        // players).  Without this the 5th player joined group 1 and
-        // the round-setup API rejected the 5-player group.
-        _playerGroups[playerId] = _nextAvailableGroup();
+        // Multi-Group Skins seats every player in their OWN group of one
+        // (Halved-only pool — each self-scores), so there's no group picker.
+        // Other multi-group play spills over into groups of up to 4.
+        _playerGroups[playerId] =
+            _multiGroup ? _nextSoloGroup() : _nextAvailableGroup();
       } else {
         _playerTees.remove(playerId);
         _playerGroups.remove(playerId);
@@ -907,42 +907,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                                   ),
                                 ],
                               ]),
-                              // Line 2: handicap, plus the tee (and group)
-                              // selectors when this player is selected — on the
-                              // same line as the handicap to keep the card tight.
-                              // Tees moved to their own step; here we only show
-                              // the index (+ the group selector for multi-group
-                              // rounds).  Tees are set on the next step.
-                              if (isSelected && _multiGroup)
-                                Row(children: [
-                                  Text('Index ${player.handicapIndex}',
-                                      style: Theme.of(context)
-                                          .textTheme.bodySmall),
-                                  const SizedBox(width: 12),
-                                  DropdownButton<int>(
-                                    value: _playerGroups[player.id] ?? 1,
-                                    isDense: true,
-                                    hint: const Text('Group'),
-                                    items: [
-                                      for (int g = 1;
-                                          g <= _maxGroupOption; g++)
-                                        DropdownMenuItem(
-                                          value: g,
-                                          child: Text('G$g'),
-                                        ),
-                                    ],
-                                    onChanged: (g) {
-                                      if (g != null) {
-                                        setState(() =>
-                                            _playerGroups[player.id] = g);
-                                      }
-                                    },
-                                  ),
-                                ])
-                              else
-                                Text('Index ${player.handicapIndex}',
-                                    style: Theme.of(context)
-                                        .textTheme.bodySmall),
+                              // Line 2: handicap index. (Tees are set on their
+                              // own step; Multi-Group Skins auto-seats each
+                              // player in their own group, so there's no group
+                              // picker here.)
+                              Text('Index ${player.handicapIndex}',
+                                  style: Theme.of(context)
+                                      .textTheme.bodySmall),
                             ],
                           ),
                         ),
