@@ -13,7 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
-import '../widgets/scorecard_grid.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
@@ -131,13 +130,13 @@ class _PlayerLeaderboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Group participants by foursome so each group can show its scorecard
-    // icon once at the section header.
-    final byGroup = <int, List<MultiSkinsPlayerTotal>>{};
-    for (final p in summary.players) {
-      byGroup.putIfAbsent(p.groupNumber, () => []).add(p);
-    }
-    final groupNums = byGroup.keys.toList()..sort();
+    final theme = Theme.of(context);
+    // Flat standings (already sorted by skins desc server-side). A cross-round
+    // pool draws players from different rounds, so grouping by "Group N" is
+    // meaningless; a roster member who hasn't linked a round yet has no
+    // foursome (foursome_id 0) and is flagged "Not linked yet" rather than
+    // dumped into a phantom "Group 0".
+    final players = summary.players;
 
     return Card(
       child: Column(
@@ -167,70 +166,37 @@ class _PlayerLeaderboard extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          for (final gn in groupNums) ...[
-            // Section header per group with a tappable scorecard icon
-            // that opens the foursome's full scorecard.
-            _GroupHeader(
-              groupNumber: gn,
-              foursomeId : byGroup[gn]!.first.foursomeId,
-            ),
-            for (final p in byGroup[gn]!)
-              ListTile(
-                dense: true,
-                title: Text(p.name),
-                trailing: SizedBox(
-                  width: 140,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      SizedBox(width: 36,
-                          child: Text(p.thru == 0 ? '—' : '${p.thru}',
-                              textAlign: TextAlign.right)),
-                      const SizedBox(width: 8),
-                      SizedBox(width: 36,
-                          child: Text('${p.skinsWon}',
-                              textAlign: TextAlign.right)),
-                      const SizedBox(width: 8),
-                      SizedBox(width: 52,
-                          child: Text('\$${p.payout.toStringAsFixed(2)}',
-                              textAlign: TextAlign.right)),
-                    ],
-                  ),
+          for (final p in players)
+            ListTile(
+              dense: true,
+              title: Text(p.name),
+              subtitle: p.foursomeId == 0
+                  ? Text('Not linked yet',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant))
+                  : null,
+              trailing: SizedBox(
+                width: 140,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    SizedBox(width: 36,
+                        child: Text(p.thru == 0 ? '—' : '${p.thru}',
+                            textAlign: TextAlign.right)),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 36,
+                        child: Text('${p.skinsWon}',
+                            textAlign: TextAlign.right)),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 52,
+                        child: Text('\$${p.payout.toStringAsFixed(2)}',
+                            textAlign: TextAlign.right)),
+                  ],
                 ),
               ),
-          ],
+            ),
         ],
       ),
-    );
-  }
-}
-
-class _GroupHeader extends StatelessWidget {
-  final int groupNumber;
-  final int foursomeId;
-  const _GroupHeader({required this.groupNumber, required this.foursomeId});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(children: [
-        Text('Group $groupNumber',
-            style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.bold)),
-        const Spacer(),
-        IconButton(
-          icon: const Icon(Icons.assignment, size: 20),
-          tooltip: 'View scorecard',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => ScorecardGrid(foursomeId: foursomeId),
-          )),
-        ),
-      ]),
     );
   }
 }
