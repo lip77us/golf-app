@@ -6,7 +6,6 @@ import '../api/models.dart';
 import '../ui_labels.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
-import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/route_observer.dart';
 import '../utils/shared_round.dart';
@@ -300,39 +299,13 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
       return;
     }
 
-    // In-progress: jump straight to the game screen.
-    // Setup screens auto-redirect to the play screen if the game is already
-    // started, so routing through them is safe and handles the
-    // "started vs not started" case for free.
-
-    // Load the full round so that rp.round is populated before the play screen
-    // opens.  Game screens use rp.round for things like the leaderboard button
-    // and bet-unit display; without this it stays null when coming from this
-    // list (rather than through the normal round-setup flow).
-    // ignore: use_build_context_synchronously
-    context.read<RoundProvider>().loadRound(round.id);   // fire & forget
-
-    final String route;
-    if (round.activeGames.contains('sixes')) {
-      route = '/sixes-setup';          // will redirect to /score-entry if already started
-    } else if (round.activeGames.contains('points_531')) {
-      route = '/points-531-setup';     // will redirect to /score-entry if already started
-    } else if (round.activeGames.contains('skins')) {
-      route = '/skins-setup';          // will redirect to /score-entry if already started
-    } else if (round.activeGames.contains('vegas')) {
-      route = '/vegas-setup';          // will redirect to /score-entry if already started
-    } else if (round.activeGames.contains('fourball')) {
-      route = '/fourball-setup';       // will redirect to /score-entry if already started
-    } else if (round.activeGames.contains('nassau')) {
-      route = '/nassau-setup';         // will redirect to /score-entry if already started
-    } else if (round.activeGames.contains('wolf')) {
-      route = '/wolf-setup';           // will redirect to /wolf if already started
-    } else if (round.activeGames.contains('rabbit')) {
-      route = '/rabbit-setup';         // will redirect to /rabbit if already started
-    } else {
-      route = '/score-entry';          // stroke play, stableford, or multi-game combo
-    }
-    await nav.pushNamed(route, arguments: fsId);
+    // In-progress: land on the round overview (hub), NOT straight into scoring.
+    // The hub's foursome cards each have a prominent "Enter Scores" button, and
+    // keeping the hub reachable after scoring starts is what lets you still
+    // reach per-foursome actions that live there — "Link to a Skins pool",
+    // "Set scorer", "Edit configuration". Jumping straight to the game screen
+    // hid those once a hole was posted (see the multi-skins linking case).
+    await nav.pushNamed('/round', arguments: round.id);
 
     // Immediately show a loading spinner so the stale "Not started" list is
     // hidden while we wait for any pending score syncs to flush.
