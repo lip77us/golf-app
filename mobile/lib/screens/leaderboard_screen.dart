@@ -165,7 +165,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       vsync: this,
       initialIndex: initialIndex,
     );
+    _lastTabIndex = _tabController!.index;
+    // Refresh the whole payload when the user switches game tabs, so e.g.
+    // Sixes → Honors → back to Sixes shows the latest Sixes match score
+    // (the leaderboard is one payload; switching tabs alone shows a cached
+    // snapshot). Silent so there's no spinner flash.
+    _tabController!.addListener(_onTabChanged);
     setState(() {});
+  }
+
+  int _lastTabIndex = 0;
+
+  void _onTabChanged() {
+    final c = _tabController;
+    if (c == null || c.indexIsChanging) return;   // wait until it settles
+    if (c.index == _lastTabIndex) return;          // no actual tab change
+    _lastTabIndex = c.index;
+    _refresh();
   }
 
   @override

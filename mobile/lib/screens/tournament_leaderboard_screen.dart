@@ -75,6 +75,16 @@ class _TournamentLeaderboardScreenState
     if (state == AppLifecycleState.resumed) _load(silent: true);
   }
 
+  int _lastTabIndex = 0;
+
+  void _onTabChanged() {
+    final c = _tabCtrl;
+    if (c == null || c.indexIsChanging) return;   // wait until it settles
+    if (c.index == _lastTabIndex) return;          // no actual tab change
+    _lastTabIndex = c.index;
+    _load(silent: true);
+  }
+
   // ── Data ──────────────────────────────────────────────────────────────────
 
   Future<void> _load({bool silent = false}) async {
@@ -108,6 +118,10 @@ class _TournamentLeaderboardScreenState
       if (_tabCtrl == null || _tabCtrl!.length != tabs.length) {
         _tabCtrl?.dispose();
         _tabCtrl = TabController(length: tabs.length, vsync: this);
+        _lastTabIndex = _tabCtrl!.index;
+        // Refresh on tab switch so moving between game tabs shows the latest
+        // standings (silent — no spinner flash).
+        _tabCtrl!.addListener(_onTabChanged);
         setState(() {});
       }
     } catch (e) {
