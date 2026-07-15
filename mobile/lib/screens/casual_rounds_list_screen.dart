@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../theme/halved_brand.dart';
 import '../ui_labels.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
@@ -11,7 +13,6 @@ import '../utils/route_observer.dart';
 import '../utils/shared_round.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
-import '../widgets/golf_app_bar.dart';
 import 'casual_round_screen.dart';
 import 'player_list_screen.dart';
 
@@ -200,11 +201,18 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
     final myId = auth.player?.id;
 
     return Scaffold(
-      appBar: GolfAppBar(
-        title: kCasualRoundsLabel,
+      backgroundColor: Halved.surface,
+      appBar: AppBar(
+        backgroundColor: Halved.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Halved.deepPine),
+        title: Text(kCasualRoundsLabel, style: Halved.appBarTitle()),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: Halved.pine),
             onPressed: _load,
           ),
         ],
@@ -232,46 +240,49 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
         },
         onLogout: () => auth.logout(),
       ),
-      // Only show FAB on the Active tab — no new rounds on the Completed tab.
-      floatingActionButton: _showCompleted ? null : FloatingActionButton.extended(
-        onPressed: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CasualRoundScreen()),
-          );
-          _load();
-        },
-        icon: const Icon(Icons.sports_golf),
-        label: const Text('New Casual Round'),
-      ),
+      // Persistent "New Casual Round" ghost link along the bottom — only on the
+      // Active tab (no new rounds from the Completed tab).
+      bottomNavigationBar: _showCompleted ? null : _buildNewRoundBar(),
       body: Column(
         children: [
           // ── Active / Completed toggle ──
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: SegmentedButton<bool>(
-              showSelectedIcon: false,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: HalvedSegmented<bool>(
+              selected: _showCompleted,
+              onChanged: _onToggle,
               segments: const [
-                ButtonSegment(
-                  value: false,
-                  label: Text('Active'),
-                  icon: Icon(Icons.play_circle_outline),
-                ),
-                ButtonSegment(
-                  value: true,
-                  label: Text('Completed'),
-                  icon: Icon(Icons.check_circle_outline),
-                ),
+                (value: false, label: 'Active',
+                    icon: Icons.play_circle_outline),
+                (value: true,  label: 'Completed',
+                    icon: Icons.check_circle_outline),
               ],
-              selected: {_showCompleted},
-              onSelectionChanged: (s) => _onToggle(s.first),
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-              ),
             ),
           ),
           // ── List ──
           Expanded(child: _buildBody(myId)),
         ],
+      ),
+    );
+  }
+
+  /// Bottom ghost link that opens the new-casual-round wizard.
+  Widget _buildNewRoundBar() {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+        child: TextButton.icon(
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CasualRoundScreen()),
+            );
+            _load();
+          },
+          icon: const Icon(Icons.add, color: Halved.pine),
+          label: Text('New Round',
+              style: Halved.body(weight: FontWeight.w700, color: Halved.pine)),
+        ),
       ),
     );
   }
@@ -321,6 +332,74 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
     }
   }
 
+  /// Branded empty state — pin-in-hole mark in a sage badge, headline, and (on
+  /// the Active tab) the bright-mint New Casual Round CTA.
+  Widget _buildEmptyState() {
+    final completed = _showCompleted;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 116, height: 116,
+              decoration: BoxDecoration(
+                color: Halved.pine.withValues(alpha: 0.06),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: completed
+                  ? const Icon(Icons.check_circle_outline,
+                      size: 52, color: Halved.pine)
+                  : SvgPicture.asset('assets/icon/halved_mark.svg', height: 50),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              completed ? 'No completed rounds yet.' : 'No rounds in progress.',
+              textAlign: TextAlign.center,
+              style: Halved.emptyTitle(),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              completed
+                  ? 'Completed rounds will appear here.'
+                  : 'Tap the button below to start a new casual round.',
+              textAlign: TextAlign.center,
+              style: Halved.body(color: Halved.muted),
+            ),
+            if (!completed) ...[
+              const SizedBox(height: 28),
+              HalvedCtaButton(
+                label: 'New Round',
+                icon: Icons.sports_golf,
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const CasualRoundScreen()),
+                  );
+                  _load();
+                },
+              ),
+              // Onboarding wizard stays reachable for a truly empty account.
+              if (!_hasAnyRound) ...[
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () async {
+                    await Navigator.of(context).pushNamed('/onboarding');
+                    _load();
+                  },
+                  child: Text('First time? Set up your first round',
+                      style: Halved.body(
+                          weight: FontWeight.w600, color: Halved.pine)),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody(int? myId) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
@@ -356,45 +435,7 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
       return _showCompleted ? r.status == 'complete' : r.status != 'complete';
     }).toList();
     if (rounds.isEmpty && shared.isEmpty && observing.isEmpty) {
-      final emptyMsg = _showCompleted
-          ? 'No completed rounds yet.'
-          : 'No rounds in progress.';
-      final hintMsg = _showCompleted
-          ? 'Completed rounds will appear here.'
-          : 'Tap + to start a new casual round.';
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _showCompleted
-                  ? Icons.check_circle_outline
-                  : Icons.sports_golf,
-              size: 56,
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(emptyMsg,
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(hintMsg,
-                style: Theme.of(context).textTheme.bodySmall),
-            // Onboarding CTA only for a truly empty account (no rounds at all) —
-            // not just an empty Active tab when completed rounds exist.
-            if (!_showCompleted && !_hasAnyRound) ...[
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: () async {
-                  await Navigator.of(context).pushNamed('/onboarding');
-                  _load();
-                },
-                icon: const Icon(Icons.auto_awesome_outlined),
-                label: const Text('Set up your first round'),
-              ),
-            ],
-          ],
-        ),
-      );
+      return _buildEmptyState();
     }
 
     // One date-sorted list mixing my own rounds and ones a friend started and

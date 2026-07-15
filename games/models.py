@@ -884,6 +884,125 @@ class RabbitHoleResult(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# HONORS (side-game-only carry-token points game)
+# ---------------------------------------------------------------------------
+
+class HonorsGame(models.Model):
+    """
+    The Honors side game for one Foursome (2–4 real players; phantoms
+    ignored).  A single carry token — "the honor" — passes to whoever wins
+    a hole outright (strictly lowest score-to-compare, no tie).  The holder
+    keeps it until another player wins a hole outright; a tied hole never
+    beats the holder ("a tie doesn't beat you").  Each hole a player is
+    holding the honor they score 1 point, so a player's points = the number
+    of holes they held the honor.
+
+    Always a SIDE game (never a primary) — it's a leaderboard overlay
+    derived from the entered scores, like Skins/Stableford in their side
+    role.  It does not affect score entry.
+
+    handicap_mode / net_percent are stored per-game so the honor travels
+    with its own handicap policy: Net (with percentage), Gross, and
+    Strokes-Off-Low.
+
+    Settlement uses the shared wager engine (services.wager) on the point
+    totals — ``bet_unit`` (the round stake) is the value of one point:
+      * pool                  — everyone antes bet_unit; the pot splits by
+                                share of points (PROPORTIONAL). Entry is the cap.
+      * per_point + 'average' — settle vs the field average (VS_AVERAGE).
+                                This is the default.
+      * per_point + 'all'     — pay everyone above you (PAY_ABOVE).
+      * per_point + 'first'   — only the leader collects (PAY_WINNER).
+    """
+    foursome            = models.OneToOneField(
+                            Foursome, on_delete=models.CASCADE,
+                            related_name='honors_game',
+                        )
+    status              = models.CharField(
+                            max_length=20,
+                            choices=MatchStatus.choices,
+                            default=MatchStatus.PENDING,
+                        )
+    handicap_mode       = models.CharField(
+                            max_length=20,
+                            choices=HandicapMode.choices,
+                            default=HandicapMode.NET,
+                            help_text="How per-hole scores are adjusted for ranking.",
+                        )
+    net_percent         = models.PositiveSmallIntegerField(
+                            default=100,
+                            validators=[MinValueValidator(0), MaxValueValidator(200)],
+                            help_text="Percentage of playing handicap applied when "
+                                      "handicap_mode='net'.",
+                        )
+    loss_cap            = models.DecimalField(
+                            max_digits=8, decimal_places=2,
+                            null=True, blank=True,
+                            help_text=(
+                                "Optional per-side loss cap (one table-wide value "
+                                "applied per player). Null = uncapped. When set, "
+                                "losers clip at the cap and winners are reduced "
+                                "pro-rata — see services.wager.settle()."
+                            ),
+                        )
+    PAYOUT_STYLES   = [('pool', 'Pool'), ('per_point', 'Per point')]
+    payout_style    = models.CharField(max_length=12, choices=PAYOUT_STYLES,
+                                       default='per_point')
+    PER_POINT_MODES = [
+        ('average', 'Settle vs the field average'),
+        ('all',     'Pay everyone above you'),
+        ('first',   'Pay the leader'),
+    ]
+    per_point_mode  = models.CharField(max_length=8, choices=PER_POINT_MODES,
+                                       default='average')
+    # Subset side game: which real players are IN the honors game.  Empty list
+    # = all real players in the foursome (backward compatible).  A non-empty
+    # subset restricts who competes for the honor AND who settles — mirrors
+    # SkinsGame.participant_player_ids (docs/parallel-games.md).
+    participant_player_ids = models.JSONField(default=list, blank=True)
+    created_at          = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Honors — Group {self.foursome.group_number}"
+
+
+class HonorsHoleResult(models.Model):
+    """
+    Calculated per-hole state for a HonorsGame.  One row per hole that has
+    a gross score for every real player.
+
+    winner:  the outright hole winner (strictly lowest score), or null on a
+             tie for low.
+    holder:  who holds the honor *after* this hole, or null if it's loose
+             (nobody has won a hole outright yet).  The holder scores 1 point
+             for this hole.
+    """
+    game        = models.ForeignKey(
+                    HonorsGame, on_delete=models.CASCADE,
+                    related_name='hole_results',
+                )
+    hole_number = models.PositiveSmallIntegerField(
+                    validators=[MinValueValidator(1), MaxValueValidator(18)]
+                )
+    winner      = models.ForeignKey(
+                    Player, on_delete=models.SET_NULL, null=True, blank=True,
+                    related_name='honors_holes_won',
+                )
+    holder      = models.ForeignKey(
+                    Player, on_delete=models.SET_NULL, null=True, blank=True,
+                    related_name='honors_holes_held',
+                )
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        h = self.holder.short_name if self.holder else 'loose'
+        return f"Hole {self.hole_number} — honor: {h}"
+
+
+# ---------------------------------------------------------------------------
 # MULTI-FOURSOME SKINS (Round-scoped, pooled across every participating group)
 # ---------------------------------------------------------------------------
 

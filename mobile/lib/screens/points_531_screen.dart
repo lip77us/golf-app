@@ -906,8 +906,7 @@ class _P531HoleScoreCard extends StatelessWidget {
             final pointsForThisHole = awards[m.player.id];
             final cumulativePoints  = _pointsFor(m.player.id);
 
-            return [
-              _P531PlayerRow(
+            final row = _P531PlayerRow(
                 position:       idx + 1,
                 member:         m,
                 gross:          gross,
@@ -929,15 +928,42 @@ class _P531HoleScoreCard extends StatelessWidget {
                 onSpotsAdd:    spotsActive ? () => onSpotsAdd(m.player.id) : null,
                 onSpotsRemove:
                     spotsActive ? () => onSpotsRemove(m.player.id) : null,
-              ),
-              if (isHot)
-                InlineScorePicker(
-                  par:           par,
-                  strokes:       matchStrokes,
-                  currentScore:  gross,
-                  onScoreSelected: (score) => onScoreSelected(m, score),
+              );
+            if (isHot) {
+              // Active player + picker share ONE bounding box (no teams in
+              // Points, so it uses the brand pine). Flush-left bold bar, right
+              // inset so the right line shows, faint wash fill.
+              final boxColor = Theme.of(context).colorScheme.primary;
+              return [
+                Container(
+                  margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+                  decoration: BoxDecoration(
+                    color: boxColor.withOpacity(0.10),
+                    border: Border(
+                      top:    BorderSide(color: boxColor, width: 1.5),
+                      bottom: BorderSide(color: boxColor, width: 1.5),
+                      right:  BorderSide(color: boxColor, width: 1.5),
+                      left:   BorderSide(color: boxColor, width: 4.0),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      row,
+                      InlineScorePicker(
+                        par:           par,
+                        strokes:       matchStrokes,
+                        currentScore:  gross,
+                        boxBorderColor: boxColor,
+                        boxFillColor:   Colors.white,
+                        onScoreSelected: (score) => onScoreSelected(m, score),
+                      ),
+                    ],
+                  ),
                 ),
-            ];
+              ];
+            }
+            return [row];
           }).toList(),
         ],
       ),
@@ -1001,21 +1027,21 @@ class _P531PlayerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final Color boxBg = isHot
-        ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-        : Colors.transparent;
+    final Color boxBg = isHot ? Colors.white : Colors.transparent;
     final boxBorder = isHot
         ? Border.all(color: theme.colorScheme.primary, width: 2)
         : Border.all(color: theme.colorScheme.outline);
 
     return Container(
       decoration: BoxDecoration(
-        color: isHot
-            ? theme.colorScheme.primaryContainer.withOpacity(0.08)
-            : null,
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
+        // When active the row is transparent so the bounding box's wash shows
+        // through and provides the frame; inactive rows keep the top divider.
+        color: Colors.transparent,
+        border: isHot
+            ? const Border()
+            : Border(
+                top: BorderSide(color: theme.colorScheme.outlineVariant),
+              ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [

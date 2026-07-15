@@ -14,6 +14,7 @@ import '../widgets/inline_message.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../utils/watcher_invite.dart';
+import '../utils/route_observer.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/borrowed_fourth.dart';
@@ -39,7 +40,7 @@ class LeaderboardScreen extends StatefulWidget {
 }
 
 class _LeaderboardScreenState extends State<LeaderboardScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware, WidgetsBindingObserver {
   TabController? _tabController;
   List<String>   _gameTabs = [];
   bool           _initialTabApplied = false;
@@ -47,11 +48,38 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RoundProvider>().loadLeaderboard(widget.roundId);
       // First time here: explain the watcher / spectator-link icons.
       maybeShowLeaderboardHelp(context);
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) appRouteObserver.subscribe(this, route);
+  }
+
+  /// Re-fetch the leaderboard. Called on every return to this screen (a screen
+  /// pushed on top was popped) and on app resume, so leaving and coming back
+  /// always shows fresh standings without a manual pull-to-refresh.
+  void _refresh() {
+    if (!mounted) return;
+    context.read<RoundProvider>().loadLeaderboard(widget.roundId, silent: true);
+  }
+
+  /// Returning to the leaderboard (a game/score screen on top was popped).
+  @override
+  void didPopNext() => _refresh();
+
+  /// Warm launch from the home screen doesn't re-run initState — refresh so
+  /// standings reflect anything scored while backgrounded.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
   }
 
   void _initTabs(Leaderboard lb) {
@@ -142,6 +170,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _tabController?.dispose();
     super.dispose();
   }
@@ -688,6 +718,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _SixesGroupCard.new);
       case 'points_531':
         return _ByGroupView(data: data, builder: _Points531GroupCard.new);
+      case 'honors':
+        return _ByGroupView(data: data, builder: _HonorsGroupCard.new);
       case 'vegas':
         return _ByGroupView(data: data, builder: _VegasGroupCard.new);
       case 'fourball':
@@ -1182,6 +1214,19 @@ class _RedBallView extends StatelessWidget {
     final entryFee  = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
     final payouts   = (data['payouts'] as List? ?? []);
 
+    // Best net-to-par among teams that are still alive AND have started —
+    // used to highlight ALL teams tied for the lead (not just rank 1, so a tie
+    // shows both as leaders).
+    int? bestNet;
+    for (final r in results) {
+      final m = r as Map<String, dynamic>;
+      final started = (m['current_hole'] as int? ?? 0) > 0;
+      final ntp = m['net_to_par'] as int?;
+      if (m['status']?.toString() == 'Survived' && started && ntp != null) {
+        if (bestNet == null || ntp < bestNet) bestNet = ntp;
+      }
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1231,6 +1276,12 @@ class _RedBallView extends StatelessWidget {
           //   "Lost by RyanL (hole 8)" — ball was lost; carrier named when known
           final notStarted = currentHole == null || currentHole == 0;
           final activelyAlive = survived && !notStarted;
+          // The row HIGHLIGHT marks the current LEADER — every team tied for the
+          // best net-to-par among alive, started teams (so a tie highlights both).
+          // Consistent with the Irish Rumble / championship leaderboards.
+          // Alive-vs-lost still shows via the avatar/score cells and subtitle.
+          final isLeading = survived && !notStarted &&
+              netToPar != null && bestNet != null && netToPar == bestNet;
           final String subtitle;
           final Color  subtitleColor;
           if (!survived && eliminatedOn != null) {
@@ -1255,13 +1306,16 @@ class _RedBallView extends StatelessWidget {
 
           return Card(
             margin: const EdgeInsets.only(bottom: 6),
-            color: activelyAlive
-                ? Colors.green.shade50.withOpacity(0.4)
+            elevation: isLeading ? 1 : 0,
+            // Standard leader highlight — same as the Irish Rumble and
+            // championship leaderboards (green marks rank 1, not "ball alive").
+            color: isLeading
+                ? theme.colorScheme.primaryContainer.withOpacity(0.3)
                 : null,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: activelyAlive
-                  ? BorderSide(color: Colors.green.shade300, width: 1.5)
+              side: isLeading
+                  ? BorderSide(color: theme.colorScheme.primary.withOpacity(0.4))
                   : BorderSide(color: theme.colorScheme.outlineVariant),
             ),
             child: ListTile(
@@ -2976,8 +3030,74 @@ class _SkinsGroupCard extends StatelessWidget {
                   .map((e) => e as int).toList(),
             ),
           ],
+          // Where junk was logged (sparse — only holes with junk). Answers
+          // "which holes did the junk get scored on?", which the aggregate
+          // per-player totals above and the win-only scorecard can't show.
+          if (holes.any((h) => (h['junk'] as List? ?? const []).isNotEmpty)) ...[
+            const Divider(height: 16),
+            Text('JUNK BY HOLE',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontSize: 10, letterSpacing: 0.5, fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            _JunkHoleStrip(holes: holes),
+          ],
         ]),
       ),
+    );
+  }
+}
+
+/// Per-hole junk chips that wrap across lines (mirrors _SpotsHoleStrip). Each
+/// pill: hole number + short name ×count in the tertiary junk colour. Sparse —
+/// only holes that had junk logged.
+class _JunkHoleStrip extends StatelessWidget {
+  final List<Map<String, dynamic>> holes;
+  const _JunkHoleStrip({required this.holes});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const tab = [FontFeature.tabularFigures()];
+    // Dark pine — the bright-mint tertiary was too pale to read.
+    final tint = theme.colorScheme.primary;
+    final withJunk = holes
+        .where((h) => (h['junk'] as List? ?? const []).isNotEmpty)
+        .toList();
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final h in withJunk)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                  text: '${h['hole']}  ',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: tab,
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+                for (final e in (h['junk'] as List? ?? [])
+                    .cast<Map<String, dynamic>>())
+                  TextSpan(
+                    text: '${e['short_name'] ?? '?'} '
+                        '×${(e['count'] as num?)?.toInt() ?? 0}   ',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: tab,
+                        color: tint),
+                  ),
+              ]),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -3099,6 +3219,154 @@ class _SpotsHoleStrip extends StatelessWidget {
               ]),
             ),
           ),
+      ],
+    );
+  }
+}
+
+// ---- Honors leaderboard card (carry-token points overlay, separate pot) ----
+
+class _HonorsGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _HonorsGroupCard({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final summary = group['summary'] as Map<String, dynamic>? ?? {};
+    final players = (summary['players'] as List? ?? []).cast<Map<String, dynamic>>();
+    final holes   = (summary['holes']   as List? ?? []).cast<Map<String, dynamic>>();
+    final money   = summary['money'] as Map<String, dynamic>? ?? {};
+    final current = summary['current'] as Map<String, dynamic>? ?? {};
+    final avg     = (money['average'] as num?)?.toDouble() ?? 0.0;
+    final style   = money['payout_style']?.toString() == 'pool'
+        ? 'Pool'
+        : switch (money['per_point_mode']?.toString()) {
+            'first'   => 'Pay leader',
+            'all'     => 'Above you',
+            _         => 'vs Average',
+          };
+    final status  = summary['status']?.toString() ?? 'pending';
+    final holder  = current['holder_short']?.toString();
+
+    // Only holes with a holder are meaningful for the trail.
+    final trail = holes
+        .where((h) => h['holder_short'] != null)
+        .toList();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Text('Honors · $style', style: const TextStyle(fontSize: 12)),
+          ]),
+          const SizedBox(height: 2),
+          Row(children: [
+            Text('Status: ${status.replaceAll('_', ' ')}',
+                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            const Spacer(),
+            if (holder != null)
+              Text('Holds honor: $holder',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary)),
+          ]),
+          const Divider(height: 16),
+          ...players.map((p) {
+            final points = p['points'] ?? 0;
+            final payout = p['money'];
+            final payNum = (payout as num?)?.toDouble() ?? 0.0;
+            final payStr = '${payNum >= 0 ? '+' : '−'}\$${payNum.abs().formatBet()}';
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                Expanded(child: Text(p['name']?.toString() ?? '—')),
+                Text('$points pt${points == 1 ? '' : 's'}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(width: 12),
+                Text(payStr,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: payNum > 0
+                            ? GameColors.win
+                            : payNum < 0
+                                ? GameColors.loss
+                                : theme.colorScheme.onSurface)),
+              ]),
+            );
+          }),
+          const SizedBox(height: 4),
+          Text('Field average: ${avg.toStringAsFixed(1)} pts',
+              style: TextStyle(
+                  fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+          if (trail.isNotEmpty) ...[
+            const Divider(height: 16),
+            Text('HONOR BY HOLE',
+                style: theme.textTheme.labelSmall?.copyWith(
+                    fontSize: 10, letterSpacing: 0.5, fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            _HonorsHoleStrip(holes: trail),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Per-hole honor chips: hole number + who held the honor after that hole.
+/// A hole the holder WON outright is bolded/tinted; a carried hole (tie, held
+/// on) is shown muted.
+class _HonorsHoleStrip extends StatelessWidget {
+  final List<Map<String, dynamic>> holes;
+  const _HonorsHoleStrip({required this.holes});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const tab = [FontFeature.tabularFigures()];
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final h in holes)
+          () {
+            final won = h['winner_short'] != null;   // won outright this hole
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: won
+                    ? theme.colorScheme.primary.withOpacity(0.12)
+                    : theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                    text: '${h['hole']}  ',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: tab,
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  TextSpan(
+                    text: '${h['holder_short'] ?? '?'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: won ? FontWeight.w700 : FontWeight.w500,
+                        fontFeatures: tab,
+                        color: won
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface),
+                  ),
+                ]),
+              ),
+            );
+          }(),
       ],
     );
   }

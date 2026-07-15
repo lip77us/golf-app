@@ -1423,8 +1423,9 @@ class _HoleScoreCard extends StatelessWidget {
             final strokes = _strokesForHole(m, holeData);
             final role = _roleFor(m.player.id);
 
-            return [
-              _PlayerRow(
+            final teamColor =
+                _wolfTeamColor(role) ?? Theme.of(context).colorScheme.primary;
+            final row = _PlayerRow(
                 member:    m,
                 gross:     gross,
                 isHot:     isHot,
@@ -1442,15 +1443,46 @@ class _HoleScoreCard extends StatelessWidget {
                 spotsCount:   spotsActive ? spotsCountFor(m.player.id) : 0,
                 onSpotsAdd:   spotsActive ? () => onSpotsAdd(m.player.id) : null,
                 onSpotsRemove:spotsActive ? () => onSpotsRemove(m.player.id) : null,
-              ),
-              if (isHot || isEditing)
-                InlineScorePicker(
-                  par:          par,
-                  strokes:      strokes,
-                  currentScore: gross,
-                  onScoreSelected: (s) => onScoreSelected(m, s),
+              );
+            if (isHot || isEditing) {
+              // Active player + score entry share ONE team-coloured bounding
+              // box with a white fill (matches the universal score-entry
+              // screen). The picker inherits the same team colour + white fill.
+              return [
+                Container(
+                  // Flush on the LEFT so the bold accent bar lines up with the
+                  // unpicked rows' left bars; inset on the RIGHT so the right
+                  // line stays visible (not clipped by the card edge).
+                  margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+                  decoration: BoxDecoration(
+                    // Match the universal (Nassau) screen: faint team-colour
+                    // wash + a bold left accent, thin line on the other sides.
+                    color: teamColor.withOpacity(0.10),
+                    border: Border(
+                      top:    BorderSide(color: teamColor, width: 1.5),
+                      bottom: BorderSide(color: teamColor, width: 1.5),
+                      right:  BorderSide(color: teamColor, width: 1.5),
+                      left:   BorderSide(color: teamColor, width: 4.0),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      row,
+                      InlineScorePicker(
+                        par:          par,
+                        strokes:      strokes,
+                        currentScore: gross,
+                        boxBorderColor: teamColor,
+                        boxFillColor:   Colors.white,
+                        onScoreSelected: (s) => onScoreSelected(m, s),
+                      ),
+                    ],
+                  ),
                 ),
-            ];
+              ];
+            }
+            return [row];
           }),
         ],
       ),
@@ -1495,11 +1527,11 @@ class _PlayerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final teamColor = _wolfTeamColor(role);
-    final boxBg = (isHot || isEditing)
-        ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-        : Colors.transparent;
-    final boxBorder = (isHot || isEditing)
-        ? Border.all(color: theme.colorScheme.primary, width: 2)
+    final active = isHot || isEditing;
+    // Active score box: white fill + a team-colour ring (not the old green).
+    final boxBg = active ? Colors.white : Colors.transparent;
+    final boxBorder = active
+        ? Border.all(color: teamColor ?? theme.colorScheme.primary, width: 2)
         : Border.all(color: teamColor ?? theme.colorScheme.outline,
             width: teamColor != null ? 1.5 : 1);
 
@@ -1507,16 +1539,18 @@ class _PlayerRow extends StatelessWidget {
       opacity: dimmed ? 0.45 : 1.0,
       child: Container(
       decoration: BoxDecoration(
-        // Team tint stays on (warm = Wolf side, cool = opponents) even on
-        // the active row, so a player's team is never hidden — the
-        // highlighted score box on the right is what marks the active input.
-        color: teamColor?.withOpacity(0.07),
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant),
-          left: teamColor != null
-              ? BorderSide(color: teamColor, width: 4)
-              : BorderSide.none,
-        ),
+        // Inside the active bounding box the row is transparent so the box's
+        // white fill shows through; inactive rows keep their team tint + the
+        // left accent bar (warm = Wolf side, cool = opponents).
+        color: active ? Colors.transparent : teamColor?.withOpacity(0.07),
+        border: active
+            ? const Border()
+            : Border(
+                top: BorderSide(color: theme.colorScheme.outlineVariant),
+                left: teamColor != null
+                    ? BorderSide(color: teamColor, width: 4)
+                    : BorderSide.none,
+              ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [

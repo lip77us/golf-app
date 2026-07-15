@@ -969,6 +969,68 @@ hole-card widget → player-row widget, rendering `SpotsDots` under the player n
 a foursome side game inside a tournament, start a separate casual round instead).
 This closes the gap where Spots was addable to a Nassau round but had no capture UI.
 
+## Honors (`honors`) — implemented (derived overlay, side-game-only)
+
+A **carry-token points side game**, DERIVED from the entered scores (unlike Spots,
+which is captured by hand). Win a hole **outright** (strictly lowest score-to-
+compare, no tie) and you take **the honor**; you keep it — and score **1 point** —
+every hole until another player wins a hole outright. **A tied hole never beats
+the holder** ("a tie doesn't beat you"), so the current holder keeps it; a
+still-loose honor (nobody has won a hole outright yet) awards no point. A player's
+points = the number of holes they held the honor. **Always a side game, never a
+primary** (`GameMeta.sideGameOnly`, `canBeSideGame`); 2–4 players; Net (with %) /
+Gross / Strokes-Off-Low; **separate payout** via the shared wager engine.
+
+The carry logic mirrors **Rabbit** (`services/rabbit.py` `_outright_winner` + the
+per-hole holder walk) but simplified: no lead/accumulate, no segments — the honor
+transfers ONLY to an outright hole winner, and every held hole scores a point. The
+money model + handicap plumbing mirror **Points 5-3-1** (`payout_style` /
+`per_point_mode`, `_build_so_score_index`, `services.wager.settle`).
+
+**Backend:**
+- `core.GameType.HONORS`; `games.HonorsGame` (OneToOne foursome: `status`,
+  `handicap_mode`, `net_percent`, `loss_cap`, `payout_style` (`pool`|`per_point`),
+  `per_point_mode` (`average`|`all`|`first`)) + `HonorsHoleResult` (one row per
+  scored hole: nullable `winner` [outright, null on tie] + `holder` [after the
+  hole]). Migrations `games/0056_honors`, `tournament/0048` (enum refresh of
+  `rydercupfoursomeconfig.game_type` + `rydercupmatchpoints.game_type`).
+- `services/honors.py`: `setup_honors`, `calculate_honors` (walks holes in play
+  order; outright winner takes the honor, tie keeps the holder; holder scores 1
+  pt/hole), `honors_summary` (players with points+money via `settle`; per-hole
+  holder trail with a running `cum`/`average`; `current.holder_short`).
+- `api`: `HonorsSetupSerializer`; `HonorsSetupView`/`HonorsResultView`
+  (`foursome_for_scorer`); routes `foursomes/<id>/honors/{,setup/}`; recalc
+  dispatch (`calculate_honors`) + leaderboard block (`honors`) added alongside
+  Points 5-3-1. Tests: `scoring/tests/test_honors.py` (carry/transfer/tie/loose/
+  unscored-carry, the 3 settlement modes + pool zero-sum, net + strokes-off) and
+  `api/test_honors.py` (setup scores existing holes, result mirror, zero-sum,
+  auth).
+- Settlement mapping (the user's three named options → wager engine): "pay
+  against average" = `average` (VS_AVERAGE), "pay everyone above you" = `all`
+  (PAY_ABOVE), "pay the leader" = `first` (PAY_WINNER); plus optional `pool`.
+
+**Mobile:**
+- Catalog: `GameIds.honors`; `GameMeta(canBeSideGame:true, sideGameOnly:true,
+  2–4)` — a derived overlay (NO `capturesInScoreEntry`; nothing to tap in score
+  entry). Offered wherever an individual-ball primary hosts overlays (Skins /
+  Stableford / Stroke Play / Nassau / Points 5-3-1 / Fourball / Wolf / Rabbit);
+  filtered out of every primary list.
+- `HonorsSummary`/`HonorsPlayerTotal`/`HonorsHole` models;
+  `client.get/postHonorsSetup`; `RoundProvider.honorsSummary` + `loadHonors`.
+- `honors_setup_screen.dart` (`/honors-setup`, returnToHub) — `HandicapModeSelector`
+  + the 3 per-point settlement modes + `StakeField` + optional loss cap; reached
+  from the hub's side-game buttons (`_sideGameSetupRoute` /
+  `_sideGamePerFoursomeTargets`). Leaderboard `_HonorsGroupCard`: per-player
+  points + payout, current honor holder, field average, and a wrapping
+  **"honor by hole"** trail (hole # + holder, hole-win holes tinted). No dedicated
+  play/entry screen — scores are entered on the primary's screen; Honors shows
+  only as a leaderboard tab.
+
+**Deferred:** the `pool` payout style isn't surfaced in the setup UI (backend
+supports it; the screen offers the three per-point modes the game is usually
+played with); tournament-foursome Honors; a per-hole honor strip inside score
+entry.
+
 ## Scorecard reconciliation — standalone screen retired, rotate-to-landscape (mobile-only)
 
 Collapsed three overlapping surfaces (portrait scorecard, landscape scorecard,

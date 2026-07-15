@@ -4,12 +4,12 @@ import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../theme/halved_brand.dart';
 import '../utils/create_casual_round.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../utils/add_halved_golfer.dart';
 import '../utils/golfer_invite.dart';
-import '../widgets/golf_app_bar.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/tee_assignment.dart';
@@ -503,13 +503,21 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final title = _step == 0
+        ? 'New Round'
+        : _step == 1
+            ? 'Players'
+            : 'Tees';
     return Scaffold(
-      appBar: GolfAppBar(
-        title: _step == 0
-            ? 'Casual Round — Course & Game'
-            : _step == 1
-                ? 'Casual Round — Players'
-                : 'Casual Round — Tees',
+      backgroundColor: Halved.surface,
+      appBar: AppBar(
+        backgroundColor: Halved.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        iconTheme: const IconThemeData(color: Halved.deepPine),
+        title: Text(title, style: Halved.appBarTitle()),
       ),
       body: _buildBody(),
       bottomNavigationBar: (_loading || _error != null) ? null : _buildNav(),
@@ -520,22 +528,38 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     final canNext = _selectedCourse != null && _primaryGame != null;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: Row(
           children: [
             if (_step > 0)
               OutlinedButton(
                 onPressed: _creating ? null : () => setState(() => _step -= 1),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Halved.pine,
+                  side: const BorderSide(color: Halved.pine, width: 1.5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(Halved.rCta)),
+                  textStyle: Halved.button(color: Halved.pine),
+                ),
                 child: const Text('Back'),
               ),
             const Spacer(),
             if (_step == 0)
-              FilledButton(
+              HalvedCtaButton(
+                label: 'Next',
+                icon: Icons.arrow_forward,
+                trailingIcon: true,
+                expand: false,
                 onPressed: canNext ? () => setState(() => _step = 1) : null,
-                child: const Text('Next'),
               )
             else if (_step == 1)
-              FilledButton(
+              HalvedCtaButton(
+                label: 'Next',
+                icon: Icons.arrow_forward,
+                trailingIcon: true,
+                expand: false,
                 // Players chosen → move to the dedicated tee step, filling in
                 // sex-based suggestions for review.
                 onPressed: _playerTees.length >= 2
@@ -544,18 +568,14 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                           _step = 2;
                         })
                     : null,
-                child: const Text('Next'),
               )
             else
-              FilledButton.icon(
+              HalvedCtaButton(
+                label: _creating ? 'Configuring…' : 'Configure Round',
+                icon: Icons.tune,
+                expand: false,
+                loading: _creating,
                 onPressed: _creating ? null : _createRound,
-                icon: _creating
-                    ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.tune),
-                label: Text(_creating ? 'Configuring…' : 'Configure Round'),
               ),
           ],
         ),
@@ -677,35 +697,35 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         children: [
           // ── Step 1: course + game ──
           if (_step == 0) ...[
-          Text('Select Course', style: Theme.of(context).textTheme.titleLarge),
+          Text('Select Course', style: Halved.sectionHead()),
           const SizedBox(height: 12),
+          Text('COURSE',
+              style: Halved.label(color: Halved.muted, weight: FontWeight.w700)),
+          const SizedBox(height: 6),
           // Inline combined search: type to see matches from your courses + the
           // shared catalog right here, with a full-database/API fallback.
           CourseSearchField(
             selected: _selectedCourse,
             onSelected: _onCourseSelected,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 26),
 
-          Text('Games', style: Theme.of(context).textTheme.titleLarge),
+          Text('Games', style: Halved.sectionHead()),
           const SizedBox(height: 8),
           // Group-size filter — surfaces the games that fit your group so a
           // twosome/threesome isn't hunting through foursome-only options.
-          Text("Who's playing?",
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 6),
-          SegmentedButton<String>(
+          Text("Who's playing?", style: Halved.body(color: Halved.muted)),
+          const SizedBox(height: 10),
+          HalvedSegmented<String>(
+            selected: _sizeFilter,
             segments: const [
-              ButtonSegment(value: '2', label: Text('2')),
-              ButtonSegment(value: '3', label: Text('3')),
-              ButtonSegment(value: '4', label: Text('4')),
-              ButtonSegment(value: 'groups', label: Text('Across groups')),
+              (value: '2',      label: '2',             icon: null),
+              (value: '3',      label: '3',             icon: null),
+              (value: '4',      label: '4',             icon: null),
+              (value: 'groups', label: 'Across groups', icon: null),
             ],
-            selected: {_sizeFilter},
-            showSelectedIcon: false,
-            onSelectionChanged: (s) => setState(() {
-              _sizeFilter = s.first;
+            onChanged: (v) => setState(() {
+              _sizeFilter = v;
               // Deselect the primary if it no longer fits the new size
               // (e.g. an 18-Hole Match when switching off "2", or a
               // single-foursome game when switching to "Across groups").
@@ -720,15 +740,20 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               _sideGames.removeWhere((g) => !eligible.contains(g));
             }),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           // Primary game — pick exactly one. It drives the score-entry screen.
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              for (final meta in _filteredCasualGames)
-                _buildPrimaryChip(meta),
-            ],
+          // Wrapped in the brand chip scope so the shared FilterChip renders
+          // pine-selected / white-bordered per the Halved guidelines.
+          Theme(
+            data: Halved.chipScope(context),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final meta in _filteredCasualGames)
+                  _buildPrimaryChip(meta),
+              ],
+            ),
           ),
           if (_isPartial) ...[
             const SizedBox(height: 6),
@@ -743,22 +768,25 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           // add-ons (Spots) that ride structure-owning primaries too.
           // sideGamesFor() encodes that, so just gate on the eligible list.
           if (_primaryGame != null && _eligibleSideGames.isNotEmpty) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Text('Side games',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 2),
+                style: Halved.body(weight: FontWeight.w700, color: Halved.deepPine)
+                    .copyWith(fontSize: 17)),
+            const SizedBox(height: 3),
             Text('Each settles separately and does not change how your main '
                 'game is scored.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                for (final meta in _eligibleSideGames)
-                  _buildSideChip(meta),
-              ],
+                style: Halved.body(color: Halved.muted).copyWith(fontSize: 13)),
+            const SizedBox(height: 10),
+            Theme(
+              data: Halved.chipScope(context),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final meta in _eligibleSideGames)
+                    _buildSideChip(meta),
+                ],
+              ),
             ),
           ],
           const SizedBox(height: 12),

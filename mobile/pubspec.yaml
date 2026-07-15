@@ -62,6 +62,10 @@ dependencies:
   firebase_core: ^4.10.0
   firebase_messaging: ^16.3.0
 
+  # Brand typefaces (Schibsted Grotesk + Spline Sans) per the Halved brand
+  # guidelines. Fetched/cached at runtime; used on the redesigned screens.
+  google_fonts: ^6.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

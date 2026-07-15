@@ -27,6 +27,7 @@ import '../game_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
+import '../theme/halved_brand.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/nassau_team_style.dart';
@@ -143,6 +144,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
   int  _selectedHole    = 1;
   bool _initialJumpDone = false;
+
+  /// When the user taps an already-scored player to edit, we make THAT player
+  /// the active/hot one (so they get the normal inline picker) instead of
+  /// popping a separate edit sheet. Null = follow the natural next-scorer.
+  /// Cleared whenever the hole changes.
+  int? _editHotPid;
 
   /// startHole of every Sixes extras segment we've already auto-opened the
   /// team picker for.  Prevents an infinite modal loop when the user cancels.
@@ -1056,12 +1063,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
   void _advance() {
     final n = _nextHoleInOrder(context.read<RoundProvider>());
-    if (n != null) setState(() => _selectedHole = n);
+    if (n != null) setState(() { _selectedHole = n; _editHotPid = null; });
   }
 
   void _retreat() {
     final p = _prevHoleInOrder(context.read<RoundProvider>());
-    if (p != null) setState(() => _selectedHole = p);
+    if (p != null) setState(() { _selectedHole = p; _editHotPid = null; });
   }
 
   /// Whether [h] may be navigated to from the hole strip. You can tap BACK to any
@@ -1083,7 +1090,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// unplayed hole is refused (with a hint) so entry stays in play order.
   void _selectHole(int h) {
     if (_canSelectHole(h)) {
-      setState(() => _selectedHole = h);
+      setState(() { _selectedHole = h; _editHotPid = null; });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Enter holes in order — finish the current hole first.'),
@@ -1960,7 +1967,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final merged   = _mergePending(rp.localPendingByHole, _pending);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
-    final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
+    // Natural hot spot = the first player without a score. When the user has
+    // tapped an already-scored player to edit, override it to that player so
+    // they get the same inline picker (not a separate edit sheet).
+    int hotSpot = isComplete ? -1 : _hotSpotIdx(players, scores);
+    if (!isComplete && _editHotPid != null) {
+      final idx = players.indexWhere((p) =>
+          p.player.id == _editHotPid &&
+          !p.isWithdrawnOnHole(_selectedHole));
+      if (idx != -1) hotSpot = idx;
+    }
     final par      = holeData?.par ?? 4;
     final (hMode, hPct) = _handicapParams(rp, games);
     // Junk is a score-entry modifier, so it's only available when Skins is the
@@ -2021,6 +2037,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 hotSpotIdx:      hotSpot,
                 par:             par,
                 nassau:          nas,
+                // Team colours ride the side game too: pass the Nassau summary
+                // for colouring whenever a Nassau-family game is present (even
+                // as a side game), while [nassau]=nas keeps the in-card Nassau
+                // UI primary-only.
+                teamColorNassau: _nassauActive(games) ? rp.nassauSummary : null,
                 skins:           skins,
                 // Only pass sixesSummary when Sixes is actually active — a
                 // stale summary from a prior Sixes game must not bleed into
@@ -2053,6 +2074,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   final wasAllScored = _allScored(
                     players, _effectiveScores(sc, hole), hole);
                   _selectScore(m, score, hole);
+                  // Editing a tapped player is a one-shot: once they pick a
+                  // value, drop the override so the natural next-scorer resumes.
+                  if (_editHotPid != null) {
+                    setState(() => _editHotPid = null);
+                  }
                   // Auto-save+advance the moment the last player on the hole
                   // gets a positive score.  Skip when clearing (score == -1)
                   // and when the hole was already complete (user is editing).
@@ -2078,8 +2104,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     }
                   }
                 },
-                onEditTap: (m) =>
-                    _editScore(ctx, m, par, _selectedHole, players, hMode, hPct),
+                // Tapping an already-scored player makes THEM the active/hot
+                // player so the normal inline picker appears (with its own
+                // Clear chip) — not a separate edit sheet.
+                onEditTap: (m) => setState(() => _editHotPid = m.player.id),
                 onJunkAdd:    (pid) => _adjustJunk(pid, _selectedHole, 1),
                 onJunkRemove: (pid) => _adjustJunk(pid, _selectedHole, -1),
                 // Spots add-on: an inline ⊖ N spots ⊕ under each player name
@@ -2188,114 +2216,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     ]);
   }
 
-  Future<void> _editScore(
-    BuildContext ctx,
-    Membership player,
-    int par,
-    int hole,
-    List<Membership> players,
-    String hMode,
-    int hPct,
-  ) async {
-    final rp      = context.read<RoundProvider>();
-    final sc      = rp.scorecard;
-    final current = (_pending[hole] ?? {})[player.player.id]
-        ?? sc?.holeData(hole)?.scoreFor(player.player.id)?.grossScore;
-
-    final holeEntry = sc?.holeData(hole)?.scoreFor(player.player.id);
-    final si        = holeEntry?.strokeIndex ?? sc?.holeData(hole)?.strokeIndex ?? 18;
-
-    final int strokes;
-    final mpData   = rp.matchPlayData;
-    final games    = _activeGames(rp.round);
-    final isCupSng = games.contains('singles_nassau') || games.contains('singles_18');
-
-    // Cup singles: match-play handicap per pairing (lower = 0, higher = diff).
-    if (isCupSng) {
-      int so = 0;
-      if (mpData != null && mpData['bracket_type'] == 'cup_singles') {
-        // Exact per-match differential from loaded bracket data.
-        final matches = (mpData['matches'] as List?) ?? [];
-        for (final raw in matches) {
-          final match = Map<String, dynamic>.from(raw as Map);
-          final p1Id  = match['player1_id'] as int?;
-          final p2Id  = match['player2_id'] as int?;
-          int? opponentId;
-          if (p1Id == player.player.id)      opponentId = p2Id;
-          else if (p2Id == player.player.id) opponentId = p1Id;
-          else continue;
-          final opp = players.where((x) => x.player.id == opponentId).firstOrNull;
-          if (opp != null) so = player.playingHandicap - opp.playingHandicap;
-          break;
-        }
-      } else if (players.isNotEmpty) {
-        // Fallback before matchPlayData loads: strokes off foursome low.
-        final low = players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b);
-        so = player.playingHandicap - low;
-      }
-      strokes = so > 0 ? strokesOnHole(so, si) : 0;
-    } else {
-      final lowPlaying = hMode == 'strokes_off' && players.isNotEmpty
-          ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
-          : null;
-      final effective = _effectiveHandicap(
-        mode:                  hMode,
-        netPercent:            hPct,
-        playingHandicap:       player.playingHandicap,
-        lowestPlayingHandicap: lowPlaying,
-      );
-      // Sixes SO: use the exact per-segment algorithm so the modal picker
-      // colors match the inline picker and the backend calculation.
-      final games = _activeGames(rp.round);
-      if (hMode == 'strokes_off' && games.contains('sixes') &&
-          rp.sixesSummary != null && sc != null) {
-        strokes = _sixesSoStrokesOnHole(
-          playerSo:    effective,
-          holeNumber:  hole,
-          strokeIndex: si,
-          summary:     rp.sixesSummary!,
-          scorecard:   sc,
-          holesInPlay: _playOrderFor(rp),
-          playerId:    player.player.id,
-        );
-      } else {
-        // Partial-round aware (scale + re-rank); identical to strokesOnHole on a
-        // full round, so the picker's net preview matches the leaderboard.
-        final universe = (sc == null || sc.holes.isEmpty)
-            ? 18
-            : sc.holes.map((x) => x.holeNumber).reduce((a, b) => a > b ? a : b);
-        strokes = partialStrokesOnHole(
-          effective, hole, _playOrderFor(rp), universe,
-          (hh) => sc?.holeData(hh)?.scoreFor(player.player.id)?.strokeIndex
-              ?? sc?.holeData(hh)?.strokeIndex ?? 18,
-        );
-      }
-    }
-
-    // Clear is offered only on the trailing hole, so it never leaves a gap.
-    final canClear = _isTrailingHole(hole);
-    final score = await showModalBottomSheet<int>(
-      context: ctx,
-      useRootNavigator: true,
-      builder: (_) => _ScorePickerSheet(
-        playerName: player.player.name,
-        par:        par,
-        holeNumber: hole,
-        strokes:    strokes,
-        current:    current,
-        canClear:   canClear,
-      ),
-    );
-    if (!mounted || score == null) return;
-    setState(() {
-      // -1 = clear → store the sentinel: the cell blanks and the save sends a
-      // null gross so the server deletes the row (persisted, survives reload).
-      _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] =
-          score == -1 ? _kClearedScore : score;
-    });
-    // Commit immediately (save without advancing) — for both an edit and a clear.
-    await _saveCurrentHole(ctx, players, par);
-  }
 }
 
 // ===========================================================================
@@ -2320,6 +2240,11 @@ class _HoleScoreCard extends StatelessWidget {
   final int                     hotSpotIdx;
   final int                     par;
   final NassauSummary?          nassau;
+  /// Nassau summary used ONLY for team COLOURING (name tint + left bar) — it's
+  /// populated even when Nassau/Singles Match is a SIDE game, so the teams still
+  /// colour the rows. The primary-gated [nassau] above still governs the
+  /// Nassau-only in-card UI (banner / presses / outcome) per parallel-games.
+  final NassauSummary?          teamColorNassau;
   final SkinsSummary?           skins;
   final SixesSummary?           sixesSummary;
   final VegasSummary?           vegasSummary;
@@ -2384,6 +2309,7 @@ class _HoleScoreCard extends StatelessWidget {
     required this.hotSpotIdx,
     required this.par,
     required this.nassau,
+    this.teamColorNassau,
     required this.skins,
     this.sixesSummary,
     this.vegasSummary,
@@ -2483,7 +2409,9 @@ class _HoleScoreCard extends StatelessWidget {
     // banner all share the same two team colours. Cup colours win when present.
     final cup = _cupSinglesColors[m.player.id];
     if (cup != null) return cup;
-    final n = nassau;
+    // Team colouring uses the colour-only summary (present even when Nassau /
+    // Singles Match is a SIDE game), falling back to the primary [nassau].
+    final n = teamColorNassau ?? nassau;
     if (n != null) {
       if (n.team1.any((p) => p.playerId == m.player.id)) return GameColors.team1;
       if (n.team2.any((p) => p.playerId == m.player.id)) return GameColors.team2;
@@ -3220,8 +3148,12 @@ class _HoleScoreCard extends StatelessWidget {
             // side-game golfer in the Larry solution).  The wash is a very light
             // tint of that same colour, shared with the nested picker.
             final teamColor  = _nameColorFor(m, holeNumber);
-            final boxColor   = teamColor ?? Colors.grey.shade500;
-            final washColor  = boxColor.withValues(alpha: 0.10);
+            // No team colour (e.g. Points 5-3-1): frame the active golfer in
+            // PINE with a stronger wash so the highlighted row clearly outranks
+            // the sage "completed" band — a neutral grey box read too light.
+            final boxColor   = teamColor ?? Halved.pine;
+            final washColor  =
+                boxColor.withValues(alpha: teamColor != null ? 0.10 : 0.14);
             final entryControl = blockedExtraSeg == null
                 ? InlineScorePicker(
                     par:             par,
@@ -3238,19 +3170,25 @@ class _HoleScoreCard extends StatelessWidget {
                   );
             return [
               Container(
-                margin: const EdgeInsets.symmetric(vertical: 6),
+                // Flush on the LEFT so the bold accent bar lines up with the
+                // inactive rows' left bars; inset on the RIGHT so the right line
+                // stays visible (not hidden flush against the card edge).
+                margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
                 decoration: BoxDecoration(
                   color: washColor,
-                  // Bold team-colour bar on the LEFT (matching the inactive
-                  // rows' left accent); thin line on top/bottom/right.
+                  // Square-cornered team-colour frame: a bold 4px bar on the
+                  // LEFT (matching the inactive rows), a clear line on the other
+                  // three sides — including the RIGHT edge.
                   border: Border(
-                    top:    BorderSide(color: boxColor, width: 1.0),
-                    bottom: BorderSide(color: boxColor, width: 1.0),
-                    right:  BorderSide(color: boxColor, width: 1.0),
-                    left:   BorderSide(color: boxColor, width: 3.0),
+                    top:    BorderSide(color: boxColor, width: 1.5),
+                    bottom: BorderSide(color: boxColor, width: 1.5),
+                    right:  BorderSide(color: boxColor, width: 1.5),
+                    left:   BorderSide(color: boxColor, width: 4.0),
                   ),
                 ),
-                clipBehavior: Clip.antiAlias,
+                // No clip here: Clip.antiAlias on this frame was trimming the
+                // score-picker's right border/corner. Children stay within the
+                // frame anyway, so clipping isn't needed.
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [rowWidget, entryControl],
@@ -4044,7 +3982,14 @@ class _PlayerRow extends StatelessWidget {
             ? Colors.transparent
             : (teamTint != null
                 ? teamTint.withValues(alpha: 0.07)
-                : null),
+                // No team colour (e.g. Points 5-3-1): once a score is in, give
+                // the completed row a subtle neutral band so it reads as a
+                // finished block instead of the score floating on the white
+                // card. Not-yet-scored rows stay white — three clear states:
+                // active (section box) · done (band) · pending (white).
+                : (gross != null
+                    ? theme.colorScheme.surfaceContainerHigh
+                    : null)),
         // No border on the active row itself — the surrounding section box
         // (team-coloured) is the frame; a left accent here would double it.
         border: isHot
@@ -4250,10 +4195,10 @@ class _PlayerRow extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: isHot ? Colors.white : Colors.transparent,
                       // Team-colour box around the active score box (Blue/Orange,
-                      // grey for a no-team golfer) to match the section frame.
+                      // pine for a no-team golfer) to match the section frame.
                       border: isHot
                           ? Border.all(
-                              color: teamTint ?? Colors.grey.shade500, width: 2)
+                              color: teamTint ?? Halved.pine, width: 2)
                           : Border.all(color: theme.colorScheme.outline),
                       borderRadius: BorderRadius.circular(6),
                     ),
@@ -4271,9 +4216,11 @@ class _PlayerRow extends StatelessWidget {
         child: IgnorePointer(ignoring: true, child: body),
       );
     }
-    // De-emphasise the non-active rows (still tappable to edit their score) so
-    // the active player is the one clear focal point.
-    if (deemphasized) return Opacity(opacity: 0.55, child: body);
+    // Lightly de-emphasise the non-active rows — the active player already
+    // stands out via its team-coloured bounding box, so this only needs to be
+    // subtle. (Too dim made an interactive spots/junk count on another row hard
+    // to read while entering it.)
+    if (deemphasized) return Opacity(opacity: 0.78, child: body);
     return body;
   }
 }
@@ -4296,11 +4243,17 @@ class _JunkDots extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // A modest bump from 14px: bigger icons + a little tap padding so the
+    // control is easier to hit, while still living inline on every row.
     if (count == 0) {
       return GestureDetector(
         onTap: onAdd,
-        child: Icon(Icons.add_circle_outline,
-            size: 14, color: theme.colorScheme.onSurfaceVariant),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.all(3),
+          child: Icon(Icons.add_circle_outline,
+              size: 20, color: theme.colorScheme.onSurfaceVariant),
+        ),
       );
     }
     return Row(
@@ -4308,120 +4261,37 @@ class _JunkDots extends StatelessWidget {
       children: [
         GestureDetector(
           onTap: onRemove,
-          child: Icon(Icons.remove_circle_outline,
-              size: 14, color: theme.colorScheme.onSurfaceVariant),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Icon(Icons.remove_circle_outline,
+                size: 20, color: theme.colorScheme.onSurfaceVariant),
+          ),
         ),
         const SizedBox(width: 4),
         Text(
           '$count junk',
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.tertiary,
+          style: theme.textTheme.labelMedium?.copyWith(
+            // Dark pine — the bright-mint tertiary was too pale to read.
+            color: theme.colorScheme.primary,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(width: 4),
         GestureDetector(
           onTap: onAdd,
-          child: Icon(Icons.add_circle_outline,
-              size: 14, color: theme.colorScheme.onSurfaceVariant),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Icon(Icons.add_circle_outline,
+                size: 20, color: theme.colorScheme.onSurfaceVariant),
+          ),
         ),
       ],
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Score picker sheet (modal bottom sheet for editing a saved score)
-// ---------------------------------------------------------------------------
-
-class _ScorePickerSheet extends StatelessWidget {
-  final String playerName;
-  final int    par;
-  final int    holeNumber;
-  final int    strokes;
-  final int?   current;
-  /// Whether to offer "Clear score" — true only on the trailing hole (no-gaps).
-  /// On an earlier hole the score is corrected by picking a new value instead.
-  final bool   canClear;
-
-  const _ScorePickerSheet({
-    required this.playerName,
-    required this.par,
-    required this.holeNumber,
-    required this.strokes,
-    this.current,
-    this.canClear = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final scores = List.generate(12, (i) => i + 1);
-    final netPar = par + strokes;
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 40, height: 4,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(playerName,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          Text(
-            strokes > 0
-                ? 'Hole $holeNumber  •  Par $par  •  Net par $netPar'
-                : 'Hole $holeNumber  •  Par $par',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 56,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.zero,
-              itemCount: scores.length,
-              itemBuilder: (_, i) {
-                final s   = scores[i];
-                final sel = s == current;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: NetScoreButton(
-                    score:    s,
-                    par:      par,
-                    strokes:  strokes,
-                    selected: sel,
-                    width:    46,
-                    height:   52,
-                    onTap:    () => Navigator.of(context).pop(s),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (current != null && canClear)
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(-1),
-              child: const Text('Clear score'),
-            )
-          else
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: const Text('Cancel'),
-            ),
-        ]),
-      ),
-    );
-  }
-}
 
 // ===========================================================================
 // Game status section — summary cards for each active game

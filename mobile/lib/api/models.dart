@@ -1913,19 +1913,30 @@ class TripleCupMatch {
   /// Human-friendly match status: "1 UP thru 3", "4 and 2", "AS", etc.
   String get statusDisplay {
     if (!team1.hasPlayers || !team2.hasPlayers) return 'Pending';
-    if (holes.isEmpty) return '—';
-    final played    = holes.length;
-    final margin    = holes.last.margin;
-    final absMargin = margin.abs();
-    final left      = totalHoles - played;
+    // Only holes actually played (winner != null). The backend emits every
+    // segment hole up front, so `holes.last` can be an UNPLAYED hole whose
+    // margin is 0 — which made a decided match read "Halved".
+    final played = holes.where((h) => h.winner != null).toList();
+    if (played.isEmpty) return '—';
+    final playedCount = played.length;
+
     if (status == 'complete' || status == 'halved' || result != null) {
       if (result == 'halved') return 'Halved';
-      if (left > 0) return '$absMargin and $left';
-      return absMargin > 0 ? '$absMargin UP' : 'Halved';
+      // Authoritative signed final margin (NOT holes.last.margin).
+      final margin = holesUpFinal.abs();
+      if (margin == 0) return 'Halved';
+      // Clinched early → "X and Y" (Y = holes left when it ended).
+      final leftAtClinch =
+          (finishedOnHole != null && finishedOnHole! < endHole)
+              ? endHole - finishedOnHole!
+              : 0;
+      if (leftAtClinch > 0) return '$margin and $leftAtClinch';
+      return '$margin UP';
     }
     if (status == 'in_progress') {
-      if (margin == 0) return 'AS thru $played';
-      return '$absMargin UP thru $played';
+      final lastMargin = played.last.margin;
+      if (lastMargin == 0) return 'AS thru $playedCount';
+      return '${lastMargin.abs()} UP thru $playedCount';
     }
     return '—';
   }
@@ -2319,6 +2330,138 @@ class Points531Summary {
       lossCap:    (money['loss_cap']     as num?)?.toDouble(),
       payoutStyle:  money['payout_style']   as String? ?? 'per_point',
       perPointMode: money['per_point_mode'] as String? ?? 'average',
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Honors (side-game-only carry-token points game)
+// ---------------------------------------------------------------------------
+
+/// Per-player total for an Honors game.  [points] == [holesHeld] (1 point per
+/// hole the player held the honor).
+class HonorsPlayerTotal {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final int    points;
+  final int    holesHeld;
+  final double money;
+  final int?   phcpInPlay;
+
+  const HonorsPlayerTotal({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.points,
+    required this.holesHeld,
+    required this.money,
+    this.phcpInPlay,
+  });
+
+  factory HonorsPlayerTotal.fromJson(Map<String, dynamic> j) =>
+      HonorsPlayerTotal(
+        playerId:   j['player_id']    as int,
+        name:       j['name']         as String? ?? '',
+        shortName:  j['short_name']   as String? ?? '',
+        points:     j['points']       as int? ?? 0,
+        holesHeld:  j['holes_held']   as int? ?? 0,
+        money:      (j['money']       as num?)?.toDouble() ?? 0.0,
+        phcpInPlay: j['phcp_in_play'] as int?,
+      );
+}
+
+/// One hole in the honor trail — who won it outright ([winnerShort], null on a
+/// tie) and who held the honor after it ([holderShort]).  [average] is the
+/// running field-average of points after this hole.
+class HonorsHole {
+  final int     hole;
+  final int?    par;
+  final int?    winnerId;
+  final String? winnerShort;
+  final int?    holderId;
+  final String? holderShort;
+  final double? average;
+
+  const HonorsHole({
+    required this.hole,
+    this.par,
+    this.winnerId,
+    this.winnerShort,
+    this.holderId,
+    this.holderShort,
+    this.average,
+  });
+
+  factory HonorsHole.fromJson(Map<String, dynamic> j) => HonorsHole(
+        hole:        j['hole']         as int? ?? 0,
+        par:         j['par']          as int?,
+        winnerId:    j['winner_id']    as int?,
+        winnerShort: j['winner_short'] as String?,
+        holderId:    j['holder_id']    as int?,
+        holderShort: j['holder_short'] as String?,
+        average:     (j['average']     as num?)?.toDouble(),
+      );
+}
+
+/// Full summary for an Honors game — shape mirrors honors_summary() in
+/// services/honors.py.
+class HonorsSummary {
+  final String status;          // 'pending' | 'in_progress' | 'complete'
+  final String handicapMode;
+  final int    netPercent;
+  final List<HonorsPlayerTotal> players;   // sorted money desc
+  final List<HonorsHole>        holes;     // in play order
+  final String? currentHolderShort;
+  final double  betUnit;
+  final double  average;        // final field average of points
+  final String  payoutStyle;    // 'pool' | 'per_point'
+  final String  perPointMode;   // 'average' | 'all' | 'first'
+  final double? lossCap;
+  /// Players IN the game (empty = all real players in the foursome).
+  final List<int> participantPlayerIds;
+
+  const HonorsSummary({
+    required this.status,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.players,
+    required this.holes,
+    this.currentHolderShort,
+    required this.betUnit,
+    required this.average,
+    this.payoutStyle  = 'per_point',
+    this.perPointMode = 'average',
+    this.lossCap,
+    this.participantPlayerIds = const [],
+  });
+
+  bool get isNet        => handicapMode == 'net';
+  bool get isGross      => handicapMode == 'gross';
+  bool get isStrokesOff => handicapMode == 'strokes_off';
+
+  factory HonorsSummary.fromJson(Map<String, dynamic> j) {
+    final hcap    = j['handicap'] as Map<String, dynamic>? ?? {};
+    final money   = j['money']    as Map<String, dynamic>? ?? {};
+    final current = j['current']  as Map<String, dynamic>? ?? {};
+    return HonorsSummary(
+      status:       j['status'] as String? ?? 'pending',
+      handicapMode: hcap['mode']        as String? ?? 'net',
+      netPercent:   hcap['net_percent'] as int?    ?? 100,
+      players: (j['players'] as List? ?? [])
+          .map((p) => HonorsPlayerTotal.fromJson(p as Map<String, dynamic>))
+          .toList(),
+      holes: (j['holes'] as List? ?? [])
+          .map((h) => HonorsHole.fromJson(h as Map<String, dynamic>))
+          .toList(),
+      currentHolderShort: current['holder_short'] as String?,
+      betUnit:      (money['bet_unit'] as num?)?.toDouble() ?? 1.0,
+      average:      (money['average']  as num?)?.toDouble() ?? 0.0,
+      payoutStyle:  money['payout_style']   as String? ?? 'per_point',
+      perPointMode: money['per_point_mode'] as String? ?? 'average',
+      lossCap:      (money['loss_cap'] as num?)?.toDouble(),
+      participantPlayerIds:
+          (j['participant_player_ids'] as List? ?? []).cast<int>(),
     );
   }
 }

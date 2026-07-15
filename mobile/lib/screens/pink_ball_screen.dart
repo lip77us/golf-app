@@ -673,9 +673,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                 final displayed = pending ?? stored;
                 final isHot     = idx == hotSpotIdx;
 
-                return [
-                  _PlayerScoreRow(
-                    position:        idx + 1,
+                final row = _PlayerScoreRow(
                     member:          m,
                     isCarrier:       isCarrier,
                     isHot:           isHot,
@@ -687,12 +685,33 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                     onEditTap: displayed != null
                         ? () => _editScore(m, par, strokes)
                         : null,
-                  ),
+                  );
+                final boxColor = Theme.of(context).colorScheme.primary;
+                return [
                   if (isHot && displayed == null)
-                    InlineScorePicker(
+                    // Active player + picker share ONE bounding box (no teams in
+                    // Pink Ball → brand pine). Flush-left bold bar, right inset.
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+                      decoration: BoxDecoration(
+                        color: boxColor.withOpacity(0.10),
+                        border: Border(
+                          top:    BorderSide(color: boxColor, width: 1.5),
+                          bottom: BorderSide(color: boxColor, width: 1.5),
+                          right:  BorderSide(color: boxColor, width: 1.5),
+                          left:   BorderSide(color: boxColor, width: 4.0),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          row,
+                          InlineScorePicker(
                       par:             par,
                       strokes:         strokes,
                       currentScore:    null,
+                      boxBorderColor:  boxColor,
+                      boxFillColor:    Colors.white,
                       onScoreSelected: (score) {
                         setState(
                             () => _pendingScores[m.player.id] = score);
@@ -716,7 +735,12 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                           });
                         }
                       },
-                    ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    row,
                 ];
                   }).toList();
                 }(),
@@ -926,7 +950,6 @@ class _InfoChip extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _PlayerScoreRow extends StatelessWidget {
-  final int                position;   // 1-based display position
   final Membership         member;
   final bool               isCarrier;
   final bool               isHot;      // active entry player
@@ -939,7 +962,6 @@ class _PlayerScoreRow extends StatelessWidget {
   final bool               ballAlreadyLost;
 
   const _PlayerScoreRow({
-    required this.position,
     required this.member,
     required this.isCarrier,
     required this.isHot,
@@ -958,28 +980,28 @@ class _PlayerScoreRow extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        // Carrier gets a distinctive tinted band; hot player gets the standard blue tint.
-        color: isCarrier
-            ? theme.colorScheme.secondaryContainer.withOpacity(0.25)
-            : isHot
-                ? theme.colorScheme.primaryContainer.withOpacity(0.08)
-                : null,
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant),
-          // Accent left border for ball carrier
-          left: isCarrier
-              ? BorderSide(color: theme.colorScheme.secondary, width: 3)
-              : BorderSide.none,
-        ),
+        // When active the row is transparent so the bounding box's wash/frame
+        // shows; otherwise the carrier gets its distinctive tinted band.
+        color: isHot
+            ? Colors.transparent
+            : (isCarrier
+                ? theme.colorScheme.secondaryContainer.withOpacity(0.25)
+                : null),
+        border: isHot
+            ? const Border()
+            : Border(
+                top: BorderSide(color: theme.colorScheme.outlineVariant),
+                // Accent left border for ball carrier
+                left: isCarrier
+                    ? BorderSide(color: theme.colorScheme.secondary, width: 3)
+                    : BorderSide.none,
+              ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
         // Position + name + HCP chip + optional carrier badge
         Expanded(
           child: Row(children: [
-            Text('$position)  ',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.primary)),
             Flexible(
               child: Text(
                 player.name,
@@ -1001,8 +1023,9 @@ class _PlayerScoreRow extends StatelessWidget {
                 border: Border.all(
                     color: theme.colorScheme.outlineVariant),
               ),
+              // Player's course/playing handicap (total), labelled "CH".
               child: Text(
-                'Course ${member.playingHandicap}',
+                'CH ${member.playingHandicap}',
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: theme.colorScheme.onSecondaryContainer,
@@ -1052,9 +1075,9 @@ class _PlayerScoreRow extends StatelessWidget {
                     width: 40,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: isHot
-                          ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-                          : Colors.transparent,
+                      // Lighter (white) fill to match the Skins / universal
+                      // score box, with a pine ring while active.
+                      color: isHot ? Colors.white : Colors.transparent,
                       border: isHot
                           ? Border.all(color: theme.colorScheme.primary, width: 2)
                           : Border.all(color: theme.colorScheme.outline),

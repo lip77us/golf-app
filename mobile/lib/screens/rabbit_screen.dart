@@ -859,8 +859,7 @@ class _HoleScoreCard extends StatelessWidget {
           // hot-spot, so without this there'd be no way to edit a past hole).
           final editable = gross != null && !isHot;
           final strokes = _strokesForHole(m, holeData);
-          return [
-            _PlayerRow(
+          final row = _PlayerRow(
               member:   m,
               gross:    gross,
               isHot:    isHot,
@@ -877,12 +876,39 @@ class _HoleScoreCard extends StatelessWidget {
               spotsCount:    spotsActive ? spotsCountFor(m.player.id) : 0,
               onSpotsAdd:    spotsActive ? () => onSpotsAdd(m.player.id) : null,
               onSpotsRemove: spotsActive ? () => onSpotsRemove(m.player.id) : null,
-            ),
-            if (isHot || isEditing)
-              InlineScorePicker(
-                par: par, strokes: strokes, currentScore: gross,
-                onScoreSelected: (s) => onScoreSelected(m, s)),
-          ];
+            );
+          if (isHot || isEditing) {
+            // Active player + picker share ONE bounding box (no teams in
+            // Rabbit → brand pine). Flush-left bold bar, right inset so the
+            // right line shows, faint wash fill.
+            final boxColor = Theme.of(context).colorScheme.primary;
+            return [
+              Container(
+                margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+                decoration: BoxDecoration(
+                  color: boxColor.withOpacity(0.10),
+                  border: Border(
+                    top:    BorderSide(color: boxColor, width: 1.5),
+                    bottom: BorderSide(color: boxColor, width: 1.5),
+                    right:  BorderSide(color: boxColor, width: 1.5),
+                    left:   BorderSide(color: boxColor, width: 4.0),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    row,
+                    InlineScorePicker(
+                      par: par, strokes: strokes, currentScore: gross,
+                      boxBorderColor: boxColor,
+                      boxFillColor:   Colors.white,
+                      onScoreSelected: (s) => onScoreSelected(m, s)),
+                  ],
+                ),
+              ),
+            ];
+          }
+          return [row];
         }).toList(),
       ),
     );
@@ -923,21 +949,27 @@ class _PlayerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final boxBg = (isHot || isEditing)
-        ? theme.colorScheme.primaryContainer.withOpacity(0.4) : Colors.transparent;
-    final boxBorder = (isHot || isEditing)
+    final active = isHot || isEditing;
+    final boxBg = active ? Colors.white : Colors.transparent;
+    final boxBorder = active
         ? Border.all(color: theme.colorScheme.primary, width: 2)
         : Border.all(color: theme.colorScheme.outline);
 
     final row = Container(
       decoration: BoxDecoration(
-        color: isHolder ? theme.colorScheme.primary.withOpacity(0.06) : null,
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant),
-          left: isHolder
-              ? BorderSide(color: theme.colorScheme.primary, width: 4)
-              : BorderSide.none,
-        ),
+        // Active row is transparent so the bounding box's wash/frame shows;
+        // inactive rows keep the holder tint + left accent.
+        color: active
+            ? Colors.transparent
+            : (isHolder ? theme.colorScheme.primary.withOpacity(0.06) : null),
+        border: active
+            ? const Border()
+            : Border(
+                top: BorderSide(color: theme.colorScheme.outlineVariant),
+                left: isHolder
+                    ? BorderSide(color: theme.colorScheme.primary, width: 4)
+                    : BorderSide.none,
+              ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [

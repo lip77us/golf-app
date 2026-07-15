@@ -103,6 +103,10 @@ urlpatterns = [
     path('foursomes/<int:pk>/points_531/',       views.Points531ResultView.as_view(), name='api-points-531-result'),
     path('foursomes/<int:pk>/points_531/setup/', views.Points531SetupView.as_view(),  name='api-points-531-setup'),
 
+    # ---- Honors ----
+    path('foursomes/<int:pk>/honors/',           views.HonorsResultView.as_view(),    name='api-honors-result'),
+    path('foursomes/<int:pk>/honors/setup/',     views.HonorsSetupView.as_view(),     name='api-honors-setup'),
+
     # ---- Las Vegas ----
     path('foursomes/<int:pk>/vegas/',            views.VegasResultView.as_view(),     name='api-vegas-result'),
     path('foursomes/<int:pk>/vegas/setup/',      views.VegasSetupView.as_view(),      name='api-vegas-setup'),

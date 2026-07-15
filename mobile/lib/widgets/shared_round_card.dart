@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../api/models.dart';
 import '../game_catalog.dart';
+import '../theme/halved_brand.dart';
 
 /// Card for a round shared with me — a tournament or multi-group skins game a
 /// friend/TD added me to. Shown in a "Shared with you" section on the Active
@@ -35,8 +36,8 @@ class SharedRoundCard extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: theme.colorScheme.tertiaryContainer,
-                foregroundColor: theme.colorScheme.onTertiaryContainer,
+                backgroundColor: Halved.pine.withValues(alpha: 0.10),
+                foregroundColor: Halved.pine,
                 child: Icon(round.isTournament
                     ? Icons.emoji_events
                     : Icons.sports_golf),
@@ -62,12 +63,9 @@ class SharedRoundCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               if (round.status == 'in_progress')
-                const Chip(
-                  label: Text('Live', style: TextStyle(fontSize: 11)),
-                  visualDensity: VisualDensity.compact,
-                )
+                const HalvedLivePill()
               else
-                const Icon(Icons.chevron_right),
+                const Icon(Icons.chevron_right, color: Halved.muted),
             ],
           ),
         ),

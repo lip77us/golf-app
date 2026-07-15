@@ -31,6 +31,11 @@ class GameIds {
   static const String match18    = 'match_18';
   static const String skins      = 'skins';
   static const String spots      = 'spots';
+  /// Honors — a leaderboard-only overlay side game derived from the entered
+  /// scores.  Win a hole outright (net) and you hold "the honor"; you keep it
+  /// (and score 1 point) every hole until someone else wins a hole outright.
+  /// Always an add-on, never a primary.
+  static const String honors     = 'honors';
   static const String multiSkins = 'multi_skins';
   static const String tripleCup  = 'triple_cup';
   /// Wolf — 3- or 4-player rotating-wolf game.  Each hole one player is the
@@ -370,6 +375,21 @@ const List<GameMeta> kGameCatalog = [
     // overlap). Still excluded from the team/round-wide games we don't host
     // Spots on (Vegas, Triple Cup, Multi-Skins).
     excludes    : {GameIds.vegas, GameIds.tripleCup, GameIds.multiSkins},
+  ),
+  GameMeta(
+    id          : GameIds.honors,
+    displayName : 'Honors',
+    casual      : true,
+    minPlayers  : 2,
+    maxPlayers  : 4,
+    // A leaderboard-only overlay derived from the entered scores (win a hole
+    // outright net → hold "the honor"; 1 pt per hole held).  Like Skins as a
+    // side game, but sideGameOnly — never offered as a primary.  No manual
+    // capture (unlike Spots), so no capturesInScoreEntry.  Offered wherever an
+    // individual-ball primary hosts overlays (Skins / Stableford / Stroke Play
+    // / Nassau / Points 5-3-1 / Fourball / Wolf / Rabbit).
+    canBeSideGame : true,
+    sideGameOnly  : true,
   ),
   GameMeta(
     id          : GameIds.wolf,

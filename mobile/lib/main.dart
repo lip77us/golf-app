@@ -3,11 +3,14 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+// Hide google_fonts' own `Config` — it collides with our app's Config.
+import 'package:google_fonts/google_fonts.dart' hide Config;
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api/client.dart';
 import 'config.dart';
+import 'theme/halved_brand.dart';
 
 import 'local/local_database.dart';
 import 'sync/sync_service.dart';
@@ -32,6 +35,7 @@ import 'screens/fourball_setup_screen.dart';
 import 'screens/points_531_screen.dart';
 import 'screens/skins_setup_screen.dart';
 import 'screens/spots_setup_screen.dart';
+import 'screens/honors_setup_screen.dart';
 import 'screens/skins_screen.dart';
 import 'screens/wolf_setup_screen.dart';
 import 'screens/wolf_screen.dart';
@@ -66,22 +70,115 @@ import 'screens/confirm_tees_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/manage_courses_screen.dart';
 
-/// App theme for a given brightness. Centralizes the two pieces the May/June
-/// design reviews flagged as drifting (D-03 / D-05):
-///   * Selected state is ONE thing app-wide — filled brand-green with white
-///     text — so segmented controls (handicap, group size, payout toggles)
-///     match the GameSelectableChip picker instead of M3's pale
-///     secondaryContainer + checkmark.
-///   * FABs are a primary action, so they use the same filled brand-green as
-///     every other primary (FilledButton) rather than M3's light default.
+/// The app-wide Halved brand theme (docs/Halved-Brand-Guidelines.md): light
+/// sage surface, pine structure, bright-mint reserved for CTAs / the FAB, and
+/// Schibsted Grotesk (headings) + Spline Sans (body). Selected state stays ONE
+/// thing app-wide — pine fill, white text — per the earlier design reviews.
+///
+/// The palette + reusable widgets live in theme/halved_brand.dart; this wires
+/// the same tokens into the global ThemeData so every screen inherits them.
 ThemeData _halvedTheme(Brightness brightness) {
+  // Dark mode is currently unused (themeMode is forced light); keep a basic
+  // seeded dark theme so the app still compiles if it's ever enabled.
+  if (brightness == Brightness.dark) {
+    return ThemeData(
+      colorScheme:
+          ColorScheme.fromSeed(seedColor: Halved.pine, brightness: brightness),
+      useMaterial3: true,
+    );
+  }
+
   final scheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF2E7D32),
-    brightness: brightness,
+    seedColor: Halved.pine,
+    brightness: Brightness.light,
+  ).copyWith(
+    primary:        Halved.pine,
+    onPrimary:      Colors.white,
+    secondary:      Halved.mint,
+    onSecondary:    Colors.white,
+    tertiary:       Halved.brightMint,
+    onTertiary:     Halved.deepPine,
+    surface:        Halved.card,      // white cards / sheets / dialogs
+    onSurface:      Halved.deepPine,
+    onSurfaceVariant: Halved.muted,
+    outline:        const Color(0xFFB7C3BB),
+    outlineVariant: Halved.cardBorder,
+    surfaceContainerLowest:  Colors.white,
+    surfaceContainerLow:     const Color(0xFFF4F7F4),
+    surfaceContainer:        const Color(0xFFEDF2ED),
+    surfaceContainerHigh:    const Color(0xFFE7EEE8),
+    surfaceContainerHighest: const Color(0xFFE1EAE2),
+    error:          Halved.warning,
   );
+
+  // Body/labels in Spline Sans; headings (display/headline/title) in Schibsted
+  // Grotesk. Sizes come from the M3 defaults; only the family + weight change.
+  final spline = GoogleFonts.splineSansTextTheme();
+  TextStyle grotesk(TextStyle? s) =>
+      GoogleFonts.schibstedGrotesk(textStyle: s, fontWeight: FontWeight.w600);
+  final textTheme = spline.copyWith(
+    displayLarge:   grotesk(spline.displayLarge),
+    displayMedium:  grotesk(spline.displayMedium),
+    displaySmall:   grotesk(spline.displaySmall),
+    headlineLarge:  grotesk(spline.headlineLarge),
+    headlineMedium: grotesk(spline.headlineMedium),
+    headlineSmall:  grotesk(spline.headlineSmall),
+    titleLarge:     grotesk(spline.titleLarge),
+    titleMedium:    grotesk(spline.titleMedium),
+    titleSmall:     grotesk(spline.titleSmall),
+  ).apply(bodyColor: Halved.deepPine, displayColor: Halved.deepPine);
+
   return ThemeData(
     colorScheme: scheme,
     useMaterial3: true,
+    scaffoldBackgroundColor: Halved.surface,
+    textTheme: textTheme,
+    dividerTheme: const DividerThemeData(color: Halved.cardBorder),
+    appBarTheme: AppBarTheme(
+      backgroundColor: Halved.surface,
+      foregroundColor: Halved.deepPine,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: true,
+      iconTheme: const IconThemeData(color: Halved.deepPine),
+      titleTextStyle: GoogleFonts.schibstedGrotesk(
+          fontSize: 20, fontWeight: FontWeight.w600, color: Halved.deepPine),
+    ),
+    cardTheme: CardThemeData(
+      color: Halved.card,
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Halved.rCard),
+        side: const BorderSide(color: Halved.cardBorder, width: 1.5),
+      ),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: Halved.card,
+      selectedColor: Halved.pine,
+      side: const BorderSide(color: Halved.cardBorder),
+      showCheckmark: false,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Halved.rChip),
+      ),
+      // Normal / bare chips: deep-pine label on the white fill. A plain
+      // TextStyle (not WidgetStateTextStyle) is required — non-interactive
+      // Chips don't resolve a stateful style, so its colour fell back to null
+      // and the label rendered white-on-white.
+      labelStyle: const TextStyle(
+          color: Halved.deepPine, fontWeight: FontWeight.w500),
+      // Selected ChoiceChip/FilterChip fill pine (dark) → white label so it
+      // stays readable. (GameSelectableChip sets its own colours regardless.)
+      secondaryLabelStyle: const TextStyle(
+          color: Colors.white, fontWeight: FontWeight.w600),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Halved.pine,
+        side: const BorderSide(color: Halved.pine, width: 1.5),
+      ),
+    ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith((states) =>
@@ -94,9 +191,10 @@ ThemeData _halvedTheme(Brightness brightness) {
                 : scheme.onSurface),
       ),
     ),
-    floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: scheme.primary,
-      foregroundColor: scheme.onPrimary,
+    // FAB is a primary "create" action → bright-mint CTA, deep-pine icon/label.
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      backgroundColor: Halved.brightMint,
+      foregroundColor: Halved.deepPine,
     ),
   );
 }
@@ -453,6 +551,13 @@ class _GolfAppState extends State<GolfApp> {
         final foursomeId  = a is Map ? a['id'] as int : a as int;
         final returnToHub = a is Map && a['returnToHub'] == true;
         return page((_) => SpotsSetupScreen(
+              foursomeId: foursomeId, returnToHub: returnToHub));
+      case '/honors-setup':
+        // Side game: args are {'id': int, 'returnToHub': bool} (or a plain int).
+        final a = settings.arguments;
+        final foursomeId  = a is Map ? a['id'] as int : a as int;
+        final returnToHub = a is! Map || a['returnToHub'] == true;
+        return page((_) => HonorsSetupScreen(
               foursomeId: foursomeId, returnToHub: returnToHub));
       case '/wolf-setup':
         return page((_) => WolfSetupScreen(

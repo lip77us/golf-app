@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+// Hide google_fonts' own `Config` — it collides with our app's Config.
+import 'package:google_fonts/google_fonts.dart' hide Config;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../api/client.dart';
+import '../theme/halved_brand.dart';
 import '../ui_labels.dart';
 import '../config.dart';
 import '../providers/auth_provider.dart';
@@ -71,7 +74,7 @@ class AppDrawer extends StatelessWidget {
                     ),
                     decoration: const BoxDecoration(
                       border: Border(bottom: BorderSide(
-                        color: Color(0x1F000000),
+                        color: Halved.cardBorder,
                         width: 1,
                       )),
                     ),
@@ -93,11 +96,11 @@ class AppDrawer extends StatelessWidget {
                             const SizedBox(width: 10),
                             Text(
                               'Halved',
-                              style: TextStyle(
+                              style: GoogleFonts.schibstedGrotesk(
                                 fontSize: 26,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.5,
-                                color: Theme.of(ctx).colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: Halved.deepPine,
                               ),
                             ),
                           ],

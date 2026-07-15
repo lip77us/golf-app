@@ -1005,29 +1005,57 @@ class _NassauHoleScoreCard extends StatelessWidget {
               if (h > 0) hcapLabel = 'gets $h';
             }
 
-            return [
-              _NassauPlayerRow(
+            final team = _teamOf(m.player.id);
+            final boxColor = team != null
+                ? nassauTeamColor(team)
+                : Theme.of(context).colorScheme.primary;
+            final row = _NassauPlayerRow(
                 member:              m,
                 gross:               gross,
                 isHot:               isHot,
                 matchHcapLabel:      hcapLabel,
                 strokesOnThisHole:   matchStrok,
-                team:                _teamOf(m.player.id),
+                team:                team,
                 onTap: (hasScore && !isHot) ? () => onEditTap(m) : null,
                 spotsActive:   spotsActive,
                 spotsCount:    spotsActive ? spotsCountFor(m.player.id) : 0,
                 onSpotsAdd:    spotsActive ? () => onSpotsAdd(m.player.id) : null,
                 onSpotsRemove:
                     spotsActive ? () => onSpotsRemove(m.player.id) : null,
-              ),
-              if (isHot)
-                InlineScorePicker(
-                  par:             par,
-                  strokes:         matchStrok,
-                  currentScore:    gross,
-                  onScoreSelected: (score) => onScoreSelected(m, score),
+              );
+            if (isHot) {
+              // Active player + picker share ONE team-coloured bounding box.
+              // Flush-left bold bar, right inset so the right line shows.
+              return [
+                Container(
+                  margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+                  decoration: BoxDecoration(
+                    color: boxColor.withOpacity(0.10),
+                    border: Border(
+                      top:    BorderSide(color: boxColor, width: 1.5),
+                      bottom: BorderSide(color: boxColor, width: 1.5),
+                      right:  BorderSide(color: boxColor, width: 1.5),
+                      left:   BorderSide(color: boxColor, width: 4.0),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      row,
+                      InlineScorePicker(
+                        par:             par,
+                        strokes:         matchStrok,
+                        currentScore:    gross,
+                        boxBorderColor:  boxColor,
+                        boxFillColor:    Colors.white,
+                        onScoreSelected: (score) => onScoreSelected(m, score),
+                      ),
+                    ],
+                  ),
                 ),
-            ];
+              ];
+            }
+            return [row];
           }).toList(),
         ],
       ),
@@ -1245,31 +1273,28 @@ class _NassauPlayerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final Color boxBg = isHot
-        ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-        : Colors.transparent;
+    final Color activeColor =
+        team != null ? nassauTeamColor(team!) : theme.colorScheme.primary;
+    final Color boxBg = isHot ? Colors.white : Colors.transparent;
     final boxBorder = isHot
-        ? Border.all(color: theme.colorScheme.primary, width: 2)
+        ? Border.all(color: activeColor, width: 2)
         : Border.all(color: theme.colorScheme.outline);
 
     return Container(
       decoration: BoxDecoration(
-        color: isHot
-            ? theme.colorScheme.primaryContainer.withOpacity(0.08)
-            : null,
-        border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
+        // Transparent when active so the surrounding bounding box's team wash
+        // shows through; inactive rows keep the top divider only.
+        color: isHot ? Colors.transparent : null,
+        border: isHot
+            ? const Border()
+            : Border(
+                top: BorderSide(color: theme.colorScheme.outlineVariant),
+              ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
-        // Team identity is the colour dot (Blue = team 1, Orange = team 2).
-        if (team != null) ...[
-          nassauTeamDot(team!),
-          const SizedBox(width: 6),
-        ],
-
-        // Name + handicap chip
+        // Name + handicap chip. Team identity is conveyed by the name colour
+        // (blue = team 1, orange = team 2) — no separate dot needed.
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1278,7 +1303,7 @@ class _NassauPlayerRow extends StatelessWidget {
               Row(children: [
             Flexible(
               child: Text(
-                member.player.displayShort,
+                member.player.name,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,

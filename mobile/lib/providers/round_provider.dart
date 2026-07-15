@@ -90,6 +90,7 @@ class RoundProvider extends ChangeNotifier {
   FourballSummary? _fourballSummary;
   SkinsSummary?    _skinsSummary;
   SpotsSummary?    _spotsSummary;
+  HonorsSummary?   _honorsSummary;
   WolfSummary?     _wolfSummary;
   RabbitSummary?   _rabbitSummary;
   TripleCupSummary? _tripleCupSummary;
@@ -147,6 +148,7 @@ class RoundProvider extends ChangeNotifier {
   FourballSummary?  get fourballSummary     => _fourballSummary;
   SkinsSummary?     get skinsSummary       => _skinsSummary;
   SpotsSummary?     get spotsSummary       => _spotsSummary;
+  HonorsSummary?    get honorsSummary      => _honorsSummary;
   WolfSummary?      get wolfSummary        => _wolfSummary;
   RabbitSummary?    get rabbitSummary      => _rabbitSummary;
   TripleCupSummary? get tripleCupSummary   => _tripleCupSummary;
@@ -208,6 +210,7 @@ class RoundProvider extends ChangeNotifier {
     _points531Summary        = null;
     _skinsSummary            = null;
     _spotsSummary            = null;
+    _honorsSummary           = null;
     _wolfSummary             = null;
     _rabbitSummary           = null;
     _tripleCupSummary        = null;
@@ -319,6 +322,7 @@ class RoundProvider extends ChangeNotifier {
       _tripleCupSummary = null;
       _sixesSummary     = null;
       _points531Summary = null;
+      _honorsSummary    = null;
       _wolfSummary      = null;
       _rabbitSummary    = null;
       // Was previously left set — stale single-elim match-play data leaked
@@ -738,6 +742,20 @@ class RoundProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load the Honors summary for the active foursome. Non-fatal on network
+  /// errors so the entry screen keeps working offline.
+  Future<void> loadHonors(int foursomeId) async {
+    try {
+      _honorsSummary = await _client.getHonorsSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadHonors error: $e');
+    } finally {
+      notifyListeners();
+    }
+  }
+
   /// Authoritative per-hole + total Stableford points (config-aware) for the
   /// round, matching the leaderboard/watch page. Round-scoped.
   Map<String, dynamic>? _stablefordResult;
@@ -1130,16 +1148,22 @@ class RoundProvider extends ChangeNotifier {
 
   // ── Leaderboard ────────────────────────────────────────────────────────────
 
-  Future<void> loadLeaderboard(int roundId) async {
-    _loadingLeaderboard = true;
-    _clearError();
-    notifyListeners();
+  /// [silent] re-fetches WITHOUT flipping the full-screen loading flag (so the
+  /// current standings stay on screen instead of flashing a spinner) and keeps
+  /// the last-good leaderboard on a transient error. Used when returning to the
+  /// leaderboard screen or on app resume.
+  Future<void> loadLeaderboard(int roundId, {bool silent = false}) async {
+    if (!silent) {
+      _loadingLeaderboard = true;
+      _clearError();
+      notifyListeners();
+    }
     try {
       _leaderboard = await _client.getLeaderboard(roundId);
     } on NetworkException {
-      _error = 'No connection — leaderboard unavailable offline.';
+      if (!silent) _error = 'No connection — leaderboard unavailable offline.';
     } catch (e) {
-      _error = friendlyError(e);
+      if (!silent) _error = friendlyError(e);
     } finally {
       _loadingLeaderboard = false;
       notifyListeners();

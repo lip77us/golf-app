@@ -463,8 +463,9 @@ class _RoundInfoCard extends StatelessWidget {
           Text(round.date, style: theme.textTheme.bodySmall),
           const SizedBox(height: 8),
           Row(children: [
-            Chip(label: Text(round.status.replaceAll('_', ' ').toUpperCase(),
-                style: const TextStyle(fontSize: 11))),
+            GameChip(
+                label: round.status.replaceAll('_', ' ').toUpperCase(),
+                filled: true),
             if (!round.isCupRound) ...[
               const SizedBox(width: 8),
               Text('\$${round.betUnit.formatBet()} / unit',
@@ -802,6 +803,8 @@ List<(String, String)> _roundLevelEditTargets(
       return ('/nassau-setup-18', {'id': foursomeId, 'returnToHub': true});
     case GameIds.spots:
       return ('/spots-setup', {'id': foursomeId, 'returnToHub': true});
+    case GameIds.honors:
+      return ('/honors-setup', {'id': foursomeId, 'returnToHub': true});
     case GameIds.stableford:
       return ('/stableford-setup', {'id': roundId, 'returnToHub': true});
     case GameIds.strokePlay:
@@ -947,6 +950,10 @@ List<(String, String)> _sideGamePerFoursomeTargets(
   // Spots is always a side game (capture add-on) — gets its own setup button.
   if (fsGames.contains('spots')) {
     out.add(('/spots-setup', label('spots', 'Spots')));
+  }
+  // Honors is always a side game (derived overlay) — gets its own setup button.
+  if (fsGames.contains('honors')) {
+    out.add(('/honors-setup', label('honors', 'Honors')));
   }
   return out;
 }

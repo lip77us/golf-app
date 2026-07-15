@@ -233,9 +233,6 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
       );
     }
 
-    final foursomes = context.read<RoundProvider>().round?.foursomes
-                          ?? const <Foursome>[];
-
     return Scaffold(
       appBar: GolfAppBar(
           title: _editing
@@ -299,37 +296,34 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
               ),
               const Divider(height: 32),
 
-              // ── Roster (per foursome) ────────────────────────────────────
+              // ── Roster (flat list) ───────────────────────────────────────
+              // Multi-Group Skins seats every player in their own group of one
+              // (Halved-only self-scoring pool), so per-foursome group headers
+              // would just be one header per player — noise. List participants
+              // flat instead.
               Text('Participants',
                   style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 4),
-              for (final fs in foursomes) ...[
-                Padding(
-                  padding: const EdgeInsets.only(top: 12, bottom: 4),
-                  child: Text(fs.label,
-                      style: Theme.of(context).textTheme.labelLarge),
-                ),
-                for (final m in fs.memberships.where((m) => !m.player.isPhantom))
-                  Builder(builder: (_) {
-                    final onApp = _onAppIds.contains(m.player.id);
-                    return CheckboxListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(m.player.name),
-                      // Roster is Halved-only: a login-less golfer can't be
-                      // matched across rounds, so they can't join the pool.
-                      subtitle: Text(onApp
-                          ? 'Index ${m.player.handicapIndex}'
-                          : 'Not on Halved — invite them to include them'),
-                      value: onApp && (_participants[m.player.id] ?? false),
-                      onChanged: onApp
-                          ? (v) => setState(() {
-                                _participants[m.player.id] = v ?? false;
-                              })
-                          : null,
-                    );
-                  }),
-              ],
+              for (final m in _allMemberships)
+                Builder(builder: (_) {
+                  final onApp = _onAppIds.contains(m.player.id);
+                  return CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(m.player.name),
+                    // Roster is Halved-only: a login-less golfer can't be
+                    // matched across rounds, so they can't join the pool.
+                    subtitle: Text(onApp
+                        ? 'Index ${m.player.handicapIndex}'
+                        : 'Not on Halved — invite them to include them'),
+                    value: onApp && (_participants[m.player.id] ?? false),
+                    onChanged: onApp
+                        ? (v) => setState(() {
+                              _participants[m.player.id] = v ?? false;
+                            })
+                        : null,
+                  );
+                }),
               // ── Other Halved golfers (each gets their own group of one) ────
               if (_externalGolfers.isNotEmpty) ...[
                 Padding(

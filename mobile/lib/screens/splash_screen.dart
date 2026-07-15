@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../theme/halved_brand.dart';
 
 /// Branded splash screen shown on desktop (Windows/macOS/Linux) while the
 /// app initialises.  On iOS the native LaunchImage handles the very first
@@ -55,7 +58,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Halved.surface,
       body: AnimatedBuilder(
         animation: _controller,
         builder: (_, __) {
@@ -82,11 +85,11 @@ class _SplashScreenState extends State<SplashScreen>
                       const SizedBox(height: 20),
                       Text(
                         'Halved',
-                        style: TextStyle(
+                        style: GoogleFonts.schibstedGrotesk(
                           fontSize: 40,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 3,
-                          color: const Color(0xFF2E7D32),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                          color: Halved.deepPine,
                         ),
                       ),
                     ],

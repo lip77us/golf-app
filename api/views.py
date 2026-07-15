@@ -83,7 +83,7 @@ from .serializers import (
     Points531SetupSerializer, CasualRoundSummarySerializer,
     IrishRumbleSetupSerializer, LowNetSetupSerializer,
     ThreePersonMatchSetupSerializer, MessageSerializer, VegasSetupSerializer,
-    FourballSetupSerializer,
+    FourballSetupSerializer, HonorsSetupSerializer,
 )
 
 
@@ -170,6 +170,10 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'points_531' in active_games:
         from services.points_531 import calculate_points_531
         calculate_points_531(foursome)
+
+    if 'honors' in active_games:
+        from services.honors import calculate_honors
+        calculate_honors(foursome)
 
     if 'vegas' in active_games:
         from services.vegas import calculate_vegas
@@ -792,6 +796,17 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
                  'summary': points_531_summary(fs)}
+                for fs in foursomes
+            ],
+        }
+
+    if 'honors' in active_games:
+        from services.honors import honors_summary
+        games['honors'] = {
+            'label'   : 'Honors',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': honors_summary(fs)}
                 for fs in foursomes
             ],
         }
@@ -4600,6 +4615,55 @@ class Points531ResultView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.points_531 import points_531_summary
         return Response(points_531_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Honors (side-game-only carry-token points game)
+# ---------------------------------------------------------------------------
+
+class HonorsSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/honors/setup/
+    Body: { "handicap_mode": "net" | "gross" | "strokes_off",
+            "net_percent":  0..200, "loss_cap": null|number,
+            "payout_style": "pool"|"per_point",
+            "per_point_mode": "average"|"all"|"first" }
+
+    Creates (or replaces) the HonorsGame for this foursome, then re-runs
+    calculate_honors so any hole scores already on file are reflected in
+    the first summary the UI fetches.  Both are idempotent.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        ser = HonorsSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        from services.honors import (
+            setup_honors, calculate_honors, honors_summary,
+        )
+        data = ser.validated_data
+        setup_honors(
+            foursome,
+            handicap_mode  = data.get('handicap_mode', 'net'),
+            net_percent    = data.get('net_percent', 100),
+            loss_cap       = data.get('loss_cap'),
+            payout_style   = data.get('payout_style', 'per_point'),
+            per_point_mode = data.get('per_point_mode', 'average'),
+            participant_player_ids = data.get('participant_player_ids', []),
+        )
+        calculate_honors(foursome)
+        return Response(
+            honors_summary(foursome),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class HonorsResultView(APIView):
+    """GET /api/foursomes/{id}/honors/"""
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.honors import honors_summary
+        return Response(honors_summary(foursome))
 
 
 # ---------------------------------------------------------------------------

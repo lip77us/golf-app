@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
+import '../theme/halved_brand.dart';
 import '../utils/shared_round.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/error_view.dart';
@@ -467,14 +468,13 @@ class _TournamentListScreenState extends State<TournamentListScreen>
   /// A tournament I'm only WATCHING (read-only). Tapping opens the read-only
   /// leaderboard, never the score-entry round screen.
   Widget _observingTournamentCard(SharedRoundSummary r) {
-    final theme = Theme.of(context);
     final title = r.courseName.isEmpty ? r.groupLabel : r.courseName;
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.secondaryContainer,
-          foregroundColor: theme.colorScheme.onSecondaryContainer,
+          backgroundColor: Halved.pine.withValues(alpha: 0.10),
+          foregroundColor: Halved.pine,
           child: const Icon(Icons.visibility_outlined),
         ),
         title: Text(title,
@@ -482,11 +482,8 @@ class _TournamentListScreenState extends State<TournamentListScreen>
         subtitle: Text('Observing · ${r.groupLabel}',
             maxLines: 2, overflow: TextOverflow.ellipsis),
         trailing: r.status == 'in_progress'
-            ? const Chip(
-                label: Text('Live', style: TextStyle(fontSize: 11)),
-                visualDensity: VisualDensity.compact,
-              )
-            : const Icon(Icons.chevron_right),
+            ? const HalvedLivePill()
+            : const Icon(Icons.chevron_right, color: Halved.muted),
         onTap: () async {
           await openWatchedRound(context, r);
           _load();

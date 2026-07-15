@@ -12,6 +12,7 @@ import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../utils/golf_colors.dart';
 import '../utils/watcher_invite.dart';
+import '../utils/route_observer.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/stroke_play_strip.dart';
@@ -35,7 +36,7 @@ class TournamentLeaderboardScreen extends StatefulWidget {
 
 class _TournamentLeaderboardScreenState
     extends State<TournamentLeaderboardScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware, WidgetsBindingObserver {
   TabController?             _tabCtrl;
   List<String>               _tabs    = [];
   Map<String, dynamic>?      _payload;
@@ -45,19 +46,41 @@ class _TournamentLeaderboardScreenState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) appRouteObserver.subscribe(this, route);
+  }
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _tabCtrl?.dispose();
     super.dispose();
   }
 
+  /// Returning to the leaderboard (a screen on top was popped) — silently
+  /// re-fetch so standings are fresh without flashing the full-screen spinner.
+  @override
+  void didPopNext() => _load(silent: true);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load(silent: true);
+  }
+
   // ── Data ──────────────────────────────────────────────────────────────────
 
-  Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() { _loading = true; _error = null; });
+    }
     try {
       final client  = context.read<AuthProvider>().client;
       final payload = await client.getTournamentLeaderboard(widget.tournamentId);
@@ -88,7 +111,11 @@ class _TournamentLeaderboardScreenState
         setState(() {});
       }
     } catch (e) {
-      if (mounted) setState(() { _error = friendlyError(e); _loading = false; });
+      // On a silent refresh keep the last-good standings rather than flipping
+      // to a full-screen error for a transient failure.
+      if (mounted && !silent) {
+        setState(() { _error = friendlyError(e); _loading = false; });
+      }
     }
   }
 
@@ -394,7 +421,6 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(children: [
-            const SizedBox(width: 36),
             const Expanded(child: Text('Player',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
             const SizedBox(width: 34, child: Text('Thru',
@@ -408,9 +434,6 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                         style: const TextStyle(fontSize: 10,
                             fontWeight: FontWeight.w600))),
             const SizedBox(width: 46, child: Text('Net',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
-            const SizedBox(width: 46, child: Text('Gross',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
             if (hasPrize)
@@ -434,20 +457,6 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
           final roundLabels = (r['round_labels'] as List? ?? [])
               .map((v) => v.toString()).toList();
           final payout      = (r['payout'] as num?)?.toDouble();
-          // Gross-to-par total (gross is uncapped; only net caps at double
-          // bogey) — summed from the round hole detail, to match the per-round
-          // Stroke Play tab which shows both Net and Gross to par.
-          int grossToPar = 0;
-          bool anyGross  = false;
-          for (final rh in roundHoles) {
-            for (final h in (rh as List)) {
-              final m = h as Map;
-              final g = m['gross'] as int?;
-              if (g == null) continue;
-              anyGross = true;
-              grossToPar += g - (m['par'] as int? ?? 0);
-            }
-          }
           final isLeading   = rank == 1;
           final hasHoles    = roundHoles.isNotEmpty &&
               (roundHoles.first as List?)?.isNotEmpty == true;
@@ -459,7 +468,7 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
             elevation: isLeading ? 1 : 0,
             clipBehavior: Clip.antiAlias,
             color: isLeading
-                ? theme.colorScheme.primaryContainer.withOpacity(0.25)
+                ? theme.colorScheme.primaryContainer.withOpacity(0.3)
                 : null,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
@@ -483,19 +492,6 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 8),
                     child: Row(children: [
-                      SizedBox(
-                        width: 28,
-                        child: Text(
-                          rank != null ? '$rank' : '—',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14,
-                              color: isLeading
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurface),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
                       Expanded(
                         child: Text.rich(
                           TextSpan(children: [
@@ -549,14 +545,6 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                             style: TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 15,
                                 color: _ntpColor(ntp, theme))),
-                      ),
-                      SizedBox(
-                        width: 46,
-                        child: Text(anyGross ? _ntpLabel(grossToPar) : '—',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: _ntpColor(
-                                    anyGross ? grossToPar : null, theme))),
                       ),
                       if (hasPrize)
                         SizedBox(

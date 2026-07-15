@@ -35,6 +35,7 @@
 
 import 'package:flutter/material.dart';
 import '../game_catalog.dart';
+import '../theme/halved_brand.dart';
 
 /// Read-only chip that displays a game label.
 ///
@@ -67,19 +68,28 @@ class GameChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final text  = gameId != null ? gameDisplayName(gameId!) : label!;
+    final text = gameId != null ? gameDisplayName(gameId!) : label!;
 
-    return Chip(
-      label: Text(
-        text,
-        style: TextStyle(fontSize: dense ? 10 : 11),
+    // Explicit pill (not a Material Chip): a bare display Chip doesn't reliably
+    // pick up the themed label colour, which rendered these blank on the sage
+    // theme. This guarantees a readable deep-pine label everywhere GameChip is
+    // used (round hub, leaderboard, foursome cards, wizard).
+    return Container(
+      padding: EdgeInsets.symmetric(
+          horizontal: dense ? 8 : 10, vertical: dense ? 3 : 4),
+      decoration: BoxDecoration(
+        color: filled ? Halved.pine.withValues(alpha: 0.10) : Halved.card,
+        borderRadius: BorderRadius.circular(Halved.rChip),
+        border: Border.all(color: Halved.cardBorder),
       ),
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-      backgroundColor: filled
-          ? theme.colorScheme.primaryContainer.withValues(alpha: 0.5)
-          : null,
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: dense ? 10 : 11,
+          fontWeight: FontWeight.w600,
+          color: Halved.deepPine,
+        ),
+      ),
     );
   }
 }

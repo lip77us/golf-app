@@ -1207,6 +1207,37 @@ class ApiClient {
     return Points531Summary.fromJson(data as Map<String, dynamic>);
   }
 
+  // ── Honors (side-game-only carry-token points game) ──────────────────────
+
+  Future<HonorsSummary> getHonorsSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/honors/');
+    return HonorsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/honors/setup/
+  ///
+  /// Create (or replace) the Honors side game for this foursome.  Returns
+  /// the fresh summary so the caller doesn't need a second GET.
+  Future<HonorsSummary> postHonorsSetup(
+    int foursomeId, {
+    String  handicapMode  = 'strokes_off',
+    int     netPercent    = 100,
+    double? lossCap,
+    String  payoutStyle   = 'per_point',
+    String  perPointMode  = 'average',
+    List<int> participantPlayerIds = const [],
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/honors/setup/', {
+      'handicap_mode' : handicapMode,
+      'net_percent'   : netPercent,
+      'loss_cap'      : lossCap,
+      'payout_style'  : payoutStyle,
+      'per_point_mode': perPointMode,
+      'participant_player_ids': participantPlayerIds,
+    });
+    return HonorsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Triple Cup (One Round Ryder Cup) ----
 
   /// GET /api/foursomes/{id}/triple-cup/

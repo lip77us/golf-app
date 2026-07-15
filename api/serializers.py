@@ -974,6 +974,44 @@ class Points531SetupSerializer(serializers.Serializer):
                     )
 
 
+class HonorsSetupSerializer(serializers.Serializer):
+    """
+    Set up (or update) the Honors side game for a foursome.
+
+    Per-player, derived from the entered scores — the only knobs are the
+    handicap policy and the settlement style, mirroring Points 5-3-1 so the
+    mobile layer can reuse the same handicap + payout widgets.
+    """
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'],
+                        default='net',
+                    )
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100,
+                    )
+    loss_cap      = serializers.DecimalField(
+                        max_digits=8, decimal_places=2,
+                        required=False, allow_null=True, default=None,
+                        min_value=0,
+                        help_text=(
+                            "Optional per-player loss cap. Null = uncapped. "
+                            "Lower it to clip losses; winners reduce pro-rata."
+                        ),
+                    )
+    payout_style   = serializers.ChoiceField(
+                        choices=['pool', 'per_point'], default='per_point',
+                    )
+    per_point_mode = serializers.ChoiceField(
+                        choices=['average', 'all', 'first'], default='average',
+                    )
+    # Subset side game: which players are IN the game (empty = all real players).
+    participant_player_ids = serializers.ListField(
+                        child=serializers.IntegerField(), default=list)
+
+    def validate(self, data):
+        return _validate_subset_participants(data)
+
+
 class FourballSetupSerializer(serializers.Serializer):
     """
     Set up (or replace) the Fourball game for a foursome (2v2 best-ball

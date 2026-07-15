@@ -30,29 +30,41 @@ class SpotsDots extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Matches the score-entry junk control: 20px icons + a little tap padding
+    // so the control is easier to hit, still inline on every player row.
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         GestureDetector(
           onTap: onRemove,
-          child: Icon(Icons.remove_circle_outline,
-              size: 14, color: theme.colorScheme.onSurfaceVariant),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Icon(Icons.remove_circle_outline,
+                size: 20, color: theme.colorScheme.onSurfaceVariant),
+          ),
         ),
         const SizedBox(width: 4),
         Text(
           '$count spot${count.abs() == 1 ? '' : 's'}',
-          style: theme.textTheme.labelSmall?.copyWith(
+          style: theme.textTheme.labelMedium?.copyWith(
+            // Dark, readable colour once a spot is set (the bright-mint tertiary
+            // was too pale on the light rows); muted only at zero.
             color: count == 0
                 ? theme.colorScheme.onSurfaceVariant
-                : theme.colorScheme.tertiary,
+                : theme.colorScheme.primary,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(width: 4),
         GestureDetector(
           onTap: onAdd,
-          child: Icon(Icons.add_circle_outline,
-              size: 14, color: theme.colorScheme.onSurfaceVariant),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Icon(Icons.add_circle_outline,
+                size: 20, color: theme.colorScheme.onSurfaceVariant),
+          ),
         ),
       ],
     );

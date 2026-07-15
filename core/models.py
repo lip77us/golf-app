@@ -118,6 +118,14 @@ class GameType(models.TextChoices):
     # (one-putt, sandy, barky, …), settled on their own pot.  Engine in
     # services/spots.py and games/models.py SpotsGame/SpotsPlayerHoleResult.
     SPOTS           = 'spots',           'Spots'
+    # Honors: a side-game-only carry-token points game.  Win a hole outright
+    # net and you take "the honor"; you keep it (and score 1 point) every hole
+    # until someone else wins a hole outright.  A tied hole never beats the
+    # holder.  Derived from entered scores (no manual capture); Net/Gross/
+    # Strokes-Off-Low; settled via the shared wager engine (vs-average /
+    # pay-above / pay-leader / pool).  Engine in services/honors.py and
+    # games/models.py HonorsGame/HonorsHoleResult.
+    HONORS          = 'honors',          'Honors'
 
 
 class RoundStatus(models.TextChoices):
