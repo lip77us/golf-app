@@ -506,6 +506,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             ('three_person_match', 'three_person_match'),
             ('wolf_game',          'wolf'),
             ('rabbit_game',        'rabbit'),
+            ('honors_game',        'honors'),
             ('triple_cup_game',    'triple_cup'),
         ]:
             try:
