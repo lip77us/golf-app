@@ -627,6 +627,15 @@ def calculate_sixes(foursome) -> list:
             # Reposition this segment so it starts right after the previous one.
             sp = current_pos
             ep = min(sp + seg_len - 1, n - 1)
+        # Defensive guard: a well-formed round has exactly enough play-order
+        # holes for its standard segments, so `sp` never reaches `n`. But if the
+        # foursome carries MORE standard (non-extra) segments than the round has
+        # holes for — a data anomaly, e.g. from a re-setup — the pointer runs off
+        # the end. Stop rather than IndexError on order[sp]; segments past the
+        # last played hole simply have no holes to score. (current_pos only
+        # grows, so every later segment is out of range too → break.)
+        if sp >= n:
+            break
         seg_holes = order[sp:ep + 1]
         start_hole, end_hole = order[sp], order[ep]
         if seg.start_hole != start_hole or seg.end_hole != end_hole:

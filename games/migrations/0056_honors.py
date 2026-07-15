@@ -22,7 +22,6 @@ class Migration(migrations.Migration):
                 ('loss_cap', models.DecimalField(blank=True, decimal_places=2, help_text='Optional per-side loss cap (one table-wide value applied per player). Null = uncapped. When set, losers clip at the cap and winners are reduced pro-rata — see services.wager.settle().', max_digits=8, null=True)),
                 ('payout_style', models.CharField(choices=[('pool', 'Pool'), ('per_point', 'Per point')], default='per_point', max_length=12)),
                 ('per_point_mode', models.CharField(choices=[('average', 'Settle vs the field average'), ('all', 'Pay everyone above you'), ('first', 'Pay the leader')], default='average', max_length=8)),
-                ('participant_player_ids', models.JSONField(blank=True, default=list)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('foursome', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='honors_game', to='tournament.foursome')),
             ],
