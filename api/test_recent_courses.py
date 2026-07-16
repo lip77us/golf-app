@@ -150,3 +150,21 @@ class RecentCoursesCrossAccountTests(TestCase):
         self._friend_round('Unseen Course', 'api-unseen', date.today(),
                            '+13105550101')
         self.assertEqual(self._names(), [])
+
+    def test_home_course_excluded_so_three_non_home_returned(self):
+        # The picker pins the home course separately and strips it from recents,
+        # so a recent round at the home course must NOT cost a recents slot.
+        home = _course_with_tee(self.acct, 'Home Links', golf_api_id='api-home')
+        Player.objects.create(account=self.acct, user=self.user, name='Me',
+                              handicap_index=Decimal('0'), home_course=home)
+        # Most-recent round is at home; three other courses follow.
+        Round.objects.create(account=self.acct, course=home, status='complete',
+                             active_games=['skins'], date=date.today())
+        for i, nm in enumerate(['C1', 'C2', 'C3']):
+            c = _course_with_tee(self.acct, nm, golf_api_id=f'api-{nm.lower()}')
+            Round.objects.create(account=self.acct, course=c, status='complete',
+                                 active_games=['skins'],
+                                 date=date.today() - timedelta(days=i + 1))
+        names = self._names()
+        self.assertNotIn('Home Links', names)
+        self.assertEqual(names, ['C1', 'C2', 'C3'])

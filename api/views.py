@@ -1510,10 +1510,23 @@ class RecentCoursesView(APIView):
                     continue
                 _bump(c.golf_api_id, (r.date, r.created_at), cross=c)
 
+        # Drop the golfer's home course — the picker pins it separately, so
+        # including it here would just cost a recents slot (the client filters it
+        # out, leaving fewer than 3). Match by the same identity key.
+        try:
+            pp = request.user.player_profile
+            home_id = pp.home_course_id if pp else None
+        except Exception:
+            home_id = None
+        if home_id:
+            hc = Course.objects.filter(id=home_id).only('golf_api_id').first()
+            if hc is not None:
+                best.pop(hc.golf_api_id or f'c{home_id}', None)
+
         if not best:
             return Response([])
 
-        # The 3 most recently played, across both sources.
+        # The 3 most recently played (excluding the home course), newest first.
         top = sorted(best.values(), key=lambda v: v['sort'], reverse=True)[:3]
 
         courses = []
