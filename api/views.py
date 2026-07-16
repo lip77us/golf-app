@@ -1443,32 +1443,102 @@ class RecentCoursesView(APIView):
     """
     GET /api/courses/recent/
 
-    The account's most recently played DISTINCT courses (up to 3, newest
-    first). Drives the course picker's recents quick-pick — tap one to select
-    it instantly (it's already an account course). Empty list when the account
-    has no rounds yet.
+    Your most recently played DISTINCT courses (up to 3, newest first), drawn
+    from BOTH your own account's rounds AND rounds in OTHER accounts you were
+    added to as a phone-matched player (same source as your Completed-rounds
+    list — PlayingRoundsView). A course you played in a friend's round is cloned
+    into your account (idempotently, via the shared catalog) so the recents
+    quick-pick can select it instantly for a new round — even though you didn't
+    host that round and never opened the app during it. Empty list when you have
+    no rounds at all.
     """
     def get(self, request):
-        from tournament.models import Round
-        recent_ids, seen = [], set()
-        for cid in (Round.objects
-                    .filter(account=request.user.account)
-                    .order_by('-date', '-created_at')
-                    .values_list('course_id', flat=True)):
-            if cid in seen:
-                continue
-            seen.add(cid)
-            recent_ids.append(cid)
-            if len(recent_ids) >= 3:
-                break
-        if not recent_ids:
+        from tournament.models import Round, FoursomeMembership
+        from accounts.phone import normalize
+        from core.models import CatalogCourse
+        from services.catalog import catalog_from_course, clone_catalog_to_account
+
+        acct = request.user.account
+
+        # identity_key -> {'sort': (date, created_at),
+        #                  'own_id': int|None, 'cross': Course|None}
+        # identity_key dedupes an own copy and a cross copy of the same course
+        # (shared golf_api_id) into one entry, keeping the most recent play.
+        best: dict = {}
+
+        def _bump(key, sort, *, own_id=None, cross=None):
+            cur = best.get(key)
+            if cur is None:
+                best[key] = {'sort': sort, 'own_id': own_id, 'cross': cross}
+                return
+            if sort > cur['sort']:
+                cur['sort'] = sort
+            if own_id is not None and cur['own_id'] is None:
+                cur['own_id'] = own_id          # prefer an existing account copy
+            if cross is not None and cur['cross'] is None:
+                cur['cross'] = cross
+
+        # --- Own-account rounds ---
+        for r in (Round.objects.filter(account=acct)
+                  .order_by('-date', '-created_at')
+                  .values('course_id', 'course__golf_api_id', 'date', 'created_at')):
+            key = r['course__golf_api_id'] or f"c{r['course_id']}"
+            _bump(key, (r['date'], r['created_at']), own_id=r['course_id'])
+
+        # --- Cross-account rounds I played in (phone-matched), same match as
+        #     PlayingRoundsView. Only real (catalog-linked) courses are cloneable
+        #     cross-account, so custom courses without a golf_api_id are skipped.
+        my_phone = getattr(request.user, 'phone', None)
+        if my_phone:
+            rows = (
+                FoursomeMembership.objects
+                .exclude(foursome__round__account=acct)
+                .exclude(player__phone='')
+                .select_related('foursome__round__course', 'player', 'foursome__round')
+                .order_by('-foursome__round__date')
+            )
+            seen_round = set()
+            for m in rows:
+                if normalize(m.player.phone) != my_phone:
+                    continue
+                r = m.foursome.round
+                if r.id in seen_round:
+                    continue
+                seen_round.add(r.id)
+                c = r.course
+                if not c.golf_api_id:
+                    continue
+                _bump(c.golf_api_id, (r.date, r.created_at), cross=c)
+
+        if not best:
             return Response([])
-        # Re-sort the fetched rows back into recency order (the IN query won't
-        # preserve it).
-        by_id = {c.id: c for c in
-                 Course.objects.filter(id__in=recent_ids).prefetch_related('tees')}
-        ordered = [by_id[cid] for cid in recent_ids if cid in by_id]
-        return Response(CourseSerializer(ordered, many=True).data)
+
+        # The 3 most recently played, across both sources.
+        top = sorted(best.values(), key=lambda v: v['sort'], reverse=True)[:3]
+
+        courses = []
+        for info in top:
+            if info['own_id'] is not None:
+                c = (Course.objects.filter(id=info['own_id'])
+                     .prefetch_related('tees').first())
+                if c:
+                    courses.append(c)
+                continue
+            # A course from a friend's round — clone it into my account so it's
+            # selectable. Best-effort: a clone failure must not break recents.
+            try:
+                cross = info['cross']
+                cat = CatalogCourse.objects.filter(golf_api_id=cross.golf_api_id).first()
+                if cat is None:
+                    cat, _ = catalog_from_course(cross)
+                cloned, _ = clone_catalog_to_account(cat, acct)
+                cloned = (Course.objects.filter(id=cloned.id)
+                          .prefetch_related('tees').first())
+                if cloned:
+                    courses.append(cloned)
+            except Exception:
+                continue
+        return Response(CourseSerializer(courses, many=True).data)
 
 
 class CourseDetailView(APIView):
