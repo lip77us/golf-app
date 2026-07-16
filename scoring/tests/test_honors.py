@@ -167,6 +167,44 @@ class HonorsTests(TestCase):
         s = honors_summary(self.fs)
         assert abs(sum(self._money(s).values())) < 1e-6
 
+    # ── Auto-init when active but unconfigured ───────────────────────────────
+
+    def test_auto_inits_when_active_but_not_set_up(self):
+        # Honors added as a side game (in active_games) but the setup screen was
+        # never completed → no HonorsGame row. calculate_honors should auto-init
+        # with defaults and score from the entered gross, instead of the
+        # leaderboard sitting at "not started".
+        r = make_round(self.tee.course, active_games=['points_531', 'honors'])
+        r.bet_unit = 1
+        r.save(update_fields=['bet_unit'])
+        fs = make_foursome(r, [('Al', 0), ('Bo', 0), ('Cy', 0)], tee=self.tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        submit_hole(fs, 1, [(pid['Al'], 4), (pid['Bo'], 5), (pid['Cy'], 6)])
+        submit_hole(fs, 2, [(pid['Al'], 5), (pid['Bo'], 4), (pid['Cy'], 6)])
+        # No setup_honors() call — simulate an unconfigured side game; the
+        # summary starts out "not started".
+        assert honors_summary(fs)['status'] == 'pending'
+        calculate_honors(fs)
+        s = honors_summary(fs)
+        assert s['status'] == 'in_progress', s['status']
+        # Default handicap is Strokes-Off Low.
+        assert s['handicap']['mode'] == 'strokes_off', s['handicap']
+        # Al won hole 1, Bo won hole 2 → 1 point each.
+        pts = {p['short_name']: p['points'] for p in s['players']}
+        assert sum(pts.values()) == 2, pts
+
+    def test_does_not_auto_init_when_not_active(self):
+        # calculate_honors on a round without 'honors' active is a no-op.
+        r = make_round(self.tee.course, active_games=['points_531'])
+        fs = make_foursome(r, [('Al', 0), ('Bo', 0), ('Cy', 0)], tee=self.tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        submit_hole(fs, 1, [(pid['Al'], 4), (pid['Bo'], 5), (pid['Cy'], 6)])
+        calculate_honors(fs)
+        s = honors_summary(fs)
+        assert s['status'] == 'pending', s['status']
+
     # ── Participant subset ───────────────────────────────────────────────────
 
     def test_participant_subset_restricts_the_game(self):

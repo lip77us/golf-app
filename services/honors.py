@@ -161,7 +161,19 @@ def calculate_honors(foursome) -> list:
     try:
         game = foursome.honors_game
     except HonorsGame.DoesNotExist:
-        return []
+        # 'honors' is active for this round but was never explicitly configured
+        # (added as a side game without completing the setup screen). Honors is a
+        # DERIVED overlay that needs no per-hole input, so auto-create it with
+        # sensible defaults (Strokes-Off Low, settle vs the field average) and
+        # score from the entered gross — matching Stroke Play / Stableford
+        # instead of sitting at "not started". An explicit setup later
+        # overwrites this. Guard on active_games so we only auto-init when the
+        # round actually wants Honors.
+        active = (set(foursome.active_games or [])
+                  | set(foursome.round.active_games or []))
+        if 'honors' not in active:
+            return []
+        game = setup_honors(foursome, handicap_mode=HandicapMode.STROKES_OFF)
 
     real_ids = [m.player_id for m in _participant_members(game, foursome)]
     HonorsHoleResult.objects.filter(game=game).delete()
