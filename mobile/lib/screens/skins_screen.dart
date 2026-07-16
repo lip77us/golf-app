@@ -21,6 +21,7 @@ import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_score_picker.dart';
+import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
