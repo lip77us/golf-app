@@ -791,6 +791,8 @@ class _SkinsHoleScoreCard extends StatelessWidget {
                   par:             par,
                   strokes:         matchStrokes,
                   currentScore:    gross,
+                  boxBorderColor:  theme.colorScheme.primary,
+                  boxFillColor:    Colors.white,
                   onScoreSelected: (score) => onScoreSelected(m, score),
                 ),
             ];
@@ -992,12 +994,6 @@ class _SkinsPlayerRow extends StatelessWidget {
                   ),
                 ),
               ),
-            ],
-            if (member.tee != null) ...[
-              const SizedBox(width: 6),
-              Text(member.tee!.teeName,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
             ],
           ]),
         ),

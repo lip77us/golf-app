@@ -937,6 +937,10 @@ class _QNHoleScoreCard extends StatelessWidget {
                   par:             playerPar,
                   strokes:         0, // gross only — net par == par
                   currentScore:    gross,
+                  boxBorderColor:  teamLbl == null
+                      ? Theme.of(context).colorScheme.primary
+                      : (teamLbl == 'T1' ? _t1Color : _t2Color),
+                  boxFillColor:    Colors.white,
                   onScoreSelected: (score) => onScoreSelected(m, score),
                 ),
             ];
@@ -987,14 +991,22 @@ class _QNPlayerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final pts   = gross != null ? _gsf(gross!, par) : null;
+    final teamColor = teamLabel == null
+        ? null
+        : (teamLabel == 'T1' ? t1Color : t2Color);
 
     return Container(
       decoration: BoxDecoration(
+        // Non-active team players get a light team-colour wash + a 4px team
+        // left bar, matching the casual score-entry screen.
         color: isHot
             ? theme.colorScheme.primaryContainer.withOpacity(0.08)
-            : null,
+            : (teamColor != null ? teamColor.withOpacity(0.07) : null),
         border: Border(
           top: BorderSide(color: theme.colorScheme.outlineVariant),
+          left: (!isHot && teamColor != null)
+              ? BorderSide(color: teamColor, width: 4)
+              : BorderSide.none,
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1038,12 +1050,6 @@ class _QNPlayerRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (member.tee != null) ...[
-                  const SizedBox(width: 6),
-                  Text(member.tee!.teeName,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ],
               ]),
               if (quota != null)
                 Text(

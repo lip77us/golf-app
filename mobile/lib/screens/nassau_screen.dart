@@ -1246,12 +1246,18 @@ class _NassauPlayerRow extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         // Transparent when active so the surrounding bounding box's team wash
-        // shows through; inactive rows keep the top divider only.
-        color: isHot ? Colors.transparent : null,
+        // shows through. Inactive team players get a light team-colour wash +
+        // a 4px team left bar (matches the casual score-entry screen).
+        color: isHot
+            ? Colors.transparent
+            : (team != null ? activeColor.withOpacity(0.07) : null),
         border: isHot
             ? const Border()
             : Border(
                 top: BorderSide(color: theme.colorScheme.outlineVariant),
+                left: team != null
+                    ? BorderSide(color: activeColor, width: 4)
+                    : BorderSide.none,
               ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1297,15 +1303,6 @@ class _NassauPlayerRow extends StatelessWidget {
                   ),
                 ),
               ),
-            ],
-            // Tee name next to the handicap index (or right after the
-            // name when there's no chip — gross mode).  Same placement
-            // as the universal score-entry screen.
-            if (member.tee != null) ...[
-              const SizedBox(width: 6),
-              Text(member.tee!.teeName,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
             ],
           ]),
               if (spotsActive)

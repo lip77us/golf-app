@@ -228,6 +228,9 @@ class _InlineScorePickerState extends State<InlineScorePicker> {
                       selected: sel,
                       width:    40,
                       height:   40,
+                      // Net par is the anchor — always clean par (no bogey
+                      // square), even when Net Style Entry is off.
+                      forceNetBaseline: true,
                     ),
                   ),
                 )

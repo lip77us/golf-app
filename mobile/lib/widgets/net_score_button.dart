@@ -67,6 +67,11 @@ class NetScoreButton extends StatelessWidget {
   /// the caller is expected to wrap it in its own gesture handler.
   final VoidCallback? onTap;
 
+  /// Force NET baseline (par + strokes) regardless of the Net Style Entry
+  /// setting. Used for the picker's net-par anchor cell so it always renders
+  /// as clean par (no bogey square) even when Net Style Entry is off.
+  final bool forceNetBaseline;
+
   const NetScoreButton({
     super.key,
     required this.score,
@@ -76,6 +81,7 @@ class NetScoreButton extends StatelessWidget {
     this.width = 40,
     this.height = 40,
     this.onTap,
+    this.forceNetBaseline = false,
   });
 
   @override
@@ -83,7 +89,7 @@ class NetScoreButton extends StatelessWidget {
     final theme         = Theme.of(context);
     final netStyleEntry =
         context.watch<SettingsProvider>().netStyleEntry;
-    final baseline      = netStyleEntry ? par + strokes : par;
+    final baseline      = (forceNetBaseline || netStyleEntry) ? par + strokes : par;
     final diff          = score - baseline;
 
     // Shape style driven by diff (net or gross per the preference).
