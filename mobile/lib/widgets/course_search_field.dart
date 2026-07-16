@@ -182,20 +182,26 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
     // compact "change" suffix icon so the box matches the search field height.
     if (!_editing && widget.selected != null) {
       final c = widget.selected!;
-      return InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Course',
-          border: const OutlineInputBorder(),
-          prefixIcon: const Icon(Icons.golf_course),
-          suffixIcon: IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Change course',
-            onPressed: () => setState(() => _editing = true),
+      // The whole field is tappable (not just the pencil) so tapping the course
+      // name also opens the picker.
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _editing = true),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: 'Course',
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.golf_course),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Change course',
+              onPressed: () => setState(() => _editing = true),
+            ),
           ),
-        ),
-        child: Text(
-          c.location.isEmpty ? c.name : '${c.name}  ·  ${c.location}',
-          overflow: TextOverflow.ellipsis,
+          child: Text(
+            c.location.isEmpty ? c.name : '${c.name}  ·  ${c.location}',
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       );
     }
