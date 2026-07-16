@@ -86,19 +86,49 @@ class HonorsTests(TestCase):
         assert self._points(s) == {self.sn['Ann']: 0, self.sn['Ben']: 0,
                                    self.sn['Cal']: 1}, self._points(s)
 
-    def test_tie_below_holder_still_keeps_holder(self):
-        # A tie for low never beats the holder, even when both other
-        # players score below the holder — "a tie doesn't beat you".
+    def test_tie_including_holder_keeps_holder(self):
+        # A tie for low that INCLUDES the holder doesn't beat them — they keep
+        # it. (Nobody scored strictly below the holder.)
         setup_honors(self.fs, handicap_mode='gross')
         submit_hole(self.fs, 1, [(self.pid['Ann'], 3), (self.pid['Ben'], 5),
                                   (self.pid['Cal'], 5)])            # Ann holds
-        submit_hole(self.fs, 2, [(self.pid['Ann'], 6), (self.pid['Ben'], 4),
-                                  (self.pid['Cal'], 4)])            # Ben & Cal tie low
+        submit_hole(self.fs, 2, [(self.pid['Ann'], 4), (self.pid['Ben'], 4),
+                                  (self.pid['Cal'], 5)])            # Ann & Ben tie low
         calculate_honors(self.fs)
         s = honors_summary(self.fs)
-        assert self._hole(s, 2)['winner_short'] is None
+        assert self._hole(s, 2)['winner_short'] is None            # carry
         assert self._hole(s, 2)['holder_short'] == self.sn['Ann']
         assert self._points(s)[self.sn['Ann']] == 2
+
+    def test_tie_below_holder_transfers_via_walk_back(self):
+        # Ann holds hole 1. Hole 2: Ben & Cal tie BELOW Ann → Ann is beaten and
+        # loses the honor. Break the tie by walking back: on hole 1 Ben (4) beat
+        # Cal (5), so Ben takes the honor — it does NOT stay with Ann.
+        setup_honors(self.fs, handicap_mode='gross')
+        submit_hole(self.fs, 1, [(self.pid['Ann'], 3), (self.pid['Ben'], 4),
+                                  (self.pid['Cal'], 5)])            # Ann wins
+        submit_hole(self.fs, 2, [(self.pid['Ann'], 6), (self.pid['Ben'], 4),
+                                  (self.pid['Cal'], 4)])            # Ben & Cal < Ann
+        calculate_honors(self.fs)
+        s = honors_summary(self.fs)
+        assert self._hole(s, 2)['holder_short'] == self.sn['Ben'], self._hole(s, 2)
+        assert self._points(s) == {self.sn['Ann']: 1, self.sn['Ben']: 1,
+                                   self.sn['Cal']: 0}, self._points(s)
+
+    def test_tie_below_holder_with_no_prior_difference_dies(self):
+        # Ben & Cal tie below Ann on hole 2 AND were tied on hole 1 → the
+        # walk-back never separates them, so the honor dies (loose). It does
+        # NOT stay with the beaten holder Ann.
+        setup_honors(self.fs, handicap_mode='gross')
+        submit_hole(self.fs, 1, [(self.pid['Ann'], 3), (self.pid['Ben'], 5),
+                                  (self.pid['Cal'], 5)])            # Ann wins; Ben=Cal
+        submit_hole(self.fs, 2, [(self.pid['Ann'], 6), (self.pid['Ben'], 4),
+                                  (self.pid['Cal'], 4)])            # tie below Ann
+        calculate_honors(self.fs)
+        s = honors_summary(self.fs)
+        assert self._hole(s, 2)['holder_short'] is None, self._hole(s, 2)
+        assert self._points(s) == {self.sn['Ann']: 1, self.sn['Ben']: 0,
+                                   self.sn['Cal']: 0}, self._points(s)
 
     def test_unscored_hole_carries_state(self):
         setup_honors(self.fs, handicap_mode='gross')

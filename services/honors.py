@@ -3,11 +3,16 @@ services/honors.py
 ------------------
 Honors calculator — a side-game-only "carry the honor" points game.
 
-A single token, **the honor**, is won by taking a hole outright (the
-strictly lowest score-to-compare, no tie).  Whoever wins a hole outright
-takes the honor; they keep it until another player wins a hole outright.
-A hole with no outright winner (a tie for low) never beats the holder —
-"a tie doesn't beat you" — so the current holder simply keeps it.
+A single token, **the honor**, goes to the best (lowest) score-to-compare
+on each hole.  The subtlety is ties:
+
+* An outright low takes/keeps the honor.
+* A tie for low that INCLUDES the current holder is kept by the holder —
+  "a tie doesn't beat you" (nobody scored strictly below them).
+* A tie for low among players who all BEAT the holder is broken by walking
+  BACK through prior holes (most recent first) until one is lower; that
+  player takes it.  If they are never separated, the honor DIES (goes loose)
+  — it does NOT stay with the beaten holder.
 
 Every hole a player is holding the honor they score **1 point**, so a
 player's total points = the number of holes they held the honor.  A hole
@@ -134,6 +139,44 @@ def _outright_winner(nets: dict):
     return leaders[0] if len(leaders) == 1 else None
 
 
+def _tiebreak(candidates: list, history: list):
+    """Break a tie for the hole's best score by walking BACK through prior
+    holes, most recent first: at each prior hole keep only the candidate(s)
+    with the lowest score there; the first hole that separates them decides.
+    If the candidates are never separated, return None (the honor dies).
+
+    ``history`` is the list of prior fully-scored ``nets`` dicts in play order
+    (so every candidate has a score on every history hole)."""
+    cands = list(candidates)
+    for past in reversed(history):
+        best = min(past[pid] for pid in cands)
+        cands = [pid for pid in cands if past[pid] == best]
+        if len(cands) == 1:
+            return cands[0]
+    return None
+
+
+def _resolve_honor(holder, nets: dict, history: list):
+    """Return ``(winner_id, new_holder_id)`` after a hole.
+
+    * The best (lowest) score takes the honor.
+    * A tie for best that INCLUDES the current holder is kept by the holder
+      ("a tie doesn't beat you") — recorded as a carry (winner ``None``).
+    * A tie for best among players who all BEAT the holder (or a loose honor)
+      is broken by walking back to prior holes (``_tiebreak``); if they are
+      never separated the honor DIES (loose) — it does NOT stay with the
+      beaten holder.
+    """
+    low = min(nets.values())
+    low_set = [pid for pid, s in nets.items() if s == low]
+    if len(low_set) == 1:
+        return low_set[0], low_set[0]          # outright win / grab
+    if holder is not None and holder in low_set:
+        return None, holder                    # tie kept by the holder
+    resolved = _tiebreak(low_set, history)     # holder beaten (or loose)
+    return resolved, resolved                  # None => honor dies
+
+
 def _phcp_in_play(mode, npct, phcp, low_phcp) -> int:
     if mode == HandicapMode.GROSS:
         return 0
@@ -151,11 +194,14 @@ def calculate_honors(foursome) -> list:
     """Rebuild HonorsHoleResult rows from the current HoleScore table and
     update the game's status.
 
-    Walks the holes in the group's play order.  On each fully-scored hole:
-      * compute the outright winner (strictly lowest score, else None);
-      * if there IS an outright winner, the honor passes to them;
-      * otherwise the holder is unchanged (keeps it if held, stays loose
-        if nobody holds it) — a tie never beats the holder.
+    Walks the holes in the group's play order.  On each fully-scored hole the
+    honor goes to the best (lowest) score (see _resolve_honor):
+      * an outright low takes/keeps it;
+      * a tie for low that INCLUDES the holder is kept by the holder
+        ("a tie doesn't beat you");
+      * a tie for low among players who all BEAT the holder is broken by
+        walking back to prior holes; if never separated the honor dies — it
+        does NOT stay with the beaten holder.
     The holder AFTER the hole scores 1 point for that hole.
     """
     try:
@@ -188,6 +234,7 @@ def calculate_honors(foursome) -> list:
 
     rows = []
     holder = None       # player_id or None (loose)
+    history = []        # prior fully-scored nets, in play order (for tiebreaks)
     fully_scored = 0
     for hole in order:
         nets = {}
@@ -202,9 +249,7 @@ def calculate_honors(foursome) -> list:
             continue          # skip unscored holes; the honor carries
         fully_scored += 1
 
-        winner = _outright_winner(nets)   # outright low, else None (tie)
-        if winner is not None:
-            holder = winner               # a hole win takes the honor
+        winner, holder = _resolve_honor(holder, nets, history)
 
         rows.append(HonorsHoleResult(
             game        = game,
@@ -212,6 +257,7 @@ def calculate_honors(foursome) -> list:
             winner_id   = winner,
             holder_id   = holder,
         ))
+        history.append(nets)
 
     if rows:
         HonorsHoleResult.objects.bulk_create(rows)

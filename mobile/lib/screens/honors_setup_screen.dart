@@ -360,10 +360,12 @@ class _HonorsSetupScreenState extends State<HonorsSetupScreen> {
                           color: theme.colorScheme.primary)),
                   const SizedBox(height: 8),
                   Text(
-                    'Win a hole outright (lowest ${_modeWord()}) and you take '
-                    'the honor. You keep it — and score 1 point — every hole '
-                    'until another player wins a hole outright. A tied hole '
-                    "doesn't beat you, so the current holder keeps it.",
+                    'The best (lowest ${_modeWord()}) each hole holds the '
+                    'honor and scores 1 point. A tie that includes you '
+                    "doesn't beat you — you keep it. A tie of players who all "
+                    'beat you is broken by the previous hole; if still tied, '
+                    'the honor goes loose (nobody scores) until someone wins '
+                    'a hole again.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
