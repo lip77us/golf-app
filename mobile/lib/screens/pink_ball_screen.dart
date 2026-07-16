@@ -63,6 +63,10 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
   // Null = not yet entered this session (uses stored value from scorecard).
   final Map<int, int?> _pendingScores = {};
 
+  /// Tap an already-scored player → they become the active row so the inline
+  /// picker edits their score in place (casual score-entry model), not a modal.
+  int? _editHotPid;
+
   // Match play refresh — sync-drain watcher + 3-second polling timer.
   SyncService?  _syncRef;
   VoidCallback? _syncWatcher;
@@ -408,6 +412,8 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
 
   // ── Edit existing score via modal ─────────────────────────────────────────
 
+  // Superseded by inline editing (tap a scored row → InlineScorePicker).
+  // ignore: unused_element
   Future<void> _editScore(Membership m, int par, int strokes) async {
     final current = _pendingScores[m.player.id]
         ?? context.read<RoundProvider>().scorecard
@@ -503,6 +509,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
         _holeIndex++;
         _ballLost = _ballLostOnHole == (_holeIndex + 1); // restore for new hole
         _pendingScores.clear();
+        _editHotPid = null;
       });
     } else if (ok && advance && _holeIndex == 17) {
       // Finished hole 18
@@ -660,6 +667,12 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                             ?.grossScore;
                     if (s == null) { hotSpotIdx = i; break; }
                   }
+                  // Editing an already-scored player: make them the hot row.
+                  if (_editHotPid != null) {
+                    final ei = realMembers
+                        .indexWhere((m) => m.player.id == _editHotPid);
+                    if (ei != -1) hotSpotIdx = ei;
+                  }
                   return realMembers.asMap().entries.expand<Widget>((entry) {
                 final idx       = entry.key;
                 final m         = entry.value;
@@ -683,12 +696,13 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                     grossScore:      displayed,
                     handicapStrokes: strokes,
                     onEditTap: displayed != null
-                        ? () => _editScore(m, par, strokes)
+                        ? () => setState(() => _editHotPid = m.player.id)
                         : null,
                   );
                 final boxColor = Theme.of(context).colorScheme.primary;
+                final editingThis = m.player.id == _editHotPid;
                 return [
-                  if (isHot && displayed == null)
+                  if (isHot && (displayed == null || editingThis))
                     // Active player + picker share ONE bounding box (no teams in
                     // Pink Ball → brand pine). Flush-left bold bar, right inset.
                     Container(
@@ -709,12 +723,25 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                           InlineScorePicker(
                       par:             par,
                       strokes:         strokes,
-                      currentScore:    null,
+                      currentScore:    displayed,
                       boxBorderColor:  boxColor,
                       boxFillColor:    Colors.white,
                       onScoreSelected: (score) {
+                        final editing = _editHotPid == m.player.id;
                         setState(
                             () => _pendingScores[m.player.id] = score);
+                        // Inline edit of an existing score: drop the one-shot
+                        // override and commit the correction immediately.
+                        if (editing) {
+                          setState(() => _editHotPid = null);
+                          if (score > 0) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!mounted || _saving) return;
+                              _save(advance: false);
+                            });
+                          }
+                          return;
+                        }
                         // Auto-save + advance the moment the last player on
                         // the hole gets a score — mirrors the universal
                         // score-entry screen so the pink-ball flow doesn't
@@ -796,6 +823,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                         _holeIndex = newIdx;
                         _ballLost  = _ballLostOnHole == (newIdx + 1);
                         _pendingScores.clear();
+                        _editHotPid = null;
                       }),
               icon: const Icon(Icons.chevron_left),
               label: Text(_holeIndex == 0 ? 'Previous' : 'Hole $_holeIndex'),
@@ -1359,6 +1387,7 @@ class _BallLostCard extends StatelessWidget {
 // Edit-score modal — tap a scored player's box to correct a score
 // ---------------------------------------------------------------------------
 
+// ignore: unused_element
 class _EditScoreSheet extends StatefulWidget {
   final String playerName;
   final int    par;

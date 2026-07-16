@@ -57,6 +57,10 @@ class _Points531ScreenState extends State<Points531Screen>
   bool _prevHadPending  = false;
   bool _initialJumpDone = false;
 
+  /// Tap an already-scored player → they become the active row so the inline
+  /// picker edits their score in place (casual score-entry model), not a modal.
+  int? _editHotPid;
+
   @override
   void initState() {
     super.initState();
@@ -249,6 +253,8 @@ class _Points531ScreenState extends State<Points531Screen>
     });
   }
 
+  // Superseded by inline editing (tap a scored row → InlineScorePicker).
+  // ignore: unused_element
   Future<void> _editScore(
     BuildContext ctx,
     Membership player,
@@ -302,11 +308,11 @@ class _Points531ScreenState extends State<Points531Screen>
   }
 
   void _advance() {
-    if (_selectedHole < 18) setState(() => _selectedHole++);
+    if (_selectedHole < 18) setState(() { _selectedHole++; _editHotPid = null; });
   }
 
   void _retreat() {
-    if (_selectedHole > 1) setState(() => _selectedHole--);
+    if (_selectedHole > 1) setState(() { _selectedHole--; _editHotPid = null; });
   }
 
   Future<void> _saveAndAdvance(
@@ -582,7 +588,11 @@ class _Points531ScreenState extends State<Points531Screen>
     final merged   = _mergePending(rp.localPendingByHole, _pending);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
-    final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
+    int hotSpot    = isComplete ? -1 : _hotSpotIdx(players, scores);
+    if (!isComplete && _editHotPid != null) {
+      final idx = players.indexWhere((p) => p.player.id == _editHotPid);
+      if (idx != -1) hotSpot = idx;
+    }
     final par      = holeData?.par ?? 4;
 
     return Column(children: [
@@ -613,10 +623,18 @@ class _Points531ScreenState extends State<Points531Screen>
                     adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
                 onSpotsRemove: (pid) =>
                     adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
-                onScoreSelected: (m, score) =>
-                    _handleScore(ctx, m, score, players, par),
-                onEditTap: (m) =>
-                    _editScore(ctx, m, par, _selectedHole, players),
+                onScoreSelected: (m, score) {
+                  if (_editHotPid != null) {
+                    // Inline edit of an existing score: drop the one-shot
+                    // override and commit the correction immediately.
+                    setState(() => _editHotPid = null);
+                    _selectScore(m, score, _selectedHole);
+                    _saveAndAdvance(ctx, players, par, advance: false);
+                  } else {
+                    _handleScore(ctx, m, score, players, par);
+                  }
+                },
+                onEditTap: (m) => setState(() => _editHotPid = m.player.id),
               ),
               const SizedBox(height: 12),
 
@@ -627,7 +645,8 @@ class _Points531ScreenState extends State<Points531Screen>
                   players:     players,
                   scorecard:   sc,
                   currentHole: _selectedHole,
-                  onTapHole:   (h) => setState(() => _selectedHole = h),
+                  onTapHole:   (h) =>
+                      setState(() { _selectedHole = h; _editHotPid = null; }),
                 ),
                 const SizedBox(height: 12),
               ] else if (rp.loadingPoints531) ...[
@@ -1192,6 +1211,7 @@ class _P531PlayerRow extends StatelessWidget {
 // Modal picker sheet — used for editing already-entered scores
 // ---------------------------------------------------------------------------
 
+// ignore: unused_element
 class _P531ScorePickerSheet extends StatelessWidget {
   final String playerName;
   final int    par;

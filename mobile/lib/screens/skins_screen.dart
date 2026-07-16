@@ -49,6 +49,10 @@ class _SkinsScreenState extends State<SkinsScreen> {
   bool _prevHadPending = false;
   bool _initialJumpDone = false;
 
+  /// Tap an already-scored player → they become the active row so the inline
+  /// picker edits their score in place (casual score-entry model), not a modal.
+  int? _editHotPid;
+
   @override
   void initState() {
     super.initState();
@@ -179,6 +183,8 @@ class _SkinsScreenState extends State<SkinsScreen> {
   }
 
   /// Open the edit-score modal for an already-scored player (non-hot row tap).
+  // Superseded by inline editing (tap a scored row → InlineScorePicker).
+  // ignore: unused_element
   Future<void> _editScore(
     BuildContext ctx,
     Membership player,
@@ -232,11 +238,11 @@ class _SkinsScreenState extends State<SkinsScreen> {
   }
 
   void _advance() {
-    if (_selectedHole < 18) setState(() => _selectedHole++);
+    if (_selectedHole < 18) setState(() { _selectedHole++; _editHotPid = null; });
   }
 
   void _retreat() {
-    if (_selectedHole > 1) setState(() => _selectedHole--);
+    if (_selectedHole > 1) setState(() { _selectedHole--; _editHotPid = null; });
   }
 
   Future<void> _saveAndAdvance(
@@ -521,7 +527,11 @@ class _SkinsScreenState extends State<SkinsScreen> {
     final merged   = _mergePending(rp.localPendingByHole, _pending);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
-    final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
+    int hotSpot    = isComplete ? -1 : _hotSpotIdx(players, scores);
+    if (!isComplete && _editHotPid != null) {
+      final idx = players.indexWhere((p) => p.player.id == _editHotPid);
+      if (idx != -1) hotSpot = idx;
+    }
     final par      = holeData?.par ?? 4;
     final summary  = rp.skinsSummary;
 
@@ -546,10 +556,18 @@ class _SkinsScreenState extends State<SkinsScreen> {
                 par:             par,
                 summary:         summary,
                 pendingJunk:     _pendingJunk[_selectedHole] ?? {},
-                onScoreSelected: (m, score) =>
-                    _selectScore(m, score, _selectedHole),
-                onEditTap: (m) =>
-                    _editScore(ctx, m, par, _selectedHole, players),
+                onScoreSelected: (m, score) {
+                  _selectScore(m, score, _selectedHole);
+                  if (_editHotPid != null) {
+                    // Inline edit of an existing score: drop the one-shot
+                    // override and commit the correction immediately.
+                    setState(() => _editHotPid = null);
+                    if (score != -1) {
+                      _saveAndAdvance(ctx, players, par, advance: false);
+                    }
+                  }
+                },
+                onEditTap: (m) => setState(() => _editHotPid = m.player.id),
                 onJunkChanged: (pid, delta) =>
                     _adjustJunk(pid, _selectedHole, delta),
               ),
@@ -561,7 +579,8 @@ class _SkinsScreenState extends State<SkinsScreen> {
                   summary:     summary,
                   players:     players,
                   currentHole: _selectedHole,
-                  onTapHole:   (h) => setState(() => _selectedHole = h),
+                  onTapHole:   (h) =>
+                      setState(() { _selectedHole = h; _editHotPid = null; }),
                 ),
                 const SizedBox(height: 12),
               ] else if (rp.loadingSkins) ...[
@@ -1198,6 +1217,7 @@ class _JunkDots extends StatelessWidget {
 // Modal edit-score sheet — copied from _P531ScorePickerSheet
 // ===========================================================================
 
+// ignore: unused_element
 class _SkinsScorePickerSheet extends StatelessWidget {
   final String playerName;
   final int    par;
