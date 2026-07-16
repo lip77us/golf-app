@@ -50,6 +50,12 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
   bool _prevHadPending  = false;
   bool _initialJumpDone = false;
 
+  /// When set, tapping an already-scored player made THEM the active row so the
+  /// inline picker edits their score in place (matching the casual score-entry
+  /// form) instead of a modal sheet. Cleared once they pick a value or change
+  /// holes.
+  int? _editHotPid;
+
   // Polling timer used when a cross-foursome phantom is waiting for a donor
   // to score.  Refreshes the scorecard every 8 s so the phantom row updates
   // automatically without needing user interaction.
@@ -275,6 +281,9 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
     });
   }
 
+  // Superseded by inline editing (tap a scored row → InlineScorePicker, see
+  // _editHotPid). Kept temporarily; remove once the inline flow is confirmed.
+  // ignore: unused_element
   Future<void> _editScore(
     BuildContext ctx,
     Membership player,
@@ -333,11 +342,11 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
   }
 
   void _advance() {
-    if (_selectedHole < 18) setState(() => _selectedHole++);
+    if (_selectedHole < 18) setState(() { _selectedHole++; _editHotPid = null; });
   }
 
   void _retreat() {
-    if (_selectedHole > 1) setState(() => _selectedHole--);
+    if (_selectedHole > 1) setState(() { _selectedHole--; _editHotPid = null; });
   }
 
   Future<void> _saveAndAdvance(
@@ -677,7 +686,13 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
     final merged   = _mergePending(rp.localPendingByHole, _pending);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
-    final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
+    int hotSpot    = isComplete ? -1 : _hotSpotIdx(players, scores);
+    // Editing an already-scored player: make them the active row so the inline
+    // picker targets them (mirrors the casual score-entry form).
+    if (!isComplete && _editHotPid != null) {
+      final idx = players.indexWhere((p) => p.player.id == _editHotPid);
+      if (idx != -1) hotSpot = idx;
+    }
     final par      = holeData?.par ?? 4;
 
     // Start / stop phantom polling based on whether the phantom has scored
@@ -733,7 +748,16 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
                   final hole = _selectedHole;
                   final wasAllScored = _allScored(
                       players, _effectiveScores(sc, hole));
+                  final wasEditing = _editHotPid != null;
                   _selectScore(m, score, hole);
+                  // Editing an existing score (inline): drop the one-shot edit
+                  // override and commit the correction immediately, like the
+                  // old edit sheet did — no save+advance needed.
+                  if (wasEditing) {
+                    setState(() => _editHotPid = null);
+                    _saveAndAdvance(ctx, players, par, advance: false);
+                    return;
+                  }
                   // Auto-save+advance the moment the last player on the
                   // hole gets a positive score.  Gated by the Auto-advance
                   // setting; when off, stay on the hole so the scorer can
@@ -754,8 +778,7 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
                     }
                   }
                 },
-                onEditTap: (m) =>
-                    _editScore(ctx, m, par, _selectedHole, players, nas),
+                onEditTap: (m) => setState(() => _editHotPid = m.player.id),
               ),
               const SizedBox(height: 12),
 
@@ -766,7 +789,8 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
                   players:     players,
                   scorecard:   sc,
                   currentHole: _selectedHole,
-                  onTapHole:   (h) => setState(() => _selectedHole = h),
+                  onTapHole:   (h) =>
+                      setState(() { _selectedHole = h; _editHotPid = null; }),
                 ),
                 const SizedBox(height: 8),
               ] else if (rp.loadingNassau) ...[
@@ -1398,6 +1422,7 @@ class _NassauPlayerRow extends StatelessWidget {
 // Modal score picker sheet
 // ---------------------------------------------------------------------------
 
+// ignore: unused_element
 class _NassauScorePickerSheet extends StatelessWidget {
   final String playerName;
   final int    par;
