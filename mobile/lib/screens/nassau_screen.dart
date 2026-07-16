@@ -23,7 +23,6 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_score_picker.dart';
-import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
@@ -279,66 +278,6 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
             score;
       }
     });
-  }
-
-  // Superseded by inline editing (tap a scored row → InlineScorePicker, see
-  // _editHotPid). Kept temporarily; remove once the inline flow is confirmed.
-  // ignore: unused_element
-  Future<void> _editScore(
-    BuildContext ctx,
-    Membership player,
-    int par,
-    int hole,
-    List<Membership> players,
-    NassauSummary? nas,
-  ) async {
-    final rp      = context.read<RoundProvider>();
-    final sc      = rp.scorecard;
-    final current = (_pending[hole] ?? {})[player.player.id]
-        ?? sc?.holeData(hole)?.scoreFor(player.player.id)?.grossScore;
-
-    final mode       = nas?.handicapMode ?? 'net';
-    final netPercent = nas?.netPercent   ?? 100;
-    final lowPlaying = mode == 'strokes_off' && players.isNotEmpty
-        ? players
-            .map((m) => m.playingHandicap)
-            .reduce((a, b) => a < b ? a : b)
-        : null;
-    final effective = effectiveMatchHandicap(
-      mode:                  mode,
-      netPercent:            netPercent,
-      playingHandicap:       player.playingHandicap,
-      lowestPlayingHandicap: lowPlaying,
-    );
-    // Use this player's own tee SI, not the shared first-player SI.
-    final holeEntry = sc?.holeData(hole)?.scoreFor(player.player.id);
-    final si        = holeEntry?.strokeIndex ?? sc?.holeData(hole)?.strokeIndex ?? 18;
-    final strokes   = strokesOnHole(effective, si);
-
-    final score = await showModalBottomSheet<int>(
-      context: ctx,
-      useRootNavigator: true,
-      builder: (_) => _NassauScorePickerSheet(
-        playerName: player.player.displayShort,
-        par:        par,
-        holeNumber: hole,
-        strokes:    strokes,
-        current:    current,
-      ),
-    );
-    if (!mounted) return;
-    if (score == null) return;
-    setState(() {
-      if (score == -1) {
-        _pending[hole]?.remove(player.player.id);
-        if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
-      } else {
-        _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] =
-            score;
-      }
-    });
-    // Commit a past-hole correction immediately — no save+advance needed.
-    if (score != -1) await _saveAndAdvance(ctx, players, par, advance: false);
   }
 
   void _advance() {
@@ -1414,97 +1353,6 @@ class _NassauPlayerRow extends StatelessWidget {
           ),
         ),
       ]),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Modal score picker sheet
-// ---------------------------------------------------------------------------
-
-// ignore: unused_element
-class _NassauScorePickerSheet extends StatelessWidget {
-  final String playerName;
-  final int    par;
-  final int    holeNumber;
-  final int    strokes;
-  final int?   current;
-
-  const _NassauScorePickerSheet({
-    required this.playerName,
-    required this.par,
-    required this.holeNumber,
-    required this.strokes,
-    this.current,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final scores = List.generate(12, (i) => i + 1);
-    final netPar = par + strokes;
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 40, height: 4,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(playerName,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          Text(
-            strokes > 0
-                ? 'Hole $holeNumber  •  Par $par  •  Net par $netPar'
-                : 'Hole $holeNumber  •  Par $par',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 56,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.zero,
-              itemCount: scores.length,
-              itemBuilder: (_, i) {
-                final s   = scores[i];
-                final sel = s == current;
-                return Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4),
-                  child: NetScoreButton(
-                    score:    s,
-                    par:      par,
-                    strokes:  strokes,
-                    selected: sel,
-                    width:    46,
-                    height:   52,
-                    onTap:    () => Navigator.of(context).pop(s),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (current != null)
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(-1),
-              child: const Text('Clear score'),
-            )
-          else
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: const Text('Cancel'),
-            ),
-        ]),
-      ),
     );
   }
 }
