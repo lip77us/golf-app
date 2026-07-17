@@ -62,6 +62,12 @@ class _ShareScorecardScreenState extends State<ShareScorecardScreen> {
     if (_sharing) return;
     // Capture what we need from context BEFORE any await.
     final course = context.read<RoundProvider>().round?.course.name ?? 'Golf';
+    // iOS requires a non-zero source rect for the share sheet (and the iPad
+    // popover anchor); without it shareXFiles throws sharePositionOrigin errors.
+    final box = context.findRenderObject() as RenderBox?;
+    final Rect? origin = (box != null && box.hasSize)
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
     setState(() => _sharing = true);
     try {
       final boundary = _boundaryKey.currentContext?.findRenderObject()
@@ -80,6 +86,7 @@ class _ShareScorecardScreenState extends State<ShareScorecardScreen> {
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'image/png')],
         text: '$course scorecard',
+        sharePositionOrigin: origin,
       );
     } catch (e) {
       if (mounted) {
