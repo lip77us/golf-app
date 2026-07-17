@@ -5,9 +5,10 @@
 /// user can text to friends.  Pure/stateless — it takes already-loaded scorecard
 /// data and renders it; capture + share lives in ShareScorecardScreen.
 ///
-/// Each nine shows a Hole row, a Par row, and one GROSS row per player with the
-/// nine's subtotal (Out / In / Tot).  Net totals (Out / In / Tot) follow in a
-/// compact summary so handicap games read at a glance.
+/// Styling mirrors the Stroke Play scorecard: a highlighted header row, thin
+/// hole dividers (TableBorder), a tinted Par row, and tinted Out/In/Tot
+/// subtotal columns.  Each nine shows Hole, Par, and one GROSS row per player;
+/// a net totals summary (Out/In/Tot) follows.
 
 import 'package:flutter/material.dart';
 
@@ -20,14 +21,21 @@ class ShareableScorecard extends StatelessWidget {
   final List<ScorecardHole> holes;
   final List<PlayerTotals> totals;
 
-  /// Fixed render width — keeps the captured image consistent regardless of the
-  /// device screen (a phone-portrait-friendly ~380pt). Column widths are sized
-  /// so the WIDER back nine (9 holes + In + Tot) fits inside with margin:
-  ///   name 60 + 9×23 + 2×26 = 319  (+ table & card padding) < 380.
+  // Fixed render width — a phone-portrait-friendly ~380pt keeps the captured
+  // image consistent regardless of the device screen. Column widths are sized
+  // so both nines (9 holes + two subtotal columns) fit inside with margin.
   static const double _width = 380;
   static const double _holeW = 23;
   static const double _subW  = 26;
   static const double _nameW = 60;
+
+  static const Color _pine     = Color(0xFF1E5C3F);
+  static const Color _muted    = Color(0xFF6B7280);
+  static const Color _line     = Color(0xFFD8DED9);
+  static const Color _headerBg = Color(0xFFE7EEE9);
+  static const Color _parBg    = Color(0xFFF3F6F4);
+  static const Color _subBg    = Color(0xFFF1F5F2);
+  static const Color _under    = Color(0xFFC62828); // birdie+ red
 
   const ShareableScorecard({
     super.key,
@@ -45,20 +53,41 @@ class ShareableScorecard extends StatelessWidget {
       (holes.where((h) => h.holeNumber >= 10).toList()
         ..sort((a, b) => a.holeNumber.compareTo(b.holeNumber)));
 
-  int? _gross(int playerId, int hole) {
-    final h = holes.where((x) => x.holeNumber == hole).firstOrNull;
-    return h?.scores
-        .where((s) => s.playerId == playerId)
-        .firstOrNull
-        ?.grossScore;
+  int? _gross(int playerId, int hole) => holes
+      .where((x) => x.holeNumber == hole)
+      .firstOrNull
+      ?.scores
+      .where((s) => s.playerId == playerId)
+      .firstOrNull
+      ?.grossScore;
+
+  static int _sumPar(List<ScorecardHole> hs) => hs.fold(0, (a, h) => a + h.par);
+
+  static String _shortName(String full) {
+    final parts = full.trim().split(RegExp(r'\s+'));
+    if (parts.length < 2) return full;
+    return '${parts.first} ${parts.last[0]}.';
+  }
+
+  // A single cell: padded, single-line text; optional own background.
+  Widget _c(String t, {
+    FontWeight w = FontWeight.w500,
+    Color color = Colors.black87,
+    TextAlign a = TextAlign.center,
+    Color? bg,
+  }) {
+    final child = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 3),
+      child: Text(t,
+          textAlign: a, maxLines: 1, overflow: TextOverflow.clip,
+          style: TextStyle(
+              fontSize: 12, height: 1.1, fontWeight: w, color: color)),
+    );
+    return bg == null ? child : Container(color: bg, child: child);
   }
 
   @override
   Widget build(BuildContext context) {
-    final pine   = const Color(0xFF1E5C3F); // Halved pine (brand)
-    final muted  = const Color(0xFF6B7280);
-    final line   = const Color(0xFFD8DED9);
-
     return Container(
       width: _width,
       color: Colors.white,
@@ -67,200 +96,140 @@ class ShareableScorecard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ──
           Text(courseName,
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w800, color: pine)),
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w800, color: _pine)),
           const SizedBox(height: 2),
           Text('$dateLabel   ·   $roundLabel',
-              style: TextStyle(fontSize: 12, color: muted)),
+              style: const TextStyle(fontSize: 12, color: _muted)),
           const SizedBox(height: 12),
 
-          _nineTable(_front, isFront: true, pine: pine, muted: muted, line: line),
-          const SizedBox(height: 12),
-          _nineTable(_back, isFront: false, pine: pine, muted: muted, line: line),
-
-          const SizedBox(height: 12),
-          _netSummary(pine: pine, muted: muted, line: line),
+          _nineTable(_front, isFront: true),
+          const SizedBox(height: 10),
+          _nineTable(_back, isFront: false),
 
           const SizedBox(height: 10),
-          Center(
+          _netSummary(),
+
+          const SizedBox(height: 10),
+          const Center(
             child: Text('Halved',
                 style: TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w800, color: pine)),
+                    fontSize: 12, fontWeight: FontWeight.w800, color: _pine)),
           ),
         ],
       ),
     );
   }
 
-  // ── A single nine's table (Hole / Par / one gross row per player) ──────────
-  Widget _nineTable(
-    List<ScorecardHole> nine, {
-    required bool isFront,
-    required Color pine,
-    required Color muted,
-    required Color line,
-  }) {
-    final holeCells = nine.map((h) => h.holeNumber).toList();
-    // Subtotal columns: Front → OUT; Back → IN + TOT.
-    final subCols = isFront ? const ['Out'] : const ['In', 'Tot'];
+  // ── One nine: Hole / Par / a gross row per player, with subtotals. ─────────
+  // Front carries [Out] plus a trailing blank column so it lines up under the
+  // Back nine's [In, Tot].
+  Widget _nineTable(List<ScorecardHole> nine, {required bool isFront}) {
+    // subtotal columns: (label, per-player value or null for a blank spacer)
+    final subLabels = isFront ? const ['Out', ''] : const ['In', 'Tot'];
 
-    Widget hcell(String text, {Color? color, FontWeight? weight, double w = _holeW}) =>
-        SizedBox(
-          width: w,
-          child: Text(text,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 12,
-                  height: 1.25,
-                  fontWeight: weight ?? FontWeight.w500,
-                  color: color ?? Colors.black87)),
-        );
+    final colWidths = <int, TableColumnWidth>{
+      0: const FixedColumnWidth(_nameW),
+      for (int i = 1; i <= nine.length; i++) i: const FixedColumnWidth(_holeW),
+      for (int i = 0; i < subLabels.length; i++)
+        1 + nine.length + i: const FixedColumnWidth(_subW),
+    };
 
-    // Header (hole numbers) row.
-    final headerRow = Row(children: [
-      SizedBox(width: _nameW, child: hcell('Hole', color: muted, weight: FontWeight.w700, w: _nameW)),
-      for (final n in holeCells) hcell('$n', color: muted, weight: FontWeight.w700),
-      for (final s in subCols) hcell(s, color: pine, weight: FontWeight.w800, w: _subW),
-    ]);
+    String parSub(String label) {
+      if (label == 'Tot') return '${_sumPar(_front) + _sumPar(_back)}';
+      if (label == 'In' || label == 'Out') return '${_sumPar(nine)}';
+      return '';
+    }
 
-    // Par row.
-    final parRow = Row(children: [
-      SizedBox(width: _nameW, child: hcell('Par', color: muted, w: _nameW)),
-      for (final h in nine) hcell('${h.par}', color: muted),
-      for (final s in subCols)
-        hcell(
-          s == 'Out'
-              ? '${_sumPar(nine)}'
-              : (s == 'In' ? '${_sumPar(nine)}' : '${_sumPar(_front) + _sumPar(_back)}'),
-          color: muted, weight: FontWeight.w700, w: _subW),
-    ]);
+    String playerSub(PlayerTotals t, String label) {
+      switch (label) {
+        case 'Out': return '${t.frontGross}';
+        case 'In':  return '${t.backGross}';
+        case 'Tot': return '${t.totalGross}';
+        default:    return '';
+      }
+    }
 
-    // Player gross rows.
-    final playerRows = <Widget>[];
-    for (final t in totals) {
-      playerRows.add(Container(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: line)),
-        ),
-        child: Row(children: [
-          SizedBox(
-            width: _nameW,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Text(_shortName(t.name),
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600)),
-            ),
-          ),
+    final header = TableRow(
+      decoration: const BoxDecoration(color: _headerBg),
+      children: [
+        _c('Hole', w: FontWeight.w800, color: _muted, a: TextAlign.left),
+        for (final h in nine) _c('${h.holeNumber}', w: FontWeight.w800, color: _muted),
+        for (final s in subLabels)
+          _c(s, w: FontWeight.w800, color: s.isEmpty ? _muted : _pine),
+      ],
+    );
+
+    final parRow = TableRow(
+      decoration: const BoxDecoration(color: _parBg),
+      children: [
+        _c('Par', color: _muted, a: TextAlign.left),
+        for (final h in nine) _c('${h.par}', color: _muted),
+        for (final s in subLabels) _c(parSub(s), w: FontWeight.w700, color: _muted),
+      ],
+    );
+
+    final playerRows = <TableRow>[
+      for (final t in totals)
+        TableRow(children: [
+          _c(_shortName(t.name), w: FontWeight.w600, a: TextAlign.left),
           for (final h in nine)
             () {
               final g = _gross(t.playerId, h.holeNumber);
               final under = g != null && g < h.par;
-              return SizedBox(
-                width: _holeW,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Text(g?.toString() ?? '–',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: under ? FontWeight.w800 : FontWeight.w500,
-                          color: under
-                              ? const Color(0xFFC62828) // birdie+ red
-                              : Colors.black87)),
-                ),
-              );
+              return _c(g?.toString() ?? '–',
+                  w: under ? FontWeight.w800 : FontWeight.w500,
+                  color: under ? _under : Colors.black87);
             }(),
-          for (final s in subCols)
-            SizedBox(
-              width: _subW,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Text(
-                    s == 'Out'
-                        ? '${t.frontGross}'
-                        : (s == 'In' ? '${t.backGross}' : '${t.totalGross}'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: pine)),
-              ),
-            ),
+          for (final s in subLabels)
+            _c(playerSub(t, s),
+                w: FontWeight.w800, color: _pine, bg: s.isEmpty ? null : _subBg),
         ]),
-      ));
-    }
+    ];
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: line),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [headerRow, const SizedBox(height: 2), parRow, ...playerRows],
-      ),
+    return Table(
+      columnWidths: colWidths,
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      border: TableBorder.all(color: _line, width: 0.5),
+      children: [header, parRow, ...playerRows],
     );
   }
 
-  // ── Net totals summary (Out / In / Tot per player) ─────────────────────────
-  Widget _netSummary({
-    required Color pine,
-    required Color muted,
-    required Color line,
-  }) {
-    Widget cell(String t, {Color? color, FontWeight? weight, double w = _subW, TextAlign a = TextAlign.center}) =>
-        SizedBox(
-          width: w,
-          child: Text(t,
-              textAlign: a,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: weight ?? FontWeight.w500,
-                  color: color ?? Colors.black87)),
-        );
+  // ── Net totals (Out / In / Tot per player) — same highlighted style. ───────
+  Widget _netSummary() {
+    const nameW = 116.0, valW = 68.0; // 116 + 3×68 = 320 ≈ grid width
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: line),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(children: [
-            cell('Net', color: muted, weight: FontWeight.w800, w: _nameW, a: TextAlign.left),
-            cell('Out', color: pine, weight: FontWeight.w800),
-            cell('In',  color: pine, weight: FontWeight.w800),
-            cell('Tot', color: pine, weight: FontWeight.w800),
-          ]),
-          for (final t in totals)
-            Container(
-              decoration: BoxDecoration(border: Border(top: BorderSide(color: line))),
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(children: [
-                cell(_shortName(t.name), weight: FontWeight.w600, w: _nameW, a: TextAlign.left),
-                cell('${t.frontNet}'),
-                cell('${t.backNet}'),
-                cell('${t.totalNet}', weight: FontWeight.w800, color: pine),
-              ]),
-            ),
-        ],
-      ),
+    final header = TableRow(
+      decoration: const BoxDecoration(color: _headerBg),
+      children: [
+        _c('Net', w: FontWeight.w800, color: _pine, a: TextAlign.left),
+        _c('Out', w: FontWeight.w800, color: _pine),
+        _c('In',  w: FontWeight.w800, color: _pine),
+        _c('Tot', w: FontWeight.w800, color: _pine),
+      ],
     );
-  }
 
-  static int _sumPar(List<ScorecardHole> hs) =>
-      hs.fold(0, (a, h) => a + h.par);
+    final rows = <TableRow>[
+      for (final t in totals)
+        TableRow(children: [
+          _c(_shortName(t.name), w: FontWeight.w600, a: TextAlign.left),
+          _c('${t.frontNet}'),
+          _c('${t.backNet}'),
+          _c('${t.totalNet}', w: FontWeight.w800, color: _pine, bg: _subBg),
+        ]),
+    ];
 
-  static String _shortName(String full) {
-    final parts = full.trim().split(RegExp(r'\s+'));
-    if (parts.length < 2) return full;
-    return '${parts.first} ${parts.last[0]}.';
+    return Table(
+      columnWidths: const {
+        0: FixedColumnWidth(nameW),
+        1: FixedColumnWidth(valW),
+        2: FixedColumnWidth(valW),
+        3: FixedColumnWidth(valW),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      border: TableBorder.all(color: _line, width: 0.5),
+      children: [header, ...rows],
+    );
   }
 }
