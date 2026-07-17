@@ -205,6 +205,11 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
+/// True once the splash has handed off to a real screen (home or login), so
+/// deep-link navigation can safely push on top without the splash's
+/// pushReplacement clobbering it. Watched deep-links wait for this.
+bool gDeepLinkReady = false;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -445,6 +450,9 @@ class _GolfAppState extends State<GolfApp> {
     }
 
     navigatorKey.currentState?.pushReplacementNamed(destination);
+    // The app is now on a real screen — safe for a stashed watch deep-link to
+    // push the round leaderboard on top.
+    gDeepLinkReady = true;
   }
 
   /// Returns true if [current] is strictly older than [minimum].
