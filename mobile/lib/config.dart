@@ -27,7 +27,7 @@ class Config {
   /// which is exactly what caused About to show a stale version and mis-fed the
   /// force-upgrade check.  The literal below is only a fallback if the platform
   /// lookup fails; keep it roughly current but it is not the source of truth.
-  static String appVersion = '2.3.0';
+  static String appVersion = '2.4.0';
 
   /// Load the real build version from the bundle.  Call once early in main()
   /// (before the version-compatibility check).  Never throws.
