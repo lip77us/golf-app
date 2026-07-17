@@ -21,11 +21,13 @@ class ShareableScorecard extends StatelessWidget {
   final List<PlayerTotals> totals;
 
   /// Fixed render width — keeps the captured image consistent regardless of the
-  /// device screen (a phone-portrait-friendly ~380pt).
+  /// device screen (a phone-portrait-friendly ~380pt). Column widths are sized
+  /// so the WIDER back nine (9 holes + In + Tot) fits inside with margin:
+  ///   name 60 + 9×23 + 2×26 = 319  (+ table & card padding) < 380.
   static const double _width = 380;
-  static const double _holeW = 26;
-  static const double _subW  = 32;
-  static const double _nameW = 74;
+  static const double _holeW = 23;
+  static const double _subW  = 26;
+  static const double _nameW = 60;
 
   const ShareableScorecard({
     super.key,
