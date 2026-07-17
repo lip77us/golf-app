@@ -230,6 +230,7 @@ void main() async {
 
   final auth = AuthProvider();
   await auth.restoreSession();
+  debugPrint('[WATCHLINK] main: after restoreSession isLoggedIn=${auth.isLoggedIn}');
 
   final settings = SettingsProvider();
   await settings.load();
@@ -284,6 +285,7 @@ class _GolfAppState extends State<GolfApp> {
   void initState() {
     super.initState();
     _wasLoggedIn = widget.auth.isLoggedIn;
+    debugPrint('[WATCHLINK] AuthGate.initState: isLoggedIn=$_wasLoggedIn');
     widget.auth.addListener(_onAuthChanged);
   }
 
@@ -295,7 +297,9 @@ class _GolfAppState extends State<GolfApp> {
 
   void _onAuthChanged() {
     final isLoggedIn = widget.auth.isLoggedIn;
+    debugPrint('[WATCHLINK] AuthGate._onAuthChanged: was=$_wasLoggedIn now=$isLoggedIn');
     if (_wasLoggedIn && !isLoggedIn) {
+      debugPrint('[WATCHLINK] AuthGate: logout transition -> pushing /login');
       // Clear cached data on sign-out so another user doesn't see it.
       widget.localDb.clearAll();
       navigatorKey.currentState?.pushNamedAndRemoveUntil(
@@ -402,6 +406,7 @@ class _GolfAppState extends State<GolfApp> {
   /// swallowed so an offline first launch still works.
   Future<void> _navigateAfterSplash() async {
     final destination = widget.auth.isLoggedIn ? '/tournaments' : '/login';
+    debugPrint('[WATCHLINK] splash: isLoggedIn=${widget.auth.isLoggedIn} destination=$destination');
 
     try {
       // Use a short timeout so a slow server doesn't delay the startup.
@@ -487,6 +492,8 @@ class _GolfAppState extends State<GolfApp> {
               onComplete: () => _navigateAfterSplash(),
             ));
       case '/login':
+        debugPrint('[WATCHLINK] router: building /login (StackTrace below)\n'
+            '${StackTrace.current}');
         return page((_) => const LoginScreen());
       case '/verify-otp':
         final args = settings.arguments as Map? ?? const {};

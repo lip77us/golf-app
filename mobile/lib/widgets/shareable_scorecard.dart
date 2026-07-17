@@ -26,7 +26,7 @@ class ShareableScorecard extends StatelessWidget {
   // so both nines (9 holes + two subtotal columns) fit inside with margin.
   static const double _width = 380;
   static const double _holeW = 23;
-  static const double _subW  = 26;
+  static const double _subW  = 32; // wide enough for bold "Out" / "Tot"
   static const double _nameW = 60;
 
   static const Color _pine     = Color(0xFF1E5C3F);

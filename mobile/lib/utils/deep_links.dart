@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../main.dart' show navigatorKey, gDeepLinkReady;
@@ -50,10 +51,14 @@ class DeepLinkService {
   }
 
   void _capture(Uri uri) {
+    debugPrint('[WATCHLINK] deepLink capture: uri=$uri');
     // Expect .../watch/<token>/  (accepts extra path segments defensively).
     final segs = uri.pathSegments;
     final i = segs.indexOf('watch');
-    if (i < 0 || i + 1 >= segs.length) return;
+    if (i < 0 || i + 1 >= segs.length) {
+      debugPrint('[WATCHLINK] deepLink capture: no /watch/ segment -> ignored');
+      return;
+    }
     final token = segs[i + 1].trim();
     if (token.isEmpty) return;
     _pendingToken = token;
@@ -64,6 +69,9 @@ class DeepLinkService {
   Future<void> _flush() async {
     final token = _pendingToken;
     if (token == null) return;
+    debugPrint('[WATCHLINK] deepLink flush: isLoggedIn=${auth.isLoggedIn} '
+        'navReady=${navigatorKey.currentState != null} pastSplash=$gDeepLinkReady '
+        'attempt=$_flushAttempts');
 
     // Not signed in yet — the saved session may still be restoring, or the user
     // hasn't logged in. Keep the token stashed; the auth listener retries once
@@ -79,6 +87,7 @@ class DeepLinkService {
       return;
     }
 
+    debugPrint('[WATCHLINK] deepLink flush: RESOLVING token + pushing leaderboard');
     _pendingToken = null;   // consume — don't double-navigate
     try {
       final res          = await auth.client.resolveWatchToken(token);
