@@ -10,7 +10,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -73,9 +72,9 @@ class _ShareScorecardScreenState extends State<ShareScorecardScreen> {
       if (byteData == null) return;
       final bytes = byteData.buffer.asUint8List();
 
-      final dir = await getTemporaryDirectory();
-      final file = File(
-          '${dir.path}/scorecard_${DateTime.now().millisecondsSinceEpoch}.png');
+      // Dart's built-in temp dir (NSTemporaryDirectory on iOS) — no plugin.
+      final file = File('${Directory.systemTemp.path}'
+          '/scorecard_${DateTime.now().millisecondsSinceEpoch}.png');
       await file.writeAsBytes(bytes);
 
       await Share.shareXFiles(

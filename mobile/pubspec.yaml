@@ -36,9 +36,6 @@ dependencies:
   # their own phone → TCPA / App Store safe).
   share_plus: ^10.1.4
 
-  # Temp dir to write the captured scorecard PNG before sharing it.
-  path_provider: ^2.1.4
-
   # Reads the app's real version from the bundle at runtime so Config.appVersion
   # can never drift from pubspec (drove the About-shows-2.2.0 + force-upgrade bug).
   package_info_plus: ^8.0.0
