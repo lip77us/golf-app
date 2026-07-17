@@ -213,7 +213,8 @@ class ShareableScorecard extends StatelessWidget {
     final rows = <TableRow>[
       for (final t in totals)
         TableRow(children: [
-          _c(_shortName(t.name), w: FontWeight.w600, a: TextAlign.left),
+          // Full name here (the net table has room); the grids use short names.
+          _c(t.name, w: FontWeight.w600, a: TextAlign.left),
           _c('${t.frontNet}'),
           _c('${t.backNet}'),
           _c('${t.totalNet}', w: FontWeight.w800, color: _pine, bg: _subBg),

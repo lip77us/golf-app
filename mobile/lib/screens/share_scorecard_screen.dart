@@ -117,8 +117,11 @@ class _ShareScorecardScreenState extends State<ShareScorecardScreen> {
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              child: Center(
-                // RepaintBoundary is what gets captured — sized to the card.
+              // Scale the fixed-width card DOWN to fit narrow phones (e.g. the
+              // 13 mini) for the preview, while the RepaintBoundary still
+              // captures it at full 380pt resolution.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
                 child: RepaintBoundary(
                   key: _boundaryKey,
                   child: ShareableScorecard(
