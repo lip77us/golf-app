@@ -18,6 +18,7 @@ import '../utils/route_observer.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/borrowed_fourth.dart';
+import 'share_scorecard_screen.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 
@@ -242,6 +243,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           case 'refresh':
             context.read<RoundProvider>().loadLeaderboard(widget.roundId);
             break;
+          case 'scorecard':
+            final fsId = _landscapeFoursomeId(rp);
+            if (fsId != null) {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => ShareScorecardScreen(foursomeId: fsId),
+              ));
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Open your group to share its scorecard.')));
+            }
+            break;
           case 'invite':
             inviteWatcher(context, roundId: widget.roundId);
             break;
@@ -262,6 +274,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           child: ListTile(
             leading: Icon(Icons.refresh),
             title: Text('Refresh'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'scorecard',
+          child: ListTile(
+            leading: Icon(Icons.ios_share),
+            title: Text('Share scorecard'),
             contentPadding: EdgeInsets.zero,
           ),
         ),
