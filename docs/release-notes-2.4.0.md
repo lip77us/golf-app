@@ -1,8 +1,8 @@
-# Halved 2.4.0 (build 15) — Release notes
+# Halved 2.4.0 (build 16) — Release notes
 
-Version bumped in `mobile/pubspec.yaml` → `2.4.0+15` (build must exceed the last
-TestFlight upload). Backend `CLIENT_MIN_VERSION` left at `2.1.0` (this release is
-backward-compatible).
+Version in `mobile/pubspec.yaml` → `2.4.0+16` (build must exceed the last
+TestFlight upload; build 15 was the first upload, 16 adds the fixes below).
+Backend `CLIENT_MIN_VERSION` left at `2.1.0` (this release is backward-compatible).
 
 ---
 
@@ -70,11 +70,23 @@ backward-compatible).
 - Nassau press labels / early-decided announcements; hub plays-to Playing
   Handicap (from earlier in the cycle).
 
+### Fixes added in build 16
+- **Watch link no longer forces re-login.** Tapping a spectator/watch link as an
+  already-signed-in Halved user opened a blank login screen (the deep-link
+  handler read the session as not-yet-restored and pushed `/login`). The watch
+  token is now stashed and opened once the session is applied and the app is
+  past the splash — a logged-in user goes straight to the round; a signed-out
+  user is taken there right after logging in. (`utils/deep_links.dart`,
+  `gDeepLinkReady` in `main.dart`.)
+- **Share Scorecard now opens the iOS share sheet.** `Share.shareXFiles` was
+  throwing a `sharePositionOrigin` PlatformException; it now passes a valid
+  source rect so the share sheet (and the iPad popover) appears correctly.
+
 ---
 
 ## Pre-submit checklist
 - [ ] `flutter pub get` (no new native deps in this release).
-- [ ] Build a release IPA / archive with build number **15**.
+- [ ] Build a release IPA / archive with build number **16**.
 - [ ] **Manually verify on a physical iPhone**: leaderboard ⋮ → Share scorecard
       → Share/Text → the image hands off to Messages and looks correct.
 - [ ] Smoke-test Honors, inline score editing, and the Total $ tab.
