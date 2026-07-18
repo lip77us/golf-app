@@ -68,31 +68,22 @@ class AuthProvider extends ChangeNotifier {
     _lastAccountName = prefs.getString(_accountNameKey);
 
     final saved = prefs.getString(_tokenKey);
-    debugPrint('[WATCHLINK] restoreSession: savedToken=${saved != null}');
     if (saved == null) {
       notifyListeners();
       return;
     }
+    // Trust the persisted token IMMEDIATELY so app startup never blocks on the
+    // network. The token validation (me()) used to be awaited here, which
+    // stalled main() — and therefore runApp AND DeepLinkService.start() —
+    // whenever connectivity wasn't ready yet. That is exactly the case when the
+    // app is cold-launched by tapping a watch link: me() hangs, the UI never
+    // renders, the deep link is dropped before it can be captured, and the iOS
+    // launch watchdog can kill/relaunch the process. Now we mark the session
+    // restored from storage and validate + hydrate the profile in the
+    // background, clearing the token only on a genuine 401.
     _token = saved;
-    try {
-      _applyProfile(await ApiClient(token: saved).me());
-      debugPrint('[WATCHLINK] restoreSession: me() OK');
-    } on AuthException catch (e) {
-      // Genuine 401 — the saved token is dead. Clear it so the user re-auths.
-      debugPrint('[WATCHLINK] restoreSession: me() AuthException -> CLEARING token ($e)');
-      _token = null;
-      await prefs.remove(_tokenKey);
-    } catch (e) {
-      // Transient network/server error — do NOT log the user out. A flaky
-      // connection on cold-start (e.g. launching from a tapped watch link)
-      // would otherwise wipe a perfectly valid session and force an OTP
-      // re-login. Keep the token and refresh the profile in the background
-      // once connectivity returns.
-      debugPrint('[WATCHLINK] restoreSession: me() transient error -> KEEPING token ($e)');
-      unawaited(_refreshProfileInBackground());
-    }
-    debugPrint('[WATCHLINK] restoreSession: done isLoggedIn=$isLoggedIn');
     notifyListeners();
+    unawaited(_refreshProfileInBackground());
   }
 
   void _applyProfile(dynamic result) {
@@ -104,12 +95,19 @@ class AuthProvider extends ChangeNotifier {
     _isSupport      = result.isSupport;
   }
 
-  /// Recover the profile after `restoreSession` kept the token but couldn't
-  /// fetch `me()` (transient failure). Retries with backoff until it succeeds,
-  /// hits a real 401 (then logs out), or the user logs out meanwhile.
+  /// Validate the restored token and hydrate the profile off the startup path.
+  /// Runs after `restoreSession` trusts the persisted token. Tries once
+  /// immediately (so the drawer's name/account populate right away on a healthy
+  /// connection), then backs off on failure. Keeps the session on transient
+  /// errors; clears it only on a genuine 401, or bails if the user logs out
+  /// meanwhile.
   Future<void> _refreshProfileInBackground() async {
     for (var attempt = 0; attempt < 5; attempt++) {
-      await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
+      // First pass fires immediately; later retries back off so a flaky
+      // cold-start connection gets time to settle without hammering.
+      if (attempt > 0) {
+        await Future.delayed(Duration(seconds: 2 * attempt));
+      }
       final token = _token;
       if (token == null) return;   // logged out in the meantime
       try {
@@ -122,7 +120,7 @@ class AuthProvider extends ChangeNotifier {
         await prefs.remove(_tokenKey);
         notifyListeners();
         return;
-      } catch (_) {
+      } catch (e) {
         // still offline — keep retrying
       }
     }

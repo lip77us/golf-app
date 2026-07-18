@@ -20,6 +20,16 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Deep links (halved.golf/watch/<token>/) are handled entirely by
+                 the app_links plugin (see utils/deep_links.dart). Disable
+                 Flutter's OWN built-in deep linking so the incoming URL isn't
+                 also fed to the Flutter navigator as a pushNamed('/watch/...'),
+                 which would hit onUnknownRoute and stack a stray LoginScreen.
+                 (iOS equivalent: FlutterDeepLinkingEnabled=false in Info.plist.) -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false"
+              />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

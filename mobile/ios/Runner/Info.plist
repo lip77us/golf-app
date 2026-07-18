@@ -4,6 +4,14 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- Deep links (halved.golf/watch/<token>/) are handled entirely by the
+	     app_links plugin (see utils/deep_links.dart). Flutter's OWN built-in
+	     deep linking must be DISABLED, otherwise iOS also feeds the incoming
+	     URL to the Flutter navigator, which tries to pushNamed('/watch/<token>/')
+	     — an unregistered route — tripping onUnknownRoute and stacking a stray
+	     LoginScreen under the leaderboard (Back then lands on login). -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

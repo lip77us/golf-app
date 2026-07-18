@@ -230,7 +230,6 @@ void main() async {
 
   final auth = AuthProvider();
   await auth.restoreSession();
-  debugPrint('[WATCHLINK] main: after restoreSession isLoggedIn=${auth.isLoggedIn}');
 
   final settings = SettingsProvider();
   await settings.load();
@@ -285,7 +284,6 @@ class _GolfAppState extends State<GolfApp> {
   void initState() {
     super.initState();
     _wasLoggedIn = widget.auth.isLoggedIn;
-    debugPrint('[WATCHLINK] AuthGate.initState: isLoggedIn=$_wasLoggedIn');
     widget.auth.addListener(_onAuthChanged);
   }
 
@@ -297,9 +295,7 @@ class _GolfAppState extends State<GolfApp> {
 
   void _onAuthChanged() {
     final isLoggedIn = widget.auth.isLoggedIn;
-    debugPrint('[WATCHLINK] AuthGate._onAuthChanged: was=$_wasLoggedIn now=$isLoggedIn');
     if (_wasLoggedIn && !isLoggedIn) {
-      debugPrint('[WATCHLINK] AuthGate: logout transition -> pushing /login');
       // Clear cached data on sign-out so another user doesn't see it.
       widget.localDb.clearAll();
       navigatorKey.currentState?.pushNamedAndRemoveUntil(
@@ -369,13 +365,24 @@ class _GolfAppState extends State<GolfApp> {
         // (Revisit if/when the full theme-aware color refactor lands.)
         themeMode: ThemeMode.light,
         initialRoute: '/splash',
-        // Override the default initial-route generation so Flutter doesn't
-        // split '/splash' into ['/', '/splash'] and silently push a
-        // LoginScreen at the bottom of the stack (via the onGenerateRoute
-        // default case).  That hidden LoginScreen was the destination
-        // every popUntil-to-isFirst was bottoming out on.
+        // Always boot through '/splash', regardless of the route the platform
+        // hands us here. Two reasons:
+        //  1. When the app is COLD-LAUNCHED from a universal link (tapping a
+        //     watch link with the app closed), Flutter's WidgetsApp uses the
+        //     platform's defaultRouteName — e.g. '/watch/<token>/' — as the
+        //     initial route, OVERRIDING our `initialRoute: '/splash'`. That
+        //     path has no case in `_router`, so it returned null and this
+        //     callback produced an EMPTY initial stack: splash never ran, the
+        //     auth gate never routed to '/tournaments', and the stack bottomed
+        //     out on a LoginScreen (via onUnknownRoute) with nothing sane for
+        //     Back to pop to. Forcing '/splash' restores the normal boot; the
+        //     app_links DeepLinkService handles the watch link separately once
+        //     we're past the splash, pushing the leaderboard on top of the hub.
+        //  2. It also stops Flutter from splitting '/splash' into
+        //     ['/', '/splash'] and silently pushing a LoginScreen at the bottom
+        //     of the stack (via the onGenerateRoute default case).
         onGenerateInitialRoutes: (initialRoute) {
-          final route = _router(RouteSettings(name: initialRoute));
+          final route = _router(const RouteSettings(name: '/splash'));
           return route == null ? const [] : [route];
         },
         onGenerateRoute: _router,
@@ -406,7 +413,6 @@ class _GolfAppState extends State<GolfApp> {
   /// swallowed so an offline first launch still works.
   Future<void> _navigateAfterSplash() async {
     final destination = widget.auth.isLoggedIn ? '/tournaments' : '/login';
-    debugPrint('[WATCHLINK] splash: isLoggedIn=${widget.auth.isLoggedIn} destination=$destination');
 
     try {
       // Use a short timeout so a slow server doesn't delay the startup.
@@ -492,8 +498,6 @@ class _GolfAppState extends State<GolfApp> {
               onComplete: () => _navigateAfterSplash(),
             ));
       case '/login':
-        debugPrint('[WATCHLINK] router: building /login (StackTrace below)\n'
-            '${StackTrace.current}');
         return page((_) => const LoginScreen());
       case '/verify-otp':
         final args = settings.arguments as Map? ?? const {};

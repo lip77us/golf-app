@@ -116,7 +116,15 @@ class _TournamentListScreenState extends State<TournamentListScreen>
             shared.any((r) => r.status != 'complete');
         if (!hasActive) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) Navigator.of(context).pushNamed('/casual-rounds');
+            if (!mounted) return;
+            // Don't auto-redirect to the casual-rounds hub if we've already
+            // been navigated off the tournaments screen. On a cold launch from
+            // a watch link, the deep-link handler pushes the round leaderboard
+            // on top of us right around now; pushing casual-rounds here would
+            // bury the leaderboard the user tapped in to see. isCurrent is
+            // false once anything (the leaderboard) sits on top of /tournaments.
+            if (ModalRoute.of(context)?.isCurrent != true) return;
+            Navigator.of(context).pushNamed('/casual-rounds');
           });
         }
       }

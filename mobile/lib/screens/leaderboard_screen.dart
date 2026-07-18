@@ -270,22 +270,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       },
       itemBuilder: (_) => [
         const PopupMenuItem(
-          value: 'refresh',
-          child: ListTile(
-            leading: Icon(Icons.refresh),
-            title: Text('Refresh'),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'scorecard',
-          child: ListTile(
-            leading: Icon(Icons.ios_share),
-            title: Text('Share scorecard'),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        const PopupMenuItem(
           value: 'invite',
           child: ListTile(
             leading: Icon(Icons.visibility_outlined),
@@ -303,6 +287,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             ),
           ),
         const PopupMenuItem(
+          value: 'refresh',
+          child: ListTile(
+            leading: Icon(Icons.refresh),
+            title: Text('Refresh'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        const PopupMenuItem(
           value: 'help',
           child: ListTile(
             leading: Icon(Icons.help_outline),
@@ -319,6 +311,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               contentPadding: EdgeInsets.zero,
             ),
           ),
+        const PopupMenuItem(
+          value: 'scorecard',
+          child: ListTile(
+            leading: Icon(Icons.ios_share),
+            title: Text('Share scorecard'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
       ],
     );
   }
