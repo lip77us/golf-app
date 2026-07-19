@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Native Xcode build output (not just the Flutter /build/ dir above)
+ios/build/
+macos/build/
+
+# Ghost files left by the cloud file-bridge FUSE mount
+.fuse_hidden*
