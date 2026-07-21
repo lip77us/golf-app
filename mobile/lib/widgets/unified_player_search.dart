@@ -338,6 +338,10 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
         ],
       );
     }
+    // No client-side de-duplication: the server excludes golfers you already
+    // have, matched on normalized phone. Filtering by name here as well would
+    // hide a genuine stranger who happens to share a name with someone in your
+    // roster — two real Bob Smiths, and you could never add the second.
     if (_halved.isEmpty) return const SizedBox.shrink();
     return _Group(
       label: 'ON HALVED',

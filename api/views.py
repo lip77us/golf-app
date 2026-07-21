@@ -2943,12 +2943,20 @@ class HalvedUserLookupView(APIView):
 
         # Everyone the caller already has — matched on phone, the same key the
         # rest of the app uses to tie a roster Player to a Halved member.
-        own_phones = set(
-            Player.objects
-            .filter(account=request.user.account)
-            .exclude(phone='')
-            .values_list('phone', flat=True)
-        )
+        # NORMALIZE first: roster numbers are stored as typed ("917-806-3363")
+        # while a member's login phone is E.164 ("+19178063363"), so comparing
+        # them raw silently matches nothing and the golfer comes back as a
+        # stranger you're invited to add a second time.
+        from accounts.phone import normalize as _norm
+        own_phones = {
+            _norm(p) for p in (
+                Player.objects
+                .filter(account=request.user.account)
+                .exclude(phone='')
+                .values_list('phone', flat=True)
+            )
+        }
+        own_phones.discard(None)
 
         qs = (get_user_model().objects
               .filter(discoverable_by_name=True)
@@ -3040,8 +3048,15 @@ class AddHalvedGolferToRosterView(APIView):
             return Response({'detail': 'No such golfer.'},
                             status=status.HTTP_404_NOT_FOUND)
 
-        existing = Player.objects.filter(account=request.user.account,
-                                         phone=u.phone).first()
+        # Same normalization trap as the search filter: a roster golfer holding
+        # "917-806-3363" IS the member whose login phone is "+19178063363", and
+        # comparing raw would create a duplicate instead of returning them.
+        from accounts.phone import normalize as _norm
+        existing = next(
+            (p for p in Player.objects.filter(account=request.user.account)
+                                      .exclude(phone='')
+             if _norm(p.phone) == u.phone),
+            None)
         if existing is not None:
             return Response(PlayerSerializer(
                 existing, context=_on_app_context([existing])).data)

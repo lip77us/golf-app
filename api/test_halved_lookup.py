@@ -161,6 +161,19 @@ class HalvedNameSearchTests(TestCase):
             phone=member.phone, handicap_index=Decimal('12.4'), sex='F')
         self.assertEqual(self._search('Lib').data['results'], [])
 
+    def test_roster_golfer_excluded_despite_phone_formatting(self):
+        """
+        Roster numbers are stored as typed; a member's login phone is E.164.
+        Comparing them raw matches nothing, and the golfer you already have
+        comes back as a stranger to add all over again.
+        """
+        self._member('libby', 'Libby Chen', '+13105550101')
+        Player.objects.create(
+            account=self.acct_a, name='Libby C', short_name='LC',
+            phone='(310) 555-0101',  # same human, typed by hand
+            handicap_index=Decimal('12.4'), sex='F')
+        self.assertEqual(self._search('Lib').data['results'], [])
+
     def test_results_are_capped(self):
         for i in range(NAME_SEARCH_LIMIT + 5):
             self._member(f'lib{i}', f'Libby Number{i:02d}',
@@ -222,6 +235,19 @@ class AddHalvedGolferToRosterTests(TestCase):
                          1)
         self._add(self.member.pk)
         self.assertEqual(self.c.get(url, {'name': 'Lib'}).data['results'], [])
+
+    def test_matches_an_existing_roster_golfer_despite_formatting(self):
+        """
+        Adding someone you already hold under a hand-typed number must return
+        that golfer, not mint a second copy of the same person.
+        """
+        mine = Player.objects.create(
+            account=self.acct, name='Libby C', short_name='LC',
+            phone='(310) 555-0101', handicap_index=Decimal('12.4'), sex='F')
+        r = self._add(self.member.pk)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data['id'], mine.pk)
+        self.assertEqual(Player.objects.filter(account=self.acct).count(), 1)
 
     def test_is_idempotent(self):
         first = self._add(self.member.pk)
