@@ -655,6 +655,18 @@ class ApiClient {
         .toList();
   }
 
+  /// Copy a member found by name search into My Golfers.
+  ///
+  /// The server does the copy because it has to carry across the member's phone
+  /// — the key that makes their handicap authoritative, lights the Halved
+  /// badge, and stops them showing up in future searches — without handing that
+  /// number to us. Idempotent: adding someone already in the roster returns the
+  /// existing golfer.
+  Future<PlayerProfile> addHalvedUserToRoster(int id) async {
+    final data = await _post('/halved-users/add-to-roster/', {'id': id});
+    return PlayerProfile.fromJson((data as Map).cast<String, dynamic>());
+  }
+
   /// Flip this user's "findable by name" setting. Phone lookup is unaffected.
   Future<bool> setDiscoverableByName(bool value) async {
     final data = await _patch('/auth/me/', {'discoverable_by_name': value});

@@ -8,11 +8,11 @@ import '../theme/halved_brand.dart';
 import '../utils/create_casual_round.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
-import '../utils/add_halved_golfer.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/tee_assignment.dart';
+import '../widgets/unified_player_search.dart';
 import '../widgets/course_search_field.dart';
 import 'player_form_screen.dart';
 
@@ -314,12 +314,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       await maybeOfferRoundSmsInvite(context, created,
           courseName: _selectedCourse?.name);
     }
-  }
-
-  /// Add an existing Halved member (not yet in my roster) by phone number.
-  Future<void> _addHalvedGolfer() async {
-    final created = await addHalvedGolferByPhone(context);
-    _addCreatedGolfer(created);
   }
 
   void _addCreatedGolfer(PlayerProfile? created) {
@@ -803,20 +797,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
           Text('Select Players & Tees',
               style: Theme.of(context).textTheme.titleLarge),
-          Wrap(
-            children: [
-              TextButton.icon(
-                onPressed: _addGolfer,
-                icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
-                label: const Text('Add Golfer'),
-              ),
-              TextButton.icon(
-                onPressed: _addHalvedGolfer,
-                icon: const Icon(Icons.phone_iphone, size: 18),
-                label: const Text('Halved Golfer search'),
-              ),
-            ],
-          ),
           const SizedBox(height: 16),
 
           if (_selectedCourse == null)
@@ -825,15 +805,19 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               kind: InlineMessageKind.info,
             )
           else ...[
-            TextField(
-              controller: _playerSearchCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Search golfers…',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              onChanged: (v) => setState(() => _playerSearch = v),
+            // One field instead of three entry points: your golfers, then
+            // Halved, then a guest.  The roster list below stays put — it is
+            // where tees get assigned once someone is in the round.
+            UnifiedPlayerSearch(
+              roster: _players,
+              selectedIds: _playerTees.keys.toSet(),
+              onToggle: _onPlayerToggle,
+              onGolferAdded: _addCreatedGolfer,
+              onCreateGuest: _addGolfer,
+              requiredCount: _requiredPlayerCount,
+              gameLabel: _primaryGame == null
+                  ? ''
+                  : gameDisplayName(_primaryGame!),
             ),
             const SizedBox(height: 8),
             Builder(builder: (context) {
@@ -1017,6 +1001,21 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     final l = s.toList()..sort();
     if (l.length == 1) return '${l.first}';
     return '${l.sublist(0, l.length - 1).join(', ')} or ${l.last}';
+  }
+
+  /// Seats to draw in the add-players progress row, or null when the round has
+  /// no fixed size.  Only a game with ONE valid count gives an honest target —
+  /// a 2-or-4 game has nothing definite to count towards, so it shows a plain
+  /// tally instead of empty seats implying players are missing.
+  int? get _requiredPlayerCount {
+    final id = _primaryGame;
+    if (id == null) return null;
+    final meta = gameMeta(id);
+    if (meta == null) return null;
+    if (meta.exactPlayers != null) return meta.exactPlayers;
+    final sizes = meta.sizes;
+    if (sizes != null && sizes.length == 1) return sizes.first;
+    return null;
   }
 
   Widget _gamePlayerCountHint(String gameId) {
