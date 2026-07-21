@@ -30,11 +30,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _indexCtrl = TextEditingController();
   bool _saving = false;
 
+  /// "Findable by name" — server-side, unlike the local preferences below it,
+  /// so it is fetched rather than read from SettingsProvider. Null while
+  /// loading, which keeps the switch from flashing the wrong state first.
+  bool? _discoverable;
+
   @override
   void initState() {
     super.initState();
     final me = context.read<AuthProvider>().player;
     if (me != null) _syncControllers(me);
+    _loadDiscoverable();
+  }
+
+  Future<void> _loadDiscoverable() async {
+    try {
+      final me = await context.read<AuthProvider>().client.me();
+      if (!mounted) return;
+      setState(() => _discoverable = me.discoverableByName);
+    } catch (_) {
+      // Leave it null; the row renders disabled rather than claiming a state
+      // we could not confirm. A privacy switch showing the wrong value is
+      // worse than one that admits it does not know.
+    }
+  }
+
+  Future<void> _setDiscoverable(bool value) async {
+    final previous = _discoverable;
+    setState(() => _discoverable = value); // optimistic — the switch must move
+    try {
+      final saved =
+          await context.read<AuthProvider>().client.setDiscoverableByName(value);
+      if (!mounted) return;
+      setState(() => _discoverable = saved);
+    } catch (_) {
+      if (!mounted) return;
+      // Snap back: a privacy control that silently fails to save is the one
+      // place a stale UI genuinely matters.
+      setState(() => _discoverable = previous);
+      _snack('Could not save that. Check your connection and try again.');
+    }
   }
 
   void _syncControllers(PlayerProfile p) {
@@ -374,6 +409,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _pickHomeCourse,
                   ),
                 ],
+                _sectionHeader('Privacy'),
+                SwitchListTile(
+                  title: const Text('Findable by name'),
+                  subtitle: Text(
+                    _discoverable == null
+                        ? 'Checking…'
+                        : _discoverable!
+                            ? 'Other Halved golfers can find you by name when '
+                              'they add players to a round. They see your name, '
+                              'handicap and home-course city — never your phone '
+                              'number.'
+                            : 'You won’t appear in name searches. Someone who '
+                              'already has your phone number can still add you '
+                              'with it.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  value: _discoverable ?? true,
+                  // Disabled until we know the real value — better than
+                  // letting a tap act on a guess.
+                  onChanged:
+                      _discoverable == null ? null : (v) => _setDiscoverable(v),
+                ),
                 _sectionHeader('Preferences'),
                 SwitchListTile(
                   title: const Text('Net Style Entry'),

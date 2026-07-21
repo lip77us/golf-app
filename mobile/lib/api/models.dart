@@ -154,6 +154,12 @@ class MeResult {
   final bool isStaff;
   final bool isAccountAdmin;
   final bool isSupport;
+
+  /// Whether other members can find this user by NAME when adding players to a
+  /// round.  Defaults true; switching it off removes you from name results
+  /// only — anyone who already knows your number can still look you up by it.
+  final bool discoverableByName;
+
   final AccountInfo account;
   final PlayerProfile? player;
 
@@ -163,6 +169,7 @@ class MeResult {
     this.isStaff        = false,
     this.isAccountAdmin = false,
     this.isSupport      = false,
+    this.discoverableByName = true,
     this.player,
   });
 
@@ -171,6 +178,8 @@ class MeResult {
         isStaff:        j['is_staff']         as bool? ?? false,
         isAccountAdmin: j['is_account_admin'] as bool? ?? false,
         isSupport:      j['is_support']       as bool? ?? false,
+        discoverableByName:
+                        j['discoverable_by_name'] as bool? ?? true,
         account:        AccountInfo.fromJson(
                           j['account'] as Map<String, dynamic>),
         player:         j['player'] is Map<String, dynamic>

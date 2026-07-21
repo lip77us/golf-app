@@ -28,6 +28,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   bool    _saving  = false;
   String? _error;
 
+  /// Findable by name — on by default, matching the server. Only PATCHed when
+  /// the user turns it OFF, so the common path costs no extra request.
+  bool _discoverable = true;
+
   /// While false, the short name auto-tracks the initials of the name field.
   /// A brand-new account starts with an auto-derived short ("NG" for the
   /// "New Golfer" default), so we begin in auto-sync mode — changing the name
@@ -108,6 +112,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         sex: _sex,
       );
       auth.applyPlayer(updated);
+      // Only when they opted OUT — the server already defaults to on, so the
+      // common path needs no second request. Failure here must not block
+      // signup: they can still change it in Profile, and stranding someone on
+      // this screen over a privacy default would be a worse outcome than the
+      // setting not sticking.
+      if (!_discoverable) {
+        try {
+          await auth.client.setDiscoverableByName(false);
+        } catch (_) {
+          // Deliberately swallowed; see above.
+        }
+      }
       if (mounted) _goToApp();
     } catch (e) {
       setState(() => _error = 'Could not save. Please try again.');
@@ -206,6 +222,29 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   selected: {_sex},
                   onSelectionChanged: (s) =>
                       setState(() => _sex = s.first),
+                ),
+                const SizedBox(height: 20),
+
+                // Offered at signup rather than buried in settings: it decides
+                // whether the friends who invited you can find you at all, and
+                // it is far easier to reason about now than after someone has
+                // failed to add you to a round. Changeable later in Profile.
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Findable by name'),
+                  subtitle: Text(
+                    _discoverable
+                        ? 'Golfers you play with can find you by name when they '
+                          'add players to a round. They never see your phone '
+                          'number.'
+                        : 'You won’t appear in name searches. Someone who has '
+                          'your phone number can still add you with it.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  value: _discoverable,
+                  onChanged: (v) => setState(() => _discoverable = v),
                 ),
 
                 if (_error != null)
