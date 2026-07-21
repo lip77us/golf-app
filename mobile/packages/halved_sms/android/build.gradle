@@ -1,0 +1,45 @@
+// Minimal plugin module. Nothing here is Halved-specific — it exists so the
+// Android build can resolve the Kotlin source alongside the iOS Swift package.
+group = "us.lipkin.halved_sms"
+version = "1.0"
+
+buildscript {
+    ext.kotlin_version = "1.9.22"
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.1.0"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+android {
+    namespace = "us.lipkin.halved_sms"
+    compileSdk = 34
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+    sourceSets {
+        main.java.srcDirs += "src/main/kotlin"
+    }
+    defaultConfig {
+        minSdk = 21
+    }
+}

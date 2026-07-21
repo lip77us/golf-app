@@ -1,0 +1,24 @@
+name: halved_sms
+description: >
+  Opens the platform's native message composer, pre-addressed and pre-filled.
+  Replaces the flutter_sms package, which never adopted Swift Package Manager
+  and was the last thing keeping CocoaPods in the iOS build.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+  flutter: '>=3.29.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      ios:
+        pluginClass: HalvedSmsPlugin
+      android:
+        package: us.lipkin.halved_sms
+        pluginClass: HalvedSmsPlugin

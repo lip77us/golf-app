@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_sms/flutter_sms.dart';
+import 'package:halved_sms/halved_sms.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
@@ -194,11 +194,6 @@ Future<bool> _launchSmsInvite({
   required String body,
 }) async {
   final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-  try {
-    if (!await canSendSMS()) return false;
-    await sendSMS(message: body, recipients: [cleaned]);
-    return true;
-  } catch (_) {
-    return false;
-  }
+  if (!await canSendSms()) return false;
+  return sendSms(message: body, recipients: [cleaned]);
 }

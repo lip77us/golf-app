@@ -1,6 +1,6 @@
 name: golf_mobile
 description: Golf group scorecard and games app.
-version: 2.4.0+17
+version: 2.5.0+18
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -49,7 +49,15 @@ dependencies:
   # invites so the Messages compose UI appears as a sheet OVER Halved and
   # dismisses back to the app automatically on send/cancel — no app switch, no
   # "Halved" top-left back tap (unlike the url_launcher sms: external launch).
-  flutter_sms: ^3.0.1
+  #
+  # In-repo rather than a pub package: flutter_sms did exactly this job but
+  # never adopted Swift Package Manager, and once every other plugin moved
+  # across it was the only thing still keeping CocoaPods in the iOS build.
+  # Flutter also warns that a plugin without SPM support "will become an error
+  # in a future version". What we relied on is two functions — see
+  # packages/halved_sms.
+  halved_sms:
+    path: packages/halved_sms
 
   # iOS/Android universal-link handling. Taps on https://halved.golf/watch/...
   # open the app (Associated Domains + apple-app-site-association) and are

@@ -5,7 +5,7 @@
 /// app-download link is shared so they can install and follow.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_sms/flutter_sms.dart';
+import 'package:halved_sms/halved_sms.dart';
 import 'package:provider/provider.dart';
 
 import '../api/client.dart';
@@ -90,7 +90,13 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
       navigator.pop(); // close the sheet
 
       final body = _watchInviteBody(
-        inviter: inviter, onApp: onApp, watchUrl: watchUrl, downloadUrl: dlUrl);
+        inviter: inviter,
+        onApp: onApp,
+        watchUrl: watchUrl,
+        downloadUrl: dlUrl,
+        courseName: (res['course_name'] as String?) ?? '',
+        gameLabel: (res['game_label'] as String?) ?? '',
+      );
 
       // They ARE a watcher at this point — the server matched them. An empty
       // phone here means we found them by name and never learned their number,
@@ -190,22 +196,49 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
     return typed;
   }
 
-  /// Body of the watch-invite text.  One halved.golf link for everyone; a
-  /// download link is appended only for a non-Halved recipient.
+  /// Body of the watch-invite text.
+  ///
+  /// This lands with people who have often never heard of Halved, which makes
+  /// it one of the few places the app talks to a stranger — so it reads like a
+  /// person inviting a friend, not a system issuing a notification. The old
+  /// wording ("X invited you to observe an active Halved round") described the
+  /// database row rather than the thing happening on the course.
+  ///
+  /// It goes into an editable composer, so it is a first draft the sender can
+  /// rewrite — which is also why it states nothing we haven't checked. Naming
+  /// the game and course is safe; claiming who is winning is not.
+  ///
+  /// One halved.golf link for everyone; the download link is appended only for
+  /// someone not already on Halved, who would otherwise have nowhere to go.
   String _watchInviteBody({
     required String inviter,
     required bool   onApp,
     String?         watchUrl,
     String?         downloadUrl,
+    String          courseName = '',
+    String          gameLabel  = '',
   }) {
     final by = inviter.isNotEmpty ? inviter : 'A friend';
-    final b  = StringBuffer(
-        '$by invited you to observe an active Halved round.');
+    // "playing Nassau at Tilden Park" / "playing at Tilden Park" / "out on the
+    // course" — each clause appears only when we actually know it.
+    final what = [
+      if (gameLabel.isNotEmpty) gameLabel,
+      if (courseName.isNotEmpty) 'at $courseName',
+    ].join(' ');
+    final b = StringBuffer(
+      inviter.isNotEmpty
+          ? (what.isEmpty
+              ? 'Come rail me — I’m out on the course ⛳'
+              : 'Come rail me — I’m playing $what ⛳')
+          : (what.isEmpty
+              ? '$by is out on the course ⛳'
+              : '$by is playing $what ⛳'),
+    );
     if (watchUrl != null) {
-      b.write(onApp ? ' Follow it live: $watchUrl' : ' Watch live: $watchUrl');
+      b.write(' $watchUrl');
     }
     if (!onApp && downloadUrl != null) {
-      b.write('  Get the Halved app: $downloadUrl');
+      b.write('\n\nGet Halved: $downloadUrl');
     }
     return b.toString();
   }
@@ -215,13 +248,8 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
   Future<bool> _launchWatchSms(
       {required String phone, required String body}) async {
     final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-    try {
-      if (!await canSendSMS()) return false;
-      await sendSMS(message: body, recipients: [cleaned]);
-      return true;
-    } catch (_) {
-      return false;
-    }
+    if (!await canSendSms()) return false;
+    return sendSms(message: body, recipients: [cleaned]);
   }
 
   Future<void> _tapGolfer(PlayerProfile p) async {

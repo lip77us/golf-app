@@ -2711,12 +2711,35 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
     if watch_round is not None and watch_round.watch_token:
         watch_url = f'{base}/watch/{watch_round.watch_token}/'
 
+    # Course + game names for the invite text ("I'm playing Nassau at Tilden
+    # Park"). The client has only a round id at this point — the invite sheet is
+    # opened from a leaderboard that never loaded the round itself — so sending
+    # them here saves it a second request purely to write a sentence.
+    course_name = ''
+    game_label = ''
+    if watch_round is not None:
+        course_name = (watch_round.course.name
+                       if watch_round.course_id else '') or ''
+        slug = watch_round.primary_game or ''
+        if not slug:
+            games = watch_round.active_games or []
+            slug = games[0] if games else ''
+        if slug:
+            try:
+                game_label = GameType(slug).label
+            except ValueError:
+                # A slug the enum doesn't know (older round, renamed game).
+                # Better to say nothing than to print a raw slug at someone.
+                game_label = ''
+
     return Response(
         {'watcher_id': watcher.id, 'created': created, 'is_on_app': is_on_app,
          'player_id': roster_player.id if roster_player else None,
          'roster_name': roster_player.name if roster_player else None,
          'roster_created': roster_created,
          'watch_url': watch_url,
+         'course_name': course_name,
+         'game_label': game_label,
          'download_url': settings.APP_DOWNLOAD_URL,
          # '' means "we matched them, but you don't have their number" — the
          # client offers to collect one rather than silently skipping the text.

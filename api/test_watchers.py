@@ -259,3 +259,29 @@ class WatcherTests(TestCase):
             {'player_id': known.id}, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         self.assertEqual(resp.data['phone'], '+14155557777')
+
+    # ---- context for the invite text ----
+    def test_response_carries_course_and_game_for_the_invite_text(self):
+        """
+        The invite sheet is opened from a leaderboard that never loaded the
+        round, so the client cannot name the course or game itself. Sending
+        them with the invite saves a request made purely to write a sentence.
+        """
+        self.round.primary_game = 'nassau'
+        self.round.save(update_fields=['primary_game'])
+        resp = self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '(415) 555-7777', 'name': 'Wanda'}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data['course_name'], 'Pebble')
+        self.assertEqual(resp.data['game_label'], 'Nassau')
+
+    def test_unknown_game_slug_yields_no_label(self):
+        """Better to say nothing than to print a raw slug at someone."""
+        self.round.primary_game = 'not_a_real_game'
+        self.round.save(update_fields=['primary_game'])
+        resp = self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'phone': '(415) 555-7777', 'name': 'Wanda'}, format='json')
+        self.assertEqual(resp.data['game_label'], '')
+        self.assertEqual(resp.data['course_name'], 'Pebble')
