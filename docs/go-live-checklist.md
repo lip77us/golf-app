@@ -58,6 +58,30 @@ Order matters: **backend first**, then mobile.
 - [ ] Submit 2.0.0 for **App Store review** (same build), with reviewer notes +
       demo credentials.
 
+### How the build actually gets to TestFlight
+
+```sh
+cd mobile
+flutter build ipa          # → build/ios/ipa/*.ipa
+```
+
+Then upload the `.ipa` with **Transporter** (free, Mac App Store, made by Apple —
+it was called *Application Loader* before 2019, which is what you'll half-remember
+it as). Drag the file in, upload, and the build appears in App Store Connect →
+TestFlight once processing finishes, usually a few minutes.
+
+Transporter authenticates with the App Store Connect API key kept at
+`~/.appstoreconnect/private_keys/AuthKey_KQMU88YXV7.p8` (mode 600, never in git).
+The Issuer ID that goes with it is in App Store Connect → Users and Access →
+Integrations.
+
+Alternatives, same outcome: **Xcode → Product → Archive → Distribute App** (no
+extra install, signs in with your Apple ID instead of the key), or `xcrun altool`
+if you ever script it.
+
+> Written down because it was not: after the July 2026 machine rebuild, nothing in
+> this repo recorded which tool did the upload.
+
 ## 6. After 2.0.0 is approved & live
 - [ ] (Optional) Flip `CLIENT_MIN_VERSION=2.0.0` on Railway if/when you want
       everyone on the new build (or when a future backend change requires it).
