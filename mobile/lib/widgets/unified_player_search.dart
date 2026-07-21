@@ -135,6 +135,24 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
     _halvedTimer = Timer(_halvedDebounce, () => _searchHalved(q));
   }
 
+  /// Empty the field and everything it was showing.
+  ///
+  /// Called once a golfer is in the round: the query has done its job, and
+  /// leaving it up means the next name gets typed after the last one, or worse,
+  /// the picked golfer stays on screen looking like they still need adding.
+  /// Clearing returns you to the roster list and the progress row, which is
+  /// where the answer to "who else?" actually is.
+  void _clearSearch() {
+    _localTimer?.cancel();
+    _halvedTimer?.cancel();
+    _ctrl.clear();
+    setState(() {
+      _query = '';
+      _halved = const [];
+      _searchingHalved = false;
+    });
+  }
+
   Future<void> _searchHalved(String q) async {
     final client = context.read<AuthProvider>().client;
     try {
@@ -205,10 +223,8 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
       );
       if (!mounted) return;
       widget.onGolferAdded(added);
-      setState(() {
-        _halved = const [];
-        _adding.remove(-1);
-      });
+      _adding.remove(-1);
+      _clearSearch();
       messenger.showSnackBar(
           SnackBar(content: Text('${added.name} added to My Golfers.')));
     } catch (_) {
@@ -229,12 +245,10 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
       final added = await client.addHalvedUserToRoster(id);
       if (!mounted) return;
       widget.onGolferAdded(added);
-      setState(() {
-        // They're in the roster now, so they belong under "Your golfers" —
-        // leaving them in the Halved group would show them twice.
-        _halved = _halved.where((r) => r['id'] != id).toList();
-        _adding.remove(id);
-      });
+      // The host selects them into the round, so the search is spent — clearing
+      // also disposes of the now-stale Halved row without special-casing it.
+      _adding.remove(id);
+      _clearSearch();
       messenger.showSnackBar(
           SnackBar(content: Text('${added.name} added to My Golfers.')));
     } catch (_) {
@@ -310,7 +324,12 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.trailing,
             value: widget.selectedIds.contains(p.id),
-            onChanged: (v) => widget.onToggle(p.id, v ?? false),
+            onChanged: (v) {
+              widget.onToggle(p.id, v ?? false);
+              // Only on the way IN. Unchecking someone by mistake shouldn't
+              // also throw away the search that found them.
+              if (v == true) _clearSearch();
+            },
             secondary: _Monogram(name: p.name, short: p.shortName),
             title: Text(p.name),
             subtitle: Text('Index ${p.handicapIndex}'),

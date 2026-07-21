@@ -787,7 +787,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           _buildAdvanced(),
           ], // ── end step 1
 
-          // ── Step 2: players + tees ──
+          // ── Step 2: players ──
           if (_step == 1) ...[
           // How many golfers the chosen game(s) allow — shown up front, and
           // it flips to an error if the current selection is off.
@@ -795,7 +795,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             _gamePlayerCountHint(gameId),
           const SizedBox(height: 8),
 
-          Text('Select Players & Tees',
+          Text('Select Players',
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 16),
 
