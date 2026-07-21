@@ -70,6 +70,21 @@ class PlayerSerializer(serializers.ModelSerializer):
                   'home_course_id', 'home_course_name']
         read_only_fields = ['id']
 
+    def to_representation(self, instance):
+        """
+        Hide a phone the owner was never shown.
+
+        A golfer added from a NAME search carries the member's number so the
+        "on the app" match and the authoritative handicap keep working, but the
+        owner never saw it and must not learn it this way — name search exists
+        precisely so you can find someone WITHOUT knowing their number.
+        `is_on_app` is computed server-side, so the Halved badge is unaffected.
+        """
+        data = super().to_representation(instance)
+        if getattr(instance, 'phone_from_directory', False):
+            data['phone'] = ''
+        return data
+
     def get_home_course_name(self, obj) -> str:
         # Guard on the id column so players WITHOUT a home course (the whole
         # roster, typically) never trigger a join.
@@ -145,6 +160,17 @@ class PlayerSerializer(serializers.ModelSerializer):
         # directly like user_id so ModelSerializer doesn't fight the FK.
         if 'home_course_id' in validated_data:
             instance.home_course_id = validated_data.pop('home_course_id')
+        # A golfer added from a name search has a phone the owner has never
+        # seen — to_representation renders it as ''.  A plain save from the
+        # player form would therefore PATCH the real number away and quietly
+        # break the member link (on-app badge, authoritative handicap, search
+        # exclusion).  Ignore the empty write; accept a real number, which
+        # means the owner now knows it and there is nothing left to hide.
+        if instance.phone_from_directory and 'phone' in validated_data:
+            if (validated_data['phone'] or '').strip():
+                instance.phone_from_directory = False
+            else:
+                validated_data.pop('phone')
         return super().update(instance, validated_data)
 
 

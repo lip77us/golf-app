@@ -25,6 +25,8 @@ urlpatterns = [
     # ---- Reference data ----
     path('players/',           views.PlayerListView.as_view(),   name='api-players'),
     path('halved-users/lookup/', views.HalvedUserLookupView.as_view(), name='api-halved-user-lookup'),
+    path('halved-users/add-to-roster/', views.AddHalvedGolferToRosterView.as_view(),
+         name='api-halved-user-add-to-roster'),
     path('devices/register/',    views.DeviceRegisterView.as_view(),   name='api-device-register'),
     path('devices/unregister/',  views.DeviceUnregisterView.as_view(), name='api-device-unregister'),
     path('notification-prefs/',  views.NotificationPrefsView.as_view(), name='api-notification-prefs'),

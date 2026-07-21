@@ -220,6 +220,18 @@ class Player(models.Model):
                     )
     email           = models.EmailField(blank=True)
     phone           = models.CharField(max_length=20, blank=True)
+    # True when `phone` was copied from a Halved member the owner found by NAME
+    # search rather than typed in themselves.  The number still has to live
+    # here — it is the join key for "on the app", for the authoritative
+    # handicap, and for keeping that member out of future search results — but
+    # the owner was never shown it, so PlayerSerializer blanks it on the way out
+    # and refuses to let an empty write clear it.  False for every golfer whose
+    # number the owner actually knows.
+    phone_from_directory = models.BooleanField(
+                        default=False,
+                        help_text="Phone came from a name-search match rather "
+                                  "than from the owner; never expose it.",
+                    )
     # GHIN (Golf Handicap and Information Network) number — the golfer's
     # national handicap id.  Blank for golfers without one.  Populated by the
     # Golf Genius roster import (services/genius_import.py) and a natural key

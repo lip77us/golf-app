@@ -1214,7 +1214,14 @@ class LogoutView(APIView):
 
 
 class MeView(APIView):
-    """GET /api/auth/me/ — current user info (account, is_staff, optional player)."""
+    """
+    GET   /api/auth/me/ — current user info (account, is_staff, optional player).
+    PATCH /api/auth/me/ — update the user's own privacy toggles.
+
+    PATCH currently accepts only ``discoverable_by_name``; it is deliberately an
+    allow-list rather than a generic serializer update, so adding a field to the
+    User model never silently makes it user-writable.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -1223,6 +1230,7 @@ class MeView(APIView):
             'is_staff':         request.user.is_staff,
             'is_account_admin': request.user.is_account_admin,
             'is_support': request.user.is_support,
+            'discoverable_by_name': request.user.discoverable_by_name,
             'account': {
                 'id':   request.user.account_id,
                 'name': request.user.account.name,
@@ -1234,6 +1242,19 @@ class MeView(APIView):
         except Exception:
             body['player'] = None
         return Response(body)
+
+    def patch(self, request):
+        if 'discoverable_by_name' not in request.data:
+            return Response({'detail': 'Nothing to update.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        value = request.data['discoverable_by_name']
+        if not isinstance(value, bool):
+            return Response(
+                {'detail': 'discoverable_by_name must be true or false.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        request.user.discoverable_by_name = value
+        request.user.save(update_fields=['discoverable_by_name'])
+        return Response({'discoverable_by_name': value})
 
 
 class DeleteAccountView(APIView):
@@ -2603,10 +2624,18 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
     phone_raw = (request.data.get('phone') or '').strip()
     name      = (request.data.get('name') or '').strip()
     player_id = request.data.get('player_id')
+    # Whether to withhold the number from the response.  We echo `phone` so the
+    # client can open a pre-addressed SMS composer, but a golfer added from a
+    # name search carries a number the inviter has never seen — handing it back
+    # here would undo that.  The invite itself is unaffected: matching happens
+    # server-side, and an on-Halved watcher is notified by push anyway.
+    hide_phone = False
     if player_id:
         p = account_get_or_404(Player, request.user.account, pk=player_id)
         phone_raw = (p.phone or phone_raw).strip()
         name = name or p.name
+        hide_phone = bool(p.phone_from_directory
+                          and not (request.data.get('phone') or '').strip())
     if not name:
         return Response({'detail': 'A name is required to invite a watcher.'},
                         status=status.HTTP_400_BAD_REQUEST)
@@ -2689,7 +2718,9 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
          'roster_created': roster_created,
          'watch_url': watch_url,
          'download_url': settings.APP_DOWNLOAD_URL,
-         'phone': norm},
+         # '' means "we matched them, but you don't have their number" — the
+         # client offers to collect one rather than silently skipping the text.
+         'phone': '' if hide_phone else norm},
         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
@@ -2838,22 +2869,49 @@ class TournamentWatcherCandidatesView(APIView):
         return _watcher_candidates_response(request, ids, phones)
 
 
+#: Shortest ?name= fragment we will search for.  Two characters would let a
+#: caller walk the whole member base with a couple of hundred requests; three
+#: makes bulk enumeration tedious without hurting real searches ("Lib", "Kim").
+NAME_SEARCH_MIN_CHARS = 3
+#: Hard cap on ?name= results.  The add-player sheet only shows a handful, and
+#: an uncapped query is a directory dump.
+NAME_SEARCH_LIMIT = 10
+
+
 class HalvedUserLookupView(APIView):
     """
-    GET /api/halved-users/lookup/?phone=<number>
+    GET /api/halved-users/lookup/?phone=<number>   → {found, name, ...}
+    GET /api/halved-users/lookup/?name=<fragment>  → {results: [...]}
 
-    Look up a registered Halved member by phone so you can add them to a round
-    even if they're not in your roster yet. You must know the number — there is
-    NO browsable directory, and we never return phone numbers. Returns the
-    member's profile fields (to confirm + seed a local golfer); their handicap
-    then follows them via the usual phone match. {found:false} when no verified
-    user has that number.
+    Find a registered Halved member so you can add them to a round even if
+    they're not in your roster yet.  Two modes, with deliberately different
+    privacy rules:
+
+    ``?phone=`` — exact match on a full, normalized number.  Knowing someone's
+    number is already evidence of a real-world connection, so this mode ignores
+    the ``discoverable_by_name`` opt-out.
+
+    ``?name=`` — case-insensitive substring match, and the only browsable path
+    into the member base.  It is fenced accordingly: a
+    ``NAME_SEARCH_MIN_CHARS``-character minimum, a ``NAME_SEARCH_LIMIT`` cap,
+    and only members who have left ``discoverable_by_name`` on.  Golfers already
+    in the caller's roster are excluded — the client shows those under "Your
+    golfers" from its own list, and returning them here would double them up.
+
+    Neither mode EVER returns a phone number: the response is only enough to
+    confirm the right person and seed a local golfer (their handicap follows via
+    the usual phone match).  ``?phone=`` answers {found:false} when nothing
+    matches; ``?name=`` answers {results: []}.
     """
     def get(self, request):
         from accounts.phone import normalize
         from django.contrib.auth import get_user_model
 
         raw = (request.query_params.get('phone') or '').strip()
+        name_q = (request.query_params.get('name') or '').strip()
+        if name_q:
+            return self._by_name(request, name_q)
+
         n = normalize(raw) if raw else None
         if not n:
             return Response({'found': False})
@@ -2871,6 +2929,139 @@ class HalvedUserLookupView(APIView):
             'sex': (prof.sex if prof else 'M') or 'M',
             'handicap_index': str(prof.handicap_index) if prof else '0.0',
         })
+
+    def _by_name(self, request, q):
+        """Substring search over opted-in members.  See the class docstring."""
+        from django.contrib.auth import get_user_model
+        from django.db.models import Q
+
+        if len(q) < NAME_SEARCH_MIN_CHARS:
+            return Response({
+                'results': [],
+                'detail': f'Enter at least {NAME_SEARCH_MIN_CHARS} characters.',
+            })
+
+        # Everyone the caller already has — matched on phone, the same key the
+        # rest of the app uses to tie a roster Player to a Halved member.
+        own_phones = set(
+            Player.objects
+            .filter(account=request.user.account)
+            .exclude(phone='')
+            .values_list('phone', flat=True)
+        )
+
+        qs = (get_user_model().objects
+              .filter(discoverable_by_name=True)
+              .filter(phone_verified_at__isnull=False)
+              .filter(Q(player_profile__name__icontains=q)
+                      | Q(first_name__icontains=q)
+                      | Q(last_name__icontains=q))
+              .exclude(pk=request.user.pk)
+              .exclude(phone__in=own_phones)
+              .select_related('player_profile',
+                              'player_profile__home_course')
+              .order_by('player_profile__name', 'pk')
+              .distinct()[:NAME_SEARCH_LIMIT])
+
+        results = []
+        for u in qs:
+            prof = getattr(u, 'player_profile', None)
+            course = getattr(prof, 'home_course', None) if prof else None
+            city = getattr(course, 'city', '') or ''
+            state = getattr(course, 'state', '') or ''
+            results.append({
+                # Opaque handle for AddHalvedGolferToRosterView.  The client
+                # needs SOME way to say "add that one" without us handing it a
+                # phone number, and this is the whole of what it can do with it.
+                'id': u.pk,
+                'name': ((prof.name if prof else '') or u.get_full_name()
+                         or u.username),
+                'short_name': (prof.short_name if prof else '') or '',
+                'sex': (prof.sex if prof else 'M') or 'M',
+                'handicap_index': str(prof.handicap_index) if prof else '0.0',
+                # Coarse location only, and only when they've set a home
+                # course.  Enough to tell two Libbys apart; not a home address.
+                'location': ', '.join(p for p in (city, state) if p),
+            })
+        return Response({'results': results})
+
+
+class AddHalvedGolferToRosterView(APIView):
+    """
+    POST /api/halved-users/add-to-roster/   {id}
+
+    Copy a member found via ``?name=`` search into the caller's My Golfers.
+
+    This exists because name search never returns a phone number, and the phone
+    is what ties a roster Player to the Halved member it represents — it is how
+    their handicap follows them, and how the search knows to stop offering
+    someone you already have.  The phone-number flow can create the Player
+    client-side precisely because the caller typed the number in.  Here the
+    server does the copy so the connection is made without the number ever
+    reaching the client.
+
+    ``id`` is the opaque handle from a name-search result.  It only works for
+    members who are still name-discoverable, so a stale id from before someone
+    opted out cannot be used to add them.  Idempotent: if the caller already has
+    a golfer with that phone, that existing Player comes back untouched.
+
+    The copied number is flagged ``phone_from_directory`` so PlayerSerializer
+    keeps it hidden — the caller found this member by name and still has no
+    business seeing their number.
+
+    Admin-only, matching PlayerListView.post: this creates a roster row, and
+    roster management is an admin action.  Today every signup is an admin of
+    its own account, so this rarely bites; it matters for the multi-member
+    accounts the User model already allows.
+    """
+    def post(self, request):
+        from decimal import Decimal
+
+        from django.contrib.auth import get_user_model
+
+        if not (request.user.is_staff or request.user.is_account_admin):
+            return Response({'detail': 'Only admins can add players.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            uid = int(request.data.get('id'))
+        except (TypeError, ValueError):
+            return Response({'detail': 'id required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        u = (get_user_model().objects
+             .filter(pk=uid,
+                     discoverable_by_name=True,
+                     phone_verified_at__isnull=False)
+             .exclude(pk=request.user.pk)
+             .select_related('player_profile')
+             .first())
+        if u is None or not u.phone:
+            return Response({'detail': 'No such golfer.'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        existing = Player.objects.filter(account=request.user.account,
+                                         phone=u.phone).first()
+        if existing is not None:
+            return Response(PlayerSerializer(
+                existing, context=_on_app_context([existing])).data)
+
+        prof = getattr(u, 'player_profile', None)
+        player = Player.objects.create(
+            account=request.user.account,
+            name=((prof.name if prof else '') or u.get_full_name()
+                  or u.username),
+            short_name=(prof.short_name if prof else '') or '',
+            sex=(prof.sex if prof else 'M') or 'M',
+            handicap_index=(prof.handicap_index if prof else Decimal('0.0')),
+            phone=u.phone,
+            phone_from_directory=True,
+        )
+        # Same reasoning as PlayerListView.post: compute is_on_app now so the
+        # golfer carries the Halved badge immediately, not after a reload.
+        return Response(
+            PlayerSerializer(player, context=_on_app_context([player])).data,
+            status=status.HTTP_201_CREATED)
 
 
 class DeviceRegisterView(APIView):

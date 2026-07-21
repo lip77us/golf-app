@@ -626,12 +626,39 @@ class ApiClient {
     await _post('/devices/unregister/', {'token': token});
   }
 
-  /// Look up a registered Halved member by phone number (no browsable
-  /// directory). Returns {found, name, short_name, sex, handicap_index}.
+  /// Look up a registered Halved member by phone number. Exact match on the
+  /// full number, and it finds members who have switched name search off —
+  /// knowing the number is its own proof of connection.
+  /// Returns {found, name, short_name, sex, handicap_index}.
   Future<Map<String, dynamic>> lookupHalvedUser(String phone) async {
     final data = await _get(
         '/halved-users/lookup/?phone=${Uri.encodeQueryComponent(phone)}');
     return (data as Map).cast<String, dynamic>();
+  }
+
+  /// Search Halved members by name — the "On Halved" group of the add-player
+  /// sheet. Server-side rules worth knowing about here: fewer than 3 characters
+  /// returns empty with a `detail` message, results are capped at 10, members
+  /// who opted out of name search are omitted, and anyone already in My Golfers
+  /// is filtered out (the caller shows those from its own roster instead).
+  ///
+  /// Each row: {name, short_name, sex, handicap_index, location}. `location` is
+  /// a coarse "City, ST" from the member's home course, blank when unset.
+  /// Phone numbers are never returned.
+  Future<List<Map<String, dynamic>>> searchHalvedUsersByName(
+      String query) async {
+    final data = await _get(
+        '/halved-users/lookup/?name=${Uri.encodeQueryComponent(query)}');
+    final results = (data as Map)['results'] as List? ?? const [];
+    return results
+        .map((r) => (r as Map).cast<String, dynamic>())
+        .toList();
+  }
+
+  /// Flip this user's "findable by name" setting. Phone lookup is unaffected.
+  Future<bool> setDiscoverableByName(bool value) async {
+    final data = await _patch('/auth/me/', {'discoverable_by_name': value});
+    return ((data as Map)['discoverable_by_name'] as bool?) ?? value;
   }
 
   /// My Golfers eligible to invite as watchers of a round/tournament —

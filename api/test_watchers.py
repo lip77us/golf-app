@@ -228,3 +228,34 @@ class WatcherTests(TestCase):
         self.assertEqual(
             c.post(reverse('api-round-watchers', args=[self.round.id]),
                    {'phone': '4155551234'}, format='json').status_code, 404)
+
+    # ---- numbers the inviter was never shown ----
+    def test_directory_golfers_number_is_not_echoed_back(self):
+        """
+        A golfer added from a NAME search carries a phone the inviter has never
+        seen.  The invite must still work — matching is server-side — but the
+        response must not hand the number over, or the client would open a
+        pre-addressed text with it and undo the point of hiding it.
+        """
+        hidden = Player.objects.create(
+            account=self.acct_a, name='Libby Chen', phone='(415) 555-7777',
+            handicap_index=Decimal('12.4'), phone_from_directory=True)
+        resp = self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'player_id': hidden.id}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data['phone'], '')
+        # ...but they really are watching, matched on the number we withheld.
+        self.assertTrue(Watcher.objects.filter(
+            round=self.round, phone='+14155557777').exists())
+
+    def test_visible_number_is_still_echoed_back(self):
+        """The ordinary case: the inviter typed it, so texting is fine."""
+        known = Player.objects.create(
+            account=self.acct_a, name='Dave Known', phone='(415) 555-7777',
+            handicap_index=Decimal('7.0'))
+        resp = self.td_client.post(
+            reverse('api-round-watchers', args=[self.round.id]),
+            {'player_id': known.id}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data['phone'], '+14155557777')

@@ -71,7 +71,8 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
   /// user, or the read-only web page otherwise), with a download link added
   /// only when the recipient isn't on Halved yet.  The user just taps Send and
   /// is returned to the app.
-  Future<void> _invite({int? playerId, String? phone, String? name}) async {
+  Future<void> _invite(
+      {int? playerId, String? phone, String? name, PlayerProfile? player}) async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final inviter =
@@ -83,13 +84,22 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
       final onApp      = res['is_on_app'] == true;
       final watchUrl   = res['watch_url'] as String?;
       final dlUrl      = res['download_url'] as String?;
-      final toPhone    = (res['phone'] as String?) ?? phone ?? '';
+      var   toPhone    = (res['phone'] as String?) ?? phone ?? '';
       final rosterName = (res['roster_name'] as String?)?.trim();
       final rosterNew  = res['roster_created'] == true;
       navigator.pop(); // close the sheet
 
       final body = _watchInviteBody(
         inviter: inviter, onApp: onApp, watchUrl: watchUrl, downloadUrl: dlUrl);
+
+      // They ARE a watcher at this point — the server matched them. An empty
+      // phone here means we found them by name and never learned their number,
+      // so the text is the only part we can't do. Say so and offer to collect
+      // one rather than dropping the text silently.
+      if (toPhone.isEmpty && player != null && mounted) {
+        toPhone = await _askForNumber(player, onApp: onApp) ?? '';
+      }
+
       final sent = toPhone.isNotEmpty
           ? await _launchWatchSms(phone: toPhone, body: body)
           : false;
@@ -121,6 +131,63 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not invite watcher.')));
     }
+  }
+
+  /// We added them as a watcher but hold no number we're allowed to show, so
+  /// we can't open a pre-addressed text.  Explain that, and let the inviter
+  /// supply a number or skip the text.  Returns the number to text, or null to
+  /// send nothing — either way the watcher stands.
+  ///
+  /// A number entered here is saved to the golfer, which also makes it the
+  /// visible one from then on (the owner clearly knows it now).
+  Future<String?> _askForNumber(PlayerProfile p, {required bool onApp}) async {
+    final ctrl = TextEditingController();
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: Text('No number for ${p.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              onApp
+                  ? '${p.name} is watching the round and will see it in '
+                    'Halved. You found them by name, so we don’t have a '
+                    'number to text them at.'
+                  : '${p.name} is watching the round, but we don’t have a '
+                    'number to text them at.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Their number (optional)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dctx).pop(false),
+              child: const Text('Skip the text')),
+          FilledButton(
+              onPressed: () => Navigator.of(dctx).pop(true),
+              child: const Text('Text them')),
+        ],
+      ),
+    );
+    final typed = ctrl.text.trim();
+    if (send != true || typed.isEmpty || !mounted) return null;
+    // Persist it so the next invite doesn't have to ask again.
+    try {
+      await context.read<AuthProvider>().client.updatePlayer(p.id, phone: typed);
+    } catch (_) {
+      // Saving is a convenience — still let them send this one.
+    }
+    return typed;
   }
 
   /// Body of the watch-invite text.  One halved.golf link for everyone; a
@@ -158,11 +225,15 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
   }
 
   Future<void> _tapGolfer(PlayerProfile p) async {
-    if (p.phone.trim().isNotEmpty) {
-      _invite(playerId: p.id, name: p.name);
+    // A golfer on Halved can always be matched server-side — either we hold
+    // their number, or they came from a name search and the server holds it
+    // for us. Either way the invite goes through; whether we can also TEXT
+    // them is decided afterwards, from the phone the response echoes back.
+    if (p.phone.trim().isNotEmpty || p.isOnApp) {
+      _invite(playerId: p.id, name: p.name, player: p);
       return;
     }
-    // No phone → a watcher can't be matched. Offer to add one.
+    // Genuinely no number anywhere → a watcher can't be matched at all.
     final navigator = Navigator.of(context);
     final choice = await showDialog<String>(
       context: context,
@@ -187,7 +258,7 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
       MaterialPageRoute(builder: (_) => PlayerFormScreen(player: p)),
     );
     if (updated != null && updated.phone.trim().isNotEmpty) {
-      _invite(playerId: updated.id, name: updated.name);
+      _invite(playerId: updated.id, name: updated.name, player: updated);
     }
   }
 

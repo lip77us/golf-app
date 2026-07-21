@@ -170,6 +170,17 @@ class User(AbstractUser):
     # Missing key = use the category default (mostly on). OS-level permission is
     # separate and checked on the device.
     notification_prefs = models.JSONField(default=dict, blank=True)
+    # Opt-out of being findable by name when someone adds players to a round
+    # (HalvedUserLookupView ?name=).  Default on: the add-player flow leads with
+    # search, so a member nobody can find is a dead end for whoever is trying to
+    # add them.  Phone lookup deliberately ignores this flag — knowing someone's
+    # number is already evidence of a real-world connection.  Neither path ever
+    # returns a phone number; opting out only removes you from name results.
+    discoverable_by_name = models.BooleanField(
+        default=True,
+        help_text="Findable by name when another member adds players to a "
+                  "round.  Phone lookup is unaffected.",
+    )
 
     objects = AccountUserManager()
 
