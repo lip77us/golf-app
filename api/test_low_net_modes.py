@@ -13,6 +13,7 @@ So Ann leads Gross, Bea leads Net — proving the modes rank independently.
 """
 from django.test import TestCase
 
+from api.views import _build_leaderboard
 from games.models import LowNetRoundConfig
 from services.low_net_round import low_net_round_summary
 from scoring.tests._helpers import (
@@ -90,6 +91,12 @@ class LowNetModesTests(TestCase):
         self.assertEqual(so['Ann']['total_strokes'], 0)
         self.assertEqual(so['Bea']['total_strokes'], 18)
 
+    # ── selector availability flags (12A §2/§3) ───────────────────────────────
+    def test_net_round_has_no_so_selector(self):
+        lb = _build_leaderboard(self.round)['low_net_round']
+        self.assertFalse(lb['so_available'])
+        self.assertFalse(lb['primary_game_is_so'])
+
     # ── payouts belong only to the configured mode ────────────────────────────
     def test_only_primary_mode_carries_payouts(self):
         s = low_net_round_summary(self.round)
@@ -122,3 +129,16 @@ class LowNetStrokesOffPercentTests(TestCase):
         self.assertEqual(so['Lo']['total_strokes'], 0)
         self.assertEqual(so['Hi']['total_strokes'], 16)
         self.assertEqual(s['modes']['strokes_off']['net_percent'], 90)
+
+    def test_so_round_exposes_so_selector(self):
+        course = make_course('SOsel')
+        tee = make_tee(course=course, holes=DEFAULT_HOLES)
+        rnd = make_round(course=course, handicap_mode='strokes_off',
+                         net_percent=100, active_games=['low_net_round'])
+        make_foursome(rnd, [('Lo', 0), ('Hi', 12)], tee=tee)
+        LowNetRoundConfig.objects.create(
+            round=rnd, handicap_mode='strokes_off', net_percent=100)
+
+        lb = _build_leaderboard(rnd)['low_net_round']
+        self.assertTrue(lb['so_available'])
+        self.assertTrue(lb['primary_game_is_so'])
