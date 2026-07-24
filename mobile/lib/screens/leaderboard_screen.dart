@@ -1505,6 +1505,7 @@ class _LowNetViewState extends State<_LowNetView> {
     final entryFee = (widget.data['entry_fee'] as num?)?.toDouble() ?? 0.0;
     final payouts  = (widget.data['payouts'] as List? ?? []);
     final showNet  = _mode != 'gross';
+    final adjLabel = _mode == 'strokes_off' ? 'S-Off' : 'Net';
 
     // Gross · Net · [Strokes-off] — pine-filled selected segment (brand rule:
     // selected segments are pine, never mint).
@@ -1560,7 +1561,7 @@ class _LowNetViewState extends State<_LowNetView> {
         selector,
         chips,
         const SizedBox(height: 10),
-        _headerRow(theme, showNet: showNet),
+        _headerRow(theme, showNet: showNet, adjLabel: adjLabel),
         for (final r in results)
           ..._playerBlock(theme, r as Map<String, dynamic>,
               showNet: showNet, showMoney: anyPayout),
@@ -1594,7 +1595,8 @@ class _LowNetViewState extends State<_LowNetView> {
   static const double _rankW = 26;
   static const double _colW  = 44;
 
-  Widget _headerRow(ThemeData theme, {required bool showNet}) {
+  Widget _headerRow(ThemeData theme,
+      {required bool showNet, String adjLabel = 'Net'}) {
     final style = theme.textTheme.labelSmall?.copyWith(
         fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
     Widget h(String t, double w) =>
@@ -1605,9 +1607,9 @@ class _LowNetViewState extends State<_LowNetView> {
         h('#', _rankW),
         const SizedBox(width: 4),
         Expanded(child: Text('Player', style: style)),
-        // Net-to-par first, Gross-to-par second (the raw totals are dropped —
-        // they're not meaningful mid-round). Gross-only rounds show just Gross.
-        if (showNet) h('Net', _colW),
+        // Adjusted-to-par first (Net or Strokes-off per the selected mode),
+        // Gross-to-par second. Raw totals are dropped — not meaningful mid-round.
+        if (showNet) h(adjLabel, _colW),
         h('Gross', _colW),
         h('Thru', _colW),
         const SizedBox(width: 24), // chevron gutter
@@ -1762,6 +1764,14 @@ class _LowNetViewState extends State<_LowNetView> {
       final v = e.value is int ? e.value as int : int.tryParse('${e.value}');
       if (k != null && v != null) holePars[k] = v;
     }
+    // Stroke index per hole for the scorecard's SI header row (12A).
+    final holeSi = <int, int>{};
+    for (final e
+        in (widget.data['hole_stroke_index'] as Map? ?? const {}).entries) {
+      final k = e.key is int ? e.key as int : int.tryParse('${e.key}');
+      final v = e.value is int ? e.value as int : int.tryParse('${e.value}');
+      if (k != null && v != null) holeSi[k] = v;
+    }
     final inPlay = (widget.data['holes_in_play'] as List?)
         ?.map((e) => e as int)
         .toList();
@@ -1775,13 +1785,14 @@ class _LowNetViewState extends State<_LowNetView> {
     }
     return strokePlayHoleStrip(
       context,
-      holes:       (row['holes'] as List? ?? const []),
-      holesInPlay: inPlay,
-      holePars:    holePars,
-      showNet:     showNet,
-      netTotal:    row['total_net'] as int?,
-      netToPar:    row['net_to_par'] as int?,
-      strokePlan:  showNet ? strokePlan : null,
+      holes:          (row['holes'] as List? ?? const []),
+      holesInPlay:    inPlay,
+      holePars:       holePars,
+      holeStrokeIndex: holeSi,
+      showNet:        showNet,
+      netTotal:       row['total_net'] as int?,
+      netToPar:       row['net_to_par'] as int?,
+      strokePlan:     showNet ? strokePlan : null,
     );
   }
 }

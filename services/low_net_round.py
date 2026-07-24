@@ -460,10 +460,12 @@ def low_net_round_summary(round_obj) -> dict:
             rep_tee = m.tee
             break
     hole_pars: dict = {}
+    hole_si: dict = {}   # 12A two-row scorecard: SI row needs every hole's index
     if rep_tee is not None:
         for h in in_play:
             try:
                 hole_pars[h] = rep_tee.hole(h).get('par')
+                hole_si[h]   = rep_tee.hole(h).get('stroke_index')
             except StopIteration:
                 pass
 
@@ -474,6 +476,7 @@ def low_net_round_summary(round_obj) -> dict:
         'payouts'      : payouts_cfg,
         'holes_in_play': in_play,
         'hole_pars'    : hole_pars,
+        'hole_stroke_index': hole_si,
         # Backward-compat: `results` is the configured mode, reused from `modes`
         # so it can never drift from the selector's version of the same view.
         'results'      : modes[primary_key]['results'],
