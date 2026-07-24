@@ -22,6 +22,8 @@ Today the mode is fixed by `handicap_mode` and labelled inconsistently
   - Row 2: **back 9 (holes 10–18) + Total**
 - Each block has a **shaded header** with three rows: **Hole number**, **Par**,
   and **SI** (per-hole stroke index).
+- **Each score cell is separated by a 1-pixel vertical line** (thin column
+  dividers between holes).
 
 ## 2. Which selectors appear
 
@@ -54,6 +56,10 @@ Today the mode is fixed by `handicap_mode` and labelled inconsistently
   game's chosen handicap percentage**, e.g. CH 10 at 90% → **gets 9**.
 - **Net** → absolute CH (× main-game %).
 - **SO** → CH **relative to the low** handicapper (low plays off scratch), × %.
+  Formula: `round(max(0, CH − low) × net_percent / 100)` — matches the app-wide
+  SO allowance in nassau / multi_skins / points_531. NOTE: this FIXES a prior
+  inconsistency where the Stroke Play path (`low_net_round.py`) ignored net % for
+  SO while every other game applied it.
 
 ## Symbols (from turn 12)
 

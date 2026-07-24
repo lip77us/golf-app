@@ -39,6 +39,7 @@ Widget strokePlayHoleStrip(
   required List holes,
   List<int>? holesInPlay,
   Map<int, int>? holePars,
+  Map<int, int>? holeStrokeIndex,
   bool showNet = true,
   int? netTotal,
   int? netToPar,
@@ -79,30 +80,37 @@ Widget strokePlayHoleStrip(
   final showOut = front.isNotEmpty && front.every(hm.containsKey);
   final showIn  = back.isNotEmpty && back.every(hm.containsKey);
   final showTot = renderHoles.every(hm.containsKey);
+  final sis = holeStrokeIndex ?? const <int, int>{};
   int parOf(int n) => (hm[n]?['par'] as int?) ?? pars[n] ?? 0;
+  int siOf(int n) => (hm[n]?['stroke_index'] as int?) ?? sis[n] ?? 0;
   int grossSum(List<int> hs) =>
       hs.fold<int>(0, (s, n) => s + ((hm[n]?['gross'] as int?) ?? 0));
   int parSum(List<int> hs) => hs.fold<int>(0, (s, n) => s + parOf(n));
 
-  const double holeW = 32, sumW = 40, headH = 20, parH = 18, scoreH = 32;
+  const double holeW = 30, sumW = 34, headH = 20, parH = 17, scoreH = 32;
   const cellStyle = TextStyle(fontSize: 12);
   final headerStyle = theme.textTheme.labelSmall?.copyWith(
       fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
   final parStyle = theme.textTheme.labelSmall
       ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-  final border = Border.all(color: theme.colorScheme.outlineVariant, width: 0.5);
+  final siStyle = theme.textTheme.labelSmall?.copyWith(
+      fontSize: 9, color: theme.colorScheme.onSurfaceVariant);
+  // Crisp 1px cell separators (12A): right + bottom on every cell, closed on the
+  // left/top by the block's own wrapping border.
+  final line = BorderSide(color: theme.colorScheme.outlineVariant, width: 1);
+  final cellBorder = Border(right: line, bottom: line);
 
   Widget headCell(String t, double w) => Container(
         width: w, height: headH, alignment: Alignment.center,
         decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest, border: border),
+            color: theme.colorScheme.surfaceContainerHighest, border: cellBorder),
         child: Text(t, style: headerStyle),
       );
-  Widget parCell(String t, double w) => Container(
-        width: w, height: parH, alignment: Alignment.center,
+  Widget shadeCell(String t, double w, double h, TextStyle? st) => Container(
+        width: w, height: h, alignment: Alignment.center,
         decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerLow, border: border),
-        child: Text(t, style: parStyle),
+            color: theme.colorScheme.surfaceContainerLow, border: cellBorder),
+        child: Text(t, style: st),
       );
   Widget scoreCell(int n) {
     final hole    = hm[n];
@@ -119,7 +127,7 @@ Widget strokePlayHoleStrip(
     }
     return Container(
       width: holeW, height: scoreH, alignment: Alignment.center,
-      decoration: BoxDecoration(border: border),
+      decoration: BoxDecoration(border: cellBorder),
       child: scoreCellWithDots(
         Center(
           child: gross == null
@@ -134,43 +142,68 @@ Widget strokePlayHoleStrip(
   Widget sumCell(String t, double w, {Color? color}) => Container(
         width: w, height: scoreH, alignment: Alignment.center,
         decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerLow, border: border),
+            color: theme.colorScheme.surfaceContainerLow, border: cellBorder),
         child: Text(t,
             style: cellStyle.copyWith(fontWeight: FontWeight.bold, color: color)),
       );
 
+  // One nine-hole block: Hole / Par / SI header rows + the score row, with the
+  // given trailing subtotal cells appended (Out for the front; In·Tot·Net for
+  // the back). Front 9 stacks above Back-9-plus-total (12A two-row scorecard).
+  Widget block(List<int> holeNums, List<({String label, Widget cell})> tail) {
+    return Container(
+      // Close the left + top edges the per-cell right/bottom borders leave open.
+      decoration: BoxDecoration(border: Border(top: line, left: line)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          for (final n in holeNums) headCell('$n', holeW),
+          for (final t in tail) headCell(t.label, sumW),
+        ]),
+        Row(children: [
+          for (final n in holeNums)
+            shadeCell('${parOf(n) > 0 ? parOf(n) : '-'}', holeW, parH, parStyle),
+          for (final t in tail)
+            shadeCell(t.label == 'Out' ? '${parSum(holeNums)}'
+                      : t.label == 'In' ? '${parSum(holeNums)}'
+                      : t.label == 'Tot' ? '${parSum(renderHoles)}'
+                      : '', sumW, parH, parStyle),
+        ]),
+        Row(children: [
+          for (final n in holeNums)
+            shadeCell('${siOf(n) > 0 ? siOf(n) : '-'}', holeW, parH, siStyle),
+          for (final _ in tail) shadeCell('', sumW, parH, siStyle),
+        ]),
+        Row(children: [
+          for (final n in holeNums) scoreCell(n),
+          for (final t in tail) t.cell,
+        ]),
+      ]),
+    );
+  }
+
+  final frontTail = <({String label, Widget cell})>[
+    if (showOut) (label: 'Out', cell: sumCell('${grossSum(front)}', sumW)),
+  ];
+  final backTail = <({String label, Widget cell})>[
+    if (showIn) (label: 'In', cell: sumCell('${grossSum(back)}', sumW)),
+    if (showTot) (label: 'Tot', cell: sumCell('${grossSum(renderHoles)}', sumW)),
+    if (showTot && showNet)
+      (label: 'Net',
+       cell: sumCell('${netTotal ?? ''}', sumW, color: toParColor(netToPar))),
+  ];
+
   return Container(
     color: theme.colorScheme.surface,
     padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
-    child: SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          for (final n in front) headCell('$n', holeW),
-          if (showOut) headCell('Out', sumW),
-          for (final n in back) headCell('$n', holeW),
-          if (showIn) headCell('In', sumW),
-          if (showTot) headCell('Tot', sumW),
-          if (showTot && showNet) headCell('Net', sumW),
-        ]),
-        Row(children: [
-          for (final n in front) parCell('${parOf(n) > 0 ? parOf(n) : '-'}', holeW),
-          if (showOut) parCell('${parSum(front)}', sumW),
-          for (final n in back) parCell('${parOf(n) > 0 ? parOf(n) : '-'}', holeW),
-          if (showIn) parCell('${parSum(back)}', sumW),
-          if (showTot) parCell('${parSum(renderHoles)}', sumW),
-          if (showTot && showNet) parCell('', sumW),
-        ]),
-        Row(children: [
-          for (final n in front) scoreCell(n),
-          if (showOut) sumCell('${grossSum(front)}', sumW),
-          for (final n in back) scoreCell(n),
-          if (showIn) sumCell('${grossSum(back)}', sumW),
-          if (showTot) sumCell('${grossSum(renderHoles)}', sumW),
-          if (showTot && showNet)
-            sumCell('${netTotal ?? ''}', sumW, color: toParColor(netToPar)),
-        ]),
-      ]),
-    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (front.isNotEmpty)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal, child: block(front, frontTail)),
+      if (back.isNotEmpty) ...[
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+            scrollDirection: Axis.horizontal, child: block(back, backTail)),
+      ],
+    ]),
   );
 }

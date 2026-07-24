@@ -123,8 +123,9 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                         s = strokes_fns[fs.pk](eff, m.tee, hole)
                     else:  # STROKES_OFF
                         si = m.tee.hole(hole).get('stroke_index', 18)
-                        s = _strokes_on_hole(
-                            max(0, m.playing_handicap - low_hcp), si)
+                        so_diff = round(
+                            max(0, m.playing_handicap - low_hcp) * net_percent / 100)
+                        s = _strokes_on_hole(so_diff, si)
                     if s > 0:
                         plan[hole] = s
             totals[m.player_id] = {
@@ -166,7 +167,10 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
             if membership.tee_id is None:
                 continue
             si       = membership.tee.hole(hole).get('stroke_index', 18)
-            so       = max(0, membership.playing_handicap - low_hcp)
+            # Scale the strokes-off differential by net_percent, matching the
+            # app-wide SO allowance (nassau.py / multi_skins.py / points_531.py).
+            so       = round(
+                max(0, membership.playing_handicap - low_hcp) * net_percent / 100)
             adjusted = hs['gross_score'] - _strokes_on_hole(so, si)
 
         # ── Net-double-bogey cap (round-level toggle) ───────────────────────
@@ -205,46 +209,17 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
     return totals
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-def low_net_round_standings(round_obj) -> list:
+def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
     """
-    Calculate adjusted totals for all real players in the round.
+    Rank a pre-built ``{player_id: totals}`` map into the standings list.
 
-    Reads LowNetRoundConfig if present; falls back to full net (100%).
-
-    Returns a list of dicts ordered by total (lowest first), with ties
-    sharing the same rank and the prize pool split evenly among them:
-        {
-            'rank'        : int,
-            'player_id'   : int,
-            'player_name' : str,
-            'net_total'   : int,
-            'net_to_par'  : int | None,
-            'holes_played': int,
-            'foursome_id' : int,
-            'payout'      : float | None,
-        }
+    Split out of ``low_net_round_standings`` so the identical ranking / tie /
+    prize logic can be reused for each display mode (Gross / Net / Strokes-off)
+    in the 12A selector — see docs/features/12a-scorecard-display-modes.md.
+    Pass an empty ``payouts_cfg`` for a display-only mode (no prize money):
+    only the round's actually-configured mode carries payouts.
     """
-    try:
-        config        = round_obj.low_net_config
-        handicap_mode = config.handicap_mode
-        net_percent   = config.net_percent
-        payouts_cfg   = {p['place']: float(p['amount']) for p in (config.payouts or [])}
-        excluded_ids  = set(config.excluded_player_ids or [])
-        # Subset side game: restrict scoring/ranking/payouts to these players.
-        participant_ids = config.participant_player_ids or None
-    except Exception:
-        handicap_mode = HandicapMode.NET
-        net_percent   = 100
-        payouts_cfg   = {}
-        excluded_ids  = set()
-        participant_ids = None
-
-    player_totals = _build_ln_player_totals(
-        round_obj, handicap_mode, net_percent, participant_ids=participant_ids)
+    from collections import defaultdict
 
     # Sort by net-to-par (total − par_played) so rankings are always in
     # par-relative order regardless of tee/course-par differences between
@@ -275,8 +250,6 @@ def low_net_round_standings(round_obj) -> list:
     # they cannot win prize money.  Prize positions are assigned as if excluded
     # players were not competing, so the $1st prize goes to the best-scoring
     # *eligible* player, $2nd to the next, and so on.
-    from collections import defaultdict
-
     # Only players who have actually scored compete for prizes — the roster is
     # now seeded with not-yet-started players (so their prospective scorecard
     # shows), and those must not be handed money.
@@ -336,32 +309,143 @@ def low_net_round_standings(round_obj) -> list:
     return standings
 
 
+def _serialize_results(standings) -> list:
+    """Shape a standings list into the wire ``results`` payload (one row per
+    player). Shared by the configured-mode ``results`` and every entry in the
+    12A ``modes`` block so all three modes carry an identical row shape."""
+    return [
+        {
+            'rank'        : s['rank'],
+            'player_id'   : s['player_id'],
+            'name'        : s['player_name'],
+            'total_net'   : s['net_total'],
+            'net_to_par'  : s['net_to_par'],
+            'holes_played': s['holes_played'],
+            'foursome_id' : s['foursome_id'],
+            'excluded'    : s.get('excluded', False),
+            'payout'      : s['payout'],
+            'handicap'    : s.get('handicap', 0),
+            'holes'       : [
+                {'hole': h, **v}
+                for h, v in sorted(s.get('holes', {}).items())
+            ],
+            'stroke_plan'  : s.get('stroke_plan', {}),
+            'total_strokes': s.get('total_strokes', 0),
+        }
+        for s in standings
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def low_net_round_standings(round_obj) -> list:
+    """
+    Calculate adjusted totals for all real players in the round.
+
+    Reads LowNetRoundConfig if present; falls back to full net (100%).
+
+    Returns a list of dicts ordered by total (lowest first), with ties
+    sharing the same rank and the prize pool split evenly among them:
+        {
+            'rank'        : int,
+            'player_id'   : int,
+            'player_name' : str,
+            'net_total'   : int,
+            'net_to_par'  : int | None,
+            'holes_played': int,
+            'foursome_id' : int,
+            'payout'      : float | None,
+        }
+    """
+    try:
+        config        = round_obj.low_net_config
+        handicap_mode = config.handicap_mode
+        net_percent   = config.net_percent
+        payouts_cfg   = {p['place']: float(p['amount']) for p in (config.payouts or [])}
+        excluded_ids  = set(config.excluded_player_ids or [])
+        # Subset side game: restrict scoring/ranking/payouts to these players.
+        participant_ids = config.participant_player_ids or None
+    except Exception:
+        handicap_mode = HandicapMode.NET
+        net_percent   = 100
+        payouts_cfg   = {}
+        excluded_ids  = set()
+        participant_ids = None
+
+    player_totals = _build_ln_player_totals(
+        round_obj, handicap_mode, net_percent, participant_ids=participant_ids)
+
+    return _rank_standings(player_totals, payouts_cfg, excluded_ids)
+
+
 def low_net_round_summary(round_obj) -> dict:
     """
     Return serialisable summary dict:
         {
-          'handicap_mode': str,
+          'handicap_mode': str,          # the round's CONFIGURED mode
           'net_percent'  : int,
           'entry_fee'    : float,
           'payouts'      : [{'place': int, 'amount': float}, ...],
-          'results'      : [
-              {'rank', 'name', 'total_net', 'holes_played', 'payout'}, ...
-          ]
+          'results'      : [ ... configured-mode rows ... ],   # backward-compat
+          'primary_mode' : str,          # 12A: the mode `results` is ranked by
+          'modes'        : {             # 12A: all three, independently ranked
+              'gross':       {'net_percent': int, 'results': [...]},
+              'net':         {'net_percent': int, 'results': [...]},
+              'strokes_off': {'net_percent': int, 'results': [...]},
+          },
         }
+
+    The `modes` block (design 12A — docs/features/12a-scorecard-display-modes.md)
+    lets the client re-rank the Stroke Play tab between Gross / Net / Strokes-off
+    WITHOUT refetching. Only the configured mode carries payouts; the other two
+    are display-only views. SO is relative-to-low AND scaled by net %, matching
+    the app-wide SO allowance (nassau / multi_skins / points_531). `results`
+    mirrors the configured mode for older clients that don't read `modes`.
     """
     try:
-        config      = round_obj.low_net_config
-        entry_fee   = float(config.entry_fee)
-        payouts_cfg = config.payouts or []
-        hmode       = config.handicap_mode
-        npct        = config.net_percent
+        config          = round_obj.low_net_config
+        entry_fee       = float(config.entry_fee)
+        payouts_cfg     = config.payouts or []
+        hmode           = config.handicap_mode
+        npct            = config.net_percent
+        excluded_ids    = set(config.excluded_player_ids or [])
+        participant_ids = config.participant_player_ids or None
     except Exception:
-        entry_fee   = 0.0
-        payouts_cfg = []
-        hmode       = HandicapMode.NET
-        npct        = 100
+        entry_fee       = 0.0
+        payouts_cfg     = []
+        hmode           = HandicapMode.NET
+        npct            = 100
+        excluded_ids    = set()
+        participant_ids = None
 
-    standings = low_net_round_standings(round_obj)
+    payouts_map = {p['place']: float(p['amount']) for p in payouts_cfg}
+
+    # ── Per-mode standings (12A) ──────────────────────────────────────────────
+    # Each mode is built with the app's existing per-mode engine, so nothing
+    # about scoring semantics changes — this only SURFACES the three views.
+    # Payouts belong to the configured mode only (the round is settled in one
+    # mode); the others are display-only, so they get an empty payout map.
+    mode_specs = [
+        ('gross',       HandicapMode.GROSS,       100),
+        ('net',         HandicapMode.NET,         npct),
+        ('strokes_off', HandicapMode.STROKES_OFF, npct),
+    ]
+    primary_key = ('gross' if hmode == HandicapMode.GROSS
+                   else 'strokes_off' if hmode == HandicapMode.STROKES_OFF
+                   else 'net')
+
+    modes: dict = {}
+    for key, m_mode, m_npct in mode_specs:
+        totals = _build_ln_player_totals(
+            round_obj, m_mode, m_npct, participant_ids=participant_ids)
+        pmap   = payouts_map if key == primary_key else {}
+        modes[key] = {
+            'net_percent': m_npct,
+            'results'    : _serialize_results(
+                _rank_standings(totals, pmap, excluded_ids)),
+        }
 
     # The holes this round actually plays (see services/hole_plan) + a
     # representative par per hole, so the client can render the FULL scorecard
@@ -376,10 +460,12 @@ def low_net_round_summary(round_obj) -> dict:
             rep_tee = m.tee
             break
     hole_pars: dict = {}
+    hole_si: dict = {}   # 12A two-row scorecard: SI row needs every hole's index
     if rep_tee is not None:
         for h in in_play:
             try:
                 hole_pars[h] = rep_tee.hole(h).get('par')
+                hole_si[h]   = rep_tee.hole(h).get('stroke_index')
             except StopIteration:
                 pass
 
@@ -390,25 +476,10 @@ def low_net_round_summary(round_obj) -> dict:
         'payouts'      : payouts_cfg,
         'holes_in_play': in_play,
         'hole_pars'    : hole_pars,
-        'results'      : [
-            {
-                'rank'        : s['rank'],
-                'player_id'   : s['player_id'],
-                'name'        : s['player_name'],
-                'total_net'   : s['net_total'],
-                'net_to_par'  : s['net_to_par'],
-                'holes_played': s['holes_played'],
-                'foursome_id' : s['foursome_id'],
-                'excluded'    : s.get('excluded', False),
-                'payout'      : s['payout'],
-                'handicap'    : s.get('handicap', 0),
-                'holes'       : [
-                    {'hole': h, **v}
-                    for h, v in sorted(s.get('holes', {}).items())
-                ],
-                'stroke_plan'  : s.get('stroke_plan', {}),
-                'total_strokes': s.get('total_strokes', 0),
-            }
-            for s in standings
-        ],
+        'hole_stroke_index': hole_si,
+        # Backward-compat: `results` is the configured mode, reused from `modes`
+        # so it can never drift from the selector's version of the same view.
+        'results'      : modes[primary_key]['results'],
+        'primary_mode' : primary_key,
+        'modes'        : modes,
     }

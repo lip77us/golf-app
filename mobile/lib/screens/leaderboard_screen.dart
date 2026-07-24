@@ -13,9 +13,11 @@ import '../widgets/round_landscape_scorecard.dart';
 import '../widgets/inline_message.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utils/watcher_invite.dart';
 import '../utils/route_observer.dart';
 import '../utils/golf_colors.dart';
+import '../theme/halved_brand.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/borrowed_fourth.dart';
 import 'share_scorecard_screen.dart';
@@ -1430,6 +1432,43 @@ class _LowNetViewState extends State<_LowNetView> {
   /// empty when the tab's state is recreated (leaving and returning).
   final Set<int> _expandedPids = <int>{};
 
+  /// 12A — the selected Stroke Play display mode ('gross' / 'net' /
+  /// 'strokes_off'). Null until first build, where it's set to the computed
+  /// default (§3). Because this State is recreated when the tab is (re)opened,
+  /// null-then-default gives "recompute the default each time the tab opens";
+  /// switching the selector just re-reads the already-loaded per-mode results.
+  String? _mode;
+
+  /// The selectors to show: Gross and Net always; Strokes-off only when a game
+  /// in the round uses it (server flag `so_available`) and the payload actually
+  /// carries an SO mode. (Design 12A §2.)
+  List<String> _availableModes() {
+    final modes = widget.data['modes'] as Map?;
+    final out = <String>['gross', 'net'];
+    if (widget.data['so_available'] == true &&
+        modes != null && modes.containsKey('strokes_off')) {
+      out.add('strokes_off');
+    }
+    return out;
+  }
+
+  /// Default selector, precedence (first match wins, design 12A §3):
+  ///   1. the viewer enters scores in gross terms  -> Gross
+  ///   2. the round's primary game is Strokes-Off   -> Strokes-off
+  ///   3. otherwise                                 -> Net
+  String _defaultMode(BuildContext context) {
+    if (!context.read<SettingsProvider>().netStyleEntry) return 'gross';
+    if (widget.data['primary_game_is_so'] == true &&
+        _availableModes().contains('strokes_off')) {
+      return 'strokes_off';
+    }
+    return 'net';
+  }
+
+  static const _modeLabels = {
+    'gross': 'Gross', 'net': 'Net', 'strokes_off': 'Strokes-off',
+  };
+
   static String _ntpLabel(int? ntp) {
     if (ntp == null) return '—';
     if (ntp == 0)   return 'E';
@@ -1444,7 +1483,19 @@ class _LowNetViewState extends State<_LowNetView> {
   @override
   Widget build(BuildContext context) {
     final theme   = Theme.of(context);
-    final results = [...(widget.data['results'] as List? ?? [])];
+    // 12A — resolve the display mode, then read THAT mode's pre-ranked results
+    // (the backend ranks all three independently, so switching re-ranks with no
+    // refetch). The default is computed on first build = each time the tab opens.
+    final modes     = (widget.data['modes'] as Map?)?.cast<String, dynamic>();
+    final available = _availableModes();
+    _mode ??= _defaultMode(context);
+    if (!available.contains(_mode)) {
+      _mode = available.contains('net') ? 'net' : available.first;
+    }
+    final modeData = (modes?[_mode] as Map?)?.cast<String, dynamic>();
+
+    final results =
+        [...((modeData?['results'] ?? widget.data['results']) as List? ?? [])];
     // Rank order (rank 1 first) — this is a leaderboard, not score entry.
     results.sort((a, b) {
       final ra = (a as Map)['rank'] as int? ?? 1 << 30;
@@ -1453,21 +1504,24 @@ class _LowNetViewState extends State<_LowNetView> {
     });
     final entryFee = (widget.data['entry_fee'] as num?)?.toDouble() ?? 0.0;
     final payouts  = (widget.data['payouts'] as List? ?? []);
-    final hmode    = widget.data['handicap_mode']?.toString() ?? 'net';
-    final npct     = widget.data['net_percent'] as int? ?? 100;
-    final showNet  = hmode != 'gross';
+    final showNet  = _mode != 'gross';
+    final adjLabel = _mode == 'strokes_off' ? 'S-Off' : 'Net';
 
-    final modeLabel = hmode == 'gross' ? 'Gross'
-        : hmode == 'strokes_off' ? 'Strokes Off'
-        : npct == 100 ? 'Full Net'
-        : 'Net $npct%';
+    // Gross · Net · [Strokes-off] — pine-filled selected segment (brand rule:
+    // selected segments are pine, never mint).
+    final selector = Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: HalvedSegmented<String>(
+        selected: _mode!,
+        onChanged: (m) => setState(() => _mode = m),
+        segments: [
+          for (final m in available)
+            (value: m, label: _modeLabels[m] ?? m, icon: null),
+        ],
+      ),
+    );
 
     final chips = Wrap(spacing: 8, runSpacing: 4, children: [
-      Chip(
-        label: Text(modeLabel, style: const TextStyle(fontSize: 11)),
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-      ),
       if (entryFee > 0)
         Chip(
           label: Text('Entry \$${entryFee.formatBet()}',
@@ -1489,6 +1543,7 @@ class _LowNetViewState extends State<_LowNetView> {
 
     if (results.isEmpty) {
       return ListView(padding: const EdgeInsets.all(16), children: [
+        selector,
         chips,
         const SizedBox(height: 24),
         const Center(child: Text('No scores yet.')),
@@ -1503,9 +1558,10 @@ class _LowNetViewState extends State<_LowNetView> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
       children: [
+        selector,
         chips,
         const SizedBox(height: 10),
-        _headerRow(theme, showNet: showNet),
+        _headerRow(theme, showNet: showNet, adjLabel: adjLabel),
         for (final r in results)
           ..._playerBlock(theme, r as Map<String, dynamic>,
               showNet: showNet, showMoney: anyPayout),
@@ -1539,7 +1595,8 @@ class _LowNetViewState extends State<_LowNetView> {
   static const double _rankW = 26;
   static const double _colW  = 44;
 
-  Widget _headerRow(ThemeData theme, {required bool showNet}) {
+  Widget _headerRow(ThemeData theme,
+      {required bool showNet, String adjLabel = 'Net'}) {
     final style = theme.textTheme.labelSmall?.copyWith(
         fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
     Widget h(String t, double w) =>
@@ -1550,9 +1607,9 @@ class _LowNetViewState extends State<_LowNetView> {
         h('#', _rankW),
         const SizedBox(width: 4),
         Expanded(child: Text('Player', style: style)),
-        // Net-to-par first, Gross-to-par second (the raw totals are dropped —
-        // they're not meaningful mid-round). Gross-only rounds show just Gross.
-        if (showNet) h('Net', _colW),
+        // Adjusted-to-par first (Net or Strokes-off per the selected mode),
+        // Gross-to-par second. Raw totals are dropped — not meaningful mid-round.
+        if (showNet) h(adjLabel, _colW),
         h('Gross', _colW),
         h('Thru', _colW),
         const SizedBox(width: 24), // chevron gutter
@@ -1707,6 +1764,14 @@ class _LowNetViewState extends State<_LowNetView> {
       final v = e.value is int ? e.value as int : int.tryParse('${e.value}');
       if (k != null && v != null) holePars[k] = v;
     }
+    // Stroke index per hole for the scorecard's SI header row (12A).
+    final holeSi = <int, int>{};
+    for (final e
+        in (widget.data['hole_stroke_index'] as Map? ?? const {}).entries) {
+      final k = e.key is int ? e.key as int : int.tryParse('${e.key}');
+      final v = e.value is int ? e.value as int : int.tryParse('${e.value}');
+      if (k != null && v != null) holeSi[k] = v;
+    }
     final inPlay = (widget.data['holes_in_play'] as List?)
         ?.map((e) => e as int)
         .toList();
@@ -1720,13 +1785,14 @@ class _LowNetViewState extends State<_LowNetView> {
     }
     return strokePlayHoleStrip(
       context,
-      holes:       (row['holes'] as List? ?? const []),
-      holesInPlay: inPlay,
-      holePars:    holePars,
-      showNet:     showNet,
-      netTotal:    row['total_net'] as int?,
-      netToPar:    row['net_to_par'] as int?,
-      strokePlan:  showNet ? strokePlan : null,
+      holes:          (row['holes'] as List? ?? const []),
+      holesInPlay:    inPlay,
+      holePars:       holePars,
+      holeStrokeIndex: holeSi,
+      showNet:        showNet,
+      netTotal:       row['total_net'] as int?,
+      netToPar:       row['net_to_par'] as int?,
+      strokePlan:     showNet ? strokePlan : null,
     );
   }
 }

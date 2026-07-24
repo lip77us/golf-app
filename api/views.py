@@ -873,7 +873,53 @@ def _build_leaderboard(round_obj: Round) -> dict:
         logging.getLogger(__name__).exception(
             'round_settlement failed for round %s', round_obj.id)
 
+    # 12A — tell the Stroke Play tab whether any game uses Strokes-Off (so the
+    # client shows the SO selector) and whether the round's PRIMARY game is SO
+    # (so it defaults to SO). Computed here because this is the only place that
+    # sees every game's block, and their handicap mode sits in several shapes
+    # (top-level 'handicap_mode', nested 'handicap.mode', or per-foursome).
+    # See docs/features/12a-scorecard-display-modes.md §2–§3.
+    if 'low_net_round' in games:
+        so_available = any(_block_uses_so(b) for b in games.values())
+        primary_slug = round_obj.primary_game
+        primary_is_so = (_block_uses_so(games.get(primary_slug))
+                         if primary_slug else
+                         games['low_net_round'].get('handicap_mode') == 'strokes_off')
+        games['low_net_round']['so_available'] = so_available
+        games['low_net_round']['primary_game_is_so'] = bool(primary_is_so)
+
     return games
+
+
+def _summary_is_so(summ) -> bool:
+    """A single game-summary dict is Strokes-Off, in either handicap shape."""
+    if not isinstance(summ, dict):
+        return False
+    if summ.get('handicap_mode') == 'strokes_off':
+        return True
+    h = summ.get('handicap')
+    return isinstance(h, dict) and h.get('mode') == 'strokes_off'
+
+
+def _block_uses_so(block) -> bool:
+    """True if a leaderboard game block is scored Strokes-Off.
+
+    Game summaries expose the handicap mode in several shapes: top-level
+    'handicap_mode', nested 'handicap': {'mode': ...}, OR per-group, where each
+    group's summary is nested in a list. Games disagree on that list's key
+    ('foursomes' vs 'by_group' vs …), so scan every list-of-dicts that carries a
+    'summary'. Missing this is what hid the SO tab for a Points 5-3-1 round."""
+    if not isinstance(block, dict):
+        return False
+    if _summary_is_so(block):
+        return True
+    for value in block.values():
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if isinstance(item, dict) and _summary_is_so(item.get('summary')):
+                return True
+    return False
 
 
 def _leaderboard_active_games(round_obj, games_dict: dict) -> list:
