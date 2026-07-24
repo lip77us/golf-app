@@ -86,7 +86,7 @@ class LowNetModesTests(TestCase):
     def test_strokes_off_relative_to_low(self):
         s = low_net_round_summary(self.round)
         so = self._by_name(s['modes']['strokes_off']['results'])
-        # Low handicapper (Ann, 0) gets nothing; Bea gets 18 − 0 = 18.
+        # Low handicapper (Ann, 0) gets nothing; Bea gets 18 − 0 = 18 (at 100%).
         self.assertEqual(so['Ann']['total_strokes'], 0)
         self.assertEqual(so['Bea']['total_strokes'], 18)
 
@@ -101,3 +101,24 @@ class LowNetModesTests(TestCase):
         for key in ('gross', 'strokes_off'):
             for r in s['modes'][key]['results']:
                 self.assertIsNone(r['payout'], f'{key} should have no payouts')
+
+
+class LowNetStrokesOffPercentTests(TestCase):
+    """SO scales by net % like the rest of the app (nassau/multi_skins/points_531).
+    This closes a prior gap where low_net's SO ignored net %."""
+
+    def test_strokes_off_scales_by_net_percent(self):
+        course = make_course('SO90')
+        tee = make_tee(course=course, holes=DEFAULT_HOLES)
+        rnd = make_round(course=course, handicap_mode='strokes_off',
+                         net_percent=90, active_games=['low_net_round'])
+        make_foursome(rnd, [('Lo', 0), ('Hi', 18)], tee=tee)
+        LowNetRoundConfig.objects.create(
+            round=rnd, handicap_mode='strokes_off', net_percent=90)
+
+        s = low_net_round_summary(rnd)
+        so = {r['name']: r for r in s['modes']['strokes_off']['results']}
+        # round((18 − 0) × 90/100) = round(16.2) = 16
+        self.assertEqual(so['Lo']['total_strokes'], 0)
+        self.assertEqual(so['Hi']['total_strokes'], 16)
+        self.assertEqual(s['modes']['strokes_off']['net_percent'], 90)

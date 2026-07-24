@@ -123,8 +123,9 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                         s = strokes_fns[fs.pk](eff, m.tee, hole)
                     else:  # STROKES_OFF
                         si = m.tee.hole(hole).get('stroke_index', 18)
-                        s = _strokes_on_hole(
-                            max(0, m.playing_handicap - low_hcp), si)
+                        so_diff = round(
+                            max(0, m.playing_handicap - low_hcp) * net_percent / 100)
+                        s = _strokes_on_hole(so_diff, si)
                     if s > 0:
                         plan[hole] = s
             totals[m.player_id] = {
@@ -166,7 +167,10 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
             if membership.tee_id is None:
                 continue
             si       = membership.tee.hole(hole).get('stroke_index', 18)
-            so       = max(0, membership.playing_handicap - low_hcp)
+            # Scale the strokes-off differential by net_percent, matching the
+            # app-wide SO allowance (nassau.py / multi_skins.py / points_531.py).
+            so       = round(
+                max(0, membership.playing_handicap - low_hcp) * net_percent / 100)
             adjusted = hs['gross_score'] - _strokes_on_hole(so, si)
 
         # ── Net-double-bogey cap (round-level toggle) ───────────────────────
@@ -396,9 +400,9 @@ def low_net_round_summary(round_obj) -> dict:
     The `modes` block (design 12A — docs/features/12a-scorecard-display-modes.md)
     lets the client re-rank the Stroke Play tab between Gross / Net / Strokes-off
     WITHOUT refetching. Only the configured mode carries payouts; the other two
-    are display-only views. SO uses the app's existing strokes-off-relative-to-
-    low math (unchanged; not scaled by net %). `results` mirrors the configured
-    mode for older clients that don't read `modes`.
+    are display-only views. SO is relative-to-low AND scaled by net %, matching
+    the app-wide SO allowance (nassau / multi_skins / points_531). `results`
+    mirrors the configured mode for older clients that don't read `modes`.
     """
     try:
         config          = round_obj.low_net_config
