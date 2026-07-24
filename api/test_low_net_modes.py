@@ -142,3 +142,21 @@ class LowNetStrokesOffPercentTests(TestCase):
         lb = _build_leaderboard(rnd)['low_net_round']
         self.assertTrue(lb['so_available'])
         self.assertTrue(lb['primary_game_is_so'])
+
+    def test_points_531_so_round_exposes_selector(self):
+        """Regression: a Strokes-Off Points 5-3-1 game (no side game) must light
+        up the SO selector. Its handicap sits under a 'by_group' list, not
+        'foursomes' — the shape _block_uses_so originally missed."""
+        from services.points_531 import setup_points_531
+        course = make_course('Pts531')
+        tee = make_tee(course=course, holes=DEFAULT_HOLES)
+        rnd = make_round(course=course, active_games=['points_531'])
+        rnd.primary_game = 'points_531'
+        rnd.save(update_fields=['primary_game'])
+        fs = make_foursome(rnd, [('A', 0), ('B', 9), ('C', 18)], tee=tee)
+        setup_points_531(fs, handicap_mode='strokes_off', net_percent=100)
+
+        lb = _build_leaderboard(rnd)
+        self.assertIn('low_net_round', lb)         # auto-added Stroke Play tab
+        self.assertTrue(lb['low_net_round']['so_available'])
+        self.assertTrue(lb['low_net_round']['primary_game_is_so'])

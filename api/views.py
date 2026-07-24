@@ -891,24 +891,33 @@ def _build_leaderboard(round_obj: Round) -> dict:
     return games
 
 
+def _summary_is_so(summ) -> bool:
+    """A single game-summary dict is Strokes-Off, in either handicap shape."""
+    if not isinstance(summ, dict):
+        return False
+    if summ.get('handicap_mode') == 'strokes_off':
+        return True
+    h = summ.get('handicap')
+    return isinstance(h, dict) and h.get('mode') == 'strokes_off'
+
+
 def _block_uses_so(block) -> bool:
-    """True if a leaderboard game block is scored Strokes-Off, checking the
-    several shapes game summaries use: top-level 'handicap_mode', nested
-    'handicap': {'mode': ...}, or per-foursome 'summary' carrying either."""
+    """True if a leaderboard game block is scored Strokes-Off.
+
+    Game summaries expose the handicap mode in several shapes: top-level
+    'handicap_mode', nested 'handicap': {'mode': ...}, OR per-group, where each
+    group's summary is nested in a list. Games disagree on that list's key
+    ('foursomes' vs 'by_group' vs …), so scan every list-of-dicts that carries a
+    'summary'. Missing this is what hid the SO tab for a Points 5-3-1 round."""
     if not isinstance(block, dict):
         return False
-    if block.get('handicap_mode') == 'strokes_off':
+    if _summary_is_so(block):
         return True
-    h = block.get('handicap')
-    if isinstance(h, dict) and h.get('mode') == 'strokes_off':
-        return True
-    for fs in block.get('foursomes', []) or []:
-        summ = fs.get('summary') if isinstance(fs, dict) else None
-        if isinstance(summ, dict):
-            if summ.get('handicap_mode') == 'strokes_off':
-                return True
-            fh = summ.get('handicap')
-            if isinstance(fh, dict) and fh.get('mode') == 'strokes_off':
+    for value in block.values():
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if isinstance(item, dict) and _summary_is_so(item.get('summary')):
                 return True
     return False
 
