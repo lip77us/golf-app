@@ -179,6 +179,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 12),
               CourseSearchField(
                 selected: null,
+                // Picking the home course itself — a home suggestion here would
+                // be circular, so suppress it (recents + search still show).
+                suggestHome: false,
                 onSelected: (c) {
                   Navigator.of(sheetCtx).pop();
                   apply(courseId: c.id, label: c.name);

@@ -195,17 +195,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             _playerGroups[authPlayer.id] = 1;
           }
 
-          // Default to the golfer's home course (if set and present in this
-          // account's course list). The course search field / pencil can still
-          // swap it; tee suggestions are applied on the tee step as usual.
-          if (_selectedCourse == null && authPlayer.homeCourseId != null) {
-            for (final c in _courses) {
-              if (c.id == authPlayer.homeCourseId) {
-                _selectedCourse = c;
-                break;
-              }
-            }
-          }
+          // 9a — never pre-select a course. The home course is offered as an
+          // explicit "Play here" suggestion inside CourseSearchField instead, so
+          // nobody tees off somewhere they didn't actually pick. Next stays
+          // disabled until _selectedCourse is set by a real tap.
         }
 
         _loading = false;
