@@ -1,4 +1,4 @@
-from django.db import migrations, models
+from django.db import migrations
 
 
 class Migration(migrations.Migration):
@@ -32,22 +32,11 @@ class Migration(migrations.Migration):
                     reverse_sql=migrations.RunSQL.noop,
                 ),
             ],
-            state_operations=[
-                migrations.AddField(
-                    model_name='rydercuproundconfig',
-                    name='format_declarations',
-                    field=models.JSONField(
-                        blank=True,
-                        null=True,
-                        help_text=(
-                            'Declared game formats for this round. '
-                            'Used to compute total_possible before foursomes are '
-                            'configured. Each entry: {"game_type": str, "units": int, '
-                            '"point_value": str}. units = foursomes for nassau/quota/'
-                            'singles; pairings for irish_rumble.'
-                        ),
-                    ),
-                ),
-            ],
+            # No state operations: 0018 now adds format_declarations to Django's
+            # migration state (as a state-only AddField). Re-adding it here would
+            # raise "field already exists" on a fresh migrate. This migration is
+            # therefore database-only — it exists solely to create the column on a
+            # legacy local DB where 0018 was applied under its older content.
+            state_operations=[],
         ),
     ]
