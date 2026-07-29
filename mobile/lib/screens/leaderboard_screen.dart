@@ -8687,7 +8687,11 @@ class _TripleCupOverviewView extends StatelessWidget {
     } else if (m.result == 'halved') {
       leaderColor = theme.colorScheme.onSurfaceVariant;
     } else {
-      final margin = m.holes.isNotEmpty ? m.holes.last.margin : 0;
+      // Last *played* hole — the backend emits unplayed segment holes up front
+      // whose margin is 0, so m.holes.last could wrongly read all-square and
+      // leave a live lead uncoloured.
+      final played = m.holes.where((h) => h.winner != null).toList();
+      final margin = played.isEmpty ? 0 : played.last.margin;
       leaderColor = margin > 0
           ? t1Color
           : margin < 0
@@ -8709,11 +8713,12 @@ class _TripleCupOverviewView extends StatelessWidget {
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 3),
         Row(children: [
-          // Orange (team 2) left, Blue (team 1) right.
+          // Blue (team 1) left, Orange (team 2) right — matches the standings
+          // header above and score entry (team 1 first; colour marks the team).
           Expanded(
-            child: Text(m.team2.shorts.join(' & '),
+            child: Text(m.team1.shorts.join(' & '),
                 style: TextStyle(
-                    color: t2Color, fontSize: 12, fontWeight: FontWeight.w600)),
+                    color: t1Color, fontSize: 12, fontWeight: FontWeight.w600)),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -8724,12 +8729,13 @@ class _TripleCupOverviewView extends StatelessWidget {
                     fontWeight: FontWeight.bold)),
           ),
           Expanded(
-            child: Text(m.team1.shorts.join(' & '),
+            child: Text(m.team2.shorts.join(' & '),
                 textAlign: TextAlign.right,
                 style: TextStyle(
-                    color: t1Color, fontSize: 12, fontWeight: FontWeight.w600)),
+                    color: t2Color, fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ]),
+
       ]),
     );
   }

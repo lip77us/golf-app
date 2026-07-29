@@ -7744,9 +7744,12 @@ class _TripleCupMatchCard extends StatelessWidget {
       case 'halved': return Colors.grey.shade700;
     }
     // In progress: tint by current leader so "1 UP thru 3" reads in
-    // the leading team's color.  AS thru N stays neutral.
+    // the leading team's color.  AS thru N stays neutral.  Use the last
+    // *played* hole — the backend emits unplayed segment holes up front whose
+    // margin is 0, so holes.last read all-square and left every live match grey.
     if (match.status == 'in_progress') {
-      final margin = match.holes.isNotEmpty ? match.holes.last.margin : 0;
+      final played = match.holes.where((h) => h.winner != null).toList();
+      final margin = played.isEmpty ? 0 : played.last.margin;
       if (margin > 0) return t1Color;
       if (margin < 0) return t2Color;
       return Theme.of(ctx).colorScheme.onSurfaceVariant;

@@ -158,13 +158,13 @@ class _OverallScoreCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _scorePill(theme, 'Orange', summary.team2Points,
-                    isLeader: summary.team2Points > summary.team1Points),
+                _scorePill(theme, 'Blue', summary.team1Points,
+                    isLeader: summary.team1Points > summary.team2Points),
                 Text('—',
                     style: theme.textTheme.headlineSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
-                _scorePill(theme, 'Blue', summary.team1Points,
-                    isLeader: summary.team1Points > summary.team2Points),
+                _scorePill(theme, 'Orange', summary.team2Points,
+                    isLeader: summary.team2Points > summary.team1Points),
               ],
             ),
             const SizedBox(height: 6),
@@ -220,11 +220,27 @@ class _MatchCard extends StatelessWidget {
       _           => 'Singles',
     };
     final winner = match.winnerLabel;
-    final statusColor = match.result == 'team1'
-        ? kTripleCupTeam1Color
-        : match.result == 'team2'
-            ? kTripleCupTeam2Color
-            : theme.colorScheme.onSurfaceVariant;
+    // Colour the status by whoever leads: the final winner once decided, else
+    // the sign of the CURRENT margin so a live "1 UP" shows the leading team's
+    // colour. (Was neutral grey for every in-progress match, giving no
+    // indication of who was up.) Use the last *played* hole — the backend emits
+    // unplayed segment holes up front whose margin is 0.
+    final Color statusColor;
+    if (match.result == 'team1') {
+      statusColor = kTripleCupTeam1Color;
+    } else if (match.result == 'team2') {
+      statusColor = kTripleCupTeam2Color;
+    } else if (match.result == 'halved') {
+      statusColor = theme.colorScheme.onSurfaceVariant;
+    } else {
+      final played = match.holes.where((h) => h.winner != null).toList();
+      final margin = played.isEmpty ? 0 : played.last.margin;
+      statusColor = margin > 0
+          ? kTripleCupTeam1Color
+          : margin < 0
+              ? kTripleCupTeam2Color
+              : theme.colorScheme.onSurfaceVariant;
+    }
 
     return Card(
       elevation: 0,
@@ -262,12 +278,13 @@ class _MatchCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // Team rosters + status line — Orange (team 2) left, Blue (team 1)
-            // right, per the app convention (blue renders second).
+            // Team rosters + status line — Blue (team 1) left, Orange (team 2)
+            // right, matching the standings header, the leaderboard cup tab, and
+            // score entry (team 1 renders first; colour, not order, marks teams).
             Row(children: [
-              Expanded(child: _teamLine(theme, 'Orange', match.team2.players,
-                  highlight: match.result == 'team2',
-                  color: kTripleCupTeam2Color)),
+              Expanded(child: _teamLine(theme, 'Blue', match.team1.players,
+                  highlight: match.result == 'team1',
+                  color: kTripleCupTeam1Color)),
               const SizedBox(width: 8),
               SizedBox(
                 width: 92,
@@ -282,10 +299,10 @@ class _MatchCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(child: _teamLine(theme, 'Blue', match.team1.players,
-                  highlight: match.result == 'team1',
+              Expanded(child: _teamLine(theme, 'Orange', match.team2.players,
+                  highlight: match.result == 'team2',
                   alignRight: true,
-                  color: kTripleCupTeam1Color)),
+                  color: kTripleCupTeam2Color)),
             ]),
 
             if (match.holes.any((h) => h.winner != null)) ...[
