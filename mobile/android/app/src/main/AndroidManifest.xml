@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for the release/main build to reach the API. Flutter only adds
+         this automatically to the debug/profile manifests. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="golf_mobile"
+        android:label="Halved"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
