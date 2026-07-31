@@ -123,6 +123,51 @@ class RabbitTests(TestCase):
         assert money[self.sn['Cal']] == -9.0, money
         assert abs(sum(money.values())) < 1e-9
 
+    def test_extra_holes_use_full_round_allocation(self):
+        # Strokes-Off + per-segment + extras: the fixed 1-6/7-12/13-18 spread no
+        # longer fits once early locks shift the legs.  Standard legs re-spread
+        # over their REAL holes; extra legs fall back to full-round strokes.
+        rnd = make_round(self.tee.course)
+        rnd.bet_unit = 6
+        rnd.save(update_fields=['bet_unit'])
+        fs = make_foursome(
+            rnd,
+            [('Ann', 0), ('Ben', 0), ('Cal', 9)],   # Cal gets 9 strokes-off
+            tee=self.tee,
+        )
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        A, B, C = pid['Ann'], pid['Ben'], pid['Cal']
+        setup_rabbit(fs, handicap_mode='strokes_off', accumulate=True,
+                     num_segments=3, extra_rabbits=True,
+                     handicap_allocation='per_segment')
+        # Ann laps the field on every hole, so each leg locks at its 4th hole:
+        # legs 1-4, 5-8, 9-12, then extra 13-16 (locks) and extra 17-18.
+        for h in range(1, 19):
+            submit_hole(fs, h, [(A, 3), (B, 6), (C, 6)])
+        calculate_rabbit(fs)
+        s = rabbit_summary(fs)
+
+        segs = [(x['start_hole'], x['end_hole'], x['is_extra']) for x in s['segments']]
+        assert segs == [(1, 4, False), (5, 8, False), (9, 12, False),
+                        (13, 16, True), (17, 18, True)], segs
+
+        def net(hole, player_id):
+            h = next(x for x in s['holes'] if x['hole'] == hole)
+            return next(e['net_score'] for e in h['entries']
+                        if e['player_id'] == player_id)
+
+        # Extra leg (13-16): full-round allocation — Cal's 9 strokes fall on the
+        # nine lowest stroke-index holes (SI 1-9).  Hole 14 is SI 2 (stroke →
+        # net 5); hole 13 is SI 10 (NO stroke → net 6), even though the old
+        # fixed-segment spread would have put a stroke there.
+        assert net(14, C) == 5, s['holes']
+        assert net(13, C) == 6, s['holes']
+        # Standard leg 1 (1-4) re-spread over its real holes — hardest three are
+        # SI 3/7/9 = holes 2/1/4 (stroke → net 5); hole 3 (SI 15) gets none.
+        assert net(4, C) == 5
+        assert net(3, C) == 6
+
     def test_extra_rabbits_forced_off_in_stop_mode(self):
         g = setup_rabbit(self.fs, handicap_mode='gross', accumulate=False,
                          num_segments=3, extra_rabbits=True)

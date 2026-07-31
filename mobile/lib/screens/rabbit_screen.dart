@@ -37,6 +37,24 @@ String _fmtMoney(double v) {
   return '$sign\$${v.abs().toStringAsFixed(2)}';
 }
 
+/// Handicap strokes a player took on a hole, read straight from the Rabbit
+/// summary (gross − net).  This is the ONLY allocation-faithful source: a
+/// per-segment strokes-off game spreads strokes differently on the standard
+/// legs vs. the (full-round) extra legs, so a client-side re-derivation would
+/// disagree with what the engine actually scored — which is exactly the bug
+/// where a dot went missing on an extra hole.  Returns null when the hole isn't
+/// scored in the summary yet (the caller falls back to a live estimate).
+int? _summaryStrokes(RabbitHole? hole, int playerId) {
+  if (hole == null) return null;
+  for (final e in hole.entries) {
+    if (e.playerId != playerId) continue;
+    final g = e.gross, net = e.netScore;
+    if (g != null && net != null) return (g - net).clamp(0, 9);
+    return null;
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -820,6 +838,10 @@ class _HoleScoreCard extends StatelessWidget {
 
   int _strokesForHole(Membership m, ScorecardHole? h) {
     if (h == null || _mode == 'gross') return 0;
+    // Prefer the engine's own allocation (gross − net) once the hole is scored,
+    // so the dots match how the rabbit was actually decided.
+    final fromSummary = _summaryStrokes(holeInfo, m.player.id);
+    if (fromSummary != null) return fromSummary;
     final entry = h.scoreFor(m.player.id);
     final mySi  = entry?.strokeIndex ?? h.strokeIndex;
     if (_mode == 'net') {
@@ -1200,6 +1222,11 @@ class _RabbitGrid extends StatelessWidget {
   /// by hole" grid shows where each player's strokes fall over the whole round.
   int _strokesFor(Membership m, int hole) {
     if (_mode == 'gross') return 0;
+    // Engine-faithful strokes (gross − net) for scored holes; the client-side
+    // estimate below only fills in holes not yet in the summary.
+    final rh = summary.holes.where((x) => x.hole == hole).firstOrNull;
+    final fromSummary = _summaryStrokes(rh, m.player.id);
+    if (fromSummary != null) return fromSummary;
     final entry = scorecard.holeData(hole)?.scoreFor(m.player.id);
     final si    = entry?.strokeIndex ?? scorecard.holeData(hole)?.strokeIndex ?? 18;
     if (_mode == 'net') {

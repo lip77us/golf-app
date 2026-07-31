@@ -151,6 +151,62 @@ def _build_rabbit_so_seg_index(foursome, seg_lists, net_percent: int = 100) -> d
     return score_index
 
 
+def _build_dynamic_so_index(foursome, segments, num_segments, net_percent) -> dict:
+    """Strokes-Off net index re-spread over the ACTUAL (post-early-lock) legs.
+
+    Standard legs keep the per-segment share of a player's strokes-off allowance
+    (own_phcp − low, at net_percent, split evenly across num_segments — earliest
+    legs absorb the remainder), placed on the hardest holes WITHIN that leg's real
+    hole range.  Extra legs (leftover holes that don't line up with a segment)
+    fall back to the plain full-round allocation, so each of their holes gets a
+    stroke iff its round-wide stroke index earns one — the same allocation the
+    play-screen dots draw.  A leg is independently handicapped (Sixes-style), so a
+    player's total strokes across all legs can exceed their round allowance.
+    """
+    gross = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
+    full  = _build_so_score_index(foursome, net_percent=net_percent)
+    memberships = [m for m in _real_members(foursome) if m.tee_id is not None]
+    phcps = [m.playing_handicap for m in memberships
+             if m.playing_handicap is not None]
+    low = min(phcps) if phcps else 0
+
+    std_legs   = [s['holes'] for s in segments if not s['is_extra']]
+    extra_legs = [s['holes'] for s in segments if s['is_extra']]
+
+    idx = {pid: dict(holes) for pid, holes in gross.items()}
+    for m in memberships:
+        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
+        if so <= 0:
+            continue
+        per = idx.get(m.player_id)
+        if per is None:
+            continue
+        # Standard legs: per-segment share on the hardest holes within each leg.
+        base, rem = divmod(so, max(1, num_segments))
+        for j, holes in enumerate(std_legs):
+            share = base + (1 if j < rem else 0)
+            if share <= 0 or not holes:
+                continue
+            ranked = sorted(
+                holes, key=lambda h: m.tee.hole(h).get('stroke_index', 18))
+            for k in range(share):
+                h = ranked[k % len(ranked)]
+                if per.get(h) is not None:
+                    per[h] -= 1
+        # Extra legs: adopt the full-round net for those holes.
+        fu = full.get(m.player_id, {})
+        for holes in extra_legs:
+            for h in holes:
+                if h in fu:
+                    per[h] = fu[h]
+    return idx
+
+
+def _same_scored(a: dict, b: dict, real_ids) -> bool:
+    """True when two net indexes agree on every player's scored holes."""
+    return all(a.get(pid) == b.get(pid) for pid in real_ids)
+
+
 def _score_index(game, foursome, seg_lists=None) -> dict:
     if game.handicap_mode == HandicapMode.STROKES_OFF:
         # Per-segment spread only differs from round-wide when there's more
@@ -246,20 +302,11 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
     minus the teams.
     """
     dynamic = bool(game.extra_rabbits) and bool(game.accumulate)
-    rows: list = []
-    segments: list = []
-    fully_scored = 0
-
-    def _finish(index, is_extra, holes, holder, lead):
-        complete = bool(holes) and all(
-            _hole_nets(score_index, real_ids, h)[0] for h in holes)
-        value = (bet_unit / 2.0) if (is_extra and len(holes) == 1) else bet_unit
-        segments.append({
-            'index': index, 'is_extra': is_extra, 'holes': list(holes),
-            'holder': holder, 'lead': lead, 'complete': complete, 'value': value,
-        })
 
     if not dynamic:
+        rows: list = []
+        segments: list = []
+        fully_scored = 0
         for idx, seg_holes in enumerate(
                 segment_hole_lists(foursome, game.num_segments), start=1):
             holder, lead = None, 0
@@ -273,45 +320,89 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
                 rows.append(RabbitHoleResult(
                     game=game, hole_number=hole, segment=idx,
                     winner_id=winner, holder_id=holder, lead=lead, event=event))
-            _finish(idx, False, seg_holes, holder, lead)
-        return rows, segments, fully_scored
+            complete = bool(seg_holes) and all(
+                _hole_nets(score_index, real_ids, h)[0] for h in seg_holes)
+            segments.append({
+                'index': idx, 'is_extra': False, 'holes': list(seg_holes),
+                'holder': holder, 'lead': lead, 'complete': complete,
+                'value': bet_unit,
+            })
+        return rows, segments, fully_scored, score_index
 
     # ── Dynamic: early-lock scheduling + extra rabbits ───────────────────────
     positions = play_order(foursome.round, foursome)
     n         = len(positions)
     seg_len   = max(1, n // max(1, game.num_segments))
-    pos, seg_idx, standard_done, extras_done = 0, 0, 0, 0
-    while pos < n:
-        seg_idx += 1
-        is_extra = standard_done >= game.num_segments
-        # Standard legs + the FIRST extra can lock; the 2nd extra runs to the end
-        # (the cap — at most two extras / five legs at three segments).
-        can_lock   = not (is_extra and extras_done >= 1)
-        window_end = (n - 1) if is_extra else min(pos + seg_len - 1, n - 1)
-        holder, lead, end_pos, cur = None, 0, window_end, pos
-        while cur <= window_end:
-            hole = positions[cur]
-            complete, nets = _hole_nets(score_index, real_ids, hole)
-            if complete:
-                fully_scored += 1
-                holder, lead, event, winner = _advance_rabbit(
-                    holder, lead, nets, real_ids, True)
-                rows.append(RabbitHoleResult(
-                    game=game, hole_number=hole, segment=seg_idx,
-                    winner_id=winner, holder_id=holder, lead=lead, event=event))
-                if can_lock and holder is not None and lead > (window_end - cur):
-                    end_pos = cur                  # decided early → leg ends here
-                    break
-            cur += 1
-        _finish(seg_idx, is_extra, positions[pos:end_pos + 1], holder, lead)
-        pos = end_pos + 1
-        if is_extra:
-            extras_done += 1
-        else:
-            standard_done += 1
-        if standard_done >= game.num_segments and (pos >= n or extras_done >= 2):
-            break
-    return rows, segments, fully_scored
+
+    def schedule(idx):
+        """Walk the play order under net index `idx`, locking each leg early once
+        the holder's lead exceeds the holes left, and running leftover holes as
+        extra rabbits.  Returns (rows, segments, fully_scored)."""
+        rows: list = []
+        segments: list = []
+        fully = 0
+        pos, seg_idx, standard_done, extras_done = 0, 0, 0, 0
+        while pos < n:
+            seg_idx += 1
+            is_extra = standard_done >= game.num_segments
+            # Standard legs + the FIRST extra can lock; the 2nd extra runs to the
+            # end (the cap — at most two extras / five legs at three segments).
+            can_lock   = not (is_extra and extras_done >= 1)
+            window_end = (n - 1) if is_extra else min(pos + seg_len - 1, n - 1)
+            holder, lead, end_pos, cur = None, 0, window_end, pos
+            while cur <= window_end:
+                hole = positions[cur]
+                complete, nets = _hole_nets(idx, real_ids, hole)
+                if complete:
+                    fully += 1
+                    holder, lead, event, winner = _advance_rabbit(
+                        holder, lead, nets, real_ids, True)
+                    rows.append(RabbitHoleResult(
+                        game=game, hole_number=hole, segment=seg_idx,
+                        winner_id=winner, holder_id=holder, lead=lead, event=event))
+                    if can_lock and holder is not None and lead > (window_end - cur):
+                        end_pos = cur              # decided early → leg ends here
+                        break
+                cur += 1
+            leg_holes = positions[pos:end_pos + 1]
+            leg_complete = bool(leg_holes) and all(
+                _hole_nets(idx, real_ids, h)[0] for h in leg_holes)
+            value = (bet_unit / 2.0) if (is_extra and len(leg_holes) == 1) else bet_unit
+            segments.append({
+                'index': seg_idx, 'is_extra': is_extra, 'holes': list(leg_holes),
+                'holder': holder, 'lead': lead, 'complete': leg_complete,
+                'value': value,
+            })
+            pos = end_pos + 1
+            if is_extra:
+                extras_done += 1
+            else:
+                standard_done += 1
+            if standard_done >= game.num_segments and (pos >= n or extras_done >= 2):
+                break
+        return rows, segments, fully
+
+    net_index = score_index
+    rows, segments, fully_scored = schedule(net_index)
+
+    # Strokes-Off + per-segment: the fixed 1-6/7-12/13-18 spread doesn't match the
+    # legs once early locks shift their holes, so RE-allocate over each leg's real
+    # holes — standard legs keep their per-segment share (hardest holes within the
+    # leg), extra legs use full-round strokes (their leftover holes don't map to a
+    # segment).  Re-allocation can move an outright winner and shift a lock, so
+    # iterate to a fixpoint (bounded).
+    if (game.handicap_mode == HandicapMode.STROKES_OFF
+            and game.handicap_allocation == RabbitGame.ALLOC_PER_SEGMENT
+            and game.num_segments > 1):
+        for _ in range(5):
+            realloc = _build_dynamic_so_index(
+                foursome, segments, game.num_segments, game.net_percent or 100)
+            if _same_scored(realloc, net_index, real_ids):
+                break
+            net_index = realloc
+            rows, segments, fully_scored = schedule(net_index)
+
+    return rows, segments, fully_scored, net_index
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +430,7 @@ def calculate_rabbit(foursome) -> list:
     holes_total = sum(len(s) for s in seg_lists)
     bet_unit    = float(foursome.round.bet_unit)
 
-    rows, _segments, fully_scored = _run_rabbit(
+    rows, _segments, fully_scored, _ = _run_rabbit(
         game, foursome, score_index, real_ids, bet_unit)
 
     if rows:
@@ -398,8 +489,13 @@ def rabbit_summary(foursome) -> dict:
     score_index = _score_index(game, foursome, seg_lists)
 
     # The leg schedule (fixed, or early-lock + extras when extra_rabbits is on).
-    rows, segments, _ = _run_rabbit(
+    # `net_index` is the allocation actually scored — for a per-segment SO game
+    # with extras it's the re-spread (standard legs per-leg, extras full-round),
+    # so the displayed nets (and thus the stroke dots derived from gross − net)
+    # match what decided each hole.
+    rows, segments, _, net_index = _run_rabbit(
         game, foursome, score_index, real_ids, bet_unit)
+    score_index = net_index
     seg_of      = {h: s['index'] for s in segments for h in s['holes']}
 
     # Each leg (standard or extra) is its own Sixes-style match worth `value`
