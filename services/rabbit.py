@@ -20,11 +20,11 @@ hole.
 Segments: num_segments is 1 (one 18-hole match), 2 (two 9-hole matches),
 or 3 (three 6-hole matches).  The rabbit resets at the start of each
 segment.  Whoever holds the rabbit when a segment ends wins that segment;
-a segment that ends loose is a push.
+a leg that ends loose is halved (no money changes hands).
 
 Settlement: bet_unit is the per-segment stake (Sixes-style — each segment is
 its own match, NOT a share of one pot).  On every completed segment the holder
-collects bet_unit from each non-holder; a push moves no money.  So the table
+collects bet_unit from each non-holder; a halved leg moves no money.  So the table
 nets to zero and winning every segment is worth (n-1) × num_segments units.
 
 Handicap modes mirror Points 5-3-1 / Wolf (Net %, Gross, Strokes-Off-Low).
@@ -404,7 +404,7 @@ def rabbit_summary(foursome) -> dict:
 
     # Each leg (standard or extra) is its own Sixes-style match worth `value`
     # (bet_unit, or bet_unit/2 for a single-hole extra); the holder at the leg's
-    # end collects `value` from each opponent, and a leg left loose pushes.
+    # end collects `value` from each opponent, and a leg left loose is halved (no money).
     n     = len(real_ids) or 3
     entry = bet_unit
 

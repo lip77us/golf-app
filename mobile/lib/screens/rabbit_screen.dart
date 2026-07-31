@@ -1143,7 +1143,7 @@ class _SegmentStrip extends StatelessWidget {
                   Expanded(
                     child: Text(
                       s.holderShort == null
-                          ? (s.complete ? 'Loose (push)' : 'Loose')
+                          ? (s.complete ? 'Halved' : 'Loose')
                           : 'Rabbit: ${s.holderShort}'
                             '${summary.accumulate ? ' (+${s.lead})' : ''}'
                             '${s.isHalf ? ' · ½' : ''}',

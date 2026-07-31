@@ -4986,7 +4986,7 @@ class _RabbitGroupCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       holder == null
-                          ? (complete ? 'Loose (push)' : 'Loose')
+                          ? (complete ? 'Halved' : 'Loose')
                           : 'Rabbit: $holder',
                       style: theme.textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w600,
