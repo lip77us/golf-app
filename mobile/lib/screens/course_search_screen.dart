@@ -267,7 +267,7 @@ class _CourseDetailSheetState extends State<_CourseDetailSheet> {
   Future<void> _loadDetail() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final courseId = widget.course['id'] as int;
+      final courseId = widget.course['id'] as Object;  // int or alphanumeric slug
       final detail   = await widget.client.getGolfApiCourse(courseId);
       if (mounted) setState(() { _detail = detail; _loading = false; });
     } catch (e) {
@@ -281,7 +281,7 @@ class _CourseDetailSheetState extends State<_CourseDetailSheet> {
           .toList();
 
   Future<void> _import({bool forceUpdate = false}) async {
-    final courseId = widget.course['id'] as int;
+    final courseId = widget.course['id'] as Object;  // int or alphanumeric slug
     Navigator.of(context).pop();
 
     final scaffoldMsg = ScaffoldMessenger.of(context);

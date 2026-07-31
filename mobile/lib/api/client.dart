@@ -1795,8 +1795,10 @@ class ApiClient {
   }
 
   /// Fetch full course detail (tees + holes) from GolfCourseAPI.
-  /// [courseId] is the numeric id returned by searchGolfApiCourses.
-  Future<Map<String, dynamic>> getGolfApiCourse(int courseId) async {
+  /// [courseId] is the id returned by searchGolfApiCourses (may be an
+  /// alphanumeric slug, not just a number).
+  Future<Map<String, dynamic>> getGolfApiCourse(Object courseId) async {
+    // Object, not int — GolfCourseAPI ids can be alphanumeric slugs.
     final data = await _get('/courses/golf-api/courses/$courseId/');
     return data as Map<String, dynamic>;
   }
