@@ -112,32 +112,35 @@ class TeeAssignmentList extends StatelessWidget {
               // aligned so it lines up with the per-player tee pickers below —
               // and has room not to ellipsize on a narrow phone (13 mini).
               Row(children: [
-                Expanded(
-                  child: Row(children: [
-                    Text(title(sex),
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold)),
-                    if (group.length > 1) ...[
-                      const SizedBox(width: 12),
-                      Text('Set all',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold)),
-                    ],
-                  ]),
-                ),
-                if (group.length > 1)
-                  TeePicker(
-                    tees: groupTees,
-                    value: commonId,
-                    hint: 'Choose',
-                    warn: false, // null here = "mixed", not an error
-                    onChanged: (id) {
-                      for (final p in group) {
-                        onChanged(p.id, id);
-                      }
-                    },
+                Text(title(sex),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                if (group.length > 1) ...[
+                  const SizedBox(width: 12),
+                  Text('Set all',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 12),
+                  // The picker (not the label) absorbs the leftover width and
+                  // ellipsizes via isExpanded — so the title + "Set all" stay
+                  // intact instead of the row overflowing on a narrow phone
+                  // (13 mini overflowed the label by 11px the old way).
+                  Expanded(
+                    child: TeePicker(
+                      tees: groupTees,
+                      value: commonId,
+                      hint: 'Choose',
+                      warn: false, // null here = "mixed", not an error
+                      isExpanded: true,
+                      onChanged: (id) {
+                        for (final p in group) {
+                          onChanged(p.id, id);
+                        }
+                      },
+                    ),
                   ),
+                ],
               ]),
               const Divider(),
               ...group.map(playerRow),
