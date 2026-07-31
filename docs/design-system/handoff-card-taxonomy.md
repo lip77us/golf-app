@@ -99,7 +99,7 @@ Grouping is by what a card *is*, not which folder it lives in — `patterns/sixe
 ### Scorecards & leaderboards
 
 - `patterns/leaderboard-cards.html` — **Leaderboard cards** · Stroke Play net-to-par table + Skins group card
-- `patterns/leaderboard-rabbit.html` — **Leaderboard — Rabbit** · _RabbitGroupCard — holder/money rows + segment breakdown
+- `patterns/leaderboard-rabbit.html` — **Leaderboard — Rabbit** · _RabbitGroupCard — holder/money rows, segment breakdown, by-hole winner strip
 - `patterns/leaderboard-sixes.html` — **Leaderboard — Sixes** · _SixesGroupCard — per-match score + who-beat-whom + money
 - `patterns/leaderboard-stroke-play.html` — **Leaderboard — Stroke Play** · _LowNetView — Gross / Net / Strokes-off selector (SO only when the round plays it)
 - `patterns/scorecard-grid.html` — **ScorecardGrid** · Full-group landscape scorecard — handicap dots, net, OUT/IN/TOT
