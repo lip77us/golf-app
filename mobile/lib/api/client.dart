@@ -802,7 +802,11 @@ class ApiClient {
   /// upserts the shared catalog, clones into the account) and return the
   /// account's own CourseInfo.
   Future<CourseInfo> importApiCourse(String golfApiId) async {
-    final res = await importCourse(int.parse(golfApiId));
+    // GolfCourseAPI ids are NOT always numeric — some are alphanumeric slugs
+    // (e.g. California GC is '1z16d412').  Pass the id through as-is; parsing it
+    // to an int threw a FormatException before the request even left the app,
+    // which surfaced as the useless generic "couldn't add that course".
+    final res = await importCourse(golfApiId);
     return CourseInfo.fromJson(res['course'] as Map<String, dynamic>);
   }
 
@@ -1803,7 +1807,7 @@ class ApiClient {
   /// Throws ApiException(409) when the course exists and forceUpdate=false —
   /// the caller can catch that and offer the user Skip / Update.
   Future<Map<String, dynamic>> importCourse(
-    int courseId, {
+    Object courseId, {          // int OR alphanumeric GolfCourseAPI id string
     bool forceUpdate = false,
   }) async {
     final body = <String, dynamic>{
