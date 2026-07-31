@@ -1511,6 +1511,7 @@ class RabbitSetupSerializer(serializers.Serializer):
     handicap_allocation = serializers.ChoiceField(
                         choices=['per_segment', 'full_round'],
                         default='per_segment')
+    extra_rabbits = serializers.BooleanField(default=False)
 
 
 class WolfOrderSerializer(serializers.Serializer):

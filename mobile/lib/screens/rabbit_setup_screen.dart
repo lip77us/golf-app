@@ -25,6 +25,7 @@ import '../widgets/stake_field.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/max_liability_note.dart';
 
 class RabbitSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -55,6 +56,9 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
   // Strokes-Off allocation (Sixes-style): 'per_segment' (default) spreads a
   // golfer's SO strokes across the matches; 'full_round' allocates round-wide.
   String _allocation = 'per_segment';
+  // Extra rabbits (accumulate only): leftover holes from an early-decided leg
+  // start a fresh rabbit; a single-hole rabbit pays half the stake.
+  bool _extraRabbits = false;
 
   final TextEditingController _betCtrl = TextEditingController();
   /// True once a stake is entered or "no stakes" is chosen (gates Start).
@@ -112,8 +116,9 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
           _mode       = _summary!.handicapMode;
           _netPercent = _summary!.netPercent;
           _accumulate = _summary!.accumulate;
-          _segments   = _summary!.numSegments;
-          _allocation = _summary!.handicapAllocation;
+          _segments     = _summary!.numSegments;
+          _allocation   = _summary!.handicapAllocation;
+          _extraRabbits = _summary!.extraRabbits;
         }
         // Keep the segment count valid for this round's hole count (a 9-hole
         // round can't split into 2 even matches; fall back to 3 → three 3-hole
@@ -182,6 +187,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
         accumulate:   _accumulate,
         numSegments:  _segments,
         handicapAllocation: _allocation,
+        extraRabbits: _extraRabbits && _accumulate,
       );
       rp.setRabbitSummary(summary);
 
@@ -356,10 +362,37 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
           ),
           const SizedBox(height: 16),
 
+          // ── Extra rabbit (accumulate only) ──
+          if (_accumulate) ...[
+            _Card(
+              title: 'Extra rabbit',
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _extraRabbits,
+                onChanged: (v) => setState(() => _extraRabbits = v),
+                title: const Text('Play the leftover holes for another rabbit'),
+                subtitle: const Text(
+                    'When a leg is decided early (the leader can’t be caught) the '
+                    'next leg starts on the very next hole, and any leftover holes '
+                    'start a fresh rabbit — up to two. A rabbit that runs a single '
+                    'hole is worth half the stake.'),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           StakeField(
             controller: _betCtrl,
             label: 'Stake per match',
             onChanged: (v) => setState(() => _stakeOk = v)),
+          MaxLiabilityNote(
+            bet: double.tryParse(_betCtrl.text.trim()) ?? 0,
+            multiple: _segments + (_accumulate && _extraRabbits ? 2 : 0),
+            detail: (_accumulate && _extraRabbits)
+                ? 'up to ${_segments + 2} rabbits — a leg can decide early and '
+                    'its leftover starts another'
+                : (_segments == 1 ? 'one rabbit' : '$_segments rabbits'),
+          ),
           const SizedBox(height: 16),
 
           _Card(

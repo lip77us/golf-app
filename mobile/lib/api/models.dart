@@ -3024,33 +3024,45 @@ class RabbitPlayerTotal {
 /// One segment of a Rabbit match (1×18, 2×9, or 3×6).
 class RabbitSegment {
   final int    index;
+  final bool   isExtra;     // an "extra rabbit" spun off an early-decided leg
   final int    startHole;
   final int    endHole;
+  final int    holes;       // leg length; a 1-hole extra pays half
   final int?   holderId;
   final String? holderShort;
   final int    lead;
   final bool   complete;
+  final double value;       // per-leg stake (bet_unit, or bet_unit/2 for 1-hole extra)
   final double payout;
 
   const RabbitSegment({
     required this.index,
+    this.isExtra = false,
     required this.startHole,
     required this.endHole,
+    this.holes = 0,
     required this.holderId,
     required this.holderShort,
     required this.lead,
     required this.complete,
+    this.value = 0.0,
     required this.payout,
   });
 
+  /// True when this leg is a single-hole extra (settles for half the stake).
+  bool get isHalf => isExtra && holes == 1;
+
   factory RabbitSegment.fromJson(Map<String, dynamic> j) => RabbitSegment(
         index:       j['index']       as int? ?? 0,
+        isExtra:     j['is_extra']    as bool? ?? false,
         startHole:   j['start_hole']  as int? ?? 0,
         endHole:     j['end_hole']    as int? ?? 0,
+        holes:       j['holes']       as int? ?? 0,
         holderId:    j['holder_id']   as int?,
         holderShort: j['holder_short'] as String?,
         lead:        j['lead']        as int? ?? 0,
         complete:    j['complete']    as bool? ?? false,
+        value:       (j['value']      as num?)?.toDouble() ?? 0.0,
         payout:      (j['payout']     as num?)?.toDouble() ?? 0.0,
       );
 }
@@ -3139,6 +3151,8 @@ class RabbitSummary {
   final int    numSegments;
   /// 'per_segment' | 'full_round' — only meaningful for strokes_off + >1 segment.
   final String handicapAllocation;
+  /// Extra-rabbit legs enabled (accumulate only).
+  final bool   extraRabbits;
   final List<RabbitSegment>     segments;
   final List<RabbitPlayerTotal> players;
   final List<RabbitHole>        holes;
@@ -3159,6 +3173,7 @@ class RabbitSummary {
     required this.accumulate,
     required this.numSegments,
     this.handicapAllocation = 'per_segment',
+    this.extraRabbits = false,
     required this.segments,
     required this.players,
     required this.holes,
@@ -3192,6 +3207,7 @@ class RabbitSummary {
       handicapMode: hcap['mode']        as String? ?? 'net',
       netPercent:   hcap['net_percent'] as int?    ?? 100,
       handicapAllocation: hcap['allocation'] as String? ?? 'per_segment',
+      extraRabbits: j['extra_rabbits'] as bool? ?? false,
       accumulate:   j['accumulate']   as bool? ?? true,
       numSegments:  j['num_segments'] as int?  ?? 1,
       segments: (j['segments'] as List? ?? [])

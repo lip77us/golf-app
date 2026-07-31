@@ -839,6 +839,16 @@ class RabbitGame(models.Model):
                                   "'full_round' allocates round-wide by stroke "
                                   "index.  No effect for net/gross or 1 segment.",
                     )
+    extra_rabbits = models.BooleanField(
+                        default=False,
+                        help_text="ACCUMULATE ONLY.  When a leg is decided early "
+                                  "(the holder's lead exceeds the holes left), the "
+                                  "next leg starts on the very next hole and any "
+                                  "leftover holes start a fresh 'extra' rabbit "
+                                  "(loose) — up to two.  A rabbit that runs a "
+                                  "single hole is worth half the stake.  No effect "
+                                  "in stop-after-one mode.",
+                    )
     created_at    = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

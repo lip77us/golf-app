@@ -55,6 +55,106 @@ class RabbitTests(TestCase):
         g = setup_rabbit(self.fs, handicap_mode='strokes_off', num_segments=3)
         assert g.handicap_allocation == 'per_segment'
 
+    # ── Extra rabbits (accumulate-only, Sixes-style early lock) ───────────────
+
+    def _abc(self):
+        return self.pid['Ann'], self.pid['Ben'], self.pid['Cal']
+
+    def test_extra_rabbit_full_leg_after_early_lock(self):
+        setup_rabbit(self.fs, handicap_mode='gross', accumulate=True,
+                     num_segments=3, extra_rabbits=True)
+        A, B, C = self._abc()
+        # Leg 1 (holes 1-6): Ann wins 1-4 → lead 4 > holes-left → locks at hole 4.
+        for h in range(1, 5):
+            submit_hole(self.fs, h, [(A, 3), (B, 4), (C, 4)])
+        # Leg 2 (holes 5-10): all halved → loose → push.
+        for h in range(5, 11):
+            submit_hole(self.fs, h, [(A, 4), (B, 4), (C, 4)])
+        # Leg 3 (holes 11-16): Ben grabs 11, holds → Ben.
+        submit_hole(self.fs, 11, [(A, 4), (B, 3), (C, 4)])
+        for h in range(12, 17):
+            submit_hole(self.fs, h, [(A, 4), (B, 4), (C, 4)])
+        # Extra (holes 17-18): Ann grabs 17, holds → full-value extra (2 holes).
+        submit_hole(self.fs, 17, [(A, 3), (B, 4), (C, 4)])
+        submit_hole(self.fs, 18, [(A, 4), (B, 4), (C, 4)])
+        calculate_rabbit(self.fs)
+        s = rabbit_summary(self.fs)
+        segs = s['segments']
+        assert len(segs) == 4, [(x['start_hole'], x['end_hole'], x['is_extra']) for x in segs]
+        assert segs[0]['end_hole'] == 4 and segs[0]['holder_short'] == self.sn['Ann']
+        assert segs[1]['holder_short'] is None                    # push
+        assert segs[2]['holder_short'] == self.sn['Ben']
+        ex = segs[3]
+        assert ex['is_extra'] and ex['start_hole'] == 17 and ex['end_hole'] == 18
+        assert ex['value'] == 6.0 and ex['holder_short'] == self.sn['Ann'], ex
+        money = {p['short_name']: p['money'] for p in s['players']}
+        assert money[self.sn['Ann']] == 18.0, money
+        assert money[self.sn['Ben']] == 0.0, money
+        assert money[self.sn['Cal']] == -18.0, money
+        assert abs(sum(money.values())) < 1e-9
+
+    def test_single_hole_extra_pays_half(self):
+        setup_rabbit(self.fs, handicap_mode='gross', accumulate=True,
+                     num_segments=3, extra_rabbits=True)
+        A, B, C = self._abc()
+        # Leg 1 (holes 1-6): halve 1-2 (loose), Ann grabs 3 then wins 4-5.  Lead
+        # is 2 with 2 to play at hole 4 (2 > 2 is false → no lock) and 3 with 1
+        # to play at hole 5 (3 > 1 → locks) — a five-hole leg.
+        for h in (1, 2):
+            submit_hole(self.fs, h, [(A, 4), (B, 4), (C, 4)])
+        for h in (3, 4, 5):
+            submit_hole(self.fs, h, [(A, 3), (B, 4), (C, 4)])
+        # Legs 2 & 3 (holes 6-11, 12-17): all halved → push.
+        for h in range(6, 18):
+            submit_hole(self.fs, h, [(A, 4), (B, 4), (C, 4)])
+        # Extra = hole 18 only → HALF value.
+        submit_hole(self.fs, 18, [(A, 3), (B, 4), (C, 4)])
+        calculate_rabbit(self.fs)
+        s = rabbit_summary(self.fs)
+        ex = s['segments'][-1]
+        assert ex['is_extra'] and ex['holes'] == 1
+        assert ex['start_hole'] == 18 and ex['end_hole'] == 18
+        assert ex['value'] == 3.0, ex          # half of bet_unit 6
+        assert ex['holder_short'] == self.sn['Ann'] and ex['payout'] == 6.0, ex
+        money = {p['short_name']: p['money'] for p in s['players']}
+        # Leg1 Ann +12 ; extra (half) Ann +6 → +18 ; Ben −6−3 ; Cal −6−3.
+        assert money[self.sn['Ann']] == 18.0, money
+        assert money[self.sn['Ben']] == -9.0, money
+        assert money[self.sn['Cal']] == -9.0, money
+        assert abs(sum(money.values())) < 1e-9
+
+    def test_extra_rabbits_forced_off_in_stop_mode(self):
+        g = setup_rabbit(self.fs, handicap_mode='gross', accumulate=False,
+                         num_segments=3, extra_rabbits=True)
+        assert g.extra_rabbits is False           # accumulate-only
+        for h in range(1, 19):
+            submit_hole(self.fs, h, [(self.pid['Ann'], 3),
+                                     (self.pid['Ben'], 4), (self.pid['Cal'], 4)])
+        calculate_rabbit(self.fs)
+        s = rabbit_summary(self.fs)
+        assert len(s['segments']) == 3
+        assert all(not x['is_extra'] for x in s['segments'])
+
+    def test_extra_on_but_no_early_lock_stays_three_legs(self):
+        setup_rabbit(self.fs, handicap_mode='gross', accumulate=True,
+                     num_segments=3, extra_rabbits=True)
+        A, B, C = self._abc()
+        submit_hole(self.fs, 1, [(A, 3), (B, 4), (C, 4)])     # Ann grabs
+        for h in range(2, 7):
+            submit_hole(self.fs, h, [(A, 4), (B, 4), (C, 4)])  # halves → lead 1
+        submit_hole(self.fs, 7, [(A, 4), (B, 3), (C, 4)])     # Ben grabs
+        for h in range(8, 13):
+            submit_hole(self.fs, h, [(A, 4), (B, 4), (C, 4)])
+        submit_hole(self.fs, 13, [(A, 4), (B, 4), (C, 3)])    # Cal grabs
+        for h in range(14, 19):
+            submit_hole(self.fs, h, [(A, 4), (B, 4), (C, 4)])
+        calculate_rabbit(self.fs)
+        s = rabbit_summary(self.fs)
+        assert len(s['segments']) == 3
+        assert all(not x['is_extra'] for x in s['segments'])
+        holders = [x['holder_short'] for x in s['segments']]
+        assert holders == [self.sn['Ann'], self.sn['Ben'], self.sn['Cal']], holders
+
     # ── Catch / hold / free ──────────────────────────────────────────────────
 
     def test_first_outright_win_catches_rabbit(self):

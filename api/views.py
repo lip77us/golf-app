@@ -5460,6 +5460,7 @@ class RabbitSetupView(APIView):
             accumulate          = d.get('accumulate', True),
             num_segments        = d.get('num_segments', 1),
             handicap_allocation = d.get('handicap_allocation', 'per_segment'),
+            extra_rabbits       = d.get('extra_rabbits', False),
         )
         calculate_rabbit(foursome)
         return Response(rabbit_summary(foursome), status=status.HTTP_201_CREATED)

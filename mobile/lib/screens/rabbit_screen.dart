@@ -1131,8 +1131,13 @@ class _SegmentStrip extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(children: [
                   SizedBox(
-                    width: 96,
-                    child: Text('Holes ${s.startHole}–${s.endHole}',
+                    width: 118,
+                    child: Text(
+                        s.isExtra
+                            ? (s.holes == 1
+                                ? 'Hole ${s.startHole} · extra'
+                                : 'Holes ${s.startHole}–${s.endHole} · extra')
+                            : 'Holes ${s.startHole}–${s.endHole}',
                         style: theme.textTheme.bodySmall),
                   ),
                   Expanded(
@@ -1140,7 +1145,8 @@ class _SegmentStrip extends StatelessWidget {
                       s.holderShort == null
                           ? (s.complete ? 'Loose (push)' : 'Loose')
                           : 'Rabbit: ${s.holderShort}'
-                            '${summary.accumulate ? ' (+${s.lead})' : ''}',
+                            '${summary.accumulate ? ' (+${s.lead})' : ''}'
+                            '${s.isHalf ? ' · ½' : ''}',
                       style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: s.holderShort == null

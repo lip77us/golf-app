@@ -58,6 +58,7 @@ def setup_rabbit(
     accumulate: bool = True,
     num_segments: int = 1,
     handicap_allocation: str = RabbitGame.ALLOC_PER_SEGMENT,
+    extra_rabbits: bool = False,
 ) -> 'RabbitGame':
     """Create (or replace) the Rabbit game for a foursome.  Safe to call
     again — the prior game + its hole results are dropped first."""
@@ -69,6 +70,9 @@ def setup_rabbit(
                     if handicap_allocation in
                     (RabbitGame.ALLOC_PER_SEGMENT, RabbitGame.ALLOC_FULL_ROUND)
                     else RabbitGame.ALLOC_PER_SEGMENT)
+    # Extra rabbits are an accumulate-only mechanic (stop-after-one never decides
+    # a leg early), so force the flag off outside accumulate mode.
+    extras = bool(extra_rabbits) and bool(accumulate)
 
     return RabbitGame.objects.create(
         foursome            = foursome,
@@ -77,6 +81,7 @@ def setup_rabbit(
         accumulate          = bool(accumulate),
         num_segments        = num_segments,
         handicap_allocation = allocation,
+        extra_rabbits       = extras,
         status              = MatchStatus.PENDING,
     )
 
@@ -190,6 +195,125 @@ def _outright_winner(nets: dict):
     return leaders[0] if len(leaders) == 1 else None
 
 
+def _hole_nets(score_index, real_ids, hole):
+    """(complete, nets) for a hole across every real player."""
+    nets = {}
+    for pid in real_ids:
+        s = score_index.get(pid, {}).get(hole)
+        if s is None:
+            return False, {}
+        nets[pid] = s
+    return True, nets
+
+
+def _advance_rabbit(holder, lead, nets, real_ids, accumulate):
+    """Apply one fully-scored hole to the (holder, lead) state.  Returns
+    (holder, lead, event, winner_id) — the single source of truth for the
+    catch / hold / free transitions (shared by the fixed and dynamic paths)."""
+    winner = _outright_winner(nets)
+    if holder is None:
+        if winner is not None:
+            return winner, 1, RabbitHoleResult.GRAB, winner
+        return None, 0, RabbitHoleResult.TIE, winner
+    opp_low = min(nets[pid] for pid in real_ids if pid != holder)
+    if opp_low < nets[holder]:
+        lead -= 1
+        if lead <= 0:
+            return None, 0, RabbitHoleResult.FREED, winner
+        return holder, lead, RabbitHoleResult.BEATEN, winner
+    if nets[holder] < opp_low:
+        if accumulate:
+            return holder, lead + 1, RabbitHoleResult.EXTEND, winner
+        return holder, lead, RabbitHoleResult.HELD, winner   # stop-mode: capped
+    return holder, lead, RabbitHoleResult.HELD, winner        # tie for low
+
+
+def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
+    """Compute the leg schedule + per-hole state from the current scores.
+
+    Returns (rows, segments, fully_scored):
+      * rows      — unsaved RabbitHoleResult instances (scored holes only)
+      * segments  — [{index, is_extra, holes:[hole,...], holder, lead, complete,
+                      value}]; value is the per-leg stake (bet_unit, or bet_unit/2
+                      for a single-hole extra).
+      * fully_scored — count of fully-scored holes.
+
+    With extra_rabbits OFF the legs are the fixed segment_hole_lists ranges —
+    byte-for-byte the original behaviour.  With it ON (accumulate only) each leg
+    ends the moment the holder's lead exceeds the holes remaining in it, the next
+    leg starts on the very next hole, and leftover holes after the standard legs
+    form up to two extra rabbits (loose start) — Sixes' close-out/extra mechanic,
+    minus the teams.
+    """
+    dynamic = bool(game.extra_rabbits) and bool(game.accumulate)
+    rows: list = []
+    segments: list = []
+    fully_scored = 0
+
+    def _finish(index, is_extra, holes, holder, lead):
+        complete = bool(holes) and all(
+            _hole_nets(score_index, real_ids, h)[0] for h in holes)
+        value = (bet_unit / 2.0) if (is_extra and len(holes) == 1) else bet_unit
+        segments.append({
+            'index': index, 'is_extra': is_extra, 'holes': list(holes),
+            'holder': holder, 'lead': lead, 'complete': complete, 'value': value,
+        })
+
+    if not dynamic:
+        for idx, seg_holes in enumerate(
+                segment_hole_lists(foursome, game.num_segments), start=1):
+            holder, lead = None, 0
+            for hole in seg_holes:
+                complete, nets = _hole_nets(score_index, real_ids, hole)
+                if not complete:
+                    continue                       # skip unscored; state carries
+                fully_scored += 1
+                holder, lead, event, winner = _advance_rabbit(
+                    holder, lead, nets, real_ids, game.accumulate)
+                rows.append(RabbitHoleResult(
+                    game=game, hole_number=hole, segment=idx,
+                    winner_id=winner, holder_id=holder, lead=lead, event=event))
+            _finish(idx, False, seg_holes, holder, lead)
+        return rows, segments, fully_scored
+
+    # ── Dynamic: early-lock scheduling + extra rabbits ───────────────────────
+    positions = play_order(foursome.round, foursome)
+    n         = len(positions)
+    seg_len   = max(1, n // max(1, game.num_segments))
+    pos, seg_idx, standard_done, extras_done = 0, 0, 0, 0
+    while pos < n:
+        seg_idx += 1
+        is_extra = standard_done >= game.num_segments
+        # Standard legs + the FIRST extra can lock; the 2nd extra runs to the end
+        # (the cap — at most two extras / five legs at three segments).
+        can_lock   = not (is_extra and extras_done >= 1)
+        window_end = (n - 1) if is_extra else min(pos + seg_len - 1, n - 1)
+        holder, lead, end_pos, cur = None, 0, window_end, pos
+        while cur <= window_end:
+            hole = positions[cur]
+            complete, nets = _hole_nets(score_index, real_ids, hole)
+            if complete:
+                fully_scored += 1
+                holder, lead, event, winner = _advance_rabbit(
+                    holder, lead, nets, real_ids, True)
+                rows.append(RabbitHoleResult(
+                    game=game, hole_number=hole, segment=seg_idx,
+                    winner_id=winner, holder_id=holder, lead=lead, event=event))
+                if can_lock and holder is not None and lead > (window_end - cur):
+                    end_pos = cur                  # decided early → leg ends here
+                    break
+            cur += 1
+        _finish(seg_idx, is_extra, positions[pos:end_pos + 1], holder, lead)
+        pos = end_pos + 1
+        if is_extra:
+            extras_done += 1
+        else:
+            standard_done += 1
+        if standard_done >= game.num_segments and (pos >= n or extras_done >= 2):
+            break
+    return rows, segments, fully_scored
+
+
 # ---------------------------------------------------------------------------
 # Calculator
 # ---------------------------------------------------------------------------
@@ -213,65 +337,10 @@ def calculate_rabbit(foursome) -> list:
     seg_lists   = segment_hole_lists(foursome, game.num_segments)
     score_index = _score_index(game, foursome, seg_lists)
     holes_total = sum(len(s) for s in seg_lists)
-    accumulate  = game.accumulate
+    bet_unit    = float(foursome.round.bet_unit)
 
-    rows = []
-    fully_scored = 0
-    for seg_index, seg_holes in enumerate(seg_lists, start=1):
-        holder = None     # player_id or None (loose)
-        lead   = 0
-        for hole in seg_holes:          # play order within the segment
-            nets = {}
-            complete = True
-            for pid in real_ids:
-                s = score_index.get(pid, {}).get(hole)
-                if s is None:
-                    complete = False
-                    break
-                nets[pid] = s
-            if not complete:
-                continue          # skip unscored holes; state carries
-            fully_scored += 1
-
-            winner = _outright_winner(nets)   # outright low, else None
-
-            if holder is None:
-                # Loose — an outright win catches the rabbit.
-                if winner is not None:
-                    holder, lead = winner, 1
-                    event = RabbitHoleResult.GRAB
-                else:
-                    event = RabbitHoleResult.TIE
-            else:
-                opp_low = min(nets[pid] for pid in real_ids if pid != holder)
-                if opp_low < nets[holder]:
-                    # Rabbit beaten — lead drops; freed at 0.
-                    lead -= 1
-                    if lead <= 0:
-                        holder, lead = None, 0
-                        event = RabbitHoleResult.FREED
-                    else:
-                        event = RabbitHoleResult.BEATEN
-                elif nets[holder] < opp_low:
-                    # Rabbit wins the hole.
-                    if accumulate:
-                        lead += 1
-                        event = RabbitHoleResult.EXTEND
-                    else:
-                        event = RabbitHoleResult.HELD   # capped at 1
-                else:
-                    # Rabbit tied for low with an opponent — no change.
-                    event = RabbitHoleResult.HELD
-
-            rows.append(RabbitHoleResult(
-                game        = game,
-                hole_number = hole,
-                segment     = seg_index,
-                winner_id   = winner,
-                holder_id   = holder,
-                lead        = lead,
-                event       = event,
-            ))
+    rows, _segments, fully_scored = _run_rabbit(
+        game, foursome, score_index, real_ids, bet_unit)
 
     if rows:
         RabbitHoleResult.objects.bulk_create(rows)
@@ -308,15 +377,17 @@ def rabbit_summary(foursome) -> dict:
             'status'      : 'pending',
             'handicap'    : {'mode': HandicapMode.STROKES_OFF, 'net_percent': 100,
                              'allocation': RabbitGame.ALLOC_PER_SEGMENT},
-            'accumulate'  : True,
-            'num_segments': 1,
-            'segments'    : [],
-            'players'     : [],
-            'holes'       : [],
-            'current'     : {'holder_id': None, 'holder_short': None,
-                             'lead': 0, 'segment': 1},
-            'money'       : {'bet_unit': bet_unit, 'entry': bet_unit,
-                             'pot': bet_unit, 'seg_value': bet_unit},
+            'accumulate'   : True,
+            'num_segments' : 1,
+            'extra_rabbits': False,
+            'segments'     : [],
+            'players'      : [],
+            'holes'        : [],
+            'current'      : {'holder_id': None, 'holder_short': None,
+                              'lead': 0, 'segment': 1},
+            'money'        : {'bet_unit': bet_unit, 'entry': bet_unit,
+                              'pot': bet_unit, 'seg_value': bet_unit,
+                              'max_liability': bet_unit},
         }
 
     members  = _real_members(foursome)
@@ -325,18 +396,17 @@ def rabbit_summary(foursome) -> dict:
     order       = play_order(foursome.round, foursome)   # holes in play order
     seg_lists   = segment_hole_lists(foursome, game.num_segments)
     score_index = _score_index(game, foursome, seg_lists)
-    seg_of      = _segment_of_map(seg_lists)
-    nseg        = len(seg_lists) or 1
 
-    # bet_unit is the per-segment stake (Sixes-style — each segment is its own
-    # match, not a share of one pot).  On every completed segment each loser
-    # pays the holder one full bet_unit and the holder collects from all
-    # opponents.  Winning every segment nets +(n-1)·num_segments; losing every
-    # segment nets −num_segments.  Push segments (loose at the end) move nothing.
-    n         = len(real_ids) or 3
-    entry     = bet_unit
-    pot       = entry * nseg          # max a single player can lose (all segments)
-    per_loser = entry                 # each loser pays a full stake per lost segment
+    # The leg schedule (fixed, or early-lock + extras when extra_rabbits is on).
+    rows, segments, _ = _run_rabbit(
+        game, foursome, score_index, real_ids, bet_unit)
+    seg_of      = {h: s['index'] for s in segments for h in s['holes']}
+
+    # Each leg (standard or extra) is its own Sixes-style match worth `value`
+    # (bet_unit, or bet_unit/2 for a single-hole extra); the holder at the leg's
+    # end collects `value` from each opponent, and a leg left loose pushes.
+    n     = len(real_ids) or 3
+    entry = bet_unit
 
     # Gross + par for display.
     gross_index: dict = {}
@@ -367,7 +437,7 @@ def rabbit_summary(foursome) -> dict:
         p = by_pid.get(pid)
         return p.short_name if p else None
 
-    results = {r.hole_number: r for r in game.hole_results.all()}
+    results = {r.hole_number: r for r in rows}
 
     # Per-hole grid, in play order.
     holes_out: list = []
@@ -399,35 +469,35 @@ def rabbit_summary(foursome) -> dict:
             'entries'     : entries,
         })
 
-    # Segments: holder at the last scored hole; complete when all holes scored.
+    # Segments — one entry per leg (standard + any extras), settled zero-sum.
     money_by_pid = {pid: 0.0 for pid in real_ids}
     seg_out: list = []
-    for i, seg_holes in enumerate(seg_lists, start=1):
-        complete  = bool(seg_holes) and all(
-            results.get(h) is not None for h in seg_holes)
-        # Holder is the state after the last scored hole in the segment (play
-        # order), so a partial / wraparound segment settles on its real last hole.
-        holder_id, lead = None, 0
-        for h in reversed(seg_holes):
-            if results.get(h) is not None:
-                holder_id = results[h].holder_id
-                lead      = results[h].lead
-                break
+    max_at_risk  = 0.0
+    for s in segments:
+        seg_holes = s['holes']
+        holder_id = s['holder']
+        lead      = s['lead']
+        complete  = s['complete']
+        value     = s['value']
+        max_at_risk += value
         payout = 0.0
         if complete and holder_id is not None:
-            payout = per_loser * (n - 1)        # holder's net gain this segment
+            payout = value * (n - 1)            # holder's net gain this leg
             money_by_pid[holder_id] += payout
             for pid in real_ids:
                 if pid != holder_id:
-                    money_by_pid[pid] -= per_loser
+                    money_by_pid[pid] -= value
         seg_out.append({
-            'index'       : i,
+            'index'       : s['index'],
+            'is_extra'    : s['is_extra'],
             'start_hole'  : seg_holes[0] if seg_holes else None,
             'end_hole'    : seg_holes[-1] if seg_holes else None,
+            'holes'       : len(seg_holes),
             'holder_id'   : holder_id,
             'holder_short': short(holder_id) if holder_id else None,
             'lead'        : lead,
             'complete'    : complete,
+            'value'       : value,
             'payout'      : payout,        # to the holder; others split −payout
         })
 
@@ -458,17 +528,24 @@ def rabbit_summary(foursome) -> dict:
         'status'      : game.status,
         'handicap'    : {'mode': game.handicap_mode, 'net_percent': game.net_percent,
                          'allocation': game.handicap_allocation},
-        'accumulate'  : game.accumulate,
-        'num_segments': game.num_segments,
-        'segments'    : seg_out,
-        'players'     : players_out,
-        'holes'       : holes_out,
-        'current'     : {
+        'accumulate'   : game.accumulate,
+        'num_segments' : game.num_segments,
+        'extra_rabbits': game.extra_rabbits,
+        'segments'     : seg_out,
+        'players'      : players_out,
+        'holes'        : holes_out,
+        'current'      : {
             'holder_id'   : cur_holder,
             'holder_short': short(cur_holder) if cur_holder else None,
             'lead'        : cur_lead,
             'segment'     : cur_seg,
         },
-        'money'       : {'bet_unit': entry, 'entry': entry, 'pot': pot,
-                         'seg_value': entry},
+        'money'        : {
+            'bet_unit'     : entry,
+            'entry'        : entry,
+            'seg_value'    : entry,
+            'pot'          : max_at_risk,     # sum of the actual legs' values
+            'max_liability': (game.num_segments +
+                              (2 if game.extra_rabbits else 0)) * entry,
+        },
     }

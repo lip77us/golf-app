@@ -1,10 +1,28 @@
 # Extra Rabbit — spec
 
-Status: **proposed** (not yet built). Kickoff brief for the "extra rabbit"
-option on the Rabbit game. Deliberately modelled on how **Sixes** handles
+Status: **implemented** (backend + mobile). Modelled on how **Sixes** handles
 early close-outs and extra matches (`services/sixes.py`), **minus the teams** —
 Rabbit is an individual game, so an extra rabbit simply starts *loose* and all
 three players race for it, with no team-assignment step.
+
+**What shipped**
+- `RabbitGame.extra_rabbits` (migration `games/0059`); forced off outside
+  accumulate mode in `setup_rabbit`. `RabbitSetupSerializer` + view pass it.
+- `services/rabbit.py`: shared `_advance_rabbit` + `_run_rabbit` scheduler.
+  Toggle **off** ⇒ the original fixed-segment behaviour (regression-guarded).
+  Toggle **on** (accumulate) ⇒ a leg locks when `lead > holes_left`, the next
+  leg starts on the next hole, leftover holes form up to two extra rabbits; a
+  single-hole extra settles for `bet_unit/2`. Zero-sum preserved.
+- Summary: `segments[]` gain `is_extra`, `holes`, `value`; top-level
+  `extra_rabbits`; `money.max_liability`.
+- Mobile: setup "Extra rabbit" toggle (accumulate-only) + `MaxLiabilityNote`;
+  `RabbitSummary.extraRabbits`, `RabbitSegment.isExtra/holes/value/isHalf`; the
+  play-screen segment strip labels extras and marks the ½ single-hole rabbit.
+- Tests: `scoring/tests/test_rabbit.py` — early-lock extra (full), single-hole
+  extra (half), stop-mode force-off, no-early-lock stays 3 legs (13 green).
+
+Open decisions from §9 resolved: default **off**; extra-hole SO uses the
+round-wide remainder; no separate tie-breaker hole.
 
 Related: `services/rabbit.py`, `games/models.py` (`RabbitGame`,
 `RabbitHoleResult`), the Design cards `screens/rabbit-setup.html`,
