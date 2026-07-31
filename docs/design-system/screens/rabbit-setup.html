@@ -43,6 +43,20 @@
   .funcheck{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px;color:var(--deepPine)}
   .box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--cardBorder)}
   .rules{color:var(--muted);font-size:12.5px;line-height:1.5}
+  .toggle{display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px solid var(--cardBorder)}
+  .toggle:first-of-type{border-top:none}
+  .toggle .txt{flex:1}
+  .toggle .t{font-weight:600;font-size:14px}
+  .toggle .d{color:var(--muted);font-size:12px;line-height:1.4;margin-top:2px}
+  .switch{width:44px;height:26px;border-radius:999px;background:var(--pine);position:relative;flex:none;margin-top:2px}
+  .switch.off{background:var(--cardBorder)}
+  .switch::after{content:"";position:absolute;right:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff}
+  .switch.off::after{right:auto;left:3px}
+  .rule{display:flex;gap:8px;align-items:flex-start;border-top:1px solid var(--cardBorder);margin-top:10px;padding-top:10px;color:var(--muted);font-size:12px;line-height:1.45}
+  .rule .half{color:var(--pine);font-weight:700}
+  .rule b{color:var(--deepPine)}
+  .alloc{color:var(--muted);font-size:11.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--cardBorder);font-variant-numeric:tabular-nums}
+  .alloc b{color:var(--deepPine)}
   .bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--surface) 26%)}
   .start{width:100%;height:52px;border-radius:16px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:16px}
 </style>
@@ -76,9 +90,24 @@
       </div>
 
       <div class="sc">
+        <div class="sct">Handicap allocation</div>
+        <div class="subt">Strokes Off + three 6-hole matches — decide where a golfer’s strokes land.</div>
+        <div class="opt"><span class="radio on"></span><div><div class="t">Spread across the 3 matches</div><div class="d">Divide each golfer’s strokes evenly between the three ranges, then allocate to the hardest holes inside each one. Every match stays contested.</div></div></div>
+        <div class="opt"><span class="radio"></span><div><div class="t">Straight up (round-wide)</div><div class="d">Allocate by overall course SI — strokes fall on SI 1, 2, 3… wherever they sit, so one match can absorb most of them.</div></div></div>
+        <div class="alloc">Dave, <b>7 strokes off</b> → <b>3</b> · <b>2</b> · <b>2</b> &nbsp;·&nbsp; remainders go to the earliest match first</div>
+      </div>
+
+      <div class="sc">
+        <div class="sct">Extra rabbit</div>
+        <div class="toggle"><div class="txt"><div class="t">Play the extra hole for another rabbit</div><div class="d">A deciding hole after the last match — or holes left over when a match locks early — starts one more rabbit instead of playing for nothing.</div></div><span class="switch"></span></div>
+        <div class="rule"><span class="half">½</span><span>A rabbit that runs a <b>single hole</b> is worth <b>half the stake</b> — $2.50 at $5.00 a match. Two holes or more pays full.</span></div>
+      </div>
+
+      <div class="sc">
         <div class="sct" style="text-transform:none;font-size:13px">Stake per match</div>
         <div class="field"><span class="pfx">$</span>5.00</div>
         <label class="funcheck"><span class="box"></span> Play for fun — no stakes</label>
+        <div class="alloc">🛡 Most you can lose: <b>$25.00</b> &nbsp;(up to 5 rabbits — a match can lock early and its leftover holes start another)</div>
       </div>
 
       <div class="sc">
