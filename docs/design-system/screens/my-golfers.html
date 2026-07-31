@@ -1,0 +1,47 @@
+<!-- @dsCard group="Account & setup" name="My Golfers" subtitle="PlayerListScreen — roster, On-Halved badge, invite, add" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · My Golfers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .search{display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:11px 14px;margin:0 16px 10px;color:var(--muted)}
+  .body{padding:0 16px;overflow-y:auto;height:596px}
+  .r{display:flex;align-items:center;gap:12px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:11px 14px;margin-bottom:8px}
+  .r.me{border-color:var(--pine);background:rgba(15,110,86,.05)}
+  .av{width:38px;height:38px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--pine);font-size:14px}
+  .nm{flex:1}.nm b{font-weight:600}.nm small{display:block;color:var(--muted);font-size:12px}
+  .mark{width:22px;height:22px;border-radius:6px;background:var(--pine);display:flex;align-items:center;justify-content:center}
+  .inv{color:var(--pine);font-weight:600;font-size:12.5px}
+  .fab{position:absolute;right:18px;bottom:22px;height:50px;padding:0 18px;border-radius:16px;background:var(--brightMint);color:var(--deepPine);border:none;font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;box-shadow:0 8px 20px rgba(6,18,14,.22)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">☰</span><span class="ttl">My Golfers</span><span class="ic">➕</span><span class="ic">⟳</span></div>
+    <div class="search"><span>🔍</span><span>Search golfers</span></div>
+    <div class="body">
+      <div class="r me"><span class="av">PL</span><span class="nm"><b>Paul (you)</b><small>Hcp 8.2 · paul@lipkin.us</small></span><span class="mark"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2.5" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/></svg></span></div>
+      <div class="r"><span class="av">DM</span><span class="nm"><b>Dave Miller</b><small>Hcp 12.4 · On Halved</small></span><span class="mark"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2.5" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/></svg></span></div>
+      <div class="r"><span class="av">SL</span><span class="nm"><b>Sam Lopez</b><small>Hcp 4.1 · On Halved</small></span><span class="mark"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2.5" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/></svg></span></div>
+      <div class="r"><span class="av">LB</span><span class="nm"><b>Lee Brooks</b><small>Hcp 15.9 · (415) 555-0148</small></span><span class="inv">Invite</span></div>
+      <div class="r"><span class="av">JC</span><span class="nm"><b>Jo Chen</b><small>Hcp 6.8</small></span><span class="inv">Invite</span></div>
+      <div class="r"><span class="av">RA</span><span class="nm"><b>Rae Avery</b><small>Hcp 10.5</small></span><span class="inv">Invite</span></div>
+    </div>
+    <button class="fab">＋ Add Player</button>
+  </div>
+</body>
+</html>

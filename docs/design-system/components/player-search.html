@@ -1,0 +1,45 @@
+<!-- @dsCard group="People & teams" name="UnifiedPlayerSearch" subtitle="Add a golfer — roster → find on Halved → create guest" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · UnifiedPlayerSearch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 20px;font-size:13px}
+  .wrap{max-width:380px}
+  .prog{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--muted);margin-bottom:8px}
+  .seats{display:flex;gap:6px}
+  .seat{width:22px;height:22px;border-radius:50%;border:1.5px dashed var(--cardBorder)}
+  .seat.on{background:var(--pine);border-style:solid;border-color:var(--pine)}
+  .search{display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:12px 14px}
+  .list{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;margin-top:8px;overflow:hidden}
+  .r{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--cardBorder);font-size:14px}
+  .r:first-child{border-top:none}
+  .r .nm{flex:1;font-weight:500}
+  .badge{width:18px;height:18px;border-radius:5px;background:var(--pine);display:inline-flex;align-items:center;justify-content:center}
+  .add{color:var(--pine);font-weight:600;font-size:13px}
+  .ladder{color:var(--muted);font-size:12px;padding:9px 14px;border-top:1px solid var(--cardBorder);background:var(--surface)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>UnifiedPlayerSearch</h1>
+  <p class="sub">One box, a fallback ladder: your roster → find on Halved (name or phone) → create a guest. Shows “N of M added” with seat chips.</p>
+  <div class="wrap">
+    <div class="prog"><span>2 of 4 added</span><span class="seats"><span class="seat on"></span><span class="seat on"></span><span class="seat"></span><span class="seat"></span></span></div>
+    <div class="search"><span>🔍</span><span style="color:var(--muted)">da</span></div>
+    <div class="list">
+      <div class="r"><span class="badge"><svg width="11" height="11" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2.5" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/></svg></span><span class="nm">Dave Miller · on Halved</span><span class="add">Add</span></div>
+      <div class="r"><span style="width:18px"></span><span class="nm">Dana Cole</span><span class="add">Add</span></div>
+      <div class="ladder">No match? &nbsp;•&nbsp; Find on Halved by phone &nbsp;•&nbsp; Create a guest</div>
+    </div>
+  </div>
+</body>
+</html>

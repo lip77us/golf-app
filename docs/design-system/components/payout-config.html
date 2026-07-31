@@ -1,0 +1,45 @@
+<!-- @dsCard group="Money & settlement" name="PayoutConfigField" subtitle="Paid places + amounts, balance row, auto-suggest" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · PayoutConfigField</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--win:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .card{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:16px;max-width:380px}
+  .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .head .lbl{font-weight:600}
+  .stepper{display:flex;align-items:center;gap:10px;border:1.5px solid var(--cardBorder);border-radius:999px;padding:4px 6px}
+  .stepper button{width:26px;height:26px;border-radius:50%;border:none;background:var(--surface);font-size:16px;font-weight:700;color:var(--pine)}
+  .stepper span{min-width:16px;text-align:center;font-weight:600}
+  .place{display:flex;align-items:center;gap:12px;padding:8px 0}
+  .rank{width:34px;height:34px;border-radius:10px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+  .amt{flex:1;border:1.5px solid var(--cardBorder);border-radius:10px;padding:9px 12px;font-variant-numeric:tabular-nums;font-weight:600}
+  .sub2{color:var(--muted);font-size:11.5px}
+  .balance{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--cardBorder);font-size:13px}
+  .ok{color:var(--pine);font-weight:600}
+  .suggest{color:var(--pine);font-weight:600;font-size:13px;background:none;border:none;cursor:pointer}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>PayoutConfigField</h1>
+  <p class="sub">Paid-places config for pool games — 1–N places stepper, dollar fields, a live balance row, and Auto-suggest (fixed splits, last place absorbs the remainder).</p>
+  <div class="card">
+    <div class="head"><span class="lbl">Payouts</span>
+      <span class="stepper"><button>−</button><span>3</span><button>+</button></span>
+    </div>
+    <div class="place"><span class="rank">1st</span><span class="amt">$60</span></div>
+    <div class="place"><span class="rank">2nd</span><span class="amt">$30</span></div>
+    <div class="place"><span class="rank">3rd</span><span class="amt">$10</span></div>
+    <div class="balance"><span class="ok">Payouts balance ✓</span><button class="suggest">Auto-suggest</button></div>
+  </div>
+</body>
+</html>

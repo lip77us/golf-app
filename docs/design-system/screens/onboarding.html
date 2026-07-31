@@ -1,0 +1,61 @@
+<!-- @dsCard group="Account & setup" name="Onboarding" subtitle="OnboardingWizard — pick your first game" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Onboarding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;padding:6px 16px 10px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:18px;flex:1;text-align:center}
+  .appbar .skip{color:var(--muted);font-weight:600;font-size:14px}
+  .dots{display:flex;gap:8px;justify-content:center;margin:4px 0 20px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--cardBorder)}
+  .dot.on{background:var(--pine);width:22px;border-radius:5px}
+  .body{padding:0 20px;overflow-y:auto;height:610px}
+  .h{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:24px}
+  .p{color:var(--muted);font-size:14px;margin:6px 0 22px;line-height:1.5}
+  .chips{display:flex;gap:10px;flex-wrap:wrap}
+  .chip{border-radius:14px;padding:14px 18px;font-size:15px;font-weight:600;border:1.5px solid var(--cardBorder);background:var(--card);flex:1 1 40%;text-align:center}
+  .chip.sel{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .chip small{display:block;font-weight:400;font-size:11.5px;color:var(--muted);margin-top:3px}
+  .chip.sel small{color:rgba(255,255,255,.75)}
+  .stake{margin-top:20px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:14px 16px}
+  .stake .l{font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .stake .f{display:flex;align-items:center;font-size:16px;font-weight:600}
+  .bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 20px 18px;display:flex;gap:10px;background:linear-gradient(transparent,var(--surface) 26%)}
+  .back{flex:1;height:52px;border-radius:16px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font-weight:700}
+  .go{flex:2;height:52px;border-radius:16px;border:none;background:var(--brightMint);color:var(--deepPine);font-weight:700;font-size:16px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span style="width:32px"></span><span class="ttl">Set up your first round</span><span class="skip">Skip</span></div>
+    <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot on"></span></div>
+    <div class="body">
+      <div class="h">Pick a game</div>
+      <div class="p">You can add more later. Start simple — Skins is a great first bet.</div>
+      <div class="chips">
+        <span class="chip sel">Skins<small>1 skin per hole</small></span>
+        <span class="chip">Stroke Play<small>low net wins</small></span>
+        <span class="chip">Nassau<small>front / back / overall</small></span>
+        <span class="chip">Stableford<small>points per hole</small></span>
+      </div>
+      <div class="stake">
+        <div class="l">Ante per player</div>
+        <div class="f"><span style="color:var(--muted);margin-right:6px">$</span>2.00</div>
+      </div>
+    </div>
+    <div class="bottom"><button class="back">Back</button><button class="go">Start Round</button></div>
+  </div>
+</body>
+</html>

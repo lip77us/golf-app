@@ -1,0 +1,39 @@
+<!-- @dsCard group="Buttons & chips" name="Buttons" subtitle="GolfPrimaryButton · HalvedCtaButton · Outlined · loading" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Buttons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--disabledFill:#D3DAD5;--disabledText:#93A099}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .stack{display:flex;flex-direction:column;gap:14px;max-width:360px}
+  .lbl{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;font-weight:600}
+  button{font-family:"Spline Sans",sans-serif;font-size:16px;font-weight:700;width:100%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+  .primary{height:52px;border-radius:16px;background:var(--pine);color:#fff}
+  .cta{height:54px;border-radius:16px;background:var(--brightMint);color:var(--deepPine)}
+  .outlined{height:52px;border-radius:16px;background:transparent;color:var(--pine);border:1.5px solid var(--pine)}
+  .disabled{height:52px;border-radius:16px;background:var(--disabledFill);color:var(--disabledText)}
+  .spin{width:18px;height:18px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:s .8s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Buttons</h1>
+  <p class="sub">Primary actions are the dark pine pill (<code>GolfPrimaryButton</code>). The one bright-mint <code>HalvedCtaButton</code> per screen is reserved for the key forward action.</p>
+  <div class="stack">
+    <div><div class="lbl">GolfPrimaryButton</div><button class="primary">Complete Round</button></div>
+    <div><div class="lbl">GolfPrimaryButton · loading</div><button class="primary"><span class="spin"></span>Saving…</button></div>
+    <div><div class="lbl">HalvedCtaButton (mint · one per screen)</div><button class="cta">Configure Round</button></div>
+    <div><div class="lbl">OutlinedButton (pine)</div><button class="outlined">Edit Configuration</button></div>
+    <div><div class="lbl">Disabled</div><button class="disabled">Start Game</button></div>
+  </div>
+</body>
+</html>

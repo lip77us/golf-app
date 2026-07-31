@@ -1,0 +1,41 @@
+<!-- @dsCard group="Scorecards & leaderboards" name="ScorecardGrid" subtitle="Full-group landscape scorecard — handicap dots, net, OUT/IN/TOT" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · ScorecardGrid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--head:#E7EEE9;--par:#F3F6F4}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 20px;font-size:13px}
+  .scroll{overflow-x:auto;border:1.5px solid var(--cardBorder);border-radius:14px;background:var(--card)}
+  table{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:12px;min-width:640px}
+  th,td{border:1px solid var(--cardBorder);padding:6px 8px;text-align:center;white-space:nowrap}
+  th{background:var(--head);font-weight:700}
+  td.name,th.name{text-align:left;font-weight:600;background:#fff;position:sticky;left:0}
+  tr.parrow td{background:var(--par);color:var(--muted);font-weight:600}
+  td.sum{background:var(--head);font-weight:700}
+  .dot{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--pine);margin:0 1px;vertical-align:top}
+  .u{color:var(--under);font-weight:700}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>ScorecardGrid</h1>
+  <p class="sub">Rotate the phone to landscape anywhere in a round → the full-group read-only card: all players × 18 holes with handicap <span class="u">dots</span>, net, and OUT/IN/TOT. Wide content scrolls inside its own box.</p>
+  <div class="scroll">
+    <table>
+      <tr><th class="name">Hole</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th class="sum">OUT</th><th>10</th><th>11</th><th>12</th><th class="sum">TOT</th></tr>
+      <tr class="parrow"><td class="name">Par</td><td>4</td><td>3</td><td>5</td><td>4</td><td>4</td><td>4</td><td class="sum">36</td><td>4</td><td>5</td><td>3</td><td class="sum">72</td></tr>
+      <tr><td class="name">Paul</td><td>4</td><td><span class="dot"></span><br><span class="u">2</span></td><td>5</td><td>5</td><td>4</td><td>4</td><td class="sum">39</td><td>4</td><td>5</td><td>3</td><td class="sum">80</td></tr>
+      <tr><td class="name">Dave</td><td>5</td><td>3</td><td><span class="dot"></span><br>6</td><td>4</td><td>5</td><td>4</td><td class="sum">42</td><td>5</td><td>6</td><td>4</td><td class="sum">86</td></tr>
+      <tr><td class="name">Sam</td><td>4</td><td>3</td><td><span class="u">4</span></td><td>4</td><td>4</td><td>3</td><td class="sum">35</td><td>4</td><td>4</td><td>3</td><td class="sum">74</td></tr>
+    </table>
+  </div>
+</body>
+</html>

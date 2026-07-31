@@ -1,0 +1,64 @@
+<!-- @dsCard group="Account & setup" name="Phone login" subtitle="LoginScreen — phone-first sign-in + OTP step" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;gap:24px;justify-content:center;flex-wrap:wrap}
+  .phone{width:360px;height:760px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .wrap{padding:40px 28px;display:flex;flex-direction:column;align-items:center;text-align:center}
+  .mark{width:72px;height:72px;border-radius:20px;background:var(--pine);display:flex;align-items:center;justify-content:center;margin-bottom:18px}
+  .word{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:30px}
+  .sub{color:var(--muted);font-size:14px;margin:6px 0 30px}
+  .flabel{align-self:flex-start;font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .field{width:100%;border:1.5px solid var(--cardBorder);background:var(--card);border-radius:12px;padding:14px 16px;font-size:16px;font-weight:600;margin-bottom:14px;text-align:left}
+  .field.focus{border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.14)}
+  .field.ph{color:var(--muted);font-weight:400}
+  .cta{width:100%;height:54px;border-radius:16px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:16px;margin-top:4px}
+  .consent{color:var(--muted);font-size:11px;line-height:1.5;margin-top:16px}
+  .otp{display:flex;gap:10px;margin:6px 0 14px}
+  .digit{flex:1;height:56px;border:1.5px solid var(--cardBorder);background:var(--card);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+  .digit.on{border-color:var(--pine)}
+  .resend{color:var(--pine);font-weight:600;font-size:13px;margin-top:16px}
+  .cap{position:absolute;bottom:14px;left:0;right:0;text-align:center;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="wrap">
+      <div class="mark"><svg width="40" height="40" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/><ellipse cx="11" cy="19" rx="7" ry="2.4" fill="#F3F1EA" opacity=".9"/></svg></div>
+      <div class="word">Halved</div>
+      <div class="sub">Sign in with your phone number</div>
+      <div class="flabel">Mobile number</div>
+      <div class="field focus">(415) 555-0148</div>
+      <div class="flabel">Your name (new here)</div>
+      <div class="field ph">First name</div>
+      <button class="cta">Send code</button>
+      <div class="consent">By continuing you agree to receive a one-time SMS code. Message &amp; data rates may apply.</div>
+    </div>
+    <div class="cap">Step 1 — phone</div>
+  </div>
+
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="wrap">
+      <div class="mark" style="margin-top:6px"><svg width="40" height="40" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/><ellipse cx="11" cy="19" rx="7" ry="2.4" fill="#F3F1EA" opacity=".9"/></svg></div>
+      <div class="word" style="font-size:24px">Enter code</div>
+      <div class="sub">We sent a 6-digit code to (415) 555-0148</div>
+      <div class="otp"><span class="digit on">4</span><span class="digit">1</span><span class="digit">9</span><span class="digit">0</span><span class="digit">_</span><span class="digit">_</span></div>
+      <button class="cta">Verify</button>
+      <div class="resend">Resend code</div>
+    </div>
+    <div class="cap">Step 2 — OTP</div>
+  </div>
+</body>
+</html>

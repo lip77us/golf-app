@@ -1,0 +1,42 @@
+<!-- @dsCard group="Layout & feedback" name="SectionCard" subtitle="Outlined card with brand-primary section title" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · SectionCard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .card{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:14px;max-width:360px;margin-bottom:14px}
+  .title{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;color:var(--pine);font-size:15px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+  .trail{font-size:12px;color:var(--muted);font-weight:500}
+  .line{display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid var(--cardBorder);font-size:14px}
+  .line:first-of-type{border-top:none}
+  .val{color:var(--muted);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>SectionCard</h1>
+  <p class="sub">Canonical container grouping form controls on setup screens — outlined card, bold pine title, optional trailing widget.</p>
+
+  <div class="card">
+    <div class="title">Teams<span class="trail">2v2</span></div>
+    <div class="line"><span>Blue</span><span class="val">Paul · Dave</span></div>
+    <div class="line"><span>Orange</span><span class="val">Sam · Lee</span></div>
+  </div>
+
+  <div class="card">
+    <div class="title">How the money settles</div>
+    <div class="line"><span>Style</span><span class="val">Pool</span></div>
+    <div class="line"><span>Ante</span><span class="val">$5.00 / player</span></div>
+    <div class="line"><span>Pot</span><span class="val">$20.00</span></div>
+  </div>
+</body>
+</html>

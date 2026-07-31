@@ -1,0 +1,43 @@
+<!-- @dsCard group="Foundations" name="HalvedMark" subtitle="Brand mark badge — 'On Halved' / halved-hole marker" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · HalvedMark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .mark{width:var(--s);height:var(--s);border-radius:calc(var(--s)/4);background:var(--pine);display:inline-flex;align-items:center;justify-content:center}
+  .row{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:12px 14px;display:flex;align-items:center;gap:12px;max-width:360px;margin-bottom:10px}
+  .nm{font-weight:600}
+  .hc{color:var(--muted);font-size:12.5px}
+  svg{display:block}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>HalvedMark</h1>
+  <p class="sub">The brand mark (pin-in-hole) as a small rounded badge: flags an “On&nbsp;Halved” golfer in pickers &amp; rosters, and doubles as a halved-hole marker.</p>
+
+  <div class="row">
+    <span class="mark" style="--s:36px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/><ellipse cx="11" cy="19" rx="7" ry="2.4" fill="#F3F1EA" opacity=".9"/></svg>
+    </span>
+    <div><div class="nm">Dave Miller</div><div class="hc">On Halved · Hcp 12.4</div></div>
+  </div>
+
+  <div style="display:flex;gap:16px;align-items:center;margin-top:8px">
+    <span class="mark" style="--s:20px"><svg width="12" height="12" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2.5" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/></svg></span>
+    <span class="mark" style="--s:28px"><svg width="17" height="17" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2.2" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/></svg></span>
+    <span class="mark" style="--s:44px"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/></svg></span>
+    <span class="hc">sizes 20 / 28 / 36 / 44</span>
+  </div>
+  <p class="sub" style="margin-top:18px">Note: an SVG stand-in for <code>assets/icon/halved_mark.svg</code>; swap in the real asset in Claude Design.</p>
+</body>
+</html>

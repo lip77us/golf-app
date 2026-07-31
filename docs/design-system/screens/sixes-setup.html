@@ -1,0 +1,109 @@
+<!-- @dsCard group="Games" name="Sixes (setup)" subtitle="SixesSetupScreen — 2v2 across 3 segments, Classic/High-Low, allocation" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Sixes setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--blue:#1976D2;--orange:#EF6C00}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .body{padding:0 14px;overflow-y:auto;height:634px}
+  /* hole + team card */
+  .card{border:1px solid var(--cardBorder);border-radius:8px;overflow:hidden;background:var(--card);margin-bottom:16px}
+  .hh{background:#E1EAE2;padding:10px;text-align:center}
+  .hh .n{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px}
+  .hh .sub{font-size:12px;color:var(--muted)}
+  .teamlbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:8px 12px 4px}
+  .blue{color:var(--blue)} .orange{color:var(--orange)}
+  .prow{display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--cardBorder)}
+  .prow.b{border-left:4px solid var(--blue)} .prow.o{border-left:4px solid var(--orange)}
+  .grip{color:var(--muted);font-size:15px;letter-spacing:-2px}
+  .nm{flex:1;font-weight:600}.hc{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+  /* section card */
+  .sc{border:1px solid var(--cardBorder);border-radius:8px;padding:12px 14px;background:var(--card);margin-bottom:16px}
+  .sct{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;color:var(--pine);font-size:14px;margin-bottom:8px}
+  .opt{display:flex;gap:10px;padding:6px 0}
+  .radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--cardBorder);flex:none;margin-top:1px}
+  .radio.on{border-color:var(--pine);box-shadow:inset 0 0 0 4px var(--pine)}
+  .opt .t{font-weight:600;font-size:14px}
+  .opt .d{color:var(--muted);font-size:12px;line-height:1.4;margin-top:2px}
+  /* handicap seg */
+  .seg{display:flex;border:1.5px solid var(--pine);border-radius:999px;overflow:hidden;margin-bottom:8px}
+  .seg div{flex:1;text-align:center;padding:8px 0;font-size:12.5px;font-weight:600;color:var(--pine)}
+  .seg div.on{background:var(--pine);color:#fff}
+  .note{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px;margin:-6px 2px 16px}
+  .field{display:flex;align-items:center;border:1.5px solid var(--cardBorder);border-radius:12px;padding:11px 14px;font-size:16px;font-weight:600;background:var(--card);margin-bottom:6px}
+  .field .pfx{color:var(--muted);margin-right:6px}
+  /* match preview */
+  .mp{border:1px solid var(--cardBorder);border-radius:8px;padding:12px 14px;background:var(--card);margin-bottom:14px}
+  .mp .h{font-size:12px;font-weight:700;color:var(--pine);text-transform:uppercase;letter-spacing:.3px}
+  .mp .tm{font-weight:600;margin-top:6px}
+  .mp .v{color:var(--muted);font-size:12px;margin:2px 0}
+  .mp .meta{color:var(--muted);font-size:11px;margin-top:8px;line-height:1.4}
+  .bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--surface) 26%)}
+  .start{width:100%;height:52px;border-radius:16px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:16px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span style="font-size:17px">‹</span><span class="ttl">Sixes Setup</span><span style="width:17px"></span></div>
+    <div class="body">
+      <!-- hole + team splitter -->
+      <div class="card">
+        <div class="hh"><div class="n">Hole 1</div><div class="sub">Par 4 &nbsp;|&nbsp; 412 yds. &nbsp;|&nbsp; SI: 3</div></div>
+        <div class="teamlbl blue">Team A</div>
+        <div class="prow b"><span class="grip">⣿</span><span class="nm">Paul</span><span class="hc">8.2</span></div>
+        <div class="prow b"><span class="grip">⣿</span><span class="nm">Dave</span><span class="hc">12.4</span></div>
+        <div class="teamlbl orange">Team B</div>
+        <div class="prow o"><span class="grip">⣿</span><span class="nm">Sam</span><span class="hc">4.1</span></div>
+        <div class="prow o"><span class="grip">⣿</span><span class="nm">Lee</span><span class="hc">15.9</span></div>
+      </div>
+
+      <!-- scoring format -->
+      <div class="sc">
+        <div class="sct">Scoring format</div>
+        <div class="opt"><span class="radio on"></span><div><div class="t">Classic</div><div class="d">1 point per hole — best ball vs best ball. Early finishes roll over into extras at the end.</div></div></div>
+        <div class="opt"><span class="radio"></span><div><div class="t">High-Low</div><div class="d">2 points per hole — low net vs low net + high net vs high net. Always 3 matches, closeout if a team can’t be caught.</div></div></div>
+      </div>
+
+      <!-- handicap -->
+      <div class="sc">
+        <div class="sct">Handicap</div>
+        <div class="seg"><div>Net</div><div>Gross</div><div class="on">Strokes Off</div></div>
+      </div>
+
+      <!-- allocation (strokes-off only) -->
+      <div class="sc">
+        <div class="sct">Handicap allocation</div>
+        <div class="opt"><span class="radio on"></span><div><div class="t">Spread across 3 matches</div><div class="d">A player with 6 SO strokes gets 2 per match, allocated to the hardest holes in that match’s range.</div></div></div>
+        <div class="opt"><span class="radio"></span><div><div class="t">Straight up (round-wide)</div><div class="d">Allocate every stroke by overall course SI — 6 SO strokes fall on SI 1–6, wherever they are.</div></div></div>
+      </div>
+
+      <!-- stake -->
+      <div class="field"><span class="pfx">$</span>5.00</div>
+      <div class="note">🛡 Most you can lose: <b>&nbsp;$25.00</b>&nbsp; (lose all 5 matches — 3 + up to 2 extras)</div>
+
+      <!-- match preview -->
+      <div class="mp">
+        <div class="h">Match 1</div>
+        <div class="tm blue">Paul/Dave (1/2)</div>
+        <div class="v">v.</div>
+        <div class="tm orange">Sam/Lee (3/4)</div>
+        <div class="meta">Holes 1–6 &nbsp;•&nbsp; Best ball, strokes-off low &nbsp;•&nbsp; Match ends early if a team wins more holes than remain</div>
+      </div>
+      <div style="height:8px"></div>
+    </div>
+    <div class="bottom"><button class="start">Start Match</button></div>
+  </div>
+</body>
+</html>

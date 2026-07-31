@@ -1,0 +1,39 @@
+<!-- @dsCard group="People & teams" name="TeamSplitter4" subtitle="Reorderable 4-player team picker — Blue (top 2) vs Orange" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · TeamSplitter4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--blue:#1976D2;--orange:#EF6C00}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .wrap{max-width:360px}
+  .teamlbl{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:14px 0 6px}
+  .blue{color:var(--blue)} .orange{color:var(--orange)}
+  .row{display:flex;align-items:center;gap:12px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+  .row.b{border-left:4px solid var(--blue)} .row.o{border-left:4px solid var(--orange)}
+  .grip{color:var(--muted);font-size:18px;letter-spacing:-2px}
+  .nm{font-weight:600;flex:1}
+  .hc{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>TeamSplitter4</h1>
+  <p class="sub">Drag to assemble teams — rows 1–2 = <b class="blue">Blue</b>, rows 3–4 = <b class="orange">Orange</b>. Order within a team matters (Sixes rotation). Requires exactly 4 players.</p>
+  <div class="wrap">
+    <div class="teamlbl blue">Blue</div>
+    <div class="row b"><span class="grip">⣿</span><span class="nm">Paul</span><span class="hc">8.2</span></div>
+    <div class="row b"><span class="grip">⣿</span><span class="nm">Dave</span><span class="hc">12.4</span></div>
+    <div class="teamlbl orange">Orange</div>
+    <div class="row o"><span class="grip">⣿</span><span class="nm">Sam</span><span class="hc">4.1</span></div>
+    <div class="row o"><span class="grip">⣿</span><span class="nm">Lee</span><span class="hc">15.9</span></div>
+  </div>
+</body>
+</html>

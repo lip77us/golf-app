@@ -1,0 +1,59 @@
+<!-- @dsCard group="Scorecards & leaderboards" name="Leaderboard — Sixes" subtitle="_SixesGroupCard — per-match score + who-beat-whom + money" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Leaderboard — Sixes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--win:#388E3C;--loss:#D32F2F}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 18px;font-size:13px;max-width:520px}
+  .tabs{display:flex;gap:16px;border-bottom:1px solid var(--cardBorder);margin-bottom:14px;font-size:13px;font-weight:600;color:var(--muted)}
+  .tabs .on{color:var(--pine);border-bottom:2px solid var(--pine);padding-bottom:8px}
+  .card{max-width:400px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:14px 16px}
+  .match{padding:8px 0}
+  .mrow{display:flex;justify-content:space-between;font-weight:600;font-size:14px}
+  .subt{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .lead{color:var(--pine);font-weight:700}
+  .divider{height:1px;background:var(--cardBorder);margin:12px 0}
+  .mhead{font-weight:700;font-size:14px;margin-bottom:6px}
+  .prow{display:flex;justify-content:space-between;padding:3px 0;font-size:14px}
+  .amt{font-weight:600;font-variant-numeric:tabular-nums}
+  .pos{color:var(--win)} .neg{color:var(--loss)} .zero{color:var(--muted)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Leaderboard — Sixes</h1>
+  <p class="sub">One card per group. Each of the three rotating matches shows its <b>score</b> on the right (“4 and 2”, “2 UP thru 5”, “AS”, “Pending”, “Halved”) and a <b>who-beat-whom</b> subtitle with the leading/winning team emphasized in pine. Money totals appear only when a stake is set.</p>
+
+  <div class="tabs"><span class="on">Sixes</span><span>Stroke Play</span><span>Settlement</span></div>
+
+  <div class="card">
+    <div class="match">
+      <div class="mrow"><span>Match 1 · Holes 1–6</span><span>4 and 2</span></div>
+      <div class="subt"><span class="lead">Paul &amp; Dave</span> beat Sam &amp; Lee</div>
+    </div>
+    <div class="match">
+      <div class="mrow"><span>Match 2 · Holes 7–12</span><span>2 UP thru 5</span></div>
+      <div class="subt"><span class="lead">Paul &amp; Sam</span> vs Dave &amp; Lee</div>
+    </div>
+    <div class="match">
+      <div class="mrow"><span>Match 3 · Holes 13–18</span><span>Pending</span></div>
+      <div class="subt">Paul &amp; Lee vs Dave &amp; Sam</div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="mhead">Money (unit $5.00)</div>
+    <div class="prow"><span>Paul</span><span class="amt pos">+$10.00</span></div>
+    <div class="prow"><span>Dave</span><span class="amt neg">−$5.00</span></div>
+    <div class="prow"><span>Sam</span><span class="amt neg">−$5.00</span></div>
+    <div class="prow"><span>Lee</span><span class="amt zero">$0.00</span></div>
+  </div>
+</body>
+</html>

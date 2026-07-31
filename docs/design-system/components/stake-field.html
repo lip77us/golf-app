@@ -1,0 +1,35 @@
+<!-- @dsCard group="Money & settlement" name="StakeField" subtitle="Round stake input + 'play for fun' opt-in" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · StakeField</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .card{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:16px;max-width:380px}
+  .flabel{font-size:12.5px;color:var(--muted);margin-bottom:6px;font-weight:600}
+  .field{display:flex;align-items:center;border:1.5px solid var(--cardBorder);border-radius:12px;padding:12px 14px;font-size:16px}
+  .field .pfx{color:var(--muted);margin-right:6px}
+  .field .amt{font-variant-numeric:tabular-nums;font-weight:600}
+  .check{display:flex;align-items:center;gap:10px;margin-top:14px;color:var(--deepPine);font-size:14px}
+  .box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--cardBorder);display:inline-block}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>StakeField</h1>
+  <p class="sub">Round-level stake paired with a “Play for fun — no stakes” opt-in. Reports whether a stake decision has been made (positive value <b>or</b> box ticked), keeping the two consistent.</p>
+  <div class="card">
+    <div class="flabel">Value per point</div>
+    <div class="field"><span class="pfx">$</span><span class="amt">2.00</span></div>
+    <label class="check"><span class="box"></span> Play for fun — no stakes</label>
+  </div>
+</body>
+</html>

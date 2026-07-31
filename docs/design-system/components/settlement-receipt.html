@@ -1,0 +1,46 @@
+<!-- @dsCard group="Money & settlement" name="Settlement receipt" subtitle="The signature moment — deep-pine tile, cream text, mint figures, closing quip" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Settlement receipt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--cream:#F3F1EA;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .receipt{max-width:360px;background:var(--deepPine);color:var(--cream);border-radius:18px;padding:22px;box-shadow:0 12px 30px rgba(6,18,14,.28)}
+  .rhead{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:20px;letter-spacing:.01em}
+  .rsub{color:rgba(243,241,234,.6);font-size:12.5px;margin-top:2px}
+  .divider{height:1px;background:rgba(243,241,234,.15);margin:16px 0}
+  .line{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;font-size:15px}
+  .who{font-weight:500}
+  .amt{font-family:"Spline Sans",sans-serif;font-weight:700;font-variant-numeric:tabular-nums;color:var(--brightMint)}
+  .amt.neg{color:#F0916E}
+  .total{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;font-size:13px;color:rgba(243,241,234,.7)}
+  .quip{margin-top:18px;font-style:italic;color:rgba(243,241,234,.8);font-size:13px;line-height:1.5;border-left:2px solid var(--brightMint);padding-left:12px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Settlement receipt</h1>
+  <p class="sub">The signature Halved moment that closes a round — a deep-pine tile with cream text and <b>mint figures</b>, ending on a rotating golf quip (<code>golf-sayings.js</code>).</p>
+
+  <div class="receipt">
+    <div class="rhead">Settle up</div>
+    <div class="rsub">Pebble Dunes · Skins + Nassau · Jul 29</div>
+    <div class="divider"></div>
+    <div class="line"><span class="who">Dave pays Paul</span><span class="amt">+$18.00</span></div>
+    <div class="line"><span class="who">Sam pays Paul</span><span class="amt">+$6.00</span></div>
+    <div class="line"><span class="who">Lee pays Dave</span><span class="amt">+$4.00</span></div>
+    <div class="divider"></div>
+    <div class="line"><span class="who">Paul — net</span><span class="amt">+$24.00</span></div>
+    <div class="line"><span class="who">Lee — net</span><span class="amt neg">−$10.00</span></div>
+    <div class="quip">“The most important shot in golf is the next one.” — Ben Hogan</div>
+  </div>
+</body>
+</html>

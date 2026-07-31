@@ -1,0 +1,40 @@
+<!-- @dsCard group="Buttons & chips" name="Game chips" subtitle="GameChip (read-only) · GameSelectableChip (pine-selected)" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Chips</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .lbl{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:18px 0 8px;font-weight:600}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{border-radius:12px;padding:7px 14px;font-size:13px;font-weight:500;border:1px solid var(--cardBorder);background:var(--card);color:var(--deepPine)}
+  .chip.sel{background:var(--pine);color:#fff;border-color:var(--pine);font-weight:600}
+  .chip.filled{background:var(--pine);color:#fff;border-color:var(--pine);font-weight:600}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Game chips</h1>
+  <p class="sub">Canonical game-name pills. Selected state is <b>pine fill / white label</b> — one selected treatment app-wide (never mint).</p>
+
+  <div class="lbl">GameChip — read-only</div>
+  <div class="row">
+    <span class="chip">Skins</span><span class="chip">Nassau</span><span class="chip">Wolf</span>
+    <span class="chip">Stableford</span><span class="chip filled">IN&nbsp;PROGRESS</span>
+  </div>
+
+  <div class="lbl">GameSelectableChip — picker (selected = pine)</div>
+  <div class="row">
+    <span class="chip sel">Skins</span><span class="chip">Stroke Play</span><span class="chip">Sixes</span>
+    <span class="chip sel">Stableford</span><span class="chip">Vegas</span><span class="chip">Fourball</span>
+  </div>
+</body>
+</html>

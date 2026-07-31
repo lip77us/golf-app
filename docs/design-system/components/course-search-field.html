@@ -1,0 +1,47 @@
+<!-- @dsCard group="Inputs & fields" name="CourseSearchField" subtitle="One-box course picker → 'Playing today' card" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · CourseSearchField</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#1D9E75;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .lbl{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:16px 0 8px;font-weight:600}
+  .search{display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:12px 14px;max-width:380px}
+  .search .ic{color:var(--muted)}
+  .search .ph{color:var(--muted)}
+  .results{max-width:380px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;margin-top:8px;overflow:hidden}
+  .res{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-top:1px solid var(--cardBorder);font-size:14px}
+  .res:first-child{border-top:none}
+  .res .loc{color:var(--muted);font-size:12px}
+  .tag{font-size:10.5px;font-weight:600;color:var(--pine);background:rgba(15,110,86,.08);padding:2px 7px;border-radius:8px}
+  .picked{max-width:380px;background:rgba(59,216,154,.14);border:1.5px solid var(--brightMint);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+  .picked .cap{font-size:11px;font-weight:700;color:var(--mint);text-transform:uppercase;letter-spacing:.4px}
+  .picked .nm{font-weight:600;font-size:16px;margin-top:2px}
+  .picked .chg{color:var(--pine);font-weight:600;font-size:13px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>CourseSearchField</h1>
+  <p class="sub">One box, one merged list — your courses + shared catalog + GolfCourseAPI. Adding is transparent; once chosen it collapses to a mint “Playing today” card.</p>
+
+  <div class="lbl">Searching</div>
+  <div class="search"><span class="ic">🔍</span><span class="ph">peb</span></div>
+  <div class="results">
+    <div class="res"><div><div>Pebble Dunes GC</div><div class="loc">Monterey, CA</div></div><span class="tag">Yours</span></div>
+    <div class="res"><div><div>Pebble Ridge Links</div><div class="loc">Bandon, OR</div></div><span class="tag">Catalog</span></div>
+    <div class="res"><div><div>Pebblewood CC</div><div class="loc">Austin, TX</div></div><span class="tag">Add</span></div>
+  </div>
+
+  <div class="lbl">Selected</div>
+  <div class="picked"><div><div class="cap">Playing today</div><div class="nm">Pebble Dunes GC</div></div><span class="chg">Change</span></div>
+</body>
+</html>

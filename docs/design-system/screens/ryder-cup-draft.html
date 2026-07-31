@@ -1,0 +1,60 @@
+<!-- @dsCard group="People & teams" name="Cup draft" subtitle="RyderCupDraftScreen — team rosters + Lock Draft" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Cup draft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--blue:#1976D2;--orange:#EF6C00}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .body{padding:0 16px;overflow-y:auto;height:626px}
+  .hint{color:var(--muted);font-size:12.5px;margin:2px 2px 12px}
+  .team{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;overflow:hidden;margin-bottom:14px}
+  .th{display:flex;align-items:center;gap:8px;padding:12px 14px;font-weight:700}
+  .th.b{background:rgba(25,118,210,.10);color:var(--blue)}
+  .th.o{background:rgba(239,108,0,.10);color:var(--orange)}
+  .th .ct{margin-left:auto;font-size:12px;font-weight:600;color:var(--muted)}
+  .pr{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--cardBorder);font-size:14px}
+  .pr .nm{flex:1;font-weight:500}
+  .pr .hc{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+  .pr .rm{color:var(--muted);font-size:18px}
+  .add{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;color:var(--pine);font-weight:600;font-size:13.5px;border-top:1px dashed var(--cardBorder)}
+  .bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--surface) 24%)}
+  .lock{width:100%;height:54px;border-radius:16px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;gap:8px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">‹</span><span class="ttl">Team Cup · Draft</span><span style="width:17px"></span></div>
+    <div class="body">
+      <div class="hint">Build both rosters, then lock. Players can’t be moved after locking.</div>
+      <div class="team">
+        <div class="th b"><span style="width:10px;height:10px;border-radius:50%;background:var(--blue);display:inline-block"></span> Blue Team <span class="ct">6</span></div>
+        <div class="pr"><span class="nm">Paul</span><span class="hc">8.2</span><span class="rm">⊖</span></div>
+        <div class="pr"><span class="nm">Dave</span><span class="hc">12.4</span><span class="rm">⊖</span></div>
+        <div class="pr"><span class="nm">Rae</span><span class="hc">10.5</span><span class="rm">⊖</span></div>
+        <div class="add">＋ Add player</div>
+      </div>
+      <div class="team">
+        <div class="th o"><span style="width:10px;height:10px;border-radius:50%;background:var(--orange);display:inline-block"></span> Orange Team <span class="ct">6</span></div>
+        <div class="pr"><span class="nm">Sam</span><span class="hc">4.1</span><span class="rm">⊖</span></div>
+        <div class="pr"><span class="nm">Lee</span><span class="hc">15.9</span><span class="rm">⊖</span></div>
+        <div class="pr"><span class="nm">Jo</span><span class="hc">6.8</span><span class="rm">⊖</span></div>
+        <div class="add">＋ Add player</div>
+      </div>
+    </div>
+    <div class="bottom"><button class="lock">🔒 Lock Draft</button></div>
+  </div>
+</body>
+</html>

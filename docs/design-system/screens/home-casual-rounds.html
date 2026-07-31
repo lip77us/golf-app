@@ -1,0 +1,63 @@
+<!-- @dsCard group="Rounds" name="Casual Rounds (home)" subtitle="CasualRoundsListScreen — Active/Completed list + New Round" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Casual Rounds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#1D9E75;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+  .appbar .mn{font-size:20px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .seg{display:flex;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:999px;margin:4px 16px 12px;overflow:hidden}
+  .seg div{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;color:var(--muted)}
+  .seg div.on{background:var(--pine);color:#fff}
+  .body{padding:0 16px;overflow-y:auto;height:626px}
+  .rc{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:14px 16px;margin-bottom:12px}
+  .rc .top{display:flex;justify-content:space-between;align-items:flex-start}
+  .rc .c{font-weight:600;font-size:16px}
+  .rc .m{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .live{display:inline-flex;align-items:center;gap:6px;background:rgba(59,216,154,.18);color:var(--mint);font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px}
+  .live .d{width:7px;height:7px;border-radius:50%;background:var(--brightMint)}
+  .obs{color:var(--mint);font-size:11.5px;font-weight:600}
+  .chips{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .chip{font-size:11px;font-weight:600;border:1px solid var(--cardBorder);border-radius:8px;padding:3px 8px}
+  .grp{color:var(--muted);font-size:12px;margin-top:8px}
+  .newbar{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--surface) 24%)}
+  .newbtn{width:100%;height:52px;border-radius:16px;background:transparent;border:1.5px solid var(--pine);color:var(--pine);font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:"Spline Sans"}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="mn">☰</span><span class="ttl">Casual Rounds</span><span class="mn">⟳</span></div>
+    <div class="seg"><div class="on">Active</div><div>Completed</div></div>
+    <div class="body">
+      <div class="rc">
+        <div class="top"><div><div class="c">Pebble Dunes GC</div><div class="m">Today · Skins + Nassau</div></div><span class="live"><span class="d"></span>Live</span></div>
+        <div class="grp">You · 4 players · thru 12</div>
+        <div class="chips"><span class="chip">Skins</span><span class="chip">Nassau</span><span class="chip">Spots</span></div>
+      </div>
+      <div class="rc">
+        <div class="top"><div><div class="c">Bandon Trails</div><div class="m">Today · Stableford</div></div><span class="obs">👁 Observing</span></div>
+        <div class="grp">Thursday Game · read-only</div>
+        <div class="chips"><span class="chip">Stableford</span></div>
+      </div>
+      <div class="rc">
+        <div class="top"><div><div class="c">Harding Park</div><div class="m">Jul 22 · Sixes</div></div></div>
+        <div class="grp">You · 4 players · not started</div>
+        <div class="chips"><span class="chip">Sixes</span></div>
+      </div>
+    </div>
+    <div class="newbar"><button class="newbtn">＋ New Round</button></div>
+  </div>
+</body>
+</html>

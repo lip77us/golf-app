@@ -1,0 +1,47 @@
+<!-- @dsCard group="Scorecards & leaderboards" name="ShareableScorecard" subtitle="Portrait, image-capture scorecard (its own paper inks)" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · ShareableScorecard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@700&family=Spline+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--surface:#EEF3EE;--muted:#5C6B62;
+    --pine:#1E5C3F;--pmuted:#6B7280;--line:#D8DED9;--headerBg:#E7EEE9;--parBg:#F3F6F4;--subBg:#F1F5F2;--under:#C62828}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);font-family:"Spline Sans",system-ui,sans-serif;padding:28px;color:#0B1F1A}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 20px;font-size:13px}
+  .paper{max-width:300px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 8px 24px rgba(6,18,14,.14)}
+  .hd{padding:14px 16px;background:var(--headerBg)}
+  .hd .c{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;color:var(--pine);font-size:16px}
+  .hd .m{color:var(--pmuted);font-size:12px;margin-top:2px}
+  table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:12px}
+  th,td{border:1px solid var(--line);padding:5px 6px;text-align:center}
+  th{background:var(--subBg);color:var(--pmuted);font-weight:700}
+  td.nm,th.nm{text-align:left;font-weight:600}
+  tr.par td{background:var(--parBg);color:var(--pmuted)}
+  td.tot{background:var(--headerBg);font-weight:700}
+  .u{color:var(--under);font-weight:700}
+  .ft{padding:10px 16px;text-align:center;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;color:var(--pine);font-size:13px;background:var(--subBg)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>ShareableScorecard</h1>
+  <p class="sub">Portrait, phone-width card designed to capture cleanly to a PNG for the share sheet. Uses its own self-contained “paper” inks (not the app theme) so the exported image is stable.</p>
+  <div class="paper">
+    <div class="hd"><div class="c">Pebble Dunes GC</div><div class="m">Skins · Nassau — Jul 29, 2026</div></div>
+    <table>
+      <tr><th class="nm">Hole</th><th>OUT</th><th>IN</th><th>TOT</th><th>Net</th></tr>
+      <tr class="par"><td class="nm">Par</td><td>36</td><td>36</td><td>72</td><td>—</td></tr>
+      <tr><td class="nm">Paul</td><td>39</td><td>41</td><td class="tot">80</td><td class="u">72</td></tr>
+      <tr><td class="nm">Sam</td><td>35</td><td>39</td><td class="tot">74</td><td class="u">70</td></tr>
+      <tr><td class="nm">Dave</td><td>42</td><td>44</td><td class="tot">86</td><td>74</td></tr>
+    </table>
+    <div class="ft">Halved</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!-- @dsCard group="Rounds" name="Round feed" subtitle="RoundFeedScreen — chat bubbles + server event cards" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Round feed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .body{padding:8px 16px;overflow-y:auto;height:620px;display:flex;flex-direction:column;gap:12px}
+  .event{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:13px}
+  .event .ic{font-size:18px}
+  .event b{font-weight:600}
+  .event .t{margin-left:auto;color:var(--muted);font-size:11px}
+  .bubble{max-width:76%;padding:10px 13px;border-radius:16px;font-size:14px;line-height:1.35}
+  .them{align-self:flex-start;background:var(--card);border:1.5px solid var(--cardBorder);border-bottom-left-radius:5px}
+  .me{align-self:flex-end;background:var(--pine);color:#fff;border-bottom-right-radius:5px}
+  .who{font-size:11px;color:var(--muted);margin:0 0 3px 4px}
+  .clock{font-size:10px;opacity:.7;margin-left:6px}
+  .scorecard{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:12px 14px;font-size:13px}
+  .scorecard .h{font-weight:700;margin-bottom:6px}
+  .scorecard .l{display:flex;justify-content:space-between;color:var(--muted);padding:2px 0;font-variant-numeric:tabular-nums}
+  .composer{position:absolute;left:0;right:0;bottom:0;padding:10px 14px 18px;background:var(--surface);display:flex;gap:10px;align-items:center;border-top:1px solid var(--cardBorder)}
+  .cin{flex:1;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:22px;padding:11px 16px;color:var(--muted);font-size:14px}
+  .send{width:44px;height:44px;border-radius:50%;background:var(--pine);color:#fff;border:none;font-size:18px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">‹</span><span class="ttl">Round chat</span><span style="width:17px"></span></div>
+    <div class="body">
+      <div class="event"><span class="ic">🐦</span><span><b>Sam</b> made birdie on 5</span><span class="t">10:42</span></div>
+      <div><div class="who">Dave</div><div class="bubble them">Nice putt 👏</div></div>
+      <div class="event"><span class="ic">🏆</span><span><b>Paul</b> won the skin on 7 (2 skins)</span><span class="t">11:03</span></div>
+      <div class="bubble me">On fire today ☀️<span class="clock">11:04 ✓</span></div>
+      <div class="event"><span class="ic">🔁</span><span>Nassau front 9 — <b>Blue wins 2&1</b></span><span class="t">11:20</span></div>
+      <div class="scorecard">
+        <div class="h">Final scores</div>
+        <div class="l"><span>1 · Sam</span><span>70 (−2)</span></div>
+        <div class="l"><span>2 · Paul</span><span>72 (E)</span></div>
+        <div class="l"><span>3 · Dave</span><span>74 (+2)</span></div>
+      </div>
+    </div>
+    <div class="composer"><div class="cin">Message the group…</div><button class="send">➤</button></div>
+  </div>
+</body>
+</html>

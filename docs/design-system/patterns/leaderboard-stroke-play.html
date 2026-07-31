@@ -1,0 +1,135 @@
+<!-- @dsCard group="Scorecards & leaderboards" name="Leaderboard — Stroke Play" subtitle="_LowNetView — Gross / Net / Strokes-off selector (SO only when the round plays it)" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Leaderboard — Stroke Play</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--win:#388E3C;--head:#E7EEE9;--shade:#F1F5F2;--par:#F3F6F4}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 16px;font-size:13px;max-width:560px}
+  .tabs{display:flex;gap:16px;border-bottom:1px solid var(--cardBorder);margin-bottom:14px;font-size:13px;font-weight:600;color:var(--muted)}
+  .tabs .on{color:var(--pine);border-bottom:2px solid var(--pine);padding-bottom:8px}
+  .wrap{max-width:440px}
+  .seg{display:flex;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:999px;overflow:hidden;margin-bottom:6px}
+  .seg div{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;color:var(--muted)}
+  .seg div.on{background:var(--pine);color:#fff}
+  .cap{color:var(--muted);font-size:11.5px;margin:0 2px 10px;line-height:1.45}
+  .chips{display:flex;gap:8px;margin-bottom:10px}
+  .chip{font-size:11px;font-weight:600;border:1px solid var(--cardBorder);border-radius:8px;padding:3px 9px;color:var(--muted);background:var(--card)}
+  .card{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:16px;overflow:hidden}
+  .ch{display:flex;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;padding:9px 12px;border-bottom:1px solid var(--cardBorder);font-weight:700}
+  .ch .g{flex:1}
+  .tr{display:flex;align-items:center;padding:11px 12px;border-bottom:1px solid var(--cardBorder);font-size:14px}
+  .rk{width:20px;color:var(--muted);font-weight:700}
+  .pl{flex:1}.pl small{color:var(--muted);font-size:11px}
+  .n{width:46px;text-align:right;font-variant-numeric:tabular-nums}
+  .adj{width:46px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .parc{width:40px;text-align:right;font-variant-numeric:tabular-nums;color:var(--under);font-weight:700}
+  .pay{width:48px;text-align:right;font-variant-numeric:tabular-nums;color:var(--win);font-weight:700}
+  /* expanded scorecard strip */
+  .exp{background:var(--surface);padding:8px 12px;border-bottom:1px solid var(--cardBorder)}
+  .scard{overflow-x:auto}
+  .block{display:inline-block;border-top:1px solid var(--cardBorder);border-left:1px solid var(--cardBorder)}
+  .block+.block{margin-top:6px}
+  .brow{display:flex}
+  .cell{width:26px;height:19px;border-right:1px solid var(--cardBorder);border-bottom:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-size:11px;font-variant-numeric:tabular-nums}
+  .cell.sum{width:32px;background:var(--shade);font-weight:700}
+  .cell.hd{background:var(--head);font-weight:700;color:var(--muted);height:17px;font-size:10px}
+  .cell.pr{background:var(--par);color:var(--muted);height:15px}
+  .cell.si{background:var(--par);color:var(--muted);height:14px;font-size:9px}
+  .cell.sc{height:31px;flex-direction:column;gap:0}
+  .dots{height:6px;display:flex;gap:2px;align-items:center;justify-content:center}
+  .dot{width:4px;height:4px;border-radius:50%;background:var(--pine)}
+  .digit{font-weight:600;line-height:1}
+  .mk{width:17px;height:17px;display:flex;align-items:center;justify-content:center;font-weight:600;line-height:1}
+  .u{color:var(--under)}
+  .circle{border:1.5px solid var(--under);border-radius:50%}
+  .square{border:1.5px solid var(--deepPine);border-radius:4px}
+  .legend{color:var(--muted);font-size:11px;margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  .lgdot{display:inline-flex;align-items:center;gap:5px}
+  .note{color:var(--muted);font-size:11.5px;margin-top:10px;line-height:1.45}
+  .note b{color:var(--deepPine)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Leaderboard — Stroke Play</h1>
+  <p class="sub">The Stroke Play tab (<code>_LowNetView</code>): a ranked net-to-par table with a three-way mode selector. Tap a row to expand that player’s hole-by-hole strip — Hole / Par / SI / Score with <b>stroke dots on every hole the player gets a shot</b>, and Out / In / Tot / Net subtotals.</p>
+
+  <div class="tabs"><span>Skins</span><span>Nassau</span><span class="on">Stroke Play</span><span>Settlement</span></div>
+
+  <div class="wrap">
+    <div class="seg"><div>Gross</div><div class="on">Net</div><div>Strokes-off</div></div>
+    <div class="cap"><b style="color:var(--deepPine)">Strokes-off</b> shows only when a game in the round plays it (server <code>so_available</code>). Default: Gross if you enter scores gross-style · Strokes-off if the primary game is SO · otherwise Net. Under Strokes-off the middle column reads <b>S-Off</b> and the table re-ranks.</div>
+
+    <div class="chips"><span class="chip">Entry $40</span><span class="chip">3 places paid</span></div>
+
+    <div class="card">
+      <div class="ch"><span class="rk">#</span><span class="g">Player</span><span class="n">Gross</span><span class="adj" style="font-weight:700">Net</span><span class="parc">+/−</span><span class="pay">$</span></div>
+
+      <div class="tr"><span class="rk">1</span><span class="pl">Sam <small>CH 4</small></span><span class="n">74</span><span class="adj">70</span><span class="parc">−2</span><span class="pay">$300</span></div>
+
+      <!-- expanded row: Paul, CH 8 → a stroke on the 8 hardest holes (dots) -->
+      <div class="tr" style="border-bottom:none"><span class="rk">2</span><span class="pl">Paul <small>CH 8</small></span><span class="n">80</span><span class="adj">72</span><span class="parc">E</span><span class="pay">$180</span></div>
+      <div class="exp">
+        <div class="scard">
+          <!-- FRONT 9 -->
+          <div class="block">
+            <div class="brow"><div class="cell hd">1</div><div class="cell hd">2</div><div class="cell hd">3</div><div class="cell hd">4</div><div class="cell hd">5</div><div class="cell hd">6</div><div class="cell hd">7</div><div class="cell hd">8</div><div class="cell hd">9</div><div class="cell hd sum">Out</div></div>
+            <div class="brow"><div class="cell pr">4</div><div class="cell pr">3</div><div class="cell pr">5</div><div class="cell pr">4</div><div class="cell pr">4</div><div class="cell pr">4</div><div class="cell pr">4</div><div class="cell pr">3</div><div class="cell pr">5</div><div class="cell pr sum">36</div></div>
+            <div class="brow"><div class="cell si">5</div><div class="cell si">15</div><div class="cell si">1</div><div class="cell si">7</div><div class="cell si">17</div><div class="cell si">3</div><div class="cell si">13</div><div class="cell si">11</div><div class="cell si">9</div><div class="cell si sum"></div></div>
+            <div class="brow">
+              <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="digit">5</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="mk square">4</span></div>
+              <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="mk circle u">5</span></div>
+              <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="mk circle u">4</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="mk square">5</span></div>
+              <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="mk circle u">4</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="digit">4</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="digit">3</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="mk square">6</span></div>
+              <div class="cell sc sum"><span class="digit">40</span></div>
+            </div>
+          </div>
+          <!-- BACK 9 -->
+          <div class="block">
+            <div class="brow"><div class="cell hd">10</div><div class="cell hd">11</div><div class="cell hd">12</div><div class="cell hd">13</div><div class="cell hd">14</div><div class="cell hd">15</div><div class="cell hd">16</div><div class="cell hd">17</div><div class="cell hd">18</div><div class="cell hd sum">In</div><div class="cell hd sum">Tot</div><div class="cell hd sum">Net</div></div>
+            <div class="brow"><div class="cell pr">4</div><div class="cell pr">5</div><div class="cell pr">3</div><div class="cell pr">4</div><div class="cell pr">4</div><div class="cell pr">5</div><div class="cell pr">3</div><div class="cell pr">4</div><div class="cell pr">4</div><div class="cell pr sum">36</div><div class="cell pr sum">72</div><div class="cell pr sum"></div></div>
+            <div class="brow"><div class="cell si">6</div><div class="cell si">2</div><div class="cell si">12</div><div class="cell si">8</div><div class="cell si">14</div><div class="cell si">4</div><div class="cell si">18</div><div class="cell si">10</div><div class="cell si">16</div><div class="cell si sum"></div><div class="cell si sum"></div><div class="cell si sum"></div></div>
+            <div class="brow">
+              <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="mk circle u">4</span></div>
+              <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="digit">6</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="digit">3</span></div>
+              <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="digit">5</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="digit">4</span></div>
+              <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="digit">6</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="digit">3</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="digit">4</span></div>
+              <div class="cell sc"><span class="dots"></span><span class="mk square">5</span></div>
+              <div class="cell sc sum"><span class="digit">40</span></div>
+              <div class="cell sc sum"><span class="digit">80</span></div>
+              <div class="cell sc sum"><span class="digit">72</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="legend">
+          <span class="lgdot"><span class="dot"></span> handicap stroke received</span>
+          <span class="lgdot"><span class="mk circle u" style="width:15px;height:15px;font-size:10px">–</span> net under par</span>
+          <span class="lgdot"><span class="mk square" style="width:15px;height:15px;font-size:10px">–</span> net over par</span>
+        </div>
+      </div>
+
+      <div class="tr"><span class="rk">3</span><span class="pl">Dave <small>CH 12</small></span><span class="n">86</span><span class="adj">74</span><span class="parc">+2</span><span class="pay">$100</span></div>
+      <div class="tr"><span class="rk">4</span><span class="pl">Lee <small>CH 16</small></span><span class="n">92</span><span class="adj">78</span><span class="parc">+6</span><span class="pay">$0</span></div>
+    </div>
+
+    <div class="note">Score digits are gross; a <b>dot</b> marks each hole the player receives a handicap stroke (8 for Paul off CH 8), so the net is legible at a glance. Circle = net under par, square = net over. Switching to <b>Gross</b> drops the dots and colours by gross-to-par; <b>Strokes-off</b> re-ranks and relabels the column <b>S-Off</b>.</div>
+  </div>
+</body>
+</html>

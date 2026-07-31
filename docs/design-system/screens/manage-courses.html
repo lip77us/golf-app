@@ -1,0 +1,42 @@
+<!-- @dsCard group="Account & setup" name="Manage courses" subtitle="ManageCoursesScreen — course list + paste/import" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Manage courses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 12px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .body{padding:0 16px;overflow-y:auto;height:632px}
+  .r{display:flex;align-items:center;gap:12px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:13px 14px;margin-bottom:8px}
+  .av{width:40px;height:40px;border-radius:10px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .nm{flex:1}.nm b{font-weight:600}.nm small{display:block;color:var(--muted);font-size:12px}
+  .chev{color:var(--muted)}
+  .del{color:var(--muted);font-size:18px}
+  .fab{position:absolute;right:18px;bottom:22px;height:50px;padding:0 18px;border-radius:16px;background:var(--brightMint);color:var(--deepPine);border:none;font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;box-shadow:0 8px 20px rgba(6,18,14,.22)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">‹</span><span class="ttl">Courses</span><span class="ic">📋</span><span class="ic">⟳</span></div>
+    <div class="body">
+      <div class="r"><span class="av">⛳</span><span class="nm"><b>Pebble Dunes GC</b><small>Monterey, CA · 3 tees · Black, Blue, White</small></span><span class="del">🗑</span></div>
+      <div class="r"><span class="av">⛳</span><span class="nm"><b>Harding Park</b><small>San Francisco, CA · 2 tees · Blue, White</small></span><span class="del">🗑</span></div>
+      <div class="r"><span class="av">⛳</span><span class="nm"><b>Bandon Trails</b><small>Bandon, OR · 4 tees · Gold, Green, Blue…</small></span><span class="del">🗑</span></div>
+      <div class="r"><span class="av">⛳</span><span class="nm"><b>Tilden Park GC</b><small>Berkeley, CA · 2 tees · Blue, White</small></span><span class="del">🗑</span></div>
+    </div>
+    <button class="fab">＋ Import course</button>
+  </div>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!-- @dsCard group="Rounds" name="Score entry" subtitle="ScoreEntryScreen — hole card, inline picker, game status" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Score entry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--blue:#1976D2;--orange:#EF6C00}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:17px;flex:1;text-align:center}
+  .body{padding:0 16px;overflow-y:auto;height:636px}
+  .banner{display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:10px 14px;margin-bottom:10px;font-size:13px;font-weight:600}
+  .team{display:flex;align-items:center;gap:6px}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .b{background:var(--blue)} .o{background:var(--orange)}
+  .card{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;overflow:hidden;margin-bottom:12px}
+  .hh{background:#E7EEE9;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--muted)}
+  .hh b{font-family:"Schibsted Grotesk",sans-serif;color:var(--deepPine);font-size:16px}
+  .prow{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--cardBorder)}
+  .nm{font-weight:600;flex:1}
+  .gets{font-size:10.5px;color:var(--muted);font-weight:600;background:var(--surface);border-radius:6px;padding:2px 6px}
+  .sbox{width:42px;height:42px;border-radius:10px;border:1.5px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700;font-variant-numeric:tabular-nums}
+  .u{color:var(--under)} .circle{border:2px solid var(--under);border-radius:50%}
+  .square{border:2px solid var(--deepPine);border-radius:6px}
+  .hot{background:rgba(15,110,86,.06)}
+  .picker{border:2px solid var(--pine);border-radius:12px;margin:8px 14px 12px;padding:10px 6px;display:flex;gap:6px;justify-content:center}
+  .opt{min-width:42px;height:48px;border-radius:9px;border:1.5px solid var(--cardBorder);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:18px}
+  .opt small{font-size:8px;color:var(--muted);text-transform:uppercase;margin-top:2px}
+  .opt.sel{border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.15)}
+  .status2{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:12px 14px;font-size:13px}
+  .status2 .h{font-weight:700;margin-bottom:6px}
+  .status2 .l{display:flex;justify-content:space-between;color:var(--muted);padding:3px 0}
+  .bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;display:flex;gap:10px;background:linear-gradient(transparent,var(--surface) 26%)}
+  .prev{flex:1;height:50px;border-radius:14px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font-weight:700}
+  .next{flex:2;height:50px;border-radius:14px;border:none;background:var(--pine);color:#fff;font-weight:700}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">✕</span><span class="ttl">Skins (Net 90%)</span><span class="ic">☁︎</span><span class="ic">💬</span><span class="ic">📊</span></div>
+    <div class="body">
+      <div class="banner"><span class="team"><span class="dot b"></span>Blue</span><span style="color:var(--muted)">vs</span><span class="team">Orange<span class="dot o"></span></span></div>
+      <div class="card">
+        <div class="hh"><span><b>Hole 7</b></span><span>Par 4 · 412 yds · SI 3</span></div>
+        <div class="prow"><span class="nm">Paul</span><span class="gets">gets 1</span><span class="sbox u circle">3</span></div>
+        <div class="prow hot"><span class="nm">Dave</span><span class="gets">gets 1</span><span class="sbox" style="border-color:var(--pine)">–</span></div>
+        <div class="picker"><span class="opt u">3<small>bird</small></span><span class="opt sel">4<small>par</small></span><span class="opt">5<small>bog</small></span><span class="opt">6<small>dbl</small></span></div>
+        <div class="prow"><span class="nm">Sam</span><span class="sbox">4</span></div>
+        <div class="prow"><span class="nm">Lee</span><span class="gets">gets 1</span><span class="sbox square">6</span></div>
+      </div>
+      <div class="status2">
+        <div class="h">Skins · thru 6</div>
+        <div class="l"><span>🏆 Paul</span><span>3 skins · $12</span></div>
+        <div class="l"><span>Sam</span><span>1 skin · $4</span></div>
+        <div class="l"><span>Carry live →</span><span>hole 7 worth 2</span></div>
+      </div>
+    </div>
+    <div class="bottom"><button class="prev">‹ Hole 6</button><button class="next">Hole 8 ›</button></div>
+  </div>
+</body>
+</html>

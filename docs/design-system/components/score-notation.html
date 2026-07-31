@@ -1,0 +1,41 @@
+<!-- @dsCard group="Scoring controls" name="Score notation" subtitle="NetScoreButton — circle under par, square over, + handicap dots" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Score notation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600&family=Spline+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:8px;width:74px}
+  .dots{height:8px;display:flex;gap:3px;align-items:center}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--pine)}
+  .mark{width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;background:var(--card)}
+  .under{color:var(--under)}
+  .circle{border:2px solid var(--under);border-radius:50%}
+  .dcircle{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--under);border:2px solid var(--under);border-radius:50%}
+  .square{border:2px solid var(--deepPine);border-radius:6px}
+  .dsquare{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--deepPine);border:2px solid var(--deepPine);border-radius:6px}
+  .cap{font-size:11px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Score notation</h1>
+  <p class="sub">Golf-scorecard marks (<code>NetScoreButton</code> / <code>scoreMark</code>): under par = red digit in a circle (double ring for eagle+), par = plain, over par = square (double for double-bogey+). Handicap “gets-a-stroke” dots sit above the cell.</p>
+  <div class="row">
+    <div class="cell"><div class="dots"><span class="dot"></span></div><div class="mark under dcircle">2</div><div class="cap">Eagle</div></div>
+    <div class="cell"><div class="dots"><span class="dot"></span></div><div class="mark under circle">3</div><div class="cap">Birdie</div></div>
+    <div class="cell"><div class="dots"></div><div class="mark">4</div><div class="cap">Par</div></div>
+    <div class="cell"><div class="dots"><span class="dot"></span><span class="dot"></span></div><div class="mark square">5</div><div class="cap">Bogey</div></div>
+    <div class="cell"><div class="dots"><span class="dot"></span></div><div class="mark dsquare">6</div><div class="cap">Double+</div></div>
+  </div>
+</body>
+</html>

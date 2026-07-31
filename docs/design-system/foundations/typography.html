@@ -1,0 +1,36 @@
+<!-- @dsCard group="Foundations" name="Typography" subtitle="Schibsted Grotesk headings · Spline Sans body · tabular figures" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Typography</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .row{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+  .spec{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .grotesk{font-family:"Schibsted Grotesk",sans-serif}
+  .spline{font-family:"Spline Sans",sans-serif}
+  .tab{font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Typography</h1>
+  <p class="sub">Headings in <b>Schibsted Grotesk</b>, body/labels in <b>Spline Sans</b> (both via google_fonts). Money &amp; scores use tabular figures.</p>
+
+  <div class="row"><span class="grotesk" style="font-size:26px;font-weight:700">Empty-state title</span><span class="spec">Grotesk · 26 / 700</span></div>
+  <div class="row"><span class="grotesk" style="font-size:22px;font-weight:600">Section head</span><span class="spec">Grotesk · 22 / 600</span></div>
+  <div class="row"><span class="grotesk" style="font-size:20px;font-weight:600">App-bar title</span><span class="spec">Grotesk · 20 / 600</span></div>
+  <div class="row"><span class="spline" style="font-size:16px;font-weight:700">Button label</span><span class="spec">Spline · 16 / 700</span></div>
+  <div class="row"><span class="spline" style="font-size:15px;font-weight:400">Body copy — the quick brown fox settles the bet.</span><span class="spec">Spline · 15 / 400</span></div>
+  <div class="row"><span class="spline" style="font-size:12.5px;font-weight:600;letter-spacing:.4px;color:var(--muted);text-transform:uppercase">Label / meta</span><span class="spec">Spline · 12.5 / 600 · +0.4</span></div>
+  <div class="row"><span class="spline tab" style="font-size:22px;font-weight:700">$128.00&nbsp;&nbsp;+3&nbsp;&nbsp;72</span><span class="spec">Tabular figures — money / scores</span></div>
+</body>
+</html>

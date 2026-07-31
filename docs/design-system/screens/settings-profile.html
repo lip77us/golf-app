@@ -1,0 +1,66 @@
+<!-- @dsCard group="Account & setup" name="Profile / Settings" subtitle="SettingsScreen — info, home course, prefs, delete" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Profile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--warning:#B24225}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .body{padding:0 16px;overflow-y:auto;height:640px}
+  .sh{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:16px 4px 8px}
+  .card{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:16px;overflow:hidden}
+  .info{padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--cardBorder)}
+  .av{width:48px;height:48px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--pine)}
+  .av .nm{font-weight:700}
+  .who b{font-weight:700}.who small{display:block;color:var(--muted);font-size:12px}
+  .badge{margin-left:auto;width:22px;height:22px;border-radius:6px;background:var(--pine);display:flex;align-items:center;justify-content:center}
+  .field{padding:12px 16px;border-bottom:1px solid var(--cardBorder)}
+  .field small{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}
+  .field b{font-weight:600}
+  .save{margin:12px 16px;height:44px;border-radius:12px;background:var(--pine);color:#fff;border:none;font-weight:700;width:calc(100% - 32px)}
+  .tile{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--cardBorder);font-size:14px}
+  .tile:last-child{border-bottom:none}
+  .switch{width:44px;height:26px;border-radius:999px;background:var(--pine);position:relative}
+  .switch.off{background:var(--cardBorder)}
+  .switch::after{content:"";position:absolute;right:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff}
+  .switch.off::after{right:auto;left:3px}
+  .chev{color:var(--muted)}
+  .delete{color:var(--warning);font-weight:600;padding:16px;text-align:center;font-size:14px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">☰</span><span class="ttl">Profile</span><span style="width:17px"></span></div>
+    <div class="body">
+      <div class="sh">Your info</div>
+      <div class="card">
+        <div class="info"><span class="av">PL</span><span class="who"><b>Paul Lipkin</b><small>On Halved · (415) 555-0148</small></span><span class="badge"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M9 3v13" stroke="#3BD89A" stroke-width="2.5" stroke-linecap="round"/><path d="M9 3l7 2.5L9 8" fill="#3BD89A"/></svg></span></div>
+        <div class="field"><small>Name</small><b>Paul Lipkin</b></div>
+        <div class="field"><small>Handicap index</small><b>8.2</b></div>
+        <button class="save">Save</button>
+      </div>
+      <div class="sh">Home course</div>
+      <div class="card"><div class="tile"><span>Pebble Dunes GC</span><span class="chev">›</span></div></div>
+      <div class="sh">Privacy &amp; preferences</div>
+      <div class="card">
+        <div class="tile"><span>Findable by name</span><span class="switch"></span></div>
+        <div class="tile"><span>Net-style score entry</span><span class="switch"></span></div>
+        <div class="tile"><span>Auto-advance to next hole</span><span class="switch off"></span></div>
+      </div>
+      <div class="card" style="margin-top:16px"><div class="delete">Delete Account</div></div>
+    </div>
+  </div>
+</body>
+</html>
