@@ -15,6 +15,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../api/client.dart' show ApiException;
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
@@ -147,20 +148,29 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
       try {
         final course = await client.getCourse(h.courseId!);
         _commit(course);
-      } catch (_) {
-        _failAdd(messenger);
+      } catch (e) {
+        _failAdd(messenger, e);
       }
-    } catch (_) {
-      _failAdd(messenger);
+    } catch (e) {
+      _failAdd(messenger, e);
     }
   }
 
-  void _failAdd(ScaffoldMessengerState messenger) {
+  void _failAdd(ScaffoldMessengerState messenger, [Object? error]) {
     if (!mounted) return;
     setState(() => _addingKey = null);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Could not add that course. Try again.')),
-    );
+    // Surface the server's reason when it sent one — the course-import quality
+    // gate returns a 422 whose message names exactly what's wrong (e.g. a bad
+    // stroke index).  Fall back to the generic line for network/opaque errors.
+    final reason = (error is ApiException && error.message.trim().isNotEmpty)
+        ? error.message.trim()
+        : null;
+    messenger.showSnackBar(SnackBar(
+      content: Text(reason == null
+          ? 'Could not add that course. Try again.'
+          : "Couldn't add that course — $reason"),
+      duration: Duration(seconds: reason == null ? 4 : 7),
+    ));
   }
 
   void _commit(CourseInfo c) {

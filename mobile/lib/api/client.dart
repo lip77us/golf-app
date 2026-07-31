@@ -140,6 +140,13 @@ class ApiClient {
     try {
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       message = (body['detail'] ?? body.values.first).toString();
+      // Validation endpoints (e.g. the course-import quality gate) return a
+      // `problems` list naming exactly what's wrong — append it so the reason
+      // reaches the user instead of a bare "failed".
+      final problems = body['problems'];
+      if (problems is List && problems.isNotEmpty) {
+        message = '$message — ${problems.map((p) => p.toString()).join('; ')}';
+      }
     } catch (_) {
       // Non-JSON body — most commonly Django's HTML debug page in dev mode
       // (DEBUG=True returns a several-thousand-line stacktrace).  Dumping
