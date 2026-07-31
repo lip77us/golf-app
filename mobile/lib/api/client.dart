@@ -1582,12 +1582,14 @@ class ApiClient {
     int    netPercent   = 100,
     bool   accumulate   = true,
     int    numSegments  = 1,
+    String handicapAllocation = 'per_segment',
   }) async {
     final data = await _post('/foursomes/$foursomeId/rabbit/setup/', {
       'handicap_mode': handicapMode,
       'net_percent'  : netPercent,
       'accumulate'   : accumulate,
       'num_segments' : numSegments,
+      'handicap_allocation': handicapAllocation,
     });
     return RabbitSummary.fromJson(data as Map<String, dynamic>);
   }

@@ -3137,6 +3137,8 @@ class RabbitSummary {
   final int    netPercent;
   final bool   accumulate;
   final int    numSegments;
+  /// 'per_segment' | 'full_round' — only meaningful for strokes_off + >1 segment.
+  final String handicapAllocation;
   final List<RabbitSegment>     segments;
   final List<RabbitPlayerTotal> players;
   final List<RabbitHole>        holes;
@@ -3156,6 +3158,7 @@ class RabbitSummary {
     required this.netPercent,
     required this.accumulate,
     required this.numSegments,
+    this.handicapAllocation = 'per_segment',
     required this.segments,
     required this.players,
     required this.holes,
@@ -3188,6 +3191,7 @@ class RabbitSummary {
       status:       j['status'] as String? ?? 'pending',
       handicapMode: hcap['mode']        as String? ?? 'net',
       netPercent:   hcap['net_percent'] as int?    ?? 100,
+      handicapAllocation: hcap['allocation'] as String? ?? 'per_segment',
       accumulate:   j['accumulate']   as bool? ?? true,
       numSegments:  j['num_segments'] as int?  ?? 1,
       segments: (j['segments'] as List? ?? [])

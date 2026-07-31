@@ -52,6 +52,9 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
   // Default to three 6-hole matches (rabbit resets each segment) rather than a
   // single 18-hole match — keeps more of the round in play.
   int    _segments   = 3;
+  // Strokes-Off allocation (Sixes-style): 'per_segment' (default) spreads a
+  // golfer's SO strokes across the matches; 'full_round' allocates round-wide.
+  String _allocation = 'per_segment';
 
   final TextEditingController _betCtrl = TextEditingController();
   /// True once a stake is entered or "no stakes" is chosen (gates Start).
@@ -110,6 +113,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
           _netPercent = _summary!.netPercent;
           _accumulate = _summary!.accumulate;
           _segments   = _summary!.numSegments;
+          _allocation = _summary!.handicapAllocation;
         }
         // Keep the segment count valid for this round's hole count (a 9-hole
         // round can't split into 2 even matches; fall back to 3 → three 3-hole
@@ -177,6 +181,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
         netPercent:   _netPercent,
         accumulate:   _accumulate,
         numSegments:  _segments,
+        handicapAllocation: _allocation,
       );
       rp.setRabbitSummary(summary);
 
@@ -266,6 +271,43 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
             onPercentChanged: (p) => setState(() => _netPercent = p),
           ),
           const SizedBox(height: 16),
+
+          // ── Handicap allocation (Strokes-Off + multiple segments only) ──
+          if (_mode == 'strokes_off' && _segments > 1) ...[
+            _Card(
+              title: 'Handicap allocation',
+              subtitle: 'Strokes Off across '
+                  '${_segments == 3 ? 'three 6-hole' : 'two 9-hole'} matches — '
+                  "decide where a golfer's strokes land.",
+              child: Column(children: [
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  value: 'per_segment',
+                  groupValue: _allocation,
+                  onChanged: (v) =>
+                      setState(() => _allocation = v ?? 'per_segment'),
+                  title: const Text('Spread across the matches'),
+                  subtitle: const Text(
+                      "Divide each golfer's strokes evenly between the ranges, "
+                      'then allocate to the hardest holes inside each. Every '
+                      'match stays contested.'),
+                ),
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  value: 'full_round',
+                  groupValue: _allocation,
+                  onChanged: (v) =>
+                      setState(() => _allocation = v ?? 'full_round'),
+                  title: const Text('Straight up (round-wide)'),
+                  subtitle: const Text(
+                      'Allocate by overall course stroke index — strokes fall '
+                      'on SI 1, 2, 3… wherever they sit, so one match can absorb '
+                      'most of them.'),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // ── Accumulate vs Stop ──
           _Card(

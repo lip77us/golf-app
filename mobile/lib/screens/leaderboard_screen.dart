@@ -4881,6 +4881,7 @@ class _RabbitGroupCard extends StatelessWidget {
     final status  = summary['status']?.toString() ?? 'pending';
     final players = (summary['players']  as List? ?? const []);
     final segs    = (summary['segments'] as List? ?? const []);
+    final holes   = (summary['holes']    as List? ?? const []);
     final accumulate = summary['accumulate'] as bool? ?? true;
     final money   = summary['money'] as Map<String, dynamic>? ?? const {};
     final betUnit = (money['bet_unit'] as num?)?.toDouble() ?? 0.0;
@@ -4996,6 +4997,81 @@ class _RabbitGroupCard extends StatelessWidget {
                   if (!complete)
                     Text('in play', style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
+                ]),
+              );
+            }),
+          ],
+
+          // By-hole winner strip — who took the rabbit on each hole (an initial
+          // when they won the hole outright, a dash when it was halved and the
+          // rabbit carried); unplayed holes are faint and the segment-locking
+          // cell is outlined.  Read-only; entry lives on the play screen.
+          if (holes.isNotEmpty && segs.isNotEmpty) ...[
+            const Divider(height: 20),
+            Text('By hole',
+                style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+            const SizedBox(height: 4),
+            ...segs.map((s) {
+              final seg      = s as Map<String, dynamic>;
+              final segIdx   = seg['index'];
+              final endHole  = seg['end_hole'];
+              final complete = seg['complete'] as bool? ?? false;
+              final segHoles = holes
+                  .where((h) => (h as Map<String, dynamic>)['segment'] == segIdx)
+                  .toList();
+              if (segHoles.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(children: [
+                  SizedBox(width: 40,
+                    child: Text('${seg['start_hole']}–$endHole',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant))),
+                  ...segHoles.map((hh) {
+                    final h       = hh as Map<String, dynamic>;
+                    final scored  = h['event'] != null;
+                    final winner  = h['winner_short'] as String?;
+                    final locked  = complete && h['hole'] == endHole;
+                    final label   = (scored && winner != null && winner.isNotEmpty)
+                        ? winner.substring(0, 1) : '–';
+                    return Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        decoration: BoxDecoration(
+                          color: locked
+                              ? theme.colorScheme.primary.withOpacity(0.10)
+                              : scored
+                                  ? theme.colorScheme.surfaceContainerHighest
+                                      .withOpacity(0.5)
+                                  : Colors.transparent,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: locked
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outlineVariant,
+                            width: locked ? 1.2 : 1,
+                          ),
+                        ),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text('${h['hole']}',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                  fontSize: 9,
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                          Text(label,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                  fontWeight: (scored && winner != null)
+                                      ? FontWeight.bold : FontWeight.w500,
+                                  color: (scored && winner != null)
+                                      ? theme.colorScheme.primary
+                                      : scored
+                                          ? theme.colorScheme.onSurfaceVariant
+                                          : theme.colorScheme.outlineVariant)),
+                        ]),
+                      ),
+                    );
+                  }),
                 ]),
               );
             }),
