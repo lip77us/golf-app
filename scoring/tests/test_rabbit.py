@@ -36,6 +36,25 @@ class RabbitTests(TestCase):
         h = next(x for x in summary['holes'] if x['hole'] == hole)
         return h['holder_short'], h['lead'], h['event']
 
+    # ── Handicap allocation (Strokes-Off) ────────────────────────────────────
+
+    def test_handicap_allocation_surfaced_and_scores(self):
+        # Plumbing guard: both allocations set up + summarise, and the chosen
+        # allocation is echoed back.  (Per-segment stroke-math mirrors the
+        # Sixes allocation, which is covered in test_sixes.)
+        for alloc in ('per_segment', 'full_round'):
+            setup_rabbit(self.fs, handicap_mode='strokes_off', num_segments=3,
+                         handicap_allocation=alloc)
+            submit_hole(self.fs, 5, [(self.pid['Ann'], 4), (self.pid['Ben'], 4),
+                                     (self.pid['Cal'], 5)])
+            calculate_rabbit(self.fs)
+            s = rabbit_summary(self.fs)
+            assert s['handicap']['allocation'] == alloc, s['handicap']
+
+    def test_setup_defaults_to_per_segment(self):
+        g = setup_rabbit(self.fs, handicap_mode='strokes_off', num_segments=3)
+        assert g.handicap_allocation == 'per_segment'
+
     # ── Catch / hold / free ──────────────────────────────────────────────────
 
     def test_first_outright_win_catches_rabbit(self):

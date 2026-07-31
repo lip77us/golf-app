@@ -820,6 +820,25 @@ class RabbitGame(models.Model):
                         help_text="1 = one 18-hole match, 2 = two 9-hole matches, "
                                   "3 = three 6-hole matches.",
                     )
+    # Handicap allocation — mirrors SixesSegment.  Only meaningful for
+    # handicap_mode='strokes_off' with more than one segment; a no-op for
+    # net/gross or a single 18-hole match.
+    ALLOC_PER_SEGMENT = 'per_segment'
+    ALLOC_FULL_ROUND  = 'full_round'
+    ALLOCATION_CHOICES = [
+        (ALLOC_PER_SEGMENT, 'Spread across the matches'),
+        (ALLOC_FULL_ROUND,  'Straight up (round-wide SI)'),
+    ]
+    handicap_allocation = models.CharField(
+                        max_length=20,
+                        choices=ALLOCATION_CHOICES,
+                        default=ALLOC_PER_SEGMENT,
+                        help_text="Strokes-Off only: 'per_segment' splits each "
+                                  "golfer's strokes evenly across the matches, "
+                                  "allocated to the hardest holes in each range; "
+                                  "'full_round' allocates round-wide by stroke "
+                                  "index.  No effect for net/gross or 1 segment.",
+                    )
     created_at    = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

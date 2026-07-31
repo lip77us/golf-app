@@ -5455,10 +5455,11 @@ class RabbitSetupView(APIView):
         from services.rabbit import setup_rabbit, calculate_rabbit, rabbit_summary
         setup_rabbit(
             foursome,
-            handicap_mode = d.get('handicap_mode', 'net'),
-            net_percent   = d.get('net_percent', 100),
-            accumulate    = d.get('accumulate', True),
-            num_segments  = d.get('num_segments', 1),
+            handicap_mode       = d.get('handicap_mode', 'net'),
+            net_percent         = d.get('net_percent', 100),
+            accumulate          = d.get('accumulate', True),
+            num_segments        = d.get('num_segments', 1),
+            handicap_allocation = d.get('handicap_allocation', 'per_segment'),
         )
         calculate_rabbit(foursome)
         return Response(rabbit_summary(foursome), status=status.HTTP_201_CREATED)

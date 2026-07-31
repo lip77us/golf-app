@@ -57,6 +57,7 @@ def setup_rabbit(
     net_percent: int = 100,
     accumulate: bool = True,
     num_segments: int = 1,
+    handicap_allocation: str = RabbitGame.ALLOC_PER_SEGMENT,
 ) -> 'RabbitGame':
     """Create (or replace) the Rabbit game for a foursome.  Safe to call
     again — the prior game + its hole results are dropped first."""
@@ -64,14 +65,19 @@ def setup_rabbit(
 
     net_percent  = max(0, min(200, int(net_percent)))
     num_segments = num_segments if num_segments in (1, 2, 3) else 1
+    allocation   = (handicap_allocation
+                    if handicap_allocation in
+                    (RabbitGame.ALLOC_PER_SEGMENT, RabbitGame.ALLOC_FULL_ROUND)
+                    else RabbitGame.ALLOC_PER_SEGMENT)
 
     return RabbitGame.objects.create(
-        foursome      = foursome,
-        handicap_mode = handicap_mode,
-        net_percent   = net_percent,
-        accumulate    = bool(accumulate),
-        num_segments  = num_segments,
-        status        = MatchStatus.PENDING,
+        foursome            = foursome,
+        handicap_mode       = handicap_mode,
+        net_percent         = net_percent,
+        accumulate          = bool(accumulate),
+        num_segments        = num_segments,
+        handicap_allocation = allocation,
+        status              = MatchStatus.PENDING,
     )
 
 
@@ -87,8 +93,67 @@ def _real_members(foursome) -> list:
     )
 
 
-def _score_index(game, foursome) -> dict:
+def _build_rabbit_so_seg_index(foursome, seg_lists, net_percent: int = 100) -> dict:
+    """Strokes-Off score index with each golfer's strokes spread PER SEGMENT
+    (Sixes-style), returning {pid: {hole: net_score}} for scored holes.
+
+    The lowest playing handicap plays to 0.  Every other player's SO strokes
+    (own_phcp − low, at net_percent) are split evenly across the segments — the
+    earliest segments absorb the remainder (7 over 3 → 3·2·2) — then allocated
+    to the hardest holes (lowest stroke index) within each segment's own range,
+    wrapping if a segment's share exceeds its hole count.
+    """
+    score_index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
+    memberships = list(
+        foursome.memberships
+        .select_related('player', 'tee')
+        .filter(player__is_phantom=False)
+    )
+    if not memberships:
+        return score_index
+
+    phcps = [m.playing_handicap for m in memberships
+             if m.playing_handicap is not None]
+    low  = min(phcps) if phcps else 0
+    nseg = len(seg_lists) or 1
+
+    for m in memberships:
+        if m.tee_id is None:
+            continue
+        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
+        if so <= 0:
+            continue
+        per_player = score_index.get(m.player_id)
+        if not per_player:
+            continue
+        base, rem = divmod(so, nseg)
+        for si_idx, seg_holes in enumerate(seg_lists):
+            share = base + (1 if si_idx < rem else 0)
+            if share <= 0 or not seg_holes:
+                continue
+            # Hardest holes first within THIS segment; wrap for a share that
+            # exceeds the segment length (only when SO > holes, very rare).
+            ranked = sorted(
+                seg_holes,
+                key=lambda h: m.tee.hole(h).get('stroke_index', 18),
+            )
+            for k in range(share):
+                h = ranked[k % len(ranked)]
+                # Net is only meaningful for scored holes; an unscored stroke
+                # hole lands when its score is entered and recalc re-runs.
+                if per_player.get(h) is not None:
+                    per_player[h] -= 1
+    return score_index
+
+
+def _score_index(game, foursome, seg_lists=None) -> dict:
     if game.handicap_mode == HandicapMode.STROKES_OFF:
+        # Per-segment spread only differs from round-wide when there's more
+        # than one segment; a single 18-hole match is identical either way.
+        if (game.handicap_allocation == RabbitGame.ALLOC_PER_SEGMENT
+                and seg_lists and len(seg_lists) > 1):
+            return _build_rabbit_so_seg_index(
+                foursome, seg_lists, net_percent=game.net_percent)
         return _build_so_score_index(foursome, net_percent=game.net_percent)
     return build_score_index(
         foursome,
@@ -145,8 +210,8 @@ def calculate_rabbit(foursome) -> list:
         game.save(update_fields=['status'])
         return []
 
-    score_index = _score_index(game, foursome)
     seg_lists   = segment_hole_lists(foursome, game.num_segments)
+    score_index = _score_index(game, foursome, seg_lists)
     holes_total = sum(len(s) for s in seg_lists)
     accumulate  = game.accumulate
 
@@ -241,7 +306,8 @@ def rabbit_summary(foursome) -> dict:
     except RabbitGame.DoesNotExist:
         return {
             'status'      : 'pending',
-            'handicap'    : {'mode': HandicapMode.STROKES_OFF, 'net_percent': 100},
+            'handicap'    : {'mode': HandicapMode.STROKES_OFF, 'net_percent': 100,
+                             'allocation': RabbitGame.ALLOC_PER_SEGMENT},
             'accumulate'  : True,
             'num_segments': 1,
             'segments'    : [],
@@ -256,9 +322,9 @@ def rabbit_summary(foursome) -> dict:
     members  = _real_members(foursome)
     by_pid   = {m.player_id: m.player for m in members}
     real_ids = list(by_pid.keys())
-    score_index = _score_index(game, foursome)
     order       = play_order(foursome.round, foursome)   # holes in play order
     seg_lists   = segment_hole_lists(foursome, game.num_segments)
+    score_index = _score_index(game, foursome, seg_lists)
     seg_of      = _segment_of_map(seg_lists)
     nseg        = len(seg_lists) or 1
 
@@ -390,7 +456,8 @@ def rabbit_summary(foursome) -> dict:
 
     return {
         'status'      : game.status,
-        'handicap'    : {'mode': game.handicap_mode, 'net_percent': game.net_percent},
+        'handicap'    : {'mode': game.handicap_mode, 'net_percent': game.net_percent,
+                         'allocation': game.handicap_allocation},
         'accumulate'  : game.accumulate,
         'num_segments': game.num_segments,
         'segments'    : seg_out,
