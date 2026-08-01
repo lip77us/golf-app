@@ -1,0 +1,157 @@
+<!-- @dsCard group="Games" name="Nassau (play)" subtitle="NassauScreen — team banner, presses strip, score card, F9/B9/ALL match bar, Call Press" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Nassau (play)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--win:#388E3C;--warn:#B24225;--blue:#1976D2;--orange:#EF6C00}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 14px 8px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:17px;flex:1;text-align:center}
+  /* team banner */
+  .tban{display:flex;align-items:center;gap:8px;background:#E1EAE2;padding:8px 14px;font-size:13px;font-weight:600}
+  .tban .t1{color:var(--blue)} .tban .t2{color:var(--orange);margin-left:auto;text-align:right}
+  .tban .vs{color:var(--muted);font-weight:500}
+  .dot{width:11px;height:11px;border-radius:50%;flex:none}
+  .dot.b{background:var(--blue)} .dot.o{background:var(--orange)}
+  /* presses strip */
+  .presses{display:flex;gap:7px;overflow-x:auto;padding:8px 14px 4px}
+  .ppill{flex:none;display:flex;flex-direction:column;align-items:flex-start;border-radius:999px;padding:5px 12px;font-size:11px;font-weight:700;border:1px solid var(--cardBorder);background:var(--card);line-height:1.25}
+  .ppill small{font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+  .ppill.b{border-color:rgba(25,118,210,.5);background:rgba(25,118,210,.08);color:var(--blue)}
+  .ppill.n{color:var(--muted)}
+  .body{padding:0 12px;overflow-y:auto;height:454px}
+  /* hole header */
+  .hh{position:relative;background:#E1EAE2;border-radius:8px;padding:9px 44px;text-align:center;margin:4px 0 10px}
+  .hh .n{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px}
+  .hh .sub{font-size:12px;color:var(--muted)}
+  .hh .help{position:absolute;top:6px;right:8px;color:var(--pine);font-size:16px}
+  /* outcome */
+  .outcome{display:flex;align-items:center;gap:7px;border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:13px;font-weight:700}
+  .outcome.b{background:rgba(25,118,210,.10);border:1px solid rgba(25,118,210,.4);color:var(--blue)}
+  /* score card */
+  .card{border:1px solid var(--cardBorder);border-radius:8px;overflow:hidden;background:var(--card)}
+  .prow{display:flex;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid var(--cardBorder)}
+  .prow:first-child{border-top:none}
+  .prow.t1{background:rgba(25,118,210,.06);border-left:4px solid var(--blue)}
+  .prow.t2{background:rgba(239,108,0,.06);border-left:4px solid var(--orange)}
+  .nm{flex:1;font-weight:700}
+  .nm.b{color:var(--blue)} .nm.o{color:var(--orange)}
+  .gets{font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px}
+  .dots{display:flex;gap:2px;justify-content:center;height:6px;margin-bottom:2px}
+  .sdot{width:4px;height:4px;border-radius:50%;background:var(--pine)}
+  .box{width:40px;height:36px;border-radius:6px;border:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700}
+  .box.win{color:var(--win)}
+  .scorecell{display:flex;flex-direction:column;align-items:center}
+  /* active editing box */
+  .active{margin:6px 0;border-radius:2px;background:rgba(239,108,0,.10);border-top:1.5px solid var(--orange);border-bottom:1.5px solid var(--orange);border-right:1.5px solid var(--orange);border-left:4px solid var(--orange)}
+  .active .prow{border-top:none;background:transparent}
+  .picker{display:flex;gap:6px;justify-content:center;padding:6px 6px 10px}
+  .opt{min-width:38px;height:44px;border-radius:9px;border:1px solid var(--cardBorder);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:16px}
+  .opt small{font-size:8px;color:var(--muted);text-transform:uppercase;margin-top:1px}
+  .opt.sel{border:2px solid var(--orange)}
+  .opt.u{color:var(--under)}
+  /* grid */
+  .grid{border:1px solid var(--cardBorder);border-radius:8px;padding:10px;background:var(--card);margin-top:12px}
+  .grid .h{font-size:12px;font-weight:700;color:var(--pine);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
+  .gscroll{overflow-x:auto}
+  table{border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
+  td,th{padding:3px 6px;text-align:center;white-space:nowrap}
+  td.lbl,th.lbl{text-align:left;font-weight:700;position:sticky;left:0;background:var(--card)}
+  th.cur,td.cur{background:rgba(15,110,86,.10);border-radius:5px}
+  .parrow td{color:var(--muted);font-style:italic}
+  .wonrow td{font-weight:800;font-size:10px}
+  .wonrow td.lbl{font-style:italic;color:var(--muted);font-weight:700}
+  .ini{display:inline-block;border-radius:4px;padding:1px 4px}
+  .ini.b{color:var(--blue);background:rgba(25,118,210,.15)}
+  .ini.o{color:var(--orange);background:rgba(239,108,0,.15)}
+  .ini.h{color:var(--muted);background:transparent}
+  /* bottom bar */
+  .bottom{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,var(--surface) 22%);padding:8px 12px 14px}
+  .statusbar{display:flex;gap:8px;background:#E1EAE2;border-radius:10px;padding:8px;margin-bottom:8px}
+  .bchip{flex:1;display:flex;flex-direction:column;align-items:center;border-radius:8px;padding:5px 0;background:var(--card)}
+  .bchip small{font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+  .bchip b{font-size:14px;font-weight:800;margin-top:1px}
+  .bchip.b{background:rgba(25,118,210,.10)} .bchip.b b{color:var(--blue)}
+  .bchip.dec{background:rgba(25,118,210,.16)} .bchip.dec b{color:var(--blue)}
+  .bchip.as b{color:var(--muted)}
+  .callpress{width:100%;height:38px;border-radius:10px;border:none;background:rgba(15,110,86,.14);color:var(--pine);font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px}
+  .nav{display:flex;gap:8px}
+  .prev{flex:1;height:46px;border-radius:12px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font-weight:700;font-size:14px}
+  .next{flex:1;height:46px;border-radius:12px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:14px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">✕</span><span class="ttl">Nassau — Net 90%</span><span class="ic">💬</span><span class="ic">📊</span></div>
+
+    <div class="tban"><span class="dot b"></span><span class="t1">Paul &amp; Mike</span><span class="vs">vs</span><span class="t2">Dave &amp; Sam</span><span class="dot o"></span></div>
+
+    <div class="presses">
+      <span class="ppill b">F9 Press 1 · 2UP<small>Blue · auto</small></span>
+      <span class="ppill n">B9 Press 1 · AS<small>started hole 12</small></span>
+    </div>
+
+    <div class="body">
+      <div class="hh"><div class="n">Hole 12</div><div class="sub">Par 4  |  415 yds.  |  SI: 4</div><div class="help">？</div></div>
+
+      <div class="outcome b">🏆 Blue wins hole</div>
+
+      <div class="card">
+        <div class="prow t1"><span class="nm b">Paul</span><span class="gets">gets 1</span>
+          <span class="scorecell"><span class="dots"><span class="sdot"></span></span><span class="box win">4</span></span></div>
+        <div class="prow t1"><span class="nm b">Mike</span>
+          <span class="scorecell"><span class="dots"></span><span class="box">5</span></span></div>
+      </div>
+      <!-- Dave (Orange): tapped-to-edit, inline picker open -->
+      <div class="active">
+        <div class="prow"><span class="nm o">Dave</span><span class="gets">gets 1</span>
+          <span class="scorecell"><span class="dots"><span class="sdot"></span></span><span class="box" style="border-color:var(--orange);border-width:2px">5</span></span></div>
+        <div class="picker"><span class="opt u">4<small>bird</small></span><span class="opt">5<small>par</small></span><span class="opt sel">6<small>bog</small></span><span class="opt">7<small>dbl</small></span></div>
+      </div>
+      <div class="card">
+        <div class="prow t2"><span class="nm o">Sam</span>
+          <span class="scorecell"><span class="dots"></span><span class="box">6</span></span></div>
+      </div>
+
+      <div class="grid">
+        <div class="h">Round progress</div>
+        <div class="gscroll">
+          <table>
+            <tr><th class="lbl">Hole</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th class="cur">12</th><th>13</th></tr>
+            <tr class="parrow"><td class="lbl">Par</td><td>4</td><td>3</td><td>5</td><td>4</td><td>4</td><td class="cur">4</td><td>4</td></tr>
+            <tr><td class="lbl">Paul</td><td>4</td><td>3</td><td>6</td><td>5</td><td>4</td><td class="cur">4</td><td>–</td></tr>
+            <tr><td class="lbl">Mike</td><td>5</td><td>4</td><td>5</td><td>5</td><td>5</td><td class="cur">5</td><td>–</td></tr>
+            <tr><td class="lbl">Dave</td><td>4</td><td>4</td><td>5</td><td>4</td><td>6</td><td class="cur">5</td><td>–</td></tr>
+            <tr><td class="lbl">Sam</td><td>5</td><td>3</td><td>6</td><td>5</td><td>5</td><td class="cur">6</td><td>–</td></tr>
+            <tr class="wonrow"><td class="lbl">Won by</td>
+              <td><span class="ini o">O</span></td><td><span class="ini h">=</span></td><td><span class="ini b">B</span></td>
+              <td><span class="ini o">O</span></td><td><span class="ini b">B</span></td><td class="cur"><span class="ini b">B</span></td><td>·</td></tr>
+          </table>
+        </div>
+      </div>
+      <div style="height:8px"></div>
+    </div>
+
+    <div class="bottom">
+      <div class="statusbar">
+        <div class="bchip dec"><small>F9</small><b>3&amp;2</b></div>
+        <div class="bchip as"><small>B9</small><b>AS</b></div>
+        <div class="bchip b"><small>ALL</small><b>1UP</b></div>
+      </div>
+      <button class="callpress">⊕ Call Press</button>
+      <div class="nav"><button class="prev">‹ Hole 11</button><button class="next">Hole 13 ›</button></div>
+    </div>
+  </div>
+</body>
+</html>

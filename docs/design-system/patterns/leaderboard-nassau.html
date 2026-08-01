@@ -1,0 +1,80 @@
+<!-- @dsCard group="Scorecards & leaderboards" name="Leaderboard — Nassau" subtitle="_NassauGroupCard — F9/B9/Overall bets, presses (holes 3–9), Claremont Top/Bottom, · Final" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Leaderboard — Nassau</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--win:#388E3C;--loss:#D32F2F;--blue:#1976D2;--orange:#EF6C00}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 18px;font-size:13px;max-width:540px}
+  .tabs{display:flex;gap:16px;border-bottom:1px solid var(--cardBorder);margin-bottom:14px;font-size:13px;font-weight:600;color:var(--muted)}
+  .tabs .on{color:var(--pine);border-bottom:2px solid var(--pine);padding-bottom:8px}
+  .card{max-width:420px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:14px 16px}
+  .match{text-align:center;font-weight:700;font-size:14px}
+  .match .b{color:var(--blue)} .match .o{color:var(--orange)} .match .vs{color:var(--muted);font-weight:500}
+  .thru{text-align:center;color:var(--muted);font-size:12px;margin-top:3px}
+  .divider{height:1px;background:var(--cardBorder);margin:12px 0 8px}
+  .seghead{font-weight:700;font-size:12.5px;color:var(--pine);margin-bottom:4px}
+  .betrow{display:flex;align-items:baseline;padding:3px 0;font-size:13px}
+  .betrow .r{width:72px;color:var(--muted);font-size:12.5px}
+  .betrow .v{flex:1;font-weight:600}
+  .v.b{color:var(--blue)} .v.o{color:var(--orange)} .v.as{color:var(--muted);font-weight:500}
+  .fin{color:var(--muted);font-weight:500}
+  .pressrow{display:flex;align-items:baseline;padding:2px 0;font-size:12.5px}
+  .pressrow .r{width:150px;color:var(--muted)}
+  .pressrow .v{flex:1;font-weight:600}
+  .foot{display:flex;justify-content:space-between;margin-top:6px;font-size:13px}
+  .foot .money b{font-weight:700}
+  .pos{color:var(--win)} .neg{color:var(--loss)}
+  .foot .rt{text-align:right;color:var(--muted);font-size:11.5px;line-height:1.6}
+  .note{color:var(--muted);font-size:11.5px;margin-top:10px;line-height:1.45}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Leaderboard — Nassau</h1>
+  <p class="sub">One card per match. Team identity is <b>colour</b> (Blue vs Orange), never “T1/T2”. Three bets — <b>Front 9 / Back 9 / Overall</b> — read in match-play terms: <b>N UP</b> (live lead), <b>N&amp;M</b> (decided early, close-out), <b>AS</b> (all square). A resolved plain-margin bet gets a <b>· Final</b> tag; “N&amp;M” already implies closed. Presses list their hole range (<b>Auto Press holes 3–9</b>). With the <b>Claremont</b> variant the card splits into a <b>Top (Nassau)</b> dollar game and a <b>Bottom</b> 2-points game, each with its own bets, presses and settlement.</p>
+
+  <div class="tabs"><span>Stroke Play</span><span class="on">Nassau</span><span>Settlement</span></div>
+
+  <div class="card">
+    <div class="match"><span class="b">Paul &amp; Mike</span><span class="vs">&nbsp;&nbsp;vs&nbsp;&nbsp;</span><span class="o">Dave &amp; Sam</span></div>
+    <div class="thru">Thru 12</div>
+
+    <div class="divider"></div>
+    <div class="seghead">Top (Nassau)</div>
+    <div class="betrow"><span class="r">Front 9</span><span class="v b">Paul &amp; Mike 3&amp;2</span></div>
+    <div class="betrow"><span class="r">Back 9</span><span class="v b">Paul &amp; Mike 1 UP</span></div>
+    <div class="betrow"><span class="r">Overall</span><span class="v b">Paul &amp; Mike 3 UP</span></div>
+
+    <div class="pressrow"><span class="r">Auto Press holes 3–9</span><span class="v b">Blue 2 UP · <span class="fin">Final</span></span></div>
+    <div class="pressrow"><span class="r">Manual Press holes 12–18</span><span class="v as">AS</span></div>
+
+    <div class="divider"></div>
+    <div class="seghead">Bottom (Claremont)</div>
+    <div class="betrow"><span class="r">F9</span><span class="v b">Blue +6 pts · <span class="fin">Final</span></span></div>
+    <div class="betrow"><span class="r">B9</span><span class="v o">Orange −2 pts</span></div>
+    <div class="betrow"><span class="r">All</span><span class="v b">Blue +4 pts</span></div>
+    <div class="pressrow"><span class="r">Bot Auto Press holes 5–9</span><span class="v b">Blue +4 pts · <span class="fin">Final</span></span></div>
+
+    <div class="divider"></div>
+    <div class="foot">
+      <div class="money">
+        <div>Top:&nbsp; <b class="pos">+$25.00</b></div>
+        <div>Bot:&nbsp; <b class="pos">+$8.00</b></div>
+        <div style="margin-top:4px"><b class="pos">Paul &amp; Mike: +$33.00</b></div>
+        <div><b class="neg">Dave &amp; Sam: −$33.00</b></div>
+      </div>
+      <div class="rt">Match: $10.00<br>Press: $5.00<br>Cap: $200.00</div>
+    </div>
+
+    <div class="note">Amounts are per player. A capped side shows its real position as “(down $X)”. The scorecard grid (handicap dots + stroke-index row) appends below when hole data is present.</div>
+  </div>
+</body>
+</html>
