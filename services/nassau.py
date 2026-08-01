@@ -253,6 +253,62 @@ def _is_cup_nassau(foursome) -> bool:
         return False
 
 
+TRIPLE_CHILD_SLUGS = ('triple_1', 'triple_2', 'triple_3')
+
+
+def _pair_player_ids(game) -> list:
+    """The two player ids of a 1v1 (Triple Nassau child) game — team1's player
+    then team2's player."""
+    out = []
+    for t in game.teams.all().order_by('team_number'):
+        ids = list(t.players.values_list('id', flat=True))
+        if ids:
+            out.append(ids[0])
+    return out
+
+
+def _build_pair_so_index(foursome, game) -> dict:
+    """Strokes-Off index for a single 1v1 PAIR (a Triple Nassau child).
+
+    The lower playing handicap of the TWO match players plays to 0; the higher
+    gets the pairwise difference allocated on the lowest stroke indexes.  Unlike
+    the field-wide `_build_so_score_index` (low = min over all three players),
+    the low here is the pair's own low — so the same player can receive a
+    different number of strokes in each of their two matches (e.g. 10 vs Paul but
+    5 vs Dave), both starting at SI 1.
+    """
+    score_index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
+    pair_ids    = _pair_player_ids(game)
+    memberships = list(
+        foursome.memberships
+        .select_related('player', 'tee')
+        .filter(player_id__in=pair_ids)
+    )
+    phcps = [m.playing_handicap for m in memberships
+             if m.playing_handicap is not None]
+    if not phcps:
+        return score_index
+    low = min(phcps)
+
+    for m in memberships:
+        if m.tee_id is None:
+            continue
+        so = round(max(0, (m.playing_handicap or 0) - low) * game.net_percent / 100)
+        if so <= 0:
+            continue
+        per_player = score_index.get(m.player_id)
+        if not per_player:
+            continue
+        full_laps = so // 18
+        remainder = so % 18
+        for hole_num, score in list(per_player.items()):
+            si      = m.tee.hole(hole_num).get('stroke_index', 18)
+            strokes = full_laps + (1 if si <= remainder else 0)
+            if strokes:
+                per_player[hole_num] = score - strokes
+    return score_index
+
+
 def _get_score_index(foursome, game) -> dict:
     """
     Return player_id → hole_number → adjusted_score based on game's handicap mode.
@@ -260,7 +316,16 @@ def _get_score_index(foursome, game) -> dict:
     Cup Nassau is always fourball (2v2 best-ball), so handicap is always
     strokes-off the lowest player in the group regardless of the stored
     handicap_mode.  Casual Nassau uses whatever mode was configured.
+
+    A Triple Nassau child (game_type triple_1/2/3) is a 1v1 handicapped on its
+    OWN pair — strokes-off the lower of the two match players, not the field —
+    so it routes through `_build_pair_so_index`.  (Net / Gross are per-player and
+    need no field-relative adjustment, so they use the standard index.)
     """
+    if game.game_type in TRIPLE_CHILD_SLUGS:
+        if game.handicap_mode == HandicapMode.STROKES_OFF:
+            return _build_pair_so_index(foursome, game)
+        return build_score_index(foursome, game.handicap_mode, game.net_percent)
     if game.handicap_mode == HandicapMode.STROKES_OFF or _is_cup_nassau(foursome):
         return _build_so_score_index(foursome, net_percent=game.net_percent)
     return build_score_index(foursome, game.handicap_mode, game.net_percent)
@@ -1321,6 +1386,16 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
         if m.playing_handicap is not None
     ]
     low_phcp = min(real_phcps) if real_phcps else 0
+    # Triple Nassau child: the "gets N" is a PAIRWISE difference (the lower of the
+    # two match players plays to 0), matching _build_pair_so_index — not the
+    # field low over all three players.
+    if game.game_type in TRIPLE_CHILD_SLUGS:
+        _pair_ids = set(_pair_player_ids(game))
+        _pair_phcps = [m.playing_handicap or 0 for m in real_memberships
+                       if m.player_id in _pair_ids
+                       and m.playing_handicap is not None]
+        if _pair_phcps:
+            low_phcp = min(_pair_phcps)
     npct = game.net_percent or 100
     for m in real_memberships:
         phcp = m.playing_handicap or 0

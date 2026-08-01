@@ -79,6 +79,7 @@ from .serializers import (
     ScoreSubmitSerializer, RoundSetupSerializer,
     TournamentCreateSerializer, RoundCreateSerializer,
     NassauSetupSerializer, NassauPressSerializer,
+    TripleNassauSetupSerializer, TripleNassauPressSerializer,
     SixesSetupSerializer, CourseSerializer,
     Points531SetupSerializer, CasualRoundSummarySerializer,
     IrishRumbleSetupSerializer, LowNetSetupSerializer,
@@ -126,6 +127,12 @@ def _recalculate_games(foursome: Foursome) -> None:
             or 'match_18' in active_games):
         from services.nassau import calculate_all_nassau
         calculate_all_nassau(foursome)
+
+    # Triple Nassau — a round-robin of three 1v1 Nassaus in its own container
+    # (child rows are game_type triple_1/2/3, not enumerated above).
+    if 'triple_nassau' in active_games or foursome.triple_nassau_games.exists():
+        from services.triple_nassau import calculate_triple_nassau
+        calculate_triple_nassau(foursome)
 
     # Tournament-level games (match_play, three_person_match) live on
     # tournament.active_games rather than the round or foursome, so they may
@@ -657,6 +664,28 @@ def _build_leaderboard(round_obj: Round) -> dict:
             games['quota_nassau'] = {
                 'label'   : 'Quota Nassau',
                 'by_group': quota_groups,
+            }
+
+    # Triple Nassau — round-robin of three 1v1 Nassaus (one container/foursome).
+    _tn_active = 'triple_nassau' in active_games or any(
+        'triple_nassau' in (fs.active_games or []) for fs in foursomes
+    )
+    if _tn_active:
+        from services.triple_nassau import triple_nassau_summary
+        tn_groups = []
+        for fs in foursomes:
+            summary = triple_nassau_summary(fs)
+            if summary is None:
+                continue
+            tn_groups.append({
+                'foursome_id' : fs.id,
+                'group_number': fs.group_number,
+                'summary'     : summary,
+            })
+        if tn_groups:
+            games['triple_nassau'] = {
+                'label'   : 'Triple Nassau',
+                'by_group': tn_groups,
             }
 
     # Cup singles rounds store 'singles_18' or 'singles_nassau' in per-foursome
@@ -4811,6 +4840,98 @@ class NassauResultView(APIView):
         if summary is None:
             return Response(
                 {'detail': 'No Nassau game set up for this foursome.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(summary)
+
+
+# ---------------------------------------------------------------------------
+# Triple Nassau — round-robin of three 1v1 Nassaus
+# ---------------------------------------------------------------------------
+
+class TripleNassauSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/triple-nassau/setup/
+    Body: {
+        "player_ids":    [p1, p2, p3],
+        "handicap_mode": "net" | "gross" | "strokes_off",
+        "net_percent":   100,
+        "press_mode":    "none" | "manual" | "auto" | "both",
+        "press_unit":    5.00,
+        "loss_cap":      null | 200.00,
+        "bet_unit":      10.00        # optional; sets Round.bet_unit
+    }
+    Creates (or replaces) the foursome's Triple Nassau container + its three
+    child 1v1 matches, then recalculates so existing scores reflect immediately.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        ser = TripleNassauSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        if d.get('bet_unit') is not None:
+            rnd = foursome.round
+            rnd.bet_unit = d['bet_unit']
+            rnd.save(update_fields=['bet_unit'])
+
+        from services.triple_nassau import (
+            setup_triple_nassau, calculate_triple_nassau, triple_nassau_summary,
+        )
+        try:
+            setup_triple_nassau(
+                foursome,
+                player_ids    = d['player_ids'],
+                handicap_mode = d.get('handicap_mode', 'strokes_off'),
+                net_percent   = d.get('net_percent', 100),
+                press_mode    = d.get('press_mode', 'none'),
+                press_unit    = d.get('press_unit', '0.00'),
+                loss_cap      = d.get('loss_cap'),
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        calculate_triple_nassau(foursome)
+        return Response(triple_nassau_summary(foursome),
+                        status=status.HTTP_201_CREATED)
+
+
+class TripleNassauPressView(APIView):
+    """
+    POST /api/foursomes/{id}/triple-nassau/press/
+    Body: { "game_type": "triple_1", "start_hole": 7 }
+
+    Declares a manual press in ONE of the three matches.  Presses fire per
+    match, so pressing your match with Dave doesn't touch your match with Sam.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        ser = TripleNassauPressSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from services.nassau import add_manual_press
+        from services.triple_nassau import (
+            calculate_triple_nassau, triple_nassau_summary,
+        )
+        try:
+            add_manual_press(
+                foursome,
+                ser.validated_data['start_hole'],
+                game_type=ser.validated_data['game_type'],
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        calculate_triple_nassau(foursome)
+        return Response(triple_nassau_summary(foursome))
+
+
+class TripleNassauResultView(APIView):
+    """GET /api/foursomes/{id}/triple-nassau/ — the Triple Nassau summary."""
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.triple_nassau import triple_nassau_summary
+        summary = triple_nassau_summary(foursome)
+        if summary is None:
+            return Response(
+                {'detail': 'No Triple Nassau set up for this foursome.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(summary)

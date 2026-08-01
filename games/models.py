@@ -1231,10 +1231,24 @@ class NassauGame(models.Model):
                                 (GameType.NASSAU,      'Nassau'),
                                 (GameType.NASSAU_NINE, 'Nassau Nine'),
                                 (GameType.MATCH_18,    'Singles Match'),
+                                # Internal child slots for a Triple Nassau — one
+                                # 1v1 Nassau per pair (P·D / P·S / D·S).  Grouped
+                                # by the triple_game FK; never a Round.active_games
+                                # slug on their own (that's 'triple_nassau').
+                                ('triple_1',           'Triple Nassau — match 1'),
+                                ('triple_2',           'Triple Nassau — match 2'),
+                                ('triple_3',           'Triple Nassau — match 3'),
                             ],
                             default=GameType.NASSAU,
                             help_text="Which Nassau-family match this row is; "
                                       "matches the Round.active_games slug.",
+                        )
+    # Set only on the three child matches of a Triple Nassau — links them to
+    # their container so they're scored/settled as a group and handicapped on
+    # their own pair.  Null for a standalone Nassau / Singles Match.
+    triple_game         = models.ForeignKey(
+                            'TripleNassauGame', on_delete=models.CASCADE,
+                            null=True, blank=True, related_name='matches',
                         )
     handicap_mode       = models.CharField(
                             max_length=20,
@@ -1298,6 +1312,45 @@ class NassauGame(models.Model):
 
     def __str__(self):
         return f"{self.get_game_type_display()} — Group {self.foursome.group_number}"
+
+
+class TripleNassauGame(models.Model):
+    """
+    Container for a Triple Nassau — three players, three simultaneous 1-v-1
+    Nassaus (a round-robin) driven by one setup.
+
+    The three matches are ordinary child ``NassauGame`` rows (game_type
+    triple_1/2/3, linked by ``NassauGame.triple_game``), so the whole per-match
+    Nassau engine — Front 9 / Back 9 / Overall, presses, close-out, loss cap —
+    is reused as-is.  What differs is handicap (each match is allocated on its
+    OWN pair, not the field low) and settlement (each player's two matches are
+    netted).  Config (handicap mode, net %, stake, press rule, loss cap) is the
+    same across all three and stored on each child.
+
+    ``player_order`` is the roster in display order (the three colour-coded
+    players); the pairings are the three combinations of it.
+
+    status rolls up from the child matches:
+        pending     — no holes scored yet
+        in_progress — at least one hole scored
+        complete    — all three matches through 18 holes
+    """
+    foursome     = models.ForeignKey(
+                       Foursome, on_delete=models.CASCADE,
+                       related_name='triple_nassau_games',
+                   )
+    player_order = models.JSONField(
+                       default=list,
+                       help_text="Player PKs in display order (3 entries).",
+                   )
+    status       = models.CharField(
+                       max_length=20, choices=MatchStatus.choices,
+                       default=MatchStatus.PENDING,
+                   )
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Triple Nassau — Group {self.foursome.group_number}"
 
 
 class NassauTeam(models.Model):

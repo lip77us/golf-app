@@ -95,6 +95,9 @@ urlpatterns = [
     path('foursomes/<int:pk>/nassau/',        views.NassauResultView.as_view(), name='api-nassau-result'),
     path('foursomes/<int:pk>/nassau/setup/',  views.NassauSetupView.as_view(),  name='api-nassau-setup'),
     path('foursomes/<int:pk>/nassau/press/',  views.NassauPressView.as_view(),  name='api-nassau-press'),
+    path('foursomes/<int:pk>/triple-nassau/',       views.TripleNassauResultView.as_view(), name='api-triple-nassau-result'),
+    path('foursomes/<int:pk>/triple-nassau/setup/', views.TripleNassauSetupView.as_view(),  name='api-triple-nassau-setup'),
+    path('foursomes/<int:pk>/triple-nassau/press/', views.TripleNassauPressView.as_view(),  name='api-triple-nassau-press'),
 
     # ---- Sixes ----
     path('foursomes/<int:pk>/sixes/',              views.SixesResultView.as_view(),     name='api-sixes-result'),

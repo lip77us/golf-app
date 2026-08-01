@@ -20,6 +20,12 @@ class GameType(models.TextChoices):
     # foursome can run a Singles Match AND a team Nassau at once with different
     # teams — see NassauGame.
     MATCH_18        = 'match_18',        'Singles Match'
+    # Triple Nassau: three players, three simultaneous 1-v-1 Nassaus (a
+    # round-robin) driven by one setup.  Implemented as a TripleNassauGame
+    # container over three child NassauGame rows (game_type triple_1/2/3),
+    # each handicapped on its own PAIR (not the field), settled per-player
+    # across their two matches.  See games.TripleNassauGame / services.triple_nassau.
+    TRIPLE_NASSAU   = 'triple_nassau',   'Triple Nassau'
     SIXES           = 'sixes',           'Sixes'
     PINK_BALL       = 'pink_ball',       'Pink Ball'
     SCRAMBLE        = 'scramble',        'Scramble'

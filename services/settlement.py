@@ -26,14 +26,14 @@ from collections import defaultdict
 # here is surfaced as uncovered.
 NETTABLE = {
     'skins', 'spots', 'points_531', 'wolf', 'sixes', 'fourball',
-    'low_net_round', 'stableford', 'match_play',
+    'low_net_round', 'stableford', 'match_play', 'triple_nassau',
 }
 
 _LABELS = {
     'skins': 'Skins', 'spots': 'Spots', 'points_531': 'Points 5-3-1',
     'wolf': 'Wolf', 'sixes': "Six's", 'fourball': 'Fourball',
     'low_net_round': 'Stroke Play', 'stableford': 'Stableford',
-    'match_play': 'Singles Bracket',
+    'match_play': 'Singles Bracket', 'triple_nassau': 'Triple Nassau',
 }
 
 
@@ -116,6 +116,18 @@ def _pid_nets_for_game(game_key, round_obj, foursomes):
                 pid = po.get('player_id')
                 if pid is not None:
                     out[pid] += po.get('amount', 0) or 0
+
+    elif game_key == 'triple_nassau':
+        # Round-robin of three 1v1 Nassaus — each match is zero-sum between its
+        # pair, and the summary already sums each player's two matches into
+        # `net`, so the tab just adds those up (zero-sum across the group).
+        from services.triple_nassau import triple_nassau_summary
+        for fs in foursomes:
+            s = triple_nassau_summary(fs)
+            if not s:
+                continue
+            for p in s.get('players', []):
+                out[p['player_id']] += p.get('net', 0) or 0
 
     return out
 

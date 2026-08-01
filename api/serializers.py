@@ -517,11 +517,17 @@ class FoursomeSerializer(serializers.ModelSerializer):
         # game_type.  Report every one so the hub's "needs setup vs play"
         # routing and the leaderboard tabs resolve each game.
         try:
+            # Exclude the internal Triple Nassau child rows (triple_1/2/3) — the
+            # container reports as 'triple_nassau' below, not per pair.
             games.extend(
-                obj.nassau_games.values_list('game_type', flat=True)
+                obj.nassau_games
+                .exclude(game_type__in=('triple_1', 'triple_2', 'triple_3'))
+                .values_list('game_type', flat=True)
             )
         except Exception:
             pass
+        if obj.triple_nassau_games.exists():
+            games.append('triple_nassau')
         # OneToOne relationships — safe to check via hasattr
         for attr, key in [
             ('skins_game',         'skins'),
@@ -926,6 +932,51 @@ class NassauPressSerializer(serializers.Serializer):
         choices=['nassau', 'nassau_nine', 'match_18'],
         required=False, allow_null=True, default=None,
     )
+
+
+class TripleNassauSetupSerializer(serializers.Serializer):
+    """
+    Configure a Triple Nassau for a foursome — three players, three 1v1 Nassaus.
+
+    player_ids:    exactly 3 distinct Player PKs, in display order.
+    handicap/press config is shared across all three matches.  bet_unit (the
+    stake per bet) is optional; when given it's written to Round.bet_unit.
+    """
+    player_ids = serializers.ListField(
+        child=serializers.IntegerField(), min_length=3, max_length=3,
+    )
+    handicap_mode = serializers.ChoiceField(
+        choices=['net', 'gross', 'strokes_off'], default='strokes_off',
+    )
+    net_percent = serializers.IntegerField(min_value=0, max_value=200, default=100)
+    press_mode  = serializers.ChoiceField(
+        choices=['none', 'manual', 'auto', 'both'], default='none',
+    )
+    press_unit  = serializers.DecimalField(
+        max_digits=8, decimal_places=2, default='0.00',
+    )
+    loss_cap    = serializers.DecimalField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True,
+        default=None, min_value=0,
+    )
+    bet_unit    = serializers.DecimalField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True,
+        default=None, min_value=0,
+    )
+
+    def validate_player_ids(self, value):
+        if len(set(value)) != 3:
+            raise serializers.ValidationError('Three distinct players are required.')
+        return value
+
+
+class TripleNassauPressSerializer(serializers.Serializer):
+    """Declare a manual press in ONE match of a Triple Nassau.
+
+    game_type: which child match to press (triple_1 | triple_2 | triple_3).
+    """
+    start_hole = serializers.IntegerField(min_value=1, max_value=18)
+    game_type  = serializers.ChoiceField(choices=['triple_1', 'triple_2', 'triple_3'])
 
 
 class SixesSetupSerializer(serializers.Serializer):
