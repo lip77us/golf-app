@@ -1,0 +1,110 @@
+<!-- @dsCard group="Games" name="Nassau — single match (setup)" subtitle="Singles Match (match_18) — one 18-hole bet, no presses/variant, max-liability note" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Nassau — single match (setup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--win:#388E3C;--blue:#1976D2;--orange:#EF6C00}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .body{padding:0 16px;overflow-y:auto;height:634px}
+  .sc{border:1px solid var(--cardBorder);border-radius:8px;padding:12px 14px;background:var(--card);margin-bottom:14px}
+  .sct{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;color:var(--pine);font-size:13px;margin-bottom:8px}
+  .subt{color:var(--muted);font-size:12px;margin:-2px 0 8px;line-height:1.4}
+  /* participant picker */
+  .prow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--cardBorder)}
+  .prow:first-of-type{border-top:none}
+  .prow .pn{flex:1;font-weight:600}
+  .prow .pn.b{color:var(--blue)} .prow .pn.o{color:var(--orange)} .prow .pn.out{color:var(--muted)}
+  .prow .hc{color:var(--muted);font-size:12px}
+  .tri{display:flex;border:1.5px solid var(--cardBorder);border-radius:8px;overflow:hidden;font-size:11.5px;font-weight:700}
+  .tri div{padding:5px 9px;color:var(--muted)}
+  .tri div.b{background:var(--blue);color:#fff} .tri div.o{background:var(--orange);color:#fff}
+  .tri div.outon{background:#7C8A80;color:#fff}
+  .teamsum{display:flex;gap:16px;margin-top:10px;padding-top:10px;border-top:1px solid var(--cardBorder);font-size:12.5px;font-weight:600}
+  .teamsum .b{color:var(--blue)} .teamsum .o{color:var(--orange)}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+  .dot.b{background:var(--blue)} .dot.o{background:var(--orange)}
+  /* segmented */
+  .seg{display:flex;border:1.5px solid var(--pine);border-radius:999px;overflow:hidden;margin-bottom:8px}
+  .seg div{flex:1;text-align:center;padding:8px 0;font-size:12.5px;font-weight:600;color:var(--pine)}
+  .seg div.on{background:var(--pine);color:#fff}
+  .blurb{color:var(--muted);font-size:12px;line-height:1.45}
+  .slider{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .track{flex:1;height:4px;border-radius:999px;background:var(--cardBorder);position:relative}
+  .knob{position:absolute;left:calc(60% - 8px);top:-6px;width:16px;height:16px;border-radius:50%;background:var(--pine)}
+  .track::before{content:"";position:absolute;left:0;top:0;height:4px;width:60%;background:var(--pine);border-radius:999px}
+  .pct{font-weight:700;font-size:13px;color:var(--pine);width:42px;text-align:right}
+  .flabel{font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .field{display:flex;align-items:center;border:1.5px solid var(--cardBorder);border-radius:12px;padding:11px 14px;font-size:16px;font-weight:600;background:var(--card)}
+  .field .pfx{color:var(--muted);margin-right:6px}
+  .funcheck{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px}
+  .cbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--cardBorder)}
+  .help{color:var(--muted);font-size:12px;margin-top:8px;line-height:1.45}
+  /* max-liability note (the tell that this variant can't escalate) */
+  .maxliab{display:flex;gap:10px;align-items:flex-start;background:rgba(15,110,86,.06);border:1px solid rgba(15,110,86,.35);border-radius:10px;padding:11px 13px;margin-bottom:14px}
+  .maxliab .ic{color:var(--pine);font-size:16px}
+  .maxliab .t{font-size:12.5px;line-height:1.45}
+  .maxliab b{color:var(--deepPine)}
+  .rules{color:var(--muted);font-size:12.5px;line-height:1.55}
+  /* "no advanced" callout — documents what the full Nassau adds */
+  .noadv{display:flex;gap:8px;align-items:flex-start;color:var(--muted);font-size:11.5px;line-height:1.45;padding:10px 4px 2px}
+  .noadv .x{color:#9AA79E;font-weight:700}
+  .bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--surface) 26%)}
+  .start{width:100%;height:52px;border-radius:16px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:16px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span style="font-size:17px">‹</span><span class="ttl">Singles Match — Setup</span><span style="width:17px"></span></div>
+    <div class="body">
+
+      <div class="sc">
+        <div class="sct">Teams</div>
+        <div class="subt">Pick the two players in the singles match — set the rest to “Out.”</div>
+        <div class="prow"><span class="pn b">Paul</span><span class="hc">Course 12</span><div class="tri"><div>Out</div><div class="b">Blue</div><div>Orange</div></div></div>
+        <div class="prow"><span class="pn o">Dave</span><span class="hc">Course 9</span><div class="tri"><div>Out</div><div>Blue</div><div class="o">Orange</div></div></div>
+        <div class="prow"><span class="pn out">Sam</span><span class="hc">Course 21</span><div class="tri"><div class="outon">Out</div><div>Blue</div><div>Orange</div></div></div>
+        <div class="teamsum"><span class="b"><span class="dot b"></span>Blue: Paul</span><span class="o"><span class="dot o"></span>Orange: Dave</span></div>
+      </div>
+
+      <div class="sc">
+        <div class="sct">Handicap</div>
+        <div class="seg"><div>Net</div><div>Gross</div><div class="on">SO Low</div></div>
+        <div class="slider"><span class="flabel" style="margin:0">Net %</span><span class="track"><span class="knob"></span></span><span class="pct">90%</span></div>
+        <div class="blurb" style="margin-top:8px">The lowest-handicap player plays to 0. Every other player gets one stroke on each hole whose stroke index is ≤ their (own HCP − low HCP), scaled by Net %.</div>
+      </div>
+
+      <div class="sc">
+        <div class="sct" style="text-transform:none;font-size:13px">Stake</div>
+        <div class="flabel">Stake ($)</div>
+        <div class="field"><span class="pfx">$</span>10.00</div>
+        <label class="funcheck"><span class="cbox"></span> Play for fun — no stakes</label>
+        <div class="help">What the Singles Match is worth.</div>
+      </div>
+
+      <div class="maxliab"><span class="ic">🛡</span><span class="t">Most you can lose: <b>$10.00</b>&nbsp; (the match).</span></div>
+
+      <div class="sc">
+        <div class="sct">How the match works</div>
+        <div class="rules">A single 18-hole match. Each hole goes to the lower score (per the handicap mode above); tied holes are halved. Whoever is up after 18 holes wins the match.</div>
+      </div>
+
+      <div class="noadv"><span class="x">—</span><span>No <b>Advanced</b> panel here: a single match has no nines to press, no 2nd-ball / Claremont variants, and a fixed ceiling — so presses, game variant and the loss cap are all hidden. Only the full three-match Nassau shows them.</span></div>
+
+      <div style="height:8px"></div>
+    </div>
+    <div class="bottom"><button class="start">Start Match</button></div>
+  </div>
+</body>
+</html>
