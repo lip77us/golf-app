@@ -1567,6 +1567,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   // it.  Guarded per instance + persisted per round so it never re-fires.
   bool _sixesDrawHandled = false;
 
+  // Compact pairing label — first names only, so the Segment-1 status row can't
+  // overflow with long full names.
+  String _firstNames(List<String> names) =>
+      names.map((n) => n.trim().split(RegExp(r'\s+')).first).join(' / ');
+
   Future<void> _maybeShowSixesDraw(RoundProvider rp, List<String> games) async {
     if (_sixesDrawHandled) return;
     if (!games.contains('sixes')) return;
@@ -1596,12 +1601,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         const Text('SEG 1', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
             color: Color(0xFF5C6B62), letterSpacing: 0.3)),
         const SizedBox(width: 8),
-        Text(seg1.team1.players.join(' / '), style: const TextStyle(
-            fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF1976D2))),
-        const Text(' v. ', style: TextStyle(color: Color(0xFF5C6B62), fontSize: 11)),
-        Text(seg1.team2.players.join(' / '), style: const TextStyle(
-            fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFFEF6C00))),
-        const Spacer(),
+        // First names + ellipsis so a long pairing can't overflow the row.
+        Expanded(child: RichText(overflow: TextOverflow.ellipsis, text: TextSpan(
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+          children: [
+            TextSpan(text: _firstNames(seg1.team1.players),
+                style: const TextStyle(color: Color(0xFF1976D2))),
+            const TextSpan(text: ' v. ',
+                style: TextStyle(color: Color(0xFF5C6B62), fontSize: 11)),
+            TextSpan(text: _firstNames(seg1.team2.players),
+                style: const TextStyle(color: Color(0xFFEF6C00))),
+          ]))),
+        const SizedBox(width: 8),
         Text(seg1.statusDisplay, style: const TextStyle(
             fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF0F6E56))),
       ]),

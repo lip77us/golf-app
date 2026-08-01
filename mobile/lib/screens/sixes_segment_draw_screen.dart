@@ -26,6 +26,14 @@ class SixesDrawPair {
   const SixesDrawPair({required this.blue, required this.orange});
   String get blueLabel => blue.join(' / ');
   String get orangeLabel => orange.join(' / ');
+  // Compact labels — first names only, so two-player pairings fit the reel /
+  // rows without overflowing. A long single first name is caught by FittedBox.
+  static String _first(String n) {
+    final w = n.trim().split(RegExp(r'\s+'));
+    return w.isEmpty ? n : w.first;
+  }
+  String get blueShort => blue.map(_first).join(' / ');
+  String get orangeShort => orange.map(_first).join(' / ');
 }
 
 class SixesSegmentDrawScreen extends StatefulWidget {
@@ -225,10 +233,10 @@ class _SixesSegmentDrawScreenState extends State<SixesSegmentDrawScreen>
           Flexible(child: RichText(overflow: TextOverflow.ellipsis, text: TextSpan(
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             children: [
-              TextSpan(text: p.blueLabel, style: const TextStyle(color: _blue)),
+              TextSpan(text: p.blueShort, style: const TextStyle(color: _blue)),
               const TextSpan(text: '  v.  ', style: TextStyle(color: _muted,
                   fontWeight: FontWeight.w500, fontSize: 11)),
-              TextSpan(text: p.orangeLabel, style: const TextStyle(color: _orange)),
+              TextSpan(text: p.orangeShort, style: const TextStyle(color: _orange)),
             ]))),
           if (won) ...[
             const SizedBox(width: 6),
@@ -297,6 +305,19 @@ class _SixesSegmentDrawScreenState extends State<SixesSegmentDrawScreen>
       );
 
   Widget _reelStrip() {
+    // When the pairings are concealed, the idle window shows only a prompt —
+    // neither candidate pair is revealed until the reel is spun.
+    if (widget.hideCandidatesUntilDrawn && !_spinning && !_landed) {
+      return SizedBox(
+        height: _rowH,
+        child: const Center(child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14),
+          child: Text('Spin to select next partners', textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Schibsted Grotesk',
+                  fontWeight: FontWeight.w700, fontSize: 15, color: _muted)),
+        )),
+      );
+    }
     final rows = <Widget>[];
     for (var i = 0; i < _reps; i++) {
       for (var slot = 0; slot < _n; slot++) {
@@ -327,15 +348,19 @@ class _SixesSegmentDrawScreenState extends State<SixesSegmentDrawScreen>
           Text('SIDE $side', style: const TextStyle(fontSize: 9,
               fontWeight: FontWeight.w700, letterSpacing: 0.6, color: _muted)),
           const SizedBox(height: 3),
-          RichText(text: TextSpan(
-            style: const TextStyle(fontFamily: 'Schibsted Grotesk',
-                fontWeight: FontWeight.w700, fontSize: 16),
-            children: [
-              TextSpan(text: p.blueLabel, style: const TextStyle(color: _blue)),
-              const TextSpan(text: ' v. ', style: TextStyle(color: _muted,
-                  fontWeight: FontWeight.w600, fontSize: 12)),
-              TextSpan(text: p.orangeLabel, style: const TextStyle(color: _orange)),
-            ])),
+          // FittedBox: shrink to fit if a first-name pairing is still too wide.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: FittedBox(fit: BoxFit.scaleDown, child: RichText(text: TextSpan(
+              style: const TextStyle(fontFamily: 'Schibsted Grotesk',
+                  fontWeight: FontWeight.w700, fontSize: 16),
+              children: [
+                TextSpan(text: p.blueShort, style: const TextStyle(color: _blue)),
+                const TextSpan(text: ' v. ', style: TextStyle(color: _muted,
+                    fontWeight: FontWeight.w600, fontSize: 12)),
+                TextSpan(text: p.orangeShort, style: const TextStyle(color: _orange)),
+              ]))),
+          ),
         ]),
       );
 
