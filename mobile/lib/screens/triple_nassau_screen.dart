@@ -441,8 +441,6 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           _scoreCard(ctx, rp, s, players, low, holeData, scores, hotSpot),
           if (s != null) ...[
             const SizedBox(height: 12),
-            _thisHoleOutcomes(rp, s, players),
-            const SizedBox(height: 12),
             if (_pressableMatches(s).isNotEmpty && !isComplete) ...[
               SizedBox(
                 width: double.infinity,
@@ -632,70 +630,6 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
         Text('net $net', style: const TextStyle(
             fontSize: 9.5, color: _muted, fontWeight: FontWeight.w700)),
     ]);
-  }
-
-  Widget _thisHoleOutcomes(RoundProvider rp, TripleNassauSummary s,
-      List<Membership> players) {
-    final theme = Theme.of(context);
-    String shortOf(int? pid) => players
-        .firstWhere((m) => m.player.id == pid, orElse: () => players.first)
-        .player.shortName;
-
-    List<Widget> outRows = [];
-    for (final match in s.matches) {
-      final hd = match.match.holes
-          .where((h) => h.hole == _selectedHole).firstOrNull;
-      String label;
-      Color colour = _muted;
-      if (hd == null || hd.t1Net == null || hd.t2Net == null) {
-        label = '—';
-      } else {
-        final a = hd.t1Net!, b = hd.t2Net!;
-        if (a == b) {
-          label = 'Halved · $a–$b';
-        } else if (a < b) {
-          label = '${shortOf(match.player1Id)} · $a–$b';
-          colour = _colourFor(rp, match.player1Id ?? 0);
-        } else {
-          label = '${shortOf(match.player2Id)} · $b–$a';
-          colour = _colourFor(rp, match.player2Id ?? 0);
-        }
-      }
-      outRows.add(Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 11),
-        child: Row(children: [
-          _dot(_colourFor(rp, match.player1Id ?? 0)),
-          const SizedBox(width: 3),
-          Text(shortOf(match.player1Id), style: const TextStyle(
-              fontWeight: FontWeight.w600, fontSize: 12.5)),
-          const Text(' v ', style: TextStyle(color: _muted, fontSize: 10.5)),
-          _dot(_colourFor(rp, match.player2Id ?? 0)),
-          const SizedBox(width: 3),
-          Text(shortOf(match.player2Id), style: const TextStyle(
-              fontWeight: FontWeight.w600, fontSize: 12.5)),
-          const Spacer(),
-          Text(label, style: TextStyle(
-              fontWeight: FontWeight.w700, fontSize: 12.5,
-              color: colour == _muted ? _muted : colour)),
-        ]),
-      ));
-    }
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: theme.colorScheme.outlineVariant)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(11, 7, 11, 3),
-          child: Text('THIS HOLE', style: TextStyle(
-              fontSize: 10, fontWeight: FontWeight.w700, color: _muted,
-              letterSpacing: 0.4)),
-        ),
-        for (final r in outRows) r,
-        const SizedBox(height: 4),
-      ]),
-    );
   }
 
   // 3×3 matrix — rows = matches, cols = F9/B9/Overall.
