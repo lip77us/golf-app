@@ -749,7 +749,7 @@ String? primaryGameOf(Iterable<String> active) {
 /// structure-owning primary that disallows overlays (Sixes/Nassau) — gated only
 /// by the per-game `excludes` (e.g. Spots excludes Vegas / Triple Cup).
 List<GameMeta> sideGamesFor(String primaryId,
-    {required int size, bool multiGroup = false}) {
+    {required int size, bool multiGroup = false, String? handicapMode}) {
   // A round-wide pool (Multi-Group Skins, `acrossGroups`) owns no per-foursome
   // entry structure, so it hosts NO side games — not subset matches (a 2-man
   // Nassau / Singles inside it is meaningless) and no overlays. Its own scores
@@ -762,6 +762,22 @@ List<GameMeta> sideGamesFor(String primaryId,
   return kGameCatalog.where((g) {
     if (!g.enabled) return false;
     if (g.id == primaryId) return false;
+
+    // Triple Nassau (a strokes-off round-robin of three 1v1 Nassaus) narrows its
+    // side games: no subset Nassau / Singles Match (it already IS three 1v1
+    // Nassaus), no Spots, and no Honors when played Strokes-Off (its default;
+    // `handicapMode` null is treated as SO). A net/gross Triple Nassau still
+    // offers Honors.
+    if (primaryId == GameIds.tripleNassau) {
+      if (g.id == GameIds.nassau || g.id == GameIds.match18 ||
+          g.id == GameIds.spots) {
+        return false;
+      }
+      if (g.id == GameIds.honors &&
+          (handicapMode == null || handicapMode == 'strokes_off')) {
+        return false;
+      }
+    }
 
     // SUBSET side games (docs/parallel-games.md): an independent bet over a
     // chosen subset of the foursome, with its own handicap + leaderboard tab.
