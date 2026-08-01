@@ -8385,6 +8385,21 @@ class _TripleNassauGroupCard extends StatelessWidget {
             ]),
             const SizedBox(height: 12),
             _matrix(theme, s, colourOf, shortOf),
+            if (s.scorecard.isNotEmpty) ...[
+              const Divider(height: 22),
+              _sectionLabel(theme, 'Round progress — gross scores'),
+              const SizedBox(height: 4),
+              _roundProgress(theme, s, colourOf),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('Gross scores. Each match is allocated on its own — '
+                    'the pair’s handicap difference from SI 1 down — so a hole '
+                    'can be a stroke hole in one match and not another. The '
+                    'won-by rows are the per-match hole winners.',
+                    style: TextStyle(fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant, height: 1.4)),
+              ),
+            ],
             const Divider(height: 22),
             _sectionLabel(theme, 'Net position'),
             for (final p in s.players)
@@ -8416,6 +8431,116 @@ class _TripleNassauGroupCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    final w = parts.isEmpty ? '' : parts[0];
+    return (w.length >= 2 ? w.substring(0, 2) : w).toUpperCase();
+  }
+
+  // Round-progress: fixed label column + horizontally-scrollable cells.
+  Widget _roundProgress(ThemeData theme, TripleNassauSummary s,
+      Map<int, Color> colourOf) {
+    final holes = s.scorecard;
+    const cellW = 26.0, rowH = 22.0, labelW = 118.0;
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    int getsVs(TripleNassauPlayer p, TripleNassauPlayer opp) {
+      if (s.handicapMode == 'gross') return 0;
+      final d = (p.playingHandicap ?? 0) - (opp.playingHandicap ?? 0);
+      return d <= 0 ? 0 : (d * s.netPercent / 100).round();
+    }
+
+    // Per-player "gets" summary vs each opponent, e.g. "gets 5 v JS · 10 v DP".
+    String getsLabel(TripleNassauPlayer p) {
+      final bits = <String>[];
+      for (final o in s.players) {
+        if (o.playerId == p.playerId) continue;
+        final n = getsVs(p, o);
+        if (n > 0) bits.add('$n v ${_initials(o.name)}');
+      }
+      return bits.isEmpty ? 'scratch' : 'gets ${bits.join(' · ')}';
+    }
+
+    Widget lbl(Widget child) =>
+        SizedBox(width: labelW, height: rowH, child: Align(
+            alignment: Alignment.centerLeft, child: child));
+    Widget txt(String t, {Color? c, bool bold = false, double size = 11.5}) =>
+        SizedBox(width: cellW, height: rowH, child: Center(child: Text(t,
+            style: TextStyle(fontSize: size, color: c,
+                fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+                fontFeatures: const [FontFeature.tabularFigures()]))));
+
+    // Won-by cell for a match on a hole.
+    Widget wonCell(TripleNassauMatch m, int hole) {
+      final hd = m.match.holes.where((h) => h.hole == hole).firstOrNull;
+      if (hd == null || hd.winner == null) {
+        return SizedBox(width: cellW, height: rowH,
+            child: Center(child: Text('·', style: TextStyle(color: muted))));
+      }
+      if (hd.winner == 'halved') {
+        return SizedBox(width: cellW, height: rowH, child: Center(
+            child: Text('=', style: TextStyle(fontSize: 11, color: muted))));
+      }
+      final winId = hd.winner == 'team1' ? m.player1Id : m.player2Id;
+      final c = colourOf[winId] ?? Colors.grey;
+      return SizedBox(width: cellW, height: rowH, child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+            decoration: BoxDecoration(color: c.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4)),
+            child: Text(_initials(s.players.firstWhere(
+                    (p) => p.playerId == winId,
+                    orElse: () => s.players.first).name)[0],
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: c)))));
+    }
+
+    // Fixed label column.
+    final labels = <Widget>[
+      lbl(Text('Hole', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11))),
+      lbl(Text('Par', style: TextStyle(fontStyle: FontStyle.italic, color: muted, fontSize: 11))),
+      lbl(Text('SI', style: TextStyle(color: muted, fontSize: 11))),
+      for (final p in s.players)
+        lbl(Row(children: [
+          Container(width: 8, height: 8, margin: const EdgeInsets.only(right: 4),
+              decoration: BoxDecoration(color: colourOf[p.playerId] ?? Colors.grey,
+                  shape: BoxShape.circle)),
+          Flexible(child: Text.rich(TextSpan(children: [
+            TextSpan(text: _initials(p.name), style: const TextStyle(
+                fontWeight: FontWeight.w700, fontSize: 11)),
+            TextSpan(text: '  ${getsLabel(p)}', style: TextStyle(
+                fontSize: 8.5, color: muted)),
+          ]), overflow: TextOverflow.ellipsis)),
+        ])),
+      for (final m in s.matches)
+        lbl(Text('${_initials(s.players.firstWhere((p)=>p.playerId==m.player1Id, orElse:()=>s.players.first).name)}'
+            ' · ${_initials(s.players.firstWhere((p)=>p.playerId==m.player2Id, orElse:()=>s.players.first).name)}',
+            style: TextStyle(fontStyle: FontStyle.italic, fontWeight: FontWeight.w700,
+                fontSize: 10, color: muted))),
+    ];
+
+    // Scrollable cell rows (aligned 1:1 with the labels).
+    final cellRows = <Widget>[
+      Row(children: [for (final h in holes) txt('${h.hole}', bold: true)]),
+      Row(children: [for (final h in holes) txt('${h.par ?? '-'}', c: muted)]),
+      Row(children: [for (final h in holes) txt('${h.strokeIndex ?? '-'}', c: muted, size: 10.5)]),
+      for (final p in s.players)
+        Row(children: [for (final h in holes)
+          txt(h.gross[p.playerId]?.toString() ?? '–')]),
+      for (final m in s.matches)
+        Row(children: [for (final h in holes) wonCell(m, h.hole)]),
+    ];
+
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: labels),
+      Expanded(child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: cellRows))),
+    ]);
   }
 
   Widget _matrix(ThemeData theme, TripleNassauSummary s,

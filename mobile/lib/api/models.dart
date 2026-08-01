@@ -3950,6 +3950,39 @@ class TripleNassauMatch {
       );
 }
 
+/// One hole of the merged round-progress scorecard — par, SI, and every
+/// player's gross (player_id → gross).
+class TripleNassauScHole {
+  final int  hole;
+  final int? par;
+  final int? strokeIndex;
+  final Map<int, int> gross;
+
+  const TripleNassauScHole({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.gross,
+  });
+
+  factory TripleNassauScHole.fromJson(Map<String, dynamic> j) {
+    final g = <int, int>{};
+    final raw = j['gross'];
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        final pid = int.tryParse(k.toString());
+        if (pid != null && v != null) g[pid] = (v as num).toInt();
+      });
+    }
+    return TripleNassauScHole(
+      hole:        j['hole'] as int? ?? 0,
+      par:         j['par'] as int?,
+      strokeIndex: j['stroke_index'] as int?,
+      gross:       g,
+    );
+  }
+}
+
 /// The whole Triple Nassau: shared config, the three matches, and a per-player
 /// net rollup.  Mirrors services.triple_nassau.triple_nassau_summary().
 class TripleNassauSummary {
@@ -3961,6 +3994,7 @@ class TripleNassauSummary {
   final double  pressUnit;
   final List<TripleNassauPlayer> players;   // display order
   final List<TripleNassauMatch>  matches;
+  final List<TripleNassauScHole> scorecard; // merged round progress (all 3)
 
   const TripleNassauSummary({
     required this.status,
@@ -3971,6 +4005,7 @@ class TripleNassauSummary {
     required this.pressUnit,
     required this.players,
     required this.matches,
+    this.scorecard = const [],
   });
 
   factory TripleNassauSummary.fromJson(Map<String, dynamic> j) =>
@@ -3986,6 +4021,10 @@ class TripleNassauSummary {
             .toList(),
         matches     : (j['matches'] as List? ?? [])
             .map((e) => TripleNassauMatch.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        scorecard   : (((j['scorecard'] as Map<String, dynamic>?) ?? const {})
+                ['holes'] as List? ?? [])
+            .map((e) => TripleNassauScHole.fromJson(e as Map<String, dynamic>))
             .toList(),
       );
 }

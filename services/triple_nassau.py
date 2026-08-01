@@ -200,6 +200,24 @@ def triple_nassau_summary(foursome) -> dict | None:
         for pid in order
     ]
 
+    # Round-progress scorecard for ALL three players (gross + par + SI), merged
+    # from the children (each child's scorecard lists only its two players, but
+    # every player appears in two of the three, so the union covers all three).
+    sc_by_hole: dict = {}
+    hole_order: list = []
+    for m in matches:
+        for h in (m['match'].get('scorecard') or {}).get('holes', []):
+            hn = h['hole']
+            if hn not in sc_by_hole:
+                sc_by_hole[hn] = {
+                    'hole': hn, 'par': h.get('par'),
+                    'stroke_index': h.get('stroke_index'), 'gross': {},
+                }
+                hole_order.append(hn)
+            for sr in h.get('scores', []):
+                if sr.get('gross') is not None:
+                    sc_by_hole[hn]['gross'][sr['player_id']] = sr['gross']
+
     return {
         'status'       : container.status,
         'handicap_mode': cfg['handicap_mode'],
@@ -209,4 +227,5 @@ def triple_nassau_summary(foursome) -> dict | None:
         'press_unit'   : cfg['press_unit'],
         'players'      : players,   # roster in display order + per-player net
         'matches'      : matches,   # each: player ids + full NassauSummary
+        'scorecard'    : {'holes': [sc_by_hole[hn] for hn in hole_order]},
     }
