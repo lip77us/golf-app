@@ -435,6 +435,7 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _rosterBanner(rp, players),
+          if (s != null) _pressesStrip(rp, s, players),
           const SizedBox(height: 10),
           _holeHeader(holeData),
           const SizedBox(height: 10),
@@ -481,6 +482,75 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
         const Text('3 matches',
             style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: _muted)),
       ]),
+    );
+  }
+
+  String _initials(Membership m) {
+    final parts = m.player.name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    final w = parts.isEmpty ? '' : parts[0];
+    return (w.length >= 2 ? w.substring(0, 2) : w).toUpperCase();
+  }
+
+  // Horizontal strip of press pills across all three matches — the "bubbles"
+  // above score entry.  One per press, tagged with the pair + nine + running
+  // result, coloured by the leader.
+  Widget _pressesStrip(RoundProvider rp, TripleNassauSummary s,
+      List<Membership> players) {
+    Membership? memberOf(int? pid) => players
+        .where((m) => m.player.id == pid).firstOrNull;
+    final pills = <Widget>[];
+    for (final m in s.matches) {
+      final a = memberOf(m.player1Id), b = memberOf(m.player2Id);
+      if (a == null || b == null) continue;
+      // Number presses per nine within a match, e.g. "Press 1".
+      var frontN = 0, backN = 0;
+      for (final p in m.match.presses) {
+        final n = p.nine == 'front' ? (++frontN) : (++backN);
+        final margin = p.margin ?? 0;
+        final resolved = p.result == 'team1' || p.result == 'team2';
+        final leaderId = resolved
+            ? (p.result == 'team1' ? m.player1Id : m.player2Id)
+            : (margin == 0 ? null : (margin > 0 ? m.player1Id : m.player2Id));
+        final colour = leaderId == null ? _muted : _colourFor(rp, leaderId);
+        final status = margin == 0
+            ? 'AS'
+            : (resolved && p.holesRemaining > 0
+                ? '${margin.abs()}&${p.holesRemaining}'
+                : '${margin.abs()}UP');
+        pills.add(Container(
+          margin: const EdgeInsets.only(right: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: colour == _muted ? Colors.white : colour.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: colour == _muted
+                ? const Color(0xFFD3DED6) : colour.withValues(alpha: 0.5)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${_initials(a)}·${_initials(b)} — '
+                  '${p.nine == 'front' ? 'F9' : 'B9'} Press $n · $status',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                      color: colour == _muted ? _muted : colour)),
+              Text('${p.pressType == 'manual' ? 'manual' : 'auto'} · '
+                  'holes ${p.startHole}–${p.endHole}',
+                  style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w600,
+                      color: _muted, letterSpacing: 0.2)),
+            ],
+          ),
+        ));
+      }
+    }
+    if (pills.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal, child: Row(children: pills)),
     );
   }
 
