@@ -532,18 +532,32 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
       final colour = _colourFor(rp, pid);
       final active = isHot || isEditing;
 
-      // Round-total allowance vs the lowest-index player (= the LEFT match) —
-      // like Sixes' "gets N".  Well-defined (the right match differs, which the
-      // right dots carry per hole).
-      final gets = (mode == 'gross' || low == null) ? 0
-          : ((m.playingHandicap - low.playingHandicap) * netPct / 100)
+      // Round-total allowance vs each opponent (like Sixes' "gets N"), labelled
+      // by opponent so it's obvious against whom — one pill per match the player
+      // gets strokes in (the higher player of a pair; none for the low player).
+      int getsVs(Membership opp) => mode == 'gross' ? 0
+          : ((m.playingHandicap - opp.playingHandicap) * netPct / 100)
               .round().clamp(0, 99);
+      final getsLeft  = getsVs(leftOpp);
+      final getsRight = getsVs(rightOpp);
 
       final rowContent = Row(children: [
-        Expanded(child: Row(children: [
-          Flexible(child: Text(m.player.name, overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontWeight: FontWeight.w700, color: colour))),
-          if (gets > 0) ...[const SizedBox(width: 6), _getsPill(gets)],
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(m.player.name, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.w700, color: colour)),
+          if (getsLeft > 0 || getsRight > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Wrap(spacing: 6, runSpacing: 3, children: [
+                if (getsLeft > 0)
+                  _getsPill(getsLeft, _initials(leftOpp),
+                      _colourFor(rp, leftOpp.player.id)),
+                if (getsRight > 0)
+                  _getsPill(getsRight, _initials(rightOpp),
+                      _colourFor(rp, rightOpp.player.id)),
+              ]),
+            ),
         ])),
         // Left dots (vs lowest-index) · box · right dots (other match).
         _dotsCol(leftStrokes, _colourFor(rp, leftOpp.player.id)),
@@ -611,28 +625,28 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           for (var i = 0; i < rows.length; i++) rows[i],
         ]),
       ),
-      if (mode != 'gross')
-        const Padding(
-          padding: EdgeInsets.only(top: 6, left: 2),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Left dots = your match vs the lowest-index player; '
-                'right dots = your other match.',
-                style: TextStyle(fontSize: 11, color: _muted, height: 1.4)),
-          ),
-        ),
     ]);
   }
 
-  Widget _getsPill(int n) => Container(
+  static String _initials(Membership m) {
+    final parts = m.player.name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    final w = parts.isEmpty ? '' : parts[0];
+    return (w.length >= 2 ? w.substring(0, 2) : w).toUpperCase();
+  }
+
+  // "gets N v JS" — coloured by the opponent so it's obvious against whom.
+  Widget _getsPill(int n, String vs, Color c) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
         decoration: BoxDecoration(
-          color: const Color(0x1F1D9E75),
+          color: c.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFD3DED6)),
+          border: Border.all(color: c.withValues(alpha: 0.4)),
         ),
-        child: Text('gets $n', style: const TextStyle(
-            fontSize: 10, fontWeight: FontWeight.w600, color: _muted)),
+        child: Text('gets $n v $vs', style: TextStyle(
+            fontSize: 10, fontWeight: FontWeight.w700, color: c)),
       );
 
   Widget _dotsCol(int n, Color c) {
