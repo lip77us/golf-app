@@ -8393,9 +8393,11 @@ class _TripleNassauGroupCard extends StatelessWidget {
                 child: Row(children: [
                   _dot(colourOf[p.playerId] ?? Colors.grey),
                   const SizedBox(width: 8),
-                  Text(p.shortName,
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
-                  const Spacer(),
+                  // Full name — the settlement rows have room to spell it out.
+                  Expanded(child: Text(
+                      p.name.isNotEmpty ? p.name : p.shortName,
+                      style: const TextStyle(fontWeight: FontWeight.w700))),
+                  const SizedBox(width: 8),
                   Text(_money(p.net), style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontFeatures: const [FontFeature.tabularFigures()],
