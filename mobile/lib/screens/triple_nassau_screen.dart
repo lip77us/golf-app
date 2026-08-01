@@ -674,9 +674,19 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
   // 3×3 matrix — rows = matches, cols = F9/B9/Overall.
   Widget _matrix(RoundProvider rp, TripleNassauSummary s, List<Membership> players) {
     final theme = Theme.of(context);
-    String shortOf(int? pid) => players
-        .firstWhere((m) => m.player.id == pid, orElse: () => players.first)
-        .player.shortName;
+    // Two-letter initials — the matrix cells are narrow (5-char short names
+    // ellipsized to "Pa…").  "Paul Lipkin" → "PL"; "JS" stays "JS".
+    String initialsOf(int? pid) {
+      final name = players
+          .firstWhere((m) => m.player.id == pid, orElse: () => players.first)
+          .player.name.trim();
+      final parts = name.split(RegExp(r'\s+'));
+      if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      }
+      final w = parts.isEmpty ? '' : parts[0];
+      return (w.length >= 2 ? w.substring(0, 2) : w).toUpperCase();
+    }
 
     Widget cell(TripleNassauMatch m, NassauBetResult b) {
       final leaderLive = b.margin > 0 ? m.player1Id
@@ -722,13 +732,13 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
         SizedBox(width: 74, child: Row(children: [
           _dot(_colourFor(rp, m.player1Id ?? 0)),
           const SizedBox(width: 2),
-          Flexible(child: Text(shortOf(m.player1Id), overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 10.5))),
+          Text(initialsOf(m.player1Id),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11)),
           const Text(' v ', style: TextStyle(color: _muted, fontSize: 9)),
           _dot(_colourFor(rp, m.player2Id ?? 0)),
           const SizedBox(width: 2),
-          Flexible(child: Text(shortOf(m.player2Id), overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 10.5))),
+          Text(initialsOf(m.player2Id),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11)),
         ])),
         cell(m, m.match.front9), cell(m, m.match.back9), cell(m, m.match.overall),
       ]),
