@@ -551,11 +551,9 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
               padding: const EdgeInsets.only(top: 3),
               child: Wrap(spacing: 6, runSpacing: 3, children: [
                 if (getsLeft > 0)
-                  _getsPill(getsLeft, _initials(leftOpp),
-                      _colourFor(rp, leftOpp.player.id)),
+                  _getsPill(getsLeft, _colourFor(rp, leftOpp.player.id)),
                 if (getsRight > 0)
-                  _getsPill(getsRight, _initials(rightOpp),
-                      _colourFor(rp, rightOpp.player.id)),
+                  _getsPill(getsRight, _colourFor(rp, rightOpp.player.id)),
               ]),
             ),
         ])),
@@ -628,24 +626,16 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     ]);
   }
 
-  static String _initials(Membership m) {
-    final parts = m.player.name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    final w = parts.isEmpty ? '' : parts[0];
-    return (w.length >= 2 ? w.substring(0, 2) : w).toUpperCase();
-  }
-
-  // "gets N v JS" — coloured by the opponent so it's obvious against whom.
-  Widget _getsPill(int n, String vs, Color c) => Container(
+  // "gets N" — coloured by the opponent; that colour (+ the fact you only get
+  // strokes as the higher player) identifies which match, so no "v JS" needed.
+  Widget _getsPill(int n, Color c) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
         decoration: BoxDecoration(
           color: c.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: c.withValues(alpha: 0.4)),
         ),
-        child: Text('gets $n v $vs', style: TextStyle(
+        child: Text('gets $n', style: TextStyle(
             fontSize: 10, fontWeight: FontWeight.w700, color: c)),
       );
 
