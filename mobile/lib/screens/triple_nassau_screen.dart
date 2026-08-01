@@ -529,43 +529,63 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
 
       final leftStrokes  = _pairStrokes(m, leftOpp, si, mode, netPct);
       final rightStrokes = _pairStrokes(m, rightOpp, si, mode, netPct);
-      final net = gross != null ? gross - leftStrokes : null;
       final colour = _colourFor(rp, pid);
+      final active = isHot || isEditing;
 
-      final row = InkWell(
-        onTap: (gross != null && !isHot)
-            ? () => setState(() => _editingPlayerId = isEditing ? null : pid)
-            : null,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colour.withValues(alpha: 0.06),
-            border: Border(left: BorderSide(color: colour, width: 4)),
-          ),
-          padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
-          child: Row(children: [
-            Expanded(child: Text(m.player.shortName, style: TextStyle(
-                fontWeight: FontWeight.w700, color: colour))),
-            // Left dots (vs lowest-index) · box · right dots
-            _dotsCol(leftStrokes, _colourFor(rp, leftOpp.player.id)),
-            const SizedBox(width: 5),
-            _scoreBox(gross, isHot, colour, net, mode),
-            const SizedBox(width: 5),
-            _dotsCol(rightStrokes, _colourFor(rp, rightOpp.player.id)),
-          ]),
-        ),
-      );
+      final rowContent = Row(children: [
+        Expanded(child: Text(m.player.shortName, style: TextStyle(
+            fontWeight: FontWeight.w700, color: colour))),
+        // Left dots (vs lowest-index) · box · right dots (other match).
+        _dotsCol(leftStrokes, _colourFor(rp, leftOpp.player.id)),
+        const SizedBox(width: 5),
+        _scoreBox(gross, active, colour),
+        const SizedBox(width: 5),
+        _dotsCol(rightStrokes, _colourFor(rp, rightOpp.player.id)),
+      ]);
 
-      rows.add(row);
-      if (isHot || isEditing) {
+      if (active) {
+        // Active player: ONE team-colour frame around the row AND the picker
+        // (square corners so the mixed-width border is allowed) — the Sixes look.
+        Widget rowPad = Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 12, 9), child: rowContent);
+        if (isEditing) {
+          rowPad = InkWell(
+              onTap: () => setState(() => _editingPlayerId = null), child: rowPad);
+        }
         rows.add(Container(
-          color: colour.withValues(alpha: 0.05),
-          padding: const EdgeInsets.only(bottom: 6),
-          child: InlineScorePicker(
-            par: holeData?.par ?? 4,
-            strokes: leftStrokes,
-            currentScore: gross,
-            boxBorderColor: colour,
-            onScoreSelected: (v) => _handleScore(ctx, m, v, players),
+          margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+          decoration: BoxDecoration(
+            color: colour.withValues(alpha: 0.10),
+            border: Border(
+              top:    BorderSide(color: colour, width: 1.5),
+              bottom: BorderSide(color: colour, width: 1.5),
+              right:  BorderSide(color: colour, width: 1.5),
+              left:   BorderSide(color: colour, width: 4),
+            ),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            rowPad,
+            InlineScorePicker(
+              par: holeData?.par ?? 4,
+              strokes: leftStrokes,
+              currentScore: gross,
+              boxBorderColor: colour,
+              boxFillColor: Colors.white,
+              onScoreSelected: (v) => _handleScore(ctx, m, v, players),
+            ),
+          ]),
+        ));
+      } else {
+        rows.add(InkWell(
+          onTap: gross != null
+              ? () => setState(() => _editingPlayerId = pid) : null,
+          child: Container(
+            decoration: BoxDecoration(
+              color: colour.withValues(alpha: 0.06),
+              border: Border(left: BorderSide(color: colour, width: 4)),
+            ),
+            padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+            child: rowContent,
           ),
         ));
       }
@@ -586,8 +606,8 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           padding: EdgeInsets.only(top: 6, left: 2),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: Text('Dots + net = your match vs the lowest-index player '
-                '(left); the right dots are your other match.',
+            child: Text('Left dots = your match vs the lowest-index player; '
+                'right dots = your other match.',
                 style: TextStyle(fontSize: 11, color: _muted, height: 1.4)),
           ),
         ),
@@ -609,29 +629,25 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     );
   }
 
-  Widget _scoreBox(int? gross, bool isHot, Color colour, int? net, String mode) {
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        width: 42, height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-              color: isHot ? colour : const Color(0xFFD3DED6),
-              width: isHot ? 2 : 1),
-        ),
-        alignment: Alignment.center,
-        // Empty box until scored (like the Sixes / universal entry) — no
-        // dropdown chevron; the inline picker below is the affordance.
-        child: gross != null
-            ? Text('$gross', style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 16))
-            : null,
+  Widget _scoreBox(int? gross, bool active, Color colour) {
+    // A single net figure would be misleading — the net differs per opponent —
+    // so the box shows only the gross; the dual dots carry the per-match strokes.
+    return Container(
+      width: 42, height: 36,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+            color: active ? colour : const Color(0xFFD3DED6),
+            width: active ? 2 : 1),
       ),
-      if (net != null && mode != 'gross')
-        Text('net $net', style: const TextStyle(
-            fontSize: 9.5, color: _muted, fontWeight: FontWeight.w700)),
-    ]);
+      alignment: Alignment.center,
+      // Empty box until scored (like Sixes) — the inline picker is the affordance.
+      child: gross != null
+          ? Text('$gross', style: const TextStyle(
+              fontWeight: FontWeight.w700, fontSize: 16))
+          : null,
+    );
   }
 
   // 3×3 matrix — rows = matches, cols = F9/B9/Overall.
