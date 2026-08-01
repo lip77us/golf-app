@@ -101,6 +101,8 @@ class RoundProvider extends ChangeNotifier {
   // PRIMARY match for existing single-Nassau consumers.
   final Map<String, NassauSummary> _nassauByType = {};
   QuotaNassauSummary?    _quotaNassauSummary;
+  TripleNassauSummary?   _tripleNassauSummary;
+  bool                   _loadingTripleNassau = false;
   Map<String, dynamic>? _matchPlayData;
   ThreePersonMatchSummary? _threePersonMatchSummary;
   Map<String, dynamic>? _lowNetConfig;   // { handicap_mode, net_percent, ... }
@@ -168,6 +170,8 @@ class RoundProvider extends ChangeNotifier {
     return (p == 'nassau' || p == 'nassau_nine' || p == 'match_18') ? p : null;
   }
   QuotaNassauSummary?   get quotaNassauSummary => _quotaNassauSummary;
+  TripleNassauSummary?  get tripleNassauSummary => _tripleNassauSummary;
+  bool                  get loadingTripleNassau => _loadingTripleNassau;
   bool                  get loadingQuotaNassau => _loadingQuotaNassau;
   Map<String, dynamic>?       get matchPlayData            => _matchPlayData;
   ThreePersonMatchSummary?    get threePersonMatchSummary  => _threePersonMatchSummary;
@@ -216,6 +220,7 @@ class RoundProvider extends ChangeNotifier {
     _tripleCupSummary        = null;
     _multiSkinsSummary       = null;
     _nassauSummary           = null;
+    _tripleNassauSummary     = null;
     _quotaNassauSummary      = null;
     _matchPlayData           = null;
     _threePersonMatchSummary = null;
@@ -316,6 +321,7 @@ class RoundProvider extends ChangeNotifier {
     if (_activeFoursomeId != foursomeId) {
       _scorecard        = null;
       _nassauSummary    = null;
+      _tripleNassauSummary = null;
       _skinsSummary     = null;
       _spotsSummary     = null;
       _stablefordResult = null;
@@ -961,6 +967,28 @@ class RoundProvider extends ChangeNotifier {
       _loadingNassau = false;
       notifyListeners();
     }
+  }
+
+  // ── Triple Nassau ──────────────────────────────────────────────────────────
+
+  Future<void> loadTripleNassau(int foursomeId) async {
+    _loadingTripleNassau = true;
+    notifyListeners();
+    try {
+      _tripleNassauSummary = await _client.getTripleNassauSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around.
+    } catch (e, st) {
+      debugPrint('loadTripleNassau($foursomeId) ERROR: $e\n$st');
+    } finally {
+      _loadingTripleNassau = false;
+      notifyListeners();
+    }
+  }
+
+  void setTripleNassauSummary(TripleNassauSummary s) {
+    _tripleNassauSummary = s;
+    notifyListeners();
   }
 
   // ── Quota Nassau ───────────────────────────────────────────────────────────

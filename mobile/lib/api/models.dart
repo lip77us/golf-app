@@ -3897,6 +3897,100 @@ class NassauSummary {
 }
 
 // ---------------------------------------------------------------------------
+// Triple Nassau — round-robin of three 1v1 Nassaus
+// ---------------------------------------------------------------------------
+
+/// One player's roster entry + netted position across their two matches.
+class TripleNassauPlayer {
+  final int     playerId;
+  final String  name;
+  final String  shortName;
+  final int?    playingHandicap;
+  final double  net;    // sum of this player's two matches
+
+  const TripleNassauPlayer({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.playingHandicap,
+    required this.net,
+  });
+
+  factory TripleNassauPlayer.fromJson(Map<String, dynamic> j) =>
+      TripleNassauPlayer(
+        playerId       : j['player_id'] as int,
+        name           : j['name'] as String? ?? '',
+        shortName      : j['short_name'] as String? ?? '',
+        playingHandicap: j['playing_handicap'] as int?,
+        net            : (j['net'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+/// One 1v1 match of the round-robin — the two player ids and the full Nassau
+/// summary for that pair (reuses [NassauSummary] wholesale).
+class TripleNassauMatch {
+  final String       gameType;   // triple_1 | triple_2 | triple_3
+  final int?         player1Id;
+  final int?         player2Id;
+  final NassauSummary match;
+
+  const TripleNassauMatch({
+    required this.gameType,
+    required this.player1Id,
+    required this.player2Id,
+    required this.match,
+  });
+
+  factory TripleNassauMatch.fromJson(Map<String, dynamic> j) =>
+      TripleNassauMatch(
+        gameType : j['game_type'] as String? ?? '',
+        player1Id: j['player1_id'] as int?,
+        player2Id: j['player2_id'] as int?,
+        match    : NassauSummary.fromJson(j['match'] as Map<String, dynamic>),
+      );
+}
+
+/// The whole Triple Nassau: shared config, the three matches, and a per-player
+/// net rollup.  Mirrors services.triple_nassau.triple_nassau_summary().
+class TripleNassauSummary {
+  final String  status;
+  final String  handicapMode;
+  final int     netPercent;
+  final String  pressMode;
+  final double  betUnit;
+  final double  pressUnit;
+  final List<TripleNassauPlayer> players;   // display order
+  final List<TripleNassauMatch>  matches;
+
+  const TripleNassauSummary({
+    required this.status,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.pressMode,
+    required this.betUnit,
+    required this.pressUnit,
+    required this.players,
+    required this.matches,
+  });
+
+  factory TripleNassauSummary.fromJson(Map<String, dynamic> j) =>
+      TripleNassauSummary(
+        status      : j['status'] as String? ?? 'pending',
+        handicapMode: j['handicap_mode'] as String? ?? 'strokes_off',
+        netPercent  : j['net_percent'] as int? ?? 100,
+        pressMode   : j['press_mode'] as String? ?? 'none',
+        betUnit     : (j['bet_unit'] as num?)?.toDouble() ?? 0.0,
+        pressUnit   : (j['press_unit'] as num?)?.toDouble() ?? 0.0,
+        players     : (j['players'] as List? ?? [])
+            .map((e) => TripleNassauPlayer.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        matches     : (j['matches'] as List? ?? [])
+            .map((e) => TripleNassauMatch.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+// ---------------------------------------------------------------------------
 // Nassau phantom info (Four Ball cross-foursome phantom)
 // ---------------------------------------------------------------------------
 

@@ -16,6 +16,10 @@ class GameIds {
   static const String points531  = 'points_531';
   static const String nassau     = 'nassau';
   static const String nassauNine = 'nassau_nine';
+  /// Triple Nassau — three players, three simultaneous 1v1 Nassaus (a
+  /// round-robin) from one setup.  Each pair is handicapped on its own two
+  /// players; settlement nets each player's two matches.
+  static const String tripleNassau = 'triple_nassau';
   /// Las Vegas — 2v2 team game; each team's two net scores form a number
   /// (low=tens, high=ones), lower number wins by the difference.  Owns the
   /// 2-digit scoring model, so it's mutually exclusive with the other games.
@@ -312,6 +316,19 @@ const List<GameMeta> kGameCatalog = [
     // between two gamblers).  It owns its own handicap (gross included) and
     // leaderboard tab; see docs/parallel-games.md.
     canBeSubsetSideGame: true,
+  ),
+  GameMeta(
+    id          : GameIds.tripleNassau,
+    displayName : 'Triple Nassau',
+    casual      : true,
+    // Three simultaneous F9/B9/Overall 1v1 Nassaus — needs a full 18.
+    requiresFullRound: true,
+    // Owns the score-entry screen; individual-ball, so it can host overlays.
+    allowsSideGames: false,
+    hostsOverlaySideGames: true,
+    // Exactly three players — the round-robin is the whole point.
+    exactPlayers: 3,
+    excludes    : {GameIds.sixes, GameIds.nassau, GameIds.points531},
   ),
   GameMeta(
     id          : GameIds.match18,

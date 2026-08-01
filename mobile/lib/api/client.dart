@@ -1160,6 +1160,50 @@ class ApiClient {
     return NassauSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  // ---- Triple Nassau (round-robin of three 1v1 Nassaus) ----
+
+  Future<TripleNassauSummary> getTripleNassauSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/triple-nassau/');
+    return TripleNassauSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/triple-nassau/setup/ — one setup drives all three
+  /// pairings.  Returns the full summary.
+  Future<TripleNassauSummary> postTripleNassauSetup(
+    int foursomeId, {
+    required List<int> playerIds,   // exactly 3, in display order
+    String  handicapMode = 'strokes_off',
+    int     netPercent   = 100,
+    String  pressMode    = 'none',
+    double  pressUnit    = 0.0,
+    double? lossCap,
+    double? betUnit,                // sets Round.bet_unit when given
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/triple-nassau/setup/', {
+      'player_ids'   : playerIds,
+      'handicap_mode': handicapMode,
+      'net_percent'  : netPercent,
+      'press_mode'   : pressMode,
+      'press_unit'   : pressUnit,
+      'loss_cap'     : lossCap?.toStringAsFixed(2),
+      if (betUnit != null) 'bet_unit': betUnit.toStringAsFixed(2),
+    });
+    return TripleNassauSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/triple-nassau/press/ — manual press in ONE match.
+  Future<TripleNassauSummary> postTripleNassauPress(
+    int foursomeId, {
+    required String gameType,   // triple_1 | triple_2 | triple_3
+    required int    startHole,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/triple-nassau/press/', {
+      'game_type' : gameType,
+      'start_hole': startHole,
+    });
+    return TripleNassauSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Sixes ----
 
   Future<Map<String, dynamic>> getSixes(int foursomeId) async {
