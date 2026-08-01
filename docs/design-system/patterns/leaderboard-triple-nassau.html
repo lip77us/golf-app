@@ -1,0 +1,157 @@
+<!-- @dsCard group="Scorecards & leaderboards" name="Leaderboard — Triple Nassau" subtitle="_TripleNassauGroupCard — 3×3 match matrix, per-match bets & presses, gross round progress with SI + allowances, net settlement" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Leaderboard — Triple Nassau</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--win:#388E3C;--under:#D32F2F;--blue:#1976D2;--orange:#EF6C00;--plum:#7B3FA0}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:34px 24px 56px;display:flex;flex-direction:column;align-items:center}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:26px;margin:0 0 6px;align-self:flex-start;max-width:430px;width:100%}
+  .sub{color:var(--muted);font-size:13.5px;line-height:1.6;margin:0 0 20px;max-width:430px;width:100%;align-self:flex-start;text-wrap:pretty}
+  .tabs{display:flex;gap:6px;max-width:430px;width:100%;margin-bottom:14px}
+  .tabs span{flex:1;text-align:center;padding:8px 0;font-size:12.5px;font-weight:600;color:var(--muted);border-bottom:2px solid var(--cardBorder)}
+  .tabs span.on{color:var(--pine);border-bottom-color:var(--pine)}
+  .card{max-width:430px;width:100%;border:1px solid var(--cardBorder);border-radius:12px;background:var(--card);padding:14px 15px;margin-bottom:16px}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none;display:inline-block}
+  .dot.b{background:var(--blue)} .dot.o{background:var(--orange)} .dot.p{background:var(--plum)}
+  .seghead{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;color:var(--pine);font-size:12px;text-transform:uppercase;letter-spacing:.4px;margin:0 0 8px}
+  .divider{height:1px;background:#EBF0EC;margin:13px 0}
+  /* matrix */
+  .mhead{display:flex;align-items:center;gap:6px;padding:0 0 5px}
+  .mhead .sp{width:104px;flex:none}
+  .mhead span.c{flex:1;text-align:center;font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .mline{display:flex;align-items:center;gap:6px;margin-top:5px}
+  .mline .lbl2{width:104px;flex:none;display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700}
+  .mline .lbl2 .x{color:var(--muted);font-weight:500;font-size:10px}
+  .cellb{flex:1;text-align:center;border-radius:8px;padding:6px 0 5px;background:#F4F7F4;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.15}
+  .cellb small{display:block;font-size:10px;font-weight:600;color:var(--muted);margin-top:2px}
+  .cellb.b{background:rgba(25,118,210,.13);color:var(--blue)}
+  .cellb.o{background:rgba(239,108,0,.13);color:var(--orange)}
+  .cellb.p{background:rgba(123,63,160,.13);color:var(--plum)}
+  .cellb.as{color:var(--muted)}
+  .cellb.fin{color:#fff}
+  .cellb.fin.b{background:var(--blue)} .cellb.fin.o{background:var(--orange)} .cellb.fin.p{background:var(--plum)}
+  .cellb.fin small{color:rgba(255,255,255,.88)}
+  .legend{color:var(--muted);font-size:11px;margin-top:9px;display:flex;gap:12px;flex-wrap:wrap}
+  /* per-match detail */
+  .mtitle{display:flex;align-items:center;gap:5px;font-size:13.5px;font-weight:700;margin-bottom:7px}
+  .mtitle .x{color:var(--muted);font-weight:500;font-size:11px}
+  .mtitle .tot{margin-left:auto;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+  .betrow{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-bottom:1px solid #F1F5F2}
+  .betrow:last-of-type{border-bottom:none}
+  .betrow .r{color:var(--muted);width:78px;flex:none}
+  .betrow .v{font-weight:700}
+  .betrow .v.b{color:var(--blue)} .betrow .v.o{color:var(--orange)} .betrow .v.p{color:var(--plum)} .betrow .v.h{color:var(--muted);font-weight:600}
+  .betrow .fin{color:var(--muted);font-weight:500;font-size:11.5px}
+  .betrow .m{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;font-size:12px}
+  .betrow .m.pos{color:var(--win)} .betrow .m.neg{color:var(--under)} .betrow .m.z{color:var(--muted);font-weight:600}
+  .press{font-size:11px;color:var(--muted);padding:5px 0 0;line-height:1.5}
+  .press .res{font-weight:700}
+  .press .res.b{color:var(--blue)} .press .res.o{color:var(--orange)} .press .res.p{color:var(--plum)}
+  /* presses list */
+  .presrow{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-bottom:1px solid #F1F5F2}
+  .presrow:last-child{border-bottom:none}
+  .presrow .pl{display:flex;align-items:center;gap:4px;font-weight:700;width:96px;flex:none}
+  .presrow .pl .x{color:var(--muted);font-weight:500;font-size:10px}
+  .presrow .pd{flex:1;color:var(--muted)}
+  .presrow .pr{font-weight:700}
+  .presrow .pr.b{color:var(--blue)} .presrow .pr.o{color:var(--orange)} .presrow .pr.p{color:var(--plum)} .presrow .pr.as{color:var(--muted);font-weight:600}
+  /* round progress */
+  .gscroll{overflow-x:auto}
+  table{border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums;width:100%}
+  td,th{padding:4px 5px;text-align:center;white-space:nowrap}
+  td.lbl,th.lbl{text-align:left;font-weight:700;position:sticky;left:0;background:var(--card)}
+  .parrow td{color:var(--muted);font-style:italic}
+  .sirow td{color:var(--muted);font-size:10.5px}
+  .sirow td.lbl{font-style:normal;font-weight:700;font-size:10.5px}
+  .gets{font-size:9.5px;font-weight:700;color:var(--pine);background:rgba(15,110,86,.10);border-radius:6px;padding:1px 5px;margin-left:5px;font-style:normal}
+  .wonrow td{font-weight:800;font-size:10.5px}
+  .wonrow td.lbl{font-style:italic;color:var(--muted);font-weight:700;font-size:10.5px}
+  .wonrow.first td{border-top:1px solid var(--cardBorder);padding-top:6px}
+  .ini{display:inline-block;border-radius:4px;padding:1px 4px}
+  .ini.b{color:var(--blue);background:rgba(25,118,210,.15)}
+  .ini.o{color:var(--orange);background:rgba(239,108,0,.15)}
+  .ini.p{color:var(--plum);background:rgba(123,63,160,.15)}
+  .ini.h{color:var(--muted);background:transparent}
+  /* settlement */
+  .srow{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #F1F5F2;font-size:14px}
+  .srow:last-of-type{border-bottom:none}
+  .srow .n{font-weight:700}
+  .srow .amt{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums}
+  .srow .amt.pos{color:var(--win)} .srow .amt.neg{color:var(--under)}
+  .foot{color:var(--muted);font-size:12px;margin-top:10px;line-height:1.5}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Leaderboard — Triple Nassau</h1>
+  <p class="sub">Three players, three simultaneous one-on-one Nassaus. The matrix reads the whole game at a glance — one row per match, one column per bet. A <b>solid</b> cell is settled; a <b>tinted</b> one is still live and shows holes played, so a Front 9 that ended 2 UP never reads the same as a Back 9 sitting 2 UP with holes to go. Below it: the <b>presses</b> across all three matches, the <b>round-progress</b> gross card (SI + per-match allowances + hole winners), and the <b>net position</b> (each player's two matches netted). Player identity is <b>colour</b> throughout, never “P1/P2”.</p>
+
+  <div class="tabs"><span>Stroke Play</span><span class="on">Nassau</span><span>Settlement</span></div>
+
+  <div class="card">
+    <div class="seghead">All three matches</div>
+    <div class="mhead"><span class="sp"></span><span class="c">Front 9</span><span class="c">Back 9</span><span class="c">Overall</span></div>
+    <div class="mline">
+      <span class="lbl2"><span class="dot b"></span>Paul<span class="x">v</span><span class="dot o"></span>Dave</span>
+      <span class="cellb fin b">3&amp;2<small>Final</small></span><span class="cellb as">AS<small>thru 3</small></span><span class="cellb b">1UP<small>thru 12</small></span>
+    </div>
+    <div class="mline">
+      <span class="lbl2"><span class="dot b"></span>Paul<span class="x">v</span><span class="dot p"></span>Sam</span>
+      <span class="cellb fin b">2UP<small>Final</small></span><span class="cellb b">1UP<small>thru 3</small></span><span class="cellb b">3UP<small>thru 12</small></span>
+    </div>
+    <div class="mline">
+      <span class="lbl2"><span class="dot o"></span>Dave<span class="x">v</span><span class="dot p"></span>Sam</span>
+      <span class="cellb fin p">2&amp;1<small>Final</small></span><span class="cellb o">2UP<small>thru 3</small></span><span class="cellb as">AS<small>thru 12</small></span>
+    </div>
+    <div class="legend"><span>Solid = final</span><span>Tinted = live, with holes played</span><span>N&amp;N = closed out early</span><span>N UP = margin</span></div>
+  </div>
+
+  <!-- Presses (across all three matches).  The per-match bet-detail card was
+       dropped; the matrix + settlement carry the money, and presses get their
+       own list here. -->
+  <div class="card">
+    <div class="seghead">Presses</div>
+    <div class="presrow"><span class="pl"><span class="dot b"></span>PL<span class="x">v</span><span class="dot o"></span>DG</span><span class="pd">Auto Press F9 holes 5–9</span><span class="pr b">Paul 2 UP · +$5.00</span></div>
+    <div class="presrow"><span class="pl"><span class="dot b"></span>PL<span class="x">v</span><span class="dot p"></span>SW</span><span class="pd">Auto Press B9 holes 12–18</span><span class="pr as">AS</span></div>
+    <div class="presrow"><span class="pl"><span class="dot o"></span>DG<span class="x">v</span><span class="dot p"></span>SW</span><span class="pd">Auto Press F9 holes 6–9</span><span class="pr p">Sam 1 UP · +$5.00</span></div>
+  </div>
+
+  <div class="card">
+    <div class="seghead">Round progress — gross scores</div>
+    <div class="gscroll">
+      <table>
+        <tr><th class="lbl">Hole</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th><th>13</th></tr>
+        <tr class="parrow"><td class="lbl">Par</td><td>4</td><td>3</td><td>5</td><td>4</td><td>4</td><td>4</td><td>4</td></tr>
+        <tr class="sirow"><td class="lbl">SI</td><td>9</td><td>17</td><td>3</td><td>12</td><td>2</td><td>4</td><td>14</td></tr>
+        <tr><td class="lbl">Paul <span class="gets">scratch</span></td><td>4</td><td>3</td><td>6</td><td>5</td><td>4</td><td>4</td><td>–</td></tr>
+        <tr><td class="lbl">Dave <span class="gets">gets 5 v Paul</span></td><td>4</td><td>4</td><td>5</td><td>4</td><td>6</td><td>5</td><td>–</td></tr>
+        <tr><td class="lbl">Sam <span class="gets">gets 10 v Paul · 5 v Dave</span></td><td>5</td><td>3</td><td>6</td><td>5</td><td>5</td><td>6</td><td>–</td></tr>
+        <tr class="wonrow first"><td class="lbl">Paul · Dave</td>
+          <td><span class="ini h">=</span></td><td><span class="ini b">P</span></td><td><span class="ini o">D</span></td>
+          <td><span class="ini o">D</span></td><td><span class="ini b">P</span></td><td><span class="ini h">=</span></td><td>·</td></tr>
+        <tr class="wonrow"><td class="lbl">Paul · Sam</td>
+          <td><span class="ini h">=</span></td><td><span class="ini h">=</span></td><td><span class="ini p">S</span></td>
+          <td><span class="ini h">=</span></td><td><span class="ini h">=</span></td><td><span class="ini b">P</span></td><td>·</td></tr>
+        <tr class="wonrow"><td class="lbl">Dave · Sam</td>
+          <td><span class="ini o">D</span></td><td><span class="ini p">S</span></td><td><span class="ini h">=</span></td>
+          <td><span class="ini o">D</span></td><td><span class="ini p">S</span></td><td><span class="ini h">=</span></td><td>·</td></tr>
+      </table>
+    </div>
+    <div class="foot">Gross scores. Each match is allocated on its own — the difference between the pair’s handicaps, given from SI 1 down. Sam gets 10 against Paul but only 5 against Dave, so the same hole can be a stroke hole in one match and not in another. Read a hole with the SI and the pair’s allowance and the won-by rows should reconcile.</div>
+  </div>
+
+  <div class="card">
+    <div class="seghead">Net position</div>
+    <div class="srow"><span class="dot b"></span><span class="n">Paul Lipkin</span><span class="amt pos">+$55.00</span></div>
+    <div class="srow"><span class="dot o"></span><span class="n">Dave Gabe</span><span class="amt neg">−$30.00</span></div>
+    <div class="srow"><span class="dot p"></span><span class="n">Sam White</span><span class="amt neg">−$25.00</span></div>
+    <div class="foot">Each player’s two matches netted together. Settlement pairs these off so Dave and Sam each pay Paul once, rather than settling match by match.</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!-- @dsCard group="Games" name="Nassau — 3-player (play)" subtitle="Triple Nassau — score entry with dual per-match dots + coloured 'gets' pills, 3×3 match status, Call Press" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Nassau — 3-player (play)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--win:#388E3C;--warn:#B24225;--blue:#1976D2;--orange:#EF6C00;--plum:#7B3FA0}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 14px 8px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:17px;flex:1;text-align:center}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none;display:inline-block}
+  .dot.b{background:var(--blue)} .dot.o{background:var(--orange)} .dot.p{background:var(--plum)}
+  /* roster banner — three players, no teams */
+  .tban{display:flex;align-items:center;gap:6px;background:#E1EAE2;padding:8px 14px;font-size:13px;font-weight:600}
+  .tban .who{display:flex;align-items:center;gap:5px}
+  .tban .b{color:var(--blue)} .tban .o{color:var(--orange)} .tban .p{color:var(--plum)}
+  .tban .vs{color:var(--muted);font-weight:500;font-size:11px}
+  /* presses strip */
+  .presses{display:flex;gap:7px;overflow-x:auto;padding:8px 14px 4px}
+  .ppill{flex:none;display:flex;flex-direction:column;align-items:flex-start;border-radius:999px;padding:5px 12px;font-size:11px;font-weight:700;border:1px solid var(--cardBorder);background:var(--card);line-height:1.25}
+  .ppill small{font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+  .ppill.b{border-color:rgba(25,118,210,.5);background:rgba(25,118,210,.08);color:var(--blue)}
+  .ppill.n{color:var(--muted)}
+  .body{padding:0 12px;overflow-y:auto;height:448px}
+  .hh{position:relative;background:#E1EAE2;border-radius:8px;padding:9px 44px;text-align:center;margin:4px 0 10px}
+  .hh .n{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px}
+  .hh .sub{font-size:12px;color:var(--muted)}
+  .hh .help{position:absolute;top:6px;right:8px;color:var(--pine);font-size:16px}
+  /* per-pair hole outcomes — three results from one hole */
+  .outcomes{border:1px solid var(--cardBorder);border-radius:8px;background:var(--card);margin-bottom:10px;overflow:hidden}
+  .ohead{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;padding:7px 11px 5px}
+  .orow{display:flex;align-items:center;gap:7px;padding:7px 11px;border-top:1px solid #EBF0EC;font-size:12.5px}
+  .orow .pair{display:flex;align-items:center;gap:4px;font-weight:600;width:118px;flex:none}
+  .orow .pair .x{color:var(--muted);font-weight:500;font-size:10.5px}
+  .orow .res{font-weight:700;margin-left:auto}
+  .orow .res.b{color:var(--blue)} .orow .res.o{color:var(--orange)} .orow .res.p{color:var(--plum)}
+  .orow .res.h{color:var(--muted);font-weight:600}
+  .orow.win{background:rgba(56,142,60,.05)}
+  /* score card */
+  .card{border:1px solid var(--cardBorder);border-radius:8px;overflow:hidden;background:var(--card)}
+  .prow{display:flex;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid var(--cardBorder)}
+  .prow:first-child{border-top:none}
+  .prow.pb{background:rgba(25,118,210,.06);border-left:4px solid var(--blue)}
+  .prow.po{background:rgba(239,108,0,.06);border-left:4px solid var(--orange)}
+  .prow.pp{background:rgba(123,63,160,.06);border-left:4px solid var(--plum)}
+  .nm{flex:1;font-weight:700}
+  .nm.b{color:var(--blue)} .nm.o{color:var(--orange)} .nm.p{color:var(--plum)}
+  .gets{font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px}
+  .dots{display:flex;gap:2px;justify-content:center;height:6px;margin-bottom:2px}
+  .sdot{width:4px;height:4px;border-radius:50%;background:var(--pine)}
+  .box{width:40px;height:36px;border-radius:6px;border:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700}
+  .box.win{color:var(--win)}
+  .scorecell{display:flex;flex-direction:column;align-items:center}
+  .net{font-size:9.5px;color:var(--muted);font-weight:700;margin-top:2px}
+  /* name + per-match gets pills + dual dot columns */
+  .who{flex:1;display:flex;flex-direction:column;gap:3px}
+  .pills{display:flex;gap:5px}
+  .gp{font-size:9.5px;font-weight:700;border-radius:8px;padding:1px 6px;border:1px solid}
+  .gp.b{color:var(--blue);background:rgba(25,118,210,.10);border-color:rgba(25,118,210,.4)}
+  .gp.o{color:var(--orange);background:rgba(239,108,0,.10);border-color:rgba(239,108,0,.4)}
+  .gp.p{color:var(--plum);background:rgba(123,63,160,.10);border-color:rgba(123,63,160,.4)}
+  .cell{display:flex;align-items:center;gap:5px}
+  .ds{width:8px;display:flex;flex-direction:column;gap:2px;align-items:center}
+  .d{width:5px;height:5px;border-radius:50%;display:block}
+  .d.b{background:var(--blue)} .d.o{background:var(--orange)} .d.p{background:var(--plum)}
+  .active{margin:6px 0;border-radius:2px;background:rgba(123,63,160,.08);border-top:1.5px solid var(--plum);border-bottom:1.5px solid var(--plum);border-right:1.5px solid var(--plum);border-left:4px solid var(--plum)}
+  .active .prow{border-top:none;background:transparent}
+  .picker{display:flex;gap:6px;justify-content:center;padding:6px 6px 10px}
+  .opt{min-width:38px;height:44px;border-radius:9px;border:1px solid var(--cardBorder);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:16px}
+  .opt small{font-size:8px;color:var(--muted);text-transform:uppercase;margin-top:1px}
+  .opt.sel{border:2px solid var(--plum)}
+  .opt.u{color:var(--under)}
+  .cancelnote{color:var(--muted);font-size:11px;line-height:1.45;padding:8px 11px;background:#F7FAF7;border:1px solid var(--cardBorder);border-radius:8px;margin-top:10px}
+  /* grid */
+  .grid{border:1px solid var(--cardBorder);border-radius:8px;padding:10px;background:var(--card);margin-top:12px}
+  .grid .h{font-size:12px;font-weight:700;color:var(--pine);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
+  .gscroll{overflow-x:auto}
+  table{border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
+  td,th{padding:3px 6px;text-align:center;white-space:nowrap}
+  td.lbl,th.lbl{text-align:left;font-weight:700;position:sticky;left:0;background:var(--card)}
+  th.cur,td.cur{background:rgba(15,110,86,.10);border-radius:5px}
+  .parrow td{color:var(--muted);font-style:italic}
+  .wonrow td{font-weight:800;font-size:10px}
+  .wonrow td.lbl{font-style:italic;color:var(--muted);font-weight:700;font-size:10px}
+  .wonrow.first td{border-top:1px solid var(--cardBorder);padding-top:5px}
+  .ini{display:inline-block;border-radius:4px;padding:1px 4px}
+  .ini.b{color:var(--blue);background:rgba(25,118,210,.15)}
+  .ini.o{color:var(--orange);background:rgba(239,108,0,.15)}
+  .ini.p{color:var(--plum);background:rgba(123,63,160,.15)}
+  .ini.h{color:var(--muted);background:transparent}
+  /* bottom — 3 matches × 3 bets */
+  .bottom{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,var(--surface) 18%);padding:8px 12px 14px}
+  .matrix{background:#E1EAE2;border-radius:10px;padding:7px 8px 8px;margin-bottom:8px}
+  .mhead{display:flex;align-items:center;gap:5px;padding:0 2px 5px}
+  .mhead .sp{width:76px;flex:none}
+  .mhead span.c{flex:1;text-align:center;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .mline{display:flex;align-items:center;gap:5px;margin-top:4px}
+  .mline .lbl2{width:76px;flex:none;display:flex;align-items:center;gap:3px;font-size:11px;font-weight:700}
+  .mline .lbl2 .x{color:var(--muted);font-weight:500;font-size:9.5px}
+  .cellb{flex:1;text-align:center;border-radius:7px;padding:5px 0;background:var(--card);font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+  .cellb.b{background:rgba(25,118,210,.13);color:var(--blue)}
+  .cellb.o{background:rgba(239,108,0,.13);color:var(--orange)}
+  .cellb.p{background:rgba(123,63,160,.13);color:var(--plum)}
+  .cellb.as{color:var(--muted)}
+  .cellb.dec{box-shadow:inset 0 0 0 1.5px currentColor}
+  .matrix{background:#E1EAE2;border-radius:10px;padding:7px 8px 8px;margin-bottom:8px}
+  .mhead{display:flex;align-items:center;gap:5px;padding:0 0 4px}
+  .mhead .sp{width:76px;flex:none}
+  .mhead span.c{flex:1;text-align:center;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .mline{display:flex;align-items:center;gap:5px;margin-top:4px}
+  .mline .lbl2{width:76px;flex:none;display:flex;align-items:center;gap:3px;font-size:11px;font-weight:700}
+  .mline .lbl2 .x{color:var(--muted);font-weight:500;font-size:9.5px}
+  .cellb{flex:1;text-align:center;border-radius:7px;padding:6px 0;background:var(--card);font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.15;white-space:nowrap}
+  .cellb small{font-size:9.5px;font-weight:600;color:var(--muted);margin-left:3px}
+  .cellb.b{background:rgba(25,118,210,.13);color:var(--blue)}
+  .cellb.o{background:rgba(239,108,0,.13);color:var(--orange)}
+  .cellb.p{background:rgba(123,63,160,.13);color:var(--plum)}
+  .cellb.as{color:var(--muted)}
+  .cellb.fin{color:#fff}
+  .cellb.fin.b{background:var(--blue)} .cellb.fin.o{background:var(--orange)} .cellb.fin.p{background:var(--plum)}
+  .cellb.fin small{color:rgba(255,255,255,.85)}
+  .callpress{width:100%;height:38px;border-radius:10px;border:none;background:rgba(15,110,86,.14);color:var(--pine);font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px}
+  .nav{display:flex;gap:8px}
+  .prev{flex:1;height:46px;border-radius:12px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font-weight:700;font-size:14px}
+  .next{flex:1;height:46px;border-radius:12px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:14px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">✕</span><span class="ttl">Triple Nassau — SO Low 90%</span><span class="ic">💬</span><span class="ic">📊</span></div>
+
+    <div class="tban">
+      <span class="who"><span class="dot b"></span><span class="b">Paul</span></span><span class="vs">v</span>
+      <span class="who"><span class="dot o"></span><span class="o">Dave</span></span><span class="vs">v</span>
+      <span class="who"><span class="dot p"></span><span class="p">Sam</span></span>
+      <span style="margin-left:auto;font-size:10.5px;color:var(--muted);font-weight:600">3 matches</span>
+    </div>
+
+    <div class="presses">
+      <span class="ppill b">P·D — F9 Press 1 · 2UP<small>Paul · auto</small></span>
+      <span class="ppill n">P·S — B9 Press 1 · AS<small>started hole 12</small></span>
+    </div>
+
+    <div class="body">
+      <div class="hh"><div class="n">Hole 12</div><div class="sub">Par 4  |  415 yds.  |  SI: 4</div><div class="help">？</div></div>
+
+      <!-- Score entry.  Full name + a "gets N" pill PER MATCH the player gets
+           strokes in (coloured by the opponent, so no "v X" text needed).  Two
+           dot columns flank the box — LEFT = the match vs the lowest-index
+           player, RIGHT = the other match — coloured by opponent.  The box shows
+           GROSS only (a single net would be misleading — it differs per match). -->
+      <div class="card">
+        <!-- Paul: lowest index → plays to 0, no gets, no dots. -->
+        <div class="prow pb"><span class="nm b" style="flex:1">Paul Lipkin</span>
+          <span class="cell"><span class="ds"></span><span class="box"></span><span class="ds"></span></span></div>
+        <!-- Dave: gets 5 vs Paul (blue) only. -->
+        <div class="prow po">
+          <span class="who"><span class="nm o">Dave Gabe</span>
+            <span class="pills"><span class="gp b">gets 5</span></span></span>
+          <span class="cell"><span class="ds"><i class="d b"></i></span><span class="box">5</span><span class="ds"></span></span></div>
+      </div>
+      <!-- Sam (Plum): ACTIVE — the Sixes-style frame wraps the row AND the picker;
+           two gets (10 vs Paul-blue, 5 vs Dave-orange). -->
+      <div class="active">
+        <div class="prow">
+          <span class="who"><span class="nm p">Sam White</span>
+            <span class="pills"><span class="gp b">gets 10</span><span class="gp o">gets 5</span></span></span>
+          <span class="cell"><span class="ds"><i class="d b"></i></span><span class="box" style="border-color:var(--plum);border-width:2px">6</span><span class="ds"><i class="d o"></i></span></span></div>
+        <div class="picker"><span class="opt u">4<small>bird</small></span><span class="opt">5<small>par</small></span><span class="opt sel">6<small>bog</small></span><span class="opt">7<small>dbl</small></span></div>
+      </div>
+
+      <div style="height:8px"></div>
+    </div>
+
+    <div class="bottom">
+      <div class="matrix">
+        <div class="mhead"><span class="sp"></span><span class="c">F9</span><span class="c">B9</span><span class="c">ALL</span></div>
+        <div class="mline">
+          <span class="lbl2"><span class="dot b"></span>P<span class="x">v</span><span class="dot o"></span>D</span>
+          <span class="cellb fin b">3&amp;2 <small>Final</small></span><span class="cellb as">AS <small>thru 3</small></span><span class="cellb b">1UP <small>thru 12</small></span>
+        </div>
+        <div class="mline">
+          <span class="lbl2"><span class="dot b"></span>P<span class="x">v</span><span class="dot p"></span>S</span>
+          <span class="cellb fin b">2UP <small>Final</small></span><span class="cellb b">1UP <small>thru 3</small></span><span class="cellb b">3UP <small>thru 12</small></span>
+        </div>
+        <div class="mline">
+          <span class="lbl2"><span class="dot o"></span>D<span class="x">v</span><span class="dot p"></span>S</span>
+          <span class="cellb fin p">2&amp;1 <small>Final</small></span><span class="cellb o">2UP <small>thru 3</small></span><span class="cellb as">AS <small>thru 12</small></span>
+        </div>
+      </div>
+      <button class="callpress">⊕ Call Press</button>
+      <div class="nav"><button class="prev">‹ Hole 11</button><button class="next">Hole 13 ›</button></div>
+    </div>
+  </div>
+</body>
+</html>

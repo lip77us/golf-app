@@ -1,0 +1,156 @@
+<!-- @dsCard group="Games" name="Nassau — 3-player (setup)" subtitle="Triple Nassau — one setup drives 3 simultaneous 1v1s, per-pair strokes matrix, 2× exposure note" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Nassau — 3-player (setup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--win:#388E3C;--blue:#1976D2;--orange:#EF6C00;--plum:#7B3FA0}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .body{padding:0 16px;overflow-y:auto;height:634px}
+  .sc{border:1px solid var(--cardBorder);border-radius:8px;padding:12px 14px;background:var(--card);margin-bottom:14px}
+  .sct{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;color:var(--pine);font-size:13px;margin-bottom:8px}
+  .roster{display:flex;gap:8px;background:#E1EAE2;border-radius:10px;padding:10px 12px;margin:2px 0 14px}
+  .pl{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .pl .dot{width:11px;height:11px}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
+  .pl .n{font-size:13px;font-weight:700}
+  .pl .h{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .dot.b{background:var(--blue)} .dot.o{background:var(--orange)} .dot.p{background:var(--plum)}
+  .seg{display:flex;border:1.5px solid var(--pine);border-radius:999px;overflow:hidden;margin-bottom:8px}
+  .seg div{flex:1;text-align:center;padding:8px 0;font-size:12.5px;font-weight:600;color:var(--pine)}
+  .seg div.on{background:var(--pine);color:#fff}
+  .blurb{color:var(--muted);font-size:12px;line-height:1.45}
+  .slider{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .track{flex:1;height:4px;border-radius:999px;background:var(--cardBorder);position:relative}
+  .knob{position:absolute;left:calc(60% - 8px);top:-6px;width:16px;height:16px;border-radius:50%;background:var(--pine)}
+  .track::before{content:"";position:absolute;left:0;top:0;height:4px;width:60%;background:var(--pine);border-radius:999px}
+  .pct{font-weight:700;font-size:13px;color:var(--pine);width:42px;text-align:right}
+  .flabel{font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .field{display:flex;align-items:center;border:1.5px solid var(--cardBorder);border-radius:12px;padding:11px 14px;font-size:16px;font-weight:600;background:var(--card)}
+  .field .pfx{color:var(--muted);margin-right:6px}
+  .funcheck{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px}
+  .cbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--cardBorder)}
+  .help{color:var(--muted);font-size:12px;margin-top:8px;line-height:1.45}
+  /* per-pair strokes matrix */
+  .mrow{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #EBF0EC}
+  .mrow:last-of-type{border-bottom:none}
+  .mrow .pair{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600;width:142px;flex:none}
+  .mrow .pair .vs{color:var(--muted);font-weight:500;font-size:11.5px}
+  .mrow .give{flex:1;font-size:12.5px;color:var(--muted);line-height:1.35}
+  .mrow .give b{color:var(--deepPine);font-weight:700}
+  .mrow .si{display:block;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .mrow .even{color:var(--muted);font-style:italic;font-size:12.5px}
+  .note{background:#E7F1EC;border:1px solid #C6DED2;border-radius:8px;padding:9px 11px;color:var(--deepPine);font-size:12px;line-height:1.5;margin-top:10px}
+  .adv{border:1px solid var(--cardBorder);border-radius:8px;background:var(--card);margin-bottom:14px;overflow:hidden}
+  .advhead{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(15,110,86,.05)}
+  .advhead .l{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;color:var(--pine);font-size:14px}
+  .advhead .s{color:var(--muted);font-size:11.5px}
+  .advbody{padding:0 14px 14px;border-top:1px solid var(--cardBorder)}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0}
+  .chip{border:1.5px solid var(--cardBorder);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--pine)}
+  .chip.on{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .chip.dis{color:#B4C0B8;border-color:#E4EAE5;border-style:dashed;background:#FAFBFA}
+  .desc{color:var(--muted);font-size:12px;line-height:1.45;margin:2px 0 6px}
+  .disnote{color:var(--muted);font-size:11.5px;line-height:1.4;margin-top:4px;font-style:italic}
+  .subhead{font-weight:700;font-size:12.5px;color:var(--deepPine);margin-top:12px}
+  .divider{height:1px;background:var(--cardBorder);margin:12px 0}
+  .toggle{display:flex;align-items:flex-start;gap:12px;margin-top:6px}
+  .toggle .txt{flex:1}
+  .toggle .t{font-weight:600;font-size:13.5px}
+  .switch{width:44px;height:26px;border-radius:999px;background:var(--cardBorder);position:relative;flex:none;margin-top:2px}
+  .switch::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff}
+  .rules{color:var(--muted);font-size:12.5px;line-height:1.55}
+  .liab{margin-top:10px;background:#F7FAF7;border:1px solid var(--cardBorder);border-radius:8px;padding:9px 11px;font-size:12.5px;line-height:1.5}
+  .bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--surface) 26%)}
+  .start{width:100%;height:52px;border-radius:16px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:16px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span style="font-size:17px">‹</span><span class="ttl">Triple Nassau — Setup</span><span style="width:17px"></span></div>
+    <div class="body">
+
+      <!-- Three players → no Teams card. Roster stands in; every player is in two matches. -->
+      <div class="roster">
+        <div class="pl"><span class="dot b"></span><span class="n">Paul</span><span class="h">HCP 4</span></div>
+        <div class="pl"><span class="dot o"></span><span class="n">Dave</span><span class="h">HCP 9</span></div>
+        <div class="pl"><span class="dot p"></span><span class="n">Sam</span><span class="h">HCP 15</span></div>
+      </div>
+
+      <div class="sc">
+        <div class="sct">Handicap</div>
+        <div class="seg"><div>Net</div><div>Gross</div><div class="on">SO Low</div></div>
+        <div class="slider"><span class="flabel" style="margin:0">Net %</span><span class="track"><span class="knob"></span></span><span class="pct">90%</span></div>
+        <div class="blurb" style="margin-top:8px">One setting for all three matches. Each match is then allocated on its own — the lower handicap plays to 0 and the higher gets the difference, on the lowest stroke indexes.</div>
+      </div>
+
+      <div class="sc">
+        <div class="sct">Strokes by match</div>
+        <div class="mrow">
+          <span class="pair"><span class="dot b"></span>Paul<span class="vs">vs</span><span class="dot o"></span>Dave</span>
+          <span class="give">Dave gets <b>5</b><span class="si">SI 1–5</span></span>
+        </div>
+        <div class="mrow">
+          <span class="pair"><span class="dot b"></span>Paul<span class="vs">vs</span><span class="dot p"></span>Sam</span>
+          <span class="give">Sam gets <b>10</b><span class="si">SI 1–10</span></span>
+        </div>
+        <div class="mrow">
+          <span class="pair"><span class="dot o"></span>Dave<span class="vs">vs</span><span class="dot p"></span>Sam</span>
+          <span class="give">Sam gets <b>5</b><span class="si">SI 1–5</span></span>
+        </div>
+        <div class="note">Each pair plays off a different number, but you only set it once. Every match is allocated the same way — the difference between the two handicaps, given on the lowest stroke indexes — so Sam gets 10 against Paul but only 5 against Dave, both starting at SI 1.</div>
+      </div>
+
+      <div class="sc">
+        <div class="sct" style="text-transform:none;font-size:13px">Stake per match</div>
+        <div class="flabel">Stake ($)</div>
+        <div class="field"><span class="pfx">$</span>10.00</div>
+        <label class="funcheck"><span class="cbox"></span> Play for fun — no stakes</label>
+        <div class="help">Each of the three Nassau bets (Front 9, Back 9, Overall) is worth this amount, in each of your two matches.</div>
+        <div class="liab">You’re in <b>two</b> matches, so a clean sweep against you is <b>$60.00</b> before presses — 2 matches × 3 bets × $10.00.</div>
+      </div>
+
+      <div class="adv">
+        <div class="advhead"><span><div class="l">Advanced</div><div class="s">Presses, game variant, loss cap</div></span><span style="color:var(--pine)">▾</span></div>
+        <div class="advbody">
+          <div class="subhead">Press stakes</div>
+          <div class="chips"><span class="chip">None</span><span class="chip">Manual</span><span class="chip on">Auto at 2-down</span><span class="chip">Manual + Auto</span></div>
+          <div class="desc">Presses fire per match, not across the group — going 2-down to Dave doesn’t touch your match with Sam.</div>
+          <div class="flabel" style="margin-top:6px">Press unit ($)</div>
+          <div class="field"><span class="pfx">$</span>5.00</div>
+          <div class="help">Dollar amount per press stake (separate from the main stake).</div>
+
+          <div class="divider"></div>
+          <div class="subhead">Game variant</div>
+          <div class="chips"><span class="chip on">Standard</span><span class="chip dis">2nd Ball Tiebreak</span><span class="chip dis">Claremont</span></div>
+          <div class="desc">Standard Nassau — tied holes are halved with no further comparison.</div>
+          <div class="disnote">Tiebreak and Claremont require two players per side (2v2).</div>
+
+          <div class="divider"></div>
+          <div class="subhead">Cap losses</div>
+          <div class="desc">The cap applies per match, so your worst case across both is twice the cap.</div>
+          <div class="toggle"><div class="txt"><div class="t">Cap each player’s losses per match</div></div><span class="switch"></span></div>
+        </div>
+      </div>
+
+      <div class="sc">
+        <div class="sct">How Triple Nassau works</div>
+        <div class="rules">Three players, three simultaneous one-on-one Nassaus — Paul v Dave, Paul v Sam, Dave v Sam. Each match runs the standard Front 9 / Back 9 / Overall bets off the same setup, so there is one stake, one handicap mode, and one press rule for all of them. Every hole you post is scored against both of your opponents at once; you can win one match and lose the other on the same hole.</div>
+      </div>
+      <div style="height:8px"></div>
+    </div>
+    <div class="bottom"><button class="start">Start Match</button></div>
+  </div>
+</body>
+</html>

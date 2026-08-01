@@ -1,0 +1,117 @@
+<!-- @dsCard group="Games" name="Nassau — 3-player (call press)" subtitle="Press sheet — pick which of the 3 matches to press, eligibility per match, cap and already-pressed states" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Nassau — 3-player (call press)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--win:#388E3C;--blue:#1976D2;--orange:#EF6C00;--plum:#7B3FA0}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 14px 8px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:17px;flex:1;text-align:center}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none;display:inline-block}
+  .dot.b{background:var(--blue)} .dot.o{background:var(--orange)} .dot.p{background:var(--plum)}
+  .tban{display:flex;align-items:center;gap:6px;background:#E1EAE2;padding:8px 14px;font-size:13px;font-weight:600}
+  .tban .who{display:flex;align-items:center;gap:5px}
+  .tban .b{color:var(--blue)} .tban .o{color:var(--orange)} .tban .p{color:var(--plum)}
+  .tban .vs{color:var(--muted);font-weight:500;font-size:11px}
+  .hh{position:relative;background:#E1EAE2;border-radius:8px;padding:9px 44px;text-align:center;margin:8px 12px 10px}
+  .hh .n{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px}
+  .hh .sub{font-size:12px;color:var(--muted)}
+  .scrim{position:absolute;inset:0;background:rgba(11,31,26,.42)}
+  /* sheet */
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:22px 22px 0 0;padding:8px 16px 18px;box-shadow:0 -12px 34px rgba(6,18,14,.24)}
+  .grab{width:38px;height:4px;border-radius:999px;background:var(--cardBorder);margin:0 auto 12px}
+  .shead{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px;margin-bottom:3px}
+  .ssub{color:var(--muted);font-size:12.5px;line-height:1.5;margin-bottom:12px}
+  .opt{display:flex;align-items:flex-start;gap:11px;border:1.5px solid var(--cardBorder);border-radius:12px;background:var(--card);padding:11px 13px;margin-bottom:9px}
+  .opt.sel{border-color:var(--pine);border-width:2px;background:rgba(15,110,86,.05);padding:10px 12px}
+  .opt.off{background:#F5F7F5;border-style:dashed;border-color:#E1E7E2}
+  .radio{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--cardBorder);flex:none;margin-top:2px;background:#fff}
+  .opt.sel .radio{border:6px solid var(--pine);background:#fff}
+  .opt.off .radio{border-color:#E1E7E2;background:#F5F7F5}
+  .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .mrow{display:flex;align-items:center;gap:5px;font-size:14px;font-weight:700;margin-bottom:3px}
+  .mrow .x{color:var(--muted);font-weight:500;font-size:11px}
+  .mrow .seg{margin-left:auto;font-size:10.5px;font-weight:700;color:var(--pine);background:rgba(15,110,86,.11);border-radius:999px;padding:2px 8px;letter-spacing:.2px}
+  .opt.off .mrow{color:#8D9A92}
+  .opt.off .mrow .seg{color:#9BA8A0;background:#EDF1EE}
+  .st{font-size:12.5px;line-height:1.45;display:block}
+  .st .w{font-weight:700}
+  .st .w.b{color:var(--blue)} .st .w.o{color:var(--orange)} .st .w.p{color:var(--plum)}
+  .why{color:var(--muted);font-size:11.5px;line-height:1.45;display:block}
+  .cost{font-size:11.5px;font-weight:700;color:var(--pine);display:block;margin-top:2px}
+  .liab{background:#E7F1EC;border:1px solid #C6DED2;border-radius:10px;padding:9px 11px;font-size:11.5px;line-height:1.5;margin:2px 0 12px}
+  .acts{display:flex;gap:9px}
+  .cancel{flex:1;height:50px;border-radius:14px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font-weight:700;font-size:15px}
+  .confirm{flex:1.4;height:50px;border-radius:14px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:15px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">✕</span><span class="ttl">Triple Nassau — SO Low 90%</span><span class="ic">💬</span><span class="ic">📊</span></div>
+    <div class="tban">
+      <span class="who"><span class="dot b"></span><span class="b">Paul</span></span><span class="vs">v</span>
+      <span class="who"><span class="dot o"></span><span class="o">Dave</span></span><span class="vs">v</span>
+      <span class="who"><span class="dot p"></span><span class="p">Sam</span></span>
+      <span style="margin-left:auto;font-size:10.5px;color:var(--muted);font-weight:600">3 matches</span>
+    </div>
+    <div class="hh"><div class="n">Hole 12</div><div class="sub">Par 4  |  415 yds.  |  SI: 4</div></div>
+
+    <div class="scrim"></div>
+
+    <div class="sheet">
+      <div class="grab"></div>
+      <div class="shead">Call Press</div>
+      <div class="ssub">A press starts a fresh bet over the remaining holes of the current nine. It applies to one match only — pick which.</div>
+
+      <!-- eligible, selected -->
+      <div class="opt sel">
+        <span class="radio"></span>
+        <span class="txt">
+          <span class="mrow"><span class="dot o"></span>Dave<span class="x">v</span><span class="dot p"></span>Sam<span class="seg">Back 9</span></span>
+          <span class="st"><span class="w o">Dave 2 UP</span> · Sam may press</span>
+          <span class="why">Sam is 2 down with 7 holes left.</span>
+          <span class="cost">Press 1 · $5.00 · holes 12–18</span>
+        </span>
+      </div>
+
+      <!-- ineligible: nobody is down -->
+      <div class="opt off">
+        <span class="radio"></span>
+        <span class="txt">
+          <span class="mrow"><span class="dot b"></span>Paul<span class="x">v</span><span class="dot o"></span>Dave<span class="seg">Back 9</span></span>
+          <span class="st">All square</span>
+          <span class="why">Nobody is down — only the player behind can press.</span>
+        </span>
+      </div>
+
+      <!-- ineligible: already pressed this nine -->
+      <div class="opt off">
+        <span class="radio"></span>
+        <span class="txt">
+          <span class="mrow"><span class="dot b"></span>Paul<span class="x">v</span><span class="dot p"></span>Sam<span class="seg">Back 9</span></span>
+          <span class="st"><span class="w b">Paul 1 UP</span> · already pressed</span>
+          <span class="why">Auto press fired on hole 12. One press per nine unless the rule is set to Manual + Auto.</span>
+        </span>
+      </div>
+
+      <div class="liab">Pressing here takes Sam’s exposure in this match to <b>$40.00</b> — 3 bets at $10.00 plus two presses at $5.00. His other match is unaffected.</div>
+
+      <div class="acts">
+        <button class="cancel">Cancel</button>
+        <button class="confirm">Press Dave · Sam</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
