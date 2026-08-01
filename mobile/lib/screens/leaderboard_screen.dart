@@ -8385,6 +8385,12 @@ class _TripleNassauGroupCard extends StatelessWidget {
             ]),
             const SizedBox(height: 12),
             _matrix(theme, s, colourOf, shortOf),
+            if (s.matches.any((m) => m.match.presses.isNotEmpty)) ...[
+              const Divider(height: 22),
+              _sectionLabel(theme, 'Presses'),
+              const SizedBox(height: 2),
+              ..._pressRows(theme, s, colourOf),
+            ],
             if (s.scorecard.isNotEmpty) ...[
               const Divider(height: 22),
               _sectionLabel(theme, 'Round progress — gross scores'),
@@ -8399,12 +8405,6 @@ class _TripleNassauGroupCard extends StatelessWidget {
                     style: TextStyle(fontSize: 11,
                         color: theme.colorScheme.onSurfaceVariant, height: 1.4)),
               ),
-            ],
-            if (s.matches.any((m) => m.match.presses.isNotEmpty)) ...[
-              const Divider(height: 22),
-              _sectionLabel(theme, 'Presses'),
-              const SizedBox(height: 2),
-              ..._pressRows(theme, s, colourOf),
             ],
             const Divider(height: 22),
             _sectionLabel(theme, 'Net position'),
