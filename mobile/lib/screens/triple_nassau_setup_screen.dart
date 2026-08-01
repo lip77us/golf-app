@@ -89,7 +89,7 @@ class _TripleNassauSetupScreenState extends State<TripleNassauSetupScreen> {
       final configured = s != null && s.players.isNotEmpty;
       if (configured && !widget.returnToHub) {
         Navigator.of(context).pushReplacementNamed(
-          '/score-entry', arguments: widget.foursomeId);
+          '/triple-nassau', arguments: widget.foursomeId);
         return;
       }
       setState(() {
@@ -155,7 +155,7 @@ class _TripleNassauSetupScreenState extends State<TripleNassauSetupScreen> {
       } else {
         if (!mounted) return;
         Navigator.of(context).pushReplacementNamed(
-          '/score-entry', arguments: widget.foursomeId);
+          '/triple-nassau', arguments: widget.foursomeId);
       }
     } catch (e) {
       if (mounted) setState(() { _error = e; _starting = false; });
