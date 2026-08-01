@@ -360,6 +360,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         rp.fourballSummary != null) {
       futures.add(rp.loadFourball(widget.foursomeId));
     }
+    if (games.contains('triple_nassau') ||
+        configured.contains('triple_nassau') ||
+        rp.tripleNassauSummary != null) {
+      futures.add(rp.loadTripleNassau(widget.foursomeId));
+    }
     // Stableford is round-scoped; refresh the authoritative per-hole points.
     if (games.contains('stableford') && rp.round != null) {
       futures.add(rp.loadStableford(rp.round!.id));
@@ -470,6 +475,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     }
     if (games.contains('fourball') && rp.fourballSummary != null) {
       return (rp.fourballSummary!.handicapMode, rp.fourballSummary!.netPercent);
+    }
+    // Triple Nassau's true allocation is PAIRWISE (a different low per match),
+    // which the single-allocation stroke dots can't express.  Until the
+    // dedicated play screen draws per-match dots, follow the game's own mode so
+    // a strokes-off game shows strokes-off-LOW dots (off the best player) rather
+    // than full net.
+    if (games.contains('triple_nassau') && rp.tripleNassauSummary != null) {
+      return (rp.tripleNassauSummary!.handicapMode,
+              rp.tripleNassauSummary!.netPercent);
     }
     // Three-Person Match has its own per-game handicap mode (the user
     // picks it on the TPM setup screen).  Take precedence over Match
