@@ -27,6 +27,7 @@ import '../widgets/max_liability_note.dart';
 import '../utils/play_order.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/team_splitter_4.dart';
+import 'sixes_segment_draw_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -215,6 +216,53 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
   // (e.g. a legacy cached row that hasn't been re-fetched yet).
 
   // ── Actions ───────────────────────────────────────────────────────────────
+
+  /// Draw the Segment-1 pairing with the slot machine.  The top row (position
+  /// 0) is the anchor; the three possible pairings are the anchor with row 2,
+  /// row 3, or row 4.  We pick the winner up front (so the reel is a pure
+  /// reveal) and, on return, reorder the players so the drawn pairing lands on
+  /// Team A.  The user can still drag to change the teams, or press the button
+  /// again to respin.
+  Future<void> _randomizeTeams() async {
+    if (_orderedPlayers.length < 4) return;
+    final p = _orderedPlayers;
+    // Three pairings, anchored on the top row: row1+row2, row1+row3, row1+row4.
+    final candidates = [
+      SixesDrawPair(blue: [p[0].player.name, p[1].player.name],
+                    orange: [p[2].player.name, p[3].player.name]),
+      SixesDrawPair(blue: [p[0].player.name, p[2].player.name],
+                    orange: [p[1].player.name, p[3].player.name]),
+      SixesDrawPair(blue: [p[0].player.name, p[3].player.name],
+                    orange: [p[1].player.name, p[2].player.name]),
+    ];
+    final winner = Random().nextInt(candidates.length);
+    final courseName = context.read<RoundProvider>().round?.course.name ?? 'Sixes';
+
+    final done = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => SixesSegmentDrawScreen(
+        courseName: courseName,
+        eyebrow: 'Starting the round',
+        title: 'Who partners up first?',
+        lede: 'Spin to draw the Segment 1 teams.',
+        machineTitle: 'SEGMENT 1 DRAW',
+        candidates: candidates,
+        winnerIndex: winner,
+        ctaLabel: 'Use these teams',
+        landedFootnote: 'You can still drag to change the teams — or spin again.',
+        hideCandidatesUntilDrawn: true,
+      ),
+    ));
+    if (done != true || !mounted) return;
+
+    // Reorder: anchor stays at position 0, the drawn partner moves to
+    // position 1, and the remaining two become Team B.  candidate index i
+    // pairs the anchor with others[i] (row i+2).
+    final anchor = p[0];
+    final others = [p[1], p[2], p[3]];
+    final partner = others.removeAt(winner);
+    setState(() => _orderedPlayers = [anchor, partner, ...others]);
+  }
 
   Future<void> _startMatch(BuildContext ctx) async {
     if (_orderedPlayers.length < 4) {
@@ -416,6 +464,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                         onOrderChanged: (ordered) {
                           setState(() => _orderedPlayers = ordered);
                         },
+                        onRandomize: _randomizeTeams,
                       ),
                       const SizedBox(height: 20),
 
@@ -643,12 +692,14 @@ class _HolePlayerCard extends StatelessWidget {
   final int                          startHole;
   final List<Membership>             orderedPlayers;
   final ValueChanged<List<Membership>> onOrderChanged;
+  final VoidCallback                 onRandomize;
 
   const _HolePlayerCard({
     required this.holeData,
     required this.startHole,
     required this.orderedPlayers,
     required this.onOrderChanged,
+    required this.onRandomize,
   });
 
   @override
@@ -696,10 +747,26 @@ class _HolePlayerCard extends StatelessWidget {
           )
         else
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
             child: TeamSplitter4(
               players: orderedPlayers,
               onChanged: onOrderChanged,
+            ),
+          ),
+        // Draw the teams with the slot machine instead of dragging.
+        if (orderedPlayers.length >= 4)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+            child: OutlinedButton.icon(
+              onPressed: onRandomize,
+              icon: const Icon(Icons.casino_outlined, size: 18),
+              label: const Text('Randomly assign teams'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.primary,
+                side: BorderSide(color: theme.colorScheme.outlineVariant),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
             ),
           ),
       ]),
