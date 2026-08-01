@@ -621,10 +621,12 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
               width: isHot ? 2 : 1),
         ),
         alignment: Alignment.center,
+        // Empty box until scored (like the Sixes / universal entry) — no
+        // dropdown chevron; the inline picker below is the affordance.
         child: gross != null
             ? Text('$gross', style: const TextStyle(
                 fontWeight: FontWeight.w700, fontSize: 16))
-            : Icon(Icons.arrow_drop_down, color: colour),
+            : null,
       ),
       if (net != null && mode != 'gross')
         Text('net $net', style: const TextStyle(
