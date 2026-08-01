@@ -532,9 +532,19 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
       final colour = _colourFor(rp, pid);
       final active = isHot || isEditing;
 
+      // Round-total allowance vs the lowest-index player (= the LEFT match) —
+      // like Sixes' "gets N".  Well-defined (the right match differs, which the
+      // right dots carry per hole).
+      final gets = (mode == 'gross' || low == null) ? 0
+          : ((m.playingHandicap - low.playingHandicap) * netPct / 100)
+              .round().clamp(0, 99);
+
       final rowContent = Row(children: [
-        Expanded(child: Text(m.player.shortName, style: TextStyle(
-            fontWeight: FontWeight.w700, color: colour))),
+        Expanded(child: Row(children: [
+          Flexible(child: Text(m.player.name, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.w700, color: colour))),
+          if (gets > 0) ...[const SizedBox(width: 6), _getsPill(gets)],
+        ])),
         // Left dots (vs lowest-index) · box · right dots (other match).
         _dotsCol(leftStrokes, _colourFor(rp, leftOpp.player.id)),
         const SizedBox(width: 5),
@@ -613,6 +623,17 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
         ),
     ]);
   }
+
+  Widget _getsPill(int n) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: const Color(0x1F1D9E75),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFD3DED6)),
+        ),
+        child: Text('gets $n', style: const TextStyle(
+            fontSize: 10, fontWeight: FontWeight.w600, color: _muted)),
+      );
 
   Widget _dotsCol(int n, Color c) {
     if (n <= 0) return const SizedBox(width: 10);
