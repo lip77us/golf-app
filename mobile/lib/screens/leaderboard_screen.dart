@@ -8400,6 +8400,12 @@ class _TripleNassauGroupCard extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant, height: 1.4)),
               ),
             ],
+            if (s.matches.any((m) => m.match.presses.isNotEmpty)) ...[
+              const Divider(height: 22),
+              _sectionLabel(theme, 'Presses'),
+              const SizedBox(height: 2),
+              ..._pressRows(theme, s, colourOf),
+            ],
             const Divider(height: 22),
             _sectionLabel(theme, 'Net position'),
             for (final p in s.players)
@@ -8541,6 +8547,72 @@ class _TripleNassauGroupCard extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: cellRows))),
     ]);
+  }
+
+  // Press detail across all three matches (top presses only — Triple Nassau is
+  // Standard variant, no Claremont bottom).
+  List<Widget> _pressRows(ThemeData theme, TripleNassauSummary s,
+      Map<int, Color> colourOf) {
+    final muted = theme.colorScheme.onSurfaceVariant;
+    String initOf(int? pid) => _initials(s.players
+        .firstWhere((p) => p.playerId == pid, orElse: () => s.players.first).name);
+
+    String resultLabel(NassauPressResult p, String a, String b) {
+      if (p.result == null) {
+        final m = p.margin ?? 0;
+        if (m == 0) return 'AS';
+        return '${m > 0 ? a : b} ${m.abs()}UP';
+      }
+      if (p.result == 'halved') return 'AS · Final';
+      final m = (p.margin ?? 0).abs();
+      final w = p.result == 'team1' ? a : b;
+      if (m == 0) return '$w wins · Final';
+      return p.holesRemaining > 0
+          ? '$w $m&${p.holesRemaining}'
+          : '$w ${m}UP · Final';
+    }
+
+    final rows = <Widget>[];
+    for (final m in s.matches) {
+      if (m.match.presses.isEmpty) continue;
+      final a = initOf(m.player1Id), b = initOf(m.player2Id);
+      for (final p in m.match.presses) {
+        final resolved = p.result == 'team1' || p.result == 'team2';
+        final winColour = p.result == 'team1'
+            ? colourOf[m.player1Id]
+            : p.result == 'team2'
+                ? colourOf[m.player2Id]
+                : ((p.margin ?? 0) == 0
+                    ? muted
+                    : ((p.margin ?? 0) > 0
+                        ? colourOf[m.player1Id]
+                        : colourOf[m.player2Id]));
+        var res = resultLabel(p, a, b);
+        if (resolved && s.pressUnit > 0) {
+          res += ' · +\$${s.pressUnit.toStringAsFixed(2)}';
+        }
+        rows.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(children: [
+            _dot(colourOf[m.player1Id] ?? Colors.grey),
+            const SizedBox(width: 2),
+            Text(a, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5)),
+            Text(' v ', style: TextStyle(color: muted, fontSize: 10)),
+            _dot(colourOf[m.player2Id] ?? Colors.grey),
+            const SizedBox(width: 2),
+            Text(b, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(
+                '${p.pressType == 'manual' ? 'Manual' : 'Auto'} Press '
+                '${p.nine == 'front' ? 'F9' : 'B9'} holes ${p.startHole}–${p.endHole}',
+                style: TextStyle(fontSize: 11.5, color: muted))),
+            Text(res, style: TextStyle(fontSize: 11.5,
+                fontWeight: FontWeight.w700, color: winColour ?? muted)),
+          ]),
+        ));
+      }
+    }
+    return rows;
   }
 
   Widget _matrix(ThemeData theme, TripleNassauSummary s,
