@@ -1587,17 +1587,42 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     await prefs.setBool(key, true);
     if (!mounted) return;
 
+    final seg1Line = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFD3DED6))),
+      child: Row(children: [
+        const Text('SEG 1', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+            color: Color(0xFF5C6B62), letterSpacing: 0.3)),
+        const SizedBox(width: 8),
+        Text(seg1.team1.players.join(' / '), style: const TextStyle(
+            fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF1976D2))),
+        const Text(' v. ', style: TextStyle(color: Color(0xFF5C6B62), fontSize: 11)),
+        Text(seg1.team2.players.join(' / '), style: const TextStyle(
+            fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFFEF6C00))),
+        const Spacer(),
+        Text(seg1.statusDisplay, style: const TextStyle(
+            fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF0F6E56))),
+      ]),
+    );
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
       SixesSegmentDrawScreen(
         courseName: rp.round?.course.name ?? 'Sixes',
-        seg1Label: 'holes ${seg1.startHole}–${seg1.endHole}',
-        seg1Blue1: SixesDrawPair(
-            blue: seg1.team1.players, orange: seg1.team2.players),
-        seg1Status: seg1.statusDisplay,
-        winner: SixesDrawPair(blue: seg2.team1.players, orange: seg2.team2.players),
-        other:  SixesDrawPair(blue: seg3.team1.players, orange: seg3.team2.players),
-        nextHole: seg2.startHole,
-        drawnAtLabel: TimeOfDay.now().format(context),
+        eyebrow: 'Segment 1 complete · holes ${seg1.startHole}–${seg1.endHole}',
+        title: 'Who plays together next?',
+        lede: 'Two pairings are left. Spin to pick partners for Segment 2.',
+        contextLine: seg1Line,
+        machineTitle: 'SEGMENT 2 DRAW',
+        candidates: [
+          SixesDrawPair(blue: seg2.team1.players, orange: seg2.team2.players),
+          SixesDrawPair(blue: seg3.team1.players, orange: seg3.team2.players),
+        ],
+        winnerIndex: 0,
+        ctaLabel: 'Start hole ${seg2.startHole}',
+        landedFootnote:
+            'Drawn ${TimeOfDay.now().format(context)} · Segment 3 is the last pairing',
+        hideCandidatesUntilDrawn: true,
       )));
     // On return, jump to Segment 2's first hole so the group starts there.
     if (mounted) setState(() => _selectedHole = seg2.startHole);
