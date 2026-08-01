@@ -32,6 +32,8 @@ import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/nassau_team_style.dart';
 import '../utils/sixes_handicap.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'sixes_segment_draw_screen.dart';
 import '../utils/round_complete.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
@@ -1559,12 +1561,57 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
+  // ── Sixes Segment-2 slot draw ────────────────────────────────────────────
+  // Fires ONCE, when Segment 1 completes (which may be an early close-out on
+  // hole 4/5).  The pairing is already assigned at setup; the sheet just reveals
+  // it.  Guarded per instance + persisted per round so it never re-fires.
+  bool _sixesDrawHandled = false;
+
+  Future<void> _maybeShowSixesDraw(RoundProvider rp, List<String> games) async {
+    if (_sixesDrawHandled) return;
+    if (!games.contains('sixes')) return;
+    final s = rp.sixesSummary;
+    final roundId = rp.round?.id;
+    if (s == null || roundId == null) return;
+    final segs = s.segments.where((x) => !x.isExtra).toList();
+    if (segs.length < 3) return;
+    final seg1 = segs[0], seg2 = segs[1], seg3 = segs[2];
+    // Only once Segment 1 is settled and both remaining pairings are assigned.
+    final seg1Done = seg1.status == 'complete' || seg1.status == 'halved';
+    if (!seg1Done || !seg2.team1.hasPlayers || !seg3.team1.hasPlayers) return;
+
+    _sixesDrawHandled = true;   // guard re-entry for this build session
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'sixes_draw_shown_${roundId}_${widget.foursomeId}';
+    if (prefs.getBool(key) ?? false) return;      // already revealed on this device
+    await prefs.setBool(key, true);
+    if (!mounted) return;
+
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
+      SixesSegmentDrawScreen(
+        courseName: rp.round?.course.name ?? 'Sixes',
+        seg1Label: 'holes ${seg1.startHole}–${seg1.endHole}',
+        seg1Blue1: SixesDrawPair(
+            blue: seg1.team1.players, orange: seg1.team2.players),
+        seg1Status: seg1.statusDisplay,
+        winner: SixesDrawPair(blue: seg2.team1.players, orange: seg2.team2.players),
+        other:  SixesDrawPair(blue: seg3.team1.players, orange: seg3.team2.players),
+        nextHole: seg2.startHole,
+        drawnAtLabel: TimeOfDay.now().format(context),
+      )));
+    // On return, jump to Segment 2's first hole so the group starts there.
+    if (mounted) setState(() => _selectedHole = seg2.startHole);
+  }
+
   Widget build(BuildContext context) {
     final rp         = context.watch<RoundProvider>();
     final sync       = context.watch<SyncService>();
     final sc         = rp.scorecard;
     final isComplete = rp.round?.status == 'complete';
     final games      = _activeGames(rp.round);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeShowSixesDraw(rp, games);
+    });
     // Gate summaries on the active game list so stale summaries from a prior
     // game in the same session never bleed into unrelated games.
     // Nassau's inline entry-screen elements (team banner, presses strip, hole
