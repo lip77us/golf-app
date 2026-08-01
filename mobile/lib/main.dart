@@ -46,6 +46,7 @@ import 'screens/triple_cup_screen.dart';
 import 'screens/multi_skins_setup_screen.dart';
 import 'screens/multi_skins_screen.dart';
 import 'screens/nassau_setup_screen.dart';
+import 'screens/triple_nassau_setup_screen.dart';
 import 'screens/nassau_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/casual_rounds_list_screen.dart';
@@ -537,6 +538,10 @@ class _GolfAppState extends State<GolfApp> {
               returnToHub: _routeReturnToHub(settings.arguments)));
       case '/points-531-setup':
         return page((_) => Points531SetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
+      case '/triple-nassau-setup':
+        return page((_) => TripleNassauSetupScreen(
               foursomeId: _routeId(settings.arguments),
               returnToHub: _routeReturnToHub(settings.arguments)));
       case '/vegas-setup':

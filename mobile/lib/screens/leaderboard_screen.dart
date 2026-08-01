@@ -679,7 +679,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
 
   bool _viewerIsInAnyFoursome(Leaderboard lb, int playerId) {
     for (final key in const ['triple_cup', 'nassau', 'match_18', 'quota_nassau',
-                              'skins', 'sixes']) {
+                              'triple_nassau', 'skins', 'sixes']) {
       final g = lb.games[key];
       if (g == null) continue;
       final groups = ((g.data as Map?)?['by_group'] as List? ?? []);
@@ -752,6 +752,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _NassauGroupCard.new);
       case 'quota_nassau':
         return _ByGroupView(data: data, builder: _QuotaNassauGroupCard.new);
+      case 'triple_nassau':
+        return _ByGroupView(data: data, builder: _TripleNassauGroupCard.new);
       case 'sixes':
         return _ByGroupView(data: data, builder: _SixesGroupCard.new);
       case 'points_531':
@@ -8321,6 +8323,217 @@ class _CupSingles18GroupCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // _QuotaNassauGroupCard — one leaderboard card per cup Quota Nassau foursome
 // ---------------------------------------------------------------------------
+
+// Player identity is colour, not "P1/P2" — three fixed colours in roster order.
+const List<Color> _kTripleColours = [
+  Color(0xFF1976D2), Color(0xFFEF6C00), Color(0xFF7B3FA0),
+];
+
+class _TripleNassauGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _TripleNassauGroupCard({required this.group});
+
+  static String _money(double v) {
+    if (v == 0) return '\$0.00';
+    return v > 0 ? '+\$${v.toStringAsFixed(2)}' : '−\$${v.abs().toStringAsFixed(2)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final groupNum = group['group_number'] as int? ?? 0;
+    final single   = group['_single_group'] == true;
+    final raw = group['summary'] as Map<String, dynamic>?;
+    if (raw == null) {
+      return const Card(child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Triple Nassau not yet set up for this group.')));
+    }
+    final s = TripleNassauSummary.fromJson(raw);
+    // player_id → colour (roster order).
+    final colourOf = <int, Color>{
+      for (var i = 0; i < s.players.length; i++)
+        s.players[i].playerId: _kTripleColours[i % 3],
+    };
+    final shortOf = <int, String>{
+      for (final p in s.players) p.playerId: p.shortName,
+    };
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!single)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('Group $groupNum',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            // Matchup line — colour = identity.
+            Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+              for (var i = 0; i < s.players.length; i++) ...[
+                if (i > 0) const Text('  v  ',
+                    style: TextStyle(color: Color(0xFF5C6B62), fontSize: 12)),
+                _dot(_kTripleColours[i % 3]),
+                const SizedBox(width: 4),
+                Text(s.players[i].shortName, style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: _kTripleColours[i % 3])),
+              ],
+            ]),
+            const SizedBox(height: 12),
+            _matrix(theme, s, colourOf, shortOf),
+            const Divider(height: 22),
+            _sectionLabel(theme, 'Net position'),
+            for (final p in s.players)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: [
+                  _dot(colourOf[p.playerId] ?? Colors.grey),
+                  const SizedBox(width: 8),
+                  Text(p.shortName,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  Text(_money(p.net), style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: p.net > 0
+                          ? const Color(0xFF388E3C)
+                          : p.net < 0 ? const Color(0xFFD32F2F)
+                                      : theme.colorScheme.onSurfaceVariant)),
+                ]),
+              ),
+            const SizedBox(height: 6),
+            Text('Each player’s two matches netted together — Front 9 / Back 9 / '
+                'Overall each worth \$${s.betUnit.toStringAsFixed(2)} per match.',
+                style: TextStyle(fontSize: 11.5,
+                    color: theme.colorScheme.onSurfaceVariant, height: 1.4)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _matrix(ThemeData theme, TripleNassauSummary s,
+      Map<int, Color> colourOf, Map<int, String> shortOf) {
+    Widget cell(NassauBetResult b, Color winColour) {
+      final live = !b.isComplete;
+      String txt;
+      Color fg;
+      Color bg;
+      if (b.result == 'halved') {
+        txt = 'AS'; fg = theme.colorScheme.onSurfaceVariant;
+        bg = theme.colorScheme.surfaceContainerHighest;
+      } else if (b.result == 'team1' || b.result == 'team2') {
+        fg = winColour;   // winColour already resolved to the winner
+        if (b.decidedMargin != null && b.decidedRemaining != null &&
+            b.decidedRemaining! > 0) {
+          txt = '${b.decidedMargin}&${b.decidedRemaining}';
+        } else {
+          txt = b.margin.abs() == 0 ? 'wins' : '${b.margin.abs()}UP';
+        }
+        bg = winColour;   // solid = final
+      } else {
+        // live
+        if (b.holesPlayed == 0) {
+          txt = '—'; fg = theme.colorScheme.onSurfaceVariant;
+          bg = theme.colorScheme.surfaceContainerHighest;
+        } else if (b.margin == 0) {
+          txt = 'AS'; fg = theme.colorScheme.onSurfaceVariant;
+          bg = theme.colorScheme.surfaceContainerHighest;
+        } else {
+          txt = '${b.margin.abs()}UP'; fg = winColour;
+          bg = winColour.withValues(alpha: 0.13);
+        }
+      }
+      final solidFinal = b.isComplete && b.result != 'halved';
+      return Expanded(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+              color: bg, borderRadius: BorderRadius.circular(8)),
+          child: Column(children: [
+            Text(txt, style: TextStyle(
+                fontWeight: FontWeight.w800, fontSize: 12.5,
+                color: solidFinal ? Colors.white : fg)),
+            if (live && b.holesPlayed > 0)
+              Text('thru ${b.holesPlayed}', style: TextStyle(
+                  fontSize: 9.5,
+                  color: solidFinal ? Colors.white70
+                                    : theme.colorScheme.onSurfaceVariant)),
+            if (b.isComplete && b.result != 'halved' && b.decidedRemaining == null)
+              const Text('Final', style: TextStyle(
+                  fontSize: 9.5, color: Colors.white70)),
+          ]),
+        ),
+      );
+    }
+
+    // Winner colour for a bet: team1 → match's player1 colour, team2 → player2.
+    Color winnerColour(TripleNassauMatch m, NassauBetResult b) {
+      final live = !b.isComplete;
+      final leader = live
+          ? (b.margin > 0 ? m.player1Id : b.margin < 0 ? m.player2Id : null)
+          : (b.result == 'team1' ? m.player1Id
+             : b.result == 'team2' ? m.player2Id : null);
+      return colourOf[leader] ?? Colors.grey;
+    }
+
+    Widget matchRow(TripleNassauMatch m) {
+      final n = m.match;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 5),
+        child: Row(children: [
+          SizedBox(
+            width: 96,
+            child: Row(children: [
+              _dot(colourOf[m.player1Id] ?? Colors.grey),
+              const SizedBox(width: 3),
+              Flexible(child: Text(shortOf[m.player1Id] ?? '?',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5))),
+              const Text(' v ', style: TextStyle(
+                  color: Color(0xFF5C6B62), fontSize: 10)),
+              _dot(colourOf[m.player2Id] ?? Colors.grey),
+              const SizedBox(width: 3),
+              Flexible(child: Text(shortOf[m.player2Id] ?? '?',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5))),
+            ]),
+          ),
+          cell(n.front9,  winnerColour(m, n.front9)),
+          cell(n.back9,   winnerColour(m, n.back9)),
+          cell(n.overall, winnerColour(m, n.overall)),
+        ]),
+      );
+    }
+
+    return Column(children: [
+      Row(children: [
+        const SizedBox(width: 96),
+        for (final l in const ['Front 9', 'Back 9', 'Overall'])
+          Expanded(child: Text(l, textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4, color: theme.colorScheme.onSurfaceVariant))),
+      ]),
+      const SizedBox(height: 5),
+      for (final m in s.matches) matchRow(m),
+    ]);
+  }
+
+  Widget _dot(Color c) => Container(width: 10, height: 10,
+      decoration: BoxDecoration(color: c, shape: BoxShape.circle));
+
+  Widget _sectionLabel(ThemeData theme, String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Text(t, style: TextStyle(
+            fontWeight: FontWeight.w700, fontSize: 12.5,
+            color: theme.colorScheme.primary)),
+      );
+}
 
 class _QuotaNassauGroupCard extends StatelessWidget {
   final Map<String, dynamic> group;

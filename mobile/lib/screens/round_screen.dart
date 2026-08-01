@@ -342,6 +342,11 @@ class _RoundScreenState extends State<RoundScreen> {
                         !fs.configuredGames.contains('points_531')) {
                       // Points 531 needs handicap config.
                       route = '/points-531-setup';
+                    } else if (fsGames.contains('triple_nassau') &&
+                        !fs.configuredGames.contains('triple_nassau')) {
+                      // Triple Nassau needs its roster + handicap config; once
+                      // configured, scores are entered on the universal screen.
+                      route = '/triple-nassau-setup';
                     } else if (fsGames.contains('nassau') &&
                         resolvePrimary(round.primaryGame, fsGames) == 'nassau' &&
                         !fs.configuredGames.contains('nassau')) {
