@@ -1,0 +1,194 @@
+<!-- @dsCard group="Games" name="Sixes — segment draw" subtitle="SixesSegmentDrawScreen — slot-reel team draw (Seg 1 setup · Seg 2 mid-round · extra match)" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Sixes — segment draw</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--blue:#1976D2;--orange:#EF6C00}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:28px;display:flex;gap:34px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:400px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 12px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:12px;font-weight:700;margin:16px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 12px;padding-left:18px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.notes code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;background:#E4EDE6;padding:1px 4px;border-radius:4px}
+.notes table{border-collapse:collapse;width:100%;margin:2px 0 12px;font-size:12px}
+.notes th,.notes td{border:1px solid var(--cardBorder);padding:5px 7px;text-align:left;vertical-align:top}
+.notes th{background:#E4EDE6;font-weight:700;color:var(--deepPine)}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:4px 14px 6px}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:17px;flex:1;text-align:center}
+.body{padding:4px 16px;height:720px;display:flex;flex-direction:column}
+.eyebrow{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;text-align:center;margin-top:4px}
+.h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:21px;text-align:center;margin:3px 0 3px}
+.lede{font-size:12.5px;color:var(--muted);text-align:center;line-height:1.5;margin:0 auto 11px;max-width:296px}
+.done{border:1px solid var(--cardBorder);border-radius:8px;background:var(--card);padding:9px 12px;display:flex;align-items:center;gap:8px;font-size:12px}
+.done .mn{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;flex:none}
+.done .pr{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.done .b{color:var(--blue)}.done .o{color:var(--orange)}
+.done .v{color:var(--muted);font-size:11px}
+.done .st{font-weight:700;color:var(--pine);flex:none}
+.cands{display:none;flex-direction:column;gap:7px;margin:9px 0 0}
+.cands.show{display:flex}
+.cand{border:1px solid var(--cardBorder);border-radius:10px;background:var(--card);padding:10px 12px;display:flex;align-items:center;gap:9px;transition:opacity .45s,border-color .45s,box-shadow .45s,background .45s}
+.cand .tag{width:21px;height:21px;border-radius:50%;background:var(--surface);border:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);flex:none}
+.cand .pair{font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cand .pair .b{color:var(--blue)}.cand .pair .o{color:var(--orange)}
+.cand .pair .v{color:var(--muted);font-weight:500;font-size:11px;padding:0 3px}
+.cand .mark{margin-left:auto;font-size:11px;font-weight:700;color:var(--muted);opacity:0;transition:opacity .3s;flex:none}
+.cand.dim{opacity:.32}
+.cand.won{border-color:var(--pine);box-shadow:0 0 0 2px rgba(15,110,86,.16);background:rgba(59,216,154,.07)}
+.cand.won .tag{background:var(--pine);border-color:var(--pine);color:#fff}
+.cand.won .mark{opacity:1;color:var(--pine)}
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;gap:12px}
+/* slot machine */
+.machine{width:308px;border-radius:16px;padding:13px;background:linear-gradient(165deg,#15866A 0%,#0B4A38 100%);box-shadow:0 12px 26px rgba(6,18,14,.3),inset 0 1px 0 rgba(255,255,255,.22)}
+.mtop{display:flex;align-items:center;justify-content:space-between;font-size:9.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:rgba(255,255,255,.66);margin-bottom:8px}
+.bulbs{display:flex;gap:5px}
+.bulbs i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3)}
+.machine.live .bulbs i{animation:bulb .45s linear infinite alternate}
+.machine.live .bulbs i:nth-child(2){animation-delay:.15s}
+.machine.live .bulbs i:nth-child(3){animation-delay:.3s}
+@keyframes bulb{from{background:rgba(255,255,255,.22)}to{background:var(--brightMint);box-shadow:0 0 8px var(--brightMint)}}
+.win{height:96px;border-radius:10px;background:#F7FAF7;overflow:hidden;position:relative;box-shadow:inset 0 0 0 2px rgba(11,31,26,.14),inset 0 8px 14px rgba(11,31,26,.13),inset 0 -8px 14px rgba(11,31,26,.13);transition:box-shadow .25s}
+.win:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(11,31,26,.16),transparent 26%,transparent 74%,rgba(11,31,26,.16))}
+/* idle placeholder — the pairings are concealed until the reel is spun */
+.idle{position:absolute;inset:0;background:#F7FAF7;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 14px;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px;color:var(--muted);z-index:2}
+.strip{position:absolute;left:0;right:0;top:0}
+.strip.blur{filter:blur(1.7px)}
+.slot{height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-bottom:1px dashed #DCE5DD}
+.slot .sd{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.slot .sp{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.slot .sp .b{color:var(--blue)}.slot .sp .o{color:var(--orange)}
+.slot .sp .x{color:var(--muted);font-size:12px;font-weight:600;padding:0 4px}
+.machine.hit .win{box-shadow:inset 0 0 0 2.5px var(--brightMint),inset 0 8px 14px rgba(11,31,26,.13),inset 0 -8px 14px rgba(11,31,26,.13)}
+.machine.hit{animation:thunk .34s cubic-bezier(.3,1.6,.5,1)}
+@keyframes thunk{0%{transform:translateY(0)}45%{transform:translateY(3px)}100%{transform:translateY(0)}}
+.calling{font-size:12.5px;color:var(--muted);font-weight:600;height:17px;text-align:center}
+.calling b{color:var(--pine)}
+.foot{padding:4px 0 14px;display:flex;flex-direction:column;gap:8px}
+.btn{border:none;border-radius:999px;padding:14px;font:700 15px/1 "Spline Sans",system-ui,sans-serif;background:var(--pine);color:#fff;cursor:pointer}
+.btn:disabled{background:#B9C8BE;cursor:default}
+.btn.ghost{background:transparent;color:var(--pine);font-weight:600;font-size:12.5px;padding:2px}
+.audit{font-size:10.5px;color:var(--muted);text-align:center;line-height:1.4}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Sixes &mdash; segment draw</h1>
+<p>A slot-reel that draws a 2v2 pairing. Splitting four players into two teams has exactly <b>three</b> possible pairings &mdash; the top row paired with row 2, 3, or 4 &mdash; and which one gets played is genuinely random, the call groups used to settle by flipping a ball marker on the tee.</p>
+<h3>Three places it&rsquo;s used</h3>
+<table>
+<tr><th>Draw</th><th>How it opens</th><th>Choices</th></tr>
+<tr><td><b>Segment 1</b></td><td>Setup screen &mdash; <b>&ldquo;Randomly assign teams&rdquo;</b> button under the drag rows</td><td>3 pairings</td></tr>
+<tr><td><b>Segment 2</b></td><td><b>Auto</b> &mdash; opens once Segment 1 is settled (an early close-out can fire it on hole 4/5)</td><td>2 pairings</td></tr>
+<tr><td><b>Extra match</b></td><td>End-of-round team picker &mdash; same &ldquo;Randomly assign teams&rdquo; button</td><td>3 pairings</td></tr>
+</table>
+<p><b>Drag or spin.</b> Segments 1 and the extra match reach this screen from a button that sits beside the drag-to-sort rows &mdash; the group can still drag the teams by hand, or spin (and re-spin). Segment 2 is the one forced draw. <b>Segment 3 is never drawn</b>: once Segment 2 lands the last pairing is fixed, and Match 3 is simply announced on the segment strip.</p>
+<h3>Concealed until spun</h3>
+<ul>
+<li>The reel window shows only <b>&ldquo;Spin to select next partners&rdquo;</b> while idle &mdash; the candidate pairings are <b>not</b> listed beforehand. The reveal is the point.</li>
+<li>On landing, the candidate rows drop in: the winner rings pine and takes the segment mark, the loser dims to 32%.</li>
+<li>Player names are <b>capped to first names</b> (with ellipsis / shrink-to-fit) so a two-player pairing never overflows the reel or the rows.</li>
+</ul>
+<h3>One reel, not three</h3>
+<ul>
+<li>The reel carries whole pairings &mdash; Side A / Side B alternating. Picking one side determines the other, so three independent reels would misrepresent the draw.</li>
+</ul>
+<h3>Motion spec</h3>
+<ul>
+<li>2.55s, <code>cubic-bezier(.12,.62,.15,1)</code> &mdash; fast out, long decelerating tail, no bounce-back past the winner. 1.7px blur lifts partway so the last rows read as they pass.</li>
+<li>Window flashes mint and the housing takes a 3px thunk on landing. Bulbs pulse only while spinning.</li>
+<li><b>The winner is picked before the animation starts</b> &mdash; the reel is a reveal, never the randomness. Tap the machine to skip; reduce-motion lands instantly.</li>
+</ul>
+<p><b>Front-end reveal.</b> The draw is computed on the device (no server round-trip); a per-device flag remembers that the auto Segment-2 draw has already been shown so re-entering the round doesn&rsquo;t replay it. The setup / extra-match draws are re-openable so the group can re-spin.</p>
+<p><b>&ldquo;Reset&rdquo; below is prototype chrome</b> for replaying the reveal in review.</p>
+</div>
+<div class="phone">
+<div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span style="width:17px"></span><span class="ttl">Sixes &middot; Harding Park</span><span style="width:17px"></span></div>
+<div class="body">
+<div class="eyebrow">Segment 1 complete &middot; holes 1&ndash;6</div>
+<div class="h2">Who plays together next?</div>
+<div class="lede">Two pairings are left. Spin to pick partners for Segment 2.</div>
+<div class="done"><span class="mn">Seg 1</span><span class="pr"><span class="b">Paul / Dave</span> <span class="v">v.</span> <span class="o">Sam / Lee</span></span><span class="st">2 UP</span></div>
+<div class="cands" id="cands">
+<div class="cand" id="c1"><span class="tag">A</span><span class="pair"><span class="b">Paul / Sam</span><span class="v">v.</span><span class="o">Dave / Lee</span></span><span class="mark">Segment 2</span></div>
+<div class="cand" id="c2"><span class="tag">B</span><span class="pair"><span class="b">Paul / Lee</span><span class="v">v.</span><span class="o">Dave / Sam</span></span><span class="mark">Segment 2</span></div>
+</div>
+<div class="stage">
+<div class="machine" id="mach">
+<div class="mtop"><span>Segment 2 draw</span><span class="bulbs"><i></i><i></i><i></i></span></div>
+<div class="win"><div class="idle" id="idle">Spin to select next partners</div><div class="strip" id="strip"></div></div>
+</div>
+<div class="calling" id="call">Two pairings left &mdash; spin for Segment 2.</div>
+</div>
+<div class="foot">
+<button class="btn" id="go">Spin the reel</button>
+<button class="btn ghost" id="again" style="display:none">Reset (prototype only)</button>
+<div class="audit" id="audit">Result is drawn before it animates</div>
+</div>
+</div>
+</div>
+<script>
+var $=function(i){return document.getElementById(i)};
+var strip=$('strip'),mach=$('mach'),go=$('go'),again=$('again'),call=$('call'),audit=$('audit'),cands=$('cands'),c1=$('c1'),c2=$('c2'),idle=$('idle');
+var TEAMS={A:{blue:['Paul','Sam'],orange:['Dave','Lee']},B:{blue:['Paul','Lee'],orange:['Dave','Sam']}};
+var SLOTH=96,REPS=9,busy=false,skip=null;
+var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function slotHtml(w){var t=TEAMS[w];return '<div class="slot"><span class="sd">Side '+w+'</span><span class="sp"><span class="b">'+t.blue.join(' / ')+'</span><span class="x">v.</span><span class="o">'+t.orange.join(' / ')+'</span></span></div>'}
+(function(){var h='';for(var i=0;i<REPS;i++)h+=slotHtml('A')+slotHtml('B');strip.innerHTML=h;strip.style.transform='translateY(0px)'})();
+function reset(){
+  c1.className='cand';c2.className='cand';cands.classList.remove('show');
+  idle.style.display='flex';
+  strip.style.transition='none';strip.style.transform='translateY(0px)';strip.classList.remove('blur');
+  mach.classList.remove('live','hit');
+  call.innerHTML='Two pairings left &mdash; spin for Segment 2.';
+  audit.textContent='Result is drawn before it animates';
+  go.textContent='Spin the reel';go.disabled=false;again.style.display='none';skip=null;
+}
+function settle(win){
+  cands.classList.add('show');
+  (win==='A'?c1:c2).classList.add('won');(win==='A'?c2:c1).classList.add('dim');
+  var t=TEAMS[win];
+  call.innerHTML='Segment 2 &mdash; <b>'+t.blue.join(' / ')+'</b> v. <b>'+t.orange.join(' / ')+'</b>';
+  audit.textContent='Drawn 9:41 AM · Segment 3 is the last pairing';
+  go.textContent='Start hole 7';go.disabled=false;again.style.display='block';busy=false;skip=null;
+}
+function run(win,fast){
+  var y=-((REPS-2)*2+(win==='A'?0:1))*SLOTH;
+  if(fast){strip.style.transition='none';strip.style.transform='translateY('+y+'px)';strip.classList.remove('blur');mach.classList.remove('live');mach.classList.add('hit');return 0}
+  mach.classList.add('live');strip.classList.add('blur');
+  strip.style.transition='transform 2.55s cubic-bezier(.12,.62,.15,1)';
+  strip.style.transform='translateY('+y+'px)';
+  setTimeout(function(){strip.classList.remove('blur')},1750);
+  setTimeout(function(){mach.classList.remove('live');mach.classList.add('hit')},2500);
+  return 2650;
+}
+function draw(){
+  if(busy)return;reset();busy=true;
+  idle.style.display='none';               /* conceal the prompt, reveal the reel */
+  var win=Math.random()<0.5?'A':'B';
+  go.disabled=true;again.style.display='none';call.textContent='Spinning…';audit.textContent='Drawing…';
+  if(reduce){run(win,true);settle(win);return}
+  var ms=run(win,false),done=false;
+  var finish=function(){if(done)return;done=true;settle(win)};
+  skip=function(){if(done)return;run(win,true);finish()};
+  setTimeout(finish,ms);
+}
+mach.addEventListener('click',function(){if(skip)skip()});
+go.addEventListener('click',function(){if(go.textContent!=='Start hole 7')draw()});
+again.addEventListener('click',draw);
+</script>
+</body>
+</html>
