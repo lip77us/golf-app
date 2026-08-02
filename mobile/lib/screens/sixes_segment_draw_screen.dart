@@ -396,7 +396,7 @@ class _SixesSegmentDrawScreenState extends State<SixesSegmentDrawScreen>
         ),
         const SizedBox(height: 8),
         Text(_landed ? widget.landedFootnote
-                     : 'Result is drawn before it animates · logged to the round',
+                     : 'Result is drawn before it animates',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 10.5, color: _muted, height: 1.4)),
       ]);
