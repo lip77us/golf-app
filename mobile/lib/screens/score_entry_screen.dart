@@ -17,6 +17,7 @@
 ///       – Hole ← Prev | Next → navigation / Done button
 
 import 'dart:async';
+import 'dart:math' show Random;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8558,6 +8559,56 @@ class _ExtraTeamPickerSheet extends StatefulWidget {
 
 class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
   late List<Membership> _ordered = List.of(widget.members);
+  /// Bumped on a slot-machine draw so the TeamSplitter4 re-seeds its internal
+  /// order (it ignores a same-players reorder otherwise).
+  int _teamGen = 0;
+
+  /// Draw the extra-match teams with the slot machine.  The top row is the
+  /// anchor; the three pairings are the anchor with row 2, 3, or 4.  The
+  /// winner is picked up front (the reel is a pure reveal); on return the
+  /// players reorder so the drawn pairing becomes Team A.  Drag still works,
+  /// and re-tapping respins.
+  Future<void> _randomize() async {
+    if (_ordered.length < 4) return;
+    final p = _ordered;
+    final candidates = [
+      SixesDrawPair(blue: [p[0].player.name, p[1].player.name],
+                    orange: [p[2].player.name, p[3].player.name]),
+      SixesDrawPair(blue: [p[0].player.name, p[2].player.name],
+                    orange: [p[1].player.name, p[3].player.name]),
+      SixesDrawPair(blue: [p[0].player.name, p[3].player.name],
+                    orange: [p[1].player.name, p[2].player.name]),
+    ];
+    final winner = Random().nextInt(candidates.length);
+    final courseName =
+        context.read<RoundProvider>().round?.course.name ?? 'Sixes';
+
+    final done = await Navigator.of(context, rootNavigator: true).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => SixesSegmentDrawScreen(
+          courseName: courseName,
+          eyebrow: 'Extra match',
+          title: 'Who partners up?',
+          lede: 'Spin to draw the teams for the extra match.',
+          machineTitle: 'EXTRA MATCH DRAW',
+          candidates: candidates,
+          winnerIndex: winner,
+          ctaLabel: 'Use these teams',
+          landedFootnote: 'You can still drag to change the teams — or spin again.',
+          hideCandidatesUntilDrawn: true,
+        ),
+      ),
+    );
+    if (done != true || !mounted) return;
+    final anchor = p[0];
+    final others = [p[1], p[2], p[3]];
+    final partner = others.removeAt(winner);
+    setState(() {
+      _ordered = [anchor, partner, ...others];
+      _teamGen++;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -8586,7 +8637,7 @@ class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Drag rows to set Red vs Blue for this extra match.',
+              'Drag rows to set Red vs Blue — or let the machine spin.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
@@ -8594,8 +8645,22 @@ class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
             const SizedBox(height: 16),
 
             TeamSplitter4(
+              key: ValueKey('extra-split-$_teamGen'),
               players: _ordered,
               onChanged: (ordered) => setState(() => _ordered = ordered),
+            ),
+
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _randomize,
+              icon: const Icon(Icons.casino_outlined, size: 18),
+              label: const Text('Randomly assign teams'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.primary,
+                side: BorderSide(color: theme.colorScheme.outlineVariant),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
             ),
 
             const SizedBox(height: 16),

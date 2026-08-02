@@ -82,6 +82,10 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
 
   bool _initialized   = false;
   bool _checkingSetup = true; // true while we're checking for an existing match
+  /// Bumped whenever we programmatically reorder the players (the "Randomly
+  /// assign teams" draw).  Used as the TeamSplitter4 key so it re-seeds its
+  /// internal order — the splitter otherwise ignores a same-players reorder.
+  int _teamGen = 0;
   /// True when editing an already-configured match (drives Save vs Start label
   /// and the AppBar title).  Set in initState when an existing match is loaded.
   bool _editing       = false;
@@ -261,7 +265,10 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     final anchor = p[0];
     final others = [p[1], p[2], p[3]];
     final partner = others.removeAt(winner);
-    setState(() => _orderedPlayers = [anchor, partner, ...others]);
+    setState(() {
+      _orderedPlayers = [anchor, partner, ...others];
+      _teamGen++;   // force TeamSplitter4 to adopt the new order
+    });
   }
 
   Future<void> _startMatch(BuildContext ctx) async {
@@ -465,6 +472,7 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
                           setState(() => _orderedPlayers = ordered);
                         },
                         onRandomize: _randomizeTeams,
+                        splitterKey: ValueKey('sixes-split-$_teamGen'),
                       ),
                       const SizedBox(height: 20),
 
@@ -693,6 +701,7 @@ class _HolePlayerCard extends StatelessWidget {
   final List<Membership>             orderedPlayers;
   final ValueChanged<List<Membership>> onOrderChanged;
   final VoidCallback                 onRandomize;
+  final Key                          splitterKey;
 
   const _HolePlayerCard({
     required this.holeData,
@@ -700,6 +709,7 @@ class _HolePlayerCard extends StatelessWidget {
     required this.orderedPlayers,
     required this.onOrderChanged,
     required this.onRandomize,
+    required this.splitterKey,
   });
 
   @override
@@ -749,6 +759,7 @@ class _HolePlayerCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
             child: TeamSplitter4(
+              key: splitterKey,
               players: orderedPlayers,
               onChanged: onOrderChanged,
             ),
