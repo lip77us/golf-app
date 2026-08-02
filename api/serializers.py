@@ -733,6 +733,14 @@ class CasualRoundSummarySerializer(serializers.Serializer):
     created_by_player_id = serializers.IntegerField(allow_null=True)
     foursome_id         = serializers.IntegerField(allow_null=True)
     players             = serializers.ListField(child=serializers.DictField())
+    # Stored primary game (null on legacy rounds — client falls back to deriving
+    # it from active_games) so the card can bold the primary vs muted side games.
+    primary_game        = serializers.CharField(allow_null=True, required=False)
+    # The requesting player + their result on COMPLETED rounds (null in-progress):
+    # gross total and net settlement across every nettable game.
+    my_player_id        = serializers.IntegerField(allow_null=True, required=False)
+    my_gross            = serializers.IntegerField(allow_null=True, required=False)
+    my_net              = serializers.FloatField(allow_null=True, required=False)
 
 
 class TournamentSerializer(serializers.ModelSerializer):

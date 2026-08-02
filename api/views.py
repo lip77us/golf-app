@@ -2258,18 +2258,43 @@ class CasualRoundListView(APIView):
             )
             chosen_fs = user_fs or r.foursomes.first()
 
+            # Completed rounds carry a result: the caller's gross total and their
+            # net settlement across every nettable game (so the list card shows
+            # "82" + "+$24").  Skipped for in-progress rounds — those show the
+            # stake instead (no mid-round settlement), and a partial gross is
+            # not useful.
+            my_gross = None
+            my_net = None
+            if r.status == 'complete':
+                from scoring.models import HoleScore as _HS
+                from django.db.models import Sum as _Sum
+                from services import settlement
+                if chosen_fs is not None:
+                    my_gross = (
+                        _HS.objects
+                        .filter(foursome=chosen_fs, player=requesting_player,
+                                gross_score__isnull=False)
+                        .aggregate(total=_Sum('gross_score'))['total']
+                    )
+                my_net = settlement.player_round_net(
+                    r, requesting_player.id, foursomes=list(r.foursomes.all()))
+
             results.append({
                 'id':                   r.id,
                 'date':                 r.date,
                 'course_name':          r.course.name,
                 'status':               r.status,
                 'active_games':         r.active_games,
+                'primary_game':         r.primary_game,
                 'is_eighteen_hole_match': _round_is_eighteen_hole_match(r, chosen_fs),
                 'bet_unit':             r.bet_unit,
                 'current_hole':         max_hole or 0,
                 'created_by_player_id': r.created_by_id,
                 'foursome_id':          chosen_fs.id if chosen_fs else None,
                 'players':              players,
+                'my_player_id':         requesting_player.id,
+                'my_gross':             my_gross,
+                'my_net':               my_net,
             })
 
         ser = CasualRoundSummarySerializer(results, many=True)

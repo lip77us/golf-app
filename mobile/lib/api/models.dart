@@ -648,6 +648,15 @@ class CasualRoundSummary {
   final int?   foursomeId;
   /// All real players across all foursomes.
   final List<CasualRoundPlayer> players;
+  /// Stored primary game (null on legacy rounds → derive from activeGames).
+  final String? primaryGame;
+  /// The requesting player's id, so the card can list them first.
+  final int?   myPlayerId;
+  /// My gross total — populated on COMPLETED rounds only (null in-progress).
+  final int?   myGross;
+  /// My net settlement across every nettable game — COMPLETED rounds only
+  /// (null in-progress; null too when no nettable game is configured).
+  final double? myNet;
 
   const CasualRoundSummary({
     required this.id,
@@ -661,6 +670,10 @@ class CasualRoundSummary {
     this.createdByPlayerId,
     this.foursomeId,
     required this.players,
+    this.primaryGame,
+    this.myPlayerId,
+    this.myGross,
+    this.myNet,
   });
 
   factory CasualRoundSummary.fromJson(Map<String, dynamic> j) =>
@@ -678,6 +691,10 @@ class CasualRoundSummary {
         players:             (j['players'] as List? ?? [])
             .map((p) => CasualRoundPlayer.fromJson(p as Map<String, dynamic>))
             .toList(),
+        primaryGame:         j['primary_game'] as String?,
+        myPlayerId:          j['my_player_id'] as int?,
+        myGross:             j['my_gross'] as int?,
+        myNet:               (j['my_net'] as num?)?.toDouble(),
       );
 }
 

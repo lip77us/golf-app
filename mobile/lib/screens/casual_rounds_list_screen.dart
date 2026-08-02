@@ -38,6 +38,10 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
   String? _error;
   bool    _networkError = false;
   bool    _showCompleted = false;   // false = Active, true = Completed
+  /// Completed-tab watched-round filter. Default OFF ("Rounds I played") so
+  /// watched rounds are hidden until the user opts in. Client-side over the
+  /// already-loaded list. Active is deliberately unfiltered (no row shown).
+  bool    _includeWatched = false;
   /// True once we know the account has at least one casual round (active OR
   /// completed). Gates the brand-new "Set up your first round" onboarding CTA so
   /// it doesn't reappear on the empty Active tab after a round is completed.
@@ -411,123 +415,273 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
         onRetry:   _load,
       );
     }
-    // Defensively filter by status client-side so that a round which was just
-    // completed can never flash back into the Active list even if the server
-    // response is momentarily stale.
-    final rounds = (_rounds ?? []).where((r) {
-      return _showCompleted ? r.status == 'complete' : r.status != 'complete';
-    }).toList();
-    final shared = _shared.where((r) {
-      return _showCompleted ? r.status == 'complete' : r.status != 'complete';
-    }).toList();
-    // Dedupe: if I'm both a player and a watcher of the same round, show it once
-    // as a PLAYED round (playing supersedes watching — no eyeball, opens to score
-    // entry). Build the played-id set from the full lists, not the tab-filtered
-    // ones, so the suppression holds regardless of tab.
+
+    bool tabOk(String s) =>
+        _showCompleted ? s == 'complete' : s != 'complete';
+
+    // Defensively filter by status client-side so a just-completed round can
+    // never flash back into the Active list on a momentarily stale response.
+    final rounds = (_rounds ?? []).where((r) => tabOk(r.status)).toList();
+    final shared = _shared.where((r) => tabOk(r.status)).toList();
+    // Dedupe: if I'm both a player and a watcher of the same round, it shows
+    // once as PLAYED (playing supersedes watching — no eye, opens to scoring).
     final playedIds = <int>{
       for (final r in (_rounds ?? [])) r.id,
       for (final r in _shared) r.id,
     };
-    // Observed rounds follow the same tab rule: when the round completes it
-    // drops off Active and shows under Completed, just like my own rounds.
-    final observing = _observing.where((r) {
+    final watched = _observing.where((r) {
       if (playedIds.contains(r.id)) return false;
-      return _showCompleted ? r.status == 'complete' : r.status != 'complete';
+      return tabOk(r.status);
     }).toList();
-    if (rounds.isEmpty && shared.isEmpty && observing.isEmpty) {
+
+    if (rounds.isEmpty && shared.isEmpty && watched.isEmpty) {
       return _buildEmptyState();
     }
 
-    // One date-sorted list mixing my own rounds and ones a friend started and
-    // added me to — no sections; each card is flagged with who started it.
     String fmtDate(String iso) {
       final d = DateTime.tryParse(iso);
       return d == null ? iso : DateFormat('MMM d, yyyy').format(d);
     }
+
+    // Played = my own rounds + rounds a friend added me to as a player.
+    // Watched = read-only follows (an eye replaces the money; no delete).
+    final played = <_RoundItem>[
+      for (final r in rounds) _ownItem(r, myId, fmtDate),
+      for (final r in shared) _sharedItem(r, fmtDate),
+    ];
+    final watchedItems = [for (final r in watched) _watchedItem(r, fmtDate)];
+
+    // Active is deliberately unfiltered — following a live round is the point
+    // there. Completed hides watched rounds until "Include watched" is on.
+    final showFilter     = _showCompleted;
+    final includeWatched = !_showCompleted || _includeWatched;
     final items = <_RoundItem>[
-      for (final r in rounds)
-        _RoundItem(
-          sortDate:       DateTime.tryParse(r.date),
-          dateLabel:      fmtDate(r.date),
-          courseName:     r.courseName,
-          activeGames:    r.activeGames,
-          isEighteenHoleMatch: r.isEighteenHoleMatch,
-          isCompleted:    r.status == 'complete',
-          currentHole:    r.currentHole,
-          startedByMe:    true,
-          startedByLabel: 'you',
-          people:         r.players.map((p) => p.name).join(', '),
-          onTap: () async { await _openRound(r); _load(); },
-          onDelete: (myId != null && r.createdByPlayerId == myId)
-              ? () => _confirmDelete(r)
-              : null,
-        ),
-      for (final r in shared)
-        _RoundItem(
-          sortDate:       DateTime.tryParse(r.date),
-          dateLabel:      fmtDate(r.date),
-          courseName:     r.courseName,
-          activeGames:    r.activeGames,
-          isEighteenHoleMatch: r.isEighteenHoleMatch,
-          isCompleted:    r.status == 'complete',
-          currentHole:    r.currentHole,
-          startedByMe:    false,
-          startedByLabel: r.groupLabel,
-          people:         '',
-          onTap: () async { await openSharedRound(context, r.id); _load(); },
-          onDelete: null,
-        ),
-      for (final r in observing)
-        _RoundItem(
-          sortDate:       DateTime.tryParse(r.date),
-          dateLabel:      fmtDate(r.date),
-          courseName:     r.courseName,
-          activeGames:    r.activeGames,
-          isEighteenHoleMatch: r.isEighteenHoleMatch,
-          isCompleted:    r.status == 'complete',
-          currentHole:    r.currentHole,
-          startedByMe:    false,
-          startedByLabel: r.groupLabel,
-          people:         '',
-          isObserving:    true,
-          onTap: () async { await openWatchedRound(context, r); _load(); },
-          onDelete: null,
-        ),
+      ...played,
+      if (includeWatched) ...watchedItems,
     ]..sort((a, b) =>
         (b.sortDate ?? DateTime(0)).compareTo(a.sortDate ?? DateTime(0)));
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
-        itemCount: items.length,
-        itemBuilder: (_, i) => _RoundCard(item: items[i]),
+    final list = items.isEmpty
+        ? ListView(children: [
+            const SizedBox(height: 72),
+            Center(child: Text('No rounds you played.',
+                style: Halved.body(color: Halved.muted))),
+          ])
+        : ListView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
+            itemCount: items.length,
+            itemBuilder: (_, i) => _RoundCard(item: items[i]),
+          );
+    final body = RefreshIndicator(onRefresh: _load, child: list);
+
+    if (!showFilter) return body;
+
+    final total = played.length + watchedItems.length;
+    final shown = includeWatched ? total : played.length;
+    return Column(children: [
+      _WatchedFilterRow(
+        includeWatched: _includeWatched,
+        hasWatched:     watchedItems.isNotEmpty,
+        total:          total,
+        shown:          shown,
+        onChanged:      (v) => setState(() => _includeWatched = v),
+      ),
+      Expanded(child: body),
+    ]);
+  }
+
+  /// Split a round's games into the primary (bold) and the side games (muted),
+  /// honouring the stored primary and the 18-Hole-Match Nassau relabel.
+  (String, String) _gameLabels(
+      List<String> activeGames, String? primaryGame, bool isEighteenHoleMatch) {
+    final primary = resolvePrimary(primaryGame, activeGames);
+    // No resolvable primary (empty / overlay-only round) → fall back to the
+    // joined label (which itself defaults to "Stroke Play"), no side split.
+    if (primary == null) {
+      return (
+        gamesDisplayLabel(activeGames,
+            isEighteenHoleMatch: isEighteenHoleMatch),
+        '',
+      );
+    }
+    final primaryLabel = (primary == GameIds.nassau && isEighteenHoleMatch)
+        ? gameDisplayName(GameIds.match18)
+        : gameDisplayName(primary);
+    final sides = activeGames.where((g) => g != primary).toList();
+    final sideLabel =
+        sides.isEmpty ? '' : '+ ${sides.map(gameDisplayName).join(', ')}';
+    return (primaryLabel, sideLabel);
+  }
+
+  /// My own round — full data: me-first player list (with my gross on completed
+  /// rounds), settlement money, and the delete control when I'm the creator.
+  _RoundItem _ownItem(
+      CasualRoundSummary r, int? myId, String Function(String) fmtDate) {
+    final (primaryLabel, sideLabel) =
+        _gameLabels(r.activeGames, r.primaryGame, r.isEighteenHoleMatch);
+
+    // Find "me" so the row lists me first with my gross.
+    CasualRoundPlayer? me;
+    for (final p in r.players) {
+      if (p.id == r.myPlayerId || (r.myPlayerId == null && p.id == myId)) {
+        me = p;
+        break;
+      }
+    }
+    final others = [
+      for (final p in r.players)
+        if (p.id != me?.id) p.name,
+    ];
+
+    return _RoundItem(
+      sortDate:     DateTime.tryParse(r.date),
+      dateLabel:    fmtDate(r.date),
+      courseName:   r.courseName,
+      primaryLabel: primaryLabel,
+      sideLabel:    sideLabel,
+      isCompleted:  r.status == 'complete',
+      currentHole:  r.currentHole,
+      meName:       me?.name,
+      meGross:      r.myGross,
+      otherNames:   others,
+      stake:        r.betUnit,
+      netAmount:    r.myNet,
+      onTap:        () async { await _openRound(r); _load(); },
+      onDelete: (myId != null && r.createdByPlayerId == myId)
+          ? () => _confirmDelete(r)
+          : null,
+    );
+  }
+
+  /// A round in another account I was added to as a PLAYER. No per-round money
+  /// is computed cross-account; the group label gives context.
+  _RoundItem _sharedItem(ScoringRound r, String Function(String) fmtDate) {
+    final (primaryLabel, sideLabel) =
+        _gameLabels(r.activeGames, null, r.isEighteenHoleMatch);
+    return _RoundItem(
+      sortDate:     DateTime.tryParse(r.date),
+      dateLabel:    fmtDate(r.date),
+      courseName:   r.courseName,
+      primaryLabel: primaryLabel,
+      sideLabel:    sideLabel,
+      isCompleted:  r.status == 'complete',
+      currentHole:  r.currentHole,
+      contextLabel: r.groupLabel,
+      onTap:        () async { await openSharedRound(context, r.id); _load(); },
+    );
+  }
+
+  /// A round I only WATCH (read-only). The eye replaces the money; no delete.
+  _RoundItem _watchedItem(SharedRoundSummary r, String Function(String) fmtDate) {
+    final (primaryLabel, sideLabel) =
+        _gameLabels(r.activeGames, null, r.isEighteenHoleMatch);
+    return _RoundItem(
+      sortDate:     DateTime.tryParse(r.date),
+      dateLabel:    fmtDate(r.date),
+      courseName:   r.courseName,
+      primaryLabel: primaryLabel,
+      sideLabel:    sideLabel,
+      isCompleted:  r.status == 'complete',
+      currentHole:  r.currentHole,
+      contextLabel: r.groupLabel,
+      isWatched:    true,
+      onTap:        () async { await openWatchedRound(context, r); _load(); },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Watched-round filter (Completed tab only)
+// ---------------------------------------------------------------------------
+
+class _WatchedFilterRow extends StatelessWidget {
+  final bool includeWatched;
+  final bool hasWatched;
+  final int  total;
+  final int  shown;
+  final ValueChanged<bool> onChanged;
+
+  const _WatchedFilterRow({
+    required this.includeWatched,
+    required this.hasWatched,
+    required this.total,
+    required this.shown,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // "Include watched" is disabled when there's nothing to reveal, and the
+    // count collapses to a plain total — a live control that changes nothing is
+    // worse than a dead one, and the fraction must not imply hidden rounds when
+    // none exist.
+    final mineSelected = !includeWatched || !hasWatched;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(children: [
+        _chip('Rounds I played', selected: mineSelected, enabled: true,
+            onTap: () => onChanged(false)),
+        const SizedBox(width: 8),
+        _chip('Include watched',
+            selected: includeWatched && hasWatched, enabled: hasWatched,
+            onTap: hasWatched ? () => onChanged(true) : null),
+        const Spacer(),
+        Text(hasWatched ? '$shown of $total' : '$total rounds',
+            style: Halved.body(color: Halved.muted).copyWith(fontSize: 11.5)),
+      ]),
+    );
+  }
+
+  Widget _chip(String label,
+      {required bool selected, required bool enabled, VoidCallback? onTap}) {
+    final base = selected ? Halved.pine : Halved.muted;
+    return Opacity(
+      opacity: enabled ? 1 : 0.42,
+      child: Material(
+        color: selected ? Halved.pine.withValues(alpha: 0.09) : Halved.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(999),
+          side: BorderSide(
+              color: selected ? Halved.pine : Halved.cardBorder, width: 1.5),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Text(label,
+                style: Halved.body(color: base, weight: FontWeight.w600)
+                    .copyWith(fontSize: 12)),
+          ),
+        ),
       ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Card widget
+// Card model + widget
 // ---------------------------------------------------------------------------
 
-/// A normalized row for the casual list, covering both my own rounds and rounds
-/// a friend started and added me to. [currentHole] is null for friend rounds
-/// (the shared payload carries status, not hole progress).
+/// A normalized row for the rounds list, covering my own rounds, rounds a
+/// friend added me to as a player, and rounds I only watch.
 class _RoundItem {
   final DateTime?    sortDate;
   final String       dateLabel;
   final String       courseName;
-  final List<String> activeGames;
-  /// True when this round's Nassau is really the "18-Hole Match" shortcut.
-  final bool         isEighteenHoleMatch;
+  final String       primaryLabel;   // primary game, bold
+  final String       sideLabel;      // "+ Skins, Presses", muted (may be '')
   final bool         isCompleted;
-  final int?         currentHole;
-  final bool         startedByMe;
-  final String       startedByLabel; // "you", or the friend's name
-  final String       people;         // player names (own rounds) or ''
-  /// True when I'm only WATCHING this round (read-only), not playing in it.
-  final bool         isObserving;
+  final int?         currentHole;    // 0 = not started, null = unknown (shared)
+  /// My name + gross, for the me-first player line (own rounds only).
+  final String?      meName;
+  final int?         meGross;        // shown next to my name on completed rounds
+  final List<String> otherNames;     // the rest of the group
+  /// Context label for cross-account rounds when player names aren't available.
+  final String?      contextLabel;
+  final bool         isWatched;      // read-only follow → eye, no money/delete
+  final double?      stake;          // shown in-play on active rounds
+  final double?      netAmount;      // settlement on completed rounds (null=none)
   final VoidCallback onTap;
   final VoidCallback? onDelete;
 
@@ -535,14 +689,17 @@ class _RoundItem {
     required this.sortDate,
     required this.dateLabel,
     required this.courseName,
-    required this.activeGames,
-    this.isEighteenHoleMatch = false,
+    required this.primaryLabel,
+    this.sideLabel = '',
     required this.isCompleted,
-    required this.currentHole,
-    required this.startedByMe,
-    required this.startedByLabel,
-    required this.people,
-    this.isObserving = false,
+    this.currentHole,
+    this.meName,
+    this.meGross,
+    this.otherNames = const [],
+    this.contextLabel,
+    this.isWatched = false,
+    this.stake,
+    this.netAmount,
     required this.onTap,
     this.onDelete,
   });
@@ -552,174 +709,229 @@ class _RoundCard extends StatelessWidget {
   final _RoundItem item;
   const _RoundCard({required this.item});
 
-  String _progressLabel() {
-    if (item.isCompleted) return 'Complete';
-    final h = item.currentHole;
-    if (h == null) return 'In progress';     // friend round — no hole count
-    if (h == 0)    return 'Not started';
-    if (h == 18)   return 'Hole 18';
-    return 'Through hole $h';
+  static const _danger = Color(0xFFC0392B);
+
+  String _money(double v) {
+    final a = v.abs();
+    final s = a == a.roundToDouble() ? a.toStringAsFixed(0) : a.toStringAsFixed(2);
+    return v < 0 ? '−\$$s' : '+\$$s';
   }
+
+  String _stakeLabel(double v) =>
+      '\$${v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2)}';
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final gameLabels = gamesDisplayLabel(item.activeGames,
-        isEighteenHoleMatch: item.isEighteenHoleMatch);
-
-    // The flag that replaced the section headers: who started this round, or —
-    // for a round I'm only watching — that I'm observing it (not playing).
-    final flagColor = item.isObserving
-        ? theme.colorScheme.secondary
-        : (item.startedByMe
-            ? theme.colorScheme.primary
-            : theme.colorScheme.tertiary);
-    final flagText = item.isObserving
-        ? 'Observing${item.startedByLabel.isEmpty ? '' : ' · ${item.startedByLabel}'}'
-        : (item.startedByMe
-            ? 'Started by you'
-            : 'Started by ${item.startedByLabel}');
-    final flagIcon = item.isObserving
-        ? Icons.visibility_outlined
-        : (item.startedByMe ? Icons.person_outline : Icons.group_outlined);
-
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: item.onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Course + date
-                    Row(children: [
-                      Expanded(
-                        child: Text(
-                          item.courseName,
-                          style: theme.textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        item.dateLabel,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                    ]),
-                    const SizedBox(height: 4),
-
-                    // Games + progress
-                    Row(children: [
-                      if (gameLabels.isNotEmpty) ...[
-                        Icon(Icons.casino_outlined,
-                            size: 13, color: theme.colorScheme.primary),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(gameLabels,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall
-                                  ?.copyWith(color: theme.colorScheme.primary)),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      Icon(
-                        item.isCompleted
-                            ? Icons.check_circle_outline
-                            : Icons.flag_outlined,
-                        size: 13,
-                        color: item.isCompleted
-                            ? Colors.green
-                            : theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _progressLabel(),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: item.isCompleted
-                              ? Colors.green
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(height: 6),
-
-                    // Started-by flag (chip)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: flagColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(flagIcon, size: 12, color: flagColor),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            flagText,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: flagColor,
-                                fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ]),
-                    ),
-
-                    // Players (own rounds only)
-                    if (item.people.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Row(children: [
-                        Icon(Icons.people_outline,
-                            size: 14,
-                            color: theme.colorScheme.onSurfaceVariant),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            item.people,
-                            style: theme.textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ]),
-                    ],
-                  ],
-                ),
-              ),
-
-              // Watching indicator — a clear eyeball so a round I only observe
-              // is obviously distinct from one I play in (even one a friend
-              // started). Observed rounds never have a delete button.
-              if (item.isObserving)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2, right: 6, left: 4),
-                  child: Tooltip(
-                    message: "You're watching this round",
-                    child: Icon(Icons.visibility,
-                        color: theme.colorScheme.secondary, size: 24),
-                  ),
-                ),
-
-              // Delete icon — only shown to the round creator.
-              if (item.onDelete != null)
-                IconButton(
-                  icon: Icon(Icons.delete_outline,
-                      color: theme.colorScheme.error),
-                  tooltip: 'Delete round',
-                  onPressed: item.onDelete,
-                  visualDensity: VisualDensity.compact,
-                ),
+              _row1(context),
+              const SizedBox(height: 7),
+              _row2(context),
+              const SizedBox(height: 7),
+              _row3(context),
             ],
           ),
         ),
       ),
     );
   }
+
+  // Row 1 — course (ellipsizes) + date, with the delete beneath the date.
+  Widget _row1(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(item.courseName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Halved.body(color: Halved.deepPine, weight: FontWeight.w700)
+                  .copyWith(fontSize: 16.5)),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(item.dateLabel,
+                style: Halved.body(color: Halved.muted).copyWith(fontSize: 13)),
+            if (item.onDelete != null)
+              SizedBox(
+                height: 26,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.delete_outline, size: 19, color: _danger),
+                  tooltip: 'Delete round',
+                  onPressed: item.onDelete,
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // Row 2 — primary game (bold) + side games (muted, ellipsizes) + state pill.
+  Widget _row2(BuildContext context) {
+    return Row(children: [
+      Text(item.primaryLabel,
+          style: Halved.body(color: Halved.deepPine, weight: FontWeight.w600)
+              .copyWith(fontSize: 13.5)),
+      if (item.sideLabel.isNotEmpty) ...[
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(item.sideLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Halved.body(color: Halved.muted).copyWith(fontSize: 12.5)),
+        ),
+      ] else
+        const Spacer(),
+      const SizedBox(width: 10),
+      _statePill(),
+    ]);
+  }
+
+  Widget _statePill() {
+    if (item.isCompleted) {
+      return Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.check_circle_outline, size: 14, color: Halved.mint),
+        const SizedBox(width: 4),
+        Text('Complete',
+            style: Halved.body(color: Halved.mint, weight: FontWeight.w600)
+                .copyWith(fontSize: 13)),
+      ]);
+    }
+    // Active: pulsing dot when a hole has posted, static dot when not started.
+    final started = item.currentHole == null || (item.currentHole ?? 0) > 0;
+    final label = item.currentHole == null
+        ? 'In progress'
+        : (item.currentHole == 0 ? 'Not started' : 'Through ${item.currentHole}');
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      started ? const _PulsingDot() : const _StaticDot(),
+      const SizedBox(width: 6),
+      Text(label,
+          style: Halved.body(
+                  color: started ? Halved.pine : Halved.muted,
+                  weight: FontWeight.w600)
+              .copyWith(fontSize: 13)),
+    ]);
+  }
+
+  // Row 3 — players (me first, my gross on completed) + settlement / eye.
+  Widget _row3(BuildContext context) {
+    return Row(children: [
+      Expanded(child: _players(context)),
+      const SizedBox(width: 12),
+      _result(context),
+    ]);
+  }
+
+  Widget _players(BuildContext context) {
+    final muted = Halved.body(color: Halved.muted).copyWith(fontSize: 13);
+    if (item.meName != null) {
+      final spans = <TextSpan>[
+        TextSpan(text: item.meName,
+            style: Halved.body(color: Halved.deepPine, weight: FontWeight.w600)
+                .copyWith(fontSize: 13)),
+        if (item.isCompleted && item.meGross != null)
+          TextSpan(text: ' ${item.meGross}',
+              style: Halved.body(color: Halved.deepPine, weight: FontWeight.w700)
+                  .copyWith(fontSize: 13)),
+        if (item.otherNames.isNotEmpty)
+          TextSpan(text: ', ${item.otherNames.join(', ')}', style: muted),
+      ];
+      return RichText(maxLines: 1, overflow: TextOverflow.ellipsis,
+          text: TextSpan(children: spans));
+    }
+    final text = item.otherNames.isNotEmpty
+        ? item.otherNames.join(', ')
+        : (item.contextLabel ?? '');
+    return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: muted);
+  }
+
+  Widget _result(BuildContext context) {
+    if (item.isWatched) {
+      return const Tooltip(
+        message: "You're watching this round",
+        child: Icon(Icons.visibility, size: 18, color: Halved.mint),
+      );
+    }
+    if (item.isCompleted) {
+      if (item.netAmount == null) return const SizedBox.shrink();
+      final down = item.netAmount! < 0;
+      return Text(_money(item.netAmount!),
+          style: Halved.body(color: down ? _danger : Halved.pine,
+              weight: FontWeight.w700).copyWith(fontSize: 14.5));
+    }
+    // Active: skin-in-the-game stake, or an em dash when there's no stake.
+    final stake = item.stake ?? 0;
+    return Text(stake > 0 ? _stakeLabel(stake) : '—',
+        style: Halved.body(color: Halved.muted, weight: FontWeight.w600)
+            .copyWith(fontSize: 13.5));
+  }
+}
+
+/// A pulsing mint dot — an in-progress round's live indicator.
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot();
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1900))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) {
+        final t = Curves.easeInOut.transform(_c.value);
+        return Container(
+          width: 7, height: 7,
+          decoration: BoxDecoration(
+            color: Halved.brightMint,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Halved.brightMint.withValues(alpha: 0.28 - 0.20 * t),
+                blurRadius: 0,
+                spreadRadius: 3 + 3 * t,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A static muted dot — a round that hasn't teed off yet.
+class _StaticDot extends StatelessWidget {
+  const _StaticDot();
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 7, height: 7,
+        decoration: const BoxDecoration(
+            color: Color(0xFFB9C8BE), shape: BoxShape.circle),
+      );
 }

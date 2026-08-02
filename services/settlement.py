@@ -163,6 +163,36 @@ def _who_owes_whom(nets, names):
     return transfers
 
 
+def player_round_net(round_obj, player_id, foursomes=None) -> float | None:
+    """A single player's net across ALL nettable games in the round.
+
+    Unlike :func:`round_settlement` (a cross-game tab that only appears for 2+
+    settled games), this sums every nettable game — so a one-game round still
+    reports its money.  Used by the rounds list to show each round's result.
+
+    Returns ``None`` when no nettable game is configured (caller omits money),
+    else the player's total net (may legitimately be ``0.0`` — an even round).
+    """
+    foursomes = foursomes if foursomes is not None \
+        else list(round_obj.foursomes.all())
+
+    active = list(round_obj.active_games or [])
+    for fs in foursomes:
+        for g in (fs.active_games or []):
+            if g not in active:
+                active.append(g)
+
+    covered = [g for g in active if g in NETTABLE]
+    if not covered:
+        return None
+
+    total = 0.0
+    for g in covered:
+        pid_net = _pid_nets_for_game(g, round_obj, foursomes)
+        total += pid_net.get(player_id, 0.0) or 0.0
+    return round(total, 2)
+
+
 def round_settlement(round_obj) -> dict | None:
     """Net every configured game into one per-player settlement.
 
