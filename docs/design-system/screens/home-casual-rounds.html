@@ -1,63 +1,195 @@
-<!-- @dsCard group="Rounds" name="Casual Rounds (home)" subtitle="CasualRoundsListScreen — Active/Completed list + New Round" -->
+<!-- @dsCard group="Rounds" name="Rounds (home)" subtitle="RoundsListScreen — Active/Completed list, live Active + Completed lists, watched-round filter, 3-row round card" -->
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Halved · Casual Rounds</title>
+<title>Halved · Rounds</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#1D9E75;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62}
-  *{box-sizing:border-box}
-  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
-  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
-  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
-  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
-  .appbar .mn{font-size:20px}
-  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
-  .seg{display:flex;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:999px;margin:4px 16px 12px;overflow:hidden}
-  .seg div{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;color:var(--muted)}
-  .seg div.on{background:var(--pine);color:#fff}
-  .body{padding:0 16px;overflow-y:auto;height:626px}
-  .rc{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:14px 16px;margin-bottom:12px}
-  .rc .top{display:flex;justify-content:space-between;align-items:flex-start}
-  .rc .c{font-weight:600;font-size:16px}
-  .rc .m{color:var(--muted);font-size:12.5px;margin-top:2px}
-  .live{display:inline-flex;align-items:center;gap:6px;background:rgba(59,216,154,.18);color:var(--mint);font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px}
-  .live .d{width:7px;height:7px;border-radius:50%;background:var(--brightMint)}
-  .obs{color:var(--mint);font-size:11.5px;font-weight:600}
-  .chips{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
-  .chip{font-size:11px;font-weight:600;border:1px solid var(--cardBorder);border-radius:8px;padding:3px 8px}
-  .grp{color:var(--muted);font-size:12px;margin-top:8px}
-  .newbar{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--surface) 24%)}
-  .newbtn{width:100%;height:52px;border-radius:16px;background:transparent;border:1.5px solid var(--pine);color:var(--pine);font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:"Spline Sans"}
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#1D9E75;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFFFFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--danger:#C0392B}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:360px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes ol{margin:0 0 12px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:8px 18px 12px}
+.appbar .mn{font-size:19px;color:var(--deepPine)}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:23px;flex:1;text-align:center}
+.seg{display:flex;background:#DCE6DD;border-radius:999px;margin:0 16px 12px;padding:4px;gap:4px}
+.seg button{flex:1;border:none;background:transparent;border-radius:999px;padding:11px 0;font:600 15px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.seg button.on{background:var(--pine);color:#fff;font-weight:700}
+.seg svg{width:16px;height:16px}
+.filt{display:none;align-items:center;gap:7px;margin:0 16px 10px}
+.filt.on{display:flex}
+.fchip{border:1.5px solid var(--cardBorder);background:var(--card);border-radius:999px;padding:6px 12px;font:600 12px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.fchip.on{border-color:var(--pine);background:rgba(15,110,86,.09);color:var(--pine)}
+.fchip:disabled{opacity:.42;cursor:default;border-color:var(--cardBorder);background:var(--card);color:var(--muted)}
+.fcount{margin-left:auto;font-size:11.5px;color:var(--muted)}
+.body{padding:0 16px 84px;overflow-y:auto;height:590px}
+.rc{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(11,31,26,.05);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px}
+.rc .course{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16.5px;line-height:1.2;grid-column:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc .right{grid-column:2;grid-row:1/span 2;display:flex;flex-direction:column;align-items:flex-end;gap:9px}
+.rc .date{font-size:13px;color:var(--muted);white-space:nowrap}
+.trash{border:none;background:transparent;padding:2px;cursor:pointer;color:var(--danger);display:flex}
+.trash svg{width:19px;height:19px}
+.row{grid-column:1;display:flex;align-items:center;gap:7px;font-size:13.5px;min-width:0}
+.row svg{width:14px;height:14px;flex:none;color:var(--muted)}
+.row.wide{grid-column:1/span 2}
+.game{font-weight:600;flex:none}
+.side{color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.state{flex:none}
+.state{color:var(--mint);font-weight:600;display:inline-flex;align-items:center;gap:4px;font-size:13px}
+.state.live{color:var(--pine)}
+.state.pending{color:var(--muted)}
+.state.pending .dot{width:7px;height:7px;border-radius:50%;background:#B9C8BE;box-shadow:none;animation:none}
+.state.live .dot{width:7px;height:7px;border-radius:50%;background:var(--brightMint);box-shadow:0 0 0 3px rgba(59,216,154,.28);animation:pulse 1.9s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(59,216,154,.28)}50%{box-shadow:0 0 0 6px rgba(59,216,154,.08)}}
+.thru{font-family:"Schibsted Grotesk",sans-serif;font-weight:700}
+.newbar{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 20px;background:linear-gradient(transparent,var(--surface) 26%)}
+.newbtn{width:100%;height:52px;border-radius:16px;background:transparent;border:1.5px solid var(--pine);color:var(--pine);font:700 16px/1 "Spline Sans",system-ui,sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.pane{display:none}.pane.on{display:block}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:56px 24px;line-height:1.6}
+.state svg{color:var(--mint);width:13px;height:13px}
+.score{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14px}
+.over{color:var(--muted);font-weight:500;font-family:"Spline Sans",sans-serif;font-size:13px}
+.money{margin-left:auto;padding-left:12px;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14.5px;color:var(--pine);flex:none}
+.eye{margin-left:auto;padding-left:12px;flex:none;display:flex;color:var(--mint)}
+.eye svg{width:17px;height:17px}
+.me{font-weight:600;color:var(--deepPine)}
+.myscore{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;color:var(--deepPine)}
+.money.down{color:var(--danger)}
+.watched{color:var(--mint);font-weight:600}
+.players{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.rc.w{display:none}
+.rc.w .right{grid-row:1/span 2;justify-content:flex-start}
+.showall .rc.w{display:grid}
 </style>
 </head>
 <body>
 <a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
-  <div class="phone">
-    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
-    <div class="appbar"><span class="mn">☰</span><span class="ttl">Casual Rounds</span><span class="mn">⟳</span></div>
-    <div class="seg"><div class="on">Active</div><div>Completed</div></div>
-    <div class="body">
-      <div class="rc">
-        <div class="top"><div><div class="c">Pebble Dunes GC</div><div class="m">Today · Skins + Nassau</div></div><span class="live"><span class="d"></span>Live</span></div>
-        <div class="grp">You · 4 players · thru 12</div>
-        <div class="chips"><span class="chip">Skins</span><span class="chip">Nassau</span><span class="chip">Spots</span></div>
-      </div>
-      <div class="rc">
-        <div class="top"><div><div class="c">Bandon Trails</div><div class="m">Today · Stableford</div></div><span class="obs">👁 Observing</span></div>
-        <div class="grp">Thursday Game · read-only</div>
-        <div class="chips"><span class="chip">Stableford</span></div>
-      </div>
-      <div class="rc">
-        <div class="top"><div><div class="c">Harding Park</div><div class="m">Jul 22 · Sixes</div></div></div>
-        <div class="grp">You · 4 players · not started</div>
-        <div class="chips"><span class="chip">Sixes</span></div>
-      </div>
-    </div>
-    <div class="newbar"><button class="newbtn">＋ New Round</button></div>
-  </div>
+<div class="notes">
+<h1>Rounds (home)</h1>
+<p>Matches the shipped list. Three rows per card, each earning its place:</p>
+<ol>
+<li><b>Course</b> &mdash; date held right, with delete beneath it.</li>
+<li><b>Game and state</b> &mdash; primary game, then side games while they fit; the list ellipsizes rather than wrapping.</li>
+<li><b>Players and result</b> &mdash; you first with your gross, then the group, and the settlement right-justified at the end.</li>
+</ol>
+<p><b>Watched rounds carry no trash can.</b> Only the round&rsquo;s owner can delete it, so the control is absent rather than disabled &mdash; and an eye replaces the money, since you had no stake.</p>
+<p><b>Active</b> shows live state where Completed shows the result: a pulsing dot with <b>Through 12</b>, or <b>Not started</b>. Row 3 drops the score &mdash; a partial gross tells you nothing mid-round &mdash; and carries the <b>stake</b> (skin in the game) instead, an em dash for a play-for-fun round. Settlement is a completed-round result: nothing is netted mid-round.</p>
+<p><b>Cross-account rounds.</b> A round a friend added you to (played or watched) doesn&rsquo;t carry the group&rsquo;s player names, so row 3 shows the <b>group label</b> in their place; watched rounds still get the eye. Only nettable games settle &mdash; a Nassau or Rabbit round shows the gross with no money, exactly as on the Settlement tab.</p>
+<p><b>Watched filter.</b> <b>Include watched</b> is disabled when there are no watched rounds to reveal, and the count collapses to a plain total &mdash; a live control that changes nothing is worse than a dead one. Completed defaults to <b>Rounds I played</b>; the count on the right (&ldquo;5 of 7&rdquo;) keeps hidden rounds honest rather than silently missing. Active is unfiltered &mdash; following a live round is the point there, so the filter row is absent, not empty.</p>
+</div>
+<div class="phone">
+<div class="status"><span>9:20</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="mn">&#9776;</span><span class="ttl">Rounds</span><span class="mn" style="color:var(--pine)">&#10227;</span></div>
+<div class="seg">
+<button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></svg>Active</button>
+<button class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.2l2.6 2.6L16 9.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Completed</button>
+</div>
+<div class="filt on"><button class="fchip on" id="fMine">Rounds I played</button><button class="fchip" id="fAll">Include watched</button><span class="fcount" id="fCount">5 of 7</span></div>
+<div class="body" id="scroll">
+<div class="pane" id="paneActive">
+
+<div class="rc">
+<div class="course">Tilden Park GC</div>
+<div class="right"><span class="date">Aug 1, 2026</span><button class="trash" aria-label="Delete round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></div>
+<div class="row"><span class="game">Sixes</span><span class="side">+ Skins</span><span class="state live"><span class="dot"></span>Through <span class="thru">12</span></span></div>
+<div class="row wide"><span class="players"><span class="me">Paul Lipkin</span>, Bill Jones, Ann White, Carol Martin</span><span class="money" style="color:var(--muted)">$5</span></div>
+</div>
+
+<div class="rc">
+<div class="course">Presidio GC</div>
+<div class="right"><span class="date">Aug 1, 2026</span><button class="trash" aria-label="Delete round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></div>
+<div class="row"><span class="game">Nassau</span><span class="side">+ Presses</span><span class="state live pending"><span class="dot"></span>Not started</span></div>
+<div class="row wide"><span class="players"><span class="me">Paul Lipkin</span>, Sam Reyes, Dave Okonkwo</span><span class="money" style="color:var(--muted)">&mdash;</span></div>
+</div>
+
+<div class="rc">
+<div class="course">Bandon Trails</div>
+<div class="right"><span class="date">Aug 1, 2026</span></div>
+<div class="row"><span class="game">Stableford</span><span class="state live"><span class="dot"></span>Through <span class="thru">7</span></span></div>
+<div class="row wide"><span class="players">Richard Mayers, Donn Morgan, Tom Ellis</span><span class="eye"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></svg></span></div>
+</div>
+
+</div>
+<div class="pane on" id="list">
+
+<div class="rc">
+<div class="course">Tilden Park GC</div>
+<div class="right"><span class="date">Jul 30, 2026</span><button class="trash" aria-label="Delete round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></div>
+<div class="row"><span class="game">Rabbit</span><span class="side">+ Skins</span><span class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.2l2.6 2.6L16 9.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Complete</span></div>
+<div class="row wide"><span class="players"><span class="me">Paul Lipkin</span> <span class="myscore">82</span>, Steve Etingoff, Larry Sanders</span><span class="money">+$24</span></div>
+</div>
+
+<div class="rc w">
+<div class="course">Bandon Trails</div>
+<div class="right"><span class="date">Jul 28, 2026</span></div>
+<div class="row"><span class="game">Stableford</span><span class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.2l2.6 2.6L16 9.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Complete</span></div>
+<div class="row wide"><span class="players">Richard Mayers, Donn Morgan, Tom Ellis</span><span class="eye"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></svg></span></div>
+</div>
+
+<div class="rc">
+<div class="course">Tilden Park GC</div>
+<div class="right"><span class="date">Jul 27, 2026</span><button class="trash" aria-label="Delete round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></div>
+<div class="row"><span class="game">Sixes</span><span class="side">+ Skins, Presses</span><span class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.2l2.6 2.6L16 9.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Complete</span></div>
+<div class="row wide"><span class="players"><span class="me">Paul Lipkin</span> <span class="myscore">88</span>, Richard Mayers, Donn Morgan, Tom Ellis</span><span class="money down">&minus;$10</span></div>
+</div>
+
+<div class="rc">
+<div class="course">Tilden Park GC</div>
+<div class="right"><span class="date">Jul 23, 2026</span><button class="trash" aria-label="Delete round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></div>
+<div class="row"><span class="game">Sixes</span><span class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.2l2.6 2.6L16 9.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Complete</span></div>
+<div class="row wide"><span class="players"><span class="me">Paul Lipkin</span> <span class="myscore">85</span>, Gordon Steele, Larry Sanders, Ed Chan</span><span class="money">+$14</span></div>
+</div>
+
+<div class="rc w">
+<div class="course">Spyglass Hill</div>
+<div class="right"><span class="date">Jul 21, 2026</span></div>
+<div class="row"><span class="game">Match Play</span><span class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.2l2.6 2.6L16 9.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Complete</span></div>
+<div class="row wide"><span class="players">Sam Reyes, Marcus Hall, Dave Okonkwo</span><span class="eye"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></svg></span></div>
+</div>
+
+<div class="rc">
+<div class="course">Tilden Park GC</div>
+<div class="right"><span class="date">Jul 20, 2026</span><button class="trash" aria-label="Delete round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></div>
+<div class="row"><span class="game">Points (5-3-1)</span><span class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.2l2.6 2.6L16 9.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Complete</span></div>
+<div class="row wide"><span class="players"><span class="me">Paul Lipkin</span> <span class="myscore">84</span>, Roger Bird, Will Glennon</span><span class="money">+$6</span></div>
+</div>
+
+<div class="rc">
+<div class="course">Metropolitan Gl</div>
+<div class="right"><span class="date">Jul 17, 2026</span><button class="trash" aria-label="Delete round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></div>
+<div class="row"><span class="game">Points (5-3-1)</span><span class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.2l2.6 2.6L16 9.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Complete</span></div>
+<div class="row wide"><span class="players"><span class="me">Paul Lipkin</span> <span class="myscore">86</span>, Tyler Law, Julian Boyce</span><span class="money down">&minus;$4</span></div>
+</div>
+
+</div>
+</div>
+<div class="newbar"><button class="newbtn">&#65291; New Round</button></div>
+</div>
+<script>
+var list=document.getElementById('list'),fMine=document.getElementById('fMine'),fAll=document.getElementById('fAll'),fCount=document.getElementById('fCount');
+var total=list.querySelectorAll('.rc').length,played=total-list.querySelectorAll('.rc.w').length;
+function set(all){list.classList.toggle('showall',all);fAll.classList.toggle('on',all);fMine.classList.toggle('on',!all);fCount.textContent=(all?total:played)+' of '+total}
+if(total===played){fAll.disabled=true;fAll.title='No watched rounds';fCount.textContent=total+' rounds'}
+fMine.addEventListener('click',function(){set(false)});
+fAll.addEventListener('click',function(){set(true)});
+var paneActive=document.getElementById('paneActive'),scroll=document.getElementById('scroll'),filt=document.querySelector('.filt');
+document.querySelectorAll('.seg button').forEach(function(b,i){b.addEventListener('click',function(){
+  document.querySelectorAll('.seg button').forEach(function(x){x.classList.remove('on')});b.classList.add('on');
+  var completed=i===1;
+  paneActive.classList.toggle('on',!completed);list.classList.toggle('on',completed);
+  filt.classList.toggle('on',completed);scroll.scrollTop=0;})});
+set(false);
+</script>
 </body>
 </html>
