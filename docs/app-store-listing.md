@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.3.2)
+# App Store listing copy — Halved (v2.5.1)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -89,7 +89,25 @@ seconds, with no spreadsheets and no napkin math.
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
 
-## What's New (v2.3.2)
+## What's New (v2.5.1)
+New games and a cleaner home screen:
+
+• Triple Nassau — a brand-new game. Play three 1-on-1 Nassaus at once (you
+  against each of the other three). One setup, per-pair handicaps, and a
+  dedicated screen showing every match, its presses, and who owes whom.
+• Sixes team draws — let the slot machine pick your partners. Draw the Segment 1
+  teams at setup, watch the Segment 2 pairing reveal itself at the turn, and draw
+  the teams for an extra match too. Prefer to choose? Just drag.
+• A cleaner Rounds list — every round is now a tidy card with the game, live
+  progress, your score, and the money you won or lost. A new filter keeps rounds
+  you played separate from ones you're just watching.
+• Rabbit improvements — extra "rabbits" when a leg ends early, fairer handicap
+  allocation, and clearer wording when a hole is halved.
+• Stroke Play, your way — view the leaderboard as Gross, Net, or Strokes-off.
+• Polish & fixes — Cup match cards tinted by the leading team, more reliable
+  course adds with clearer errors, and assorted layout fixes.
+
+## What's New (v2.3.2) — previous
 See where every stroke falls:
 
 • Stroke dots, everywhere — every scorecard and score-entry screen now shows
