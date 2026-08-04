@@ -81,6 +81,10 @@ HCP_POOL = [4.5, 9.4, 12.8, 7.2, 18.5, 15.0, 11.1, 20.2, 6.0, 14.0, 22.0, 8.3,
             16.7, 10.5, 3.1, 24.0]
 # Two logins besides the TD, for cross-account / scorer poking if wanted.
 MEMBER_LOGINS = ['cupmember1', 'cupmember2']
+# Verified phones so the phone-OTP login works locally (the app is phone-first).
+# Globally unique, distinct from seed_demo's +1310555010x range.
+TD_PHONE = '+13105550201'
+MEMBER_PHONES = ['+13105550202', '+13105550203']
 
 
 class Command(BaseCommand):
@@ -216,26 +220,34 @@ class Command(BaseCommand):
             (reds if team_is_red else blues).append(player)
 
         # TD admin login attached to the first Red player; two member logins.
+        # Each carries a verified phone so the phone-OTP flow works locally.
         td_player = reds[0]
-        self._attach_login(account, td_player, 'cuptd', admin=True)
+        self._attach_login(account, td_player, 'cuptd', admin=True, phone=TD_PHONE)
         member_targets = (blues[0], reds[1] if len(reds) > 1 else blues[1])
-        for login, p in zip(MEMBER_LOGINS, member_targets):
-            self._attach_login(account, p, login, admin=False)
+        for login, p, phone in zip(MEMBER_LOGINS, member_targets, MEMBER_PHONES):
+            self._attach_login(account, p, login, admin=False, phone=phone)
 
         self.stdout.write(
             f"  Created {per_team * 2} players "
             f"({per_team} Red, {per_team} Blue); TD login 'cuptd'.")
         return reds, blues, td_player
 
-    def _attach_login(self, account, player, username, *, admin):
+    def _attach_login(self, account, player, username, *, admin, phone=None):
         user = User.objects.create_user(
             username=username, password=self.password, account=account)
         user.email = f"{username}@cupdemo.golf"
         user.is_account_admin = admin
+        if phone:
+            user.phone = phone
+            user.phone_verified_at = timezone.now()
         user.save()
         Token.objects.get_or_create(user=user)
         player.user = user
-        player.save(update_fields=['user'])
+        # Mirror the verified phone onto the Player so this golfer shows
+        # "On Halved" and the phone-OTP login resolves to this account.
+        if phone:
+            player.phone = phone
+        player.save(update_fields=['user', 'phone'] if phone else ['user'])
 
     def _print_summary(self, account, groups):
         self.stdout.write("")
@@ -246,7 +258,11 @@ class Command(BaseCommand):
         self.stdout.write(f"  Players      : {Player.objects.filter(account=account).count()}")
         self.stdout.write(f"  Foursomes    : {groups} (2v2 Triple Cup, tee times 8:00…)")
         self.stdout.write("")
-        self.stdout.write("  TD login (account name + username + password):")
+        self.stdout.write("  TD login — PHONE (the app's default flow):")
+        self.stdout.write(f"    phone {TD_PHONE}  (admin, verified)")
+        self.stdout.write("    Enter the phone on the login screen; in dev the OTP code")
+        self.stdout.write("    is returned as `debug_code` and logged to the server console.")
+        self.stdout.write("    Fallback — 'Sign in with a username instead':")
         self.stdout.write(f"    {account.name} / cuptd / {self.password}   (admin)")
         self.stdout.write("")
         self.stdout.write("  Test the tee-box flow:")
