@@ -145,7 +145,7 @@ class Command(BaseCommand):
         rnd = Round.objects.create(
             account=account, course=course, status='in_progress',
             active_games=[], tournament=tourn, round_number=1,
-            created_by=td_player, handicap_mode=HandicapMode.NET,
+            created_by=td_player, handicap_mode=HandicapMode.STROKES_OFF,
             net_percent=100, net_max_double_bogey=True,
         )
         rc = RyderCupRoundConfig.objects.create(
@@ -175,7 +175,7 @@ class Command(BaseCommand):
                 fs,
                 team1_ids=[r_pair[0].id, r_pair[1].id],
                 team2_ids=[b_pair[0].id, b_pair[1].id],
-                handicap_mode='net',
+                handicap_mode=HandicapMode.STROKES_OFF,
             )
             self.stdout.write(
                 f"  Group {g + 1} @ 8:{g * 10:02d} — "
