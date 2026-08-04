@@ -4126,8 +4126,12 @@ class FoursomeRemovePlayerView(APIView):
             if errors:
                 transaction.savepoint_rollback(sid)
                 return Response(
-                    {'detail': 'Removing this player would break the donor '
-                               'pool for another group.',
+                    {'detail': 'No donor scores are available. A group playing '
+                               'a man short takes its phantom partner’s scores '
+                               'from a full group teeing off ahead of it, and '
+                               'this change would leave a short group without '
+                               'one. Swap the short group to a later tee '
+                               'position, then remove the player.',
                      'errors': errors},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -4441,8 +4445,12 @@ class FoursomeSwapPositionView(APIView):
             if errors:
                 transaction.savepoint_rollback(sid)
                 return Response(
-                    {'detail': 'Swapping positions would break the '
-                               'donor pool for another group.',
+                    {'detail': 'This tee order leaves a short group with no '
+                               'donors. A group playing a man short takes its '
+                               'phantom partner’s scores from a full group '
+                               'teeing off ahead of it — this swap would put a '
+                               'short group with none ahead of it. Keep at '
+                               'least one full group teeing off first.',
                      'errors': errors},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -4709,8 +4717,12 @@ class RoundMovePlayerView(APIView):
             if errors:
                 transaction.savepoint_rollback(sid)
                 return Response(
-                    {'detail': 'Moving this player would break the donor '
-                               'pool for another group.',
+                    {'detail': 'No donor scores are available. A group playing '
+                               'a man short takes its phantom partner’s scores '
+                               'from a full group teeing off ahead of it, and '
+                               'this move would leave a short group without '
+                               'one. Keep at least one full group teeing off '
+                               'ahead of any short group.',
                      'errors': errors},
                     status=status.HTTP_400_BAD_REQUEST,
                 )

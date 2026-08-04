@@ -1032,7 +1032,8 @@ class _FoursomeCard extends StatelessWidget {
       builder: (ctx) {
         final theme = Theme.of(ctx);
         return SafeArea(
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1082,7 +1083,7 @@ class _FoursomeCard extends StatelessWidget {
                   )),
               const SizedBox(height: 8),
             ],
-          ),
+          )),
         );
       },
     );
@@ -1313,7 +1314,8 @@ class _FoursomeCard extends StatelessWidget {
       builder: (ctx) {
         final theme = Theme.of(ctx);
         return SafeArea(
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1348,7 +1350,7 @@ class _FoursomeCard extends StatelessWidget {
                   )),
               const SizedBox(height: 8),
             ],
-          ),
+          )),
         );
       },
     );
