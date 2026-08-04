@@ -1053,6 +1053,15 @@ class _FoursomeCard extends StatelessWidget {
                       style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant),
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'If this group tees off first, there may be no earlier '
+                      'group to feed the phantom — swap it to a later tee '
+                      'position first, then remove.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic),
+                    ),
                   ],
                 ),
               ),
@@ -1696,6 +1705,57 @@ class _FoursomeCard extends StatelessWidget {
                                 : theme.colorScheme.onSurfaceVariant),
                         const SizedBox(width: 12),
                         const Flexible(child: Text('Set starting hole')),
+                      ]),
+                    ),
+                ],
+              ),
+            ],
+            // Cup rounds hide the menu above (games are wizard-fixed), but the
+            // TD still needs tee-box roster tools for a Triple Cup event: pull
+            // a no-show (→ 3-handed with a phantom standing in on their team)
+            // and, when an early group has no full group teeing off ahead of it
+            // to donate phantom scores, swap it to a later tee position first.
+            if (canManage && !isComplete && isCupRound) ...[
+              const Spacer(),
+              PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.more_vert,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                tooltip: 'Tournament director actions',
+                padding: EdgeInsets.zero,
+                onSelected: (action) {
+                  switch (action) {
+                    case 'remove_noshow':
+                      _showRemovePlayerSheet(context);
+                      break;
+                    case 'swap_position':
+                      _showSwapPositionSheet(context);
+                      break;
+                  }
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'remove_noshow',
+                    child: Row(children: [
+                      Icon(Icons.person_remove_outlined, size: 18,
+                          color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 12),
+                      const Flexible(child: Text('Remove no-show')),
+                    ]),
+                  ),
+                  // Tee-position swap — the recovery when an early short group
+                  // has no full group ahead of it to feed phantom scores.
+                  // Only meaningful with more than one group.
+                  if (allFoursomes.length > 1)
+                    PopupMenuItem(
+                      value: 'swap_position',
+                      child: Row(children: [
+                        Icon(Icons.swap_horiz, size: 18,
+                            color: theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 12),
+                        const Flexible(child: Text('Swap tee position')),
                       ]),
                     ),
                 ],

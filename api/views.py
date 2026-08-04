@@ -4170,6 +4170,15 @@ class FoursomeRemovePlayerView(APIView):
                 team2_ids = [pid for pid in team2_ids if pid != player_id]
                 reconfigure_triple_cup(foursome, team1_ids, team2_ids)
 
+            # Refresh every derived summary against the new roster: the
+            # Triple Cup match results and, on a cup round, the cup-level
+            # RyderCupMatchPoints (calculate_ryder_cup_points wipes and
+            # rebuilds them, self-healing a 4→3 match-count change).  Mirrors
+            # WithdrawPlayerView; without it the cup scoreboard keeps the
+            # pre-removal point rows.  Idempotent and a no-op for whatever
+            # isn't active, so it's safe to call unconditionally.
+            _recalculate_games(foursome)
+
         # Return a compact response — mobile re-fetches the round +
         # leaderboard separately rather than parsing a giant payload here.
         return Response({
