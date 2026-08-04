@@ -14,6 +14,24 @@ and put the demo phone + code in the **Sign-In Information** fields.
 > `+13105550101` = reviewer (admin); `+13105550102` = reviewer_delete (for the
 > deletion check). Both are fictional NANP 555-01xx numbers — **no real SMS is
 > sent**; the backend accepts the fixed code for these numbers only.
+>
+> ### How to run `seed_demo` against prod (start here — this bit is fiddly)
+> Railway's Postgres has an internal-only host, so `railway run`/`railway ssh`
+> from a laptop can't reach the DB. Run it **inside the app container**:
+> 1. Railway dashboard → open the **"Golf App"** service (NOT Postgres — a
+>    Postgres shell has `psql` but no Python/Django) → its **Terminal/Shell**.
+> 2. The interactive shell doesn't have the virtualenv on PATH, so `python`
+>    fails with `No module named 'django'`. The venv lives at **`/opt/venv`**:
+>    ```bash
+>    cd /app
+>    /opt/venv/bin/python manage.py seed_demo --reset
+>    ```
+>    (If the venv path ever moves, find it with:
+>    `find / -path '*/site-packages/django/__init__.py' 2>/dev/null | head`
+>    → the venv root is everything before `/lib/`.)
+> 3. Verify: expect `DemoClub seeded successfully`, 12 players, 7 rounds. Then
+>    confirm the bypass env is live in the same shell:
+>    `echo "phone=$REVIEW_BYPASS_PHONE code=$REVIEW_BYPASS_CODE"`
 
 ---
 
@@ -40,8 +58,8 @@ to receive an SMS:
    players, courses, rounds, and tournaments.
 
 WHAT YOU CAN TRY:
-- Open a casual round from "Casual Rounds" and tap in to see the scorecard and
-  the live Leaderboard.
+- Open a round from "Rounds" and tap in to see the scorecard and the live
+  Leaderboard.
 - Tap "Start your first round" (drawer) to see the guided setup wizard.
 - Open a tournament from "Tournaments" for multi-foursome standings.
 
@@ -49,7 +67,7 @@ NEW IN THIS VERSION (optional):
 - Las Vegas: start a casual round with 4 players and pick "Las Vegas" — the
   Leaderboard shows each 2-player side's running total and a hole-by-hole grid.
 - Follow friends: the demo account is added to another group's rounds, so the
-  Casual Rounds / Tournaments lists show entries flagged "Observing" (watch-only,
+  Rounds / Tournaments lists show entries flagged "Observing" (watch-only,
   eye icon) alongside rounds you play in. Tapping an "Observing" round opens a
   read-only leaderboard + scorecard.
 - Course search: in round setup, tap the course field and type "Corica" to find
@@ -74,7 +92,7 @@ that lookup). Privacy policy: https://halved.golf/privacy
       on Railway (deployed).
 - [ ] `seed_demo --reset` run against **prod** (so the two numbers map to users).
 - [ ] `PASSWORD_LOGIN_ENABLED` left unset/false — password login stays off.
-- [ ] iOS build is 2.1.0 (2.1.0+5); privacy-policy URL set in App Store Connect.
+- [ ] iOS build is 2.5.1 (2.5.1+19); privacy-policy URL set in App Store Connect.
 - [ ] Force-upgrade: ensure Railway `CLIENT_MIN_VERSION=2.1.0` (or clear the env
       so the 2.1.0 code default applies). Safe to set now — 2.0.0 only gets a
       soft update nag, and 2.1.0+ is hard-blocked below this (no dismiss).

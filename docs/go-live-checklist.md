@@ -32,11 +32,15 @@ Order matters: **backend first**, then mobile.
 - [ ] Rollback path if needed: set `OTP_BACKEND=local` and redeploy.
 
 ## 3. Demo data for the App Store reviewer
-- [ ] Run `seed_demo` against **prod** (the reviewer's app talks to prod):
-      `python manage.py seed_demo --reset` (deterministic rebuild).
-- [ ] Reviewer uses **password login** (Apple can't receive your SMS OTP) — keep
-      the `PasswordLoginScreen` path and put the demo credentials in App Store
-      Connect → review notes. Default password `HalvedDemo2026` (or `--password`).
+- [ ] Run `seed_demo --reset` against **prod** (the reviewer's app talks to prod).
+      Password login is OFF in prod, so this MUST be run inside the app container:
+      Railway → **"Golf App"** service (NOT Postgres) → Terminal, then
+      `cd /app && /opt/venv/bin/python manage.py seed_demo --reset`
+      (the interactive shell lacks the venv on PATH — `/opt/venv` is it).
+- [ ] Reviewer signs in via the **phone screen + OTP bypass** — NOT password.
+      Set `REVIEW_BYPASS_PHONE`/`REVIEW_BYPASS_CODE` on Railway and put the demo
+      phone + code in App Store Connect. Full procedure + copy:
+      `docs/app-store-review-notes.md`.
 
 ## 4. Version / force-update lever (already staged — do NOT pull yet)
 - [ ] Leave `CLIENT_MIN_VERSION = 1.1.0` (Railway env unset = default). 1.x apps
