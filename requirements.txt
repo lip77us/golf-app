@@ -1,4 +1,7 @@
-django>=6.0.4,<7.0.0
+# Cap <6.1: Django 6.1 removed django.utils.cache.cc_delim_re, which DRF (through
+# 3.17.2, the latest) still imports at module load — so 6.1 crashes on boot.
+# Lift the cap once a DRF release supports Django 6.1. Keep this in sync with pyproject.toml.
+django>=6.0.4,<6.1
 psycopg2-binary>=2.9.11,<3.0.0
 djangorestframework>=3.17.1,<4.0.0
 gunicorn>=21.2.0,<22.0.0
