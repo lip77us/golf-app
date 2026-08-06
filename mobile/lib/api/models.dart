@@ -3091,6 +3091,12 @@ class RabbitHoleEntry {
   final String name;
   final int?   netScore;
   final int?   gross;
+  /// Handicap strokes received on this hole, per the engine's ACTUAL allocation
+  /// (per-segment for a segmented strokes-off game) — defined for unscored holes
+  /// too, so the stroke dots stay stable across the round.  Null only from a
+  /// legacy server that predates the field (caller falls back to gross − net /
+  /// a client estimate).
+  final int?   strokes;
   final bool   isWinner;
   final bool   isHolder;
 
@@ -3100,6 +3106,7 @@ class RabbitHoleEntry {
     required this.name,
     required this.netScore,
     required this.gross,
+    required this.strokes,
     required this.isWinner,
     required this.isHolder,
   });
@@ -3110,6 +3117,7 @@ class RabbitHoleEntry {
         name:      j['name']       as String? ?? '',
         netScore:  j['net_score']  as int?,
         gross:     j['gross']      as int?,
+        strokes:   j['strokes']    as int?,
         isWinner:  j['is_winner']  as bool? ?? false,
         isHolder:  j['is_holder']  as bool? ?? false,
       );

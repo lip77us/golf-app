@@ -37,17 +37,22 @@ String _fmtMoney(double v) {
   return '$sign\$${v.abs().toStringAsFixed(2)}';
 }
 
-/// Handicap strokes a player took on a hole, read straight from the Rabbit
-/// summary (gross − net).  This is the ONLY allocation-faithful source: a
-/// per-segment strokes-off game spreads strokes differently on the standard
-/// legs vs. the (full-round) extra legs, so a client-side re-derivation would
-/// disagree with what the engine actually scored — which is exactly the bug
-/// where a dot went missing on an extra hole.  Returns null when the hole isn't
-/// scored in the summary yet (the caller falls back to a live estimate).
+/// Handicap strokes a player receives on a hole, read straight from the Rabbit
+/// summary.  This is the ONLY allocation-faithful source: a per-segment
+/// strokes-off game spreads strokes differently on the standard legs vs. the
+/// (full-round) extra legs, so a client-side re-derivation would disagree with
+/// what the engine actually scored.
+///
+/// Prefers the engine's explicit per-hole `strokes` allocation, which is
+/// defined for EVERY hole (scored or not) — so the dots don't snap from a
+/// full-round estimate to the per-segment truth as each hole is scored.  Falls
+/// back to gross − net for a legacy server that predates the field (scored
+/// holes only), then null so the caller's live estimate kicks in.
 int? _summaryStrokes(RabbitHole? hole, int playerId) {
   if (hole == null) return null;
   for (final e in hole.entries) {
     if (e.playerId != playerId) continue;
+    if (e.strokes != null) return e.strokes!.clamp(0, 9);
     final g = e.gross, net = e.netScore;
     if (g != null && net != null) return (g - net).clamp(0, 9);
     return null;

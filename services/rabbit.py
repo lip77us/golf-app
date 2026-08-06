@@ -42,7 +42,7 @@ from core.models import HandicapMode, MatchStatus
 from games.models import RabbitGame, RabbitHoleResult
 from services.points_531 import _build_so_score_index
 from services.hole_plan import play_order, segment as _hole_segment
-from scoring.handicap import build_score_index
+from scoring.handicap import build_score_index, _effective_hcp, _strokes_on_hole
 from scoring.models import HoleScore
 
 
@@ -200,6 +200,94 @@ def _build_dynamic_so_index(foursome, segments, num_segments, net_percent) -> di
                 if h in fu:
                     per[h] = fu[h]
     return idx
+
+
+def _alloc_by_hole(game, foursome, segments, order) -> dict:
+    """{pid: {hole: strokes}} — handicap strokes each real player receives on
+    EVERY hole in play, per the game's actual allocation.
+
+    This mirrors the reductions the scoring index builders bake into net_score,
+    but is defined for UNSCORED holes too.  gross − net can only report a stroke
+    once a hole is scored, so the play-screen / "Rabbit by hole" dots used to
+    fall back to a FULL-ROUND client estimate on unscored holes — which for a
+    per-segment strokes-off game (e.g. 10 strokes spread 4·3·3 over three 6-hole
+    legs) disagrees with the per-segment truth and makes dots snap around as each
+    hole is scored.  Emitting the real allocation up front keeps them stable.
+
+    Kept deliberately parallel to `_build_rabbit_so_seg_index` /
+    `_build_dynamic_so_index` (same split + hardest-hole-within-leg rule); the
+    test suite asserts strokes == gross − net on scored holes so the two can't
+    drift.
+    """
+    memberships = [m for m in _real_members(foursome) if m.tee_id is not None]
+    alloc = {m.player_id: {} for m in memberships}
+    mode = game.handicap_mode
+    if mode == HandicapMode.GROSS:
+        return alloc
+
+    npct = game.net_percent or 100
+
+    def si(m, h):
+        return m.tee.hole(h).get('stroke_index', 18)
+
+    if mode == HandicapMode.NET:
+        for m in memberships:
+            eff = _effective_hcp(m.playing_handicap or 0, npct)
+            if eff <= 0:
+                continue
+            per = alloc[m.player_id]
+            for h in order:
+                s = _strokes_on_hole(eff, si(m, h))
+                if s:
+                    per[h] = s
+        return alloc
+
+    # ── Strokes-Off ──────────────────────────────────────────────────────────
+    phcps = [m.playing_handicap for m in memberships
+             if m.playing_handicap is not None]
+    low = min(phcps) if phcps else 0
+
+    per_seg    = game.handicap_allocation == RabbitGame.ALLOC_PER_SEGMENT
+    dynamic    = bool(game.extra_rabbits) and bool(game.accumulate)
+    std_legs   = [s['holes'] for s in segments if not s['is_extra']]
+    extra_legs = [s['holes'] for s in segments if s['is_extra']]
+    # Dynamic spreads over the configured num_segments (extras get full-round);
+    # the fixed path spreads over its actual segment list.
+    nseg = max(1, game.num_segments) if dynamic else max(1, len(std_legs))
+
+    for m in memberships:
+        so = round(max(0, (m.playing_handicap or 0) - low) * npct / 100)
+        if so <= 0:
+            continue
+        per = alloc[m.player_id]
+
+        # Full-round when the allocation isn't per-segment, or there's only one
+        # standard leg (a single 18-hole match is identical either way).
+        if not per_seg or (not dynamic and len(std_legs) <= 1):
+            for h in order:
+                s = _strokes_on_hole(so, si(m, h))
+                if s:
+                    per[h] = s
+            continue
+
+        # Per-segment: split across the standard legs, hardest holes within each
+        # (wrapping if a leg's share exceeds its hole count).
+        base, rem = divmod(so, nseg)
+        for j, holes in enumerate(std_legs):
+            share = base + (1 if j < rem else 0)
+            if share <= 0 or not holes:
+                continue
+            ranked = sorted(holes, key=lambda h: si(m, h))
+            for k in range(share):
+                h = ranked[k % len(ranked)]
+                per[h] = per.get(h, 0) + 1
+        # Extra legs (dynamic only) adopt the full-round allocation.
+        for holes in extra_legs:
+            for h in holes:
+                s = _strokes_on_hole(so, si(m, h))
+                if s:
+                    per[h] = s
+    return alloc
 
 
 def _same_scored(a: dict, b: dict, real_ids) -> bool:
@@ -497,6 +585,9 @@ def rabbit_summary(foursome) -> dict:
         game, foursome, score_index, real_ids, bet_unit)
     score_index = net_index
     seg_of      = {h: s['index'] for s in segments for h in s['holes']}
+    # Authoritative per-hole stroke allocation (every hole, scored or not) so the
+    # mobile dots don't estimate a full-round spread on unscored holes.
+    alloc = _alloc_by_hole(game, foursome, segments, order)
 
     # Each leg (standard or extra) is its own Sixes-style match worth `value`
     # (bet_unit, or bet_unit/2 for a single-hole extra); the holder at the leg's
@@ -549,6 +640,7 @@ def rabbit_summary(foursome) -> dict:
                 'name'      : by_pid[pid].name,
                 'net_score' : net,
                 'gross'     : gross_index.get(pid, {}).get(hole),
+                'strokes'   : alloc.get(pid, {}).get(hole, 0),
                 'is_winner' : bool(r and r.winner_id == pid),
                 'is_holder' : bool(r and r.holder_id == pid),
             })

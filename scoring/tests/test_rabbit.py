@@ -55,6 +55,62 @@ class RabbitTests(TestCase):
         g = setup_rabbit(self.fs, handicap_mode='strokes_off', num_segments=3)
         assert g.handicap_allocation == 'per_segment'
 
+    def _cal_so9(self):
+        """Foursome where Cal gets SO=9 — splits 3·3·3 across the three 6-hole
+        legs, but a FULL-ROUND spread over the test tee is 4·3·2 (last leg
+        shorted a stroke).  Returns (fs, pid)."""
+        rnd = make_round(self.tee.course)
+        rnd.bet_unit = 6
+        rnd.save(update_fields=['bet_unit'])
+        fs = make_foursome(
+            rnd, [('Ann', 0), ('Ben', 0), ('Cal', 9)], tee=self.tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        return fs, pid
+
+    def _cal_seg_strokes(self, summary, pid):
+        def cal(hole):
+            h = next(x for x in summary['holes'] if x['hole'] == hole)
+            e = next(x for x in h['entries'] if x['player_id'] == pid['Cal'])
+            return e['strokes']
+        return [sum(cal(h) for h in seg)
+                for seg in (range(1, 7), range(7, 13), range(13, 19))]
+
+    def test_per_segment_strokes_stable_on_unscored_holes(self):
+        # Regression: the play-screen / "Rabbit by hole" stroke dots estimated a
+        # FULL-ROUND spread on UNSCORED holes and only switched to the
+        # per-segment truth once a hole was scored — so a segmented
+        # strokes-off game's dots visibly moved mid-round, and the last leg read
+        # 2 strokes instead of 3.  The summary must report the per-segment
+        # allocation (3·3·3) on every hole up front, scored or not.
+        fs, pid = self._cal_so9()
+        setup_rabbit(fs, handicap_mode='strokes_off', num_segments=3,
+                     handicap_allocation='per_segment')
+        # Only hole 1 is scored — the last two legs are untouched.
+        submit_hole(fs, 1, [(pid['Ann'], 4), (pid['Ben'], 4), (pid['Cal'], 5)])
+        calculate_rabbit(fs)
+        s = rabbit_summary(fs)
+        assert self._cal_seg_strokes(s, pid) == [3, 3, 3], \
+            self._cal_seg_strokes(s, pid)
+
+    def test_strokes_field_matches_gross_minus_net_on_scored_holes(self):
+        # The advertised allocation must equal what the engine actually scored,
+        # so the display value and the settlement can't drift.
+        fs, pid = self._cal_so9()
+        setup_rabbit(fs, handicap_mode='strokes_off', num_segments=3,
+                     handicap_allocation='per_segment')
+        for h in range(1, 19):
+            submit_hole(fs, h, [(pid['Ann'], 4), (pid['Ben'], 4),
+                                (pid['Cal'], 5)])
+        calculate_rabbit(fs)
+        s = rabbit_summary(fs)
+        for h in s['holes']:
+            for e in h['entries']:
+                if e['gross'] is not None and e['net_score'] is not None:
+                    assert e['strokes'] == e['gross'] - e['net_score'], \
+                        (h['hole'], e)
+        assert self._cal_seg_strokes(s, pid) == [3, 3, 3]
+
     # ── Extra rabbits (accumulate-only, Sixes-style early lock) ───────────────
 
     def _abc(self):
@@ -167,6 +223,21 @@ class RabbitTests(TestCase):
         # SI 3/7/9 = holes 2/1/4 (stroke → net 5); hole 3 (SI 15) gets none.
         assert net(4, C) == 5
         assert net(3, C) == 6
+
+        # The advertised per-hole `strokes` must track the engine (gross − net)
+        # even after early locks reshuffled the legs — i.e. it is recalculated
+        # across the SHIFTED hole set, not the fixed 1-6/7-12/13-18 ranges.
+        def strokes(hole, player_id):
+            h = next(x for x in s['holes'] if x['hole'] == hole)
+            return next(e['strokes'] for e in h['entries']
+                        if e['player_id'] == player_id)
+        for h in s['holes']:
+            for e in h['entries']:
+                if e['gross'] is not None and e['net_score'] is not None:
+                    assert e['strokes'] == e['gross'] - e['net_score'], \
+                        (h['hole'], e)
+        assert strokes(14, C) == 1 and strokes(13, C) == 0   # extra leg full-round
+        assert strokes(4, C) == 1 and strokes(3, C) == 0     # std leg 1 re-spread
 
     def test_extra_rabbits_forced_off_in_stop_mode(self):
         g = setup_rabbit(self.fs, handicap_mode='gross', accumulate=False,
