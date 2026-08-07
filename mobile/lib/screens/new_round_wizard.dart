@@ -1238,6 +1238,17 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           hasAnyTournamentGame      : _tournamentActiveGames.isNotEmpty,
         );
       case _StepKind.review:
+        if (_isCupTournament) {
+          return _StepCupReview(
+            cupName       : _nameCtrl.text.trim(),
+            handicapMode  : _handicapMode,
+            netPercent    : _netPercent,
+            sideGame      : _tournamentSideGame,
+            teams         : _cupReviewTeams(),
+            rounds        : _cupReviewRounds(),
+            createError   : _createError,
+          );
+        }
         return _Step5Review(
           createNew            : _createNewTournament,
           tournamentName       : _createNewTournament
@@ -1256,6 +1267,50 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           createError          : _createError,
         );
     }
+  }
+
+  /// Team summaries for the cup review: name, badge and colour per team.
+  List<({String name, String badge, String colour})> _cupReviewTeams() => [
+        for (int i = 0; i < _cupTeamCount; i++)
+          (
+            name  : _effectiveTeamName(i),
+            badge : _effectiveTeamBadge(i),
+            colour: i < _cupTeamColours.length ? _cupTeamColours[i] : 'Red',
+          ),
+      ];
+
+  /// Round summaries for the cup review: label, course, date and cup game(s).
+  List<({String label, String course, DateTime date, String game})>
+      _cupReviewRounds() {
+    final courseMap = {for (final c in _courses) c.id: c};
+    final labels = {
+      for (final g in kGameCatalog) g.id: g.displayName,
+      for (final (v, l) in kChampionshipGames) v: l,
+    };
+    String gameFor(int roundIdx) {
+      final games = (_roundCupGames[roundIdx] ?? [])
+          .where((g) => g != _tournamentSideGame)
+          .map((g) => labels[g] ?? g)
+          .toList();
+      return games.isEmpty ? 'Not set' : games.join(' · ');
+    }
+    return [
+      (
+        label : 'R1',
+        course: _selectedCourse?.name ?? 'Not set',
+        date  : _date,
+        game  : gameFor(0),
+      ),
+      for (int i = 0; i < _additionalRounds.length; i++)
+        (
+          label : 'R${i + 2}',
+          course: courseMap[_additionalRounds[i].courseId ?? _selectedCourseId]
+                      ?.name ??
+                  'Not set',
+          date  : _additionalRounds[i].date,
+          game  : gameFor(i + 1),
+        ),
+    ];
   }
 }
 
@@ -1320,8 +1375,8 @@ class _BottomBar extends StatelessWidget {
                       width: 16, height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2,
                           color: Colors.white))
-                  : Icon(isCupTournament ? Icons.emoji_events : Icons.flag),
-              label: Text(isCupTournament ? 'Save Tournament' : 'Create Round'),
+                  : Icon(isCupTournament ? Icons.arrow_forward : Icons.flag),
+              label: Text(isCupTournament ? 'Save & draft teams' : 'Create Round'),
             )
           else
             FilledButton(
@@ -2796,28 +2851,38 @@ class _StepTeamsState extends State<_StepTeams> {
           const SizedBox(width: 9),
           SizedBox(
             width: 66,
-            child: TextField(
-              controller: widget.badgeCtrls[i],
-              maxLength: 2,
-              textAlign: TextAlign.center,
-              textCapitalization: TextCapitalization.characters,
-              onChanged: (v) => setState(() {
-                widget.badgeOwned[i] = v.trim().isNotEmpty;
-                final up = v.toUpperCase();
-                if (up != v) {
-                  widget.badgeCtrls[i].value = TextEditingValue(
-                    text: up,
-                    selection: TextSelection.collapsed(offset: up.length),
-                  );
-                }
-              }),
-              decoration: const InputDecoration(
-                labelText: 'Badge',
-                counterText: '',
-                isDense: true,
-                border: OutlineInputBorder(),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: widget.badgeCtrls[i],
+                maxLength: 2,
+                textAlign: TextAlign.center,
+                textCapitalization: TextCapitalization.characters,
+                onChanged: (v) => setState(() {
+                  widget.badgeOwned[i] = v.trim().isNotEmpty;
+                  final up = v.toUpperCase();
+                  if (up != v) {
+                    widget.badgeCtrls[i].value = TextEditingValue(
+                      text: up,
+                      selection: TextSelection.collapsed(offset: up.length),
+                    );
+                  }
+                }),
+                decoration: const InputDecoration(
+                  counterText: '',
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
+              const SizedBox(height: 4),
+              Text('BADGE',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      fontSize: 9.5)),
+            ]),
           ),
         ]),
         const SizedBox(height: 6),
@@ -3958,6 +4023,356 @@ class _Step4GamesState extends State<_Step4Games> {
 // ===========================================================================
 // Step 5 — Review
 // ===========================================================================
+
+// ===========================================================================
+// Step (Cup) — Review & save
+// ===========================================================================
+
+class _StepCupReview extends StatelessWidget {
+  final String cupName;
+  final String handicapMode;
+  final int    netPercent;
+  final String sideGame;
+  final List<({String name, String badge, String colour})> teams;
+  final List<({String label, String course, DateTime date, String game})> rounds;
+  final String? createError;
+
+  const _StepCupReview({
+    required this.cupName,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.sideGame,
+    required this.teams,
+    required this.rounds,
+    this.createError,
+  });
+
+  static const _cardBorder  = Color(0xFFD3DED6);
+  static const _warnBg      = Color(0xFFFDF3E7);
+  static const _warnBorder  = Color(0xFFF0DCBE);
+  static const _warnFg      = Color(0xFF8A5216);
+  static const _pineChipBg  = Color(0xFFE4F2EA);
+  static const _brightMint  = Color(0xFF3BD89A);
+
+  Color _teamColour(String name) => _kCupColourChoices
+      .firstWhere((e) => e.$1.toLowerCase() == name.toLowerCase(),
+          orElse: () => _kCupColourChoices.first)
+      .$2;
+
+  String get _handicapShort {
+    switch (handicapMode) {
+      case 'gross':       return 'Gross';
+      case 'strokes_off': return 'Strokes off low';
+      default:            return netPercent < 100 ? 'Net $netPercent%' : 'Net';
+    }
+  }
+
+  String get _sideGameLabel {
+    switch (sideGame) {
+      case 'irish_rumble': return 'Irish Rumble';
+      case 'pink_ball':    return 'Pink Ball';
+      default:             return 'None';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return _pinnedStep(
+      context,
+      title: 'Review',
+      subtitle: 'Check the cup over, then save it. The draft and one group '
+          'build per round come next.',
+      children: [
+        // ── Cup card ──
+        _card(children: [
+          Text(cupName.isEmpty ? 'Untitled cup' : cupName,
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          Text('Team (Cup) Play · ${_handicapShort.toLowerCase()}',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+          const SizedBox(height: 12),
+          Row(children: [
+            for (int i = 0; i < teams.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(child: _teamPill(context, teams[i])),
+            ],
+          ]),
+        ]),
+        // ── Rounds ──
+        _sectionCard(context, 'Rounds', [
+          for (int i = 0; i < rounds.length; i++)
+            _roundRow(context, rounds[i], i > 0),
+        ]),
+        // ── Players todo (warns, doesn't block) ──
+        _todoRow(context),
+        // ── Scoring ──
+        _sectionCard(context, 'Scoring', [
+          _kv(context, 'Handicap', _handicapShort,
+              sub: handicapMode == 'strokes_off'
+                  ? 'Every golfer plays off the lowest index in the group'
+                  : null,
+              first: true),
+          _kv(context, 'Side game', _sideGameLabel),
+        ]),
+        // ── What happens after saving ──
+        _sectionCard(context, 'What happens after saving', [
+          _nextRow(context, 1, 'Draft the teams',
+              'Add players to each side, then lock the draft.', first: true),
+          _nextRow(context, 2, 'Build the groups',
+              'One screen per group — golfers, tees and tee time. Repeats for each round.'),
+          _nextRow(context, 3, 'Start Round 1',
+              'Scoring opens once a group has its four.'),
+        ]),
+        const SizedBox(height: 4),
+        Row(children: [
+          Container(
+            width: 16,
+            height: 16,
+            alignment: Alignment.center,
+            decoration:
+                const BoxDecoration(color: _brightMint, shape: BoxShape.circle),
+            child: const Icon(Icons.check, size: 11, color: Color(0xFF08301F)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('Everything here stays editable until Round 1 starts.',
+                style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+          ),
+        ]),
+        if (createError != null) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.errorContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              Icon(Icons.error_outline, color: theme.colorScheme.error),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: Text(createError!,
+                      style: TextStyle(
+                          color: theme.colorScheme.onErrorContainer))),
+            ]),
+          ),
+        ],
+        const SizedBox(height: 80),
+      ],
+    );
+  }
+
+  Widget _card({required List<Widget> children}) => Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 11),
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: _cardBorder),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      );
+
+  Widget _sectionCard(BuildContext context, String heading, List<Widget> rows) {
+    final theme = Theme.of(context);
+    return _card(children: [
+      Text(heading.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              fontSize: 11)),
+      const SizedBox(height: 8),
+      ...rows,
+    ]);
+  }
+
+  Widget _teamPill(BuildContext context, ({String name, String badge, String colour}) t) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+          color: const Color(0xFFF6F9F6), borderRadius: BorderRadius.circular(11)),
+      child: Row(children: [
+        Container(
+          constraints: const BoxConstraints(minWidth: 22),
+          height: 22,
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+              color: _teamColour(t.colour), borderRadius: BorderRadius.circular(7)),
+          child: Text(t.badge,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11.5)),
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(t.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            Text(t.colour,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontSize: 11.5)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _roundRow(BuildContext context,
+      ({String label, String course, DateTime date, String game}) r, bool border) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: border
+          ? const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFF1F5F1))))
+          : null,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+              color: _pineChipBg, borderRadius: BorderRadius.circular(9)),
+          child: Text(r.label,
+              style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(r.course,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(DateFormat('EEEE, MMMM d, yyyy').format(r.date),
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ]),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+              color: _pineChipBg, borderRadius: BorderRadius.circular(999)),
+          child: Text(r.game,
+              style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11)),
+        ),
+      ]),
+    );
+  }
+
+  Widget _todoRow(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: _warnBg,
+        border: Border.all(color: _warnBorder),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFB9791C)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('No players added yet',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600, color: _warnFg)),
+            const SizedBox(height: 1),
+            Text('You can save now and draft later, or add players before Round 1.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: const Color(0xFF9A6B24), height: 1.4)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _kv(BuildContext context, String k, String v, {String? sub, bool first = false}) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      decoration: first
+          ? null
+          : const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFF1F5F1)))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(
+            width: 96,
+            child: Text(k,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(v,
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            if (sub != null)
+              Text(sub,
+                  textAlign: TextAlign.right,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _nextRow(BuildContext context, int n, String title, String sub, {bool first = false}) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      decoration: first
+          ? null
+          : const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFF1F5F1)))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration:
+              const BoxDecoration(color: _pineChipBg, shape: BoxShape.circle),
+          child: Text('$n',
+              style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(sub,
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant, height: 1.4)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
 
 class _Step5Review extends StatelessWidget {
   final bool               createNew;
