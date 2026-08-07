@@ -1,0 +1,409 @@
+<!-- @dsCard group="Cup Flow" name="Group builder — one screen per group" subtitle="Players, tees and tee time in one step; tee time defaults to previous + 10; live composition check. Replaces screens 24–26" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Group builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--field:#DEE9E0;--warn:#8A5216;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.cost{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;color:var(--muted);line-height:1.7}
+.cost table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+.cost td{padding:2px 0}
+.cost td:last-child{text-align:right;color:var(--deepPine);font-weight:600}
+.cost .tot td{border-top:1px solid #E6EDE7;padding-top:4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16px}
+.appbar .stp{margin-left:auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.prog{height:3px;background:#DDE6DE}
+.prog i{display:block;height:100%;width:50%;background:var(--pine)}
+.body{padding:14px 16px 92px;overflow-y:auto;height:685px}
+.hrow{display:flex;align-items:baseline;gap:9px}
+.hrow h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:23px;margin:0}
+.hrow small{color:var(--muted);font-size:12.5px}
+p.sub{color:var(--muted);font-size:12.5px;margin:4px 0 14px}
+.c{background:var(--card);border:1px solid var(--cardBorder);border-radius:15px;padding:12px 13px 13px;margin-bottom:11px}
+.chd{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.chd h3{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0}
+.chd .setall{margin-left:auto;background:none;border:none;color:var(--pine);font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;padding:2px 0}
+.time{display:flex;align-items:center;gap:10px}
+.time .tv{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:26px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.time .ampm{font-size:13px;font-weight:600;color:var(--muted);margin-left:-4px}
+.stp2{display:flex;align-items:center;gap:2px;background:#F1F6F2;border-radius:11px;padding:3px;margin-left:auto;flex:none}
+.stp2 button{min-width:44px;height:34px;border:none;background:transparent;border-radius:8px;color:var(--pine);font:700 12.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.stp2 button:hover{background:#E1EBE4}
+.tnote{font-size:11.5px;color:#9AA8A0;margin-top:7px}
+.tnote.warn{color:var(--warn);font-weight:600;background:#FDF3E7;border-radius:8px;padding:6px 8px;margin-top:8px}
+.ivrow{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #F1F5F1;font-size:12.5px;color:var(--muted)}
+.ivrow small{font-size:11px;color:#9AA8A0;margin-left:auto;text-align:right}
+.iv{display:inline-flex;align-items:center;gap:6px;background:var(--field);border:none;border-radius:9px;padding:6px 9px;font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);cursor:pointer}
+.iv .cv{font-size:8px;color:var(--muted)}
+.modes{margin-left:auto;display:flex;gap:3px;background:#DFE8E1;border-radius:9px;padding:2px;flex:none}
+.modes button{border:none;background:transparent;border-radius:7px;padding:5px 10px;font:600 11.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.modes button svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.modes button.on{background:var(--card);color:var(--deepPine);box-shadow:0 1px 2px rgba(11,31,26,.1)}
+.modes button.lk{color:#9AA8A0}
+.modes button.lk.on{background:#EFE3D2;color:var(--warn)}
+.block{display:flex;align-items:flex-start;gap:9px;background:#FDF3E7;border:1px solid #F0DCBE;border-radius:12px;padding:10px 11px;margin-bottom:12px}
+.block svg{width:16px;height:16px;stroke:#B9791C;fill:none;stroke-width:1.9;stroke-linecap:round;flex:none;margin-top:1px}
+.block span{font-size:12px;line-height:1.5;color:var(--warn)}
+.block b{font-weight:700}
+.off{opacity:.4;pointer-events:none}
+.recov{font-size:11.5px;color:var(--muted);margin:-4px 0 12px}
+.recov b{color:var(--deepPine);font-weight:600}
+.mnote{font-size:11px;color:#9AA8A0;margin:2px 0 10px}
+.gall{font-size:12px;color:var(--muted);margin-left:auto;text-align:right;max-width:130px;line-height:1.3}
+.holerow{display:flex;align-items:center;gap:9px;margin-top:11px;padding-top:10px;border-top:1px solid #F1F5F1}
+.holerow .hl{font-size:12.5px;color:var(--muted);flex:1}
+.mi.tk{opacity:.45;cursor:not-allowed}
+.mi.tk:hover{background:none}
+.comp{display:flex;align-items:center;gap:7px;margin-bottom:9px;flex-wrap:wrap}
+.cc{display:flex;align-items:center;gap:6px;background:#F4F8F4;border-radius:999px;padding:5px 10px 5px 6px;font-size:12px;font-weight:600}
+.cc .chip{min-width:19px;height:19px;padding:0 3px;border-radius:6px;color:#fff;font:700 10.5px/19px "Spline Sans",system-ui,sans-serif;text-align:center}
+.cc .chip.a{background:var(--t1)}.cc .chip.b{background:var(--t2)}
+.vd{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border-radius:999px;padding:4px 9px}
+.vd.ok{color:#08301F;background:var(--brightMint)}
+.vd.no{color:var(--warn);background:#FDF3E7}
+.slot{display:flex;align-items:center;gap:9px;padding:9px 0}
+.slot+.slot{border-top:1px solid #F1F5F1}
+.slot .chip{min-width:22px;height:22px;padding:0 3px;border-radius:7px;color:#fff;font:700 11px/22px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.slot .chip.a{background:var(--t1)}.slot .chip.b{background:var(--t2)}
+.slot .who{flex:1;min-width:0}
+.slot .who b{display:block;font-weight:600;font-size:14.5px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot .who small{display:block;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;margin-top:1px}
+.tee{display:inline-flex;align-items:center;gap:6px;background:var(--field);border:none;border-radius:9px;padding:7px 9px;font:600 11.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);cursor:pointer;flex:none}
+.tee .cv{font-size:8px;color:var(--muted)}
+.rm{border:none;background:transparent;color:#9AA8A0;font-size:17px;line-height:1;cursor:pointer;padding:2px 3px;flex:none}
+.rm:hover{color:var(--warn)}
+.empty{display:flex;align-items:center;gap:9px;padding:11px 0;border-top:1px solid #F1F5F1;color:#9AA8A0;font-size:13px}
+.empty i{min-width:22px;height:22px;border-radius:7px;border:1.5px dashed #C3CFC6;flex:none}
+.phantom{margin-top:9px;background:#F4F8F4;border-radius:10px;padding:8px 10px;font-size:11.5px;color:var(--muted);line-height:1.45}
+.phantom b{color:var(--deepPine);font-weight:600}
+.opt{margin-left:auto;font-size:10.5px;font-weight:600;color:#9AA8A0}
+.bets{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 0}
+.bt{border:1.5px solid var(--cardBorder);background:var(--card);border-radius:999px;padding:8px 13px;font:600 13px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);cursor:pointer}
+.bt.on{border-color:var(--pine);background:#E4F2EA;color:var(--pine)}
+.bt.dis{opacity:.4;pointer-events:none}
+.pool .pr{display:flex;align-items:center;gap:9px;padding:9px 0;cursor:pointer}
+.pool .pr+.pr{border-top:1px solid #F1F5F1}
+.pool .pr .chip{min-width:22px;height:22px;padding:0 3px;border-radius:7px;color:#fff;font:700 11px/22px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.pool .pr .chip.a{background:var(--t1)}.pool .pr .chip.b{background:var(--t2)}
+.pool .pr .who{flex:1;min-width:0}
+.pool .pr .who b{display:block;font-weight:600;font-size:14px;line-height:1.2}
+.pool .pr .who small{display:block;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;margin-top:1px}
+.pool .pr .go{color:var(--pine);font-weight:700;font-size:19px;line-height:1;flex:none;padding:0 3px}
+.pool .pr.tk{opacity:.5;cursor:default}
+.pool .pr.tk .go{color:#9AA8A0;font-size:11.5px;font-weight:600}
+.pool .pr.full{opacity:.45;cursor:default}
+.pool .pr.full .go{color:#9AA8A0;font-size:11.5px;font-weight:600}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.bottom .back{width:96px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.bottom .next[disabled]{background:#C3D4C8;color:#7C8E83;cursor:not-allowed}
+.scrim{position:absolute;inset:0;background:rgba(11,31,26,.18);opacity:0;pointer-events:none;transition:opacity .16s}
+.scrim.on{opacity:1;pointer-events:auto}
+.menu{position:absolute;background:var(--card);border-radius:13px;box-shadow:0 18px 44px rgba(6,18,14,.3);overflow:hidden;display:none;z-index:6;width:282px}
+.menu.on{display:block}
+.mhd{padding:10px 14px 7px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);background:#F7FAF7}
+.mi{padding:11px 14px;font-size:13.5px;cursor:pointer;display:flex;gap:8px;align-items:baseline}
+.mi+.mi{border-top:1px solid #EEF3EE}
+.mi:hover{background:#F4F8F4}
+.mi.sel{background:#DDE4DE;font-weight:600}
+.mi .c{font-weight:600;flex:none}
+.mi .d{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Group builder</h1>
+<p>Building one group currently takes three screens &mdash; pick the players, set four tees, set a tee time &mdash; and you walk all three again for every group. This is one screen, repeated once per group, and it is the same screen for every tournament type.</p>
+<div class="cost"><table>
+<tr><td>Shipped: screens per group</td><td>3</td></tr>
+<tr><td>Groups in a 16-player cup</td><td>&times; 4</td></tr>
+<tr class="tot"><td>Screens walked per round</td><td>12</td></tr>
+<tr><td>This screen, per group</td><td>1</td></tr>
+<tr class="tot"><td><b>Screens walked per round</b></td><td><b>4</b></td></tr>
+</table></div>
+<h3>What the merge buys</h3>
+<ul>
+<li><b>Tee time is proposed, not asked.</b> It defaults to one <b>tee interval</b> after the previous group &mdash; the answer in almost every case &mdash; with &plusmn;5 to adjust. A clock dial for a value that is always <i>previous + interval</i> is the most work for the most predictable input.</li>
+<li><b>The interval is a course property, not a constant.</b> Seven, eight and nine minutes are all common; a hardcoded ten just moves the work into the stepper. It is set once, remembered for the course, and every later group follows it.</li>
+<li><b>Shotgun is the same card, not another screen.</b> Start format is a round setting, so the toggle carries a note saying so. In shotgun the time collapses to one value for the whole field and the per-group question becomes <b>which hole</b> &mdash; suggested by group number, with holes already assigned shown as taken.</li>
+<li><b>Triple Cup is sequential only, by rule.</b> Its segments are defined by hole &mdash; Fourball 1&ndash;6, Foursomes 7&ndash;12, Singles 13&ndash;18 &mdash; so a shotgun would hand each group a different split and change the balance of the cup. Rather than warn after the fact, the toggle shows shotgun as unavailable and says why. Stroke play, skins and singles rounds can use it.</li>
+<li><b>Tees live next to the golfers</b>, so a mixed group is visible while you build it, and <b>Set all</b> handles the common case of one tee for the group. The shipped dropdown covers the very row it belongs to.</li>
+<li><b>Composition is checked as you go</b>, and cannot be broken: once a side has its two, that side&rsquo;s remaining golfers dim to <i>Team full</i>. Preventing 3 v 1 costs less than explaining it. The badge still names an over-filled side, for the case where a golfer&rsquo;s team changes after the group was built.</li>
+<li><b>All three legal shapes save.</b> Screen 24 already allows <b>2 v 2</b>, <b>1 v 2</b> with a phantom filling the solo side, and <b>1 v 1</b> as an 18-hole Nassau &mdash; so a four-seat requirement would reject a legal group. Below four, the remaining seats read <i>Optional</i> and the card states what the shape means rather than leaving the captain to remember.</li>
+<li><b>The pool shows who is spoken for.</b> Golfers already in Group 1 stay visible and dimmed with their group named, so &ldquo;where did Webb go&rdquo; is answerable without leaving.</li>
+<li><b>Index is shown everywhere a golfer is picked.</b> Add players shows it, Set matches does not &mdash; and the index is the reason you would pair two people.</li>
+</ul>
+<h3>Side games are not the TD&rsquo;s business</h3>
+<p>An earlier pass put a <b>group bet</b> control on this card &mdash; skins, Nassau, rabbit, per group. Removed. A wager inside a foursome is between those four people, and nothing about it needs a tournament director&rsquo;s hand: he is not in it, does not collect it, and cannot be asked to remember it while seating sixteen golfers.</p>
+<ul>
+<li><b>The foursome starts its own.</b> There is already a mechanism for a group to open a side game and attach it to their tournament entry &mdash; the same one multi-group skins will use. This screen should not duplicate it, and a TD-facing control would make the captain the owner of a decision that is not his.</li>
+<li><b>What stays here is what only the TD can set:</b> who is in the group, which tee each golfer plays, when they go out, and whether the field is sequential or shotgun. Those are field-management facts. A bet is not.</li>
+<li><b>The wizard&rsquo;s side-game step is a different thing</b> and still belongs there &mdash; <a href="cup-side-game.html">Irish Rumble or Pink Ball</a> is played by every foursome and ranked across the field, so somebody has to declare it once for everyone. That is the test: if it needs one answer for the whole field, it is the TD&rsquo;s; if it settles among four, it is theirs.</li>
+<li>The <b>cup match</b> in a 1 v 1 group is still not called a Nassau on this screen, even though it is one in structure &mdash; that word belongs to the group&rsquo;s own game.</li>
+</ul>
+<h3>Same screen, other tournament types</h3>
+<ul>
+<li><b>Stroke or Stableford:</b> the team chips and the <i>2 v 2</i> rule drop out; the check becomes a simple count of 2&ndash;4. Everything else is identical, which is what makes this worth building once.</li>
+<li><b>Odd fields:</b> a group of three is legal for stroke play and needs a phantom for cup play &mdash; the check is the right place to say so.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li><b>Shotgun breaks the segment-to-hole mapping</b> &mdash; settled by ruling it out for Triple Cup rather than by making segments relative to the starting hole. If a future format wants both, the leaderboard&rsquo;s &ldquo;Starts 13&rdquo; labels have to name each group&rsquo;s real hole.</li>
+<li><b>Double shotgun</b> &mdash; more than 18 groups needs 1A / 1B on the same hole. The picker is the right place for it; not drawn here.</li>
+<li>Whether to offer <b>auto-fill</b> &mdash; seed all groups by index and let the captain adjust. Faster for 16 players, but it hides the pairing decision, which is half the fun.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:31</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Round 1 &middot; Tilden Park GC</span><span class="stp">Group 2 of 4</span></div>
+<div class="prog"><i></i></div>
+<div class="body">
+<div class="hrow"><h2>Group 2</h2><small>Triple Cup &middot; 2 per team, or 1 v 2 / 1 v 1</small></div>
+<p class="sub" id="sub">Pick two to four golfers, confirm their tees, and set the tee time.</p>
+
+<div class="c">
+<div class="chd"><h3>Start</h3><span class="modes" id="modes"><button class="on" data-m="tee">Tee times</button><button class="lk" data-m="gun"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg>Shotgun</button></span></div>
+<div class="mnote" id="mnote">Round setting &mdash; applies to every group in Round 1.</div>
+<div id="pTee">
+<div class="time"><span class="tv" id="tv">9:10</span><span class="ampm">AM</span>
+<span class="stp2"><button data-d="-5">&minus;5 min</button><button data-d="5">+5 min</button></span>
+</div>
+<div class="tnote" id="tnote">10 minutes after Group 1 (9:00 AM)</div>
+<div class="ivrow">Interval <button class="iv" id="iv"><span id="ivv">10 min</span><span class="cv">&#9660;</span></button><small>Remembered for Tilden Park GC</small></div>
+</div>
+<div id="pGun" style="display:none">
+<div class="block"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h0M10.3 3.9 2.6 17.2A1.9 1.9 0 0 0 4.3 20h15.4a1.9 1.9 0 0 0 1.7-2.8L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg><span><b>Not available for Triple Cup.</b> Segments are counted by hole &mdash; Fourball 1&ndash;6, Foursomes 7&ndash;12, Singles 13&ndash;18 &mdash; so every group has to play the same holes in the same order. A shotgun would give each group a different segment split and change the balance of the cup. Available for stroke play, skins and singles rounds.</span></div>
+<div class="recov">Switch back to <b>Tee times</b> to save this group.</div>
+<div class="off">
+<div class="time"><span class="tv" id="gtv">9:00</span><span class="ampm">AM</span>
+<span class="stp2"><button data-gd="-5">&minus;5 min</button><button data-gd="5">+5 min</button></span>
+</div>
+<div class="tnote">Every group in Round 1 tees off at this time.</div>
+<div class="holerow">
+<span class="hl">Starting hole</span>
+<button class="iv" id="hb"><span id="hbv">Hole 2</span><span class="cv">&#9660;</span></button>
+</div>
+<div class="tnote" id="hnote">Suggested by group number. Group 1 starts hole 1.</div>
+</div>
+</div>
+</div>
+
+<div class="c">
+<div class="chd"><h3>Golfers</h3><button class="setall" id="setall">Set all tees</button></div>
+<div class="comp" id="comp"></div>
+<div id="slots"></div>
+</div>
+
+<div class="c pool">
+<div class="chd"><h3>Not yet in a group</h3></div>
+<div id="pool"></div>
+</div>
+
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next" id="save" disabled>Save group</button></div>
+<div class="scrim" id="scrim"></div>
+<div class="menu" id="menu"></div>
+</div>
+<script>
+var TEES=[{c:'White',y:5778,r:'69.0/122',p:70},{c:'Blue',y:6260,r:'71.2/125',p:70},{c:'Red',y:5438,r:'67.3/116',p:70},{c:'White - sixes',y:5778,r:'69.0/122',p:70}];
+var P=[
+ {n:'Connie Wong',x:29.4,t:'a',g:2,tee:'Red'},
+ {n:'Larry Sanders',x:16.2,t:'b',g:2,tee:'White'},
+ {n:'Cory Comer',x:17.1,t:'a',g:0,tee:'White'},
+ {n:'Marc Lajoie',x:11.4,t:'b',g:0,tee:'White'},
+ {n:'Dan Gabe',x:14.0,t:'a',g:0,tee:'White'},
+ {n:'Dale Kang',x:8.2,t:'a',g:0,tee:'White'},
+ {n:'Paul Lipkin',x:15.6,t:'b',g:0,tee:'White'},
+ {n:'Mark Cisneros',x:9.8,t:'b',g:0,tee:'White'},
+ {n:'Daniel Bucko',x:22.5,t:'a',g:1,tee:'White'},
+ {n:'David Webb',x:9.3,t:'a',g:1,tee:'White'},
+ {n:'Paul Miller',x:12.7,t:'b',g:1,tee:'White'},
+ {n:'Randy Malat',x:7.4,t:'b',g:1,tee:'White'}
+];
+var BADGE={a:'B',b:'M'},mins=550,gap=10,menu=document.getElementById('menu'),scrim=document.getElementById('scrim'),open=null;
+var GAPS=[7,8,9,10,12,15],TAKEN=[1],hole=2,mode='tee';
+function openHoles(btn){
+  var s='<div class="mhd">Starting hole &middot; shotgun</div>';
+  for(var h=1;h<=18;h++){
+    var tk=TAKEN.indexOf(h)>-1;
+    s+='<div class="mi'+(h===hole?' sel':'')+(tk?' tk':'')+'" data-h="'+(tk?'':h)+'"><span class="c">Hole '+h+'</span><span class="d">'+(tk?'Group 1':'')+'</span></div>';
+  }
+  menu.innerHTML=s;menu.style.maxHeight='320px';menu.style.overflowY='auto';
+  place(btn);
+  menu.querySelectorAll('.mi').forEach(function(mi){mi.addEventListener('click',function(){
+    if(!mi.dataset.h)return;
+    hole=+mi.dataset.h;
+    document.getElementById('hbv').textContent='Hole '+hole;
+    document.getElementById('hnote').textContent=hole===2?'Suggested by group number. Group 1 starts hole 1.':'Group 2 starts on hole '+hole+'. Group 1 starts hole 1.';
+    close();})});
+}
+var gmins=540;
+document.querySelectorAll('[data-gd]').forEach(function(b){
+  b.addEventListener('click',function(){
+    gmins=Math.max(300,Math.min(1080,gmins+ +b.dataset.gd));
+    document.getElementById('gtv').textContent=fmt(gmins);
+  });
+});
+document.getElementById('hb').addEventListener('click',function(e){e.stopPropagation();openHoles(this)});
+document.querySelectorAll('#modes button').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('#modes button').forEach(function(x){x.classList.remove('on')});
+    b.classList.add('on');
+    var gun=b.dataset.m==='gun';
+    mode=gun?'gun':'tee';
+    document.getElementById('pTee').style.display=gun?'none':'block';
+    document.getElementById('pGun').style.display=gun?'block':'none';
+    document.getElementById('mnote').textContent=gun
+      ?'Round setting \u2014 this round plays One-Day Triple Cup.'
+      :'Round setting \u2014 applies to every group in Round 1.';
+    document.getElementById('sub').textContent=gun
+      ?'This round is played off tee times \u2014 Triple Cup cannot use a shotgun start.'
+      :'Pick two to four golfers, confirm their tees, and set the tee time.';
+    render();
+  });
+});
+function fmt(m){var h=Math.floor(m/60),x=m%60;return (h>12?h-12:h)+':'+(x<10?'0':'')+x}
+function inG(){return P.filter(function(p){return p.g===2})}
+function teeLabel(c){var t=TEES.filter(function(x){return x.c===c})[0];return c.toUpperCase()+' \u00b7 '+t.y+'y'}
+function vlabel(a,b){
+  if(a>2)return (a-2)+' too many from Bucko';
+  if(b>2)return (b-2)+' too many from Miller';
+  if(a===0&&b===0)return 'Pick at least one from each side';
+  if(a===0)return 'Needs 1 from Bucko';
+  if(b===0)return 'Needs 1 from Miller';
+  return '';
+}
+function vgood(a,b){
+  if(a===2&&b===2)return '2 v 2 \u2713';
+  if(a===1&&b===1)return '1 v 1 \u00b7 F9 / B9 / OA \u2713';
+  return (a<b?a+' v '+b:b+' v '+a)+' \u00b7 phantom \u2713';
+}
+function render(){
+  var g=inG(),a=g.filter(function(p){return p.t==='a'}).length,b=g.filter(function(p){return p.t==='b'}).length;
+  var legal=a>=1&&b>=1&&a<=2&&b<=2,ok=legal&&mode==='tee';
+  document.getElementById('comp').innerHTML=
+    '<span class="cc"><span class="chip a">B</span>Team Bucko '+a+'</span>'+
+    '<span class="cc"><span class="chip b">M</span>Team Miller '+b+'</span>'+
+    '<span class="vd '+(legal?'ok':'no')+'">'+(legal?vgood(a,b):vlabel(a,b))+'</span>';
+  var s='';
+  g.forEach(function(p,i){
+    s+='<div class="slot"><span class="chip '+p.t+'">'+BADGE[p.t]+'</span>'+
+       '<span class="who"><b>'+p.n+'</b><small>Index '+p.x.toFixed(1)+'</small></span>'+
+       '<button class="tee" data-i="'+P.indexOf(p)+'"><span>'+teeLabel(p.tee)+'</span><span class="cv">\u25bc</span></button>'+
+       '<button class="rm" data-rm="'+P.indexOf(p)+'">\u00d7</button></div>';
+  });
+  for(var k=g.length;k<4;k++)s+='<div class="empty"><i></i>'+(legal?'Optional seat':'Empty seat '+(k+1))+'</div>';
+  if(legal&&g.length===3)s+='<div class="phantom"><b>Phantom</b> plays the solo side &mdash; the single golfer&rsquo;s score is used twice.</div>';
+  if(legal&&g.length===2)s+='<div class="phantom">A 1 v 1 group plays its <b>cup match</b> over three segments &mdash; front nine, back nine and overall.</div>';
+  document.getElementById('slots').innerHTML=s;
+  var full=g.length>=4,pl='';
+  P.forEach(function(p,i){
+    if(p.g===2)return;
+    var taken=p.g>0,tfull=(p.t==='a'?a:b)>=2,blocked=taken||full||tfull;
+    pl+='<div class="pr'+(taken?' tk':(blocked?' full':''))+'" data-add="'+(blocked?'':i)+'">'+
+        '<span class="chip '+p.t+'">'+BADGE[p.t]+'</span>'+
+        '<span class="who"><b>'+p.n+'</b><small>Index '+p.x.toFixed(1)+'</small></span>'+
+        '<span class="go">'+(taken?'Group '+p.g:tfull?'Team full':'+')+'</span></div>';
+  });
+  document.getElementById('pool').innerHTML=pl;
+  document.getElementById('save').disabled=!ok;
+  var nb=null;
+  if(nb){
+    var solo=g.length===2;
+    nb.classList.toggle('dis',solo);
+    if(solo&&nb.classList.contains('on')){
+      nb.classList.remove('on');
+      document.querySelector('#bets .bt[data-b="none"]').classList.add('on');
+      document.getElementById('bnote').innerHTML='Nassau is unavailable as a group bet here &mdash; this group&rsquo;s <b>cup match</b> is already played over front nine, back nine and overall.';
+    }
+  }
+  bind();
+}
+function bind(){
+  document.querySelectorAll('[data-add]').forEach(function(el){
+    if(!el.dataset.add)return;
+    el.addEventListener('click',function(){P[+el.dataset.add].g=2;render()});
+  });
+  document.querySelectorAll('[data-rm]').forEach(function(el){
+    el.addEventListener('click',function(e){e.stopPropagation();P[+el.dataset.rm].g=0;render()});
+  });
+  document.querySelectorAll('.tee').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();openMenu(b,+b.dataset.i)});
+  });
+}
+function close(){menu.classList.remove('on');scrim.classList.remove('on');open=null}
+function openMenu(btn,idx){
+  var all=idx<0,cur=all?null:P[idx].tee;
+  menu.innerHTML='<div class="mhd">'+(all?'Set every golfer in this group':'Tee for this golfer')+'</div>'+
+    TEES.map(function(t){return '<div class="mi'+(t.c===cur?' sel':'')+'" data-c="'+t.c+'"><span class="c">'+t.c+'</span><span class="d">'+t.y+' yds \u00b7 '+t.r+' \u00b7 par '+t.p+'</span></div>'}).join('');
+  menu.style.maxHeight='';menu.style.overflowY='';
+  var pr=btn.getBoundingClientRect(),ph=document.querySelector('.phone').getBoundingClientRect();
+  menu.classList.add('on');scrim.classList.add('on');
+  var top=pr.bottom-ph.top+6,mh=menu.offsetHeight;
+  if(top+mh>ph.height-16)top=Math.max(52,pr.top-ph.top-mh-6);
+  menu.style.top=top+'px';
+  menu.style.left=Math.max(12,Math.min(pr.right-ph.left-menu.offsetWidth,ph.width-menu.offsetWidth-12))+'px';
+  menu.querySelectorAll('.mi').forEach(function(mi){mi.addEventListener('click',function(){
+    if(all)inG().forEach(function(p){p.tee=mi.dataset.c});else P[idx].tee=mi.dataset.c;
+    close();render();})});
+}
+function tnote(){
+  var d=mins-540,n=document.getElementById('tnote');
+  n.className='tnote'+(d<=0?' warn':'');
+  n.textContent=d>0?d+' minutes after Group 1 (9:00 AM)'+(d===gap?' \u2014 one interval':''):d===0?'Same time as Group 1 \u2014 check this is intended':(-d)+' minutes before Group 1 \u2014 Group 2 would tee off first';
+}
+function openGaps(btn){
+  menu.innerHTML='<div class="mhd">Tee interval at this course</div>'+GAPS.map(function(m){
+    return '<div class="mi'+(m===gap?' sel':'')+'" data-g="'+m+'"><span class="c">'+m+' min</span><span class="d">Group 2 at '+fmt(540+m)+' AM</span></div>'}).join('');
+  menu.style.maxHeight='';menu.style.overflowY='';
+  place(btn);
+  menu.querySelectorAll('.mi').forEach(function(mi){mi.addEventListener('click',function(){
+    gap=+mi.dataset.g;mins=540+gap;
+    document.getElementById('ivv').textContent=gap+' min';
+    document.getElementById('tv').textContent=fmt(mins);
+    tnote();close();})});
+}
+function place(btn){
+  var pr=btn.getBoundingClientRect(),ph=document.querySelector('.phone').getBoundingClientRect();
+  menu.classList.add('on');scrim.classList.add('on');
+  var top=pr.bottom-ph.top+6,mh=menu.offsetHeight;
+  if(top+mh>ph.height-16)top=Math.max(52,pr.top-ph.top-mh-6);
+  menu.style.top=top+'px';
+  menu.style.left=Math.max(12,Math.min(pr.right-ph.left-menu.offsetWidth,ph.width-menu.offsetWidth-12))+'px';
+}
+document.getElementById('iv').addEventListener('click',function(e){e.stopPropagation();openGaps(this)});
+document.getElementById('setall').addEventListener('click',function(e){e.stopPropagation();openMenu(this,-1)});
+scrim.addEventListener('click',close);
+document.querySelectorAll('#pTee .stp2 button').forEach(function(b){
+  b.addEventListener('click',function(){
+    mins=Math.max(300,Math.min(1080,mins+ +b.dataset.d));
+    document.getElementById('tv').textContent=fmt(mins);
+    tnote();
+  });
+});
+[].forEach(function(b){
+});
+render();
+</script>
+</body>
+</html>

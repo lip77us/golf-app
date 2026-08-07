@@ -1,0 +1,146 @@
+<!-- @dsCard group="Cup Flow" name="Cup review — final step" subtitle="No empty sections; unfinished setup becomes actionable rows; subtitle matches the button it names" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Cup review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:366px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .stp{margin-left:auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.prog{height:3px;background:#DDE6DE}
+.prog i{display:block;height:100%;width:100%;background:var(--pine)}
+.body{padding:16px 16px 92px;overflow-y:auto;height:685px}
+h2.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:24px;margin:0 0 5px}
+p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 15px}
+.c{background:var(--card);border:1px solid var(--cardBorder);border-radius:15px;padding:13px 14px;margin-bottom:11px}
+.c h3{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.cup{display:flex;align-items:baseline;gap:8px}
+.cup b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px}
+.cup small{color:var(--muted);font-size:12.5px}
+.teams{display:flex;gap:8px;margin-top:11px}
+.tm{flex:1;display:flex;align-items:center;gap:7px;background:#F6F9F6;border-radius:11px;padding:9px 10px;min-width:0}
+.tm .chip{min-width:22px;height:22px;padding:0 3px;border-radius:7px;color:#fff;font:700 11.5px/22px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.tm .chip.a{background:var(--t1)}.tm .chip.b{background:var(--t2)}
+.tm span{min-width:0}
+.tm b{display:block;font-weight:600;font-size:13.5px;line-height:1.2}
+.tm small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px}
+.kv{display:flex;align-items:baseline;gap:10px;padding:9px 0;font-size:14px}
+.kv+.kv{border-top:1px solid #F1F5F1}
+.kv .k{color:var(--muted);font-size:13px;flex:none;width:96px}
+.kv .v{font-weight:600;text-align:right;flex:1}
+.kv .v small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:1px}
+.rd{display:flex;align-items:flex-start;gap:10px;padding:10px 0}
+.rd+.rd{border-top:1px solid #F1F5F1}
+.rd .n{min-width:26px;height:26px;border-radius:9px;background:#E4F2EA;color:var(--pine);font:700 12px/26px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.rd .d{flex:1;min-width:0}
+.rd .d b{display:block;font-weight:600;font-size:14px}
+.rd .d small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.rd .gm{font-size:11px;font-weight:600;color:var(--pine);background:#E4F2EA;border-radius:999px;padding:4px 9px;flex:none}
+.todo{display:flex;align-items:center;gap:10px;background:#FDF3E7;border:1px solid #F0DCBE;border-radius:13px;padding:11px 12px;margin-bottom:11px;cursor:pointer}
+.todo svg{width:18px;height:18px;stroke:#B9791C;fill:none;stroke-width:1.9;stroke-linecap:round;flex:none}
+.todo .t{flex:1;min-width:0}
+.todo .t b{display:block;font-size:13.5px;font-weight:600;color:var(--warn)}
+.todo .t small{display:block;font-size:12px;color:#9A6B24;margin-top:1px;line-height:1.4}
+.todo .cv{color:#B9791C;font-size:15px;flex:none}
+.nx{display:flex;align-items:flex-start;gap:10px;padding:9px 0}
+.nx+.nx{border-top:1px solid #F1F5F1}
+.nx .i{min-width:22px;height:22px;border-radius:50%;background:#E4F2EA;color:var(--pine);font:700 11px/22px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.nx .d b{display:block;font-weight:600;font-size:13.5px}
+.nx .d small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.4}
+.ok{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);padding:2px 2px 0}
+.ok i{width:16px;height:16px;border-radius:50%;background:var(--brightMint);color:#08301F;font:700 10px/16px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none;font-style:normal}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.bottom .next svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:1.9;stroke-linecap:round}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Cup review &mdash; final step</h1>
+<p>Review is the moment a captain decides whether the last four screens did what they meant. The shipped one spends most of its height on nothing: a <b>Foursomes</b> heading with no body, a <b>Tournament Games</b> section holding a single chip, and the line <i>0 players &rarr; 0 group(s)</i> &mdash; which is a true statement about an unfinished setup, delivered as if it were a summary.</p>
+<h3>What changed</h3>
+<ul>
+<li><b>Nothing empty renders.</b> A heading with no content reads as a loading failure. If there is nothing to show, the section is not drawn.</li>
+<li><b>Unfinished setup becomes a task, not a statistic.</b> &ldquo;0 players&rdquo; is replaced by a tappable row that names what is missing and where to fix it. Players can also legitimately arrive later, so it warns rather than blocks.</li>
+<li><b>The subtitle names the button it refers to.</b> The shipped copy says &lsquo;Tap &ldquo;Create Round&rdquo;&rsquo; above a button labelled <i>Save Tournament</i>.</li>
+<li><b>The button says where it goes.</b> <i>Save Tournament</i> reads like the end of setup; eight required steps follow it. <b>Save &amp; draft teams</b> plus a three-line list of what remains means nobody arrives at the draft screen thinking they were finished.</li>
+<li><b>Teams appear with their names, badges and colours</b> &mdash; the one place to catch a wrong colour before it propagates through every scorecard.</li>
+<li><b>Rounds are listed as rounds</b>, each with course, date and the game it plays, because that is the thing most likely to be wrong and least visible in the wizard.</li>
+<li>A short <b>ready line</b> at the end states what will exist after saving. Review should end in a prediction, not a shrug.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Whether an odd player count should warn here as well &mdash; cup formats need even teams, and the draft is the place that discovers it.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>12:55</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="stp">Review</span></div>
+<div class="prog"><i></i></div>
+<div class="body">
+<h2 class="hd">Review</h2>
+<p class="sub">Check the cup over, then save it. The draft and one group build per round come next.</p>
+
+<div class="c">
+<div class="cup"><b>Tilden Ryder Cup</b></div>
+<div class="cup"><small>Team (Cup) Play &middot; net, strokes off low</small></div>
+<div class="teams">
+<span class="tm"><span class="chip a">B</span><span><b>Team Bucko</b><small>Red</small></span></span>
+<span class="tm"><span class="chip b">M</span><span><b>Team Miller</b><small>Blue</small></span></span>
+</div>
+</div>
+
+<div class="c">
+<h3>Rounds</h3>
+<div class="rd"><span class="n">R1</span><span class="d"><b>Chardonnay GC</b><small>Tuesday, August 4, 2026 &middot; 9:00 first tee</small></span><span class="gm">Triple Cup</span></div>
+<div class="rd"><span class="n">R2</span><span class="d"><b>Chardonnay GC</b><small>Wednesday, August 5, 2026 &middot; 8:40 first tee</small></span><span class="gm">Singles</span></div>
+</div>
+
+<div class="todo">
+<svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h0M10.3 3.9 2.6 17.2A1.9 1.9 0 0 0 4.3 20h15.4a1.9 1.9 0 0 0 1.7-2.8L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+<span class="t"><b>No players added yet</b><small>You can save now and draft later, or add players before Round 1.</small></span>
+<span class="cv">&#8250;</span>
+</div>
+
+<div class="c">
+<h3>Scoring</h3>
+<div class="kv"><span class="k">Handicap</span><span class="v">Net &mdash; strokes off low<small>Every golfer plays off the lowest index in the group</small></span></div>
+<div class="kv"><span class="k">Points</span><span class="v">1 per segment<small>4 per foursome in Triple Cup</small></span></div>
+<div class="kv"><span class="k">Side game</span><span class="v">None</span></div>
+</div>
+
+<div class="c">
+<h3>What happens after saving</h3>
+<div class="nx"><span class="i">1</span><span class="d"><b>Draft the teams</b><small>Add players to Team Bucko and Team Miller, then lock the draft.</small></span></div>
+<div class="nx"><span class="i">2</span><span class="d"><b>Build the groups</b><small>One screen per group &mdash; golfers, tees and tee time. Repeats for each round.</small></span></div>
+<div class="nx"><span class="i">3</span><span class="d"><b>Start Round 1</b><small>Scoring opens once a group has its four.</small></span></div>
+</div>
+
+<div class="ok"><i>&#10003;</i><span>Everything here stays editable until Round 1 starts.</span></div>
+
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>Save &amp; draft teams</button></div>
+</div>
+</body>
+</html>

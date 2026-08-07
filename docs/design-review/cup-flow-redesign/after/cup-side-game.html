@@ -1,0 +1,149 @@
+<!-- @dsCard group="Cup Flow" name="Tournament side game" subtitle="Field-wide games only, renamed off Secondary game, and struck with a reason when the format is exclusive" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved &middot; Tournament side game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes i{font-style:normal;font-weight:600;color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:5px}
+.was{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12.5px;line-height:1.6}
+.was table{border-collapse:collapse;width:100%}
+.was td{padding:4px 0;vertical-align:top}
+.was td:first-child{color:#9AA8A0;width:88px;font-weight:600}
+.demo{background:#0B1F1A;border-radius:12px;padding:10px 12px;margin:0 0 12px;color:#9EBCAD;font-size:11.5px}
+.demo b{display:block;color:#fff;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:7px}
+.demo .btns{display:flex;gap:6px}
+.demo button{flex:1;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#DDEBE2;border-radius:8px;padding:7px 4px;font:600 11.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.demo button.on{background:var(--brightMint);border-color:var(--brightMint);color:#08301F}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:11px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px}
+.appbar .stp{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip{min-width:20px;height:20px;padding:0 4px;border-radius:6px;color:#fff;font:700 11px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.bottom .next[disabled]{background:#C4D3C8;color:#7E8E84;cursor:not-allowed}
+</style>
+<style>
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:14px 0 7px}
+.body{padding:8px 16px 96px;height:706px;overflow-y:auto}
+.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:23px;margin:6px 0 4px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 4px}
+.opts{display:flex;flex-direction:column;gap:8px}
+.o{display:flex;gap:11px;align-items:flex-start;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:12px 13px;cursor:pointer}
+.o.on{border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.11)}
+.o .rd{width:19px;height:19px;border-radius:50%;border:2px solid #C0CFC5;flex:none;margin-top:2px}
+.o.on .rd{border-color:var(--pine);background:radial-gradient(var(--pine) 0 44%,transparent 46%)}
+.o .d b{display:block;font-size:14.5px;font-weight:600;margin-bottom:2px}
+.o .d small{display:block;color:var(--muted);font-size:12px;line-height:1.45}
+.o .sc{margin-left:auto;flex:none;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:5px;padding:3px 6px}
+.skip{background:var(--card);border:1.5px dashed #C9D8CD;border-radius:16px;padding:14px 15px 15px}
+.skip .st{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.skip .st svg{width:20px;height:20px;stroke:var(--pine);fill:none;stroke-width:1.9;stroke-linecap:round;flex:none}
+.skip .st b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16px}
+.skip p{margin:0 0 10px;font-size:12.5px;color:var(--muted);line-height:1.55}
+.skip .why{background:#F4F8F4;border-radius:10px;padding:9px 11px;font-size:12px;color:var(--deepPine);line-height:1.5}
+.skip .why em{font-style:normal;color:var(--muted)}
+.grp{margin-top:12px;background:#F4F8F4;border:1px solid #DDE7DF;border-radius:13px;padding:11px 12px}
+.grp b{display:block;font-size:12.5px;font-weight:600;margin-bottom:3px}
+.grp p{margin:0;font-size:11.5px;color:var(--muted);line-height:1.5}
+.grp a{font-weight:600}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Tournament side game</h1>
+<p>Shipped step 18 is called <i>Secondary game</i> and offers Skins, Nassau and rabbit alongside Irish Rumble. Those are not the same kind of thing: the first three are settled inside a foursome, the last two are scored across the field. Mixing them here is why the step contradicts the exclusive-format rule two screens later.</p>
+<div class="was"><table>
+<tr><td>Was</td><td><b>Secondary game</b> &mdash; Skins, Nassau, Rabbit, Irish Rumble, Pink Ball, in one list.</td></tr>
+<tr><td>Now</td><td><b>Tournament side game</b> &mdash; field-wide games only. Skins, Nassau and rabbit move to the group builder, where the wager actually lives.</td></tr>
+<tr><td>Exclusive</td><td>The step is <b>struck with its reason</b> rather than shown empty.</td></tr>
+</table></div>
+<div class="demo"><b>Format on this round</b><div class="btns"><button class="on" data-m="excl">Triple Cup &middot; exclusive</button><button data-m="open">Singles</button></div></div>
+<h3>What the split fixes</h3>
+<ul>
+<li><b>One scope per step.</b> A tournament side game is played by every group and ranked across the field. A group bet is money between four people. They need different screens because they need different scoreboards.</li>
+<li><b>The exclusive rule becomes legible.</b> On Triple Cup the step is struck, and it says why: the segments own all 18 holes, so there is no room for a field-wide game beside them.</li>
+<li><b>Group bets are not lost, they are relocated</b> &mdash; and the struck state links to where. Being exclusive at tournament scope does not stop a foursome having a Nassau.</li>
+<li><b>None is a first-class answer,</b> and the default. Most cups do not run one.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Whether a field-wide game can differ per round. The data allows it; a cup that runs Pink Ball on Saturday only is plausible, but the round picker adds a dimension to a step most people answer once.</li>
+<li>Irish Rumble needs its own setup (which holes, whose ball) &mdash; a sub-screen not drawn here.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="stp" id="hstp">Struck &mdash; not counted</span></div>
+<div class="body">
+<h2 class="hd">Tournament side game</h2>
+<p class="sub" id="sub">A game every group plays, scored across the whole field &mdash; if the format leaves room for one.</p>
+<div id="wOpen" style="display:none">
+<div class="lb">Played by the whole field</div>
+<div class="opts" id="opts">
+<div class="o on" data-v="none"><span class="rd"></span><span class="d"><b>None</b><small>The cup stands on its own. Most do.</small></span></div>
+<div class="o" data-v="rumble"><span class="rd"></span><span class="d"><b>Irish Rumble</b><small>One, two, then three balls counted across the round. Needs its own hole setup.</small></span><span class="sc">Field</span></div>
+<div class="o" data-v="pink"><span class="rd"></span><span class="d"><b>Pink Ball</b><small>One marked ball rotates through the group and must survive the round.</small></span><span class="sc">Field</span></div>
+</div>
+</div>
+<div id="wExcl">
+<div class="lb">Not available on this round</div>
+<div class="skip">
+<div class="st"><svg viewBox="0 0 24 24"><path d="M5 12.5 9.5 17 19 7"/></svg><b>Skipped &mdash; nothing to ask</b></div>
+<p>Triple Cup is exclusive, so this step has no legal answer and is struck from your plan.</p>
+<div class="why"><b>Why:</b> <em>its three segments are defined by hole &mdash; Fourball 1&ndash;6, Foursomes 7&ndash;12, Singles 13&ndash;18 &mdash; so every hole is already committed to a match. A field-wide game would have to share holes with one of them.</em></div>
+</div>
+</div>
+<div class="grp">
+<b>Looking for Skins, Nassau or rabbit?</b>
+<p>Those are settled inside a foursome, not across the field, so they are set on each group in <a href="group-builder.html">Build the groups</a>. They read the gross scores this tournament already collects, and an exclusive format does not block them.</p>
+</div>
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next" id="nx">Skip this step</button></div>
+</div>
+<script>
+document.querySelectorAll('#opts .o').forEach(function(o){
+  o.addEventListener('click',function(){
+    document.querySelectorAll('#opts .o').forEach(function(x){x.classList.remove('on')});
+    o.classList.add('on');
+  });
+});
+document.querySelectorAll('.demo button').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.demo button').forEach(function(x){x.classList.remove('on')});
+    b.classList.add('on');
+    var ex=b.dataset.m==='excl';
+    document.getElementById('wExcl').style.display=ex?'':'none';
+    document.getElementById('wOpen').style.display=ex?'none':'';
+    document.getElementById('sub').textContent=ex
+      ?'A game every group plays, scored across the whole field \u2014 if the format leaves room for one.'
+      :'A game every group plays, scored across the whole field.';
+    document.getElementById('nx').textContent=ex?'Skip this step':'Next';
+    document.getElementById('hstp').innerHTML=ex?'Struck &mdash; not counted':'6 of 8';
+    document.getElementById('hstp').textContent=ex?'Struck \u2014 6 of 8':'6 of 8';
+  });
+});
+</script>
+</body>
+</html>

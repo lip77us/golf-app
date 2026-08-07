@@ -1,0 +1,362 @@
+<!-- @dsCard group="Cup Flow" name="Add players to a side" subtitle="Step 6 of 7. Side size set here and the group count derived from it. Side switcher with per-side fill counts. The team being filled is named in the header, the count runs against the roster size, and already-drafted golfers say which side has them" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved &middot; Add players to a side</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes i{font-style:normal;font-weight:600;color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:5px}
+.was{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12.5px;line-height:1.6}
+.was table{border-collapse:collapse;width:100%}
+.was td{padding:4px 0;vertical-align:top}
+.was td:first-child{color:#9AA8A0;width:88px;font-weight:600}
+.demo{background:#0B1F1A;border-radius:12px;padding:10px 12px;margin:0 0 12px;color:#9EBCAD;font-size:11.5px}
+.demo b{display:block;color:#fff;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:7px}
+.demo .btns{display:flex;gap:6px}
+.demo button{flex:1;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#DDEBE2;border-radius:8px;padding:7px 4px;font:600 11.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.demo button.on{background:var(--brightMint);border-color:var(--brightMint);color:#08301F}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:11px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px}
+.appbar .stp{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip{min-width:20px;height:20px;padding:0 4px;border-radius:6px;color:#fff;font:700 11px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.bottom .next[disabled]{background:#C4D3C8;color:#7E8E84;cursor:not-allowed}
+</style>
+<style>
+.body{padding:8px 16px 100px;height:706px;overflow-y:auto}
+.who{display:flex;align-items:center;gap:9px;margin:2px 0 3px}
+.who h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:22px;margin:0;letter-spacing:-.01em}
+.cnt{color:var(--muted);font-size:13px;margin:0 0 11px}
+.cnt b{color:var(--deepPine)}
+.cnt i{font-style:normal;font-weight:700;color:#8A5216}
+.pips{display:flex;gap:4px;margin:0 0 12px}
+.pips i{height:5px;flex:1;border-radius:3px;background:#D3DFD7}
+.pips i.f{background:var(--t1)}
+.pips i.s{background:#F1B9B1}
+.srch{display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 13px;margin-bottom:9px}
+.srch svg{width:17px;height:17px;stroke:#93A29A;fill:none;stroke-width:2;stroke-linecap:round;flex:none}
+.srch input{border:none;outline:none;font:400 14px/1 "Spline Sans",system-ui,sans-serif;flex:1;background:transparent;color:var(--deepPine)}
+.fil{display:flex;gap:4px;background:#DFE8E1;border-radius:11px;padding:3px;margin-bottom:11px}
+.fil button{flex:1;border:none;background:transparent;border-radius:8px;padding:8px 0;font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.fil button.on{background:var(--card);color:var(--deepPine);box-shadow:0 1px 2px rgba(11,31,26,.1)}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:13px 0 7px}
+.list{display:flex;flex-direction:column;gap:6px}
+.r{display:flex;align-items:center;gap:11px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:10px 12px;cursor:pointer}
+.r.on{border-color:var(--t1);box-shadow:0 0 0 3px rgba(185,51,39,.1)}
+.r.gone{background:#F3F6F3;border-color:#E6EDE7;cursor:not-allowed}
+.av{width:34px;height:34px;border-radius:50%;background:#DCE9E0;color:var(--pine);font:700 12.5px/34px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.r.gone .av{background:#E8EEE9;color:#9AA8A0}
+.nm{flex:1;min-width:0}
+.nm b{display:block;font-size:14.5px;font-weight:600;line-height:1.25}
+.nm small{display:block;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.r.gone .nm b{color:#7E8E84}
+.ck{width:24px;height:24px;border-radius:8px;border:2px solid #C0CFC5;flex:none;position:relative}
+.r.on .ck{background:var(--t1);border-color:var(--t1)}
+.r.on .ck:after{content:"";position:absolute;left:6px;top:3px;width:7px;height:12px;border:2.5px solid #fff;border-top:0;border-left:0;transform:rotate(42deg)}
+.tk{flex:none;display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.full{display:flex;gap:9px;align-items:flex-start;background:#FDF3E7;border:1px solid #EFD9B8;border-radius:12px;padding:11px 12px;margin-top:11px;font-size:12px;color:#7A4E12;line-height:1.5;display:none}
+.full.on{display:flex}
+.full b{color:#5D3A0B}
+.demo{background:#0B1F1A;border-radius:12px;padding:10px 12px;margin:0 0 12px;color:#9EBCAD;font-size:11.5px}
+.demo b{display:block;color:#fff;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:7px}
+.demo .btns{display:flex;gap:6px}
+.demo button{flex:1;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#DDEBE2;border-radius:8px;padding:7px 4px;font:700 12px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.demo button.on{background:#3BD89A;border-color:#3BD89A;color:#08301F}
+.prog{height:3px;background:#DDE6DE}
+.prog i{display:block;height:100%;width:85.7%;background:var(--pine)}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 7px;display:flex;align-items:baseline;gap:7px}
+.lb em{margin-left:auto;font-style:normal;font-weight:500;letter-spacing:0;text-transform:none;font-size:11.5px;color:#9AA8A0}
+.tsw{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px}
+.tsw button{display:flex;align-items:center;gap:7px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:9px 10px;cursor:pointer;text-align:left;font-family:"Spline Sans",system-ui,sans-serif;min-width:0}
+.tsw button .chip{margin:0}
+.tsw button .d{flex:1;min-width:0}
+.tsw button .d b{display:block;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tsw button .d small{display:block;font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:1px}
+.tsw button.on{border-width:2px;padding:8px 9px}
+.tsw button.done .d small{color:var(--pine);font-weight:600}
+.tsw button .d small u{text-decoration:none;display:block;color:#8A5216;font-weight:700}
+.hold{margin:-6px 0 12px;font-size:11.5px;color:var(--muted);line-height:1.45}
+.hold b{color:var(--deepPine)}
+.szr{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:11px 12px 12px;margin-bottom:15px}
+.szhd{display:flex;align-items:center;gap:10px}
+.szhd .mn{width:34px;height:34px;border-radius:10px;border:1.5px solid #C6D5CB;background:#F4F8F4;color:var(--pine);font:600 18px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;flex:none}
+.szhd .mn[disabled]{color:#B7C4BB;border-color:#E2EAE3;cursor:not-allowed}
+.szhd .szv{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:21px;min-width:26px;text-align:center;font-variant-numeric:tabular-nums}
+.szhd .szl{font-size:12.5px;color:var(--muted)}
+.szout{margin-top:10px;background:#F4F8F4;border-radius:10px;padding:8px 11px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.szout b{color:var(--deepPine);font-weight:700}
+.szout.odd{background:#FDF3E7;color:#7A4E12}
+.szout.odd b{color:#5D3A0B}
+.szh{margin:9px 0 0;font-size:11px;color:var(--muted);line-height:1.5}
+.cscrim{position:absolute;inset:0;background:rgba(11,31,26,.42);opacity:0;pointer-events:none;transition:opacity .2s}
+.cscrim.on{opacity:1;pointer-events:auto}
+.csheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:22px 22px 0 0;box-shadow:0 -8px 34px rgba(6,18,14,.26);transform:translateY(102%);transition:transform .24s cubic-bezier(.32,.72,0,1);padding:18px 18px 24px}
+.csheet.on{transform:none}
+.csheet b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px;line-height:1.25;margin-bottom:6px}
+.csheet p{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.5}
+.cfb{display:flex;flex-direction:column;gap:8px}
+.cfb button{height:50px;border-radius:14px;font:700 14.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.cfb .p{background:var(--pine);border:none;color:#fff}
+.cfb .s{background:var(--card);border:1.5px solid var(--cardBorder);color:var(--deepPine)}
+.cfb .t{background:transparent;border:none;color:var(--muted);height:40px;font-weight:600}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Add players to a side</h1>
+<p>Shipped step 23 is a searchable roster with checkboxes and no statement of what it is filling. Two teams drafting in turn see the same screen twice, and nothing on it says which turn this is or how many picks are left.</p>
+<div class="was"><table>
+<tr><td>Was</td><td>Title <b>Add Players</b>. No team, no count, no indication that a golfer is already drafted elsewhere.</td></tr>
+<tr><td>Now</td><td>A <b>side switcher</b> with both fill counts, the side in the header with its badge, and a roster line reading <b>4 of 8 &middot; pick 4 more</b>.</td></tr>
+<tr><td>Groups</td><td><b>Derived here</b> from side size &mdash; the first step where a roster exists to derive it from.</td></tr>
+<tr><td>Commit</td><td>Staged and named: <b>hold, then Add</b>. Switching sides mid-pick <b>offers to add first</b>. The shipped screen never says whether a check is written.</td></tr>
+<tr><td>Taken</td><td>Golfers on another side are <b>shown but locked</b>, labelled with the team holding them.</td></tr>
+</table></div>
+<div class="demo"><b>Teams in this cup</b><div class="btns"><button class="on" data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></div></div>
+<h3>Decisions</h3>
+<ul>
+<li><b>Side size is set here, and the group count falls out of it.</b> Nothing before this step can answer it &mdash; <a href="cup-wizard-step1.html">step 1</a> was asked and it was removed, <a href="cup-games-by-round.html">step 5</a> shows a rate because it cannot know. The draft is the first moment a roster exists, so it is the first moment 8 a side can mean 4 groups of 4. One number, stated once, and every later step reads it.</li>
+<li><b>It is a target, not a gate</b> &mdash; the label says <i>aiming for</i>. The stepper sets what the sides are aiming at; the pips and <i>pick 4 more</i> measure against it, and the derived line describes the cup being built rather than the golfers currently seated. Lowering it below what is already seated unseats the extras rather than leaving a side over its cap.</li>
+<li><b>An odd total is allowed and named.</b> Fourteen golfers is three groups and a threesome, which is legal &mdash; so the derived line says a group will be short instead of blocking a real roster.</li>
+<li><b>The side being filled is switchable, not fixed.</b> A captain drafting for two sides was previously stuck on whichever one he entered from. The switcher carries each side&rsquo;s fill count, so it doubles as the answer to <i>where am I</i>.</li>
+<li><b>It is a two-column grid, not a row</b>, so three and four sides wrap to a second line instead of clipping their names. A single row cannot carry four team names at this width. Switch the count above to see it &mdash; the roster cap follows, 8 a side at two teams and 4 at four.</li>
+<li><b>Badge colour comes from the team, not a stylesheet.</b> <a href="cup-design-teams.html">Step 3</a> offers six swatches, so any fixed set of colour classes would leave a side with an invisible badge. The hex travels with the team through the chip, the border and the pips.</li>
+<li><b>Picks are held, then committed.</b> Tapping a golfer stages him &mdash; ghosted pip, a <i>&#43;n holding</i> line on the side&rsquo;s own count, and nothing written. <b>Add</b> is what puts them on the roster. A draft is a sequence of deliberate moves and a captain reads the group he is about to hand over before handing it over, so per-tap commit would be the wrong model even though it is fewer taps.</li>
+<li><b>The staged count sits on the side it belongs to,</b> not just in the button. The switcher is where a captain reads the state of the draft, so a pick in hand has to show up there or the two numbers disagree.</li>
+<li><b>Switching sides offers to add first.</b> Requiring <i>Add</i> before the switcher works would be a modal rule enforced by a dead control; silently discarding would lose deliberate work. So the switch asks, names the count, and puts the likely answer first &mdash; <i>Add 2 to the Bandits, then switch</i>. Dropping them stays available, because a captain who changed his mind mid-pick should not have to commit to undo.</li>
+<li><b>The picks still do not travel.</b> A selection means &ldquo;these go to the Bandits&rdquo;; the prompt exists so that sentence gets finished rather than carried into a different one.</li>
+<li><b>The step number is on the screen.</b> This is 6 of 7, and the draft is the step most likely to be entered from a link rather than walked to &mdash; so it has to say where it sits.</li>
+<li><b>Entitlement is the only thing this screen sets.</b> It answers who is in the tournament and on which side. Not which group, not which round &mdash; those belong to the builder, and keeping them out is what stops the third duplicate list.</li>
+<li><b>Taken golfers stay visible.</b> Hiding them makes a captain search for a name that is not there and doubt the roster. Locked with <i>On Blue</i> attached answers the question in place.</li>
+<li><b>The pip row is the roster</b>, filled to the current count and ghosted for this selection &mdash; so the effect of the picks in hand is visible before committing.</li>
+<li><b>Selection caps at the remaining slots,</b> then explains itself rather than silently ignoring taps. A captain who wanted a different fourth deselects one.</li>
+<li><b>Unassigned is the default filter</b> because it is the working set; <i>All golfers</i> exists for checking where somebody went.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Whether the draft is snake or free assignment. This screen works for both, but only snake needs a <i>your pick</i> turn indicator.</li>
+<li>A golfer not in <a href="my-golfers.html">My Golfers</a> yet needs an inline create. The row is easy; the handicap lookup behind it is not.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>4:12</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Draft</span><span class="stp">6 of 7</span></div>
+<div class="prog"><i></i></div>
+<div class="body">
+<div class="lb">Side size <em id="tot"></em></div>
+<div class="szr">
+<div class="szhd"><button class="mn" id="szdn">&minus;</button><span class="szv" id="szv">8</span><button class="mn" id="szup">&#43;</button><span class="szl">golfers a side &mdash; aiming for</span></div>
+<div class="szout" id="szout">16 golfers &middot; <b>4 groups</b> of 4 &mdash; two from each side</div>
+<p class="szh" id="szh">Set here because the draft is where the roster becomes real. Every later step reads this: <a href="cup-games-by-round.html">points</a> resolve their totals from it, and <a href="round-groups.html">round setup</a> opens with this many groups.</p>
+</div>
+<div class="lb">Filling</div>
+<div class="tsw" id="tsw"></div>
+<div class="who"><span class="chip a" id="wchip">B</span><h2 id="wname">Add to Bandits</h2></div>
+<p class="cnt"><b id="have">4</b> of <b id="cap">8</b> on this side<span id="held"></span> &middot; <span id="need">pick 4 more</span></p>
+<div class="pips" id="pips"></div>
+<p class="hold" id="hold">Nothing is written yet &mdash; tap a golfer to hold him, then <b>Add</b> to put the picks on this side.</p>
+<div class="srch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.3-4.3"/></svg><input placeholder="Search golfers"></div>
+<div class="fil"><button class="on">Unassigned</button><button>All golfers</button></div>
+<div class="lb">Unassigned <em id="ucount">10 golfers</em></div>
+<div class="list" id="list"></div>
+<div class="full" id="warn"><span><b id="wfull">Bandits are full.</b> Deselect a golfer to swap this pick, or switch to the other side.</span></div>
+<div class="lb">Already drafted <em id="dcount">6 golfers</em></div>
+<div class="list" id="dlist"></div>
+</div>
+<div class="bottom"><button class="back">Cancel</button><button class="next" id="add" disabled>Add golfers</button></div>
+<div class="cscrim" id="cscrim"></div>
+<div class="csheet" id="csheet">
+<b id="cfT">Add 2 to the Bandits first?</b>
+<p id="cfP">You are holding two picks for the Bandits. Switching to the Marauders will leave them unassigned.</p>
+<div class="cfb">
+<button class="p" id="cfSave">Add them, then switch</button>
+<button class="s" id="cfDrop">Switch and drop them</button>
+<button class="t" id="cfCancel">Stay here</button>
+</div>
+</div>
+</div>
+<script>
+var ALL=[{n:'Bandits',b:'B',c:'#B93327'},{n:'Marauders',b:'M',c:'#1B4C99'},{n:'Renegades',b:'R',c:'#1D7A4C'},{n:'Outlaws',b:'O',c:'#D2691E'}];
+var TEAMS=ALL.slice(0,2),CAP=8,act=0,PICKS=[];
+var G=[
+['GB','Bucko, Gil','4.4',0],['DW','Webb, Dan','2.8',0],['AW','Wong, Alan','7.3',0],['JC','Comer, Jake','9.6',0],
+['MS','Miller, Sam','5.1',1],['RL','Lajoie, Ray','11.4',1],
+['TM','Malat, Tom','14.2',null],['PS','Sanders, Pete','16.8',null],['NF','Ford, Nate','12.0',null],['EK','Kane, Ed','19.5',null],
+['CD','Dunne, Chris','6.2',null],['EV','Vance, Ed','13.9',null],['JS','Shaw, Joe','8.4',null],['BH','Hines, Bob','10.7',null],
+['LP','Pratt, Lee','15.3',null],['MO','Ochoa, Marco','18.1',null]];
+function count(t){return G.filter(function(g){return g[3]===t}).length}
+function draw(){
+  var T=TEAMS[act],on=count(act),left=CAP-on-PICKS.length;
+  document.getElementById('tsw').innerHTML=TEAMS.map(function(t,i){
+    var c=count(i),full=c>=CAP;
+    var stg=(i===act&&PICKS.length)?'<u>&#43;'+PICKS.length+' holding</u>':'';
+    return '<button data-t="'+i+'" class="'+(i===act?'on':'')+(full?' done':'')+'" style="'+(i===act?'border-color:'+t.c:'')+'">'+
+    '<span class="chip" style="background:'+t.c+'">'+t.b+'</span><span class="d"><b>'+t.n+'</b><small>'+c+' of '+CAP+(full?' \u00b7 full':'')+stg+'</small></span></button>';
+  }).join('');
+  document.getElementById('tsw').querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click',function(){
+      var to=+b.dataset.t;
+      if(to===act)return;
+      if(PICKS.length){askSwitch(to);return}
+      act=to;draw();
+    });
+  });
+  var tot=TEAMS.length*CAP,grp=Math.ceil(tot/4),odd=tot%4!==0;
+  document.getElementById('szv').textContent=CAP;
+  document.getElementById('szdn').disabled=CAP<=2;
+  document.getElementById('szup').disabled=CAP>=12;
+  document.getElementById('tot').textContent=TEAMS.length+' sides';
+  var so=document.getElementById('szout');
+  so.classList.toggle('odd',odd);
+  var gw=grp===1?' group':' groups';
+  so.innerHTML=odd
+    ?tot+' golfers &middot; <b>'+grp+gw+'</b> &mdash; one will be short, and round setup will say which'
+    :tot+' golfers &middot; <b>'+grp+gw+'</b> of 4'+(TEAMS.length===2?' &mdash; two from each side':'');
+  var wc=document.getElementById('wchip');
+  wc.className='chip';wc.style.background=T.c;wc.textContent=T.b;
+  document.getElementById('wname').textContent='Add to '+T.n;
+  document.getElementById('wfull').textContent=T.n+' are full.';
+  document.getElementById('have').textContent=on;
+  document.getElementById('cap').textContent=CAP;
+  document.getElementById('held').innerHTML=PICKS.length?' &middot; <i>'+PICKS.length+' holding</i>':'';
+  document.getElementById('need').textContent=left>0?'pick '+left+' more':'side complete';
+  document.getElementById('warn').classList.toggle('on',left===0&&PICKS.length>0);
+  var ph='';
+  for(var i=0;i<CAP;i++)ph+='<i class="'+(i<on?'f':(i<on+PICKS.length?'s':''))+'" style="'+(i<on?'background:'+T.c:(i<on+PICKS.length?'background:'+T.c+';opacity:.42':''))+'"></i>';
+  document.getElementById('pips').innerHTML=ph;
+  var un=G.map(function(g,i){return [g,i]}).filter(function(x){return x[0][3]===null});
+  document.getElementById('ucount').textContent=un.length+' golfers';
+  document.getElementById('list').innerHTML=un.map(function(x){
+    var g=x[0],i=x[1],sel=PICKS.indexOf(i)>-1;
+    return '<div class="r'+(sel?' on':'')+'" data-i="'+i+'" style="'+(sel?'border-color:'+T.c:'')+'"><span class="av">'+g[0]+'</span><span class="nm"><b>'+g[1]+'</b><small>Index '+g[2]+'</small></span><span class="ck" style="'+(sel?'background:'+T.c+';border-color:'+T.c:'')+'"></span></div>';
+  }).join('');
+  document.getElementById('list').querySelectorAll('.r').forEach(function(r){
+    r.addEventListener('click',function(){
+      var i=+r.dataset.i,at=PICKS.indexOf(i);
+      if(at>-1)PICKS.splice(at,1);
+      else{if(count(act)+PICKS.length>=CAP){document.getElementById('warn').classList.add('on');return}PICKS.push(i)}
+      draw();
+    });
+  });
+  var dr=G.map(function(g,i){return [g,i]}).filter(function(x){return x[0][3]!==null});
+  document.getElementById('dcount').textContent=dr.length+' golfers';
+  document.getElementById('dlist').innerHTML=dr.map(function(x){
+    var g=x[0],t=TEAMS[g[3]];
+    return '<div class="r gone"><span class="av">'+g[0]+'</span><span class="nm"><b>'+g[1]+'</b><small>Index '+g[2]+'</small></span><span class="tk"><span class="chip" style="background:'+t.c+'">'+t.b+'</span>'+t.n+'</span></div>';
+  }).join('');
+  var btn=document.getElementById('add');
+  btn.disabled=PICKS.length===0;
+  btn.textContent=PICKS.length?'Add '+PICKS.length+' to '+T.n:'Add golfers';
+  document.getElementById('hold').innerHTML=PICKS.length
+    ?'<b>Holding '+PICKS.length+'.</b> Not on the side until you tap Add. Switch sides and we will offer to add them first.'
+    :(left>0?'Nothing is written yet &mdash; tap a golfer to hold him, then <b>Add</b> to put the picks on this side.'
+            :'<b>'+T.n+' are complete.</b> Switch to another side, or head back to lock the draft.');
+}
+var pending=null;
+function askSwitch(to){
+  pending=to;
+  var T=TEAMS[act],D=TEAMS[to],n=PICKS.length;
+  document.getElementById('cfT').textContent='Add '+n+' to the '+T.n+' first?';
+  document.getElementById('cfP').textContent='You are holding '+(n===1?'one pick':n+' picks')+' for the '+T.n+'. Switching to the '+D.n+' will leave '+(n===1?'him':'them')+' unassigned.';
+  document.getElementById('cfSave').textContent='Add '+n+' to the '+T.n+', then switch';
+  document.getElementById('cfDrop').textContent='Switch and drop '+(n===1?'him':'them');
+  document.getElementById('csheet').classList.add('on');
+  document.getElementById('cscrim').classList.add('on');
+}
+function closeAsk(){
+  document.getElementById('csheet').classList.remove('on');
+  document.getElementById('cscrim').classList.remove('on');
+}
+function commit(){PICKS.forEach(function(i){G[i][3]=act});PICKS=[]}
+document.getElementById('cfSave').addEventListener('click',function(){commit();act=pending;closeAsk();draw()});
+document.getElementById('cfDrop').addEventListener('click',function(){PICKS=[];act=pending;closeAsk();draw()});
+document.getElementById('cfCancel').addEventListener('click',function(){closeAsk()});
+document.getElementById('cscrim').addEventListener('click',closeAsk);
+function setCap(n){
+  CAP=Math.max(2,Math.min(12,n));PICKS=[];
+  for(var t=0;t<TEAMS.length;t++){
+    var seat=G.map(function(g,i){return [g,i]}).filter(function(x){return x[0][3]===t});
+    seat.slice(CAP).forEach(function(x){G[x[1]][3]=null});
+  }
+  draw();
+}
+document.getElementById('szdn').addEventListener('click',function(){setCap(CAP-1)});
+document.getElementById('szup').addEventListener('click',function(){setCap(CAP+1)});
+document.getElementById('add').addEventListener('click',function(){
+  if(!PICKS.length)return;
+  commit();draw();
+});
+document.querySelectorAll('.demo button').forEach(function(b){
+  b.addEventListener('click',function(){
+    var pending=null;
+function askSwitch(to){
+  pending=to;
+  var T=TEAMS[act],D=TEAMS[to],n=PICKS.length;
+  document.getElementById('cfT').textContent='Add '+n+' to the '+T.n+' first?';
+  document.getElementById('cfP').textContent='You are holding '+(n===1?'one pick':n+' picks')+' for the '+T.n+'. Switching to the '+D.n+' will leave '+(n===1?'him':'them')+' unassigned.';
+  document.getElementById('cfSave').textContent='Add '+n+' to the '+T.n+', then switch';
+  document.getElementById('cfDrop').textContent='Switch and drop '+(n===1?'him':'them');
+  document.getElementById('csheet').classList.add('on');
+  document.getElementById('cscrim').classList.add('on');
+}
+function closeAsk(){
+  document.getElementById('csheet').classList.remove('on');
+  document.getElementById('cscrim').classList.remove('on');
+}
+function commit(){PICKS.forEach(function(i){G[i][3]=act});PICKS=[]}
+document.getElementById('cfSave').addEventListener('click',function(){commit();act=pending;closeAsk();draw()});
+document.getElementById('cfDrop').addEventListener('click',function(){PICKS=[];act=pending;closeAsk();draw()});
+document.getElementById('cfCancel').addEventListener('click',function(){closeAsk()});
+document.getElementById('cscrim').addEventListener('click',closeAsk);
+function setCap(n){
+  CAP=Math.max(2,Math.min(12,n));PICKS=[];
+  for(var t=0;t<TEAMS.length;t++){
+    var seat=G.map(function(g,i){return [g,i]}).filter(function(x){return x[0][3]===t});
+    seat.slice(CAP).forEach(function(x){G[x[1]][3]=null});
+  }
+  draw();
+}
+document.getElementById('szdn').addEventListener('click',function(){setCap(CAP-1)});
+document.getElementById('szup').addEventListener('click',function(){setCap(CAP+1)});
+document.getElementById('add').addEventListener('click',function(){
+  if(!PICKS.length)return;
+  commit();draw();
+});
+document.querySelectorAll('.demo button').forEach(function(x){x.classList.remove('on')});
+    b.classList.add('on');
+    var n=+b.dataset.n;
+    TEAMS=ALL.slice(0,n);CAP=Math.floor(16/n);act=0;PICKS=[];
+    G.forEach(function(g){if(g[3]!==null&&g[3]>=n)g[3]=null});
+    for(var t=0;t<n;t++){
+      var seat=G.map(function(g,i){return [g,i]}).filter(function(x){return x[0][3]===t});
+      seat.slice(CAP).forEach(function(x){G[x[1]][3]=null});
+    }
+    draw();
+  });
+});
+draw();
+</script>
+</body>
+</html>

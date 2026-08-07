@@ -1,0 +1,362 @@
+<!-- @dsCard group="Cup Flow" name="Handicap" subtitle="Step 4 — handicap only: course and date moved to event details, the casual Triple Cup controls carried over (mode, Net %, combined foursomes allowance), and the net double-bogey cap struck because match play has no stroke total to protect" viewport="900x1020" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved &middot; Handicap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes i{font-style:normal;font-weight:600;color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:5px}
+.was{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12.5px;line-height:1.6}
+.was table{border-collapse:collapse;width:100%}
+.was td{padding:4px 0;vertical-align:top}
+.was td:first-child{color:#9AA8A0;width:104px;font-weight:600}
+.std{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.std table{border-collapse:collapse;width:100%}
+.std td{padding:4px 0;color:var(--muted)}
+.std td:first-child{color:var(--deepPine);font-weight:600}
+.std td:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--deepPine);font-weight:600;white-space:nowrap}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .stp{margin-left:auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.prog{height:3px;background:#DDE6DE}
+.prog i{display:block;height:100%;background:var(--pine);width:57.1%}
+.body{padding:16px 16px 92px;overflow-y:auto;height:685px}
+h2.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:24px;margin:0 0 5px}
+p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 17px}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px;display:flex;align-items:baseline;gap:7px}
+.lb em{margin-left:auto;font-style:normal;font-weight:500;letter-spacing:0;text-transform:none;font-size:11.5px;color:#9AA8A0}
+.opts{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.o{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 12px;cursor:pointer}
+.o.on{border-color:var(--pine);background:#F4FAF6}
+.o .rd{min-width:18px;height:18px;border-radius:50%;border:2px solid #C3CFC6;flex:none;margin-top:1px;position:relative}
+.o.on .rd{border-color:var(--pine)}
+.o.on .rd:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--pine)}
+.o .d{flex:1;min-width:0}
+.o .d b{display:block;font-size:14.5px;font-weight:600;line-height:1.25}
+.o .d small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.45}
+.al{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:4px 13px;margin-bottom:9px}
+.ar{display:flex;align-items:center;gap:10px;padding:11px 0}
+.ar+.ar{border-top:1px solid #EFF4F0}
+.ar .d{flex:1;min-width:0}
+.ar .d b{display:block;font-size:14px;font-weight:600}
+.ar .d small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.stp2{display:flex;align-items:center;gap:2px;flex:none;background:#F2F6F2;border-radius:9px;padding:2px}
+.stp2 button{width:28px;height:28px;border:none;background:transparent;border-radius:7px;font:600 15px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.stp2 button:hover{background:#E2EBE4}
+.stp2 span{min-width:44px;text-align:center;font:700 13.5px/1 "Spline Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.rec{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:5px;padding:2px 5px;margin-left:6px}
+.rec.off{color:var(--warn);background:#FDF3E7}
+.gnote{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:12px 13px;margin-bottom:9px;font-size:12.5px;color:var(--muted);line-height:1.5}
+.gnote b{color:var(--deepPine)}
+.pct{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:12px 13px 13px;margin-bottom:16px}
+.pl{display:flex;align-items:baseline;margin-bottom:9px}
+.pl span{font-size:13.5px;font-weight:600}
+.pl b{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
+.pct input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;background:#DCE6DE;outline:none}
+.pct input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--pine);cursor:pointer;border:none}
+.pn{margin:10px 0 0;font-size:11.5px;color:var(--muted);line-height:1.55}
+.fs{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:12px 13px 13px;margin-bottom:16px}
+.fs>p{margin:0 0 11px;font-size:11.5px;color:var(--muted);line-height:1.55}
+.fs>p b{color:var(--deepPine)}
+.fsr{display:flex;gap:9px}
+.fsr label{flex:1;display:flex;flex-direction:column;gap:5px}
+.fsr label>span:first-child{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.fi{display:flex;align-items:center;gap:6px;border:1.5px solid var(--cardBorder);border-radius:11px;padding:9px 11px}
+.fi input{border:none;outline:none;width:100%;font:700 16px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);background:transparent;font-variant-numeric:tabular-nums}
+.fi i{font-style:normal;font-size:13px;color:var(--muted);flex:none}
+.fsn{margin-top:10px;display:inline-block;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:5px;padding:3px 6px}
+.fsn.off{color:var(--warn);background:#FDF3E7}
+.ex{background:var(--deepPine);border-radius:14px;padding:13px 14px 14px;color:#DDEBE2;margin-bottom:16px}
+.ex h3{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7FA694;margin:0 0 4px}
+.ex p{margin:0 0 9px;font-size:11.5px;color:#9EBCAD;line-height:1.5}
+.er{display:flex;align-items:baseline;gap:9px;font-size:12.5px;padding:5px 0}
+.er+.er{border-top:1px solid rgba(255,255,255,.09)}
+.er span{color:#9EBCAD;flex:1;min-width:0}
+.er b{color:#fff;font-weight:700;font-variant-numeric:tabular-nums;flex:none}
+.er b em{font-style:normal;font-weight:500;color:#9EBCAD;font-size:11px}
+.skip{background:var(--card);border:1.5px dashed #C9D8CD;border-radius:14px;padding:13px 14px}
+.skip .st{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.skip .st svg{width:19px;height:19px;stroke:var(--pine);fill:none;stroke-width:1.9;stroke-linecap:round;flex:none}
+.skip .st b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
+.skip .st .tg{margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);background:#F2F6F2;border-radius:5px;padding:3px 6px}
+.skip p{margin:0;font-size:12px;color:var(--muted);line-height:1.55}
+.skip p b{color:var(--deepPine)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Handicap</h1>
+<p>Shipped 16 is titled <i>Round Details</i> and does four jobs: switch course, set the date, choose a handicap mode, and toggle a net double-bogey cap. Three of those belong somewhere else, and one does not belong in a cup at all.</p>
+<div class="was"><table>
+<tr><td>Course, date</td><td><b>Moved to <a href="cup-event-details.html">event details</a></b> at step 2, where rounds are created. Shipped 16 is the third screen to ask for a course.</td></tr>
+<tr><td>Net %</td><td><b>Kept</b>, plus the combined <b>foursomes</b> allowance casual already has. Shipped 16 offers neither.</td></tr>
+<tr><td>Double-bogey cap</td><td><b>Struck for match play</b>, with the reason attached. It caps a stroke total; match play has no total to protect.</td></tr>
+<tr><td>&ldquo;SO Low&rdquo;</td><td>Spelled out: <b>strokes off the low index</b>, with what that does to a card.</td></tr>
+</table></div>
+<h3>Matching casual Triple Cup</h3>
+<p>Casual Triple Cup already answers this properly, and the tournament wizard should not invent a second model. Its handicap card carries three things, and all three are here:</p>
+<div class="std"><table>
+<tr><td>Mode</td><td>Net &middot; Gross &middot; SO&nbsp;Low</td></tr>
+<tr><td>Net %</td><td>One scale, 50&ndash;100%</td></tr>
+<tr><td>Foursomes</td><td>Low % &#43; High %, combined</td></tr>
+</table></div>
+<ul>
+<li><b>The alt-shot allowance is a side number, not a per-golfer percentage.</b> One ball means one handicap for the pair, so the control takes <i>50% of the low &#43; 50% of the high</i> &mdash; the USGA default, and the shape casual already uses. A single <i>Net %</i> cannot express it, which is why it is its own card rather than a third row in a list.</li>
+<li><b>Net % applies to the segments where each golfer plays a ball</b> &mdash; fourball and singles. Foursomes is scaled by its own two numbers instead.</li>
+<li><b>The SO Low explanation is the casual copy, unchanged.</b> It is the one sentence that makes the mode legible, and rewording it for the tournament would be two explanations of one rule.</li>
+<li>The worked example uses the four course handicaps from the casual setup &mdash; 11, 16, 19, 24 &mdash; so the two screens can be compared line for line.</li>
+</ul>
+<h3>Why the cap has no meaning here</h3>
+<p>Net double bogey exists to stop one disaster hole from wrecking a <b>score</b> &mdash; a stroke-play total, or a Stableford points tally. In match play a hole is won, lost or halved, so a nine on the fourth costs exactly one hole, the same as a bogey would. Capping it changes nothing, and offering the toggle implies it changes something.</p>
+<p>It stays on the screen rather than disappearing, struck with its reason, for the same argument as the exclusive side game: a control that vanished looks like a missing feature.</p>
+<h3>Still open</h3>
+<ul>
+<li><b>Segment order and stake are the casual screen&rsquo;s other two cards</b> &mdash; the hole ranges with a <i>Play Foursomes first</i> toggle, and one cup payout. Neither is a handicap, so they belong on <a href="cup-games-by-round.html">points by round</a> at step 5. Not yet added there.</li>
+<li>Whether <b>strokes off low</b> should be a mode at all, or a checkbox on Net. It is arithmetically net with a shifted baseline, and two modes that produce the same card for a scratch field may be one mode too many.</li>
+<li>The worked example uses the lowest and highest index in the draft &mdash; but the draft happens at step 6, two steps after this one. Until then it has to use the roster, or say it is illustrative.</li>
+<li>Whether the two-man and four-man families need a <b>combined allowance</b> control here, which is a different shape again: one number for a side rather than a percentage per golfer.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:44</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="stp">4 of 7</span></div>
+<div class="prog"><i></i></div>
+<div class="body">
+<h2 class="hd">Handicap</h2>
+<p class="sub">How strokes are given across the cup. Applies to every round.</p>
+
+<div class="lb">Mode</div>
+<div class="opts" id="modes">
+<div class="o" data-m="net"><span class="rd"></span><span class="d"><b>Net</b><small>Every golfer plays off their own course handicap.</small></span></div>
+<div class="o" data-m="gross"><span class="rd"></span><span class="d"><b>Gross</b><small>No strokes given. The card is the card.</small></span></div>
+<div class="o on" data-m="low"><span class="rd"></span><span class="d"><b>Strokes off the low</b><small>The lowest course handicap plays to 0; everyone else gets the difference. <i>SO Low</i> in the shipped build.</small></span></div>
+</div>
+
+<div class="pct" id="pctWrap">
+<div class="pl"><span>Net %</span><b id="pv">100%</b></div>
+<input type="range" id="pct" min="50" max="100" step="5" value="100">
+<p class="pn" id="pexp">The lowest-handicap player plays to 0. Every other player gets one stroke on each hole whose stroke index is &le; their (own HCP &minus; low HCP), scaled by Net&nbsp;%.</p>
+</div>
+<div class="gnote" id="gnote" style="display:none"><b>No strokes given.</b> Every segment is decided on gross scores, so there is no percentage to set and no combined allowance for the alt-shot segment.</div>
+
+<div id="fsWrap">
+<div class="lb">Foursomes (alt-shot) handicap</div>
+<div class="fs">
+<p>Combined team handicap for the alt-shot segment, <b>holes 7&ndash;12</b>. USGA default is 50% low &#43; 50% high.</p>
+<div class="fsr">
+<label><span>Low %</span><span class="fi"><input id="lo" value="50"><i>%</i></span></label>
+<label><span>High %</span><span class="fi"><input id="hi" value="50"><i>%</i></span></label>
+</div>
+<div class="fsn" id="fsn">Standard</div>
+</div>
+</div>
+
+<div class="ex">
+<h3>What that means for a golfer</h3>
+<p id="exSub">Malat plays off 14.2, the lowest index in the roster is 2.8.</p>
+<div id="exRows"></div>
+</div>
+
+<div class="skip">
+<div class="st"><svg viewBox="0 0 24 24"><path d="M5 12.5 9.5 17 19 7"/></svg><b>Net double-bogey cap</b><span class="tg">Not shown</span></div>
+<p>The cap protects a <b>stroke total</b> from one disaster hole. In match play a hole is won, lost or halved, so a nine costs one hole and no more &mdash; there is nothing for the cap to do. It appears for stroke play and Stableford.</p>
+</div>
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next">Next &mdash; Points</button></div>
+</div>
+<script>
+var P=[{n:'Detomasi',t:'Blue',c:11},{n:'Lipkin',t:'Blue',c:16},{n:'Petersen',t:'Orange',c:19},{n:'Degrafinried',t:'Orange',c:24}];
+var mode='low',pct=100,lo=50,hi=50,LOW=11;
+var EXP={
+net:'Every golfer plays off their full course handicap, scaled by Net&nbsp;%. The whole field receives strokes.',
+low:'The lowest-handicap player plays to 0. Every other player gets one stroke on each hole whose stroke index is &le; their (own HCP &minus; low HCP), scaled by Net&nbsp;%.',
+gross:''};
+function base(p){return mode==='gross'?0:(mode==='low'?p.c-LOW:p.c)}
+function ind(p){return Math.round(base(p)*pct/100)}
+function side(t){
+  var m=P.filter(function(p){return p.t===t}).map(base).sort(function(x,y){return x-y});
+  return Math.round((m[0]*lo+m[1]*hi)/100);
+}
+function drawEx(){
+  var rows='',sub='';
+  if(mode==='gross'){
+    sub='Nobody receives a stroke, whatever their course handicap.';
+    rows=P.map(function(p){return '<div class="er"><span>'+p.n+' &middot; course '+p.c+'</span><b>0 <em>strokes</em></b></div>'}).join('');
+  }else{
+    sub=mode==='low'
+      ?'Course handicaps 11, 16, 19 and 24. Detomasi is lowest, so he plays to 0.'
+      :'Course handicaps 11, 16, 19 and 24. Everybody plays off their own.';
+    rows=P.map(function(p){
+      var v=ind(p);
+      return '<div class="er"><span>'+p.n+' &middot; course '+p.c+'</span><b>'+v+' <em>'+(v===0?'scratch':'strokes')+'</em></b></div>';
+    }).join('');
+    var bl=side('Blue'),or=side('Orange'),d=Math.abs(or-bl);
+    rows+='<div class="er"><span>Foursomes 7&ndash;12 &middot; '+lo+'% low &#43; '+hi+'% high</span><b>'+(d===0?'level':(or>bl?'Orange &#43;'+d:'Blue &#43;'+d))+'</b></div>';
+  }
+  document.getElementById('exSub').textContent=sub;
+  document.getElementById('exRows').innerHTML=rows;
+}
+document.querySelectorAll('#modes .o').forEach(function(o){
+  o.addEventListener('click',function(){
+    document.querySelectorAll('#modes .o').forEach(function(x){x.classList.remove('on')});
+    o.classList.add('on');mode=o.dataset.m;
+    var g=mode==='gross';
+    document.getElementById('pctWrap').style.display=g?'none':'';
+    document.getElementById('fsWrap').style.display=g?'none':'';
+    document.getElementById('gnote').style.display=g?'':'none';
+    if(!g)document.getElementById('pexp').innerHTML=EXP[mode];
+    drawEx();
+  });
+});
+document.getElementById('pct').addEventListener('input',function(ev){
+  pct=+ev.target.value;document.getElementById('pv').textContent=pct+'%';drawEx();
+});
+['lo','hi'].forEach(function(id){
+  document.getElementById(id).addEventListener('input',function(ev){
+    var v=Math.max(0,Math.min(100,parseInt(ev.target.value||'0',10)));
+    if(id==='lo')lo=v;else hi=v;
+    var std=lo===50&&hi===50,n=document.getElementById('fsn');
+    n.textContent=std?'Standard':'Custom';n.className='fsn'+(std?'':' off');
+    drawEx();
+  });
+});
+document.querySelector('#modes .o[data-m="low"]').click();
+</script>
+</body>
+</html<h3>Still open</h3>
+<ul>
+<li><b>Segment order and stake are the casual screen&rsquo;s other two cards</b> &mdash; the hole ranges with a <i>Play Foursomes first</i> toggle, and one cup payout. Neither is a handicap, so they belong on <a href="cup-games-by-round.html">points by round</a> at step 5. Not yet added there.</li>
+<li>Whether <b>strokes off low</b> should be a mode at all, or a checkbox on Net. It is arithmetically net with a shifted baseline, and two modes that produce the same card for a scratch field may be one mode too many.</li>
+<li>The worked example uses the lowest and highest index in the draft &mdash; but the draft happens at step 6, two steps after this one. Until then it has to use the roster, or say it is illustrative.</li>
+<li>Whether the two-man and four-man families need a <b>combined allowance</b> control here, which is a different shape again: one number for a side rather than a percentage per golfer.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:44</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="stp">4 of 7</span></div>
+<div class="prog"><i></i></div>
+<div class="body">
+<h2 class="hd">Handicap</h2>
+<p class="sub">How strokes are given across the cup. Applies to every round.</p>
+
+<div class="lb">Mode</div>
+<div class="opts" id="modes">
+<div class="o" data-m="net"><span class="rd"></span><span class="d"><b>Net</b><small>Every golfer plays off their own course handicap.</small></span></div>
+<div class="o" data-m="gross"><span class="rd"></span><span class="d"><b>Gross</b><small>No strokes given. The card is the card.</small></span></div>
+<div class="o on" data-m="low"><span class="rd"></span><span class="d"><b>Strokes off the low</b><small>The lowest course handicap plays to 0; everyone else gets the difference. <i>SO Low</i> in the shipped build.</small></span></div>
+</div>
+
+<div class="pct" id="pctWrap">
+<div class="pl"><span>Net %</span><b id="pv">100%</b></div>
+<input type="range" id="pct" min="50" max="100" step="5" value="100">
+<p class="pn" id="pexp">The lowest-handicap player plays to 0. Every other player gets one stroke on each hole whose stroke index is &le; their (own HCP &minus; low HCP), scaled by Net&nbsp;%.</p>
+</div>
+<div class="gnote" id="gnote" style="display:none"><b>No strokes given.</b> Every segment is decided on gross scores, so there is no percentage to set and no combined allowance for the alt-shot segment.</div>
+
+<div id="fsWrap">
+<div class="lb">Foursomes (alt-shot) handicap</div>
+<div class="fs">
+<p>Combined team handicap for the alt-shot segment, <b>holes 7&ndash;12</b>. USGA default is 50% low &#43; 50% high.</p>
+<div class="fsr">
+<label><span>Low %</span><span class="fi"><input id="lo" value="50"><i>%</i></span></label>
+<label><span>High %</span><span class="fi"><input id="hi" value="50"><i>%</i></span></label>
+</div>
+<div class="fsn" id="fsn">Standard</div>
+</div>
+</div>
+
+<div class="ex">
+<h3>What that means for a golfer</h3>
+<p id="exSub">Malat plays off 14.2, the lowest index in the roster is 2.8.</p>
+<div id="exRows"></div>
+</div>
+
+<div class="skip">
+<div class="st"><svg viewBox="0 0 24 24"><path d="M5 12.5 9.5 17 19 7"/></svg><b>Net double-bogey cap</b><span class="tg">Not shown</span></div>
+<p>The cap protects a <b>stroke total</b> from one disaster hole. In match play a hole is won, lost or halved, so a nine costs one hole and no more &mdash; there is nothing for the cap to do. It appears for stroke play and Stableford.</p>
+</div>
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next">Next &mdash; Points</button></div>
+</div>
+<script>
+var P=[{n:'Detomasi',t:'Blue',c:11},{n:'Lipkin',t:'Blue',c:16},{n:'Petersen',t:'Orange',c:19},{n:'Degrafinried',t:'Orange',c:24}];
+var mode='low',pct=100,lo=50,hi=50,LOW=11;
+var EXP={
+net:'Every golfer plays off their full course handicap, scaled by Net&nbsp;%. The whole field receives strokes.',
+low:'The lowest-handicap player plays to 0. Every other player gets one stroke on each hole whose stroke index is &le; their (own HCP &minus; low HCP), scaled by Net&nbsp;%.',
+gross:''};
+function base(p){return mode==='gross'?0:(mode==='low'?p.c-LOW:p.c)}
+function ind(p){return Math.round(base(p)*pct/100)}
+function side(t){
+  var m=P.filter(function(p){return p.t===t}).map(base).sort(function(x,y){return x-y});
+  return Math.round((m[0]*lo+m[1]*hi)/100);
+}
+function drawEx(){
+  var rows='',sub='';
+  if(mode==='gross'){
+    sub='Nobody receives a stroke, whatever their course handicap.';
+    rows=P.map(function(p){return '<div class="er"><span>'+p.n+' &middot; course '+p.c+'</span><b>0 <em>strokes</em></b></div>'}).join('');
+  }else{
+    sub=mode==='low'
+      ?'Course handicaps 11, 16, 19 and 24. Detomasi is lowest, so he plays to 0.'
+      :'Course handicaps 11, 16, 19 and 24. Everybody plays off their own.';
+    rows=P.map(function(p){
+      var v=ind(p);
+      return '<div class="er"><span>'+p.n+' &middot; course '+p.c+'</span><b>'+v+' <em>'+(v===0?'scratch':'strokes')+'</em></b></div>';
+    }).join('');
+    var bl=side('Blue'),or=side('Orange'),d=Math.abs(or-bl);
+    rows+='<div class="er"><span>Foursomes 7&ndash;12 &middot; '+lo+'% low &#43; '+hi+'% high</span><b>'+(d===0?'level':(or>bl?'Orange &#43;'+d:'Blue &#43;'+d))+'</b></div>';
+  }
+  document.getElementById('exSub').textContent=sub;
+  document.getElementById('exRows').innerHTML=rows;
+}
+document.querySelectorAll('#modes .o').forEach(function(o){
+  o.addEventListener('click',function(){
+    document.querySelectorAll('#modes .o').forEach(function(x){x.classList.remove('on')});
+    o.classList.add('on');mode=o.dataset.m;
+    var g=mode==='gross';
+    document.getElementById('pctWrap').style.display=g?'none':'';
+    document.getElementById('fsWrap').style.display=g?'none':'';
+    document.getElementById('gnote').style.display=g?'':'none';
+    if(!g)document.getElementById('pexp').innerHTML=EXP[mode];
+    drawEx();
+  });
+});
+document.getElementById('pct').addEventListener('input',function(ev){
+  pct=+ev.target.value;document.getElementById('pv').textContent=pct+'%';drawEx();
+});
+['lo','hi'].forEach(function(id){
+  document.getElementById(id).addEventListener('input',function(ev){
+    var v=Math.max(0,Math.min(100,parseInt(ev.target.value||'0',10)));
+    if(id==='lo')lo=v;else hi=v;
+    var std=lo===50&&hi===50,n=document.getElementById('fsn');
+    n.textContent=std?'Standard':'Custom';n.className='fsn'+(std?'':' off');
+    drawEx();
+  });
+});
+document.querySelector('#modes .o[data-m="low"]').click();
+</script>
+</body>
+</html>

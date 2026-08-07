@@ -1,0 +1,160 @@
+<!-- @dsCard group="Cup Flow" name="Cup leaderboard — nav + match rows" subtitle="Competition selector split from view tabs; four segment results as cells instead of a comma run" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Cup leaderboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:360px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:20px}
+.appbar .sp{margin-left:auto;display:flex;gap:14px;align-items:center}
+.appbar svg{width:21px;height:21px;stroke:var(--deepPine);fill:none;stroke-width:1.9;stroke-linecap:round}
+.appbar .dots{font-size:19px;letter-spacing:2px}
+.compsel{margin:6px 16px 0;display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--cardBorder);border-radius:12px;padding:9px 12px;cursor:pointer}
+.compsel b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
+.compsel small{color:var(--muted);font-size:12px}
+.compsel .cv{margin-left:auto;color:var(--pine);font-size:11px}
+.tabs{display:flex;gap:4px;margin:10px 16px 4px;background:#DFE8E1;border-radius:12px;padding:3px}
+.tabs button{flex:1;border:none;background:transparent;border-radius:9px;padding:8px 0;font:600 13px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--deepPine);box-shadow:0 1px 2px rgba(11,31,26,.1)}
+.body{padding:10px 14px 26px;overflow-y:auto;height:614px}
+.board{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;overflow:hidden;margin-bottom:14px}
+.bt{display:grid;grid-template-columns:1fr 1fr}
+.bt>div{padding:13px 14px 14px;color:#fff}
+.bt .a{background:var(--t1)}.bt .b{background:var(--t2);text-align:right}
+.bt .nm{display:flex;align-items:center;gap:7px;font-weight:600;font-size:13.5px}
+.bt .b .nm{flex-direction:row-reverse}
+.bt .nm i{min-width:20px;height:20px;padding:0 3px;border-radius:6px;background:rgba(255,255,255,.26);font:700 11px/20px "Spline Sans",system-ui,sans-serif;text-align:center;font-style:normal;flex:none}
+.bt .v{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:40px;line-height:1.05;margin-top:4px;font-variant-numeric:tabular-nums}
+.bar{height:8px;background:#E7EDE8;display:flex;position:relative}
+.bar i{display:block;height:100%}
+.bar .ma{background:var(--t1)}.bar .mb{background:var(--t2);margin-left:auto}
+.bar .mid{position:absolute;left:50%;top:-3px;height:14px;width:2px;background:var(--deepPine);opacity:.55}
+.bfoot{padding:9px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.bfoot b{color:var(--deepPine);font-weight:600}
+.sec{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:4px 2px 8px;display:flex;align-items:center;gap:8px}
+.sec:after{content:"";flex:1;height:1px;background:#D6E1D8}
+.m{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:11px 13px 12px;margin-bottom:10px}
+.mhd{display:flex;align-items:center;gap:8px}
+.mhd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
+.mhd .thru{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.mhd .tot{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
+.mhd .tot span:first-child{color:var(--t1)}.mhd .tot span:last-child{color:var(--t2)}
+.mhd .tot em{color:#9AA8A0;font-style:normal;font-weight:600;padding:0 2px}
+.vs{display:flex;align-items:center;gap:8px;margin:8px 0 10px;font-size:13.5px}
+.vs .s{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
+.vs .s.r{flex-direction:row-reverse;text-align:right}
+.vs .s span{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vs .x{color:#9AA8A0;font-size:11.5px;font-weight:600;flex:none}
+.chip{min-width:20px;height:20px;padding:0 3px;border-radius:6px;color:#fff;font:700 11px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.segs{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.sg{border:1px solid #E6EDE7;border-radius:11px;padding:7px 9px 8px;background:#FAFCFA}
+.sg .l{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#93A29A}
+.sg .r{display:flex;align-items:baseline;gap:6px;margin-top:3px;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.sg .r i{width:8px;height:8px;border-radius:3px;flex:none;align-self:center}
+.sg .r u{text-decoration:none;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#93A29A;margin-left:auto}
+.sg.lead-a .r{color:var(--t1)}.sg.lead-a .r i{background:var(--t1)}
+.sg.lead-b .r{color:var(--t2)}.sg.lead-b .r i{background:var(--t2)}
+.sg.as .r{color:var(--muted);font-weight:600}.sg.as .r i{background:#C3CFC6}
+.sg.ns{background:transparent;border-style:dashed}
+.sg.ns .r{color:#9AA8A0;font-weight:600;font-size:12.5px}.sg.ns .r i{display:none}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Cup leaderboard &mdash; nav + match rows</h1>
+<p>Two problems, one screen. The tab strip mixes <b>which competition</b> with <b>which view</b>, so five tabs scroll and clip mid-word. And the line that matters most &mdash; four match segments &mdash; is set as prose in the smallest type on the page: <i>&ldquo;1 UP thru 6, AS thru 6, AS thru 6, AS thru 6&rdquo;</i>.</p>
+<h3>Navigation</h3>
+<ul>
+<li><b>Competition is a selector</b>, not a tab. A tournament can carry several cups, and that count is unbounded &mdash; a tab strip cannot be.</li>
+<li><b>Views are a fixed segmented control</b> of four that fits 390px with no scroll, so the reader always sees every view available.</li>
+<li>The <b>&ldquo;One Round Ryder Cup&rdquo; badge</b> came off every match card. It held the same value on all of them, so it carried no information; it now sits once, under the competition name, next to the points rule.</li>
+</ul>
+<h3>Match cards</h3>
+<ul>
+<li><b>Four segment cells</b> replace the comma run. Each names its segment, so you can see that Fourball is won and the singles have not started &mdash; the shipped string cannot express that.</li>
+<li><b>Colour plus a square</b> marks the leader, and a completed segment is stamped <b>Final</b> &mdash; without it, <i>1 UP</i> reads the same whether the point is banked or still in play. <i>AS</i> is deliberately grey, because all-square is not a result. Segments not yet begun are dashed and name the hole they start on instead of showing a misleading <i>AS</i>.</li>
+<li><b>Thru moves to the header</b> &mdash; it was repeated four times per card for a single value.</li>
+<li>The <b>points bar</b> makes the clinch line spatial: 12 points are in play, so the notch sits at 6&frac12; &mdash; &ldquo;how close is this&rdquo; is a glance, not arithmetic.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Segment cells assume four per group. Formats with 2 or 6 need the grid to reflow, not scroll.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>12:37</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Leaderboard</span><span class="sp">
+<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.4A8 8 0 1 1 21 12Z"/></svg>
+<span class="dots">&#8942;</span></span></div>
+<div class="compsel"><span><b>Tilden Ryder Cup</b><br><small>One-Round Triple Cup &middot; 1 pt per segment</small></span><span class="cv">&#9660;</span></div>
+<div class="tabs"><button class="on">Live</button><button>Overview</button><button>Details</button><button>Mine</button></div>
+<div class="body">
+
+<div class="board">
+<div class="bt">
+<div class="a"><span class="nm"><i>B</i>Team Bucko</span><div class="v">1</div></div>
+<div class="b"><span class="nm"><i>M</i>Team Miller</span><div class="v">1</div></div>
+</div>
+<div class="bar"><i class="ma" style="width:8.3%"></i><i class="mid" style="left:54.2%"></i><i class="mb" style="width:8.3%"></i></div>
+<div class="bfoot"><span><b>6&frac12;</b> to win</span><span>2 of 12 points played</span></div>
+</div>
+
+<div class="sec">Live now</div>
+
+<div class="m">
+<div class="mhd"><b>Group 1</b><span class="thru">Thru 6</span><span class="tot"><span>1</span><em>&ndash;</em><span>0</span></span></div>
+<div class="vs"><span class="s"><span class="chip a">B</span><span>Bucko &amp; Webb</span></span><span class="x">vs</span><span class="s r"><span class="chip b">M</span><span>Miller &amp; Malat</span></span></div>
+<div class="segs">
+<div class="sg lead-a"><div class="l">Fourball</div><div class="r"><i></i>1 UP<u>Final</u></div></div>
+<div class="sg ns"><div class="l">Foursomes</div><div class="r">Starts 7</div></div>
+<div class="sg ns"><div class="l">Singles 1</div><div class="r">Starts 13</div></div>
+<div class="sg ns"><div class="l">Singles 2</div><div class="r">Starts 13</div></div>
+</div>
+</div>
+
+<div class="m">
+<div class="mhd"><b>Group 2</b><span class="thru">Thru 8</span><span class="tot"><span>0</span><em>&ndash;</em><span>1</span></span></div>
+<div class="vs"><span class="s"><span class="chip a">B</span><span>Wong &amp; Comer</span></span><span class="x">vs</span><span class="s r"><span class="chip b">M</span><span>Sanders &amp; Lajoie</span></span></div>
+<div class="segs">
+<div class="sg lead-b"><div class="l">Fourball</div><div class="r"><i></i>2 UP<u>Final</u></div></div>
+<div class="sg lead-a"><div class="l">Foursomes</div><div class="r"><i></i>1 UP</div></div>
+<div class="sg ns"><div class="l">Singles 1</div><div class="r">Starts 13</div></div>
+<div class="sg ns"><div class="l">Singles 2</div><div class="r">Starts 13</div></div>
+</div>
+</div>
+
+<div class="m">
+<div class="mhd"><b>Group 3</b><span class="thru">Thru 4</span><span class="tot"><span>0</span><em>&ndash;</em><span>0</span></span></div>
+<div class="vs"><span class="s"><span class="chip a">B</span><span>Gabe &amp; Kang</span></span><span class="x">vs</span><span class="s r"><span class="chip b">M</span><span>Lipkin &amp; Cisneros</span></span></div>
+<div class="segs">
+<div class="sg as"><div class="l">Fourball</div><div class="r"><i></i>AS</div></div>
+<div class="sg ns"><div class="l">Foursomes</div><div class="r">Starts 7</div></div>
+<div class="sg ns"><div class="l">Singles 1</div><div class="r">Starts 13</div></div>
+<div class="sg ns"><div class="l">Singles 2</div><div class="r">Starts 13</div></div>
+</div>
+</div>
+
+</div>
+</div>
+</body>
+</html>

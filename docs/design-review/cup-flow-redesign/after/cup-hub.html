@@ -1,0 +1,131 @@
+<!-- @dsCard group="Cup Flow" name="Cup hub — live card + one primary action" subtitle="Tournament card shows the live score; six flat rows become one action plus a grouped round-setup disclosure" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Cup hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:360px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:14px;padding:4px 16px 6px}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:20px}
+.appbar .sp{margin-left:auto}
+.appbar svg{width:22px;height:22px;stroke:var(--deepPine);fill:none;stroke-width:1.9;stroke-linecap:round;display:block}
+.segbar{display:flex;gap:4px;margin:4px 16px 0;background:#DFE8E1;border-radius:999px;padding:3px}
+.segbar button{flex:1;border:none;background:transparent;border-radius:999px;padding:9px 0;font:600 14px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.segbar button.on{background:var(--pine);color:#fff}
+.body{padding:14px 14px 100px;overflow-y:auto;height:684px}
+.t{background:var(--card);border:1px solid var(--cardBorder);border-radius:18px;overflow:hidden;margin-bottom:12px;box-shadow:0 1px 2px rgba(11,31,26,.05)}
+.thd{display:flex;align-items:flex-start;gap:8px;padding:14px 14px 0}
+.thd h3{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px;margin:0}
+.thd small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.thd .dots{margin-left:auto;color:var(--muted);font-size:19px;letter-spacing:2px;cursor:pointer;padding:0 2px}
+.tally{display:flex;align-items:center;gap:8px;padding:12px 14px 0}
+.tm{display:flex;align-items:center;gap:7px;min-width:0;flex:1}
+.tm.r{flex-direction:row-reverse;text-align:right}
+.tm span{font-weight:600;font-size:13px;line-height:1.2;min-width:0}
+.chip{min-width:18px;height:18px;padding:0 3px;border-radius:6px;color:#fff;font:700 10.5px/18px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.sc{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:22px;font-variant-numeric:tabular-nums;flex:none;letter-spacing:-.01em}
+.sc .a{color:var(--t1)}.sc .b{color:var(--t2)}.sc em{color:#9AA8A0;font-style:normal;padding:0 3px}
+.bar{height:8px;background:#E7EDE8;display:flex;position:relative;margin:11px 14px 0;border-radius:999px;overflow:hidden}
+.bar i{display:block;height:100%}
+.bar .ma{background:var(--t1)}.bar .mb{background:var(--t2);margin-left:auto}
+.live{display:flex;align-items:center;gap:7px;padding:9px 14px 0;font-size:12.5px;color:var(--muted)}
+.live .dot{width:7px;height:7px;border-radius:50%;background:var(--brightMint);box-shadow:0 0 0 3px rgba(59,216,154,.28);flex:none}
+.live b{color:var(--deepPine);font-weight:600}
+.cta{margin:12px 14px 0;height:50px;border-radius:14px;border:none;background:var(--pine);color:#fff;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;width:calc(100% - 28px);display:flex;align-items:center;justify-content:center;gap:9px;cursor:pointer}
+.cta svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round}
+.quick{display:flex;gap:8px;padding:10px 14px 14px}
+.quick button{flex:1;height:42px;border-radius:12px;background:transparent;border:1.5px solid var(--cardBorder);color:var(--pine);font:600 13.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.disc{border-top:1px solid #EDF2ED}
+.dsum{display:flex;align-items:center;gap:8px;padding:13px 14px;font-size:14px;font-weight:600;color:var(--pine);cursor:pointer}
+.dsum .cv{margin-left:auto;font-size:10px;transition:transform .18s}
+.disc.on .dsum .cv{transform:rotate(180deg)}
+.dbody{display:none;padding:0 14px 6px}
+.disc.on .dbody{display:block}
+.row{display:flex;align-items:center;gap:11px;padding:12px 0;font-size:14.5px;cursor:pointer}
+.row+.row{border-top:1px solid #F1F5F1}
+.row svg{width:19px;height:19px;stroke:var(--pine);fill:none;stroke-width:1.8;stroke-linecap:round;flex:none}
+.row .cv{margin-left:auto;color:#9AA8A0;font-size:15px}
+.fab{position:absolute;right:16px;bottom:24px;height:56px;border:none;border-radius:18px;background:var(--brightMint);color:#08301F;font:700 16px/1 "Spline Sans",system-ui,sans-serif;padding:0 22px;display:flex;align-items:center;gap:10px;cursor:pointer;box-shadow:0 8px 22px rgba(11,31,26,.18)}
+.fab svg{width:20px;height:20px;stroke:#08301F;fill:none;stroke-width:1.9;stroke-linecap:round}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Cup hub &mdash; live card</h1>
+<p>The shipped card lists six rows of equal weight, mixes navigation with round-scoped setup, prints the same date twice, uses two trophy icons for two different destinations, and gives the loudest colour on the screen to <b>delete</b>. It also shows no score &mdash; the one thing a player opening the app during a cup wants.</p>
+<h3>What changed</h3>
+<ul>
+<li><b>The card carries state.</b> Live team tally, the clinch bar, and a line saying which round is running and how far along. You can answer &ldquo;are we up?&rdquo; without a tap.</li>
+<li><b>One primary action.</b> During a live round that is <b>Enter Scores</b>. Between rounds it becomes <i>Set Up Round 2</i>; after the last round, <i>View Result</i>. The card always proposes the next thing.</li>
+<li><b>Navigation vs. setup, separated.</b> Leaderboard and Draft sit as two quiet buttons; the three round-scoped actions collapse into <b>Round 1 setup</b>, which is where a TD looks and a player never does.</li>
+<li><b>Delete leaves the surface.</b> It moves into the &#8942; menu with the other card-level actions. A destructive action should not be the brightest pixel on a screen.</li>
+<li><b>Leaderboard and Scoreboard merged.</b> Same trophy, adjacent rows, unclear difference &mdash; they are one destination with the view tabs from the leaderboard screen.</li>
+<li>The date prints once. Course and date belong to the round line, not the tournament title.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>A multi-round cup needs the bar to show round boundaries, not just total points.</li>
+<li>Whether non-TD players should see the setup disclosure at all, or a read-only summary.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>12:34</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar">
+<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+<span class="ttl">Tournaments</span>
+<span class="sp"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></span>
+</div>
+<div class="segbar"><button class="on">Active</button><button>Completed</button></div>
+<div class="body">
+
+<div class="t">
+<div class="thd"><span><h3>Tilden Ryder Cup</h3><small>Tilden Park GC &middot; Aug 4, 2026</small></span><span class="dots">&#8942;</span></div>
+<div class="tally">
+<span class="tm"><span class="chip a">B</span><span>Team Bucko</span></span>
+<span class="sc"><span class="a">1</span><em>&ndash;</em><span class="b">1</span></span>
+<span class="tm r"><span class="chip b">M</span><span>Team Miller</span></span>
+</div>
+<div class="bar"><i class="ma" style="width:8.3%"></i><i class="mb" style="width:8.3%"></i></div>
+<div class="live"><span class="dot"></span><span><b>Round 1 in progress</b> &middot; 2 of 12 points played &middot; 6&frac12; to win</span></div>
+<button class="cta"><svg viewBox="0 0 24 24"><path d="M4 6h11M4 12h7M4 18h9"/><path d="M15 17l5-5 2 2-5 5h-2v-2Z"/></svg>Enter Scores &mdash; Group 1</button>
+<div class="quick"><button>Leaderboard</button><button>Draft &amp; Teams</button></div>
+<div class="disc" id="d1">
+<div class="dsum" onclick="document.getElementById('d1').classList.toggle('on')">Round 1 setup<span class="cv">&#9660;</span></div>
+<div class="dbody">
+<div class="row"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="7" cy="18" r="2"/></svg>Set up cup round<span class="cv">&#8250;</span></div>
+<div class="row"><svg viewBox="0 0 24 24"><path d="M4 8h12l-3-3M20 16H8l3 3"/></svg>Change cup game<span class="cv">&#8250;</span></div>
+<div class="row"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 8h8M8 13h3M8 17h3M15 13v4M13 15h4"/></svg>Recalculate cup points<span class="cv">&#8250;</span></div>
+</div>
+</div>
+</div>
+
+<div class="t">
+<div class="thd"><span><h3>Chardonnay Invitational</h3><small>Chardonnay GC &middot; Sep 12&ndash;13, 2026</small></span><span class="dots">&#8942;</span></div>
+<div class="live"><span class="dot" style="background:#C3CFC6;box-shadow:none"></span><span><b>Not started</b> &middot; 16 players &middot; draft opens Sep 5</span></div>
+<button class="cta" style="background:transparent;border:1.5px solid var(--pine);color:var(--pine)">Run the draft</button>
+<div class="quick"><button>Players</button><button>Rounds &amp; games</button></div>
+</div>
+
+</div>
+<button class="fab"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M6 4h12v3a6 6 0 0 1-12 0V4Z"/><path d="M18 5h2a2 2 0 0 1-2 2M6 5H4a2 2 0 0 0 2 2"/></svg>New</button>
+</div>
+</body>
+</html>

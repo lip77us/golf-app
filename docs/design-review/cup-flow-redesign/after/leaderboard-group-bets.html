@@ -1,0 +1,166 @@
+<!-- @dsCard group="Cup Flow" name="Group bets on the leaderboard" subtitle="Skins, Nassau and rabbit settled from the gross already entered — a leaderboard tab at group scope, not a second scoring flow" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved &middot; Group bets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes i{font-style:normal;font-weight:600;color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:5px}
+.was{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12.5px;line-height:1.6}
+.was table{border-collapse:collapse;width:100%}
+.was td{padding:4px 0;vertical-align:top}
+.was td:first-child{color:#9AA8A0;width:88px;font-weight:600}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:11px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px}
+.appbar .stp{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip{min-width:20px;height:20px;padding:0 4px;border-radius:6px;color:#fff;font:700 11px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.bottom .next[disabled]{background:#C4D3C8;color:#7E8E84;cursor:not-allowed}
+</style>
+<style>
+.tabs{display:flex;gap:3px;margin:10px 14px 4px;background:#DFE8E1;border-radius:12px;padding:3px}
+.tabs button{flex:1;border:none;background:transparent;border-radius:9px;padding:8px 0;font:600 11.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--deepPine);box-shadow:0 1px 2px rgba(11,31,26,.1)}
+.body{padding:10px 14px 26px;height:660px;overflow-y:auto}
+.src{display:flex;gap:8px;align-items:flex-start;background:#F4F8F4;border:1px dashed #C9D8CD;border-radius:12px;padding:10px 12px;margin-bottom:11px;font-size:11.5px;color:var(--muted);line-height:1.5}
+.src b{color:var(--deepPine)}
+.g{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:12px 13px 13px;margin-bottom:11px}
+.ghd{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.ghd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16px}
+.ghd .th{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.ghd .who{margin-left:auto;font-size:10.5px;color:#9AA8A0;font-weight:600}
+.rost{font-size:12px;color:var(--muted);margin-bottom:2px}
+.bet{border-top:1px solid #EDF2ED;margin-top:11px;padding-top:11px}
+.bhd{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+.bhd .nm{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14px}
+.bhd .tr{font-size:11px;color:#93A29A;font-weight:600}
+.bhd .pot{margin-left:auto;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.holes{display:grid;grid-template-columns:repeat(9,1fr);gap:3px;margin-bottom:8px}
+.holes div{text-align:center;font-size:10px;font-variant-numeric:tabular-nums;border-radius:5px;padding:4px 0;background:#F2F6F2;color:#9AA8A0;font-weight:600}
+.holes div.w1{background:#F7E3E1;color:var(--t1)}
+.holes div.w2{background:#E3E9F5;color:var(--t2)}
+.holes div.cy{background:#FDF3E7;color:#8A5216}
+.hkey{display:flex;flex-wrap:wrap;gap:9px;font-size:10.5px;color:#9AA8A0;margin-bottom:9px}
+.hkey span{display:inline-flex;align-items:center;gap:4px}
+.hkey i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.std{display:flex;flex-direction:column;gap:5px}
+.sr{display:flex;align-items:center;gap:9px;font-size:13px}
+.sr .n{flex:1;font-weight:600}
+.sr .v{font-variant-numeric:tabular-nums;font-weight:700;min-width:52px;text-align:right}
+.sr .v.up{color:var(--pine)}.sr .v.dn{color:#B24225}.sr .v.lv{color:#9AA8A0;font-weight:600}
+.nas{display:grid;grid-template-columns:1fr 54px 54px 54px;gap:0;font-size:12.5px;align-items:center}
+.nas>div{padding:6px 0;font-variant-numeric:tabular-nums}
+.nas .h{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);text-align:center;border-bottom:1px solid var(--cardBorder);padding-bottom:6px}
+.nas .h:first-child{text-align:left}
+.nas .p{font-weight:600}
+.nas .c{text-align:center;font-weight:700}
+.nas .c.a{color:var(--t1)}.nas .c.b{color:var(--t2)}.nas .c.as{color:#9AA8A0;font-weight:600}
+.nas .c small{display:block;font-size:9.5px;font-weight:600;color:#9AA8A0;letter-spacing:.3px}
+.rab{display:flex;align-items:center;gap:11px;background:#F4F8F4;border-radius:12px;padding:10px 12px}
+.rab .ic{width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid var(--cardBorder);flex:none;font-size:17px;line-height:34px;text-align:center}
+.rab .t{flex:1;font-size:12.5px;line-height:1.45;color:var(--muted)}
+.rab .t b{display:block;font-size:14px;color:var(--deepPine)}
+.none{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:13px;font-size:12.5px;color:var(--muted);line-height:1.5;text-align:center}
+.none a{font-weight:600;text-decoration:none}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Group bets on the leaderboard</h1>
+<p>Skins, Nassau and rabbit are the three games the shipped build treats as tournament types, each with its own setup flow. They are none of those things: they are wagers between the four people in one group, and every number they need is already in the gross scores the tournament collects. So they are a <b>leaderboard tab</b>, not a flow.</p>
+<div class="was"><table>
+<tr><td>Was</td><td>Separate setups and separate leaderboards per game &mdash; <a href="game-setup-skins.html">Skins</a>, <a href="nassau-setup.html">Nassau</a>, <a href="rabbit-setup.html">Rabbit</a>.</td></tr>
+<tr><td>Now</td><td>Set on the group in the <a href="group-builder.html">group builder</a>, settled here from the same card.</td></tr>
+<tr><td>Cost</td><td><b>No new score entry.</b> One tab and the settlement rules.</td></tr>
+</table></div>
+<h3>Decisions</h3>
+<ul>
+<li><b>Grouped by group, not by game.</b> A player has one foursome and cares about its money. Sorting by game would scatter a single group across three sections.</li>
+<li><b>The tab says where its numbers come from.</b> Anything settling money has to be auditable, and the honest answer is short: gross, as entered on the card.</li>
+<li><b>Skins shows the hole strip</b>, because a skins argument is always about a specific hole. Carryovers are marked in place rather than summarised.</li>
+<li><b>Nassau reads front, back, total,</b> which is the whole game &mdash; three numbers, not a running balance.</li>
+<li><b>Rabbit shows who holds it,</b> since a rabbit loose or held is the only state that matters until 18.</li>
+<li><b>Groups without a bet are not hidden;</b> the empty row keeps the tab honest about scope and offers the way to add one.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Gross or net skins. Gross is drawn here; net needs the stroke dots from <a href="cup-details.html">Details</a> repeated, which crowds the strip.</li>
+<li>Press. The Nassau screens support it and this tab does not show it yet &mdash; a pressed match is a fourth column, or a second row.</li>
+<li>Whether to settle in currency at all, or only report the result. Naming amounts makes the app a ledger.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>3:26</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Leaderboard</span><span class="stp">Round 1</span></div>
+<div class="tabs"><button>Live</button><button>Cup</button><button>Details</button><button class="on">Bets</button><button>Mine</button></div>
+<div class="body">
+<div class="src"><span><b>Read from the card.</b> Every figure below comes from the gross scores already entered for this round. Nothing here is scored separately.</span></div>
+
+<div class="g">
+<div class="ghd"><b>Group 1</b><span class="th">Thru 9</span><span class="who">Skins</span></div>
+<div class="rost">Bucko, Webb <span style="color:#C3CFC6">&middot;</span> Miller, Malat</div>
+<div class="bet">
+<div class="bhd"><span class="nm">Skins</span><span class="tr">Gross &middot; carryover</span><span class="pot">45 pot</span></div>
+<div class="holes">
+<div class="w1">1</div><div class="cy">2</div><div class="cy">3</div><div class="w2">4</div><div class="cy">5</div><div class="w1">6</div><div class="w1">7</div><div class="cy">8</div><div class="cy">9</div>
+</div>
+<div class="hkey"><span><i style="background:#F7E3E1"></i>Bandit skin</span><span><i style="background:#E3E9F5"></i>Marauder skin</span><span><i style="background:#FDF3E7"></i>Tied, carried</span></div>
+<div class="std">
+<div class="sr"><span class="chip a">B</span><span class="n">Bucko</span><span class="v up">+15</span></div>
+<div class="sr"><span class="chip a">B</span><span class="n">Webb</span><span class="v up">+10</span></div>
+<div class="sr"><span class="chip b">M</span><span class="n">Miller</span><span class="v up">+5</span></div>
+<div class="sr"><span class="chip b">M</span><span class="n">Malat</span><span class="v dn">&minus;30</span></div>
+</div>
+<div class="rab" style="margin-top:10px"><span class="ic">&#9670;</span><span class="t"><b>2 skins carried into 10</b>Holes 8 and 9 halved. Worth 15 on the next won hole.</span></div>
+</div>
+</div>
+
+<div class="g">
+<div class="ghd"><b>Group 3</b><span class="th">Thru 8</span><span class="who">Nassau &middot; Rabbit</span></div>
+<div class="rost">Ford <span style="color:#C3CFC6">&middot;</span> Kane, Reilly</div>
+<div class="bet">
+<div class="bhd"><span class="nm">Nassau</span><span class="tr">2 &middot; 2 &middot; 2</span></div>
+<div class="nas">
+<div class="h">Match</div><div class="h">Front</div><div class="h">Back</div><div class="h">Total</div>
+<div class="p">Ford v Kane</div><div class="c a">2 UP<small>Final</small></div><div class="c as">AS</div><div class="c a">2 UP</div>
+<div class="p">Ford v Reilly</div><div class="c b">1 UP<small>Final</small></div><div class="c b">1 UP</div><div class="c b">2 UP</div>
+</div>
+</div>
+<div class="bet">
+<div class="bhd"><span class="nm">Rabbit</span><span class="tr">Loose on a halve</span><span class="pot">20</span></div>
+<div class="rab"><span class="ic">&#9679;</span><span class="t"><b>Held by Reilly</b>Won hole 7 outright. Loose again if hole 9 is halved.</span></div>
+</div>
+</div>
+
+<div class="g">
+<div class="ghd"><b>Group 2</b><span class="th">Thru 9</span></div>
+<div class="rost">Wong, Comer <span style="color:#C3CFC6">&middot;</span> Sanders, Lajoie</div>
+<div class="bet"><div class="none">No bet on this group. <a href="group-builder.html">Add one</a> &mdash; it settles from scores already entered.</div></div>
+</div>
+
+</div>
+</div>
+</body>
+</html>

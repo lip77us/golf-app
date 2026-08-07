@@ -1,0 +1,244 @@
+<!-- @dsCard group="Cup Flow" name="Create flow map" subtitle="All 28 steps in order, what each collects, what it asks for too early, and what to merge — plus where other tournament types diverge" viewport="1400x2000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Create flow map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--early:#B24225;--dup:#8A5216;--merge:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:30px 34px 44px}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:28px;letter-spacing:-.02em;margin:0 0 6px}
+p.lede{color:var(--muted);font-size:13.5px;line-height:1.6;margin:0 0 18px;max-width:104ch;text-wrap:pretty}
+p.lede b{color:var(--deepPine)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 10px;margin-bottom:24px;align-items:center}
+.lg{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;background:var(--card);border:1px solid var(--cardBorder);border-radius:999px;padding:5px 11px}
+.lg i{width:8px;height:8px;border-radius:2px;flex:none}
+.lg.e i{background:var(--early)}.lg.d i{background:var(--dup)}.lg.m i{background:var(--merge)}
+.lg.cup i{background:var(--deepPine);border-radius:50%}
+.lg.all i{background:#B9CDBE;border-radius:50%}
+.ph{margin-bottom:14px}
+.phhd{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}
+.phhd h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px;margin:0;letter-spacing:.01em}
+.phhd .cnt{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.phhd .who{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:999px;padding:4px 10px}
+.phhd .who.cup{color:#fff;background:var(--deepPine)}
+.row{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:10px}
+.s{background:var(--card);border:1px solid var(--cardBorder);border-radius:13px;padding:10px 11px 11px;position:relative}
+.s.flag{border-color:#EBC6B8}
+.sn{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.sn .i{min-width:20px;height:20px;padding:0 4px;border-radius:6px;background:#EBF1EC;color:var(--muted);font:700 10.5px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none;font-variant-numeric:tabular-nums}
+.sn b{font-size:13px;font-weight:600;line-height:1.25}
+.s p{margin:0;font-size:11.5px;color:var(--muted);line-height:1.45}
+.s p em{font-style:normal;color:var(--deepPine);font-weight:600}
+.fl{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.fl span{font-size:10px;font-weight:700;letter-spacing:.3px;border-radius:5px;padding:3px 6px;line-height:1.3}
+.fl .e{background:#FBEAE4;color:var(--early)}
+.fl .d{background:#FDF3E7;color:var(--dup)}
+.fl .m{background:#E8EFF9;color:var(--merge)}
+.arr{text-align:center;color:#9AA8A0;font-size:15px;margin:2px 0 12px;letter-spacing:6px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:26px}
+.box{background:var(--card);border:1px solid var(--cardBorder);border-radius:15px;padding:16px 18px 17px}
+.box h3{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14.5px;margin:0 0 10px}
+.box ol{margin:0;padding-left:19px;font-size:12.5px;color:var(--muted);line-height:1.6}
+.box ol li{margin-bottom:9px}
+.box ol li b{color:var(--deepPine)}
+.box p{margin:0 0 10px;font-size:12.5px;color:var(--muted);line-height:1.6}
+table.div{border-collapse:collapse;width:100%;font-size:12px}
+table.div th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);padding:0 8px 7px 0;border-bottom:1px solid var(--cardBorder)}
+table.div th:not(:first-child){text-align:center;width:66px}
+table.div th i{display:block;font-style:normal;font-weight:500;font-size:9px;letter-spacing:.2px;text-transform:none;color:#9AA8A0;margin-top:1px}
+table.div td{padding:7px 8px 7px 0;border-bottom:1px solid #F1F5F1;color:var(--deepPine)}
+table.div td:not(:first-child){text-align:center;color:var(--muted)}
+table.div .y{color:var(--pine);font-weight:700}
+table.div .n{color:#C3CFC6}
+.prop{margin-top:26px;background:var(--deepPine);border-radius:16px;padding:18px 20px 20px;color:#DDEBE2}
+.prop h3{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14.5px;margin:0 0 4px;color:#fff}
+.prop p{margin:0 0 14px;font-size:12.5px;color:#9EBCAD;line-height:1.55}
+.strip{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.st{flex:1;min-width:150px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:11px;padding:9px 11px 10px}
+.st b{display:block;font-size:12.5px;font-weight:600;color:#fff;margin-bottom:3px}
+.st small{display:block;font-size:11px;color:#9EBCAD;line-height:1.4}
+.st .tag{display:inline-block;margin-top:6px;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#08301F;background:var(--brightMint);border-radius:5px;padding:2px 6px}
+.st .tag.q{background:rgba(255,255,255,.18);color:#DDEBE2}
+.inv{margin-top:26px}
+.inv h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px;margin:0 0 5px}
+.inv .key{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 16px}
+.inv .key span{font-size:10.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;border-radius:5px;padding:3px 8px}
+.k-new{background:#D8F5E6;color:#0A5C43}.k-rev{background:#E8EFF9;color:var(--merge)}.k-keep{background:#EBF1EC;color:var(--muted)}.k-gone{background:#F3E7E4;color:var(--early)}
+.step{background:var(--card);border:1px solid var(--cardBorder);border-radius:15px;padding:13px 15px 14px;margin-bottom:10px}
+.step>.h{display:flex;align-items:baseline;gap:9px;margin-bottom:10px}
+.step>.h b{font-family:"Schibsted Grotesk",sans-serif;font-size:14.5px}
+.step>.h small{font-size:11.5px;color:var(--muted)}
+.step>.h .who{margin-left:auto;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:999px;padding:3px 9px}
+.step>.h .who.cup{color:#fff;background:var(--deepPine)}
+.scr{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:9px}
+.scr .x{border:1px solid var(--cardBorder);border-radius:11px;padding:9px 10px 10px;background:#FBFDFB}
+.scr .x .t{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+.scr .x .t b,.scr .x .t a{font-size:12.5px;font-weight:600;line-height:1.25;text-decoration:none}
+.scr .x .t a{border-bottom:1.5px solid #A9DCC6}
+.scr .x p{margin:0;font-size:11px;color:var(--muted);line-height:1.45}
+.scr .x .t span{font-size:9.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;border-radius:4px;padding:2px 6px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<h1>Create flow &mdash; cup tournament</h1>
+<p class="lede">Every step between &ldquo;New Tournament&rdquo; and a group putting on the first green, in the order the build presents them. Numbers refer to the shipped screenshots in this group. The problems we have been fixing one screen at a time mostly come from one cause: <b>the wizard asks for things it cannot know yet</b>, and calls itself finished eight steps before setup actually is.</p>
+<div class="legend">
+<span class="lg e"><i></i>Asked before it can be known</span>
+<span class="lg d"><i></i>Collected in more than one place</span>
+<span class="lg m"><i></i>Candidate to merge or cut</span>
+<span class="lg all"><i></i>Every tournament type</span>
+<span class="lg cup"><i></i>Cup only</span>
+</div>
+
+<div class="ph">
+<div class="phhd"><h2>1 &middot; Wizard</h2><span class="cnt">10 screens, labelled &ldquo;4 of 4&rdquo;</span><span class="who">All types</span></div>
+<div class="row">
+<div class="s"><div class="sn"><span class="i">13</span><b>Basics</b></div><p>Collects <em>name, course, date</em>.</p></div>
+<div class="s flag"><div class="sn"><span class="i">14</span><b>Tournament game</b></div><p>Collects <em>Cup Play / stroke / other</em>. Decides whether half the remaining steps exist at all.</p><div class="fl"><span class="m">Should be step 1</span></div></div>
+<div class="s"><div class="sn"><span class="i">15</span><b>Round details</b></div><p>Collects <em>course, date, players per round</em>.</p><div class="fl"><span class="d">Players named here too</span></div></div>
+<div class="s"><div class="sn"><span class="i">16</span><b>Handicap mode</b></div><p>Collects <em>net / gross / strokes-off low</em>.</p></div>
+<div class="s"><div class="sn"><span class="i">17</span><b>Cup design</b></div><p>Collects <em>team count, colours</em> &mdash; and in our revision, <em>names and badges</em>.</p><div class="fl"><span class="d">Names also editable at 22</span></div></div>
+<div class="s flag"><div class="sn"><span class="i">18</span><b>Secondary game</b></div><p>Collects <em>a side game</em> &mdash; but Triple Cup is exclusive, so for the default cup this step has no legal answer.</p><div class="fl"><span class="e">Contradicts 19</span><span class="m">Skip when exclusive</span></div></div>
+<div class="s flag"><div class="sn"><span class="i">19 &middot; 28</span><b>Games by round</b></div><p>Collects <em>format, points, group count</em>. Groups do not exist until step 27.</p><div class="fl"><span class="e">Group count unknowable</span></div></div>
+<div class="s flag"><div class="sn"><span class="i">20</span><b>Review</b></div><p>Summarises the wizard. Reads as the end of setup; eight required steps follow.</p><div class="fl"><span class="e">Claims completion</span></div></div>
+<div class="s"><div class="sn"><span class="i">21</span><b>Created</b></div><p>Success state. The only screen that could set the expectation of what is left &mdash; and does not.</p><div class="fl"><span class="m">Merge into 20</span></div></div>
+</div>
+</div>
+<div class="arr">&#8595;</div>
+
+<div class="ph">
+<div class="phhd"><h2>2 &middot; Draft &amp; teams</h2><span class="cnt">3 screens</span><span class="who cup">Cup only</span></div>
+<div class="row">
+<div class="s flag"><div class="sn"><span class="i">22</span><b>Draft open</b></div><p>Empty rosters, rename pencil, <em>Lock Draft</em>. Invites a drag gesture that has no target while empty; Lock is enabled at zero players.</p><div class="fl"><span class="d">Renames teams</span></div></div>
+<div class="s flag"><div class="sn"><span class="i">23</span><b>Add players</b></div><p>Search and check from the roster. Never states <em>which team</em> it is filling.</p><div class="fl"><span class="d">Third place players are chosen</span></div></div>
+<div class="s"><div class="sn"><span class="i">02</span><b>Lock draft</b></div><p>Rosters become fixed; the banner switches to <em>draft locked</em>.</p></div>
+</div>
+</div>
+<div class="arr">&#8595;</div>
+
+<div class="ph">
+<div class="phhd"><h2>3 &middot; Round setup</h2><span class="cnt">5 screens, repeated per group, then per round</span><span class="who">All types</span></div>
+<div class="row">
+<div class="s"><div class="sn"><span class="i">03</span><b>Set up cup round</b></div><p>Collects <em>which cup game, which teams</em>.</p></div>
+<div class="s flag"><div class="sn"><span class="i">24</span><b>Set matches</b></div><p>Collects <em>2 per team</em> for one group. Shows <code>triple_cup</code> raw; no index shown, unlike 23.</p><div class="fl"><span class="m">One group at a time</span></div></div>
+<div class="s flag"><div class="sn"><span class="i">25</span><b>Tee selection</b></div><p>Collects <em>a tee per golfer</em>. Menu covers the row it belongs to; no <em>Set all</em>.</p><div class="fl"><span class="d">Set tees screen also owns this</span><span class="m">Fold into 24</span></div></div>
+<div class="s flag"><div class="sn"><span class="i">26</span><b>Tee time</b></div><p>Collects <em>one time</em> via a clock dial, for a value that is always the previous group plus ten minutes.</p><div class="fl"><span class="m">Fold into 24</span></div></div>
+<div class="s flag"><div class="sn"><span class="i">27</span><b>Groups for this round</b></div><p>Lists groups, <em>sitting out</em>, <em>Start Round</em>. This is where group count finally becomes real &mdash; six steps after it was asked for.</p><div class="fl"><span class="e">Answers 19</span></div></div>
+</div>
+</div>
+<div class="arr">&#8595;</div>
+
+<div class="ph">
+<div class="phhd"><h2>4 &middot; Play</h2><span class="cnt">10 screens</span><span class="who">All types</span></div>
+<div class="row">
+<div class="s"><div class="sn"><span class="i">05</span><b>Round hub</b></div><p>Foursomes, <em>Enter Scores</em>, <em>Complete Round</em>.</p></div>
+<div class="s"><div class="sn"><span class="i">04</span><b>Leaderboard</b></div><p>Team tally, live matches, points to win.</p></div>
+<div class="s"><div class="sn"><span class="i">09&ndash;12</span><b>Leaderboard tabs</b></div><p>Championship, Overview, Details, My Foursome.</p></div>
+<div class="s"><div class="sn"><span class="i">06&ndash;08</span><b>TD tools</b></div><p><em>Remove no-show</em>, <em>swap tee position</em>. The only steps that assume the plan was wrong &mdash; and the ones a real Cup morning needs most.</p></div>
+<div class="s"><div class="sn"><span class="i">01</span><b>Cup hub</b></div><p>Where a player lands between rounds. Now carries the live score.</p></div>
+</div>
+</div>
+
+<div class="cols">
+<div class="box">
+<h3>What I would change, in order</h3>
+<ol>
+<li><b>Ask the tournament type first.</b> It determines whether the draft phase, cup design and match selection exist. Asked second, the wizard cannot honestly tell you how long it is.</li>
+<li><b>Stop asking for the group count.</b> Derive it from round setup. This is the single change that removes a guess from the middle of the flow &mdash; done in <a href="cup-games-by-round.html">Games by round</a>.</li>
+<li><b>Relabel the wizard end.</b> Review should read <i>Save &amp; continue to draft</i>, and the created screen should say what remains: draft, then one round setup per round.</li>
+<li><b>Collapse round setup from five screens to one group builder.</b> Matches, tees and tee time are three screens describing one group; a captain building four groups walks twelve screens to do one job. Tee time defaults to previous + 10.</li>
+<li><b>Give players one owner.</b> They are named at 15, drafted at 23, and selected again at 24. The first is a count, the second is entitlement, the third is assignment &mdash; worth making that distinction visible rather than repeating a list.</li>
+<li><b>Skip the secondary-game step when the format is exclusive.</b> Triple Cup forbids it, so asking is a dead end.</li>
+</ol>
+</div>
+<div class="box">
+<h3>Where the four families diverge</h3>
+<p>What varies between tournaments is <b>how many golfers share a score</b>, and the rest follows from it &mdash; so the families are named for the scoring unit rather than for a game. Skins, rabbit and Nassau are <b>group bets</b> rather than types, and they need individual gross, which is why the last row is the one that decides them.</p>
+<table class="div">
+<tr><th>Step</th><th>Cup<br><i>side</i></th><th>Individual<br><i>golfer</i></th><th>Two-man<br><i>pair</i></th><th>Four-man<br><i>group</i></th></tr>
+<tr><td>Basics, course, dates</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td></tr>
+<tr><td>Handicap</td><td class="y">per golfer</td><td class="y">per golfer</td><td class="y">combined</td><td class="y">combined</td></tr>
+<tr><td>Teams, colours, badges</td><td class="y">&#10003;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td></tr>
+<tr><td>Draft</td><td class="y">&#10003;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td></tr>
+<tr><td>Field</td><td class="n">&mdash;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td></tr>
+<tr><td>Pairings</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="y">&#10003;</td><td class="n">&mdash;</td></tr>
+<tr><td>Format per round</td><td class="y">per segment</td><td class="y">per round</td><td class="y">per round</td><td class="y">per round</td></tr>
+<tr><td>Points scale</td><td class="n">&mdash;</td><td class="y">Stableford</td><td class="n">&mdash;</td><td class="n">&mdash;</td></tr>
+<tr><td>Payout</td><td class="n">points</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td></tr>
+<tr><td>Groups, tees, tee times</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">&#10003;</td></tr>
+<tr><td>Leaderboard shape</td><td class="y">side v side</td><td class="y">field</td><td class="y">pairs</td><td class="y">groups</td></tr>
+<tr><td>Scores captured</td><td class="y">per golfer</td><td class="y">per golfer</td><td class="y">one or two</td><td class="y">one or four</td></tr>
+<tr><td>Group bets possible</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td class="y">best ball</td><td class="y">shamble</td></tr>
+</table>
+<p style="margin-top:12px">Two consequences. <b>The group builder is shared work</b> &mdash; all four families walk it, which makes it the highest-leverage screen in the flow and the one currently spread across the most screens. And <b>the one-ball formats need something the app does not have:</b> alternate shot, Chapman and scramble put a single card in for two or four golfers. Best ball, shamble and bramble keep individual cards, so they are the cheap half.</p>
+</div>
+</div>
+
+<div class="prop">
+<h3>Proposed sequence</h3>
+<p>Same steps, resequenced so nothing is asked before it can be answered. Phases are named for what the captain is doing, not for the data being written.</p>
+<div class="strip">
+<div class="st"><b>1 &middot; What kind of event</b><small>Type, name, course, dates, handicap mode.</small><span class="tag">Moved first</span></div>
+<div class="st"><b>2 &middot; Teams</b><small>Count, colours, names, badges. Cup only.</small><span class="tag q">Unchanged</span></div>
+<div class="st"><b>3 &middot; Format per round</b><small>Format and points per segment. Points per group shown; no group count asked.</small><span class="tag">Derived</span></div>
+<div class="st"><b>4 &middot; Save &amp; draft</b><small>Review that names what is left, then rosters.</small><span class="tag">Relabelled</span></div>
+<div class="st"><b>5 &middot; Build the groups</b><small>One screen per group: players, tees, tee time. Repeats per round.</small><span class="tag">5 screens &rarr; 1</span></div>
+<div class="st"><b>6 &middot; Play</b><small>Round hub, leaderboard, TD tools.</small><span class="tag q">Unchanged</span></div>
+</div>
+</div>
+
+<div class="inv">
+<h2>Screens this implies</h2>
+<p class="lede">The six phases above are the sequence. This is the screen list underneath them &mdash; which drawings exist, which shipped screens carry over untouched, which still need drawing, and which the collapse retires. Fifteen are drawn, one remains, and six shipped screens are retired. The list covers cup play; the three other families reuse it except where the divergence table says otherwise.</p>
+<div class="key"><span class="k-new">Drawn</span><span class="k-rev">To draw</span><span class="k-keep">Ships as is</span><span class="k-gone">Retired</span></div>
+
+<div class="step"><div class="h"><b>1 &middot; What kind of event</b><small>3 screens, 1 retired &middot; steps 1&ndash;2 and 4</small><span class="who">All types</span></div><div class="scr">
+<div class="x"><div class="t"><a href="cup-wizard-step1.html">Type &amp; format</a><span class="k-new">Drawn</span></div><p>The scoring unit &mdash; side, golfer, pair or group &mdash; its formats, the consequences that follow, and the derived step list. Replaces shipped 13&ndash;14.</p></div>
+<div class="x"><div class="t"><a href="cup-event-details.html">Event details</a><span class="k-new">Drawn</span></div><p>Name, home course, and a round per date &mdash; shipped 13 and 15 merged, players-per-round dropped. Rounds are created here because every later step is per round.</p></div>
+<div class="x"><div class="t"><a href="cup-handicap.html">Handicap</a><span class="k-new">Drawn</span></div><p>Mode only &mdash; course and date moved here to event details. Allowance is set per segment at its match-play standard, and the net double-bogey cap is struck because match play has no stroke total to protect. Replaces shipped 16.</p></div>
+<div class="x"><div class="t"><b>Round details</b><span class="k-gone">Retired</span></div><p>Shipped 15 restates course and date and asks players per round. Merged into event details above.</p></div>
+</div></div>
+
+<div class="step"><div class="h"><b>2 &middot; Teams</b><small>1 screen</small><span class="who cup">Cup only</span></div><div class="scr">
+<div class="x"><div class="t"><a href="cup-design-teams.html">Teams</a><span class="k-new">Drawn</span></div><p>Count, colours, names and badges in one place, so the draft never has to rename.</p></div>
+</div></div>
+
+<div class="step"><div class="h"><b>3 &middot; Format per round</b><small>2 screens</small><span class="who">All types</span></div><div class="scr">
+<div class="x"><div class="t"><a href="cup-games-by-round.html">Games by round</a><span class="k-new">Drawn</span></div><p>Format and points per segment, per round. Group count removed.</p></div>
+<div class="x"><div class="t"><a href="cup-side-game.html">Tournament side game</a><span class="k-new">Drawn</span></div><p>Field-wide only &mdash; Irish Rumble, Pink Ball. Relabelled off shipped 18, and struck with its reason when the format is exclusive. Skins, Nassau and rabbit move out to group scope.</p></div>
+</div></div>
+
+<div class="step"><div class="h"><b>4 &middot; Save &amp; draft</b><small>3 screens</small><span class="who cup">Cup only</span></div><div class="scr">
+<div class="x"><div class="t"><a href="cup-review.html">Review &amp; save</a><span class="k-new">Drawn</span></div><p>Names what is left and absorbs the shipped <i>Created</i> screen (21).</p></div>
+<div class="x"><div class="t"><a href="ryder-cup-draft.html">Draft board</a><span class="k-new">Drawn</span></div><p>Rosters and lock. Lock stays disabled until every side is legal.</p></div>
+<div class="x"><div class="t"><a href="draft-add-players.html">Add players to a side</a><span class="k-new">Drawn</span></div><p>The side is named in the header, the count runs against the roster size, and drafted golfers say who holds them. Replaces shipped 23.</p></div>
+</div></div>
+
+<div class="step"><div class="h"><b>4b &middot; Pairings</b><small>1 screen</small><span class="who">Two-man only</span></div><div class="scr">
+<div class="x"><div class="t"><b>Pairings</b><span class="k-rev">To draw</span></div><p>Two golfers a side, set once and carried per round &mdash; the two-man equivalent of the draft. The wizard names this step; no screen exists. Same shape as the draft board, one side per pair instead of two rosters of eight.</p></div>
+</div></div>
+
+<div class="step"><div class="h"><b>5 &middot; Build the groups</b><small>2 screens, plus 5 retired</small><span class="who">All types</span></div><div class="scr">
+<div class="x"><div class="t"><a href="group-builder.html">Group builder</a><span class="k-new">Drawn</span></div><p>Golfers, tees, tee time, start format and group bets in one card. Replaces 24, 25 and 26.</p></div>
+<div class="x"><div class="t"><a href="round-groups.html">Groups for this round</a><span class="k-new">Drawn</span></div><p>The hub the builder returns to &mdash; composition, tee time, tees and bets per group, unassigned golfers by name, and a <i>Start Round</i> that states its blocker. Replaces shipped 27.</p></div>
+<div class="x"><div class="t"><b>Set matches &middot; Tee selection &middot; Tee time</b><span class="k-gone">Retired</span></div><p>Shipped 24, 25, 26 and the standalone <i>Set tees</i> screen. Three screens describing one group.</p></div>
+<div class="x"><div class="t"><b>Set up cup round</b><span class="k-gone">Retired</span></div><p>Shipped 03 asks which cup game and which teams &mdash; both now answered in step 3.</p></div>
+</div></div>
+
+<div class="step"><div class="h"><b>6 &middot; Play</b><small>5 screens</small><span class="who">All types</span></div><div class="scr">
+<div class="x"><div class="t"><a href="cup-round-hub.html">Round hub</a><span class="k-new">Drawn</span></div><p>Groups, scores in, complete round.</p></div>
+<div class="x"><div class="t"><a href="cup-leaderboard.html">Cup leaderboard</a><span class="k-new">Drawn</span></div><p>Team tally, live matches, points to win.</p></div>
+<div class="x"><div class="t"><a href="cup-hub.html">Cup hub</a><span class="k-new">Drawn</span></div><p>Where a player lands between rounds, carrying the live score.</p></div>
+<div class="x"><div class="t"><a href="leaderboard-group-bets.html">Group bets on the leaderboard</a><span class="k-new">Drawn</span></div><p>Skins, Nassau and rabbit settled from the gross already entered &mdash; a tab at group scope, not a second scoring flow.</p></div>
+<div class="x"><div class="t"><b>TD tools</b><span class="k-keep">Ships as is</span></div><p>No-show removal and tee-position swap. Shipped 06&ndash;08 carry over.</p></div>
+</div></div>
+</div>
+</body>
+</html>

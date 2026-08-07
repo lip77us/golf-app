@@ -1,0 +1,219 @@
+<!-- @dsCard group="Cup Flow" name="Teams" subtitle="Step 3 — count, names, badges and colours in one place: 16-char cap derived from iPhone 13 mini, real swatches, colours locked once taken, badge collisions warned not blocked" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Teams</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--field:#F3F7F3;--warn:#B24225}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.calc{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;color:var(--muted);line-height:1.6}
+.calc b{color:var(--deepPine)}
+.calc table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+.calc td{padding:1px 0}
+.calc td:last-child{text-align:right;color:var(--deepPine);font-weight:600}
+.calc .tot td{border-top:1px solid #E6EDE7;padding-top:4px}
+.phone{width:375px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.dev{position:absolute;left:0;right:0;top:-24px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.4px;color:#5C6B62;text-transform:uppercase}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .stp{margin-left:auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.prog{height:3px;background:#DDE6DE}
+.prog i{display:block;height:100%;width:42.8%;background:var(--pine)}
+.body{padding:16px 16px 96px;overflow-y:auto;height:685px}
+h2.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:24px;margin:0 0 5px}
+p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
+label.fl{display:block;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.fld{display:flex;align-items:center;gap:9px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:0 12px;height:48px}
+.fld:focus-within{border-color:var(--pine)}
+.fld input{border:none;outline:none;background:transparent;flex:1;min-width:0;font:600 15px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine)}
+.fld input::placeholder{color:#9AA8A0;font-weight:400}
+.fld .ct{font-size:11.5px;color:#9AA8A0;font-variant-numeric:tabular-nums;flex:none}
+.fld .ct.hi{color:var(--warn);font-weight:600}
+.nrow{display:flex;gap:9px;align-items:flex-start}
+.nrow .fld{flex:1;min-width:0}
+.bg{width:62px;flex:none}
+.bg .fld{padding:0 8px;justify-content:center}
+.bg input{text-align:center;text-transform:uppercase;letter-spacing:.5px;font-weight:700;font-size:15px}
+.bglb{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#9AA8A0;text-align:center;margin-top:4px}
+.dup{display:none;align-items:center;gap:8px;background:#FDF3E7;border-radius:11px;padding:9px 11px;margin-top:2px;font-size:12.5px;line-height:1.45;color:#8A5216}
+.dup.on{display:flex}
+.dup svg{width:16px;height:16px;stroke:#B9791C;fill:none;stroke-width:1.9;stroke-linecap:round;flex:none}
+.fld svg{width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:1.8;stroke-linecap:round;flex:none}
+.sec{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:20px 0 8px}
+.cnt{display:flex;gap:8px}
+.cnt button{flex:1;height:44px;border-radius:12px;border:1.5px solid var(--cardBorder);background:var(--card);font:600 14px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);cursor:pointer}
+.cnt button.on{background:var(--pine);border-color:var(--pine);color:#fff}
+.tc{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:12px 13px 13px;margin-bottom:10px}
+.tct{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.tct .chip{min-width:24px;height:24px;padding:0 4px;border-radius:8px;color:#fff;font:700 12px/24px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.tct .n{font-size:13.5px;font-weight:600;color:var(--deepPine)}
+.tct .n.ph{color:#9AA8A0;font-weight:500}
+.sw{display:flex;gap:9px;margin-top:11px}
+.sw button{position:relative;width:34px;height:34px;border-radius:11px;border:2px solid transparent;background:transparent;padding:0;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
+.sw button i{display:block;width:24px;height:24px;border-radius:8px}
+.sw button.on{border-color:var(--deepPine)}
+.sw button.on:after{content:"\2713";position:absolute;color:#fff;font-size:13px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.sw button.tk{opacity:.3;cursor:not-allowed}
+.sw button.tk:after{content:"";position:absolute;width:30px;height:2px;background:var(--deepPine);transform:rotate(-45deg)}
+.hint{font-size:11.5px;color:#9AA8A0;margin-top:9px}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Teams</h1>
+<p>Teams need names, and this is the step that collects them &mdash; step 3, after the event exists and before anybody is drafted into it. The shipped screen sets a team <b>count</b> and a team <b>colour</b> but never a name, which is why every downstream screen says &ldquo;Team 1 / Team 2&rdquo;.</p>
+<h3>Why 16 characters</h3>
+<p>The cap is set by the narrowest place a team name has to render on one line &mdash; the leaderboard score header on an iPhone 13 mini, the smallest screen we support.</p>
+<div class="calc"><table>
+<tr><td>Viewport (iPhone 13 mini)</td><td>375</td></tr>
+<tr><td>Body padding 14 &times; 2</td><td>&minus;28</td></tr>
+<tr><td>Half the board (two teams)</td><td>&divide; 2</td></tr>
+<tr><td>Cell padding 14 &times; 2</td><td>&minus;28</td></tr>
+<tr><td>Team chip + gap</td><td>&minus;27</td></tr>
+<tr class="tot"><td>Available for the name</td><td>118 px</td></tr>
+<tr><td>Spline Sans 600 at 13.5px</td><td>&asymp;7.2 px/char</td></tr>
+<tr class="tot"><td><b>Cap</b></td><td><b>16 chars</b></td></tr>
+</table></div>
+<ul>
+<li><b>16 fits every single-line surface</b>: board header, match card, draft roster.</li>
+<li><b>Over 12 wraps to two lines</b> in the compact hub tally, which is why that row was given a wrapping name and a smaller score.</li>
+<li>The counter appears from <b>12 characters on</b>, not from the first keystroke &mdash; a limit you are nowhere near is noise.</li>
+</ul>
+<h3>Other fixes on this step</h3>
+<ul>
+<li><b>Colours are swatches, not tinted word-pills.</b> The shipped control renders the colour name in that colour with a pale fill, so unselected options read as disabled. A filled square with a check is unambiguous.</li>
+<li><b>A colour taken by another team is struck through and locked.</b> Two teams could previously pick the same colour, which makes the whole red/blue system meaningless.</li>
+<li><b>2 teams is genuinely selected on arrival</b> and <b>Next</b> is enabled &mdash; the shipped screen highlights 2 but keeps Next disabled until a chip is tapped.</li>
+<li><b>The cup name is not asked here.</b> It belongs to <a href="cup-event-details.html">event details</a> at step 2, and asking twice is how the shipped flow ended up with three owners for the player list. The name is whatever the captain typed &mdash; nothing is appended, so a cup called <i>Tilden Ryder Cup</i> was typed in full.</li>
+<li>Names are <b>optional with a real default</b>: leave a field alone and it stays Team 1 / Team 2, so the step never blocks a captain in a hurry.</li>
+</ul>
+<h3>The badge is editable, and collisions are allowed</h3>
+<p>We do <b>not</b> block two teams from sharing a first letter. &ldquo;Berkeley Blues&rdquo; and &ldquo;Bucko&rsquo;s Bandits&rsquo;&rdquo; are both legitimate, and rejecting a name for a reason the user cannot see is the worst kind of validation.</p>
+<ul>
+<li><b>The badge is its own field</b>, one or two characters, sitting beside the name. It auto-derives (leading &ldquo;Team&nbsp;&rdquo; stripped, so <i>Team Bucko</i> gives <b>B</b>) and keeps following the name until you type in it &mdash; after that it is yours and stops changing.</li>
+<li><b>A duplicate badge warns, it does not block.</b> Colour is the primary identifier and it is already unique by construction; the badge is a secondary cue for greyscale and print, so a clash is a nuisance rather than an error.</li>
+<li>Two characters exist for the case that solves most clashes &mdash; <b>BB</b> and <b>BL</b> &mdash; and the chip is sized to hold them at every size it appears in.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>12:49</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="stp">3 of 7</span></div>
+<div class="prog"><i></i></div>
+<div class="body">
+<h2 class="hd">Teams</h2>
+<p class="sub">How many sides, what they are called, and which colour each one wears. Players are assigned in the draft.</p>
+
+<div class="sec">Number of teams</div>
+<div class="cnt" id="cnt"><button class="on">2 teams</button><button>3 teams</button><button>4 teams</button></div>
+
+<div class="sec">Teams</div>
+
+<div class="tc" data-team="1">
+<div class="tct"><span class="chip" style="background:#B93327">B</span><span class="n">Team 1</span></div>
+<div class="nrow">
+<div class="fld"><input class="tn" value="Team Bucko" maxlength="16" placeholder="Team 1"><span class="ct"></span></div>
+<div class="bg"><div class="fld"><input class="bd" maxlength="2" value="B"></div><div class="bglb">Badge</div></div>
+</div>
+<div class="sw">
+<button class="on" data-c="#B93327"><i style="background:#B93327"></i></button>
+<button class="tk" data-c="#1B4C99"><i style="background:#1B4C99"></i></button>
+<button data-c="#1D7A4C"><i style="background:#1D7A4C"></i></button>
+<button data-c="#D2691E"><i style="background:#D2691E"></i></button>
+<button data-c="#E0B411"><i style="background:#E0B411"></i></button>
+<button data-c="#6B4CA8"><i style="background:#6B4CA8"></i></button>
+</div>
+</div>
+
+<div class="tc" data-team="2">
+<div class="tct"><span class="chip" style="background:#1B4C99">M</span><span class="n">Team 2</span></div>
+<div class="nrow">
+<div class="fld"><input class="tn" value="Team Miller" maxlength="16" placeholder="Team 2"><span class="ct"></span></div>
+<div class="bg"><div class="fld"><input class="bd" maxlength="2" value="M"></div><div class="bglb">Badge</div></div>
+</div>
+<div class="sw">
+<button class="tk" data-c="#B93327"><i style="background:#B93327"></i></button>
+<button class="on" data-c="#1B4C99"><i style="background:#1B4C99"></i></button>
+<button data-c="#1D7A4C"><i style="background:#1D7A4C"></i></button>
+<button data-c="#D2691E"><i style="background:#D2691E"></i></button>
+<button data-c="#E0B411"><i style="background:#E0B411"></i></button>
+<button data-c="#6B4CA8"><i style="background:#6B4CA8"></i></button>
+</div>
+</div>
+
+<div class="dup" id="dup"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h0M10.3 3.9 2.6 17.2A1.9 1.9 0 0 0 4.3 20h15.4a1.9 1.9 0 0 0 1.7-2.8L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg><span>Both teams use the badge <b class="bl">B</b>. Colour still tells them apart, but a different letter reads faster on the scorecard.</span></div>
+<div class="hint">Names up to 16 characters &mdash; enough to fit the leaderboard on the smallest phone. The badge is one or two characters and follows the name unless you set it yourself.</div>
+
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next">Next &mdash; Handicap</button></div>
+</div>
+<script>
+function derive(s){s=(s||'').trim().replace(/^team\s+/i,'');return s?s.charAt(0).toUpperCase():'?'}
+function dupes(){
+  var v=[].map.call(document.querySelectorAll('.bd'),function(b){return b.value.trim().toUpperCase()}).filter(Boolean);
+  var hit=v.filter(function(x,i){return v.indexOf(x)!==i})[0];
+  var box=document.getElementById('dup');
+  box.classList.toggle('on',!!hit);
+  if(hit)box.querySelector('.bl').textContent=hit;
+}
+document.querySelectorAll('.tc').forEach(function(tc){
+  var inp=tc.querySelector('.tn'),ct=tc.querySelector('.ct'),chip=tc.querySelector('.chip'),bd=tc.querySelector('.bd'),nm=tc.querySelector('.tct .n'),own=false;
+  function paint(){
+    var n=inp.value.length;
+    ct.textContent=n>=12?n+'/16':'';
+    ct.className='ct'+(n>=16?' hi':'');
+    if(!own)bd.value=derive(inp.value||inp.placeholder);
+    chip.textContent=bd.value.trim().toUpperCase()||'?';
+    var t=inp.value.trim();
+    nm.textContent=t||inp.placeholder;
+    nm.className='n'+(t?'':' ph');
+    dupes();
+  }
+  inp.addEventListener('input',paint);
+  bd.addEventListener('input',function(){own=bd.value.trim()!=='';bd.value=bd.value.toUpperCase();chip.textContent=bd.value.trim()||derive(inp.value||inp.placeholder);dupes()});
+  paint();
+});
+document.querySelectorAll('.sw button').forEach(function(b){
+  b.addEventListener('click',function(){
+    if(b.classList.contains('tk'))return;
+    var tc=b.closest('.tc'),c=b.dataset.c;
+    tc.querySelectorAll('.sw button').forEach(function(x){x.classList.remove('on')});
+    b.classList.add('on');
+    tc.querySelector('.chip').style.background=c;
+    document.querySelectorAll('.tc').forEach(function(o){
+      if(o===tc)return;
+      o.querySelectorAll('.sw button').forEach(function(x){
+        if(x.classList.contains('on'))return;
+        x.classList.toggle('tk',x.dataset.c===c);
+      });
+    });
+  });
+});
+document.querySelectorAll('#cnt button').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('#cnt button').forEach(function(x){x.classList.remove('on')});
+    b.classList.add('on');
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!-- @dsCard group="Cup Flow" name="New tournament — type first" subtitle="Type is a scoring unit — side, golfer, pair or group — and the format sets it; scores captured, leaderboard shape and group-bet availability follow, and the step list is derived" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · New tournament</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--field:#DEE9E0;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:104px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .stp{margin-left:auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.prog{height:3px;background:#DDE6DE}
+.prog i{display:block;height:100%;background:var(--pine);transition:width .2s}
+.body{padding:16px 16px 92px;overflow-y:auto;height:685px}
+h2.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:24px;margin:0 0 5px}
+p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.opts{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.o{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 12px;cursor:pointer}
+.o.on{border-color:var(--pine);background:#F4FAF6}
+.o .rd{min-width:18px;height:18px;border-radius:50%;border:2px solid #C3CFC6;flex:none;margin-top:1px;position:relative}
+.o.on .rd{border-color:var(--pine)}
+.o.on .rd:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--pine)}
+.o .d{flex:1;min-width:0}
+.o .d b{display:block;font-size:14.5px;font-weight:600;line-height:1.25}
+.o .d small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.4}
+.o .tg{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--warn);background:#FDF3E7;border-radius:5px;padding:3px 6px;flex:none;margin-top:2px}
+.o .unit{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:5px;padding:3px 6px;flex:none;margin-top:2px}
+.cap{background:var(--card);border:1px solid var(--cardBorder);border-radius:13px;padding:11px 12px;margin:-8px 0 18px}
+.cap .r{display:flex;align-items:baseline;gap:8px;font-size:12.5px;padding:3px 0}
+.cap .r span{color:var(--muted);flex:none;width:96px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.cap .r b{font-weight:600}
+.cap .r.bet b{font-weight:600}
+.cap .r.bet.no b{color:var(--warn)}
+.cap .r.bet.yes b{color:var(--pine)}
+.plan{background:var(--deepPine);border-radius:15px;padding:14px 15px 15px;color:#DDEBE2}
+.plan .ph{display:flex;align-items:baseline;gap:8px;margin-bottom:11px}
+.plan h3{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7FA694;margin:0}
+.plan .n{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:13px;color:var(--brightMint)}
+.st{display:flex;align-items:flex-start;gap:9px;padding:7px 0;font-size:13px}
+.st+.st{border-top:1px solid rgba(255,255,255,.09)}
+.st .i{min-width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,.12);color:#DDEBE2;font:700 10.5px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.st .d{flex:1;min-width:0}
+.st .d b{display:block;font-weight:600;color:#fff;font-size:13px}
+.st .d small{display:block;color:#9EBCAD;font-size:11.5px;margin-top:1px;line-height:1.4}
+.st.skip{opacity:.55}
+.st.skip .i{background:transparent;border:1px dashed rgba(255,255,255,.3);color:#9EBCAD}
+.st.skip .d b{text-decoration:line-through;text-decoration-color:#7FA694;color:#BFD5C8}
+.st.skip .d small{color:var(--brightMint)}
+.st .rep{flex:none;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#08301F;background:var(--brightMint);border-radius:4px;padding:2px 5px;margin-top:3px}
+.pfoot{margin:11px 0 0;padding-top:10px;border-top:1px solid rgba(255,255,255,.09);font-size:11px;line-height:1.5;color:#9EBCAD}
+.pfoot b{color:#fff;font-weight:600}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Type first</h1>
+<p>The shipped wizard asks the tournament type <b>second</b>, and calls itself &ldquo;4 of 4&rdquo; regardless. But the type decides whether teams, a draft and match selection exist at all &mdash; so until it is answered, the wizard cannot say how long it is, and the answer it gives is wrong for every type.</p>
+<h3>The type is a scoring unit</h3>
+<p>Cup, stroke and Stableford are not four options on one list &mdash; they answer different questions. What actually varies between tournaments is <b>how many golfers share a score</b>, and everything downstream follows from it: who enters a number, what a leaderboard row is, and whether a group bet can exist at all.</p>
+<div class="own"><table>
+<tr><td>Side</td><td><b>Cup play.</b> Drafted teams, match segments, points to a side. Scores still land per golfer inside the segments.</td></tr>
+<tr><td>Golfer</td><td><b>Individual.</b> Stroke play and Stableford. One score per golfer against the field.</td></tr>
+<tr><td>Pair</td><td><b>Two-man team.</b> Chapman and alternate shot put one ball in the hole; best ball keeps two cards.</td></tr>
+<tr><td>Group</td><td><b>Four-man team.</b> Scramble puts one ball in the hole. Shamble and bramble keep individual cards after the drive.</td></tr>
+</table></div>
+<p>The consequence strip under the format list states the three things that follow, in the app&rsquo;s own words, before any of them cost a screen. <b>Group bets fall out of it rather than being special-cased:</b> Skins and Nassau need individual gross, so they are available under best ball and shamble and unavailable under alternate shot and scramble &mdash; and no rule has to name a format.</p>
+<h3>Recommendation 1 &mdash; ask type first</h3>
+<ul>
+<li>Type and format are the <b>first and only</b> question on step 1. Everything downstream is a consequence of them.</li>
+<li>The step list is <b>derived and shown immediately</b>. A cup on Triple Cup has six steps left; stroke play has six of a different shape; Stableford has seven. Nobody is told &ldquo;4 of 4&rdquo; and then handed eight more screens.</li>
+<li><b>A cup can mix formats across rounds</b> &mdash; Triple Cup one day, Singles the next. Triple Cup is exclusive because its segments own all 18 holes, so nothing else can run alongside it.</li>
+<li><b>Scoring unit is a property of the format, not the type.</b> A two-man team can be one ball or two; a four-man team can be one card or four. That is why the strip reads off the format and not the type above it.</li>
+<li>The two numbers agree: the header counts <b>this step plus what remains</b>, and the panel is titled for what is left.</li>
+<li>Because the list is real, the progress bar can be honest about position.</li>
+</ul>
+<h3>Recommendation 6 &mdash; drop steps that have no answer</h3>
+<p>Triple Cup is exclusive: no other game can run on the round. The shipped wizard still presents a <b>Side game</b> step, which cannot be answered. Here it is struck from the plan the moment an exclusive format is chosen, with the reason attached &mdash; so the removal reads as the format working, not as a missing screen.</p>
+<h3>Recommendation 5 &mdash; players get one owner</h3>
+<p>Players are currently named in three places, meaning three different things. Naming the meanings is what removes the duplication:</p>
+<div class="own"><table>
+<tr><td>Entitlement</td><td>Who is in the tournament. <b>One owner</b> &mdash; the draft for a cup, the field for stroke or Stableford. Round details no longer asks for a player count; it is the size of the roster.</td></tr>
+<tr><td>Side</td><td>Which team a golfer belongs to. Set once, in the draft.</td></tr>
+<tr><td>Assignment</td><td>Which group and which round. Set in the group builder, and changeable on the morning without touching either of the above.</td></tr>
+</table></div>
+<h3>Still open</h3>
+<ul>
+<li><b>Skins, rabbit and Nassau are not tournament types</b> &mdash; and not tournament side games either. They are <b>group bets</b>, set on the group rather than the field, and they are only a leaderboard addition: the gross scores the tournament already collects are all they need. A <b>tournament side game</b> is a different thing at a different scope &mdash; Irish Rumble or Pink Ball, played by every foursome and scored across the field &mdash; which is what this step collects.</li>
+<li><b>Whether one-ball formats are worth building now.</b> Alternate shot, Chapman and scramble all need score entry to accept a single card for two or four golfers, which the app currently has no shape for. Best ball, shamble and bramble need none of that &mdash; they are individual cards with a different aggregation, so they are the cheap half of this list.</li>
+<li>Whether the step list should be tappable as a jump-to &mdash; useful for editing an existing tournament, confusing during first setup.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:40</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="stp" id="stp">1 of 7</span></div>
+<div class="prog"><i id="pr" style="width:14.2%"></i></div>
+<div class="body">
+<h2 class="hd">What kind of event?</h2>
+<p class="sub">This decides the rest of the setup, so it is the first thing we ask.</p>
+
+<div class="lb">Who is competing</div>
+<div class="opts" id="types">
+<div class="o on" data-t="cup"><span class="rd"></span><span class="d"><b>Team &mdash; cup play</b><small>Two to four drafted sides playing match segments for points.</small></span><span class="unit">Side</span></div>
+<div class="o" data-t="solo"><span class="rd"></span><span class="d"><b>Individual</b><small>Every golfer for himself, against the field.</small></span><span class="unit">Golfer</span></div>
+<div class="o" data-t="pair"><span class="rd"></span><span class="d"><b>Two-man team</b><small>Pairs against the field. Chapman, alternate shot, best ball.</small></span><span class="unit">Pair</span></div>
+<div class="o" data-t="quad"><span class="rd"></span><span class="d"><b>Four-man team</b><small>The whole group against the field. Scramble, shamble, bramble.</small></span><span class="unit">Group</span></div>
+</div>
+
+<div class="lb" id="fmlb">Cup format</div>
+<div class="opts" id="fmts"></div>
+
+<div class="cap">
+<div class="r"><span>Scores in</span><b id="cUnit">Per golfer in Fourball, per pair in Foursomes</b></div>
+<div class="r"><span>Leaderboard</span><b id="cLb">Side against side</b></div>
+<div class="r bet yes" id="cBetRow"><span>Group bets</span><b id="cBet">Available &mdash; the Fourball segment has individual gross</b></div>
+</div>
+
+<div class="plan">
+<div class="ph"><h3>What&rsquo;s left after this step</h3><span class="n" id="pn">6 steps</span></div>
+<div id="steps"></div>
+<p class="pfoot">Counted for a one-round event. Rounds are set on the next screen, and the two steps marked <b>per round</b> repeat with them &mdash; a two-round cup is nine steps, not seven.</p>
+</div>
+
+</div>
+<div class="bottom"><button class="back">Cancel</button><button class="next">Next</button></div>
+</div>
+<script>
+var FMT={
+cup:[['triple','Triple Cup','Fourball, Foursomes and two Singles per group \u2014 four points a group.',1,'mixed'],
+     ['singles','Singles','One match per pairing.',0,'golfer'],
+     ['fourball','Fourball','One better-ball match per group.',0,'golfer']],
+solo:[['stroke','Stroke play','Gross or net against the field.',0,'golfer'],
+      ['stableford','Stableford','Points per hole against par.',0,'golfer']],
+pair:[['bestball','Best ball','Both play their own ball; the better score counts on each hole.',0,'golfer'],
+      ['chapman','Chapman','Both drive, swap for the second, then one ball to the hole.',0,'pair'],
+      ['alt','Alternate shot','One ball, played in turn. Also called foursomes.',0,'pair']],
+quad:[['shamble','Shamble','Best drive, then everyone plays their own ball in.',0,'golfer'],
+      ['bramble','Bramble','Best drive, own ball, the best two scores count.',0,'golfer'],
+      ['scramble','Scramble','Four drives, one chosen, all four play it. One ball to the hole.',0,'group']]};
+var UNIT={
+golfer:['Per golfer','Available \u2014 individual gross is on the card'],
+pair:['Per pair \u2014 one ball','Unavailable \u2014 no individual gross to read'],
+group:['Per group \u2014 one ball','Unavailable \u2014 no individual gross to read'],
+mixed:['Per golfer in Fourball, per pair in Foursomes','Available \u2014 the Fourball segment has individual gross']};
+var LB={cup:'Side against side',solo:'Field, gross or net',pair:'Pairs against the field',quad:'Groups against the field'};
+var LBL={cup:'Cup format',solo:'Scoring',pair:'Two-man format',quad:'Four-man format'};
+var type='cup',fmt='triple',excl=true,unit='mixed';
+function paintFmts(){
+  var list=FMT[type],only=list.length===1;
+  document.getElementById('fmlb').textContent=LBL[type];
+  document.getElementById('fmts').innerHTML=list.map(function(f,i){
+    return '<div class="o'+(i===0?' on':'')+'" data-f="'+f[0]+'" data-x="'+f[3]+'" data-u="'+f[4]+'"><span class="rd"></span><span class="d"><b>'+f[1]+'</b><small>'+f[2]+'</small></span>'+(f[3]?'<span class="tg">Exclusive</span>':'')+'</div>';
+  }).join('');
+  fmt=list[0][0];excl=list[0][3]===1;unit=list[0][4];
+  bindFmts();
+}
+function paintCaps(){
+  var u=UNIT[unit];
+  document.getElementById('cUnit').textContent=u[0];
+  document.getElementById('cLb').textContent=LB[type];
+  document.getElementById('cBet').textContent=u[1];
+  var row=document.getElementById('cBetRow'),ok=u[1].indexOf('Available \u2014')===0;
+  row.classList.toggle('yes',ok);row.classList.toggle('no',!ok);
+}
+function plan(){
+  var s=[{b:'Event details',d:'Name, course, dates'}];
+  if(type==='cup'){
+    s.push({b:'Teams',d:'Count, colours, names and badges'});
+    s.push({b:'Handicap',d:'Net, gross or strokes off the low index'});
+    s.push({b:'Points by round',d:'Format, segment order, points and stake \u2014 totals follow from your groups',rep:1});
+    if(excl)s.push({b:'Tournament side game',d:'Skipped \u2014 Triple Cup is exclusive',skip:true});
+    else s.push({b:'Tournament side game',d:'Field-wide and tracked \u2014 Irish Rumble, Pink Ball'});
+    s.push({b:'Draft',d:'Add players and assign them to teams'});
+  }else{
+    s.push({b:'Handicap',d:unit==='golfer'?'Net, gross or strokes off the low index':'Combined allowance for the '+(unit==='pair'?'pair':'group')});
+    if(fmt==='stableford')s.push({b:'Stableford points',d:'Standard or modified scale'});
+    s.push({b:'Payout',d:'Places paid and stake'});
+    s.push({b:'Tournament side game',d:'Field-wide and tracked \u2014 Irish Rumble, Pink Ball'});
+    s.push({b:'Field',d:'Add the players in this tournament'});
+    if(type==='pair')s.push({b:'Pairings',d:'Two golfers a side, set once and carried per round'});
+  }
+  s.push({b:'Build the groups',d:type==='quad'?'Four golfers, tees and tee time \u2014 one screen per group':'Golfers, tees and tee time \u2014 one screen per group',rep:1});
+  var n=s.filter(function(x){return !x.skip}).length,i=0;
+  document.getElementById('steps').innerHTML=s.map(function(x){
+    var lbl=x.skip?'\u2013':(++i)+'';
+    return '<div class="st'+(x.skip?' skip':'')+'"><span class="i">'+lbl+'</span><span class="d"><b>'+x.b+'</b><small>'+x.d+'</small></span>'+(x.rep?'<span class="rep">Per round</span>':'')+'</div>';
+  }).join('');
+  document.getElementById('pn').textContent=n+' steps';
+  document.getElementById('stp').textContent='1 of '+(n+1);
+  document.getElementById('pr').style.width=(100/(n+1))+'%';
+  paintCaps();
+}
+function bindFmts(){
+  document.querySelectorAll('#fmts .o').forEach(function(o){
+    o.addEventListener('click',function(){
+      document.querySelectorAll('#fmts .o').forEach(function(x){x.classList.remove('on')});
+      o.classList.add('on');
+      fmt=o.dataset.f;excl=o.dataset.x==='1';unit=o.dataset.u;plan();
+    });
+  });
+}
+document.querySelectorAll('#types .o').forEach(function(o){
+  o.addEventListener('click',function(){
+    document.querySelectorAll('#types .o').forEach(function(x){x.classList.remove('on')});
+    o.classList.add('on');type=o.dataset.t;paintFmts();plan();
+  });
+});
+paintFmts();plan();
+</script>
+</body>
+</html>

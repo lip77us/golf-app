@@ -1,0 +1,158 @@
+<!-- @dsCard group="Cup Flow" name="Groups for this round" subtitle="Step 7 hub: composition, tee time and tees per group, unassigned golfers named, and a Start Round that states its blocker" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved &middot; Groups for this round</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes i{font-style:normal;font-weight:600;color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:5px}
+.was{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12.5px;line-height:1.6}
+.was table{border-collapse:collapse;width:100%}
+.was td{padding:4px 0;vertical-align:top}
+.was td:first-child{color:#9AA8A0;width:88px;font-weight:600}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:11px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px}
+.appbar .stp{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip{min-width:20px;height:20px;padding:0 4px;border-radius:6px;color:#fff;font:700 11px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.bottom .next[disabled]{background:#C4D3C8;color:#7E8E84;cursor:not-allowed}
+</style>
+<style>
+.body{padding:8px 16px 100px;height:706px;overflow-y:auto}
+.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:22px;margin:4px 0 3px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:12.5px;margin:0 0 12px}
+.tally{display:flex;gap:7px;margin-bottom:13px}
+.tally div{flex:1;background:var(--card);border:1px solid var(--cardBorder);border-radius:12px;padding:9px 10px}
+.tally b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px;line-height:1.1;font-variant-numeric:tabular-nums}
+.tally small{display:block;font-size:10.5px;color:var(--muted);letter-spacing:.2px;margin-top:2px}
+.tally div.warn{border-color:#EFD9B8;background:#FDF8EF}
+.tally div.warn b{color:#8A5216}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:14px 0 7px;display:flex;align-items:baseline;gap:7px}
+.lb span{font-weight:500;letter-spacing:0;text-transform:none;font-size:11.5px;color:#9AA8A0}
+.g{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:11px 12px 12px;margin-bottom:8px;cursor:pointer}
+.g.inc{border-color:#EFD9B8;background:#FFFDF8}
+.ghd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ghd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16px}
+.ghd .tm{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;font-weight:600}
+.ghd .cv{margin-left:auto;color:#9AA8A0;font-size:19px;line-height:1}
+.comp{font-size:10px;font-weight:700;letter-spacing:.3px;border-radius:5px;padding:3px 6px;background:#E4F2EA;color:var(--pine)}
+.comp.bad{background:#FDF3E7;color:#8A5216}
+.rost{display:flex;gap:8px}
+.rost>span{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+.rost>span.r{flex-direction:row-reverse;text-align:right}
+.rost>span b{font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rost .em{color:#A9B7AD;font-weight:500;font-size:12.5px;font-style:italic}
+.meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;padding-top:9px;border-top:1px solid #EDF2ED}
+.meta span{font-size:10.5px;font-weight:600;color:var(--muted);background:#F2F6F2;border-radius:5px;padding:3px 7px}
+.meta span.bet{background:#EFEAF9;color:#4B357F}
+.add{width:100%;background:transparent;border:1.5px dashed #C3D3C8;border-radius:14px;padding:13px 0;font:600 13.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.sit{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:4px 12px}
+.sr{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #EFF4F0}
+.sr:last-child{border-bottom:none}
+.av{width:30px;height:30px;border-radius:50%;background:#DCE9E0;color:var(--pine);font:700 11.5px/30px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.sr .nm{flex:1;font-size:13.5px;font-weight:600}
+.sr .nm small{display:block;font-size:11px;color:var(--muted);font-weight:500}
+.sr a{font-size:12.5px;font-weight:600;text-decoration:none}
+.blk{display:flex;gap:8px;align-items:flex-start;background:#FDF3E7;border:1px solid #EFD9B8;border-radius:12px;padding:10px 12px;margin-top:11px;font-size:12px;color:#7A4E12;line-height:1.5}
+.blk b{color:#5D3A0B}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Groups for this round</h1>
+<p>Shipped step 27 is where the group count finally becomes real &mdash; six steps after the wizard asked for it. It lists groups by number and little else, which was survivable when three separate screens held the details. With one <a href="group-builder.html">group builder</a> behind it, this screen has to show what the builder wrote.</p>
+<div class="was"><table>
+<tr><td>Was</td><td>Group rows, a <b>sitting out</b> list, and <b>Start Round</b> enabled regardless of state.</td></tr>
+<tr><td>Now</td><td>Each row carries <b>composition, tee time and tees</b> &mdash; the three things that go wrong on the first tee.</td></tr>
+<tr><td>Start</td><td><b>Disabled with the reason named</b>, and the reason is tappable.</td></tr>
+</table></div>
+<h3>Decisions</h3>
+<ul>
+<li><b>This is the hub of step 7, not a summary.</b> Every group is reached from here, added from here, and checked from here. It is the screen a captain stands on while the group builder opens and closes over it.</li>
+<li><b>Composition is repeated per row</b> because a legal group and a complete group are different states. Group 3 is a legal 1 v 2 and playable; Group 4 holds two Marauders and no opponent, so it is neither.</li>
+<li><b>Unassigned golfers are listed by name, not counted.</b> A number tells a captain there is a problem; the names tell him which two friends are about to be left behind.</li>
+<li><b>Start Round states the blocker</b> and links to it. A disabled button with no sentence beside it is the most common complaint about the shipped flow.</li>
+<li><b>Tee times read as a sequence</b> down the list, so an interval mistake is visible as a gap rather than found by arithmetic.</li>
+<li><b>No bets on this list.</b> A wager inside a foursome is theirs, started through their own entry &mdash; the same mechanism multi-group skins uses. This screen carries only what the TD sets: golfers, tees, tee time, start format.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Whether <i>sitting out</i> should be explicit or derived. Derived is honest but flags every deliberate rest as a problem; a <i>sitting out by choice</i> mark would silence it, at the cost of a step.</li>
+<li>Reordering groups. Tee times imply the order, so dragging a group ought to renumber and re-time it &mdash; which is a bigger interaction than it looks.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>6:58</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Round 1 &middot; Groups</span><span class="stp">Step 7 of 7</span></div>
+<div class="body">
+<h2 class="hd">Tilden &middot; Sat 12 Sep</h2>
+<p class="sub">Triple Cup &middot; 16 drafted &middot; tee times from 8:00, 8 minute interval</p>
+<div class="tally">
+<div><b>4</b><small>GROUPS</small></div>
+<div><b>13</b><small>ASSIGNED</small></div>
+<div class="warn"><b>3</b><small>UNASSIGNED</small></div>
+</div>
+
+<div class="lb">Groups <span>tap to edit</span></div>
+
+<div class="g">
+<div class="ghd"><b>Group 1</b><span class="tm">8:00</span><span class="comp">2 v 2</span><span class="cv">&#8250;</span></div>
+<div class="rost"><span><span class="chip a">B</span><b>Bucko, Webb</b></span><span class="r"><span class="chip b">M</span><b>Miller, Malat</b></span></div>
+<div class="meta"><span>All White tees</span></div>
+</div>
+
+<div class="g">
+<div class="ghd"><b>Group 2</b><span class="tm">8:08</span><span class="comp">2 v 2</span><span class="cv">&#8250;</span></div>
+<div class="rost"><span><span class="chip a">B</span><b>Wong, Comer</b></span><span class="r"><span class="chip b">M</span><b>Sanders, Lajoie</b></span></div>
+<div class="meta"><span>White &middot; 1 on Gold</span></div>
+</div>
+
+<div class="g">
+<div class="ghd"><b>Group 3</b><span class="tm">8:16</span><span class="comp">1 v 2</span><span class="cv">&#8250;</span></div>
+<div class="rost"><span><span class="chip a">B</span><b>Ford</b></span><span class="r"><span class="chip b">M</span><b>Kane, Reilly</b></span></div>
+<div class="meta"><span>All White tees</span></div>
+</div>
+
+<div class="g inc">
+<div class="ghd"><b>Group 4</b><span class="tm">8:24</span><span class="comp bad">0 v 2 &middot; needs a Bandit</span><span class="cv">&#8250;</span></div>
+<div class="rost"><span><span class="chip a">B</span><b class="em">Nobody seated</b></span><span class="r"><span class="chip b">M</span><b>Pratt, Ochoa</b></span></div>
+<div class="meta"><span>Tees not set</span></div>
+</div>
+
+<button class="add">&#43; Add group 5</button>
+
+<div class="lb">Not in a group <span>3 Bandits &middot; every Marauder is seated</span></div>
+<div class="sit">
+<div class="sr"><span class="av">CD</span><span class="nm">Dunne, Chris<small><span style="color:var(--t1)">Bandits</span> &middot; index 6.2</small></span><a href="group-builder.html">Assign</a></div>
+<div class="sr"><span class="av">EV</span><span class="nm">Vance, Ed<small><span style="color:var(--t1)">Bandits</span> &middot; index 13.9</small></span><a href="group-builder.html">Assign</a></div>
+<div class="sr"><span class="av">JS</span><span class="nm">Shaw, Joe<small><span style="color:var(--t1)">Bandits</span> &middot; index 8.4</small></span><a href="group-builder.html">Assign</a></div>
+</div>
+
+<div class="blk"><span><b>Group 4 has no Bandit in it</b>, so there is no match to play. All three unassigned golfers are Bandits &mdash; seat one there, and the last two need two Marauders freed up or a fifth group.</span></div>
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next" disabled>Start Round &mdash; Group 4 incomplete</button></div>
+</div>
+</body>
+</html>

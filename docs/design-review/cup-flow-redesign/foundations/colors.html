@@ -1,0 +1,69 @@
+<!-- @dsCard group="Foundations" name="Colors" subtitle="Halved palette — sage / pine / mint + semantic + team" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Colors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --deepPine:#0B1F1A; --pine:#0F6E56; --mint:#1D9E75; --brightMint:#3BD89A;
+    --surface:#EEF3EE; --card:#FFFFFF; --cardBorder:#D3DED6; --muted:#5C6B62;
+    --cream:#F3F1EA; --ink:#06120E; --win:#3BD89A; --owe:#F0916E; --warning:#B24225;
+    --disabledFill:#D3DAD5; --disabledText:#93A099;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);
+    font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+  h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:14px;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:26px 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .sw{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;overflow:hidden}
+  .chip{height:76px}
+  .meta{padding:10px 12px}
+  .name{font-weight:600;font-size:13px}
+  .hex{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;margin-top:2px}
+  .role{color:var(--muted);font-size:11.5px;margin-top:4px;line-height:1.35}
+  .onDark{color:var(--cream)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Colors</h1>
+  <p class="sub">Live brand palette (<code>lib/theme/halved_brand.dart</code>). Light sage surface · pine is structure · bright-mint is the one CTA/live/hole accent per screen. Selected chips/segments are pine, never mint.</p>
+
+  <h2>Brand</h2>
+  <div class="grid">
+    <div class="sw"><div class="chip" style="background:#0B1F1A"></div><div class="meta"><div class="name">deepPine</div><div class="hex">#0B1F1A</div><div class="role">Primary text · dark tile</div></div></div>
+    <div class="sw"><div class="chip" style="background:#0F6E56"></div><div class="meta"><div class="name">pine</div><div class="hex">#0F6E56</div><div class="role">Primary · structure · selected state</div></div></div>
+    <div class="sw"><div class="chip" style="background:#1D9E75"></div><div class="meta"><div class="name">mint</div><div class="hex">#1D9E75</div><div class="role">Accent / secondary</div></div></div>
+    <div class="sw"><div class="chip" style="background:#3BD89A"></div><div class="meta"><div class="name">brightMint</div><div class="hex">#3BD89A</div><div class="role">CTA · live · the hole (one per screen)</div></div></div>
+    <div class="sw"><div class="chip" style="background:#EEF3EE"></div><div class="meta"><div class="name">surface</div><div class="hex">#EEF3EE</div><div class="role">App background (scaffold)</div></div></div>
+    <div class="sw"><div class="chip" style="background:#FFFFFF;border-bottom:1.5px solid #D3DED6"></div><div class="meta"><div class="name">card</div><div class="hex">#FFFFFF</div><div class="role">Card / sheet / dialog fill</div></div></div>
+    <div class="sw"><div class="chip" style="background:#D3DED6"></div><div class="meta"><div class="name">cardBorder</div><div class="hex">#D3DED6</div><div class="role">Borders · dividers</div></div></div>
+    <div class="sw"><div class="chip" style="background:#5C6B62"></div><div class="meta"><div class="name onDark">muted</div><div class="hex">#5C6B62</div><div class="role">Secondary text</div></div></div>
+  </div>
+
+  <h2>Semantic</h2>
+  <div class="grid">
+    <div class="sw"><div class="chip" style="background:#3BD89A"></div><div class="meta"><div class="name">win</div><div class="hex">#3BD89A</div><div class="role">Win / +money (= brightMint)</div></div></div>
+    <div class="sw"><div class="chip" style="background:#F0916E"></div><div class="meta"><div class="name">owe</div><div class="hex">#F0916E</div><div class="role">Owe money</div></div></div>
+    <div class="sw"><div class="chip" style="background:#B24225"></div><div class="meta"><div class="name onDark">warning</div><div class="hex">#B24225</div><div class="role">Warning / error (colorScheme.error)</div></div></div>
+    <div class="sw"><div class="chip" style="background:#D3DAD5"></div><div class="meta"><div class="name">disabledFill</div><div class="hex">#D3DAD5</div><div class="role">Disabled button fill</div></div></div>
+  </div>
+
+  <h2>Game / team (GameColors)</h2>
+  <p class="sub" style="margin-top:-4px">green/red/grey mean win/loss/neutral (never a team); teams use blue/orange (colour-blind-safe).</p>
+  <div class="grid">
+    <div class="sw"><div class="chip" style="background:#1976D2"></div><div class="meta"><div class="name onDark">team1</div><div class="hex">#1976D2</div><div class="role">Team 1 / Wolf side (blue.700)</div></div></div>
+    <div class="sw"><div class="chip" style="background:#EF6C00"></div><div class="meta"><div class="name onDark">team2</div><div class="hex">#EF6C00</div><div class="role">Team 2 / Opponents (orange.800)</div></div></div>
+    <div class="sw"><div class="chip" style="background:#388E3C"></div><div class="meta"><div class="name onDark">win</div><div class="hex">green.700</div><div class="role">Up / +money</div></div></div>
+    <div class="sw"><div class="chip" style="background:#D32F2F"></div><div class="meta"><div class="name onDark">loss</div><div class="hex">red.700</div><div class="role">Down / −money · under-par digit</div></div></div>
+    <div class="sw"><div class="chip" style="background:#757575"></div><div class="meta"><div class="name onDark">neutral</div><div class="hex">grey.600</div><div class="role">Halved / push / pending</div></div></div>
+  </div>
+</body>
+</html>

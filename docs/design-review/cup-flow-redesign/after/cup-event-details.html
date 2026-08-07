@@ -1,0 +1,260 @@
+<!-- @dsCard group="Cup Flow" name="Event details" subtitle="Shipped 13 and 15 merged: name, course and the rounds themselves — dates create rounds, no players-per-round field, course inherited with a per-round override" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved &middot; Event details</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes i{font-style:normal;font-weight:600;color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:5px}
+.was{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12.5px;line-height:1.6}
+.was table{border-collapse:collapse;width:100%}
+.was td{padding:4px 0;vertical-align:top}
+.was td:first-child{color:#9AA8A0;width:88px;font-weight:600}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .stp{margin-left:auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.prog{height:3px;background:#DDE6DE}
+.prog i{display:block;height:100%;background:var(--pine);transition:width .2s}
+.body{padding:16px 16px 92px;overflow-y:auto;height:685px}
+h2.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:24px;margin:0 0 5px}
+p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 18px}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 7px;display:flex;align-items:baseline;gap:7px}
+.lb em{margin-left:auto;font-style:normal;font-weight:500;letter-spacing:0;text-transform:none;font-size:11.5px;color:#9AA8A0;font-variant-numeric:tabular-nums}
+.fld{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:12px 13px;margin-bottom:16px}
+.fld input{border:none;outline:none;width:100%;font:600 16px/1.2 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);background:transparent}
+.fld input::placeholder{color:#A9B7AD;font-weight:500}
+.sel{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 13px;margin-bottom:6px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.sel .d{flex:1;min-width:0}
+.sel .d b{display:block;font-size:15px;font-weight:600}
+.sel .d small{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
+.sel .cv{color:#9AA8A0;font-size:11px;flex:none}
+.hint{font-size:11.5px;color:var(--muted);line-height:1.5;margin:0 0 16px}
+.rs{display:flex;flex-direction:column;gap:7px;margin-bottom:9px}
+.rd{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:11px 12px 12px}
+.rhd{display:flex;align-items:center;gap:9px}
+.rhd .n{min-width:22px;height:22px;border-radius:7px;background:#E4F2EA;color:var(--pine);font:700 11.5px/22px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.rhd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
+.rhd .x{margin-left:auto;width:26px;height:26px;border-radius:8px;border:1px solid var(--cardBorder);background:#F6F9F6;color:#93A29A;font:400 16px/24px "Spline Sans",system-ui,sans-serif;text-align:center;cursor:pointer;flex:none}
+.rrow{display:flex;gap:7px;margin-top:9px}
+.rrow button{flex:1;background:#F4F8F4;border:1px solid #E2EAE3;border-radius:10px;padding:8px 10px;text-align:left;cursor:pointer;font:400 12.5px/1.3 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);display:flex;flex-direction:column;gap:2px}
+.rrow button span{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#93A29A}
+.rrow button b{font-weight:600;font-size:13px}
+.rrow button.same b{color:var(--muted);font-weight:500}
+.add{width:100%;background:transparent;border:1.5px dashed #C3D3C8;border-radius:13px;padding:12px 0;font:600 13.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer;margin-bottom:16px}
+.add[disabled]{color:#A9B7AD;border-color:#DCE5DD;cursor:not-allowed}
+.derived{background:var(--deepPine);border-radius:14px;padding:13px 14px 14px;color:#DDEBE2}
+.derived h3{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7FA694;margin:0 0 9px}
+.dr{display:flex;align-items:baseline;gap:9px;font-size:12.5px;padding:4px 0}
+.dr+.dr{border-top:1px solid rgba(255,255,255,.09)}
+.dr span{color:#9EBCAD;flex:none;width:98px;font-size:11px}
+.dr b{color:#fff;font-weight:600}
+.dr b em{font-style:normal;color:var(--brightMint)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.bottom .next[disabled]{background:#C4D3C8;color:#7E8E84;cursor:not-allowed}
+.crs{display:flex;align-items:center;gap:11px;background:var(--card);border:1.5px solid var(--pine);border-radius:13px;padding:11px 13px;margin-bottom:7px;cursor:pointer}
+.crs.empty{border-style:dashed;border-color:#C3D3C8}
+.crs.empty .d b{color:var(--pine)}
+.crs.empty .fg svg{stroke:#A9B7AD}
+.crs .ch{font-size:19px;line-height:1;color:#9AA8A0}
+.crs .fg,.cc .fg{width:26px;flex:none;display:flex;align-items:center;justify-content:center}
+.crs .fg svg,.cc .fg svg{width:19px;height:19px;stroke:var(--pine);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.crs .d{flex:1;min-width:0}
+.crs .d b{display:block;font-size:15px;font-weight:600}
+.crs .d small{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
+.crs .ch{flex:none;font-weight:600}
+.scrim{position:absolute;inset:0;background:rgba(11,31,26,.42);opacity:0;pointer-events:none;transition:opacity .22s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:22px 22px 0 0;box-shadow:0 -8px 34px rgba(6,18,14,.26);transform:translateY(102%);transition:transform .26s cubic-bezier(.32,.72,0,1);max-height:660px;display:flex;flex-direction:column}
+.sheet.on{transform:none}
+.shd{display:flex;align-items:center;gap:10px;padding:15px 18px 10px;flex:none}
+.shd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px}
+.shd .cl{margin-left:auto;width:30px;height:30px;border-radius:50%;background:#DCE6DE;color:var(--muted);font:400 18px/30px "Spline Sans",system-ui,sans-serif;text-align:center;cursor:pointer}
+.sbody{padding:0 18px 24px;overflow-y:auto}
+.srch{display:flex;align-items:center;gap:9px;background:transparent;border:1.5px solid #C6D5CB;border-radius:12px;padding:12px 13px;margin-bottom:4px}
+.srch svg{width:18px;height:18px;stroke:#7E8E84;fill:none;stroke-width:2;stroke-linecap:round;flex:none}
+.srch input{border:none;outline:none;background:transparent;flex:1;font:400 15px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine)}
+.srch input::placeholder{color:#8A9990}
+.cc{display:flex;align-items:center;gap:11px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 13px;margin-bottom:7px;cursor:pointer}
+.cc.on{border-color:var(--pine)}
+.cc .hs{width:26px;flex:none;display:flex;align-items:center;justify-content:center}
+.cc .hs svg{width:19px;height:19px;stroke:var(--muted);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.cc .d{flex:1;min-width:0}
+.cc .d b{display:block;font-size:15px;font-weight:600}
+.cc .d small{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
+.cc .act{flex:none;font-size:12.5px;font-weight:600;color:var(--pine)}
+.sheet .lb{margin:14px 0 7px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Event details</h1>
+<p>The shipped wizard asks for basics at 13 and round details at 15, and the two overlap: course and date appear twice, and the second copy adds a <i>players per round</i> field nothing can answer yet. Merged, they become one screen with a clearer job &mdash; naming the event and <b>establishing how many rounds there are</b>, which is the fact the rest of the flow keeps needing.</p>
+<div class="was"><table>
+<tr><td>Was</td><td><b>13 Basics</b> (name, course, date) then <b>15 Round details</b> (course, date, players per round).</td></tr>
+<tr><td>Now</td><td>One screen. Name, a <b>course chosen from the picker</b> &mdash; home course, a recent, or search &mdash; and a <b>round per date</b>.</td></tr>
+<tr><td>Dropped</td><td><b>Players per round.</b> Unknowable here &mdash; the draft sets entitlement and the group builder sets who plays which round.</td></tr>
+</table></div>
+<h3>Decisions</h3>
+<ul>
+<li><b>Rounds are created here, by date.</b> Every later step is &ldquo;per round&rdquo; &mdash; format, points, groups, tee times &mdash; so the round count has to exist before any of them. Making it a list of dates rather than a number means the round always has a day attached.</li>
+<li><b>The course is inherited, not repeated.</b> One course covers most cups; a round that moves gets its own on the round row. Shipped 15 asks again every time, which reads as though the answer might differ and usually does not.</li>
+<li><b>The picker is the casual-round one, unchanged</b> &mdash; search, home course, recents. A course is a course whether it is a Tuesday nine or a two-day cup, and a captain who has used the app once already knows this list.</li>
+<li><b>Nothing is prefilled.</b> A course sitting in the field is read as decided, so a wrong one survives to the first tee. The same reason casual rounds ask: the home course is one tap away, which is cheaper than an error nobody looked at. <i>Next</i> stays disabled until it is answered.</li>
+<li><b>The round row shows the resolved name</b> rather than &ldquo;same as home&rdquo;, so nobody has to hold the inheritance in their head to read what they are playing &mdash; and it reads <i>Not set</i> until the event course is chosen.</li>
+<li><b>Two rounds on one day is allowed</b> &mdash; morning and afternoon is normal for a cup &mdash; so dates are not unique keys. The row numbers the round; the date describes it.</li>
+<li><b>The derived panel is the contract.</b> It states what the rest of the wizard will now ask for: this many format setups, this many group builds, this many steps left. The shipped flow never tells you that multiplication is coming.</li>
+<li><b>The step count is corrected here, not broken here.</b> <a href="cup-wizard-step1.html">Step 1</a> counts for one round and says so, marking the two steps that repeat. Adding a second round moves the header from 7 to 9 in front of the captain, which is a different thing from the shipped wizard saying 4 and meaning 12.</li>
+<li><b>No player count anywhere on this screen.</b> That is the single field whose removal fixes the duplication we traced through three screens.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li><b>The picker&rsquo;s action verb.</b> In casual rounds it reads <i>Play here</i>, which starts a round. Here it only sets a field, so it reads <i>Use</i> &mdash; worth confirming that is the right divergence rather than making both say the neutral thing.</li>
+<li>Whether the tee interval belongs here or on the course. The <a href="group-builder.html">group builder</a> treats it as a course property remembered between events, which is right, but a captain playing an unfamiliar course has to find it somewhere.</li>
+<li>Round names. <i>Round 1</i> is fine for a two-day cup; a Ryder-style event wants <i>Friday Fourballs</i>. Cheap to add, easy to leave empty.</li>
+<li>Whether deleting a round after groups are built should be possible at all, or only before the first tee time is set.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:42</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="stp" id="stp">2 of 7</span></div>
+<div class="prog"><i id="pr"></i></div>
+<div class="body">
+<h2 class="hd">Event details</h2>
+<p class="sub">Cup play &middot; Triple Cup. Naming the event and setting its rounds.</p>
+
+<div class="lb">Name <em id="cc">16 / 40</em></div>
+<div class="fld"><input id="nm" value="Tilden Ryder Cup" maxlength="40"></div>
+
+<div class="lb">Course</div>
+<div class="crs empty" id="crsRow"><span class="fg"><svg viewBox="0 0 24 24"><path d="M6 21V4m0 0 11 3.5L6 11"/></svg></span><span class="d"><b id="crsN">Select course</b><small id="crsS">Your home course, a recent one, or search</small></span><span class="ch" id="crsCh">&#8250;</span></div>
+
+<div class="lb">Rounds <em id="rc">1 round</em></div>
+<div class="rs" id="rs"></div>
+<button class="add" id="addr">&#43; Add a round</button>
+
+<div class="derived">
+<h3>What this sets up</h3>
+<div class="dr"><span>Rounds</span><b id="d1">1</b></div>
+<div class="dr"><span>Format setups</span><b id="d2">1 &mdash; <em>one per round</em></b></div>
+<div class="dr"><span>Group builds</span><b id="d3">1 &mdash; <em>one per round</em></b></div>
+<div class="dr"><span>Steps left</span><b id="d5">5</b></div>
+</div>
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next" id="nx" disabled>Next &mdash; Teams</button></div>
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet">
+<div class="shd"><b id="shT">Select course</b><span class="cl" id="cl">&times;</span></div>
+<div class="sbody">
+<div class="lb">Course</div>
+<div class="srch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.3-4.3"/></svg><input placeholder="Search"></div>
+<div class="lb">Your home course</div>
+<div class="cc" data-p="0"><span class="fg"><svg viewBox="0 0 24 24"><path d="M6 21V4m0 0 11 3.5L6 11"/></svg></span><span class="d"><b>Tilden Park GC</b><small>Berkeley, CA</small></span><span class="act">Use</span></div>
+<div class="lb">Recent</div>
+<div class="cc" data-p="1"><span class="hs"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><path d="M4 12a8 8 0 1 0 8-8 8 8 0 0 0-7 4"/><path d="M4 4v4h4"/></svg></span><span class="d"><b>Chardonnay GC</b><small>Napa, CA</small></span></div>
+<div class="cc" data-p="2"><span class="hs"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><path d="M4 12a8 8 0 1 0 8-8 8 8 0 0 0-7 4"/><path d="M4 4v4h4"/></svg></span><span class="d"><b>Sequoyah CC</b><small>Oakland, CA</small></span></div>
+<div class="cc" data-p="3"><span class="hs"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><path d="M4 12a8 8 0 1 0 8-8 8 8 0 0 0-7 4"/><path d="M4 4v4h4"/></svg></span><span class="d"><b>Metropolitan GL</b><small>Oakland, CA</small></span></div>
+</div>
+</div>
+</div>
+<script>
+var HOME=null,
+COURSES=[{n:'Tilden Park GC',s:'Berkeley, CA'},{n:'Chardonnay GC',s:'Napa, CA'},{n:'Sequoyah CC',s:'Oakland, CA'},{n:'Metropolitan GL',s:'Oakland, CA'}],
+target=null;
+var DATES=['Sat 12 Sep','Sun 13 Sep','Sat 19 Sep','Sun 20 Sep','Sat 26 Sep','Sun 27 Sep'];
+var R=[{d:0,c:null}];
+function draw(){
+  document.getElementById('rs').innerHTML=R.map(function(r,i){
+    var crs=r.c||(HOME?HOME.n:'Not set');
+    return '<div class="rd"><div class="rhd"><span class="n">'+(i+1)+'</span><b>Round '+(i+1)+'</b>'+(R.length>1?'<span class="x" data-x="'+i+'">&times;</span>':'')+'</div>'+
+    '<div class="rrow"><button data-d="'+i+'"><span>Date</span><b>'+DATES[r.d]+'</b></button>'+
+    '<button data-c="'+i+'"><span>Course</span><b>'+crs+'</b></button></div></div>';
+  }).join('');
+  var n=R.length;
+  document.getElementById('rc').textContent=n+' round'+(n===1?'':'s');
+  var tot=5+2*n;
+  document.getElementById('stp').textContent='2 of '+tot;
+  document.getElementById('pr').style.width=(200/tot)+'%';
+  document.getElementById('d1').textContent=n;
+  document.getElementById('d2').innerHTML=n+' &mdash; <em>one per round</em>';
+  document.getElementById('d3').innerHTML=n+' &mdash; <em>one per round</em>';
+  document.getElementById('d5').innerHTML=(3+2*n)+(n>1?' &mdash; <em>was 5 at one round</em>':'');
+  document.getElementById('addr').disabled=n>=6;
+  bind();
+}
+function bind(){
+  document.querySelectorAll('[data-x]').forEach(function(b){
+    b.addEventListener('click',function(){R.splice(+b.dataset.x,1);draw()});
+  });
+  document.querySelectorAll('[data-d]').forEach(function(b){
+    b.addEventListener('click',function(){var i=+b.dataset.d;R[i].d=(R[i].d+1)%DATES.length;draw()});
+  });
+  document.querySelectorAll('[data-c]').forEach(function(b){
+    b.addEventListener('click',function(){openPick(HOME?+b.dataset.c:null)});
+  });
+}
+document.getElementById('addr').addEventListener('click',function(){
+  var last=R[R.length-1].d;
+  R.push({d:Math.min(last+1,DATES.length-1),c:null});draw();
+});
+document.getElementById('nm').addEventListener('input',function(e){
+  document.getElementById('cc').textContent=e.target.value.length+' / 40';
+});
+function openPick(i){
+  target=i;
+  document.getElementById('shT').textContent=i===null?'Course for every round':'Course for round '+(i+1);
+  var cur=i===null?(HOME?HOME.n:null):(R[i].c||(HOME?HOME.n:null));
+  document.querySelectorAll('.cc').forEach(function(x){
+    x.classList.toggle('on',COURSES[+x.dataset.p].n===cur);
+  });
+  document.getElementById('sheet').classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+}
+function closePick(){
+  document.getElementById('sheet').classList.remove('on');
+  document.getElementById('scrim').classList.remove('on');
+}
+document.getElementById('crsRow').addEventListener('click',function(){openPick(null)});
+document.getElementById('cl').addEventListener('click',closePick);
+document.getElementById('scrim').addEventListener('click',closePick);
+document.querySelectorAll('.cc').forEach(function(c){
+  c.addEventListener('click',function(){
+    var p=COURSES[+c.dataset.p];
+    if(target===null){
+      HOME={n:p.n,s:p.s};
+      document.getElementById('crsRow').classList.remove('empty');
+      document.getElementById('crsN').textContent=p.n;
+      document.getElementById('crsS').textContent=p.s+' \u00b7 par 70 \u00b7 8 min interval';
+      document.getElementById('crsCh').textContent='Change';
+      document.getElementById('nx').disabled=false;
+      document.querySelectorAll('.cc').forEach(function(x){x.classList.toggle('on',x===c)});
+    }else{
+      R[target].c=(HOME&&p.n===HOME.n)?null:p.n;
+    }
+    closePick();draw();
+  });
+});
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!-- @dsCard group="Cup Flow" name="Cup round hub — team identity" subtitle="Team chips instead of coloured names, aligned tee and CH columns, and score entry scoped by role — a player acts on his own group, the TD on every group" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Cup round hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--field:#DEE9E0;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:360px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:4px 16px 6px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:20px}
+.appbar .sp{margin-left:auto;display:flex;gap:14px}
+.appbar svg{width:21px;height:21px;stroke:var(--deepPine);fill:none;stroke-width:1.9;stroke-linecap:round}
+.body{padding:8px 14px 92px;overflow-y:auto;height:684px}
+.hdcard{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:12px 14px;margin-bottom:10px}
+.hdrow{display:flex;align-items:baseline;gap:8px}
+.hdrow b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16.5px}
+.hdrow .st{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.5px;color:var(--pine);background:#E4F2EA;border-radius:999px;padding:4px 9px;flex:none}
+.hdcard small{display:block;color:var(--muted);font-size:12.5px;margin-top:3px}
+.tally{display:flex;align-items:center;gap:10px;margin-top:11px;padding-top:11px;border-top:1px solid #EDF2ED}
+.tm{display:flex;align-items:center;gap:7px;min-width:0}
+.tm.r{flex-direction:row-reverse;text-align:right}
+.chip{min-width:22px;height:22px;padding:0 3px;border-radius:7px;color:#fff;font:700 12px/22px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.tm span{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pts{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px;font-variant-numeric:tabular-nums;flex:1;text-align:center}
+.sec{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:16px 2px 8px}
+.grp{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:11px 14px 12px;margin-bottom:10px}
+.grp.mine{border-color:#9ED9BE;box-shadow:0 0 0 2px #E2F4EA}
+.ghd{display:flex;align-items:center;gap:8px}
+.ghd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15.5px}
+.ghd .tt{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.ghd .yours{font-size:10px;font-weight:700;letter-spacing:.4px;color:#08301F;background:var(--brightMint);border-radius:999px;padding:3px 8px}
+.ghd .dots{margin-left:auto;color:var(--muted);font-size:17px;letter-spacing:2px;cursor:pointer}
+.plist{margin-top:9px}
+.p{display:grid;grid-template-columns:22px 1fr 46px 40px;align-items:center;gap:9px;padding:7px 0;font-size:14.5px}
+.p+.p{border-top:1px solid #F1F5F1}
+.p .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p .te,.p .ch{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.p .te{letter-spacing:.3px}
+.p .ch{color:var(--deepPine);font-weight:600}
+.colhd{display:grid;grid-template-columns:22px 1fr 46px 40px;gap:9px;font-size:9.5px;font-weight:700;letter-spacing:.5px;color:#93A29A;text-transform:uppercase;padding-bottom:2px}
+.colhd span:nth-child(3),.colhd span:nth-child(4){text-align:right}
+.act{margin-top:11px;height:48px;border-radius:14px;border:none;background:var(--pine);color:#fff;font:700 15px/1 "Spline Sans",system-ui,sans-serif;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.act.ghost{background:transparent;border:1.5px solid var(--cardBorder);color:var(--pine);height:42px;font-size:14px}
+.demo{background:#0B1F1A;border-radius:12px;padding:10px 12px;margin:0 0 12px;color:#9EBCAD;font-size:11.5px}
+.demo b{display:block;color:#fff;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:7px}
+.demo .btns{display:flex;gap:6px}
+.demo button{flex:1;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#DDEBE2;border-radius:8px;padding:7px 4px;font:600 11.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.demo button.on{background:var(--brightMint);border-color:var(--brightMint);color:#08301F}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{width:100%;height:54px;border-radius:16px;background:transparent;border:1.5px solid var(--pine);color:var(--pine);font:700 16px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Cup round hub &mdash; team identity</h1>
+<p>The shipped screen carries team membership in the <b>colour of the golfer&rsquo;s name</b>. That fails twice: red-on-white and blue-on-white are the hardest pair for a colour-blind reader to separate, and it forces every name into a non-standard ink so nothing else on the row can use colour.</p>
+<div class="demo"><b>Viewing as</b><div class="btns"><button class="on" data-r="p">Player</button><button data-r="td">Tournament director</button></div></div>
+<h3>What changed</h3>
+<ul>
+<li><b>Teams get names.</b> The wizard lets you pick colours but never a name, so every screen says &ldquo;Team 1 / Team 2&rdquo;. Captain-derived names are what people actually say out loud.</li>
+<li><b>A chip carries the team</b> &mdash; colour plus the team initial, so the signal survives greyscale and print. Names return to normal ink.</li>
+<li><b>Aligned columns</b> for tee and course handicap instead of a ragged right edge. Tee names normalise to one casing (the shipped screen mixes <i>White</i> and <i>RED</i>), and playing handicap only appears when it differs from CH.</li>
+<li><b>The row acts according to who is looking.</b> A player gets <b>Enter Scores</b> on his own foursome and a quiet <b>View card</b> on the rest, so the absence of a button no longer reads as a bug. A <b>tournament director gets Enter Scores on every group</b> &mdash; he is the one who fixes a card nobody in the group filled in, and a round where one foursome never entered anything is his problem to solve. Switch the role at left.</li>
+<li><b>Your group stays marked either way.</b> The mint border and <i>YOUR GROUP</i> badge are about where you are playing, not about what you may touch &mdash; a TD who is also in the field needs both facts at once.</li>
+<li><b>Complete Round is the TD&rsquo;s alone.</b> Entering a card and closing a round are different powers: the first is data a player owns for his own group, the second ends the round for everybody.</li>
+<li><b>The round header collapses</b> from three stacked rows of chrome to a title, one line of detail, and the live cup tally &mdash; so the score is on the screen you are already on.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Team names need a length cap; two long captain names won&rsquo;t fit the tally row side by side.</li>
+<li>Chip initial collides when two teams start with the same letter &mdash; fall back to 1/2 or a pattern.</li>
+<li>Whether a TD editing another group&rsquo;s card should be attributed. Silent edits are simpler; a card that changed after the group signed it is the kind of thing people argue about.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>12:38</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Round 1</span><span class="sp">
+<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.4A8 8 0 1 1 21 12Z"/></svg>
+<svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></span></div>
+<div class="body">
+
+<div class="hdcard">
+<div class="hdrow"><b>Tilden Park GC</b><span class="st">IN PROGRESS</span></div>
+<small>Aug 4, 2026 &middot; One-Round Triple Cup &middot; 3 groups &middot; 2 of 12 pts played</small>
+<div class="tally">
+<span class="tm"><span class="chip a">B</span><span>Team Bucko</span></span>
+<span class="pts"><span style="color:var(--t1)">1</span> &ndash; <span style="color:var(--t2)">1</span></span>
+<span class="tm r"><span class="chip b">M</span><span>Team Miller</span></span>
+</div>
+</div>
+
+<div class="sec">Foursomes</div>
+
+<div class="grp mine">
+<div class="ghd"><b>Group 1</b><span class="tt">9:00</span><span class="yours">YOUR GROUP</span><span class="dots">&#8942;</span></div>
+<div class="plist">
+<div class="colhd"><span></span><span></span><span>Tee</span><span>CH</span></div>
+<div class="p"><span class="chip a">B</span><span class="nm">Daniel Bucko</span><span class="te">White</span><span class="ch">20</span></div>
+<div class="p"><span class="chip b">M</span><span class="nm">Paul Miller</span><span class="te">White</span><span class="ch">12</span></div>
+<div class="p"><span class="chip a">B</span><span class="nm">David Webb</span><span class="te">White</span><span class="ch">9</span></div>
+<div class="p"><span class="chip b">M</span><span class="nm">Randy Malat</span><span class="te">White</span><span class="ch">7</span></div>
+</div>
+<button class="act" data-g="1">Enter Scores</button>
+</div>
+
+<div class="grp">
+<div class="ghd"><b>Group 2</b><span class="tt">9:10</span><span class="dots">&#8942;</span></div>
+<div class="plist">
+<div class="colhd"><span></span><span></span><span>Tee</span><span>CH</span></div>
+<div class="p"><span class="chip a">B</span><span class="nm">Connie Wong</span><span class="te">Red</span><span class="ch">29</span></div>
+<div class="p"><span class="chip b">M</span><span class="nm">Larry Sanders</span><span class="te">White</span><span class="ch">16</span></div>
+<div class="p"><span class="chip a">B</span><span class="nm">Cory Comer</span><span class="te">White</span><span class="ch">17</span></div>
+<div class="p"><span class="chip b">M</span><span class="nm">Marc Lajoie</span><span class="te">White</span><span class="ch">11</span></div>
+</div>
+<button class="act ghost" data-g="2">View card</button>
+</div>
+
+<div class="grp">
+<div class="ghd"><b>Group 3</b><span class="tt">9:20</span><span class="dots">&#8942;</span></div>
+<div class="plist">
+<div class="colhd"><span></span><span></span><span>Tee</span><span>CH</span></div>
+<div class="p"><span class="chip a">B</span><span class="nm">Dan Gabe</span><span class="te">White</span><span class="ch">14</span></div>
+<div class="p"><span class="chip b">M</span><span class="nm">Paul Lipkin</span><span class="te">White</span><span class="ch">16</span></div>
+</div>
+<button class="act ghost" data-g="3">View card</button>
+</div>
+
+</div>
+<div class="bottom"><button disabled style="opacity:.45">Complete Round</button></div>
+<script>
+document.querySelectorAll('.demo button').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.demo button').forEach(function(x){x.classList.remove('on')});
+    b.classList.add('on');
+    var td=b.dataset.r==='td';
+    document.querySelectorAll('.act').forEach(function(a){
+      var mine=a.dataset.g==='1';
+      a.classList.toggle('ghost',!(td||mine));
+      a.textContent=(td||mine)?'Enter Scores':'View card';
+    });
+    document.querySelector('.bottom button').disabled=!td;
+    document.querySelector('.bottom button').style.opacity=td?'':'.45';
+  });
+});
+</script>
+</div>
+</body>
+</html>
