@@ -52,8 +52,9 @@ enum _StepKind {
   typeFormat,   // What kind of event — scoring unit + format (asked first)
   eventDetails, // New/existing, name, event course, rounds by date
   handicap,     // Handicap mode (+ net double-bogey cap)
-  cupDesign,    // Cup: team count + colours (+ secondary game)
+  cupDesign,    // Cup: team count + colours
   cupGamePlan,  // Cup: per-round game plan
+  sideGame,     // Cup: field-wide side game (struck when format is exclusive)
   players,      // Non-cup: player selection
   groups,       // Non-cup: group assignment + tees
   games,        // Non-cup: side games + buy-ins
@@ -95,24 +96,35 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   /// setup happen later from the tournament card, so the cup flow ends at
   /// review.  Phase 1 grows this list (e.g. a dedicated side-game step, struck
   /// when the format is exclusive).
-  List<_StepKind> get _stepFlow => _isCupTournament
-      ? const [
-          _StepKind.typeFormat,
-          _StepKind.eventDetails,
-          _StepKind.handicap,
-          _StepKind.cupDesign,
-          _StepKind.cupGamePlan,
-          _StepKind.review,
-        ]
-      : const [
-          _StepKind.typeFormat,
-          _StepKind.eventDetails,
-          _StepKind.handicap,
-          _StepKind.players,
-          _StepKind.groups,
-          _StepKind.games,
-          _StepKind.review,
-        ];
+  List<_StepKind> get _stepFlow {
+    if (_isCupTournament) {
+      return [
+        _StepKind.typeFormat,
+        _StepKind.eventDetails,
+        _StepKind.handicap,
+        _StepKind.cupDesign,
+        _StepKind.cupGamePlan,
+        // Struck when the format is exclusive (Triple Cup owns all 18 holes),
+        // so there's no room for a field-wide game beside it.
+        if (!_cupFormatExclusive) _StepKind.sideGame,
+        _StepKind.review,
+      ];
+    }
+    return const [
+      _StepKind.typeFormat,
+      _StepKind.eventDetails,
+      _StepKind.handicap,
+      _StepKind.players,
+      _StepKind.groups,
+      _StepKind.games,
+      _StepKind.review,
+    ];
+  }
+
+  /// True when the chosen cup format owns every hole (Triple Cup), leaving no
+  /// room for a field-wide side game — so that step is dropped from the flow.
+  bool get _cupFormatExclusive =>
+      _eventType == _EventType.cup && _cupFormat == 'triple';
 
   /// Number of wizard steps for the current type (excludes post-creation).
   int get _totalSteps => _stepFlow.length;
@@ -136,6 +148,11 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   _EventType _eventType  = _EventType.cup;
   String     _cupFormat  = 'triple';   // triple | singles | fourball
   String     _soloFormat = 'stroke';   // stroke | stableford
+
+  // ---- Tournament side game (cup, non-exclusive formats only) ----
+  // A field-wide game every group plays, scored across the field.  None is the
+  // default (most cups run none); the step is struck for exclusive formats.
+  String _tournamentSideGame = 'none';   // none | irish_rumble | pink_ball
 
   // ---- Step: Tournament (name, rounds, new/existing) ----
   bool              _createNewTournament = true;
@@ -479,6 +496,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         // Per-round game plan — every round must have at least one game.
         if (_roundCupGames.length < _numRounds) return false;
         return _roundCupGames.values.every((g) => g.isNotEmpty);
+      case _StepKind.sideGame:
+        // None is a valid (default) answer, so this step never blocks.
+        return true;
       case _StepKind.players:
         return _selectedIds.length >= 2;
       case _StepKind.groups:
@@ -614,6 +634,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               (label: 'Cup design', sub: 'Teams and colours', perRound: false),
             _StepKind.cupGamePlan =>
               (label: 'Games by round', sub: 'Format and points', perRound: true),
+            _StepKind.sideGame =>
+              (label: 'Side game', sub: 'Field-wide — Irish Rumble, Pink Ball', perRound: false),
             _StepKind.players =>
               (label: 'Players', sub: 'Add the field', perRound: false),
             _StepKind.groups =>
@@ -708,6 +730,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       round1Points.putIfAbsent(g, () => 1.0);
       round1Counts.putIfAbsent(g, () => 1);
     }
+    // Field-wide side game plays every round (no cup points / group count).
+    if (_tournamentSideGame != 'none') round1Games.add(_tournamentSideGame);
     final round1 = await client.createRound(
       tournamentId    : tournamentId,
       courseId        : _selectedCourseId!,
@@ -733,6 +757,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         roundPoints.putIfAbsent(g, () => 1.0);
         roundCounts.putIfAbsent(g, () => 1);
       }
+      if (_tournamentSideGame != 'none') roundGames.add(_tournamentSideGame);
       await client.createRound(
         tournamentId    : tournamentId,
         courseId        : draft.courseId ?? _selectedCourseId!, // inherit event course
@@ -1090,6 +1115,11 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               setState(() => _roundCupPoints[roundIdx] = points),
           onGroupCountsChanged: (roundIdx, counts) =>
               setState(() => _roundCupGroupCounts[roundIdx] = counts),
+        );
+      case _StepKind.sideGame:
+        return _StepSideGame(
+          value: _tournamentSideGame,
+          onChanged: (v) => setState(() => _tournamentSideGame = v),
         );
       case _StepKind.eventDetails:
         return _StepEventDetails(
@@ -2874,6 +2904,148 @@ const _kCupColourChoices = <(String, Color)>[
   ('Yellow', Color(0xFFF57F17)),
   ('Purple', Color(0xFF4A148C)),
 ];
+
+// ===========================================================================
+// Step (Cup) — Tournament side game (field-wide only)
+// ===========================================================================
+
+class _StepSideGame extends StatelessWidget {
+  final String value; // none | irish_rumble | pink_ball
+  final ValueChanged<String> onChanged;
+
+  const _StepSideGame({required this.value, required this.onChanged});
+
+  static const _cardBorder = Color(0xFFD3DED6);
+  static const _unitBg     = Color(0xFFE4F2EA);
+
+  // (value, title, subtitle, fieldTag)
+  static const _opts = <(String, String, String, bool)>[
+    ('none', 'None', 'The cup stands on its own. Most do.', false),
+    ('irish_rumble', 'Irish Rumble',
+        'One, two, then three balls counted across the round. Needs its own hole setup.',
+        true),
+    ('pink_ball', 'Pink Ball',
+        'One marked ball rotates through the group and must survive the round.',
+        true),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _pinnedStep(
+      context,
+      title: 'Tournament side game',
+      subtitle: 'A game every group plays, scored across the whole field.',
+      children: [
+        _label(context, 'Played by the whole field'),
+        const SizedBox(height: 8),
+        for (final o in _opts) _optCard(context, o.$1, o.$2, o.$3, o.$4),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF4F8F4),
+            border: Border.all(color: const Color(0xFFDDE7DF)),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Looking for Skins, Nassau or rabbit?',
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 3),
+            Text(
+              'Those are settled inside a foursome, not across the field, so '
+              'they are set on each group when you build them. They read the '
+              'gross scores this tournament already collects, and an exclusive '
+              'format does not block them.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+            ),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  Widget _label(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    return Text(text.toUpperCase(),
+        style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            fontSize: 11));
+  }
+
+  Widget _optCard(
+      BuildContext context, String v, String title, String sub, bool fieldTag) {
+    final theme = Theme.of(context);
+    final pine = theme.colorScheme.primary;
+    final selected = value == v;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () => onChanged(v),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected ? pine.withOpacity(0.06) : Colors.white,
+            border: Border.all(color: selected ? pine : _cardBorder, width: 1.5),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 18,
+              height: 18,
+              margin: const EdgeInsets.only(top: 1),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: selected ? pine : const Color(0xFFC0CFC5), width: 2),
+              ),
+              child: selected
+                  ? Center(
+                      child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration:
+                              BoxDecoration(shape: BoxShape.circle, color: pine)))
+                  : null,
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(title,
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(sub,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ])),
+            if (fieldTag) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                    color: _unitBg, borderRadius: BorderRadius.circular(5)),
+                child: Text('FIELD',
+                    style: TextStyle(
+                        color: pine,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        fontSize: 9.5)),
+              ),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+}
 
 // ===========================================================================
 // Step 3 (Cup) — Per-round game plan
