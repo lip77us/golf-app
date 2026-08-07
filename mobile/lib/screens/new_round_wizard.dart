@@ -3314,18 +3314,48 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
     });
   }
 
-  void _removeGame(String gameId) {
-    final updated = widget.currentGames.where((g) => g != gameId).toList();
-    widget.onChanged(updated);
-    final updatedPts = Map<String, double>.from(widget.currentPoints)
-      ..remove(gameId);
-    widget.onPointsChanged(updatedPts);
-    final updatedCounts = Map<String, int>.from(widget.currentGroupCounts)
-      ..remove(gameId);
-    widget.onGroupCountsChanged(updatedCounts);
-    _ptCtrl[gameId]?.dispose();
-    _ptCtrl.remove(gameId);
+  /// Swap the format on this row for a different one, preserving its points.
+  /// Triple Cup is exclusive, so choosing it clears any others.
+  void _changeGame(BuildContext context, String gameId) {
+    showModalBottomSheet<String>(
+      context: context,
+      builder: (_) => ListView(
+        shrinkWrap: true,
+        children: [
+          const ListTile(
+            title: Text('Change format',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          ..._kCupGameChoices.map((g) => ListTile(
+            title: Text(g.$2),
+            trailing: g.$1 == gameId
+                ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                : null,
+            onTap: () => Navigator.of(context).pop(g.$1),
+          )),
+        ],
+      ),
+    ).then((picked) {
+      if (picked == null || picked == gameId) return;
+      if (picked == 'triple_cup') {
+        widget.onChanged(const ['triple_cup']);
+        widget.onPointsChanged(const {'triple_cup': 1.0});
+        return;
+      }
+      final games = widget.currentGames
+          .map((x) => x == gameId ? picked : x)
+          .toList();
+      final pts = Map<String, double>.from(widget.currentPoints);
+      final oldPt = pts.remove(gameId) ?? 1.0;
+      pts[picked] = oldPt;
+      widget.onChanged(games);
+      widget.onPointsChanged(pts);
+    });
   }
+
+  /// Segments a format plays per group — the multiplier from points-per-segment
+  /// to points-per-group.  Triple Cup is Fourball + Foursomes + two Singles.
+  int _segments(String gameId) => gameId == 'triple_cup' ? 4 : 1;
 
   @override
   Widget build(BuildContext context) {
@@ -3377,49 +3407,75 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
                     textAlign: TextAlign.center,
                     style: theme.textTheme.labelSmall
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
-                const SizedBox(width: 32), // delete button column
               ]),
             ),
             const Divider(height: 1),
             const SizedBox(height: 4),
 
-            // One row per game type
+            // One row per game type — format (with a Change link) + points,
+            // and, for multi-segment formats, the per-group arithmetic.
             ...gameList.map((g) {
+              final segs = _segments(g);
+              final pts  = widget.currentPoints[g] ?? 1.0;
+              String n(double v) => v % 1 == 0 ? v.toInt().toString() : '$v';
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(children: [
-                  Expanded(child: Text(_label(g),
-                      style: theme.textTheme.bodyMedium)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Row(children: [
+                    Expanded(
+                      child: Row(children: [
+                        Flexible(
+                          child: Text(_label(g),
+                              style: theme.textTheme.bodyMedium,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: 10),
+                        InkWell(
+                          onTap: () => _changeGame(context, g),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 2),
+                            child: Text('Change',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(width: 8),
 
-                  // Points per segment field
-                  SizedBox(
-                    width: 82,
-                    child: TextField(
-                      controller: _ptCtrl[g],
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                      textAlign: TextAlign.center,
-                      decoration: const InputDecoration(
-                        suffixText: 'pt',
-                        border    : OutlineInputBorder(),
-                        isDense   : true,
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 8),
+                    // Points per segment field
+                    SizedBox(
+                      width: 82,
+                      child: TextField(
+                        controller: _ptCtrl[g],
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                        textAlign: TextAlign.center,
+                        decoration: const InputDecoration(
+                          suffixText: 'pt',
+                          border    : OutlineInputBorder(),
+                          isDense   : true,
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 8),
+                        ),
                       ),
                     ),
-                  ),
-
-                  // Remove button
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 16),
-                    onPressed: () => _removeGame(g),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                  ]),
+                  if (segs > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Text(
+                        '${n(pts)} pt × $segs segments = ${n(pts * segs)} per group',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ),
                 ]),
               );
             }),
