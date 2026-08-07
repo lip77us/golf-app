@@ -44,6 +44,21 @@ class _RoundDraft {
   _RoundDraft({this.courseId, DateTime? date}) : date = date ?? DateTime.now();
 }
 
+/// The distinct steps the create-tournament wizard can present.  The actual
+/// sequence for a given tournament is `_NewRoundWizardState._stepFlow`, derived
+/// from the chosen type — so the order and count live in data, not in a switch
+/// keyed on a hardcoded index.
+enum _StepKind {
+  tournament,   // New/existing, name, rounds, championship type
+  details,      // Course, date(s), handicap
+  cupDesign,    // Cup: team count + colours (+ secondary game)
+  cupGamePlan,  // Cup: per-round game plan
+  players,      // Non-cup: player selection
+  groups,       // Non-cup: group assignment + tees
+  games,        // Non-cup: side games + buy-ins
+  review,       // Review → create
+}
+
 // ---------------------------------------------------------------------------
 // Wizard entry point
 // ---------------------------------------------------------------------------
@@ -56,19 +71,52 @@ class NewRoundWizard extends StatefulWidget {
 }
 
 class _NewRoundWizardState extends State<NewRoundWizard> {
-  // ---- step index ----
+  // ---- step flow ----
+  // The wizard is a DERIVED, ordered list of steps — not a fixed count.
+  // `_step` indexes into `_stepFlow`, which is computed from the tournament
+  // type, so the progress indicator ("2 of 5") is always honest and so
+  // conditional steps can be added/removed by editing the list rather than
+  // renumbering a switch.  Post-creation is terminal (index == length), not a
+  // member of the flow.
   int _step = 0;
 
-  // Cup tournaments use a shorter wizard (steps 0-3 only) that ends at the
-  // game plan.  Team assignment and round setup happen later from the
-  // tournament card.  _isCupTournament and _totalSteps are computed getters.
   bool get _isCupTournament =>
       _createNewTournament &&
       _tournamentActiveGames.contains(GameIds.teamCup);
-  // Cup: 5 steps (0=tournament, 1=courses, 2=cup design, 3=game plan,
-  //              4=review → create, 5=post-create confirmation).
-  // Non-cup: 6 steps (adds players, groups, games before review).
-  int  get _totalSteps => _isCupTournament ? 5 : 6;
+
+  /// The ordered steps for the current configuration.  Cup and non-cup share
+  /// the front (tournament, details) then diverge; team assignment and round
+  /// setup happen later from the tournament card, so the cup flow ends at
+  /// review.  Phase 1 grows this list (e.g. a dedicated side-game step, struck
+  /// when the format is exclusive).
+  List<_StepKind> get _stepFlow => _isCupTournament
+      ? const [
+          _StepKind.tournament,
+          _StepKind.details,
+          _StepKind.cupDesign,
+          _StepKind.cupGamePlan,
+          _StepKind.review,
+        ]
+      : const [
+          _StepKind.tournament,
+          _StepKind.details,
+          _StepKind.players,
+          _StepKind.groups,
+          _StepKind.games,
+          _StepKind.review,
+        ];
+
+  /// Number of wizard steps for the current type (excludes post-creation).
+  int get _totalSteps => _stepFlow.length;
+
+  /// The kind of the step currently shown.  Clamped against a transient
+  /// out-of-range index — the flow length only changes at step 0, where the
+  /// index is valid in both variants.
+  _StepKind get _currentStep =>
+      _stepFlow[_step.clamp(0, _stepFlow.length - 1)];
+
+  /// True on the post-creation confirmation screen (index past the flow).
+  bool get _isPostCreate => _step >= _stepFlow.length;
 
   // ---- Step 0: Tournament ----
   bool              _createNewTournament = true;
@@ -82,12 +130,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   // ---- Cup Design (step 2 for cup tournaments) ----
   // Team NAMES are set later during Phase 2 (team roster screen).
-  // The wizard only captures the cup name, team count, and team colours
-  // here.  Default palette avoids the red/blue political read by going
+  // The wizard only captures team count and team colours here — the cup uses
+  // the single tournament name (_nameCtrl), so there is no separate cup-name
+  // field.  Default palette avoids the red/blue political read by going
   // SF-Giants-style on the second team for 2-team setups.
-  // Start blank so the user must name their cup (Next is gated on a non-empty
-  // name in _canAdvance).
-  final _cupNameCtrl = TextEditingController();
   int   _cupTeamCount = 2;
   /// Colour name per team index (0-based).  Length always matches
   /// _cupTeamCount; trimmed / extended whenever the team count changes.
@@ -220,7 +266,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _cupNameCtrl.dispose();
     super.dispose();
   }
 
@@ -357,9 +402,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // ---- navigation ----
 
   bool _canAdvance() {
-    final cup = _isCupTournament;
-    switch (_step) {
-      case 0:
+    switch (_currentStep) {
+      case _StepKind.tournament:
         if (_createNewTournament) {
           if (_nameCtrl.text.trim().isEmpty) return false;
           // Multi-day tournaments require a primary accumulator game.
@@ -373,52 +417,49 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           return true;
         }
         return _existingTournament != null;
-      case 1:
+      case _StepKind.details:
         // Course required; no game selection here any more.
         if (_selectedCourseId == null) return false;
         return _additionalRounds.every((d) => d.courseId != null);
-      case 2:
-        if (cup) return _cupNameCtrl.text.trim().isNotEmpty; // Cup Design
-        return _selectedIds.length >= 2;                     // Players (non-cup)
-      case 3:
-        if (cup) {
-          // Per-round game plan — every round must have at least one game.
-          if (_roundCupGames.length < _numRounds) return false;
-          return _roundCupGames.values.every((g) => g.isNotEmpty);
-        }
-        // Groups + tees (non-cup)
+      case _StepKind.cupDesign:
+        // One name (the tournament name) covers the cup, and 2 teams is a
+        // valid default — nothing to gate on, so Next is always live here.
+        return true;
+      case _StepKind.cupGamePlan:
+        // Per-round game plan — every round must have at least one game.
+        if (_roundCupGames.length < _numRounds) return false;
+        return _roundCupGames.values.every((g) => g.isNotEmpty);
+      case _StepKind.players:
+        return _selectedIds.length >= 2;
+      case _StepKind.groups:
         return _orderedPlayerIds.isNotEmpty &&
             _orderedPlayerIds.every((id) => _playerTees[id] != null);
-      case 4:
-        // Cup: Review step (always OK — the cup itself is the game and
-        // step 3 validated each round has at least one).
-        if (cup) return true;
-        // Non-cup: side games step.  Require at least ONE game to exist
-        // somewhere — either a championship (step 0) or a side game
-        // (this step).  Without this gate a single-round tournament can
-        // be created with zero games configured, which is meaningless.
-        return _tournamentActiveGames.isNotEmpty ||
-            _activeGames.isNotEmpty;
-      case 5:
-        // Review/Create (non-cup) / post-create (cup).  Re-check the
-        // game-required rule as a belt-and-suspenders before Create
-        // fires — _canAdvance() drives the Create button too.
-        if (cup) return true;
-        return _tournamentActiveGames.isNotEmpty ||
-            _activeGames.isNotEmpty;
-      default: return false;
+      case _StepKind.games:
+        // Require at least ONE game to exist somewhere — either a championship
+        // (tournament step) or a side game (this step).  Without this gate a
+        // single-round tournament can be created with zero games, which is
+        // meaningless.
+        return _tournamentActiveGames.isNotEmpty || _activeGames.isNotEmpty;
+      case _StepKind.review:
+        // Cup: the cup itself is the game (game plan validated each round).
+        // Non-cup: re-check the game-required rule before Create fires —
+        // _canAdvance() drives the Create button too.
+        if (_isCupTournament) return true;
+        return _tournamentActiveGames.isNotEmpty || _activeGames.isNotEmpty;
     }
   }
 
   void _next() {
-    if (_step == 0 && !(_step0Key.currentState?.validate() ?? true)) return;
-    if (_step == 1 && !(_step1Key.currentState?.validate() ?? true)) return;
-    // For non-cup tournaments, _initGroups() must run when leaving the
-    // Players step (step 2) so the groups/tees step has an ordered player list.
-    // Cup tournaments don't select players in the wizard at all.
-    if (!_isCupTournament && _step == 2) _initGroups();
-    if (_step < _totalSteps - 1) setState(() => _step++);
-    // Note: the post-creation step is _totalSteps; _next() never reaches it.
+    final kind = _currentStep;
+    if (kind == _StepKind.tournament &&
+        !(_step0Key.currentState?.validate() ?? true)) return;
+    if (kind == _StepKind.details &&
+        !(_step1Key.currentState?.validate() ?? true)) return;
+    // Build the ordered player list + tee defaults when leaving Players so the
+    // groups/tees step has them.  Cup flows have no Players step.
+    if (kind == _StepKind.players) _initGroups();
+    if (_step < _stepFlow.length - 1) setState(() => _step++);
+    // Note: the post-creation step is index == length; _next() never reaches it.
   }
 
   void _back() {
@@ -557,7 +598,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     });
     await client.postTeamTournamentSetup(
       tournamentId,
-      cupName        : _cupNameCtrl.text.trim(),
+      cupName        : _nameCtrl.text.trim(),   // one name: the tournament name
       playersPerTeam : 1,          // placeholder; real value set in Phase 2
       teams          : placeholderTeams,
     );
@@ -567,7 +608,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     setState(() {
       _createdRound        = round1;
       _createdTournamentId = tournamentId;
-      _step                = _totalSteps;   // 5 for cup
+      _step                = _totalSteps;   // past the flow → post-creation
       _creating            = false;
     });
   }
@@ -742,7 +783,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       setState(() {
         _createdRound             = fullRound;
         _createdTournamentId      = tournamentId;
-        _step                     = _totalSteps;   // 6 for non-cup
+        _step                     = _totalSteps;   // past the flow → post-creation
         _creating                 = false;
         _matchPlayStep6Configured = matchPlayAutoConfigured;
       });
@@ -761,16 +802,16 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       child: Scaffold(
         appBar: AppBar(
           leading: BackButton(onPressed: _back),
-          title: Text(_step >= _totalSteps
+          title: Text(_isPostCreate
               ? (_isCupTournament ? 'Tournament Created' : 'Game Setup')
               : (_isCupTournament
-                  ? 'New Cup Tournament  ($_step of ${_totalSteps - 1})'
-                  : 'New Round  ($_step of ${_totalSteps - 1})')),
+                  ? 'New Cup Tournament  (${_step + 1} of $_totalSteps)'
+                  : 'New Round  (${_step + 1} of $_totalSteps)')),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(4),
             child: LinearProgressIndicator(
               // Cap at 1.0 on the post-creation step so bar stays full
-              value: (_step >= _totalSteps ? _totalSteps : _step + 1) / _totalSteps,
+              value: (_isPostCreate ? _totalSteps : _step + 1) / _totalSteps,
               backgroundColor:
                   Theme.of(context).colorScheme.surfaceContainerHighest,
             ),
@@ -803,73 +844,72 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   }
 
   Widget _stepBody() {
-    // For cup tournaments a "Cup Design" step sits at position 2, pushing
-    // players → groups → games → review each one position later.
-    final cup = _isCupTournament;
-
-    // --- Cup Design step (step 2, cup only) ---
-    if (cup && _step == 2) {
-      _resizeCupTeamColours(_cupTeamCount);
-      return _Step2CupDesign(
-        cupNameCtrl       : _cupNameCtrl,
-        teamCount         : _cupTeamCount,
-        teamColours       : _cupTeamColours,
-        onTeamCountChanged: (n) => setState(() {
-          _cupTeamCount = n;
-          _resizeCupTeamColours(n);
-        }),
-        onTeamColourChanged: (idx, colour) => setState(() {
-          if (idx >= 0 && idx < _cupTeamColours.length) {
-            _cupTeamColours[idx] = colour;
-          }
-        }),
-        lowNetEnabled     : _tournamentActiveGames.contains('low_net'),
-        onToggleLowNet    : (on) => setState(() {
-          on ? _tournamentActiveGames.add('low_net')
-             : _tournamentActiveGames.remove('low_net');
-        }),
+    // Post-creation confirmation is terminal — shown once the round exists, at
+    // an index past the flow.  Not a member of _stepFlow.
+    if (_isPostCreate) {
+      return _Step6GameSetup(
+        round               : _createdRound!,
+        tournamentId        : _createdTournamentId,
+        tournamentName      : _createNewTournament
+            ? _nameCtrl.text.trim()
+            : (_existingTournament?.name ?? ''),
+        activeGames         : _activeGames,
+        isCupTournament     : _tournamentActiveGames.contains(GameIds.teamCup),
+        matchPlayConfigured : _matchPlayStep6Configured,
       );
     }
 
-    // --- Per-round game plan step (step 3, cup only) ---
-    if (cup && _step == 3) {
-      return _Step3CupRoundGames(
-        numRounds           : _numRounds,
-        roundCupGames       : _roundCupGames,
-        roundCupPoints      : _roundCupPoints,
-        roundCupGroupCounts : _roundCupGroupCounts,
-        selectedCourseId    : _selectedCourseId,
-        additionalRounds    : _additionalRounds,
-        courses             : _courses,
-        date                : _date,
-        onChanged           : (roundIdx, games) =>
-            setState(() {
-              _roundCupGames[roundIdx] = games;
-              // Triple Cup foursomes spend 6 holes in alt-shot — the
-              // individual-net scoring that drives championship Low
-              // Net doesn't apply on those holes.  Auto-drop the
-              // Low Net championship whenever any round uses Triple
-              // Cup so we don't surface a half-meaningful aggregate.
-              final anyTC = _roundCupGames.values
-                  .any((g) => g.contains('triple_cup'));
-              if (anyTC) {
-                _tournamentActiveGames.remove(GameIds.championshipStrokePlay);
-              }
-            }),
-        onPointsChanged     : (roundIdx, points) =>
-            setState(() => _roundCupPoints[roundIdx] = points),
-        onGroupCountsChanged: (roundIdx, counts) =>
-            setState(() => _roundCupGroupCounts[roundIdx] = counts),
-      );
-    }
-
-    // Map the raw step to a logical step for the shared step widgets.
-    // Cup:     step 4→logical 5 (review), step 5→logical 6 (post-create).
-    // Non-cup: no shift — step numbers match logical steps directly.
-    final logicalStep = (cup && _step >= 4) ? _step + 1 : _step;
-
-    switch (logicalStep) {
-      case 0:
+    switch (_currentStep) {
+      case _StepKind.cupDesign:
+        _resizeCupTeamColours(_cupTeamCount);
+        return _Step2CupDesign(
+          teamCount         : _cupTeamCount,
+          teamColours       : _cupTeamColours,
+          onTeamCountChanged: (n) => setState(() {
+            _cupTeamCount = n;
+            _resizeCupTeamColours(n);
+          }),
+          onTeamColourChanged: (idx, colour) => setState(() {
+            if (idx >= 0 && idx < _cupTeamColours.length) {
+              _cupTeamColours[idx] = colour;
+            }
+          }),
+          lowNetEnabled     : _tournamentActiveGames.contains('low_net'),
+          onToggleLowNet    : (on) => setState(() {
+            on ? _tournamentActiveGames.add('low_net')
+               : _tournamentActiveGames.remove('low_net');
+          }),
+        );
+      case _StepKind.cupGamePlan:
+        return _Step3CupRoundGames(
+          numRounds           : _numRounds,
+          roundCupGames       : _roundCupGames,
+          roundCupPoints      : _roundCupPoints,
+          roundCupGroupCounts : _roundCupGroupCounts,
+          selectedCourseId    : _selectedCourseId,
+          additionalRounds    : _additionalRounds,
+          courses             : _courses,
+          date                : _date,
+          onChanged           : (roundIdx, games) =>
+              setState(() {
+                _roundCupGames[roundIdx] = games;
+                // Triple Cup foursomes spend 6 holes in alt-shot — the
+                // individual-net scoring that drives championship Low
+                // Net doesn't apply on those holes.  Auto-drop the
+                // Low Net championship whenever any round uses Triple
+                // Cup so we don't surface a half-meaningful aggregate.
+                final anyTC = _roundCupGames.values
+                    .any((g) => g.contains('triple_cup'));
+                if (anyTC) {
+                  _tournamentActiveGames.remove(GameIds.championshipStrokePlay);
+                }
+              }),
+          onPointsChanged     : (roundIdx, points) =>
+              setState(() => _roundCupPoints[roundIdx] = points),
+          onGroupCountsChanged: (roundIdx, counts) =>
+              setState(() => _roundCupGroupCounts[roundIdx] = counts),
+        );
+      case _StepKind.tournament:
         return _Step0Tournament(
           createNew            : _createNewTournament,
           tournaments          : _tournaments,
@@ -927,7 +967,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             }
           }),
         );
-      case 1:
+      case _StepKind.details:
         return _Step1Details(
           courses           : _courses,
           selectedCourseId  : _selectedCourseId,
@@ -953,7 +993,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           isStablefordChampionship:
               _tournamentActiveGames.contains(GameIds.championshipStableford),
         );
-      case 2:
+      case _StepKind.players:
         return _Step2Players(
           players    : _allPlayers,
           selectedIds: _selectedIds,
@@ -978,7 +1018,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           onAddByPhone: _addHalvedGolfer,
           onAddGolfer:  _addGolfer,
         );
-      case 3:
+      case _StepKind.groups:
         return _Step3GroupsAndTees(
           orderedPlayers: _orderedPlayers,
           playerTees    : _playerTees,
@@ -996,7 +1036,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _groupSizesOverride = sizes;
           }),
         );
-      case 4:
+      case _StepKind.games:
         return _Step4Games(
           activeGames               : _activeGames,
           groupSizeList             : _effectiveGroupSizes,
@@ -1025,7 +1065,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           }),
           hasAnyTournamentGame      : _tournamentActiveGames.isNotEmpty,
         );
-      case 5:
+      case _StepKind.review:
         return _Step5Review(
           createNew            : _createNewTournament,
           tournamentName       : _createNewTournament
@@ -1043,19 +1083,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           groupSizes           : _effectiveGroupSizes,
           createError          : _createError,
         );
-      case 6:  // post-creation (logical 6 = step 6 non-cup or step 7 cup)
-        return _Step6GameSetup(
-          round               : _createdRound!,
-          tournamentId        : _createdTournamentId,
-          tournamentName      : _createNewTournament
-              ? _nameCtrl.text.trim()
-              : (_existingTournament?.name ?? ''),
-          activeGames         : _activeGames,
-          isCupTournament     : _tournamentActiveGames.contains(GameIds.teamCup),
-          matchPlayConfigured : _matchPlayStep6Configured,
-        );
-      default:
-        return const SizedBox.shrink();
     }
   }
 }
@@ -1913,7 +1940,6 @@ class _Step3GroupsAndTees extends StatelessWidget {
 // ===========================================================================
 
 class _Step2CupDesign extends StatefulWidget {
-  final TextEditingController cupNameCtrl;
   final int                   teamCount;
   final List<String>          teamColours;
   final void Function(int)    onTeamCountChanged;
@@ -1922,7 +1948,6 @@ class _Step2CupDesign extends StatefulWidget {
   final void Function(bool)   onToggleLowNet;
 
   const _Step2CupDesign({
-    required this.cupNameCtrl,
     required this.teamCount,
     required this.teamColours,
     required this.onTeamCountChanged,
@@ -1942,27 +1967,9 @@ class _Step2CupDesignState extends State<_Step2CupDesign> {
     return _pinnedStep(
       context,
       title: 'Cup Design',
-      subtitle: 'Give the cup a name and choose how many teams will compete. '
+      subtitle: 'Choose how many teams will compete and pick their colours. '
           'Team names and player assignments come later.',
       children: [
-
-        // Cup name (required)
-        GolfTextField(
-          controller: widget.cupNameCtrl,
-          label: 'Cup name',
-          hint: 'e.g. Club Cup 2026',
-          prefixIcon: Icons.emoji_events_outlined,
-          textCapitalization: TextCapitalization.words,
-          onChanged: (_) => setState(() {}),
-        ),
-        if (widget.cupNameCtrl.text.trim().isEmpty) ...[
-          const SizedBox(height: 6),
-          const InlineMessage(
-            kind: InlineMessageKind.warn,
-            text: 'Give your cup a name to continue.',
-          ),
-        ],
-        const SizedBox(height: 24),
 
         // Number of teams
         Text('Number of Teams',

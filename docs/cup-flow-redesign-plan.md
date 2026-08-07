@@ -38,6 +38,18 @@ parallel.
 
 *Unlocks all of Phase 1. Moderate churn, not a rewrite.*
 
+> **Status: landed** (`new_round_wizard.dart`). `_step` now indexes a derived
+> `List<_StepKind> _stepFlow` computed from tournament type; `_totalSteps` is
+> `_stepFlow.length`; header shows an honest 1-indexed "N of M"; `_canAdvance`
+> and `_stepBody` switch on `_currentStep` (a `_StepKind`), and the `logicalStep`
+> shim + the two cup pre-switch special-cases are gone. Post-creation is a
+> terminal `_isPostCreate` state, not a flow member. **One-name decision applied:**
+> `_cupNameCtrl` removed, cup persists under the single `_nameCtrl`; the cup-name
+> field + its Next-gate are gone from `_Step2CupDesign` (which also fixes the
+> "Teams Next disabled despite default" bug). Adding/striking a step (e.g. the
+> exclusive-format side-game rule) is now a one-line edit to `_stepFlow`.
+> `flutter analyze` clean; not yet run in the simulator.
+
 Today `new_round_wizard.dart` drives an `int _step` through a switch, with a constant step
 count:
 
@@ -189,9 +201,8 @@ Corrected file ownership (the handoff's guesses were off):
 
 ## Open product questions (settle before/while building)
 
-1. **One name or two?** The code carries `_nameCtrl` (tournament) *and* `_cupNameCtrl` (cup),
-   persisted separately (L491, L560). Event-details implies collapsing to one. Affects Spine A +
-   review.
+1. ~~**One name or two?**~~ **Resolved: one name.** `_cupNameCtrl` removed; the cup persists
+   under the single tournament `_nameCtrl` (done in Spine A).
 2. **TD editing another group's card — attributed or silent?** Flagged in the round-hub notes;
    unresolved. "A card that changed after the group signed it is the kind of thing people argue
    about."
