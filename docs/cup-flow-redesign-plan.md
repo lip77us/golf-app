@@ -101,6 +101,21 @@ group count purely from roster size (`8→[4,4]`, `14→[4,4,3,3]`), consumed cl
 5. Open **round setup** seeded with that many groups; `round-groups`' tally reads off it, not
    `_foursomes.length`.
 
+> **Progress — B1 + B2 landed.**
+> - **B1:** `players_per_team` surfaced on the client (`TeamTournamentSummary.playersPerTeam`);
+>   the backend already emitted it, the model just dropped it. Foundation for all derivation.
+> - **B2 (= the `cup-games-by-round` redesign):** the wizard **stops asking group count** — the
+>   "Groups" stepper is removed from `_RoundGameSlots`, the column is relabelled "Per segment",
+>   and an amber note explains "Side size is set in the draft, and the group count … follow[s]
+>   from it." The wizard persists **empty `cup_group_counts`**, so "points to win" honestly
+>   defers rather than being guessed at 1 group. `cup_group_counts` is only a pre-setup
+>   projection — once a round's foursomes exist the real count takes over, so nothing regresses
+>   permanently. (Backend unchanged; `Round.cup_group_counts` still accepts the empty dict.)
+> - **Follow-ups:** the group-count *plumbing* (`_roundCupGroupCounts`, `onGroupCountsChanged`,
+>   `currentGroupCounts`) is now vestigial and can be deleted. Still to do: **B3** (side size on
+>   the draft + Lock-Draft gate + derive each round's projection from it) and **B4** (round setup
+>   derives group count from the roster via `groupSizes()`).
+
 ### Corollary — make `type` / `format` a stored fact
 
 `_isCupTournament` is *derived* from which championship-chip is toggled. Making type the first

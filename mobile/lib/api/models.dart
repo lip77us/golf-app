@@ -4499,6 +4499,10 @@ class TeamTournamentSummary {
   final bool            draftComplete;
   final List<CupTeam>   teams;
   final List<CupRound>  rounds;
+  /// Target roster size per side (players per team).  The single input from
+  /// which group count derives: roster = sides × playersPerTeam,
+  /// groups = ceil(roster / 4).
+  final int             playersPerTeam;
 
   const TeamTournamentSummary({
     required this.tournamentName,
@@ -4506,6 +4510,7 @@ class TeamTournamentSummary {
     required this.draftComplete,
     required this.teams,
     required this.rounds,
+    this.playersPerTeam = 0,
   });
 
   factory TeamTournamentSummary.fromJson(Map<String, dynamic> j) =>
@@ -4513,6 +4518,7 @@ class TeamTournamentSummary {
         tournamentName: j['tournament_name'] as String,
         cupName:        j['cup_name']        as String? ?? 'Cup',
         draftComplete:  j['draft_complete']  as bool?   ?? false,
+        playersPerTeam: (j['players_per_team'] as num?)?.toInt() ?? 0,
         teams: (j['teams'] as List? ?? [])
             .map((t) => CupTeam.fromJson(t as Map<String, dynamic>))
             .toList(),

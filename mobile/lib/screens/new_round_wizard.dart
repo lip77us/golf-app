@@ -721,14 +721,13 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     if (!mounted) return;
 
     // 2. Create Round 1 as a stub (no foursomes; will be set up in Phase 3).
-    //    Save unique game types, per-game point values, and group counts so
-    //    cup_standings_summary can compute total_possible before setup runs.
+    //    Save unique game types and per-game point values.  Group counts are
+    //    NOT set here — they derive from the draft's side size, so total_possible
+    //    stays unknown until then rather than being guessed.
     final round1Games  = List<String>.from(_roundCupGames[0] ?? []);
     final round1Points = Map<String, double>.from(_roundCupPoints[0] ?? {});
-    final round1Counts = Map<String, int>.from(_roundCupGroupCounts[0] ?? {});
     for (final g in round1Games) {
       round1Points.putIfAbsent(g, () => 1.0);
-      round1Counts.putIfAbsent(g, () => 1);
     }
     // Field-wide side game plays every round (no cup points / group count).
     if (_tournamentSideGame != 'none') round1Games.add(_tournamentSideGame);
@@ -738,7 +737,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       date            : dateStr,
       activeGames     : round1Games,
       gamePointValues : round1Points,
-      cupGroupCounts  : round1Counts,
+      cupGroupCounts  : const {}, // derived from the draft's side size, not entered
       roundNumber     : 1,
       handicapMode    : _handicapMode,
       netPercent      : _netPercent,
@@ -752,10 +751,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       final draftDate    = DateFormat('yyyy-MM-dd').format(draft.date);
       final roundGames   = List<String>.from(_roundCupGames[i + 1] ?? []);
       final roundPoints  = Map<String, double>.from(_roundCupPoints[i + 1] ?? {});
-      final roundCounts  = Map<String, int>.from(_roundCupGroupCounts[i + 1] ?? {});
       for (final g in roundGames) {
         roundPoints.putIfAbsent(g, () => 1.0);
-        roundCounts.putIfAbsent(g, () => 1);
       }
       if (_tournamentSideGame != 'none') roundGames.add(_tournamentSideGame);
       await client.createRound(
@@ -764,7 +761,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         date            : draftDate,
         activeGames     : roundGames,
         gamePointValues : roundPoints,
-        cupGroupCounts  : roundCounts,
+        cupGroupCounts  : const {}, // derived from the draft's side size, not entered
         roundNumber     : i + 2,
         handicapMode    : _handicapMode,
         netPercent      : _netPercent,
@@ -3330,14 +3327,6 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
     _ptCtrl.remove(gameId);
   }
 
-  void _setGroupCount(String gameId, int delta) {
-    final current  = widget.currentGroupCounts[gameId] ?? 1;
-    final newCount = (current + delta).clamp(1, 8);
-    final updated  = Map<String, int>.from(widget.currentGroupCounts);
-    updated[gameId] = newCount;
-    widget.onGroupCountsChanged(updated);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme       = Theme.of(context);
@@ -3376,18 +3365,15 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
                 style: theme.textTheme.bodySmall
                     ?.copyWith(fontStyle: FontStyle.italic))
           else ...[
-            // Column headers
+            // Column headers — no group count here; it's derived from the
+            // draft's side size, not entered.
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(children: [
                 Expanded(child: Text('Format',
                     style: theme.textTheme.labelSmall
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
-                SizedBox(width: 90, child: Text('Groups',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
-                SizedBox(width: 72, child: Text('Pts/win',
+                SizedBox(width: 82, child: Text('Per segment',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.labelSmall
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
@@ -3399,52 +3385,15 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
 
             // One row per game type
             ...gameList.map((g) {
-              final groupCount = widget.currentGroupCounts[g] ?? 1;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(children: [
                   Expanded(child: Text(_label(g),
                       style: theme.textTheme.bodyMedium)),
 
-                  // Group count stepper
+                  // Points per segment field
                   SizedBox(
-                    width: 90,
-                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      InkWell(
-                        onTap: groupCount > 1 ? () => _setGroupCount(g, -1) : null,
-                        borderRadius: BorderRadius.circular(4),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(Icons.remove,
-                              size: 16,
-                              color: groupCount > 1
-                                  ? theme.colorScheme.primary
-                                  : theme.disabledColor),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 28,
-                        child: Text('$groupCount',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold)),
-                      ),
-                      InkWell(
-                        onTap: () => _setGroupCount(g, 1),
-                        borderRadius: BorderRadius.circular(4),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(Icons.add,
-                              size: 16,
-                              color: theme.colorScheme.primary),
-                        ),
-                      ),
-                    ]),
-                  ),
-
-                  // Points per win field
-                  SizedBox(
-                    width: 72,
+                    width: 82,
                     child: TextField(
                       controller: _ptCtrl[g],
                       keyboardType:
@@ -3474,6 +3423,30 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
                 ]),
               );
             }),
+          ],
+
+          if (gameList.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDF3E7),
+                border: Border.all(color: const Color(0xFFF0DCBE)),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.schedule, size: 16, color: Color(0xFFB9791C)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Groups aren\'t set here. Side size is set in the draft, '
+                    'and the group count — and the totals — follow from it.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8A5216), height: 1.4),
+                  ),
+                ),
+              ]),
+            ),
           ],
 
           const SizedBox(height: 6),
