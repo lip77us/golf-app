@@ -153,17 +153,25 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     GameIds.championshipStrokePlay,
   };
 
-  // ---- Cup Design (step 2 for cup tournaments) ----
-  // Team NAMES are set later during Phase 2 (team roster screen).
-  // The wizard only captures team count and team colours here — the cup uses
-  // the single tournament name (_nameCtrl), so there is no separate cup-name
-  // field.  Default palette avoids the red/blue political read by going
-  // SF-Giants-style on the second team for 2-team setups.
+  // ---- Teams (cup tournaments) ----
+  // Count, names, badges and colours are all captured here now, so the draft
+  // never has to rename.  The cup uses the single tournament name (_nameCtrl)
+  // — there is no separate cup-name field.  Names/badges are optional with a
+  // real default (Team 1 / Team 2).  Controllers are fixed at the 4-team max;
+  // only _cupTeamCount of them are shown.
   int   _cupTeamCount = 2;
   /// Colour name per team index (0-based).  Length always matches
   /// _cupTeamCount; trimmed / extended whenever the team count changes.
-  /// Default palette: Red, Blue, Green, Yellow.
+  /// Default palette: Red, Blue, Green, Yellow (all unique, so colour locking
+  /// starts from a legal state).
   List<String> _cupTeamColours = ['Red', 'Blue'];
+  final List<TextEditingController> _teamNameCtrls =
+      List.generate(4, (_) => TextEditingController());
+  final List<TextEditingController> _teamBadgeCtrls =
+      List.generate(4, (_) => TextEditingController());
+  /// Whether the user has typed in a team's badge field — once they have, the
+  /// badge stops auto-following the name.
+  final List<bool> _teamBadgeOwned = List.filled(4, false);
 
   void _resizeCupTeamColours(int newCount) {
     const defaults = ['Red', 'Blue', 'Green', 'Yellow'];
@@ -174,6 +182,25 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     }
     if (next.length > newCount) next.removeRange(newCount, next.length);
     _cupTeamColours = next;
+  }
+
+  /// A one-letter badge derived from a team name: leading "Team " stripped,
+  /// first character upper-cased ("Team Bucko" → "B").
+  static String _deriveBadge(String s) {
+    final t = s.trim().replaceFirst(RegExp(r'^team\s+', caseSensitive: false), '');
+    return t.isEmpty ? '' : t[0].toUpperCase();
+  }
+
+  /// The team name to persist — the typed name, or the "Team N" default.
+  String _effectiveTeamName(int i) {
+    final t = _teamNameCtrls[i].text.trim();
+    return t.isEmpty ? 'Team ${i + 1}' : t;
+  }
+
+  /// The badge to persist — the typed badge, else derived from the name.
+  String _effectiveTeamBadge(int i) {
+    final b = _teamBadgeCtrls[i].text.trim();
+    return b.isNotEmpty ? b.toUpperCase() : _deriveBadge(_effectiveTeamName(i));
   }
 
   // ---- Cup Round Games (step 3 for cup tournaments) ----
@@ -290,6 +317,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    for (final c in _teamNameCtrls) c.dispose();
+    for (final c in _teamBadgeCtrls) c.dispose();
     super.dispose();
   }
 
@@ -719,20 +748,21 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       if (!mounted) return;
     }
 
-    // 4. Create TeamTournament with placeholder team names + chosen
-    //    colours.  Real names and player assignments come from the
-    //    Phase 2 roster screen; the colour persists from here.
+    // 4. Create TeamTournament with the names, badges and colours captured on
+    //    the Teams step, so the draft never has to rename.  Player assignments
+    //    still come later from the draft.
     _resizeCupTeamColours(_cupTeamCount);
-    final placeholderTeams = List.generate(_cupTeamCount, (i) => <String, dynamic>{
+    final teams = List.generate(_cupTeamCount, (i) => <String, dynamic>{
       'team_number': i + 1,
-      'name'       : 'Team ${i + 1}',
+      'name'       : _effectiveTeamName(i),
       'colour'     : _cupTeamColours[i],
+      'short_code' : _effectiveTeamBadge(i),
     });
     await client.postTeamTournamentSetup(
       tournamentId,
       cupName        : _nameCtrl.text.trim(),   // one name: the tournament name
       playersPerTeam : 1,          // placeholder; real value set in Phase 2
-      teams          : placeholderTeams,
+      teams          : teams,
     );
     if (!mounted) return;
 
@@ -1015,9 +1045,13 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         );
       case _StepKind.cupDesign:
         _resizeCupTeamColours(_cupTeamCount);
-        return _Step2CupDesign(
-          teamCount         : _cupTeamCount,
-          teamColours       : _cupTeamColours,
+        return _StepTeams(
+          teamCount   : _cupTeamCount,
+          teamColours : _cupTeamColours,
+          nameCtrls   : _teamNameCtrls,
+          badgeCtrls  : _teamBadgeCtrls,
+          badgeOwned  : _teamBadgeOwned,
+          deriveBadge : _deriveBadge,
           onTeamCountChanged: (n) => setState(() {
             _cupTeamCount = n;
             _resizeCupTeamColours(n);
@@ -1026,11 +1060,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             if (idx >= 0 && idx < _cupTeamColours.length) {
               _cupTeamColours[idx] = colour;
             }
-          }),
-          lowNetEnabled     : _tournamentActiveGames.contains('low_net'),
-          onToggleLowNet    : (on) => setState(() {
-            on ? _tournamentActiveGames.add('low_net')
-               : _tournamentActiveGames.remove('low_net');
           }),
         );
       case _StepKind.cupGamePlan:
@@ -2524,132 +2553,312 @@ class _Step3GroupsAndTees extends StatelessWidget {
 // Step 2 (Cup) — Cup Design
 // ===========================================================================
 
-class _Step2CupDesign extends StatefulWidget {
+class _StepTeams extends StatefulWidget {
   final int                   teamCount;
   final List<String>          teamColours;
-  final void Function(int)    onTeamCountChanged;
+  final List<TextEditingController> nameCtrls;
+  final List<TextEditingController> badgeCtrls;
+  final List<bool>            badgeOwned;
+  final String Function(String) deriveBadge;
+  final ValueChanged<int>     onTeamCountChanged;
   final void Function(int teamIdx, String colour) onTeamColourChanged;
-  final bool                  lowNetEnabled;
-  final void Function(bool)   onToggleLowNet;
 
-  const _Step2CupDesign({
+  const _StepTeams({
     required this.teamCount,
     required this.teamColours,
+    required this.nameCtrls,
+    required this.badgeCtrls,
+    required this.badgeOwned,
+    required this.deriveBadge,
     required this.onTeamCountChanged,
     required this.onTeamColourChanged,
-    required this.lowNetEnabled,
-    required this.onToggleLowNet,
   });
 
   @override
-  State<_Step2CupDesign> createState() => _Step2CupDesignState();
+  State<_StepTeams> createState() => _StepTeamsState();
 }
 
-class _Step2CupDesignState extends State<_Step2CupDesign> {
+class _StepTeamsState extends State<_StepTeams> {
+  static const _cardBorder = Color(0xFFD3DED6);
+  static const _ink        = Color(0xFF0B1F1A);
+  static const _muted      = Color(0xFF9AA8A0);
+
+  @override
+  void initState() {
+    super.initState();
+    _syncBadges();
+  }
+
+  @override
+  void didUpdateWidget(_StepTeams old) {
+    super.didUpdateWidget(old);
+    if (old.teamCount != widget.teamCount) _syncBadges();
+  }
+
+  /// Keep each not-yet-owned badge field showing the derived letter, so the
+  /// field mirrors the chip on arrival and after a team-count change.
+  void _syncBadges() {
+    for (int i = 0; i < widget.teamCount; i++) {
+      if (widget.badgeOwned[i]) continue;
+      final d = widget.deriveBadge(
+          widget.nameCtrls[i].text.isEmpty ? 'Team ${i + 1}' : widget.nameCtrls[i].text);
+      if (widget.badgeCtrls[i].text != d) widget.badgeCtrls[i].text = d;
+    }
+  }
+
+  String _badgeFor(int i) {
+    final b = widget.badgeCtrls[i].text.trim();
+    if (b.isNotEmpty) return b.toUpperCase();
+    return widget.deriveBadge(
+        widget.nameCtrls[i].text.isEmpty ? 'Team ${i + 1}' : widget.nameCtrls[i].text);
+  }
+
+  Color _colourFor(int i) {
+    final name = i < widget.teamColours.length ? widget.teamColours[i] : 'Red';
+    return _kCupColourChoices
+        .firstWhere((e) => e.$1.toLowerCase() == name.toLowerCase(),
+            orElse: () => _kCupColourChoices.first)
+        .$2;
+  }
+
+  bool _colourLocked(int teamIdx, String colourName) {
+    for (int j = 0; j < widget.teamCount; j++) {
+      if (j == teamIdx) continue;
+      if (j < widget.teamColours.length &&
+          widget.teamColours[j].toLowerCase() == colourName.toLowerCase()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String? _duplicateBadge() {
+    final seen = <String>{};
+    for (int i = 0; i < widget.teamCount; i++) {
+      final b = _badgeFor(i);
+      if (b.isEmpty) continue;
+      if (!seen.add(b)) return b;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final dup = _duplicateBadge();
     return _pinnedStep(
       context,
-      title: 'Cup Design',
-      subtitle: 'Choose how many teams will compete and pick their colours. '
-          'Team names and player assignments come later.',
+      title: 'Teams',
+      subtitle: 'How many sides, what they are called, and which colour each '
+          'one wears. Players are assigned in the draft.',
       children: [
-
-        // Number of teams
-        Text('Number of Teams',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold)),
+        _label(context, 'Number of teams'),
         const SizedBox(height: 8),
-        Row(
-          children: [2, 3, 4].map((n) => Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text('$n teams'),
-              selected: widget.teamCount == n,
-              onSelected: (_) {
-                widget.onTeamCountChanged(n);
-                setState(() {});
-              },
-            ),
-          )).toList(),
-        ),
-        const SizedBox(height: 24),
-
-        // Team colours
-        Text('Team Colors',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Text(
-          'Pick a color for each team — used throughout the score-entry '
-          'and leaderboard screens.  Defaults to Red / Blue / Green / '
-          'Yellow; swap for Orange / Black / Purple to suit your event.',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 10),
-        for (int i = 0; i < widget.teamCount; i++) ...[
-          _CupTeamColourRow(
-            teamNumber: i + 1,
-            current:    i < widget.teamColours.length
-                ? widget.teamColours[i] : 'Red',
-            onChanged:  (c) {
-              widget.onTeamColourChanged(i, c);
-              setState(() {});
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
-        const SizedBox(height: 16),
-
-        // Secondary game
-        Text('Secondary Game (optional)',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Text(
-          'A cross-team side game played by all golfers every round.',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 10),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Stroke Play'),
-          subtitle: const Text('Individual net scores across all players'),
-          value: widget.lowNetEnabled,
-          onChanged: (v) {
-            widget.onToggleLowNet(v);
-            setState(() {});
-          },
-        ),
-        const SizedBox(height: 16),
-
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(Icons.info_outline,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'After creating the tournament, tap "Assign Teams" on the '
-                'tournament card to name the teams and assign players. '
-                'Set up each round\'s foursomes and tee times from '
-                '"Set Up Round N" when you\'re ready to play.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        Row(children: [2, 3, 4].map((n) {
+          final on = widget.teamCount == n;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: n < 4 ? 8 : 0),
+              child: InkWell(
+                onTap: () => widget.onTeamCountChanged(n),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: on ? theme.colorScheme.primary : Colors.white,
+                    border: Border.all(
+                        color: on ? theme.colorScheme.primary : _cardBorder,
+                        width: 1.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('$n teams',
+                      style: TextStyle(
+                          color: on ? Colors.white : theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w600)),
+                ),
               ),
             ),
-          ]),
+          );
+        }).toList()),
+        const SizedBox(height: 20),
+        _label(context, 'Teams'),
+        const SizedBox(height: 8),
+        for (int i = 0; i < widget.teamCount; i++) _teamCard(context, i),
+        if (dup != null) ...[
+          const SizedBox(height: 2),
+          _dupWarning(context, dup),
+        ],
+        const SizedBox(height: 10),
+        Text(
+          'Names up to 16 characters — enough to fit the leaderboard on the '
+          'smallest phone. The badge is one or two characters and follows the '
+          'name unless you set it yourself.',
+          style: theme.textTheme.bodySmall?.copyWith(color: _muted),
         ),
       ],
+    );
+  }
+
+  Widget _label(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    return Text(text.toUpperCase(),
+        style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            fontSize: 11));
+  }
+
+  Widget _teamCard(BuildContext context, int i) {
+    final theme = Theme.of(context);
+    final colour = _colourFor(i);
+    final name = widget.nameCtrls[i].text.trim();
+    final nameLen = widget.nameCtrls[i].text.length;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(13, 12, 13, 13),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _cardBorder),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            constraints: const BoxConstraints(minWidth: 24),
+            height: 24,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            alignment: Alignment.center,
+            decoration:
+                BoxDecoration(color: colour, borderRadius: BorderRadius.circular(8)),
+            child: Text(_badgeFor(i),
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+          ),
+          const SizedBox(width: 9),
+          Text(name.isEmpty ? 'Team ${i + 1}' : name,
+              style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: name.isEmpty ? _muted : theme.colorScheme.onSurface)),
+        ]),
+        const SizedBox(height: 10),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: TextField(
+              controller: widget.nameCtrls[i],
+              maxLength: 16,
+              textCapitalization: TextCapitalization.words,
+              onChanged: (v) => setState(() {
+                if (!widget.badgeOwned[i]) {
+                  widget.badgeCtrls[i].text =
+                      widget.deriveBadge(v.isEmpty ? 'Team ${i + 1}' : v);
+                }
+              }),
+              decoration: InputDecoration(
+                hintText: 'Team ${i + 1}',
+                counterText: nameLen >= 12 ? '$nameLen/16' : '',
+                isDense: true,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 9),
+          SizedBox(
+            width: 66,
+            child: TextField(
+              controller: widget.badgeCtrls[i],
+              maxLength: 2,
+              textAlign: TextAlign.center,
+              textCapitalization: TextCapitalization.characters,
+              onChanged: (v) => setState(() {
+                widget.badgeOwned[i] = v.trim().isNotEmpty;
+                final up = v.toUpperCase();
+                if (up != v) {
+                  widget.badgeCtrls[i].value = TextEditingValue(
+                    text: up,
+                    selection: TextSelection.collapsed(offset: up.length),
+                  );
+                }
+              }),
+              decoration: const InputDecoration(
+                labelText: 'Badge',
+                counterText: '',
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        _swatches(context, i),
+      ]),
+    );
+  }
+
+  Widget _swatches(BuildContext context, int i) {
+    return Wrap(
+      spacing: 9,
+      runSpacing: 9,
+      children: _kCupColourChoices.map((e) {
+        final (cname, ccolor) = e;
+        final selected = i < widget.teamColours.length &&
+            widget.teamColours[i].toLowerCase() == cname.toLowerCase();
+        final locked = _colourLocked(i, cname);
+        return GestureDetector(
+          onTap: locked ? null : () => widget.onTeamColourChanged(i, cname),
+          child: Opacity(
+            opacity: locked ? 0.3 : 1,
+            child: Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(
+                    color: selected ? _ink : Colors.transparent, width: 2),
+              ),
+              child: Stack(alignment: Alignment.center, children: [
+                Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                        color: ccolor, borderRadius: BorderRadius.circular(8))),
+                if (selected) const Icon(Icons.check, size: 15, color: Colors.white),
+                if (locked)
+                  Transform.rotate(
+                      angle: -0.785,
+                      child: Container(width: 30, height: 2, color: _ink)),
+              ]),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _dupWarning(BuildContext context, String letter) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+          color: const Color(0xFFFDF3E7), borderRadius: BorderRadius.circular(11)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFB9791C)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text.rich(TextSpan(
+            style: const TextStyle(
+                color: Color(0xFF8A5216), fontSize: 12.5, height: 1.4),
+            children: [
+              const TextSpan(text: 'Two teams use the badge '),
+              TextSpan(text: letter, style: const TextStyle(fontWeight: FontWeight.w700)),
+              const TextSpan(
+                  text: '. Colour still tells them apart, but a different '
+                      'letter reads faster on the scorecard.'),
+            ],
+          )),
+        ),
+      ]),
     );
   }
 }
@@ -2665,70 +2874,6 @@ const _kCupColourChoices = <(String, Color)>[
   ('Yellow', Color(0xFFF57F17)),
   ('Purple', Color(0xFF4A148C)),
 ];
-
-class _CupTeamColourRow extends StatelessWidget {
-  final int                  teamNumber;
-  final String               current;
-  final ValueChanged<String> onChanged;
-
-  const _CupTeamColourRow({
-    required this.teamNumber,
-    required this.current,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.outline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Team $teamNumber',
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: _kCupColourChoices.map((entry) {
-              final (name, color) = entry;
-              final selected = name.toLowerCase() == current.toLowerCase();
-              return GestureDetector(
-                onTap: () => onChanged(name),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(selected ? 1.0 : 0.15),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: selected ? color : color.withOpacity(0.4),
-                      width: selected ? 2 : 1,
-                    ),
-                  ),
-                  child: Text(
-                    name,
-                    style: TextStyle(
-                      color: selected ? Colors.white : color,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ===========================================================================
 // Step 3 (Cup) — Per-round game plan
