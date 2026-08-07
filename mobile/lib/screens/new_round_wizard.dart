@@ -3471,7 +3471,7 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
                     Padding(
                       padding: const EdgeInsets.only(top: 5),
                       child: Text(
-                        '${n(pts)} pt × $segs segments = ${n(pts * segs)} per group',
+                        '${n(pts)} pt × $segs segments = ${n(pts * segs)} pts/group',
                         style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant),
                       ),
