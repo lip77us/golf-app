@@ -193,12 +193,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<CourseInfo>  _courses        = [];
   int?              _selectedCourseId;
   DateTime          _date           = DateTime.now();
-  // Tournament round-level default → Net.  Tournament games are
-  // multi-foursome (Stroke Play, Irish Rumble, Low Net), and Strokes-
-  // Off-Low has no single "best golfer" reference point across foursomes
-  // — Net scales cleanly.  Users can switch to Gross or SO Low before
-  // saving for the rare per-round case.
-  String            _handicapMode   = 'net';
+  // Handicap mode default follows the type: cup formats are foursome-based
+  // match play and play off the low index (SO Low), so that's the default while
+  // the wizard opens on a cup; individual play defaults to Net.  Once the user
+  // picks a mode themselves (_handicapModeTouched), the default stops overriding.
+  String            _handicapMode   = 'strokes_off';
+  bool              _handicapModeTouched = false;
   int               _netPercent     = 100;
   bool              _netMaxDoubleBogey = true;
 
@@ -515,7 +515,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         // Not wired yet — the picker keeps these disabled.
         break;
     }
+    if (!_handicapModeTouched) _handicapMode = _defaultHandicapForFormat();
   }
+
+  /// The standard handicap mode for the chosen type.  Cup formats are
+  /// foursome-based match play (Triple Cup, Singles, Fourball) and play off the
+  /// low index (SO Low); individual/field play defaults to Net.
+  String _defaultHandicapForFormat() =>
+      _eventType == _EventType.cup ? 'strokes_off' : 'net';
 
   /// Short human summary of the chosen type + format, used in step subtitles.
   String _typeSummary() {
@@ -682,7 +689,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       roundNumber     : 1,
       handicapMode    : _handicapMode,
       netPercent      : _netPercent,
-      netMaxDoubleBogey: _netMaxDoubleBogey,
+      netMaxDoubleBogey: false, // struck — cup is match play, no total to cap
     );
     if (!mounted) return;
 
@@ -707,7 +714,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         roundNumber     : i + 2,
         handicapMode    : _handicapMode,
         netPercent      : _netPercent,
-        netMaxDoubleBogey: _netMaxDoubleBogey,
+        netMaxDoubleBogey: false, // struck — cup is match play, no total to cap
       );
       if (!mounted) return;
     }
@@ -995,7 +1002,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _eventType = t;
             _applyTypeFormat();
           }),
-          onPickCupFormat : (f) => setState(() => _cupFormat = f),
+          onPickCupFormat : (f) => setState(() {
+            _cupFormat = f;
+            if (!_handicapModeTouched) {
+              _handicapMode = _defaultHandicapForFormat();
+            }
+          }),
           onPickSoloFormat: (f) => setState(() {
             _soloFormat = f;
             _applyTypeFormat();
@@ -1086,11 +1098,13 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           onChangeHandicap  : (mode, pct) => setState(() {
             _handicapMode = mode;
             _netPercent   = pct;
+            _handicapModeTouched = true; // stop the format default overriding
           }),
           onChangeNetMaxDoubleBogey: (v) =>
               setState(() => _netMaxDoubleBogey = v),
           isStablefordChampionship:
               _tournamentActiveGames.contains(GameIds.championshipStableford),
+          isMatchPlay: _isCupTournament,
         );
       case _StepKind.players:
         return _Step2Players(
@@ -2040,6 +2054,10 @@ class _StepHandicap extends StatelessWidget {
   /// Stableford uses its own points table (and its 'double+' bucket is the
   /// floor) — so Strokes-Off and the net double-bogey cap don't apply.
   final bool isStablefordChampionship;
+  /// Cup formats are match play (a hole is won, lost or halved), so the net
+  /// double-bogey cap has no stroke total to protect — it is struck with its
+  /// reason rather than offered as a live toggle.
+  final bool isMatchPlay;
 
   const _StepHandicap({
     required this.handicapMode,
@@ -2048,6 +2066,7 @@ class _StepHandicap extends StatelessWidget {
     required this.onChangeHandicap,
     required this.onChangeNetMaxDoubleBogey,
     this.isStablefordChampionship = false,
+    this.isMatchPlay = false,
   });
 
   @override
@@ -2055,7 +2074,9 @@ class _StepHandicap extends StatelessWidget {
     return _pinnedStep(
       context,
       title: 'Handicap',
-      subtitle: 'How strokes are given. Applies to every round.',
+      subtitle: isMatchPlay
+          ? 'How strokes are given across the cup. Applies to every round.'
+          : 'How strokes are given. Applies to every round.',
       children: [
         HandicapModeSelector(
           mode:             handicapMode,
@@ -2067,7 +2088,10 @@ class _StepHandicap extends StatelessWidget {
               'to 0.  Other players get strokes proportional to '
               '(their HCP − foursome low HCP), scaled by Net %.',
         ),
-        if (!isStablefordChampionship) ...[
+        if (isMatchPlay) ...[
+          const SizedBox(height: 16),
+          _struckCapCard(context),
+        ] else if (!isStablefordChampionship) ...[
           const SizedBox(height: 16),
           // Net double-bogey cap — round-level rule, applied to every round in
           // this tournament at creation time. Stableford's points table already
@@ -2079,6 +2103,55 @@ class _StepHandicap extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+
+  /// The struck net double-bogey cap — shown, not hidden, so a control that
+  /// vanished doesn't read as a missing feature.
+  Widget _struckCapCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(13, 13, 13, 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border.all(
+            color: const Color(0xFFC9D8CD),
+            width: 1.5,
+            style: BorderStyle.solid),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.check, size: 18, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Text('Net double-bogey cap',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(5)),
+            child: Text('NOT SHOWN',
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: muted,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                    fontSize: 9.5)),
+          ),
+        ]),
+        const SizedBox(height: 7),
+        Text(
+          'The cap protects a stroke total from one disaster hole. In match '
+          'play a hole is won, lost or halved, so a nine costs one hole and no '
+          'more — there is nothing for the cap to do. It appears for stroke '
+          'play and Stableford.',
+          style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
+        ),
+      ]),
     );
   }
 }
