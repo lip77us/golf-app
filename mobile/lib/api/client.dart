@@ -2047,6 +2047,16 @@ class ApiClient {
     await _post('/tournaments/$tournamentId/team-tournament/draft-complete/', {});
   }
 
+  /// PATCH /api/tournaments/<id>/team-tournament/ — update the side size
+  /// (players per team) without touching rosters.  Returns the fresh summary.
+  Future<TeamTournamentSummary> updatePlayersPerTeam(
+      int tournamentId, int playersPerTeam) async {
+    final data = await _patch('/tournaments/$tournamentId/team-tournament/', {
+      'players_per_team': playersPerTeam,
+    });
+    return TeamTournamentSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   /// POST /api/tournaments/<id>/team-tournament/teams/<teamId>/players/
   /// Adds [playerId] to the team.  Automatically removes the player from any
   /// other team in this tournament.

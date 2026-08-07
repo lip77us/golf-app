@@ -111,10 +111,18 @@ group count purely from roster size (`8→[4,4]`, `14→[4,4,3,3]`), consumed cl
 >   defers rather than being guessed at 1 group. `cup_group_counts` is only a pre-setup
 >   projection — once a round's foursomes exist the real count takes over, so nothing regresses
 >   permanently. (Backend unchanged; `Round.cup_group_counts` still accepts the empty dict.)
-> - **Follow-ups:** the group-count *plumbing* (`_roundCupGroupCounts`, `onGroupCountsChanged`,
->   `currentGroupCounts`) is now vestigial and can be deleted. Still to do: **B3** (side size on
->   the draft + Lock-Draft gate + derive each round's projection from it) and **B4** (round setup
->   derives group count from the roster via `groupSizes()`).
+> - **B3 landed — side size is the single input, on the draft.** `ryder_cup_summary` now emits
+>   `players_per_team` (B1's client parse needs it — it was missing from the GET/PATCH payload).
+>   New backend `PATCH /team-tournament/` updates `players_per_team` without touching rosters
+>   (`postTeamTournamentSetup` *replaces* the whole thing, so it couldn't be reused mid-draft).
+>   The draft board gains a **"Players per side"** stepper, a derived line
+>   ("2 sides × 4 = 8 golfers · 2 groups of four", with an odd-remainder note), **"X of N"** fill
+>   per team (green when full), and **Lock Draft gated** until every side reaches the side size —
+>   verified end to end on device incl. the gate flipping.
+> - **Follow-ups:** the wizard's group-count *plumbing* (`_roundCupGroupCounts`,
+>   `onGroupCountsChanged`) is vestigial and can be deleted. **B4** (round setup derives group
+>   count from the roster via `groupSizes()`) still to do. Also: derive each round's
+>   `cup_group_counts` from the now-real side size so the pre-setup "points to win" projects.
 
 ### Corollary — make `type` / `format` a stored fact
 

@@ -7802,6 +7802,26 @@ class TeamTournamentDetailView(APIView):
         tt = get_object_or_404(TeamTournament, tournament=tournament)
         return Response(ryder_cup_summary(tt))
 
+    def patch(self, request, pk):
+        """Update the side size (players_per_team) without touching rosters.
+
+        Side size is the single input group count derives from, so it's set on
+        the draft — not at creation, where no roster exists yet.
+        """
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        tt = get_object_or_404(TeamTournament, tournament=tournament)
+        try:
+            n = int(request.data.get('players_per_team'))
+        except (TypeError, ValueError):
+            return Response({'detail': 'players_per_team must be an integer.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if n < 1:
+            return Response({'detail': 'players_per_team must be at least 1.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        tt.players_per_team = n
+        tt.save(update_fields=['players_per_team'])
+        return Response(ryder_cup_summary(tt))
+
 
 class TeamTournamentDraftCompleteView(APIView):
     """

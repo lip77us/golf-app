@@ -261,6 +261,16 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
     }
   }
 
+  Future<void> _setSideSize(int n) async {
+    if (n < 1 || _summary == null) return;
+    try {
+      final updated = await _client.updatePlayersPerTeam(widget.tournamentId, n);
+      if (mounted) setState(() => _summary = updated);
+    } catch (e) {
+      if (mounted) _showSnack(friendlyError(e));
+    }
+  }
+
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
@@ -320,6 +330,7 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
       onRemovePlayer: _removePlayer,
       onLockDraft   : _lockDraft,
       onRenameTeam  : _renameTeam,
+      onSetSideSize : _setSideSize,
     );
   }
 }
@@ -411,6 +422,7 @@ class _DraftBoard extends StatelessWidget {
   final void Function(CupTeam, CupPlayer) onRemovePlayer;
   final VoidCallback onLockDraft;
   final void Function(CupTeam) onRenameTeam;
+  final void Function(int) onSetSideSize;
 
   const _DraftBoard({
     required this.summary,
@@ -419,7 +431,15 @@ class _DraftBoard extends StatelessWidget {
     required this.onRemovePlayer,
     required this.onLockDraft,
     required this.onRenameTeam,
+    required this.onSetSideSize,
   });
+
+  /// Side size (players per team) — the single input group count derives from.
+  int get _sideSize => summary.playersPerTeam < 1 ? 1 : summary.playersPerTeam;
+  int get _roster   => summary.teams.length * _sideSize;
+  int get _groups   => (_roster / 4).ceil();
+  bool get _allSidesFull =>
+      summary.teams.every((t) => t.players.length >= _sideSize);
 
   @override
   Widget build(BuildContext context) {
@@ -441,7 +461,9 @@ class _DraftBoard extends StatelessWidget {
             child: Text(
               isLocked
                   ? 'Draft locked — rosters are final'
-                  : 'Draft open — drag players to teams',
+                  : (_allSidesFull
+                      ? 'Rosters full — lock when ready'
+                      : 'Draft open — fill every side'),
               style: TextStyle(
                   color: isLocked
                       ? Colors.green.shade800
@@ -451,7 +473,8 @@ class _DraftBoard extends StatelessWidget {
           ),
           if (!isLocked)
             FilledButton.tonal(
-              onPressed: onLockDraft,
+              // Lock stays disabled until every side has reached the side size.
+              onPressed: _allSidesFull ? onLockDraft : null,
               style: FilledButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 backgroundColor: Colors.green.shade400,
@@ -462,6 +485,50 @@ class _DraftBoard extends StatelessWidget {
         ]),
       ),
 
+      // ── Side size + derived group count ────────────────────────────────────
+      if (!isLocked)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text('Players per side',
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  Text('Each side drafts this many golfers.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ]),
+              ),
+              _Stepper(
+                value: _sideSize,
+                min: 1,
+                onChanged: onSetSideSize,
+              ),
+            ]),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '${summary.teams.length} sides × $_sideSize = $_roster golfers  ·  '
+                '$_groups group${_groups == 1 ? "" : "s"} of four'
+                '${_roster % 4 != 0 ? " (one short — round setup will say which)" : ""}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ]),
+        ),
+
       // ── Team columns ───────────────────────────────────────────────────────
       Expanded(
         child: ListView(
@@ -469,6 +536,7 @@ class _DraftBoard extends StatelessWidget {
           children: summary.teams.map((team) => _TeamCard(
             team      : team,
             isLocked  : isLocked,
+            sideSize  : _sideSize,
             onAdd     : () => onAddPlayer(team),
             onRemove  : (p) => onRemovePlayer(team, p),
             onRename  : () => onRenameTeam(team),
@@ -479,9 +547,50 @@ class _DraftBoard extends StatelessWidget {
   }
 }
 
+/// Compact −/N/+ stepper.
+class _Stepper extends StatelessWidget {
+  final int value;
+  final int min;
+  final ValueChanged<int> onChanged;
+  const _Stepper({required this.value, required this.onChanged, this.min = 0});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+          icon: const Icon(Icons.remove, size: 18),
+          visualDensity: VisualDensity.compact,
+          onPressed: value > min ? () => onChanged(value - 1) : null,
+          color: theme.colorScheme.primary,
+        ),
+        SizedBox(
+          width: 28,
+          child: Text('$value',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+        ),
+        IconButton(
+          icon: const Icon(Icons.add, size: 18),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => onChanged(value + 1),
+          color: theme.colorScheme.primary,
+        ),
+      ]),
+    );
+  }
+}
+
 class _TeamCard extends StatelessWidget {
   final CupTeam  team;
   final bool     isLocked;
+  final int      sideSize;
   final VoidCallback onAdd;
   final void Function(CupPlayer) onRemove;
   final VoidCallback onRename;
@@ -489,6 +598,7 @@ class _TeamCard extends StatelessWidget {
   const _TeamCard({
     required this.team,
     required this.isLocked,
+    required this.sideSize,
     required this.onAdd,
     required this.onRemove,
     required this.onRename,
@@ -518,8 +628,15 @@ class _TeamCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: _teamColor(team.colour))),
             ),
-            Text('${team.players.length} player${team.players.length != 1 ? "s" : ""}',
-                style: theme.textTheme.bodySmall),
+            Builder(builder: (_) {
+              final full = team.players.length >= sideSize;
+              return Text('${team.players.length} of $sideSize',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: full
+                          ? Colors.green.shade700
+                          : theme.colorScheme.onSurfaceVariant));
+            }),
             IconButton(
               icon: const Icon(Icons.edit_outlined, size: 18),
               tooltip: 'Rename team',

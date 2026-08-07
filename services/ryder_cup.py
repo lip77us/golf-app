@@ -564,6 +564,7 @@ def ryder_cup_summary(team_tournament: TeamTournament) -> dict:
         'tournament_name': team_tournament.tournament.name,
         'cup_name'       : team_tournament.cup_name,
         'draft_complete' : team_tournament.draft_complete,
+        'players_per_team': team_tournament.players_per_team,
         'teams'          : [
             {
                 'team_id'      : t.pk,
