@@ -50,8 +50,8 @@ class _RoundDraft {
 /// keyed on a hardcoded index.
 enum _StepKind {
   typeFormat,   // What kind of event — scoring unit + format (asked first)
-  tournament,   // New/existing, name, rounds
-  details,      // Course, date(s), handicap
+  eventDetails, // New/existing, name, event course, rounds by date
+  handicap,     // Handicap mode (+ net double-bogey cap)
   cupDesign,    // Cup: team count + colours (+ secondary game)
   cupGamePlan,  // Cup: per-round game plan
   players,      // Non-cup: player selection
@@ -98,16 +98,16 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<_StepKind> get _stepFlow => _isCupTournament
       ? const [
           _StepKind.typeFormat,
-          _StepKind.tournament,
-          _StepKind.details,
+          _StepKind.eventDetails,
+          _StepKind.handicap,
           _StepKind.cupDesign,
           _StepKind.cupGamePlan,
           _StepKind.review,
         ]
       : const [
           _StepKind.typeFormat,
-          _StepKind.tournament,
-          _StepKind.details,
+          _StepKind.eventDetails,
+          _StepKind.handicap,
           _StepKind.players,
           _StepKind.groups,
           _StepKind.games,
@@ -250,7 +250,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   // ---- form keys ----
   final _step0Key = GlobalKey<FormState>();
-  final _step1Key = GlobalKey<FormState>();
 
   // ---- derived helpers ----
 
@@ -432,24 +431,17 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         // A valid type + format is always selected (defaults + only enabled
         // types are tappable), so this step never blocks.
         return true;
-      case _StepKind.tournament:
+      case _StepKind.eventDetails:
+        // New: a name and an event course are required.  Additional rounds
+        // inherit the event course (the picker never clears to null), so the
+        // per-round override needs no separate gate.  A primary game is
+        // guaranteed by the type step.
         if (_createNewTournament) {
-          if (_nameCtrl.text.trim().isEmpty) return false;
-          // Multi-day tournaments require a primary accumulator game.
-          if (_numRounds > 1) {
-            final hasPrimary =
-                _tournamentActiveGames.contains(GameIds.championshipStrokePlay) ||
-                _tournamentActiveGames.contains(GameIds.championshipStableford) ||
-                _tournamentActiveGames.contains(GameIds.teamCup);
-            if (!hasPrimary) return false;
-          }
-          return true;
+          return _nameCtrl.text.trim().isNotEmpty && _selectedCourseId != null;
         }
-        return _existingTournament != null;
-      case _StepKind.details:
-        // Course required; no game selection here any more.
-        if (_selectedCourseId == null) return false;
-        return _additionalRounds.every((d) => d.courseId != null);
+        return _existingTournament != null && _selectedCourseId != null;
+      case _StepKind.handicap:
+        return true;
       case _StepKind.cupDesign:
         // One name (the tournament name) covers the cup, and 2 teams is a
         // valid default — nothing to gate on, so Next is always live here.
@@ -480,10 +472,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   void _next() {
     final kind = _currentStep;
-    if (kind == _StepKind.tournament &&
+    if (kind == _StepKind.eventDetails &&
         !(_step0Key.currentState?.validate() ?? true)) return;
-    if (kind == _StepKind.details &&
-        !(_step1Key.currentState?.validate() ?? true)) return;
     // Build the ordered player list + tee defaults when leaving Players so the
     // groups/tees step has them.  Cup flows have no Players step.
     if (kind == _StepKind.players) _initGroups();
@@ -527,6 +517,51 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     }
   }
 
+  /// Short human summary of the chosen type + format, used in step subtitles.
+  String _typeSummary() {
+    switch (_eventType) {
+      case _EventType.cup:
+        const names = {
+          'triple': 'Triple Cup',
+          'singles': 'Singles',
+          'fourball': 'Fourball',
+        };
+        return 'Cup play · ${names[_cupFormat] ?? 'Cup'}';
+      case _EventType.solo:
+        return _soloFormat == 'stableford'
+            ? 'Individual · Stableford'
+            : 'Individual · Stroke play';
+      case _EventType.pair:
+        return 'Two-man team';
+      case _EventType.quad:
+        return 'Four-man team';
+    }
+  }
+
+  /// Append a round.  Dates create rounds — the new round is a day after the
+  /// last and inherits the event course (a per-round override can change it).
+  void _addRound() {
+    if (_numRounds >= 6) return;
+    setState(() {
+      _numRounds += 1;
+      final baseDate =
+          _additionalRounds.isEmpty ? _date : _additionalRounds.last.date;
+      _additionalRounds.add(_RoundDraft(
+        courseId: _selectedCourseId,
+        date    : baseDate.add(const Duration(days: 1)),
+      ));
+    });
+  }
+
+  /// Remove round (2..N) at [additionalIndex] into [_additionalRounds].  Round 1
+  /// is the event itself and cannot be removed.
+  void _removeRound(int additionalIndex) {
+    setState(() {
+      _additionalRounds.removeAt(additionalIndex);
+      _numRounds = _additionalRounds.length + 1;
+    });
+  }
+
   /// Labels for the type step's "what's left after this step" panel — read off
   /// the real remaining flow (everything after the type step) so the panel and
   /// the honest header count can never disagree.
@@ -535,10 +570,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       for (final k in _stepFlow)
         if (k != _StepKind.typeFormat)
           switch (k) {
-            _StepKind.tournament =>
-              (label: 'Event details', sub: 'Name and rounds', perRound: false),
-            _StepKind.details =>
-              (label: 'Round details', sub: 'Course, date and handicap', perRound: false),
+            _StepKind.eventDetails =>
+              (label: 'Event details', sub: 'Name, course and rounds', perRound: false),
+            _StepKind.handicap =>
+              (label: 'Handicap', sub: 'How strokes are given', perRound: false),
             _StepKind.cupDesign =>
               (label: 'Cup design', sub: 'Teams and colours', perRound: false),
             _StepKind.cupGamePlan =>
@@ -664,7 +699,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       }
       await client.createRound(
         tournamentId    : tournamentId,
-        courseId        : draft.courseId!,
+        courseId        : draft.courseId ?? _selectedCourseId!, // inherit event course
         date            : draftDate,
         activeGames     : roundGames,
         gamePointValues : roundPoints,
@@ -780,7 +815,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         final draftDate = DateFormat('yyyy-MM-dd').format(draft.date);
         await client.createRound(
           tournamentId: tournamentId,
-          courseId    : draft.courseId!,
+          courseId    : draft.courseId ?? _selectedCourseId!, // inherit event course
           date        : draftDate,
           activeGames : games,
           roundNumber : i + 2,
@@ -1015,61 +1050,45 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           onGroupCountsChanged: (roundIdx, counts) =>
               setState(() => _roundCupGroupCounts[roundIdx] = counts),
         );
-      case _StepKind.tournament:
-        return _Step0Tournament(
-          createNew            : _createNewTournament,
-          tournaments          : _tournaments,
-          existingTournament   : _existingTournament,
-          nameCtrl             : _nameCtrl,
-          formKey              : _step0Key,
-          numRounds            : _numRounds,
-          onToggleNew          : (v) => setState(() {
+      case _StepKind.eventDetails:
+        return _StepEventDetails(
+          createNew          : _createNewTournament,
+          tournaments        : _tournaments,
+          existingTournament : _existingTournament,
+          nameCtrl           : _nameCtrl,
+          formKey            : _step0Key,
+          courses            : _courses,
+          selectedCourseId   : _selectedCourseId,
+          date               : _date,
+          additionalRounds   : _additionalRounds,
+          typeSummary        : _typeSummary(),
+          remainingSteps     : _stepFlow.length - 2, // minus type + this step
+          onToggleNew        : (v) => setState(() {
             _createNewTournament = v;
             _existingTournament  = null;
           }),
-          onPickTournament  : (t) => setState(() => _existingTournament = t),
-          onNumRoundsChanged: (n) => setState(() {
-            _numRounds = n;
-            // Resize _additionalRounds to (n - 1)
-            while (_additionalRounds.length < n - 1) {
-              // Stagger dates by 1 day each; default each new day to Round 1's
-              // course (most tournaments play one course — user can change it).
-              final baseDate = _additionalRounds.isEmpty
-                  ? _date
-                  : _additionalRounds.last.date;
-              _additionalRounds.add(_RoundDraft(
-                courseId: _selectedCourseId,
-                date    : baseDate.add(const Duration(days: 1)),
-              ));
-            }
-            if (_additionalRounds.length > n - 1) {
-              _additionalRounds = _additionalRounds.sublist(0, n - 1);
-            }
+          onPickTournament : (t) => setState(() => _existingTournament = t),
+          onPickCourse     : (course) => _selectWizardCourse(course),
+          onPickDate       : (d) => setState(() => _date = d),
+          onPickAdditionalCourse: (idx, course) =>
+              _selectWizardCourse(course, additionalIndex: idx),
+          onPickAdditionalDate: (idx, d) => setState(() {
+            _additionalRounds[idx].date = d;
           }),
+          onAddRound   : _addRound,
+          onRemoveRound: _removeRound,
         );
-      case _StepKind.details:
-        return _Step1Details(
-          courses           : _courses,
-          selectedCourseId  : _selectedCourseId,
-          date              : _date,
+      case _StepKind.handicap:
+        return _StepHandicap(
           handicapMode      : _handicapMode,
           netPercent        : _netPercent,
           netMaxDoubleBogey : _netMaxDoubleBogey,
-          formKey           : _step1Key,
-          additionalRounds  : _additionalRounds,
-          onPickCourse      : (course) => _selectWizardCourse(course),
-          onPickDate        : (d) => setState(() => _date = d),
           onChangeHandicap  : (mode, pct) => setState(() {
             _handicapMode = mode;
             _netPercent   = pct;
           }),
           onChangeNetMaxDoubleBogey: (v) =>
               setState(() => _netMaxDoubleBogey = v),
-          onPickAdditionalCourse: (idx, course) =>
-              _selectWizardCourse(course, additionalIndex: idx),
-          onPickAdditionalDate: (idx, d) => setState(() {
-            _additionalRounds[idx].date = d;
-          }),
           isStablefordChampionship:
               _tournamentActiveGames.contains(GameIds.championshipStableford),
         );
@@ -1675,311 +1694,390 @@ class _Step1TypeFormat extends StatelessWidget {
   }
 }
 
-class _Step0Tournament extends StatelessWidget {
-  final bool              createNew;
-  final List<Tournament>  tournaments;
-  final Tournament?       existingTournament;
+class _StepEventDetails extends StatelessWidget {
+  final bool                 createNew;
+  final List<Tournament>     tournaments;
+  final Tournament?          existingTournament;
   final TextEditingController nameCtrl;
   final GlobalKey<FormState> formKey;
-  final int               numRounds;
+  final List<CourseInfo>     courses;
+  final int?                 selectedCourseId;
+  final DateTime             date;
+  final List<_RoundDraft>    additionalRounds;
+  final String               typeSummary;
+  final int                  remainingSteps;
   final ValueChanged<bool>        onToggleNew;
   final ValueChanged<Tournament?> onPickTournament;
-  final ValueChanged<int>         onNumRoundsChanged;
+  final ValueChanged<CourseInfo>  onPickCourse;
+  final ValueChanged<DateTime>    onPickDate;
+  final void Function(int idx, CourseInfo course) onPickAdditionalCourse;
+  final void Function(int idx, DateTime date)     onPickAdditionalDate;
+  final VoidCallback         onAddRound;
+  final void Function(int idx) onRemoveRound;
 
-  const _Step0Tournament({
+  const _StepEventDetails({
     required this.createNew,
     required this.tournaments,
     required this.existingTournament,
     required this.nameCtrl,
     required this.formKey,
-    required this.numRounds,
+    required this.courses,
+    required this.selectedCourseId,
+    required this.date,
+    required this.additionalRounds,
+    required this.typeSummary,
+    required this.remainingSteps,
     required this.onToggleNew,
     required this.onPickTournament,
-    required this.onNumRoundsChanged,
+    required this.onPickCourse,
+    required this.onPickDate,
+    required this.onPickAdditionalCourse,
+    required this.onPickAdditionalDate,
+    required this.onAddRound,
+    required this.onRemoveRound,
+  });
+
+  int get _numRounds => additionalRounds.length + 1;
+
+  static const _cardBorder = Color(0xFFD3DED6);
+  static const _deepPine   = Color(0xFF0B1F1A);
+
+  String _courseName(int? id) =>
+      courses.where((c) => c.id == id).firstOrNull?.name ?? '';
+
+  /// A round's resolved course: its own if overridden, else the event course.
+  String _resolvedCourse(int? roundCourseId) {
+    final name = _courseName(roundCourseId ?? selectedCourseId);
+    return name.isEmpty ? 'Not set' : name;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _pinnedStep(
+      context,
+      title: 'Event details',
+      subtitle: '$typeSummary. Name the event and set its rounds.',
+      formKey: formKey,
+      children: [
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: true,  label: Text('New'),      icon: Icon(Icons.add)),
+            ButtonSegment(value: false, label: Text('Existing'), icon: Icon(Icons.list)),
+          ],
+          selected: {createNew},
+          onSelectionChanged: (s) => onToggleNew(s.first),
+        ),
+        const SizedBox(height: 20),
+
+        if (createNew) ...[
+          GolfTextField(
+            controller: nameCtrl,
+            label: 'Name',
+            prefixIcon: Icons.emoji_events,
+            maxLength: 40,
+            textCapitalization: TextCapitalization.words,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Name the event' : null,
+          ),
+          const SizedBox(height: 8),
+
+          _label(context, 'Course'),
+          const SizedBox(height: 6),
+          CourseSearchField(
+            selected: courses.where((c) => c.id == selectedCourseId).firstOrNull,
+            onSelected: onPickCourse,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Inherited by every round below — a round that moves can set its own.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          _label(context, 'Rounds  ·  $_numRounds'),
+          const SizedBox(height: 8),
+          // Round 1 — the event itself; course is the event course above.
+          _roundCard(
+            context,
+            number: 1,
+            date: date,
+            courseLabel: _resolvedCourse(null),
+            onPickDate: onPickDate,
+            courseField: null,
+          ),
+          // Rounds 2..N — each with a date and an optional course override.
+          for (int i = 0; i < additionalRounds.length; i++)
+            _roundCard(
+              context,
+              number: i + 2,
+              date: additionalRounds[i].date,
+              courseLabel: _resolvedCourse(additionalRounds[i].courseId),
+              onPickDate: (d) => onPickAdditionalDate(i, d),
+              onRemove: () => onRemoveRound(i),
+              courseField: CourseSearchField(
+                selected: courses
+                    .where((c) =>
+                        c.id == (additionalRounds[i].courseId ?? selectedCourseId))
+                    .firstOrNull,
+                onSelected: (c) => onPickAdditionalCourse(i, c),
+              ),
+            ),
+          const SizedBox(height: 4),
+          OutlinedButton.icon(
+            onPressed: _numRounds >= 6 ? null : onAddRound,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add a round'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(46),
+              side: BorderSide(
+                  color: _numRounds >= 6 ? _cardBorder : theme.colorScheme.primary),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(13)),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _derivedPanel(context),
+        ] else ...[
+          if (tournaments.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text('No existing tournaments. Create a new one instead.',
+                  style: TextStyle(color: Colors.grey)),
+            )
+          else ...[
+            DropdownButtonFormField<Tournament>(
+              value: existingTournament,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Select tournament',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.emoji_events),
+              ),
+              items: tournaments.map((t) => DropdownMenuItem(
+                value: t, child: Text(t.name),
+              )).toList(),
+              onChanged: onPickTournament,
+              validator: (v) => v == null ? 'Select a tournament' : null,
+            ),
+            const SizedBox(height: 16),
+            _label(context, 'Course'),
+            const SizedBox(height: 6),
+            CourseSearchField(
+              selected:
+                  courses.where((c) => c.id == selectedCourseId).firstOrNull,
+              onSelected: onPickCourse,
+            ),
+            const SizedBox(height: 16),
+            _dateButton(context, date, onPickDate, full: true),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _label(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    return Text(text.toUpperCase(),
+        style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            fontSize: 11));
+  }
+
+  Widget _dateButton(BuildContext context, DateTime d, ValueChanged<DateTime> onPicked,
+      {bool full = false}) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: d,
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2030),
+        );
+        if (picked != null) onPicked(picked);
+      },
+      borderRadius: BorderRadius.circular(11),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4F8F4),
+          border: Border.all(color: const Color(0xFFE2EAE3)),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('DATE',
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  fontSize: 9.5)),
+          const SizedBox(height: 2),
+          Text(DateFormat(full ? 'MMMM d, yyyy' : 'EEE MMM d').format(d),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _roundCard(BuildContext context,
+      {required int number,
+      required DateTime date,
+      required String courseLabel,
+      required ValueChanged<DateTime> onPickDate,
+      VoidCallback? onRemove,
+      Widget? courseField}) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _cardBorder, width: 1.5),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+                color: const Color(0xFFE4F2EA),
+                borderRadius: BorderRadius.circular(7)),
+            child: Text('$number',
+                style: TextStyle(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11.5)),
+          ),
+          const SizedBox(width: 9),
+          Text('Round $number',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const Spacer(),
+          if (onRemove != null)
+            InkWell(
+              onTap: onRemove,
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.close, size: 18, color: Color(0xFF93A29A)),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 9),
+        _dateButton(context, date, onPickDate),
+        const SizedBox(height: 8),
+        if (courseField != null)
+          courseField
+        else
+          Text('Course · $courseLabel',
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500)),
+      ]),
+    );
+  }
+
+  Widget _derivedPanel(BuildContext context) {
+    final n = _numRounds;
+    Widget row(String label, String value) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(
+                width: 104,
+                child: Text(label,
+                    style: const TextStyle(
+                        color: Color(0xFF9EBCAD), fontSize: 11.5))),
+            Expanded(
+                child: Text(value,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5))),
+          ]),
+        );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(15, 13, 15, 14),
+      decoration: BoxDecoration(
+          color: _deepPine, borderRadius: BorderRadius.circular(14)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('WHAT THIS SETS UP',
+            style: TextStyle(
+                color: Color(0xFF7FA694),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                fontSize: 10.5)),
+        const SizedBox(height: 8),
+        row('Rounds', '$n'),
+        row('Format setups', n == 1 ? '1 — one per round' : '$n — one per round'),
+        row('Group builds', n == 1 ? '1 — one per round' : '$n — one per round'),
+        row('Steps left', '$remainingSteps'),
+      ]),
+    );
+  }
+}
+
+// ===========================================================================
+// Step — Handicap (mode + net double-bogey cap)
+// ===========================================================================
+
+class _StepHandicap extends StatelessWidget {
+  final String            handicapMode;
+  final int               netPercent;
+  final bool              netMaxDoubleBogey;
+  final void Function(String mode, int pct) onChangeHandicap;
+  final ValueChanged<bool> onChangeNetMaxDoubleBogey;
+  /// Stableford uses its own points table (and its 'double+' bucket is the
+  /// floor) — so Strokes-Off and the net double-bogey cap don't apply.
+  final bool isStablefordChampionship;
+
+  const _StepHandicap({
+    required this.handicapMode,
+    required this.netPercent,
+    required this.netMaxDoubleBogey,
+    required this.onChangeHandicap,
+    required this.onChangeNetMaxDoubleBogey,
+    this.isStablefordChampionship = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return _pinnedStep(
       context,
-      title: 'Tournament',
-      subtitle: 'Create a new tournament or add this round to an existing one.',
-      formKey: formKey,
+      title: 'Handicap',
+      subtitle: 'How strokes are given. Applies to every round.',
       children: [
-
-          SegmentedButton<bool>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: true,  label: Text('New'),      icon: Icon(Icons.add)),
-              ButtonSegment(value: false, label: Text('Existing'), icon: Icon(Icons.list)),
-            ],
-            selected: {createNew},
-            onSelectionChanged: (s) => onToggleNew(s.first),
-          ),
-
-          const SizedBox(height: 24),
-
-          if (createNew) ...[
-            GolfTextField(
-              controller: nameCtrl,
-              label: 'Tournament name',
-              prefixIcon: Icons.emoji_events,
-              textCapitalization: TextCapitalization.words,
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Enter a tournament name' : null,
-            ),
-            const SizedBox(height: 24),
-
-            // ── Number of rounds ────────────────────────────────────────────
-            Text('Number of Rounds',
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text('How many rounds will this tournament span?',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: Colors.grey)),
-            const SizedBox(height: 12),
-            Row(children: [
-              IconButton(
-                onPressed: numRounds > 1
-                    ? () => onNumRoundsChanged(numRounds - 1)
-                    : null,
-                icon: const Icon(Icons.remove_circle_outline),
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              Container(
-                width: 56,
-                alignment: Alignment.center,
-                child: Text(
-                  '$numRounds',
-                  style: Theme.of(context).textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
-              IconButton(
-                onPressed: numRounds < 7
-                    ? () => onNumRoundsChanged(numRounds + 1)
-                    : null,
-                icon: const Icon(Icons.add_circle_outline),
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ]),
-          ] else ...[
-            if (tournaments.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text('No existing tournaments. Create a new one instead.',
-                    style: TextStyle(color: Colors.grey)),
-              )
-            else
-              DropdownButtonFormField<Tournament>(
-                value: existingTournament,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Select tournament',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.emoji_events),
-                ),
-                items: tournaments.map((t) => DropdownMenuItem(
-                  value: t, child: Text(t.name),
-                )).toList(),
-                onChanged: onPickTournament,
-                validator: (v) => v == null ? 'Select a tournament' : null,
-              ),
-          ],
-      ],
-    );
-  }
-}
-
-// ===========================================================================
-// Step 1 — Round Details (course, date, bet unit, active games)
-// ===========================================================================
-
-class _Step1Details extends StatelessWidget {
-  final List<CourseInfo>  courses;
-  final int?              selectedCourseId;
-  final DateTime          date;
-  final String            handicapMode;
-  final int               netPercent;
-  final bool              netMaxDoubleBogey;
-  final GlobalKey<FormState> formKey;
-  final List<_RoundDraft> additionalRounds;
-  final ValueChanged<CourseInfo> onPickCourse;
-  final ValueChanged<DateTime>  onPickDate;
-  final void Function(String mode, int pct) onChangeHandicap;
-  final ValueChanged<bool> onChangeNetMaxDoubleBogey;
-  final void Function(int idx, CourseInfo course) onPickAdditionalCourse;
-  final void Function(int idx, DateTime date) onPickAdditionalDate;
-  /// Stableford uses its own points table (and its 'double+' bucket is the
-  /// floor) — so Strokes-Off and the net double-bogey cap don't apply.
-  final bool isStablefordChampionship;
-
-  /// Inline combined-search "Course" field (your courses + shared catalog, with
-  /// a full-database fallback). [courseId] is the currently-selected course id
-  /// for this round (looked up in [courses] for the collapsed display).
-  Widget _courseField(int? courseId, ValueChanged<CourseInfo> onSelected) {
-    final selected = courses.where((c) => c.id == courseId).firstOrNull;
-    return CourseSearchField(selected: selected, onSelected: onSelected);
-  }
-
-  const _Step1Details({
-    required this.courses,
-    required this.selectedCourseId,
-    required this.date,
-    required this.handicapMode,
-    required this.netPercent,
-    required this.netMaxDoubleBogey,
-    required this.formKey,
-    required this.additionalRounds,
-    required this.onPickCourse,
-    required this.onPickDate,
-    required this.onChangeHandicap,
-    required this.onChangeNetMaxDoubleBogey,
-    required this.onPickAdditionalCourse,
-    required this.onPickAdditionalDate,
-    this.isStablefordChampionship = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Pinned header — stays put so it never scrolls up under the app bar /
-        // progress bar (matters on short screens like the iPhone 13 mini, where
-        // the form is taller than the viewport).
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Round Details', style: theme.textTheme.headlineSmall),
-              const SizedBox(height: 4),
-              Text('Tees are assigned per player in the next step.',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: Colors.grey)),
-            ],
-          ),
+        HandicapModeSelector(
+          mode:             handicapMode,
+          netPercent:       netPercent,
+          allowStrokesOff:  !isStablefordChampionship,
+          onModeChanged:    (m) => onChangeHandicap(m, netPercent),
+          onPercentChanged: (p) => onChangeHandicap(handicapMode, p),
+          soNote: 'The lowest-handicap player in each foursome plays '
+              'to 0.  Other players get strokes proportional to '
+              '(their HCP − foursome low HCP), scaled by Net %.',
         ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Form(
-              key: formKey,
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-          // ── Round 1 header (only shown when multi-round) ─────────────────
-          if (additionalRounds.isNotEmpty) ...[
-            Text('Round 1',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-          ],
-
-          // Course picker (Round 1) — inline combined search (your courses +
-          // catalog + full database).
-          _courseField(selectedCourseId, onPickCourse),
+        if (!isStablefordChampionship) ...[
           const SizedBox(height: 16),
-
-          // Date (Round 1)
-          InkWell(
-            onTap: () async {
-              final picked = await showDatePicker(
-                context   : context,
-                initialDate: date,
-                firstDate : DateTime(2020),
-                lastDate  : DateTime(2030),
-              );
-              if (picked != null) onPickDate(picked);
-            },
-            child: InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Date',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.calendar_today),
-              ),
-              child: Text(DateFormat('MMMM d, yyyy').format(date)),
-            ),
+          // Net double-bogey cap — round-level rule, applied to every round in
+          // this tournament at creation time. Stableford's points table already
+          // floors scores, so it's hidden there.
+          NetDoubleBogeyCard(
+            handicapMode: handicapMode, netPercent: netPercent,
+            value: netMaxDoubleBogey,
+            onChanged: onChangeNetMaxDoubleBogey,
           ),
-          const SizedBox(height: 16),
-
-          // ── Additional rounds (2..N) ─────────────────────────────────────
-          for (int i = 0; i < additionalRounds.length; i++) ...[
-            const Divider(),
-            const SizedBox(height: 8),
-            Text('Round ${i + 2}',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            _courseField(additionalRounds[i].courseId,
-                (course) => onPickAdditionalCourse(i, course)),
-            const SizedBox(height: 12),
-            Builder(builder: (ctx) => InkWell(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context   : ctx,
-                  initialDate: additionalRounds[i].date,
-                  firstDate : DateTime(2020),
-                  lastDate  : DateTime(2030),
-                );
-                if (picked != null) onPickAdditionalDate(i, picked);
-              },
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Date',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.calendar_today),
-                ),
-                child: Text(DateFormat('MMMM d, yyyy')
-                    .format(additionalRounds[i].date)),
-              ),
-            )),
-            const SizedBox(height: 16),
-          ],
-
-          if (additionalRounds.isNotEmpty) ...[
-            const Divider(),
-            const SizedBox(height: 8),
-          ],
-
-          // ── Handicap Mode ───────────────────────────────────────────────
-          // Use the same selector every casual setup screen uses so the
-          // wizard isn't a stylistic outlier.  The "Applies to all games
-          // in this tournament round." subtitle is preserved above since
-          // it's wizard-specific context the shared selector doesn't carry.
-          Text('Applies to all games in this tournament round.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: Colors.grey)),
-          const SizedBox(height: 8),
-          HandicapModeSelector(
-            mode:             handicapMode,
-            netPercent:       netPercent,
-            allowStrokesOff:  !isStablefordChampionship,
-            onModeChanged:    (m) => onChangeHandicap(m, netPercent),
-            onPercentChanged: (p) => onChangeHandicap(handicapMode, p),
-            soNote: 'The lowest-handicap player in each foursome plays '
-                'to 0.  Other players get strokes proportional to '
-                '(their HCP − foursome low HCP), scaled by Net %.',
-          ),
-
-          if (!isStablefordChampionship) ...[
-            const SizedBox(height: 16),
-            // Net double-bogey cap — round-level rule, applied to every
-            // round in this tournament at creation time. Stableford's points
-            // table already floors scores, so it's hidden there.
-            NetDoubleBogeyCard(
-              handicapMode: handicapMode, netPercent: netPercent,
-              value: netMaxDoubleBogey,
-              onChanged: onChangeNetMaxDoubleBogey,
-            ),
-          ],
-              ]),
-            ),
-          ),
-        ),
+        ],
       ],
     );
   }
