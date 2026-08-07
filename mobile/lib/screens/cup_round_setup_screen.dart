@@ -23,6 +23,7 @@ import 'package:intl/intl.dart';
 import '../api/models.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
+import '../utils/grouping.dart';
 import '../widgets/error_view.dart';
 import '../widgets/tee_assignment.dart' show TeePicker;
 
@@ -177,6 +178,16 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
   ApiClient get _client => context.read<AuthProvider>().client;
 
   List<CupTeam> get _teams => _cup?.teams ?? [];
+
+  /// The drafted roster size (all sides' players).
+  int get _rosterSize =>
+      _cup == null ? 0 : _cup!.teams.expand((t) => t.players).length;
+
+  /// Group count DERIVED from the roster — never entered.  Same helper the
+  /// casual path uses: groups = ceil(roster / 4).  This is the target the
+  /// builder works toward, so the count can't disagree with the draft.
+  int get _expectedGroupCount =>
+      _rosterSize == 0 ? 0 : groupSizes(_rosterSize).length;
 
   /// Players already assigned to a completed foursome.
   Set<int> get _assignedIds =>
@@ -787,6 +798,8 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         onAddAnother   : _startNewFoursome,
         submitError    : _submitError,
         sittingOut     : _sittingOut,
+        expectedGroups : _expectedGroupCount,
+        rosterSize     : _rosterSize,
       );
     }
   }
@@ -1436,6 +1449,9 @@ class _ReviewPage extends StatelessWidget {
   final VoidCallback         onAddAnother;
   final String?              submitError;
   final List<CupPlayer>      sittingOut;
+  /// Group count derived from the drafted roster (ceil(roster / 4)).
+  final int                  expectedGroups;
+  final int                  rosterSize;
 
   const _ReviewPage({
     required this.foursomes,
@@ -1446,11 +1462,15 @@ class _ReviewPage extends StatelessWidget {
     required this.onAddAnother,
     this.submitError,
     this.sittingOut = const [],
+    this.expectedGroups = 0,
+    this.rosterSize = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final built     = foursomes.length;
+    final remaining = expectedGroups - built;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1461,6 +1481,45 @@ class _ReviewPage extends StatelessWidget {
         Text('Tap "Start Round" when all groups are ready.',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 12),
+
+        // Derived group-count tally — the target comes from the roster, so the
+        // count can't disagree with the draft.
+        if (expectedGroups > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: remaining <= 0
+                  ? Colors.green.shade50
+                  : theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: remaining <= 0
+                      ? Colors.green.shade200
+                      : theme.colorScheme.outlineVariant),
+            ),
+            child: Row(children: [
+              Icon(remaining <= 0 ? Icons.check_circle : Icons.groups_outlined,
+                  size: 18,
+                  color: remaining <= 0
+                      ? Colors.green.shade700
+                      : theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  remaining <= 0
+                      ? '$built of $expectedGroups groups built · all set'
+                      : '$built of $expectedGroups groups built · '
+                          '$remaining more from $rosterSize drafted',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: remaining <= 0
+                          ? Colors.green.shade800
+                          : theme.colorScheme.onSurface),
+                ),
+              ),
+            ]),
+          ),
         const SizedBox(height: 16),
 
         ...foursomes.asMap().entries.map((e) {

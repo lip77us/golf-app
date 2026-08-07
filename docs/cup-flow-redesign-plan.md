@@ -119,10 +119,19 @@ group count purely from roster size (`8→[4,4]`, `14→[4,4,3,3]`), consumed cl
 >   ("2 sides × 4 = 8 golfers · 2 groups of four", with an odd-remainder note), **"X of N"** fill
 >   per team (green when full), and **Lock Draft gated** until every side reaches the side size —
 >   verified end to end on device incl. the gate flipping.
-> - **Follow-ups:** the wizard's group-count *plumbing* (`_roundCupGroupCounts`,
->   `onGroupCountsChanged`) is vestigial and can be deleted. **B4** (round setup derives group
->   count from the roster via `groupSizes()`) still to do. Also: derive each round's
->   `cup_group_counts` from the now-real side size so the pre-setup "points to win" projects.
+> - **B4 landed — round setup derives the group count.** `cup_round_setup_screen` now imports
+>   `grouping.dart` and derives `_expectedGroupCount = groupSizes(rosterSize).length` from the
+>   drafted roster. The "Groups for this round" review page shows a tally —
+>   **"1 of 2 groups built · 1 more from 8 drafted"** — instead of the count silently emerging
+>   from `_foursomes.length`; unassigned golfers are listed by name. Verified on device.
+>
+> **Spine B core is complete (B1–B4): side size is the single input, group count derives from it
+> everywhere — the wizard no longer asks, the draft sets side size and gates Lock on it, and
+> round setup derives the target from the roster.**
+> - **Follow-ups:** delete the wizard's vestigial group-count plumbing (`_roundCupGroupCounts`,
+>   `onGroupCountsChanged`); derive each round's `cup_group_counts` from the now-real side size so
+>   the pre-setup "points to win" projects; show the **handicap index** on the round-setup picker
+>   and the draft roster (`CupPlayer` doesn't carry it yet).
 
 ### Corollary — make `type` / `format` a stored fact
 
