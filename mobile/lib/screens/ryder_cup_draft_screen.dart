@@ -666,6 +666,9 @@ class _TeamCard extends StatelessWidget {
               ),
               title: Text(p.name,
                   style: TextStyle(color: _teamColor(team.colour))),
+              subtitle: p.handicapIndex.isEmpty
+                  ? null
+                  : Text('Index ${p.handicapIndex}'),
               trailing: isLocked ? null : IconButton(
                 icon: Icon(Icons.remove_circle_outline,
                     color: theme.colorScheme.error, size: 20),

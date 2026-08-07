@@ -575,10 +575,11 @@ def ryder_cup_summary(team_tournament: TeamTournament) -> dict:
                 'total_points' : float(team_totals.get(t.pk, Decimal(0))),
                 'players'      : [
                     {
-                        'player_id' : p.id,
-                        'name'      : p.name,
-                        'short_name': p.short_name,
-                        'sex'       : p.sex,
+                        'player_id'     : p.id,
+                        'name'          : p.name,
+                        'short_name'    : p.short_name,
+                        'sex'           : p.sex,
+                        'handicap_index': float(p.effective_handicap_index()),
                     }
                     for p in t.players.all()
                 ],

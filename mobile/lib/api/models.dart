@@ -4332,12 +4332,15 @@ class CupPlayer {
   final String shortName;
   /// 'M'/'W' tee designation. Older payloads omit it → defaults to 'M'.
   final String sex;
+  /// Handicap index as a display string (e.g. "11.9"); '' when unknown.
+  final String handicapIndex;
 
   const CupPlayer({
     required this.id,
     required this.name,
     required this.shortName,
     this.sex = 'M',
+    this.handicapIndex = '',
   });
 
   factory CupPlayer.fromJson(Map<String, dynamic> j) => CupPlayer(
@@ -4345,6 +4348,7 @@ class CupPlayer {
         name:      j['name']      as String,
         shortName: j['short_name'] as String? ?? '',
         sex:       j['sex'] as String? ?? 'M',
+        handicapIndex: j['handicap_index']?.toString() ?? '',
       );
 }
 

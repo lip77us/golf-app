@@ -1069,6 +1069,9 @@ class _PlayerPicker extends StatelessWidget {
                     dense: true,
                     value: sel,
                     title: Text(p.name),
+                    subtitle: p.handicapIndex.isEmpty
+                        ? null
+                        : Text('Index ${p.handicapIndex}'),
                     onChanged: (_) => onToggle(p.id),
                     controlAffinity: ListTileControlAffinity.leading,
                   );
