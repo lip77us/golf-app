@@ -49,7 +49,8 @@ class _RoundDraft {
 /// from the chosen type — so the order and count live in data, not in a switch
 /// keyed on a hardcoded index.
 enum _StepKind {
-  tournament,   // New/existing, name, rounds, championship type
+  typeFormat,   // What kind of event — scoring unit + format (asked first)
+  tournament,   // New/existing, name, rounds
   details,      // Course, date(s), handicap
   cupDesign,    // Cup: team count + colours (+ secondary game)
   cupGamePlan,  // Cup: per-round game plan
@@ -58,6 +59,11 @@ enum _StepKind {
   games,        // Non-cup: side games + buy-ins
   review,       // Review → create
 }
+
+/// Who is competing — the "scoring unit" the whole flow derives from.  Cup and
+/// solo are wired; pair/quad are drawn but staged (no pair/quad scoring engine
+/// yet), so the picker shows them disabled.
+enum _EventType { cup, solo, pair, quad }
 
 // ---------------------------------------------------------------------------
 // Wizard entry point
@@ -91,6 +97,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   /// when the format is exclusive).
   List<_StepKind> get _stepFlow => _isCupTournament
       ? const [
+          _StepKind.typeFormat,
           _StepKind.tournament,
           _StepKind.details,
           _StepKind.cupDesign,
@@ -98,6 +105,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           _StepKind.review,
         ]
       : const [
+          _StepKind.typeFormat,
           _StepKind.tournament,
           _StepKind.details,
           _StepKind.players,
@@ -118,15 +126,32 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   /// True on the post-creation confirmation screen (index past the flow).
   bool get _isPostCreate => _step >= _stepFlow.length;
 
-  // ---- Step 0: Tournament ----
+  // ---- Type & format (asked first) ----
+  // Who is competing + the format that sets the scoring unit.  Defaults to a
+  // cup on Triple Cup, matching the type-first design.  Selecting a type/format
+  // rewrites the championship entry in _tournamentActiveGames (see
+  // _applyTypeFormat).  The cup format is informational for now — per-round
+  // "Games by round" remains the source of truth; solo format is functional
+  // (it chooses the championship game).
+  _EventType _eventType  = _EventType.cup;
+  String     _cupFormat  = 'triple';   // triple | singles | fourball
+  String     _soloFormat = 'stroke';   // stroke | stableford
+
+  // ---- Step: Tournament (name, rounds, new/existing) ----
   bool              _createNewTournament = true;
   Tournament?       _existingTournament;
   final _nameCtrl   = TextEditingController();
   int               _numRounds           = 1;
   /// Additional round drafts for rounds 2..N (length = _numRounds - 1).
   List<_RoundDraft> _additionalRounds    = [];
-  /// Tournament-level games (e.g. low_net championship).
-  final Set<String> _tournamentActiveGames = {};
+  /// Tournament-level games — the championship entry (teamCup /
+  /// championshipStrokePlay / championshipStableford) is owned by the type &
+  /// format step; low_net may be added later on the Cup Design step.  Seeded to
+  /// the cup default so the flow opens on a cup.
+  final Set<String> _tournamentActiveGames = {
+    GameIds.teamCup,
+    GameIds.championshipStrokePlay,
+  };
 
   // ---- Cup Design (step 2 for cup tournaments) ----
   // Team NAMES are set later during Phase 2 (team roster screen).
@@ -403,6 +428,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   bool _canAdvance() {
     switch (_currentStep) {
+      case _StepKind.typeFormat:
+        // A valid type + format is always selected (defaults + only enabled
+        // types are tappable), so this step never blocks.
+        return true;
       case _StepKind.tournament:
         if (_createNewTournament) {
           if (_nameCtrl.text.trim().isEmpty) return false;
@@ -465,6 +494,67 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   void _back() {
     if (_step > 0) setState(() => _step--);
     else Navigator.of(context).pop();
+  }
+
+  /// Rewrite the championship entry in [_tournamentActiveGames] from the chosen
+  /// type & format.  Cup carries Stroke Play underneath (per-player detail);
+  /// solo maps its format to a championship game.  The low_net secondary game
+  /// is a cup-design add-on, so it is cleared when leaving the cup type.
+  void _applyTypeFormat() {
+    _tournamentActiveGames.removeAll({
+      GameIds.teamCup,
+      GameIds.championshipStrokePlay,
+      GameIds.championshipStableford,
+    });
+    switch (_eventType) {
+      case _EventType.cup:
+        _tournamentActiveGames.addAll({
+          GameIds.teamCup,
+          GameIds.championshipStrokePlay,
+        });
+        break;
+      case _EventType.solo:
+        _tournamentActiveGames
+          ..remove('low_net')
+          ..add(_soloFormat == 'stableford'
+              ? GameIds.championshipStableford
+              : GameIds.championshipStrokePlay);
+        break;
+      case _EventType.pair:
+      case _EventType.quad:
+        // Not wired yet — the picker keeps these disabled.
+        break;
+    }
+  }
+
+  /// Labels for the type step's "what's left after this step" panel — read off
+  /// the real remaining flow (everything after the type step) so the panel and
+  /// the honest header count can never disagree.
+  List<({String label, String sub, bool perRound})> _remainingStepPlan() {
+    return [
+      for (final k in _stepFlow)
+        if (k != _StepKind.typeFormat)
+          switch (k) {
+            _StepKind.tournament =>
+              (label: 'Event details', sub: 'Name and rounds', perRound: false),
+            _StepKind.details =>
+              (label: 'Round details', sub: 'Course, date and handicap', perRound: false),
+            _StepKind.cupDesign =>
+              (label: 'Cup design', sub: 'Teams and colours', perRound: false),
+            _StepKind.cupGamePlan =>
+              (label: 'Games by round', sub: 'Format and points', perRound: true),
+            _StepKind.players =>
+              (label: 'Players', sub: 'Add the field', perRound: false),
+            _StepKind.groups =>
+              (label: 'Groups & tees', sub: 'Assign groups and tees', perRound: true),
+            _StepKind.games =>
+              (label: 'Side games', sub: 'Field games and buy-ins', perRound: false),
+            _StepKind.review =>
+              (label: 'Review', sub: 'Save & create', perRound: false),
+            _StepKind.typeFormat =>
+              (label: '', sub: '', perRound: false), // filtered above
+          },
+    ];
   }
 
   /// Build/update the ordered player list and per-player tee defaults when
@@ -860,6 +950,22 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     }
 
     switch (_currentStep) {
+      case _StepKind.typeFormat:
+        return _Step1TypeFormat(
+          eventType  : _eventType,
+          cupFormat  : _cupFormat,
+          soloFormat : _soloFormat,
+          plan       : _remainingStepPlan(),
+          onPickType : (t) => setState(() {
+            _eventType = t;
+            _applyTypeFormat();
+          }),
+          onPickCupFormat : (f) => setState(() => _cupFormat = f),
+          onPickSoloFormat: (f) => setState(() {
+            _soloFormat = f;
+            _applyTypeFormat();
+          }),
+        );
       case _StepKind.cupDesign:
         _resizeCupTeamColours(_cupTeamCount);
         return _Step2CupDesign(
@@ -917,7 +1023,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           nameCtrl             : _nameCtrl,
           formKey              : _step0Key,
           numRounds            : _numRounds,
-          tournamentActiveGames: _tournamentActiveGames,
           onToggleNew          : (v) => setState(() {
             _createNewTournament = v;
             _existingTournament  = null;
@@ -939,31 +1044,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             }
             if (_additionalRounds.length > n - 1) {
               _additionalRounds = _additionalRounds.sublist(0, n - 1);
-            }
-          }),
-          onToggleTournamentGame: (g, on) => setState(() {
-            const champs = {
-              GameIds.championshipStrokePlay,
-              GameIds.championshipStableford,
-              GameIds.teamCup,
-            };
-            if (!on) {
-              _tournamentActiveGames.remove(g);
-              // Cup carries a hidden Stroke Play — drop it too.
-              if (g == GameIds.teamCup) {
-                _tournamentActiveGames.remove(GameIds.championshipStrokePlay);
-              }
-              return;
-            }
-            // The three championships are mutually exclusive — pick one.
-            if (champs.contains(g)) {
-              _tournamentActiveGames.removeAll(champs);
-            }
-            _tournamentActiveGames.add(g);
-            // Cup Play always includes Stroke Play underneath (per-player round
-            // detail) — so it never needs to be picked explicitly.
-            if (g == GameIds.teamCup) {
-              _tournamentActiveGames.add(GameIds.championshipStrokePlay);
             }
           }),
         );
@@ -1208,6 +1288,393 @@ Widget _pinnedStep(
   );
 }
 
+// ===========================================================================
+// Step — Type & format ("What kind of event?")
+// ===========================================================================
+
+class _Step1TypeFormat extends StatelessWidget {
+  final _EventType eventType;
+  final String     cupFormat;
+  final String     soloFormat;
+  final List<({String label, String sub, bool perRound})> plan;
+  final ValueChanged<_EventType> onPickType;
+  final ValueChanged<String>     onPickCupFormat;
+  final ValueChanged<String>     onPickSoloFormat;
+
+  const _Step1TypeFormat({
+    required this.eventType,
+    required this.cupFormat,
+    required this.soloFormat,
+    required this.plan,
+    required this.onPickType,
+    required this.onPickCupFormat,
+    required this.onPickSoloFormat,
+  });
+
+  // (value, title, subtitle, exclusive)
+  static const _cupFormats = <(String, String, String, bool)>[
+    ('triple', 'Triple Cup',
+        'Fourball, Foursomes and two Singles per group — four points a group.', true),
+    ('singles', 'Singles', 'One match per pairing.', false),
+    ('fourball', 'Fourball', 'One better-ball match per group.', false),
+  ];
+  static const _soloFormats = <(String, String, String, bool)>[
+    ('stroke', 'Stroke play', 'Gross or net against the field.', false),
+    ('stableford', 'Stableford', 'Points per hole against par.', false),
+  ];
+
+  static const _cardBorder = Color(0xFFD3DED6);
+  static const _deepPine   = Color(0xFF0B1F1A);
+  static const _brightMint = Color(0xFF3BD89A);
+  static const _unitBg     = Color(0xFFE4F2EA);
+  static const _warnBg     = Color(0xFFFDF3E7);
+  static const _warnFg     = Color(0xFF8A5216);
+
+  bool get _isTriple => eventType == _EventType.cup && cupFormat == 'triple';
+
+  @override
+  Widget build(BuildContext context) {
+    return _pinnedStep(
+      context,
+      title: 'What kind of event?',
+      subtitle:
+          'This decides the rest of the setup, so it is the first thing we ask.',
+      children: [
+        _sectionLabel(context, 'Who is competing'),
+        _typeCard(context, _EventType.cup, 'Team — cup play',
+            'Two to four drafted sides playing match segments for points.', 'Side'),
+        _typeCard(context, _EventType.solo, 'Individual',
+            'Every golfer for himself, against the field.', 'Golfer'),
+        _typeCard(context, _EventType.pair, 'Two-man team',
+            'Pairs against the field. Chapman, alternate shot, best ball.', 'Pair',
+            enabled: false),
+        _typeCard(context, _EventType.quad, 'Four-man team',
+            'The whole group against the field. Scramble, shamble, bramble.', 'Group',
+            enabled: false),
+        const SizedBox(height: 20),
+        _sectionLabel(context, _formatLabel()),
+        ..._formatCards(context),
+        const SizedBox(height: 16),
+        _consequenceStrip(context),
+        const SizedBox(height: 18),
+        _planPanel(context),
+      ],
+    );
+  }
+
+  String _formatLabel() {
+    switch (eventType) {
+      case _EventType.cup:  return 'Cup format';
+      case _EventType.solo: return 'Scoring';
+      case _EventType.pair: return 'Two-man format';
+      case _EventType.quad: return 'Four-man format';
+    }
+  }
+
+  List<Widget> _formatCards(BuildContext context) {
+    if (eventType == _EventType.cup) {
+      return _cupFormats
+          .map((f) => _formatCard(
+              context, f.$1, f.$2, f.$3, f.$4, cupFormat, onPickCupFormat))
+          .toList();
+    }
+    if (eventType == _EventType.solo) {
+      return _soloFormats
+          .map((f) => _formatCard(
+              context, f.$1, f.$2, f.$3, f.$4, soloFormat, onPickSoloFormat))
+          .toList();
+    }
+    return [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text('Coming soon.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      ),
+    ];
+  }
+
+  Widget _sectionLabel(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(text.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              fontSize: 11)),
+    );
+  }
+
+  Widget _radio(BuildContext context, bool selected) {
+    final pine = Theme.of(context).colorScheme.primary;
+    return Container(
+      width: 18,
+      height: 18,
+      margin: const EdgeInsets.only(top: 1),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+            color: selected ? pine : const Color(0xFFC3CFC6), width: 2),
+      ),
+      child: selected
+          ? Center(
+              child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: pine)))
+          : null,
+    );
+  }
+
+  Widget _pill(BuildContext context, String text, {bool muted = false}) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: muted ? theme.colorScheme.surfaceContainerHighest : _unitBg,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(text.toUpperCase(),
+          style: TextStyle(
+              color: muted ? theme.colorScheme.onSurfaceVariant : theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+              fontSize: 9.5)),
+    );
+  }
+
+  Widget _typeCard(BuildContext context, _EventType t, String title, String sub,
+      String unit, {bool enabled = true}) {
+    final theme = Theme.of(context);
+    final pine = theme.colorScheme.primary;
+    final selected = enabled && eventType == t;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Opacity(
+        opacity: enabled ? 1 : 0.55,
+        child: InkWell(
+          onTap: enabled ? () => onPickType(t) : null,
+          borderRadius: BorderRadius.circular(13),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: selected ? pine.withOpacity(0.06) : Colors.white,
+              border: Border.all(
+                  color: selected ? pine : _cardBorder, width: 1.5),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _radio(context, selected),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(title,
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(sub,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                  ])),
+              const SizedBox(width: 8),
+              _pill(context, enabled ? unit : 'Soon', muted: !enabled),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _formatCard(BuildContext context, String value, String title,
+      String sub, bool exclusive, String current, ValueChanged<String> onPick) {
+    final theme = Theme.of(context);
+    final pine = theme.colorScheme.primary;
+    final selected = current == value;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () => onPick(value),
+        borderRadius: BorderRadius.circular(13),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected ? pine.withOpacity(0.06) : Colors.white,
+            border:
+                Border.all(color: selected ? pine : _cardBorder, width: 1.5),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _radio(context, selected),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(title,
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(sub,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ])),
+            if (exclusive) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                    color: _warnBg, borderRadius: BorderRadius.circular(5)),
+                child: const Text('EXCLUSIVE',
+                    style: TextStyle(
+                        color: _warnFg,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        fontSize: 9.5)),
+              ),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _consequenceStrip(BuildContext context) {
+    final theme = Theme.of(context);
+    final scoresIn = _isTriple
+        ? 'Per golfer in Fourball, per pair in Foursomes'
+        : 'Per golfer';
+    final lb = switch (eventType) {
+      _EventType.cup  => 'Side against side',
+      _EventType.solo => 'Field, gross or net',
+      _EventType.pair => 'Pairs against the field',
+      _EventType.quad => 'Groups against the field',
+    };
+    final bets = _isTriple
+        ? 'Available — the Fourball segment has individual gross'
+        : 'Available — individual gross is on the card';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _cardBorder),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(children: [
+        _stripRow(context, 'Scores in', scoresIn),
+        _stripRow(context, 'Leaderboard', lb),
+        _stripRow(context, 'Group bets', bets, valueColor: theme.colorScheme.primary),
+      ]),
+    );
+  }
+
+  Widget _stripRow(BuildContext context, String label, String value,
+      {Color? valueColor}) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(
+            width: 92,
+            child: Text(label.toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                    fontSize: 10))),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(value,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.w600, color: valueColor))),
+      ]),
+    );
+  }
+
+  Widget _planPanel(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(15, 14, 15, 15),
+      decoration: BoxDecoration(
+          color: _deepPine, borderRadius: BorderRadius.circular(15)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text("WHAT'S LEFT AFTER THIS STEP",
+              style: TextStyle(
+                  color: Color(0xFF7FA694),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                  fontSize: 10.5)),
+          const Spacer(),
+          Text('${plan.length} steps',
+              style: const TextStyle(
+                  color: _brightMint, fontWeight: FontWeight.w700, fontSize: 13)),
+        ]),
+        const SizedBox(height: 11),
+        for (int i = 0; i < plan.length; i++) _planRow(context, i + 1, plan[i]),
+        const SizedBox(height: 11),
+        const Text(
+            'Rounds are set on the next screen; the steps marked “per round” '
+            'repeat with them.',
+            style: TextStyle(
+                color: Color(0xFF9EBCAD), fontSize: 11, height: 1.4)),
+      ]),
+    );
+  }
+
+  Widget _planRow(
+      BuildContext context, int n, ({String label, String sub, bool perRound}) s) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(6)),
+            child: Text('$n',
+                style: const TextStyle(
+                    color: Color(0xFFDDEBE2),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10.5))),
+        const SizedBox(width: 9),
+        Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(s.label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13)),
+          const SizedBox(height: 1),
+          Text(s.sub,
+              style: const TextStyle(
+                  color: Color(0xFF9EBCAD), fontSize: 11.5, height: 1.35)),
+        ])),
+        if (s.perRound) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+                color: _brightMint, borderRadius: BorderRadius.circular(4)),
+            child: const Text('PER ROUND',
+                style: TextStyle(
+                    color: Color(0xFF08301F),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                    fontSize: 9)),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
 class _Step0Tournament extends StatelessWidget {
   final bool              createNew;
   final List<Tournament>  tournaments;
@@ -1215,11 +1682,9 @@ class _Step0Tournament extends StatelessWidget {
   final TextEditingController nameCtrl;
   final GlobalKey<FormState> formKey;
   final int               numRounds;
-  final Set<String>       tournamentActiveGames;
   final ValueChanged<bool>        onToggleNew;
   final ValueChanged<Tournament?> onPickTournament;
   final ValueChanged<int>         onNumRoundsChanged;
-  final void Function(String game, bool on) onToggleTournamentGame;
 
   const _Step0Tournament({
     required this.createNew,
@@ -1228,11 +1693,9 @@ class _Step0Tournament extends StatelessWidget {
     required this.nameCtrl,
     required this.formKey,
     required this.numRounds,
-    required this.tournamentActiveGames,
     required this.onToggleNew,
     required this.onPickTournament,
     required this.onNumRoundsChanged,
-    required this.onToggleTournamentGame,
   });
 
   @override
@@ -1301,55 +1764,6 @@ class _Step0Tournament extends StatelessWidget {
                 color: Theme.of(context).colorScheme.primary,
               ),
             ]),
-
-            // ── Tournament-level games ───────────────────────────────────────
-            const SizedBox(height: 24),
-            Text('Tournament Games',
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(
-              numRounds > 1
-                  ? 'Multi-day tournaments require Stroke Play '
-                    'or Cup Play as the primary format.'
-                  : 'Format tracked across all rounds (configured separately).',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                for (final (gameValue, gameLabel) in kChampionshipGames)
-                  GameSelectableChip(
-                    label:      gameLabel,
-                    // Stroke Play is shown selected only on its own — when Cup
-                    // Play is picked it's included silently underneath.
-                    selected:   gameValue == GameIds.championshipStrokePlay
-                        ? (tournamentActiveGames
-                                .contains(GameIds.championshipStrokePlay) &&
-                            !tournamentActiveGames.contains(GameIds.teamCup))
-                        : tournamentActiveGames.contains(gameValue),
-                    onSelected: (v) => onToggleTournamentGame(gameValue, v),
-                  ),
-              ],
-            ),
-            if (numRounds > 1) ...[
-              const SizedBox(height: 6),
-              Builder(builder: (ctx) {
-                final hasPrimary =
-                    tournamentActiveGames.contains(GameIds.championshipStrokePlay) ||
-                    tournamentActiveGames.contains(GameIds.championshipStableford) ||
-                    tournamentActiveGames.contains(GameIds.teamCup);
-                if (hasPrimary) return const SizedBox.shrink();
-                return const InlineMessage(
-                  kind: InlineMessageKind.warn,
-                  text: 'Select a championship (Stroke Play, Stableford, or '
-                      'Team (Cup) Play) to continue.',
-                );
-              }),
-            ],
           ] else ...[
             if (tournaments.isEmpty)
               const Padding(
