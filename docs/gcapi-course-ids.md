@@ -90,6 +90,8 @@ so played scorecards stay frozen.
   White/Gold Combo (M); women's tees par 71→72.
 - **Corica South (f5cnws7n) full re-import** 2026-08-08: Yellow (M) par 72→70;
   re-rated slopes across all tees; added Team Match Combo (M) + II.
+- **Chardonnay (0m4sda7m) full re-import** 2026-08-08: re-rated slopes/ratings +
+  Magnum (W) hole SI; added Double Mag./Imperial (M) + Imperial (W).
 - **Quality gate floor lowered 62→55** (services/course_quality.py) so short
   forward tees (e.g. Tilden Yellow par 61) import without --skip-gate.
 
