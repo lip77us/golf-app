@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
+import '../utils/cup_colors.dart';
 import '../providers/round_provider.dart';
 import '../utils/grouping.dart';
 // Aliased so the top-level groupSizes(n) helper is reachable inside
@@ -2950,17 +2951,10 @@ class _StepTeamsState extends State<_StepTeams> {
   }
 }
 
-// Available team colours for cup tournaments — must match the colour
-// names the server-side TournamentTeam.colour accepts and the mobile
-// _nassauTeamColor / _cupTeamColor helpers map.
-const _kCupColourChoices = <(String, Color)>[
-  ('Red',    Color(0xFFB71C1C)),
-  ('Blue',   Color(0xFF0D47A1)),
-  ('Green',  Color(0xFF1B5E20)),
-  ('Orange', Color(0xFFE65100)),
-  ('Yellow', Color(0xFFF57F17)),
-  ('Purple', Color(0xFF4A148C)),
-];
+// Available team colours for cup tournaments — the shared canonical palette
+// (`kCupTeamColours`), so the swatch a captain picks here is the exact colour
+// the draft board and round-groups render for that side.
+const _kCupColourChoices = kCupTeamColours;
 
 // ===========================================================================
 // Step (Cup) — Tournament side game (field-wide only)

@@ -22,6 +22,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
+import '../utils/cup_colors.dart';
 import '../utils/grouping.dart';
 import '../widgets/error_view.dart';
 import '../widgets/tee_assignment.dart' show TeePicker;
@@ -1611,18 +1612,23 @@ class _ReviewPage extends StatelessWidget {
     final code = (team?.shortCode.isNotEmpty ?? false)
         ? team!.shortCode
         : (team?.name.isNotEmpty ?? false ? team!.name[0] : '?');
+    // Badge colour is the side's own colour, so it reads the same here as on the
+    // draft board and the wizard swatch.
+    final bg = team != null
+        ? cupTeamColor(team.colour)
+        : theme.colorScheme.primaryContainer;
     return Container(
       width: 24,
       height: 24,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
+        color: bg,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(code,
           style: theme.textTheme.labelSmall?.copyWith(
               fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onPrimaryContainer)),
+              color: Colors.white)),
     );
   }
 

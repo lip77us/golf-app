@@ -15,6 +15,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
+import '../utils/cup_colors.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import 'ryder_cup_scoreboard_screen.dart';
@@ -162,7 +163,7 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
       for (final p in t.players) {
         taken.add(_TakenGolfer(
           name: p.name, index: p.handicapIndex,
-          teamName: t.name, colour: _teamColor(t.colour)));
+          teamName: t.name, colour: cupTeamColor(t.colour)));
       }
     }
     taken.sort((a, b) => a.name.compareTo(b.name));
@@ -178,7 +179,7 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
       builder: (_) => _PlayerPickerDialog(
         players      : available,
         teamName     : team.name,
-        teamColour   : _teamColor(team.colour),
+        teamColour   : cupTeamColor(team.colour),
         sideSize     : sideSize,
         currentCount : team.players.length,
         taken        : taken,
@@ -638,7 +639,7 @@ class _TeamCard extends StatelessWidget {
             Container(
               width: 12, height: 12,
               decoration: BoxDecoration(
-                color: _teamColor(team.colour),
+                color: cupTeamColor(team.colour),
                 shape: BoxShape.circle,
               ),
             ),
@@ -647,7 +648,7 @@ class _TeamCard extends StatelessWidget {
               child: Text(team.name,
                   style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: _teamColor(team.colour))),
+                      color: cupTeamColor(team.colour))),
             ),
             Builder(builder: (_) {
               final full = team.players.length >= sideSize;
@@ -686,7 +687,7 @@ class _TeamCard extends StatelessWidget {
                     style: const TextStyle(fontSize: 11)),
               ),
               title: Text(p.name,
-                  style: TextStyle(color: _teamColor(team.colour))),
+                  style: TextStyle(color: cupTeamColor(team.colour))),
               subtitle: p.handicapIndex.isEmpty
                   ? null
                   : Text('Index ${p.handicapIndex}'),
@@ -710,23 +711,6 @@ class _TeamCard extends StatelessWidget {
         ]),
       ),
     );
-  }
-}
-
-/// Team badge colour from the stored colour name.  Shared by the team cards and
-/// the add-players picker so a side's badge is the same everywhere.
-// TODO(cup): the six design swatches are hex — carry the hex on the team so any
-// custom colour has a visible badge (bug-bundle item), instead of this fixed set.
-Color _teamColor(String colour) {
-  switch (colour.toLowerCase()) {
-    case 'red':    return Colors.red;
-    case 'blue':   return Colors.blue;
-    case 'green':  return Colors.green;
-    case 'yellow': return Colors.amber;
-    case 'orange': return Colors.deepOrange;
-    case 'purple': return Colors.purple;
-    case 'black':  return Colors.black87;
-    default:       return Colors.grey;
   }
 }
 

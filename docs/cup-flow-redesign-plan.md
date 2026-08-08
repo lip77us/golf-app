@@ -189,6 +189,18 @@ screen (all → group builder), and `03` "Set up cup round" (its two questions a
 These are called out in the design notes and verified in code. Some can land ahead of the
 larger refactors.
 
+> **Status — all resolved.** `triple_cup` label (group-builder), Teams "Next" gate (`cupDesign`
+> returns true), net double-bogey cap struck (cup-handicap), Lock-at-zero (B3), add-players header
+> names the side (draft-add-players), golfer index (group-builder/pickers), duplicate team colours
+> (`_colourLocked` in the Teams step), and **team colours unified to one hex palette** —
+> `utils/cup_colors.dart` `cupTeamColor()` / `kCupTeamColours` is now the single source; the draft
+> board's old `_teamColor` name→`Colors.*` switch and the wizard's private list both point at it,
+> and the round-groups badges use it too, so a side's colour is the exact picked swatch everywhere.
+> **Start Round blocker** is addressed by the round-groups Assign section (kept enabled at ≥1 group
+> rather than hard-blocking sit-outs — see that row). **Deferred, not a quick win:** "tee menu
+> covers its own row" is standard Material `DropdownButton` overlay behaviour; fixing it means
+> converting the shared `TeePicker` to a bottom sheet (broad blast radius) — left for later.
+
 - **`triple_cup` renders raw** — no entry in `_kCupGames` (`cup_round_setup_screen.dart:33`), so
   `_gameLabel('triple_cup')` returns the literal string; surfaces in the picker header (L987) and
   review title (L1475). Map to a display label.
