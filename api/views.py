@@ -1691,6 +1691,14 @@ class CourseDetailView(APIView):
 
 class TeeListView(APIView):
     def get(self, request):
+        # Lazy catalog fan-out: pull any pending USGA re-rate / re-import into
+        # this account's catalog-linked courses before listing.  Version-gated
+        # per course, so it's a no-op (one integer compare each) unless the
+        # catalog moved ahead — the tee picker is exactly where a stale slope
+        # would mislead a course handicap.
+        from services.catalog import sync_account_courses_from_catalog
+        sync_account_courses_from_catalog(request.user.account)
+
         # Current revisions only — retired (superseded) tees stay reachable by
         # id for the rounds that used them, but aren't offered for new setups.
         tees = account_qs(Tee, request.user.account).filter(

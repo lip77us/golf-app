@@ -353,6 +353,16 @@ class Course(models.Model):
                         help_text="Source GolfCourseAPI course id when imported "
                                   "from there; NULL for manual courses.",
                     )
+    # Catalog propagation watermark.  The CatalogCourse.data_version this clone
+    # last absorbed (see services/catalog.py sync_course_from_catalog).  0 means
+    # "never synced from the catalog"; the lazy tee-picker sync compares this to
+    # the catalog's current data_version and refreshes uncurated tees when it's
+    # behind.  Local to the account, like the rest of the clone.
+    catalog_synced_version = models.PositiveIntegerField(
+                        default=0,
+                        help_text="Last CatalogCourse.data_version this account "
+                                  "copy synced from; 0 = never.",
+                    )
     # Location (from the course database) — used to display and disambiguate
     # courses (e.g. "Lincoln Park — Chicago, IL") and to power name/city search.
     # Carried onto the account copy when cloned from the shared catalog.
@@ -417,6 +427,22 @@ class Tee(models.Model):
                         help_text="Replacement row when this tee was re-rated; "
                                   "null means this is the current revision.",
                     )
+    # Provenance / curation — mirrors CatalogTee (see docs/catalog-curation-and-
+    # updates.md).  `origin` records where this account tee came from; `curated`
+    # means "a human made this a deliberate local variant — a catalog re-sync
+    # must NOT overwrite or delete it".  clone_catalog_to_account() stamps cloned
+    # tees origin='api'/curated=False so USGA re-rates flow into them; a
+    # hand-added local tee (e.g. a re-rated "White-Sixes" extra, a combo tee) is
+    # curated=True and is skipped by sync_course_from_catalog() forever.
+    ORIGIN_API    = 'api'
+    ORIGIN_MANUAL = 'manual'
+    ORIGIN_CHOICES = [(ORIGIN_API, 'GolfCourseAPI'), (ORIGIN_MANUAL, 'Manual')]
+    origin  = models.CharField(max_length=8, choices=ORIGIN_CHOICES,
+                               default=ORIGIN_API)
+    curated = models.BooleanField(
+        default=False,
+        help_text='Deliberate local variant — protected from catalog re-sync '
+                  'overwrite/delete.')
 
     @property
     def is_current(self):
@@ -454,6 +480,13 @@ class CatalogCourse(models.Model):
                                           null=True, blank=True)
     created_at      = models.DateTimeField(auto_now_add=True)
     updated_at      = models.DateTimeField(auto_now=True)
+    # Monotonic geometry version, bumped by upsert_catalog_course() whenever a
+    # re-import actually changes an uncurated tee's slope / course_rating / par /
+    # holes (or adds/removes a tee).  Account clones store the version they last
+    # absorbed in Course.catalog_synced_version; the lazy sync fires only when
+    # this is ahead.  Starts at 1; clone_catalog_to_account() stamps a fresh
+    # clone's Course.catalog_synced_version to this value so it's born current.
+    data_version    = models.PositiveIntegerField(default=1)
 
     class Meta:
         ordering = ['name']

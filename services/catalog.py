@@ -40,6 +40,21 @@ def normalize_course_name(name: str) -> str:
     return ' '.join(fix(t) for t in name.split())
 
 
+def _tee_fields_differ(cur, fields) -> bool:
+    """True if any of `fields` differs from the CatalogTee `cur` — type-aware so
+    a Decimal course_rating vs. an incoming float doesn't read as a spurious
+    change (which would bump data_version and re-sync every clone for nothing)."""
+    from decimal import Decimal
+    for f, v in fields.items():
+        old = getattr(cur, f)
+        if f == 'course_rating':
+            if old is None or Decimal(str(old)) != Decimal(str(v)):
+                return True
+        elif old != v:
+            return True
+    return False
+
+
 def _normalize_holes(holes):
     return [
         {
@@ -68,7 +83,7 @@ def upsert_catalog_course(api_course: dict, golf_api_id, name: str):
     """
     from core.models import CatalogCourse, CatalogTee
 
-    cc, _ = CatalogCourse.objects.update_or_create(
+    cc, cc_created = CatalogCourse.objects.update_or_create(
         golf_api_id=str(golf_api_id),
         defaults={
             'name'     : name,
@@ -84,6 +99,11 @@ def upsert_catalog_course(api_course: dict, golf_api_id, name: str):
     seen = set()
     next_priority = (max((t.default_sort_priority for t in existing.values()),
                          default=0) + 10)
+    # Track whether any TEE GEOMETRY actually moved (create / real update /
+    # delete).  Only then do we bump data_version — the watermark that tells
+    # account clones to lazily re-sync.  Course name / location edits alone
+    # don't move handicap math, so they don't trigger a fan-out.
+    changed = False
 
     for tee_data in api_course.get('tees', []):
         name_i = tee_data['name'] or 'Default'
@@ -105,15 +125,24 @@ def upsert_catalog_course(api_course: dict, golf_api_id, name: str):
                 default_sort_priority=next_priority,
                 origin=CatalogTee.ORIGIN_API, curated=False, **fields)
             next_priority += 10
-        else:
+            changed = True
+        elif _tee_fields_differ(cur, fields):
             for f, v in fields.items():
                 setattr(cur, f, v)
             cur.save(update_fields=list(fields))
+            changed = True
 
     # Drop pure-API tees the API dropped; keep curated ones (our combos etc.).
     for key, t in existing.items():
         if key not in seen and not t.curated:
             t.delete()
+            changed = True
+
+    # Bump only for a re-import that changed an EXISTING catalog course; a
+    # brand-new course starts at 1 and its first clones stamp that as current.
+    if changed and not cc_created:
+        cc.data_version += 1
+        cc.save(update_fields=['data_version'])
     return cc
 
 
@@ -192,6 +221,10 @@ def clone_catalog_to_account(catalog_course, account, *, replace_tees: bool = Fa
             city=catalog_course.city, state=catalog_course.state,
             country=catalog_course.country,
             latitude=catalog_course.latitude, longitude=catalog_course.longitude,
+            # Born current: a fresh clone is a field-for-field copy of the
+            # catalog, so it's already at the catalog's version — the lazy sync
+            # should only fire on a LATER upstream re-import.
+            catalog_synced_version=catalog_course.data_version,
         )
     elif replace_tees:
         course.name = catalog_course.name
@@ -210,6 +243,8 @@ def clone_catalog_to_account(catalog_course, account, *, replace_tees: bool = Fa
                 course=course, tee_name=ct.tee_name, slope=ct.slope,
                 course_rating=ct.course_rating, par=ct.par, sex=ct.sex,
                 sort_priority=ct.default_sort_priority, holes=ct.holes,
+                # Catalog-origin: a future USGA re-rate should flow into this row.
+                origin=Tee.ORIGIN_API, curated=False,
             )
     elif replace_tees:
         # Refresh tees via copy-on-write: a tee that's been played is RETIRED
@@ -229,11 +264,109 @@ def clone_catalog_to_account(catalog_course, account, *, replace_tees: bool = Fa
                 holes=ct.holes,
             )
             existing = current_by_key.get((ct.tee_name.casefold(), ct.sex))
+            if existing is not None and existing.curated:
+                continue  # deliberate local variant owns this key — hands off
             if existing is None:
                 Tee.objects.create(
                     course=course, sort_priority=ct.default_sort_priority,
-                    **attrs,
+                    origin=Tee.ORIGIN_API, curated=False, **attrs,
                 )
             else:
                 update_tee_geometry(existing, attrs)
+    # A forced re-import realigns the clone to the catalog's current version too.
+    course.catalog_synced_version = catalog_course.data_version
+    course.save(update_fields=['catalog_synced_version'])
     return course, created
+
+
+@transaction.atomic
+def sync_course_from_catalog(course) -> bool:
+    """Lazily pull catalog updates into ONE account Course's tees.
+
+    Called from the tee picker (TeeListView) right before round setup — the
+    point where a stale slope/rating would mislead a course handicap.  Cheap and
+    idempotent: a no-op unless the course is catalog-linked AND behind the
+    catalog's data_version, so the hot path is a single integer compare.
+
+    SCOPE (the whole point of the curated flag):
+      * Only UNCURATED, catalog-origin account tees are refreshed, matched to
+        catalog tees by (tee_name, sex).
+      * A CURATED tee occupying a catalog key (a deliberate local variant) is
+        left untouched — never overwritten, never duplicated.
+      * A curated LOCAL-ONLY tee with no catalog key (a re-rated 'White-Sixes'
+        extra, a combo) is never visited at all.
+      * Catalog tees the account lacks are ADDED (origin='api').
+      * Nothing is ever DELETED — a tee the catalog dropped just stops updating.
+
+    HISTORY: refreshes go through update_tee_geometry, so a slope/course_rating
+    re-rate (holes unchanged) updates IN PLACE — completed rounds keep their
+    snapshotted FoursomeMembership.course_handicap, new rounds pick up the new
+    rating (matching GHIN) — while a stroke-index/par change supersedes the tee
+    so played scorecards stay frozen.
+
+    Returns True if it synced, False if it no-op'd.
+    """
+    from core.models import CatalogCourse, Course, Tee
+    from services.tee_revisions import update_tee_geometry
+
+    if not course.golf_api_id:
+        return False
+    cc = (CatalogCourse.objects
+          .filter(golf_api_id=course.golf_api_id)
+          .prefetch_related('tees')
+          .first())
+    if cc is None or course.catalog_synced_version >= cc.data_version:
+        return False
+
+    # Lock the row so two concurrent tee-picker loads don't both run the sync.
+    course = Course.objects.select_for_update().get(pk=course.pk)
+    if course.catalog_synced_version >= cc.data_version:
+        return False  # another request just synced it
+
+    current = {
+        (t.tee_name.casefold(), t.sex): t
+        for t in course.tees.filter(superseded_by__isnull=True)
+    }
+    for ct in cc.tees.all():
+        existing = current.get((ct.tee_name.casefold(), ct.sex))
+        if existing is not None and existing.curated:
+            continue  # deliberate local variant owns this key — hands off
+        attrs = dict(
+            tee_name=ct.tee_name, slope=ct.slope,
+            course_rating=ct.course_rating, par=ct.par, sex=ct.sex,
+            holes=ct.holes,
+        )
+        if existing is None:
+            Tee.objects.create(
+                course=course, sort_priority=ct.default_sort_priority,
+                origin=Tee.ORIGIN_API, curated=False, **attrs,
+            )
+        else:
+            update_tee_geometry(existing, attrs)
+
+    course.catalog_synced_version = cc.data_version
+    course.save(update_fields=['catalog_synced_version'])
+    return True
+
+
+def sync_account_courses_from_catalog(account) -> int:
+    """Best-effort lazy sync of every catalog-linked course an account owns.
+    Version-gated per course, so already-current courses cost one compare each.
+    Returns the number of courses actually synced.  Used by the tee picker."""
+    from core.models import Course
+
+    synced = 0
+    linked = Course.objects.filter(
+        account=account, golf_api_id__isnull=False,
+    ).exclude(golf_api_id='')
+    for course in linked:
+        try:
+            if sync_course_from_catalog(course):
+                synced += 1
+        except Exception:
+            # A sync hiccup must never break the tee picker; the course just
+            # stays on its old version and retries on the next load.
+            import logging
+            logging.getLogger(__name__).exception(
+                'sync_course_from_catalog failed for course %s', course.pk)
+    return synced
