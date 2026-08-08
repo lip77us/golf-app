@@ -45,8 +45,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadDiscoverable() async {
     try {
-      final me = await context.read<AuthProvider>().client.me();
+      final auth = context.read<AuthProvider>();
+      final me   = await auth.client.me();
       if (!mounted) return;
+      // Refresh the cached player from this same call.  Startup hydration runs
+      // in the background and may not have finished (or may have exhausted its
+      // retries) by the time the Profile opens; without this the Your-info +
+      // Home-course sections stay hidden and read as "lost". This self-heals it.
+      if (me.player != null) auth.applyPlayer(me.player!);
       setState(() => _discoverable = me.discoverableByName);
     } catch (_) {
       // Leave it null; the row renders disabled rather than claiming a state
