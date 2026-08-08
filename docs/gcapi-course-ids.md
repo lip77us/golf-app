@@ -73,7 +73,7 @@ so played scorecards stay frozen.
 ## Related commands
 
 - `suggest_gcapi_ids` — search GCAPI for current ids of dead-numeric-id courses (read-only).
-- `remap_golf_api_ids` — stamp new ids onto catalog + account courses (to be built).
+- `remap_golf_api_ids` — stamp new ids onto catalog + account courses (dry-run default).
 - `uncurate_catalog_tees` — open standard catalog tees to API re-imports (dry-run default).
 - `check_catalog_drift` — diff catalog vs live GCAPI (needs the remap first to resolve).
 - `sync_catalog_tees` — push catalog tees to account copies (eager propagation).
@@ -82,4 +82,6 @@ so played scorecards stay frozen.
 ## Status
 
 - Propagation feature committed on `main` (unpushed): `ffa523b`, `a3dd6b5`.
-- Id remap: **confirmed in table above, not yet stamped** as of 2026-08-08.
+- Id remap: **applied 2026-08-08** — all 13 catalog courses + their account clones
+  restamped to the new alphanumeric ids (0 numeric ids remain). Next: un-curate +
+  re-import per course when you push a rating change upstream.
