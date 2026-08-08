@@ -16,7 +16,6 @@ import 'setup_round_players_screen.dart';
 import 'tournament_leaderboard_screen.dart';
 import 'ryder_cup_draft_screen.dart';
 import 'ryder_cup_scoreboard_screen.dart';
-import 'ryder_cup_round_setup_screen.dart';
 import 'cup_round_setup_screen.dart';
 
 class TournamentListScreen extends StatefulWidget {
@@ -625,13 +624,14 @@ class _TournamentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasInProgress =
         tournament.rounds.any((r) => r.status == 'in_progress');
+    final isCup = tournament.activeGames.contains('team_cup');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header row: name + delete button
+          // ── Header: name · (course ·) date · card menu ─────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -643,12 +643,39 @@ class _TournamentCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleLarge
                             ?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 2),
-                    Text(tournament.startDate,
-                        style: Theme.of(context).textTheme.bodySmall),
+                    // Course and date belong to the round line; on a cup the
+                    // date prints once here rather than twice.
+                    Text(
+                      (isCup && tournament.rounds.isNotEmpty)
+                          ? '${tournament.rounds.first.courseName} · ${tournament.startDate}'
+                          : tournament.startDate,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
-              if (isStaff)
+              // Delete is a card-level action — for cups it lives in the ⋮ menu
+              // so a destructive action isn't the loudest pixel on the card.
+              if (isStaff && isCup)
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert,
+                      color: hasInProgress
+                          ? Colors.orange
+                          : Theme.of(context).colorScheme.onSurfaceVariant),
+                  tooltip: 'Tournament actions',
+                  onSelected: (v) { if (v == 'delete') onDelete(); },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(children: const [
+                        Icon(Icons.delete_outline),
+                        SizedBox(width: 12),
+                        Text('Delete tournament'),
+                      ]),
+                    ),
+                  ],
+                )
+              else if (isStaff)
                 IconButton(
                   icon: Icon(
                     Icons.delete_outline,
@@ -661,113 +688,186 @@ class _TournamentCard extends StatelessWidget {
                 ),
             ],
           ),
-          // Non-cup tournaments: show round tiles (pending = setup button, else tap to score).
-          // Cup tournaments: show in-progress round tiles so players can tap in to enter scores;
-          //   pending rounds have no tile here (staff accesses them via "Set Up Cup Round" below).
-          if (tournament.rounds.isNotEmpty) ...[
-            if (!tournament.activeGames.contains('team_cup')) ...[
+
+          if (isCup)
+            ..._cupHub(context)
+          else ...[
+            // ── Non-cup tournaments (unchanged) ──────────────────────────────
+            if (tournament.rounds.isNotEmpty) ...[
               const Divider(height: 20),
               ...tournament.rounds.map((r) => r.status == 'pending' && isStaff
-                  ? _PendingRoundTile(
-                      round   : r,
-                      onSetup : () => onSetupRound(r.id),
-                    )
-                  : _RoundTile(
-                      round: r,
-                      onTap: () => onRoundTap(r.id),
-                    )),
-            ] else ...[
-              // Cup tournament: show in_progress and complete rounds so players
-              // can view scorecards and leaderboards from past rounds.
-              // Pending rounds are accessed via the "Set Up Cup Round" button.
-              if (tournament.rounds.any((r) => r.status != 'pending')) ...[
-                const Divider(height: 20),
-                ...tournament.rounds
-                    .where((r) => r.status != 'pending')
-                    .map((r) => _RoundTile(
-                          round: r,
-                          onTap: () => onRoundTap(r.id),
-                        )),
-              ],
+                  ? _PendingRoundTile(round: r, onSetup: () => onSetupRound(r.id))
+                  : _RoundTile(round: r, onTap: () => onRoundTap(r.id))),
             ],
-          ],
-
-          // ── Championship Leaderboard (always shown for multi-game tournaments)
-          // Name the championship type so the tournament's format is visible
-          // right here on the main screen.
-          if (tournament.activeGames.isNotEmpty) ...[
-            const Divider(height: 16),
-            _ActionButton(
-              icon : Icons.emoji_events_outlined,
-              label: tournament.activeGames.contains('stableford_championship')
-                  ? 'Stableford Championship Leaderboard'
-                  : tournament.activeGames.contains('team_cup')
-                      ? 'Cup Leaderboard'
-                      : tournament.activeGames.contains('low_net')
-                          ? 'Stroke Play Championship Leaderboard'
-                          : 'Championship Leaderboard',
-              onTap: onViewLeaderboard,
-            ),
-          ],
-
-          // ── Staff configure buttons ────────────────────────────────────
-          // Hidden on completed tournaments — there's nothing left to configure.
-          if (isStaff && !isComplete && tournament.activeGames.isNotEmpty) ...[
-            if (tournament.activeGames.contains('low_net'))
+            if (tournament.activeGames.isNotEmpty) ...[
+              const Divider(height: 16),
+              _ActionButton(
+                icon : Icons.emoji_events_outlined,
+                label: tournament.activeGames.contains('stableford_championship')
+                    ? 'Stableford Championship Leaderboard'
+                    : tournament.activeGames.contains('low_net')
+                        ? 'Stroke Play Championship Leaderboard'
+                        : 'Championship Leaderboard',
+                onTap: onViewLeaderboard,
+              ),
+            ],
+            if (isStaff && !isComplete &&
+                tournament.activeGames.contains('low_net'))
               _ActionButton(
                 icon : Icons.settings_outlined,
                 label: 'Configure Stroke Play Championship',
                 onTap: onConfigureLowNet,
               ),
           ],
+        ]),
+      ),
+    );
+  }
 
-          // ── Cup / Ryder Cup buttons (only for Cup Play tournaments) ────────
-          if (tournament.activeGames.contains('team_cup')) ...[
-            const Divider(height: 16),
-            _ActionButton(
-              icon : Icons.emoji_events_outlined,
-              label: 'Cup Scoreboard',
-              onTap: onOpenCupScoreboard,
-            ),
-            // Staff configuration actions — only while the tournament is
-            // still active.  Completed cup tournaments expose the scoreboard
-            // only, no setup or recalculate buttons.
-            if (isStaff && !isComplete) ...[
-              _ActionButton(
-                icon : Icons.groups_outlined,
-                label: 'Cup Draft & Teams',
-                onTap: onOpenCupDraft,
-              ),
-              // Round setup + recalculate: show for all rounds so staff
-              // can build foursomes and fix cup points after score corrections.
-              ...tournament.rounds.expand((r) => [
+  RoundSummary? _firstRoundWhere(bool Function(RoundSummary) test) {
+    for (final r in tournament.rounds) {
+      if (test(r)) return r;
+    }
+    return null;
+  }
+
+  /// The cup-hub body: a state line, one adaptive primary action, two quiet nav
+  /// buttons, and a collapsed round-setup disclosure (TD only).  Replaces the
+  /// six equal-weight rows of the old card.
+  List<Widget> _cupHub(BuildContext context) {
+    final theme        = Theme.of(context);
+    final rounds       = tournament.rounds;
+    final inProgress   = _firstRoundWhere((r) => r.status == 'in_progress');
+    final firstPending = _firstRoundWhere((r) => r.status == 'pending');
+    final multiRound   = rounds.length > 1;
+
+    // The card carries state — "which round, how far" without a tap.  (The live
+    // team tally + clinch bar need a per-card standings fetch; deferred.)
+    final String statusText;
+    if (inProgress != null) {
+      statusText = multiRound
+          ? 'Round ${inProgress.roundNumber} in progress'
+          : 'Round in progress';
+    } else if (isComplete) {
+      statusText = 'Cup complete';
+    } else if (firstPending != null) {
+      statusText = multiRound
+          ? 'Round ${firstPending.roundNumber} — not started'
+          : 'Not started';
+    } else {
+      statusText = 'Ready to draft';
+    }
+
+    // One primary action — always proposes the next thing.
+    final IconData primaryIcon;
+    final String   primaryLabel;
+    final VoidCallback primaryTap;
+    if (inProgress != null) {
+      primaryIcon  = Icons.edit_note;
+      primaryLabel = 'Enter Scores';
+      primaryTap   = () => onRoundTap(inProgress.id);
+    } else if (isComplete) {
+      primaryIcon  = Icons.emoji_events_outlined;
+      primaryLabel = 'View Result';
+      primaryTap   = onOpenCupScoreboard;
+    } else if (firstPending != null && isStaff) {
+      primaryIcon  = Icons.tune_outlined;
+      primaryLabel = multiRound
+          ? 'Set Up Round ${firstPending.roundNumber}'
+          : 'Set Up Cup Round';
+      primaryTap   = () => onSetupCupRound(firstPending);
+    } else {
+      // No live round and (for a non-TD) nothing to set up → the scoreboard is
+      // the useful landing.
+      primaryIcon  = Icons.emoji_events_outlined;
+      primaryLabel = 'View Leaderboard';
+      primaryTap   = onOpenCupScoreboard;
+    }
+
+    return [
+      const SizedBox(height: 12),
+      Row(children: [
+        Icon(
+          inProgress != null
+              ? Icons.play_circle_outline
+              : isComplete
+                  ? Icons.emoji_events_outlined
+                  : Icons.schedule,
+          size: 16, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 6),
+        Text(statusText, style: theme.textTheme.bodyMedium
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      ]),
+      const SizedBox(height: 12),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: primaryTap,
+          icon: Icon(primaryIcon, size: 18),
+          label: Text(primaryLabel),
+        ),
+      ),
+      const SizedBox(height: 8),
+      // Navigation — Leaderboard and Scoreboard are one destination now.
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(
+          onPressed: onOpenCupScoreboard,
+          icon: const Icon(Icons.emoji_events_outlined, size: 18),
+          label: const Text('Leaderboard'),
+        )),
+        const SizedBox(width: 8),
+        Expanded(child: OutlinedButton.icon(
+          onPressed: onOpenCupDraft,
+          icon: const Icon(Icons.groups_outlined, size: 18),
+          label: const Text('Draft & Teams'),
+        )),
+      ]),
+      // Round-scoped setup collapses into a disclosure — where a TD looks and a
+      // player never does.
+      if (isStaff && !isComplete) ...[
+        const SizedBox(height: 4),
+        Theme(
+          data: theme.copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(left: 8, bottom: 4),
+            title: Text('Round setup', style: theme.textTheme.labelLarge),
+            children: [
+              if (tournament.activeGames.contains('low_net'))
+                _ActionButton(
+                  icon : Icons.settings_outlined,
+                  label: 'Configure Stroke Play Championship',
+                  onTap: onConfigureLowNet,
+                ),
+              ...rounds.expand((r) => [
                 _ActionButton(
                   icon : Icons.tune_outlined,
-                  label: 'R${r.roundNumber} · Set Up Cup Round',
+                  label: multiRound
+                      ? 'R${r.roundNumber} · Set up cup round'
+                      : 'Set up cup round',
                   onTap: () => onSetupCupRound(r),
                 ),
-                // Quick-swap: change the cup game on an already-
-                // configured round without rebuilding foursomes.
-                // Useful when Day 2's format changes (e.g. Singles
-                // Nassau → Four Ball) but the player roster +
-                // team draft stays the same.
                 _ActionButton(
                   icon : Icons.swap_horiz_outlined,
-                  label: 'R${r.roundNumber} · Change Cup Game',
+                  label: multiRound
+                      ? 'R${r.roundNumber} · Change cup game'
+                      : 'Change cup game',
                   onTap: () => onChangeCupGame(r),
                 ),
                 if (r.status != 'pending')
                   _ActionButton(
                     icon : Icons.calculate_outlined,
-                    label: 'R${r.roundNumber} · Recalculate Cup Points',
+                    label: multiRound
+                        ? 'R${r.roundNumber} · Recalculate cup points'
+                        : 'Recalculate cup points',
                     onTap: () => onRecalculateCupPoints(r),
                   ),
               ]),
             ],
-          ],
-        ]),
-      ),
-    );
+          ),
+        ),
+      ],
+    ];
   }
 }
 
