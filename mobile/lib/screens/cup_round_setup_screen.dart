@@ -624,6 +624,30 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
     if (_foursomes.isEmpty) _startNewFoursome();
   }
 
+  /// "Assign" from the round-groups review: open the builder on a new group
+  /// with this unassigned golfer already seated (and their side/tee set).
+  void _assignGolfer(int id) {
+    final autoGame = widget.availableGames.length == 1
+        ? widget.availableGames.first
+        : _gameType;
+    setState(() {
+      _gameType = autoGame;
+      _selectedIds
+        ..clear()
+        ..add(id);
+      _playerTees.clear();
+      if (_courseTees.isNotEmpty) _playerTees[id] = _defaultTeeFor(id);
+      _irishRumbleTeamIdx =
+          autoGame == 'irish_rumble' ? _teamIndexOf(id) : null;
+      _teeTimeCtrl.text = _defaultTeeTimeForNewGroup();
+      _matchupA.clear();
+      _matchupB.clear();
+      // With a game known we can go straight to the group card; otherwise the
+      // multi-game round still needs its per-group format pick first.
+      _buildStep = autoGame != null ? _BuildStep.group : _BuildStep.gameType;
+    });
+  }
+
   Future<void> _editFoursomeTeeTime(int idx) async {
     final draft  = _foursomes[idx];
     final picked = await _pickTeeTime(context, draft.teeTime);
@@ -845,11 +869,14 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
       );
       case _BuildStep.review:    return _ReviewPage(
         foursomes      : _foursomes,
+        teams          : _teams,
+        courseTees     : _courseTees,
         playerName     : _playerName,
         onRemove       : _removeFoursome,
         onEditTeeTime  : _editFoursomeTeeTime,
         onClearTeeTime : _clearFoursomeTeeTime,
         onAddAnother   : _startNewFoursome,
+        onAssign       : _assignGolfer,
         submitError    : _submitError,
         sittingOut     : _sittingOut,
         expectedGroups : _expectedGroupCount,
@@ -1491,16 +1518,24 @@ class _MatchupBuilder extends StatelessWidget {
 }
 
 // ===========================================================================
-// Step F — Review page
+// Step F — Review page ("Groups for this round")
+// ===========================================================================
+// The hub of round setup: every group is added, checked, and reached from
+// here.  Each row carries the three things that go wrong on the first tee —
+// composition, tee time, and tees — and unassigned golfers are listed by name
+// with an Assign link rather than reduced to a count.
 // ===========================================================================
 
 class _ReviewPage extends StatelessWidget {
   final List<_FoursomeDraft> foursomes;
+  final List<CupTeam>        teams;
+  final List<TeeInfo>        courseTees;
   final String Function(int) playerName;
   final void Function(int)   onRemove;
   final Future<void> Function(int) onEditTeeTime;
   final void Function(int)   onClearTeeTime;
   final VoidCallback         onAddAnother;
+  final ValueChanged<int>    onAssign;
   final String?              submitError;
   final List<CupPlayer>      sittingOut;
   /// Group count derived from the drafted roster (ceil(roster / 4)).
@@ -1509,22 +1544,95 @@ class _ReviewPage extends StatelessWidget {
 
   const _ReviewPage({
     required this.foursomes,
+    required this.teams,
+    required this.courseTees,
     required this.playerName,
     required this.onRemove,
     required this.onEditTeeTime,
     required this.onClearTeeTime,
     required this.onAddAnother,
+    required this.onAssign,
     this.submitError,
     this.sittingOut = const [],
     this.expectedGroups = 0,
     this.rosterSize = 0,
   });
 
+  CupTeam? _teamOf(int playerId) {
+    for (final t in teams) {
+      if (t.players.any((p) => p.id == playerId)) return t;
+    }
+    return null;
+  }
+
+  int _teamIndexOf(int playerId) {
+    for (int i = 0; i < teams.length; i++) {
+      if (teams[i].players.any((p) => p.id == playerId)) return i;
+    }
+    return -1;
+  }
+
+  String _teeName(int teeId) => courseTees
+      .where((t) => t.id == teeId)
+      .map((t) => t.teeName)
+      .firstOrNull ?? '—';
+
+  /// "2 v 2", "1 v 2", "1 v 1"; Irish Rumble is one team → "4 · one team".
+  String _composition(_FoursomeDraft d) {
+    if (d.gameType == 'irish_rumble') return '${d.playerIds.length} · one team';
+    final a = d.playerIds.where((id) => _teamIndexOf(id) == 0).length;
+    final b = d.playerIds.where((id) => _teamIndexOf(id) == 1).length;
+    return '$a v $b';
+  }
+
+  /// A tee summary that reads at a glance: "All White tees",
+  /// "White · 1 on Gold", or "Tees not set".
+  String _teeSummary(_FoursomeDraft d) {
+    final names = <String>[];
+    for (final id in d.playerIds) {
+      final teeId = d.playerTees[id];
+      if (teeId == null) return 'Tees not set';
+      names.add(_teeName(teeId));
+    }
+    if (names.isEmpty) return 'Tees not set';
+    final counts = <String, int>{};
+    for (final n in names) {
+      counts[n] = (counts[n] ?? 0) + 1;
+    }
+    if (counts.length == 1) return 'All ${names.first} tees';
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final base = sorted.first.key;
+    final rest = sorted.skip(1).map((e) => '${e.value} on ${e.key}').join(', ');
+    return '$base · $rest';
+  }
+
+  Widget _badge(ThemeData theme, CupTeam? team) {
+    final code = (team?.shortCode.isNotEmpty ?? false)
+        ? team!.shortCode
+        : (team?.name.isNotEmpty ?? false ? team!.name[0] : '?');
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(code,
+          style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onPrimaryContainer)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme     = Theme.of(context);
     final built     = foursomes.length;
     final remaining = expectedGroups - built;
+    final assigned  = foursomes.fold<int>(0, (s, d) => s + d.playerIds.length);
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1532,13 +1640,13 @@ class _ReviewPage extends StatelessWidget {
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text('Tap "Start Round" when all groups are ready.',
+        Text('Tap a group to remove it, or add more. '
+             'Start the round when the groups are set.',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 12),
 
-        // Derived group-count tally — the target comes from the roster, so the
-        // count can't disagree with the draft.
+        // Derived group-count tally + assigned/unassigned counts.
         if (expectedGroups > 0)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1562,9 +1670,10 @@ class _ReviewPage extends StatelessWidget {
               Expanded(
                 child: Text(
                   remaining <= 0
-                      ? '$built of $expectedGroups groups built · all set'
-                      : '$built of $expectedGroups groups built · '
-                          '$remaining more from $rosterSize drafted',
+                      ? '$built of $expectedGroups groups · '
+                          '$assigned assigned · all set'
+                      : '$built of $expectedGroups groups · $assigned assigned · '
+                          '${sittingOut.length} not in a group',
                   style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: remaining <= 0
@@ -1576,126 +1685,188 @@ class _ReviewPage extends StatelessWidget {
           ),
         const SizedBox(height: 16),
 
-        ...foursomes.asMap().entries.map((e) {
-          final i     = e.key;
-          final draft = e.value;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            child: ListTile(
-              leading: CircleAvatar(
-                child: Text('${i + 1}'),
-              ),
-              title: Text(_gameLabel(draft.gameType),
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    draft.playerIds.map(playerName).join(', ') +
-                    ((draft.playerIds.length == 3 &&
-                        (draft.gameType == 'nassau' || draft.gameType == 'quota_nassau'))
-                        ? ' + Phantom'
-                        : ''),
-                  ),
-                  // Tee time row: tap to edit (opens time picker); a clear
-                  // button appears next to it when a time is already set.
-                  InkWell(
-                    onTap: () => onEditTeeTime(i),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(children: [
-                        Icon(Icons.schedule, size: 14,
-                            color: theme.colorScheme.onSurfaceVariant),
-                        const SizedBox(width: 4),
-                        Text(
-                          draft.teeTime != null
-                              ? 'Tee: ${draft.teeTime}'
-                              : 'Set tee time',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: draft.teeTime != null
-                                ? null
-                                : theme.colorScheme.primary,
-                            decoration: draft.teeTime != null
-                                ? null
-                                : TextDecoration.underline,
-                          ),
-                        ),
-                        if (draft.teeTime != null) ...[
-                          const SizedBox(width: 4),
-                          InkWell(
-                            onTap: () => onClearTeeTime(i),
-                            child: Icon(Icons.close, size: 14,
-                                color: theme.colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ]),
-                    ),
-                  ),
-                  Text(
-                    '${draft.pointValue % 1 == 0 ? draft.pointValue.toInt() : draft.pointValue} pt${draft.pointValue == 1.0 ? '' : 's'} per win',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: draft.pointValue != 1.0
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: () => onRemove(i),
-                tooltip: 'Remove group',
-              ),
-              isThreeLine: true,
-            ),
-          );
-        }),
+        ...foursomes.asMap().entries.map((e) => _groupCard(theme, e.key, e.value)),
 
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: onAddAnother,
           icon: const Icon(Icons.add),
-          label: const Text('Add another group'),
+          label: Text('Add group ${foursomes.length + 1}'),
         ),
 
-        // Sitting-out players (e.g. leftover from uneven singles)
-        if (sittingOut.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Icon(Icons.event_busy,
-                      size: 16,
-                      color: theme.colorScheme.onSurfaceVariant),
-                  const SizedBox(width: 6),
-                  Text('Sitting out this round',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ]),
-                const SizedBox(height: 6),
-                Text(
-                  sittingOut.map((p) => p.name).join(', '),
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
+        if (sittingOut.isNotEmpty) _unassignedSection(theme),
 
         if (submitError != null) ...[
           const SizedBox(height: 16),
-          Text(submitError!,
-              style: TextStyle(color: theme.colorScheme.error)),
+          Text(submitError!, style: TextStyle(color: theme.colorScheme.error)),
         ],
       ],
+    );
+  }
+
+  Widget _groupCard(ThemeData theme, int i, _FoursomeDraft d) {
+    // Players grouped by side, so a mixed group reads at a glance.
+    final sides = <Widget>[];
+    for (int t = 0; t < teams.length; t++) {
+      final ids = d.playerIds.where((id) => _teamIndexOf(id) == t).toList();
+      if (ids.isEmpty) continue;
+      sides.add(Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _badge(theme, teams[t]),
+          const SizedBox(width: 8),
+          Expanded(child: Text(ids.map(playerName).join(', '),
+              style: theme.textTheme.bodyMedium)),
+        ]),
+      ));
+    }
+    // Fallback (e.g. a phantom-partnered id off both teams): plain name list.
+    if (sides.isEmpty) {
+      sides.add(Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Text(d.playerIds.map(playerName).join(', '),
+            style: theme.textTheme.bodyMedium),
+      ));
+    }
+
+    final pts = d.pointValue % 1 == 0
+        ? d.pointValue.toInt().toString()
+        : d.pointValue.toString();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            CircleAvatar(radius: 15, child: Text('${i + 1}')),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(_gameLabel(d.gameType),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(_composition(d),
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: 'Remove group',
+              onPressed: () => onRemove(i),
+            ),
+          ]),
+          ...sides,
+          const SizedBox(height: 8),
+          Row(children: [
+            Icon(Icons.golf_course, size: 14,
+                color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 4),
+            Text(_teeSummary(d),
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            // Tee time — tap to edit; clear button when set.
+            InkWell(
+              onTap: () => onEditTeeTime(i),
+              child: Row(children: [
+                Icon(Icons.schedule, size: 14,
+                    color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Text(
+                  d.teeTime != null
+                      ? 'Tee ${_friendlyTeeTime(d.teeTime!)}'
+                      : 'Set tee time',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: d.teeTime != null
+                        ? theme.colorScheme.onSurfaceVariant
+                        : theme.colorScheme.primary,
+                    decoration: d.teeTime != null
+                        ? null
+                        : TextDecoration.underline,
+                  ),
+                ),
+              ]),
+            ),
+            if (d.teeTime != null) ...[
+              const SizedBox(width: 4),
+              InkWell(
+                onTap: () => onClearTeeTime(i),
+                child: Icon(Icons.close, size: 13,
+                    color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+            const Spacer(),
+            Text('$pts pt${d.pointValue == 1.0 ? '' : 's'} per win',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: d.pointValue != 1.0
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant)),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _unassignedSection(ThemeData theme) {
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.person_off_outlined, size: 16,
+              color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text('Not in a group (${sittingOut.length})',
+              style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurfaceVariant)),
+        ]),
+        const SizedBox(height: 4),
+        Text('Assign them to a group, or leave them sitting out this round.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 8),
+        ...sittingOut.map((p) {
+          final team = _teamOf(p.id);
+          final sub = [
+            if (team != null) team.name,
+            if (p.handicapIndex.isNotEmpty) 'index ${p.handicapIndex}',
+          ].join(' · ');
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(children: [
+              _badge(theme, team),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p.name, style: theme.textTheme.bodyMedium),
+                  if (sub.isNotEmpty)
+                    Text(sub, style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                ]),
+              ),
+              TextButton(
+                onPressed: () => onAssign(p.id),
+                child: const Text('Assign'),
+              ),
+            ]),
+          );
+        }),
+      ]),
     );
   }
 }
