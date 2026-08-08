@@ -18,7 +18,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 
 import '../api/models.dart';
 import '../api/client.dart';
@@ -39,8 +38,39 @@ const _kCupGames = [
   ('singles_18',      '18-Hole Singles',          Icons.sports_golf),
 ];
 
-String _gameLabel(String id) =>
-    _kCupGames.firstWhere((g) => g.$1 == id, orElse: () => (id, id, Icons.sports_golf)).$2;
+String _gameLabel(String id) {
+  // triple_cup is armed via the round-format toggle, not the per-group game
+  // picker, so it isn't in _kCupGames — map it explicitly rather than letting
+  // the fallback render the raw slug.
+  if (id == 'triple_cup') return 'Triple Cup';
+  return _kCupGames
+      .firstWhere((g) => g.$1 == id, orElse: () => (id, id, Icons.sports_golf))
+      .$2;
+}
+
+/// Minutes between consecutive groups' tee times.  A course property in the
+/// full design (set once, remembered) — a constant for now; the group builder
+/// proposes previous-group + this interval so the TD rarely touches it.
+const int _kTeeInterval = 10;
+
+/// "HH:MM" (24h) → a friendly "9:10 AM".  Falls back to the raw string if it
+/// can't be parsed.
+String _friendlyTeeTime(String hhmm) {
+  final t = _parseTeeTime(hhmm);
+  if (t == null) return hhmm;
+  final h12 = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+  final ampm = t.period == DayPeriod.am ? 'AM' : 'PM';
+  return '$h12:${t.minute.toString().padLeft(2, '0')} $ampm';
+}
+
+/// Adds [deltaMin] to an "HH:MM" string, clamped to the same day, returning
+/// "HH:MM".  Used by the tee-time ±5 steppers.
+String _shiftTeeTime(String hhmm, int deltaMin) {
+  final t = _parseTeeTime(hhmm) ?? const TimeOfDay(hour: 8, minute: 0);
+  var mins = (t.hour * 60 + t.minute + deltaMin);
+  mins = mins.clamp(0, 23 * 60 + 59);
+  return _formatTeeTime(TimeOfDay(hour: mins ~/ 60, minute: mins % 60));
+}
 
 /// Formats a [TimeOfDay] as a zero-padded "HH:MM" string — the only format
 /// accepted by the backend's `TimeField` serializer.
@@ -132,7 +162,9 @@ class CupRoundSetupScreen extends StatefulWidget {
   State<CupRoundSetupScreen> createState() => _CupRoundSetupScreenState();
 }
 
-enum _BuildStep { gameType, players, tees, teeTime, matchups, review }
+// The group builder collapses the old players → tees → teeTime steps into one
+// `group` card (golfers with index + inline tees + a tee-time stepper).
+enum _BuildStep { gameType, group, matchups, review }
 
 class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
   // ── Loaded data ────────────────────────────────────────────────────────────
@@ -207,11 +239,6 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         .toList();
   }
 
-  /// Players in [team] not yet assigned to any completed foursome.
-  List<CupPlayer> _available(CupTeam team) => team.players
-      .where((p) => !_assignedIds.contains(p.id))
-      .toList();
-
   /// Players selected for current foursome, partitioned by team index.
   List<int> _selectedForTeam(int teamIdx) => _selectedIds
       .where((id) => _teamIndexOf(id) == teamIdx)
@@ -258,13 +285,11 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
     switch (_buildStep) {
       case _BuildStep.gameType:
         return _gameType != null;
-      case _BuildStep.players:
-        return _playersValid;
-      case _BuildStep.tees:
-        // Every selected player must have a tee chosen
-        return _selectedIds.every((id) => _playerTees.containsKey(id));
-      case _BuildStep.teeTime:
-        return true; // optional
+      case _BuildStep.group:
+        // Legal composition AND every selected golfer has a tee (tee time is
+        // always defaulted, so it never gates).
+        return _playersValid &&
+               _selectedIds.every((id) => _playerTees.containsKey(id));
       case _BuildStep.matchups:
         return _matchupA.every((v) => v != null) &&
                _matchupB.every((v) => v != null);
@@ -272,6 +297,13 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         return _allPlayersAssigned;
     }
   }
+
+  /// Max golfers per side for the current game.  Both sides cap at 2 for every
+  /// two-sided cup format (2 v 2, or a legal 1 v 2 / 1 v 1 under it); once a
+  /// side hits it, its remaining golfers dim to "Team full".  Irish Rumble is
+  /// one team of 4 and handled by its own team selector, so it has no per-side
+  /// cap here.
+  int get _teamCap => _gameType == 'irish_rumble' ? 4 : 2;
 
   bool get _playersValid {
     final n = _selectedIds.length;
@@ -356,10 +388,12 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         setState(() {
           _cup        = cup;
           _courseTees = tees;
-          // Auto-select game type if only one option for this round.
+          // Auto-select game type if only one option for this round, jumping
+          // straight to the group card with its tee time proposed.
           if (widget.availableGames.length == 1) {
-            _gameType  = widget.availableGames.first;
-            _buildStep = _BuildStep.players;
+            _gameType         = widget.availableGames.first;
+            _teeTimeCtrl.text = _defaultTeeTimeForNewGroup();
+            _buildStep        = _BuildStep.group;
           }
           // Auto-arm the Triple Cup preset when the tournament wizard
           // already chose it as the round's only game.  Same effect as
@@ -391,19 +425,12 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
           _selectedIds.clear();
           _playerTees.clear();
           _irishRumbleTeamIdx = null;
-          _buildStep = _BuildStep.players;
+          _teeTimeCtrl.text   = _defaultTeeTimeForNewGroup();
+          _buildStep          = _BuildStep.group;
         });
-      case _BuildStep.players:
-        // Pre-fill tees: pick the first tee matching each player's sex, or
-        // the first tee if no sex match exists.
-        _prefillTees();
-        setState(() => _buildStep = _BuildStep.tees);
-      case _BuildStep.tees:
-        setState(() {
-          _teeTimeCtrl.clear();
-          _buildStep = _BuildStep.teeTime;
-        });
-      case _BuildStep.teeTime:
+      case _BuildStep.group:
+        // Players + tees + tee time are all set on this one card.  Singles
+        // groups of 3/4 still need the matchup step; everyone else commits.
         if (_needsMatchupStep) {
           _initMatchups();
           setState(() => _buildStep = _BuildStep.matchups);
@@ -425,7 +452,7 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         } else {
           setState(() => _buildStep = _BuildStep.review);
         }
-      case _BuildStep.players:
+      case _BuildStep.group:
         // If the game was auto-selected (only 1 option), don't go back to
         // the (skipped) game picker — pop the screen instead.
         if (widget.availableGames.length == 1 && _foursomes.isEmpty) {
@@ -435,32 +462,65 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         } else {
           setState(() => _buildStep = _BuildStep.gameType);
         }
-      case _BuildStep.tees:
-        setState(() => _buildStep = _BuildStep.players);
-      case _BuildStep.teeTime:
-        setState(() => _buildStep = _BuildStep.tees);
       case _BuildStep.matchups:
-        setState(() => _buildStep = _BuildStep.teeTime);
+        setState(() => _buildStep = _BuildStep.group);
       case _BuildStep.review:
         _startNewFoursome();
     }
   }
 
-  void _prefillTees() {
-    if (_courseTees.isEmpty) return;
-    for (final id in _selectedIds) {
-      _playerTees.putIfAbsent(id, () {
-        // Sex-matched default: each golfer's lowest-priority tee (men's for
-        // men, women's for women), not just the first course tee.
-        final sex = _playerSex(id);
-        final tees = _courseTees
-            .where((t) => t.sex == null || t.sex == sex)
-            .toList()
-          ..sort((a, b) => a.sortPriority.compareTo(b.sortPriority));
-        return (tees.isNotEmpty ? tees.first : _courseTees.first).id;
-      });
-    }
-    setState(() {});
+  /// Proposed tee time for the next group: one interval after the previous
+  /// group (the answer in almost every case), or 8:00 AM for the first group.
+  String _defaultTeeTimeForNewGroup() {
+    final prev = _foursomes.isNotEmpty ? _foursomes.last.teeTime : null;
+    if (prev == null) return '08:00';
+    return _shiftTeeTime(prev, _kTeeInterval);
+  }
+
+  /// Sex-matched default tee for a golfer: their lowest-priority tee (men's for
+  /// men, women's for women), or the first course tee if none match.
+  int _defaultTeeFor(int id) {
+    final sex = _playerSex(id);
+    final tees = _courseTees
+        .where((t) => t.sex == null || t.sex == sex)
+        .toList()
+      ..sort((a, b) => a.sortPriority.compareTo(b.sortPriority));
+    return (tees.isNotEmpty ? tees.first : _courseTees.first).id;
+  }
+
+  /// Add or remove a golfer from the group being built.  Adding prefills their
+  /// tee; a side already at [_teamCap] is a no-op (its rows are dimmed anyway).
+  void _toggleGroupPlayer(int id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        _playerTees.remove(id);
+        return;
+      }
+      // Guard the per-side cap for two-sided formats (Irish Rumble uses its
+      // own single-team selector, so skip the cap there).
+      if (_gameType != 'irish_rumble') {
+        final side = _teamIndexOf(id);
+        final onSide = _selectedIds.where((s) => _teamIndexOf(s) == side).length;
+        if (onSide >= _teamCap) return;
+      }
+      _selectedIds.add(id);
+      if (_courseTees.isNotEmpty) _playerTees[id] = _defaultTeeFor(id);
+    });
+  }
+
+  /// "Set all tees": apply one tee to every selected golfer it's legal for
+  /// (unisex, or matching that golfer's sex).
+  void _setAllTees(int teeId) {
+    final tee = _courseTees.where((t) => t.id == teeId).firstOrNull;
+    if (tee == null) return;
+    setState(() {
+      for (final id in _selectedIds) {
+        if (tee.sex == null || tee.sex == _playerSex(id)) {
+          _playerTees[id] = teeId;
+        }
+      }
+    });
   }
 
   void _initMatchups() {
@@ -552,10 +612,10 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
       _selectedIds.clear();
       _playerTees.clear();
       _irishRumbleTeamIdx = null;
-      _teeTimeCtrl.clear();
+      _teeTimeCtrl.text   = _defaultTeeTimeForNewGroup();
       _matchupA.clear();
       _matchupB.clear();
-      _buildStep = autoGame != null ? _BuildStep.players : _BuildStep.gameType;
+      _buildStep = autoGame != null ? _BuildStep.group : _BuildStep.gameType;
     });
   }
 
@@ -742,39 +802,33 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
               gamePointValues : widget.gamePointValues,
             )),
         ]);
-      case _BuildStep.players:   return _PlayerPicker(
+      case _BuildStep.group:     return _GroupBuilder(
+        foursomeNumber     : _foursomes.length + 1,
         gameType           : _gameType!,
         teams              : _teams,
         selectedIds        : _selectedIds,
         assignedIds        : _assignedIds,
         irishRumbleTeamIdx : _irishRumbleTeamIdx,
-        onToggle           : (id) => setState(() {
-          _selectedIds.contains(id)
-              ? _selectedIds.remove(id)
-              : _selectedIds.add(id);
-        }),
+        teamCap            : _teamCap,
+        playerTees         : _playerTees,
+        courseTees         : _courseTees,
+        playerName         : _playerName,
+        playerSex          : _playerSex,
+        teamIndexOf        : _teamIndexOf,
+        selectedForTeam    : _selectedForTeam,
+        teeTime            : _teeTimeCtrl.text,
+        prevGroupTeeTime   : _foursomes.isNotEmpty ? _foursomes.last.teeTime : null,
+        onToggle           : _toggleGroupPlayer,
         onPickIrishTeam    : (idx) => setState(() {
           _irishRumbleTeamIdx = idx;
           // Remove any selected players not on this team
           _selectedIds.removeWhere((id) => _teamIndexOf(id) != idx);
         }),
-      );
-      case _BuildStep.teeTime:   return _TeeTimePicker(
-        ctrl          : _teeTimeCtrl,
-        foursomeNumber: _foursomes.length + 1,
-        gameType      : _gameType!,
-        playerIds     : _selectedIds.toList(),
-        playerName    : _playerName,
-      );
-      case _BuildStep.tees:      return _TeePicker(
-        playerIds  : _selectedIds.toList(),
-        playerName : _playerName,
-        playerSex  : _playerSex,
-        courseTees : _courseTees,
-        playerTees : _playerTees,
-        onPickTee  : (pid, teeId) => setState(() => _playerTees[pid] = teeId),
-        gameType   : _gameType!,
-        foursomeNumber: _foursomes.length + 1,
+        onPickTee          : (pid, teeId) =>
+            setState(() => _playerTees[pid] = teeId),
+        onSetAllTees       : _setAllTees,
+        onTeeTimeShift     : (delta) => setState(() =>
+            _teeTimeCtrl.text = _shiftTeeTime(_teeTimeCtrl.text, delta)),
       );
       case _BuildStep.matchups:  return _MatchupBuilder(
         matchupA     : _matchupA,
@@ -828,7 +882,13 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
           else
             FilledButton(
               onPressed: _canProceed ? _nextStep : null,
-              child: Text(_buildStep == _BuildStep.teeTime ? 'Add Group' : 'Next'),
+              // The group card is the last step before commit unless a 3/4-player
+              // singles group still needs its matchups.
+              child: Text(
+                (_buildStep == _BuildStep.group && !_needsMatchupStep)
+                    ? 'Add Group'
+                    : 'Next',
+              ),
             ),
         ]),
       ),
@@ -944,39 +1004,67 @@ class _GameTypePicker extends StatelessWidget {
     );
   }
 }
-
 // ===========================================================================
-// Step B — Player Picker (team-enforced)
+// Step B — Group Builder (players + inline tees + tee time, one card)
 // ===========================================================================
-// NOTE: Step C (Tee Picker) is defined further below, after _PlayerPicker.
+// Collapses the shipped players → tees → teeTime flow into a single card,
+// repeated once per group.  Golfers carry their index, tees sit next to each
+// golfer (with "Set all"), and the tee time is proposed as previous-group +
+// interval with ±5 steppers rather than a clock dial.
 // ===========================================================================
 
-class _PlayerPicker extends StatelessWidget {
-  final String       gameType;
-  final List<CupTeam> teams;
-  final Set<int>     selectedIds;
-  final Set<int>     assignedIds;
-  final int?         irishRumbleTeamIdx;
-  final ValueChanged<int> onToggle;
-  final ValueChanged<int> onPickIrishTeam;
+class _GroupBuilder extends StatelessWidget {
+  final int                foursomeNumber;
+  final String             gameType;
+  final List<CupTeam>      teams;
+  final Set<int>           selectedIds;
+  final Set<int>           assignedIds;
+  final int?               irishRumbleTeamIdx;
+  final int                teamCap;
+  final Map<int, int>      playerTees;      // playerId → teeId
+  final List<TeeInfo>      courseTees;
+  final String Function(int) playerName;
+  final String Function(int) playerSex;
+  final int    Function(int) teamIndexOf;
+  final List<int> Function(int) selectedForTeam;
+  final String             teeTime;         // 'HH:MM'
+  final String?            prevGroupTeeTime;
+  final ValueChanged<int>  onToggle;
+  final ValueChanged<int>  onPickIrishTeam;
+  final void Function(int pid, int teeId) onPickTee;
+  final ValueChanged<int>  onSetAllTees;
+  final ValueChanged<int>  onTeeTimeShift;
 
-  const _PlayerPicker({
+  const _GroupBuilder({
+    required this.foursomeNumber,
     required this.gameType,
     required this.teams,
     required this.selectedIds,
     required this.assignedIds,
     required this.irishRumbleTeamIdx,
+    required this.teamCap,
+    required this.playerTees,
+    required this.courseTees,
+    required this.playerName,
+    required this.playerSex,
+    required this.teamIndexOf,
+    required this.selectedForTeam,
+    required this.teeTime,
+    required this.prevGroupTeeTime,
     required this.onToggle,
     required this.onPickIrishTeam,
+    required this.onPickTee,
+    required this.onSetAllTees,
+    required this.onTeeTimeShift,
   });
 
   String get _rule {
     switch (gameType) {
       case 'irish_rumble':
-        return 'Pick 4 players from the same team.';
+        return 'Pick 4 golfers from the same team.';
       case 'singles_nassau':
       case 'singles_18':
-        return 'Pick 1–2 per team. Uneven (1 vs 2) — the solo player plays two matches.';
+        return 'Pick 1–2 per team. Uneven (1 vs 2) — the solo golfer plays two matches.';
       case 'triple_cup':
         return 'Pick 2 per team (4 total), 1 vs 2 (phantom fills the solo '
                'side), or 1 vs 1 (plays an 18-hole Nassau — F9 / B9 / Overall).';
@@ -985,302 +1073,265 @@ class _PlayerPicker extends StatelessWidget {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(children: [
-      // Game name + rule hint
-      Container(
-        color: theme.colorScheme.surfaceContainerLow,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        width: double.infinity,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_gameLabel(gameType),
-                style: theme.textTheme.labelLarge?.copyWith(
-                    color     : theme.colorScheme.primary,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 2),
-            Text(_rule,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          ],
-        ),
-      ),
-
-      // Irish Rumble: team selector first
-      if (gameType == 'irish_rumble') ...[
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(children: [
-            Text('Team: ', style: theme.textTheme.titleSmall),
-            const SizedBox(width: 8),
-            ...teams.asMap().entries.map((e) => Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(e.value.name),
-                selected: irishRumbleTeamIdx == e.key,
-                onSelected: (_) => onPickIrishTeam(e.key),
-              ),
-            )),
-          ]),
-        ),
-        const SizedBox(height: 8),
-      ],
-
-      // Player lists
-      Expanded(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          children: teams.asMap().entries.map((teamEntry) {
-            final teamIdx  = teamEntry.key;
-            final team     = teamEntry.value;
-
-            // For Irish Rumble, only show the selected team
-            if (gameType == 'irish_rumble' &&
-                irishRumbleTeamIdx != null &&
-                irishRumbleTeamIdx != teamIdx) {
-              return const SizedBox.shrink();
-            }
-
-            final available = team.players
-                .where((p) => !assignedIds.contains(p.id))
-                .toList();
-
-            if (available.isEmpty && gameType == 'irish_rumble') {
-              return const SizedBox.shrink();
-            }
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
-                  child: Text(team.name,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary)),
-                ),
-                ...available.map((p) {
-                  final sel = selectedIds.contains(p.id);
-                  return CheckboxListTile(
-                    dense: true,
-                    value: sel,
-                    title: Text(p.name),
-                    subtitle: p.handicapIndex.isEmpty
-                        ? null
-                        : Text('Index ${p.handicapIndex}'),
-                    onChanged: (_) => onToggle(p.id),
-                    controlAffinity: ListTileControlAffinity.leading,
-                  );
-                }),
-                if (available.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 8),
-                    child: Text('All players assigned.',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(fontStyle: FontStyle.italic)),
-                  ),
-              ],
-            );
-          }).toList(),
-        ),
-      ),
-
-      // Running count
-      Container(
-        color: theme.colorScheme.surfaceContainerLow,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(children: [
-          Text('Selected: ${selectedIds.length}',
-              style: theme.textTheme.bodySmall),
-          const Spacer(),
-          if (gameType != 'irish_rumble')
-            ...teams.asMap().entries.map((e) {
-              final cnt = selectedIds
-                  .where((id) => teams[e.key].players
-                      .any((p) => p.id == id))
-                  .length;
-              return Padding(
-                padding: const EdgeInsets.only(left: 12),
-                child: Text('${e.value.name}: $cnt',
-                    style: theme.textTheme.bodySmall),
-              );
-            }),
-        ]),
-      ),
-    ]);
+  CupPlayer? _find(int id) {
+    for (final t in teams) {
+      final p = t.players.where((p) => p.id == id).firstOrNull;
+      if (p != null) return p;
+    }
+    return null;
   }
-}
 
-// ===========================================================================
-// Step C — Tee Picker (per-player tee selection)
-// ===========================================================================
-
-class _TeePicker extends StatelessWidget {
-  final List<int>            playerIds;
-  final String Function(int) playerName;
-  final String Function(int) playerSex;   // playerId → 'M'/'W'
-  final List<TeeInfo>        courseTees;
-  final Map<int, int>        playerTees;    // playerId → teeId
-  final void Function(int pid, int teeId) onPickTee;
-  final String               gameType;
-  final int                  foursomeNumber;
-
-  const _TeePicker({
-    required this.playerIds,
-    required this.playerName,
-    required this.playerSex,
-    required this.courseTees,
-    required this.playerTees,
-    required this.onPickTee,
-    required this.gameType,
-    required this.foursomeNumber,
-  });
+  List<TeeInfo> _teesFor(int id) {
+    final sex = playerSex(id);
+    return courseTees.where((t) => t.sex == null || t.sex == sex).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Text('Group $foursomeNumber — Tee Selection',
-            style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 4),
-        Text('${_gameLabel(gameType)} · ${playerIds.length} players',
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey)),
-        const SizedBox(height: 24),
+    final theme    = Theme.of(context);
+    final selected = selectedIds.toList();
 
-        if (courseTees.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('No tees found for this course. '
-                'Please add tees via the course management screen.'),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        Text('Group $foursomeNumber', style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 2),
+        Text('${_gameLabel(gameType)} · $_rule',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 16),
+
+        // ── Tee time (proposed = previous group + interval) ──────────────────
+        _teeTimeCard(theme),
+        const SizedBox(height: 20),
+
+        // ── Golfers (with index + inline tees) ───────────────────────────────
+        Row(children: [
+          Text('Golfers', style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold)),
+          const Spacer(),
+          if (selected.isNotEmpty && courseTees.isNotEmpty)
+            PopupMenuButton<int>(
+              onSelected: onSetAllTees,
+              itemBuilder: (_) => courseTees
+                  .map((t) => PopupMenuItem<int>(
+                        value: t.id,
+                        child: Text('${t.teeName} · par ${t.par}'),
+                      ))
+                  .toList(),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.done_all, size: 16, color: theme.colorScheme.primary),
+                const SizedBox(width: 4),
+                Text('Set all tees',
+                    style: theme.textTheme.labelLarge
+                        ?.copyWith(color: theme.colorScheme.primary)),
+              ]),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        if (selected.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text('Pick golfers below to build the group.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                    fontStyle: FontStyle.italic,
+                    color: theme.colorScheme.onSurfaceVariant)),
           )
         else
-          ...playerIds.map((pid) {
-            // Only this golfer's tees: unisex tees plus those matching their sex.
-            final sex  = playerSex(pid);
-            final tees = courseTees
-                .where((t) => t.sex == null || t.sex == sex)
-                .toList();
-            final selectedTeeId = tees.any((t) => t.id == playerTees[pid])
-                ? playerTees[pid]
-                : null;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: Row(children: [
-                  Expanded(
-                    child: Text(playerName(pid),
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                  ),
-                  const SizedBox(width: 12),
-                  // Shared prominent picker: loud "Pick tee" when unassigned,
-                  // tee name + yardage when set (par + rating/slope in the menu).
-                  TeePicker(
-                    tees:  tees,
-                    value: selectedTeeId,
-                    onChanged: (id) => onPickTee(pid, id),
-                  ),
-                ]),
-              ),
-            );
-          }),
+          ...selected.map((id) => _selectedGolferCard(theme, id)),
+
+        const SizedBox(height: 20),
+
+        // ── Pool: who's not yet in this group ────────────────────────────────
+        if (gameType == 'irish_rumble') _irishTeamChips(theme),
+        ..._pool(theme),
+
+        const SizedBox(height: 16),
+        _countFooter(theme),
       ],
     );
   }
-}
 
-// ===========================================================================
-// Step D — Tee Time
-// ===========================================================================
-
-class _TeeTimePicker extends StatefulWidget {
-  final TextEditingController ctrl;
-  final int                   foursomeNumber;
-  final String                gameType;
-  final List<int>             playerIds;
-  final String Function(int)  playerName;
-
-  const _TeeTimePicker({
-    required this.ctrl,
-    required this.foursomeNumber,
-    required this.gameType,
-    required this.playerIds,
-    required this.playerName,
-  });
-
-  @override
-  State<_TeeTimePicker> createState() => _TeeTimePickerState();
-}
-
-class _TeeTimePickerState extends State<_TeeTimePicker> {
-  Future<void> _pick() async {
-    final picked = await _pickTeeTime(context, widget.ctrl.text);
-    if (picked != null) {
-      setState(() { widget.ctrl.text = picked; });
-    }
-  }
-
-  void _clear() {
-    setState(() { widget.ctrl.clear(); });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final current = widget.ctrl.text.trim();
-    final hasValue = current.isNotEmpty;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+  Widget _teeTimeCard(ThemeData theme) {
+    final caption = prevGroupTeeTime != null
+        ? '$_kTeeInterval min after Group ${foursomeNumber - 1} '
+          '(${_friendlyTeeTime(prevGroupTeeTime!)})'
+        : 'First group of the round';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Group ${widget.foursomeNumber} — Tee Time',
-            style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 4),
-        Text('${_gameLabel(widget.gameType)} · '
-             '${widget.playerIds.length} players',
-            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey)),
-        const SizedBox(height: 8),
-        Text(widget.playerIds.map(widget.playerName).join(', '),
-            style: theme.textTheme.bodySmall),
-        const SizedBox(height: 24),
-
         Row(children: [
+          Icon(Icons.schedule, size: 18,
+              color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Text('Tee time', style: theme.textTheme.titleSmall),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          OutlinedButton(
+            onPressed: () => onTeeTimeShift(-5),
+            child: const Text('−5 min'),
+          ),
           Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _pick,
-              icon: const Icon(Icons.schedule),
-              label: Text(
-                hasValue ? 'Tee time: $current' : 'Set tee time (optional)',
-              ),
-              style: OutlinedButton.styleFrom(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 16),
-              ),
+            child: Center(
+              child: Text(_friendlyTeeTime(teeTime),
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
             ),
           ),
-          if (hasValue) ...[
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.close),
-              tooltip: 'Clear tee time',
-              onPressed: _clear,
-            ),
-          ],
+          OutlinedButton(
+            onPressed: () => onTeeTimeShift(5),
+            child: const Text('+5 min'),
+          ),
         ]),
-        const SizedBox(height: 12),
-        Text('Leave blank if tee times aren\'t set yet.',
+        const SizedBox(height: 6),
+        Text(caption,
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
       ]),
     );
+  }
+
+  Widget _selectedGolferCard(ThemeData theme, int id) {
+    final p    = _find(id);
+    final tees = _teesFor(id);
+    final selectedTeeId =
+        tees.any((t) => t.id == playerTees[id]) ? playerTees[id] : null;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(playerName(id), style: theme.textTheme.bodyLarge
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+                if (p != null && p.handicapIndex.isNotEmpty)
+                  Text('Index ${p.handicapIndex}',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              ]),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 20),
+              tooltip: 'Remove from group',
+              onPressed: () => onToggle(id),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          if (courseTees.isEmpty)
+            Text('No tees for this course',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.error))
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TeePicker(
+                tees: tees,
+                value: selectedTeeId,
+                onChanged: (t) => onPickTee(id, t),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _irishTeamChips(ThemeData theme) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(children: [
+      Text('Team: ', style: theme.textTheme.titleSmall),
+      const SizedBox(width: 8),
+      ...teams.asMap().entries.map((e) => Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ChoiceChip(
+          label: Text(e.value.name),
+          selected: irishRumbleTeamIdx == e.key,
+          onSelected: (_) => onPickIrishTeam(e.key),
+        ),
+      )),
+    ]),
+  );
+
+  List<Widget> _pool(ThemeData theme) {
+    return teams.asMap().entries.map((entry) {
+      final teamIdx = entry.key;
+      final team    = entry.value;
+
+      // Irish Rumble: only show the chosen team.
+      if (gameType == 'irish_rumble' &&
+          irishRumbleTeamIdx != null &&
+          irishRumbleTeamIdx != teamIdx) {
+        return const SizedBox.shrink();
+      }
+
+      final available = team.players
+          .where((p) => !assignedIds.contains(p.id) &&
+                        !selectedIds.contains(p.id))
+          .toList();
+      if (available.isEmpty) return const SizedBox.shrink();
+
+      final sideFull = gameType != 'irish_rumble' &&
+          selectedForTeam(teamIdx).length >= teamCap;
+
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
+          child: Text(team.name, style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+        ),
+        ...available.map((p) {
+          final dim = sideFull;
+          return Opacity(
+            opacity: dim ? 0.45 : 1,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              enabled: !dim,
+              leading: Icon(
+                dim ? Icons.block : Icons.add_circle_outline,
+                color: dim
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.primary,
+              ),
+              title: Text(p.name),
+              subtitle: p.handicapIndex.isEmpty
+                  ? null
+                  : Text('Index ${p.handicapIndex}'),
+              trailing: dim
+                  ? Text('Team full', style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant))
+                  : null,
+              onTap: dim ? null : () => onToggle(p.id),
+            ),
+          );
+        }),
+      ]);
+    }).toList();
+  }
+
+  Widget _countFooter(ThemeData theme) {
+    return Row(children: [
+      Text('Selected: ${selectedIds.length}',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      const Spacer(),
+      if (gameType != 'irish_rumble')
+        ...teams.asMap().entries.map((e) {
+          final cnt = selectedForTeam(e.key).length;
+          return Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text('${e.value.name}: $cnt',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          );
+        }),
+    ]);
   }
 }
 
