@@ -3846,12 +3846,29 @@ class RoundCompleteView(APIView):
     on the first call, same as before.
     """
     def post(self, request, pk):
-        round_obj = get_object_or_404(
-            Round.objects
-                 .select_related('course')
+        # Owner or a designated scorer may reach the round; strangers poking
+        # another account's round id get a 404 (closes the previously-open
+        # get_object_or_404).
+        round_obj = round_for_scorer(
+            request.user, pk,
+            base=Round.objects
+                 .select_related('course', 'tournament')
                  .prefetch_related('foursomes__memberships__player'),
-            pk=pk,
         )
+
+        # Closing a CUP round ends it for the whole field — that is the TD's
+        # power, not a group scorer's ("entering a card and closing a round are
+        # different powers").  Casual rounds keep the scorer-can-finish flow.
+        try:
+            _ = round_obj.ryder_cup_config
+            is_cup = True
+        except Exception:
+            is_cup = False
+        if is_cup and round_obj.account_id != request.user.account_id:
+            return Response(
+                {'detail': 'Only the tournament director can complete a cup round.'},
+                status=403,
+            )
 
         all_done = self._all_foursomes_done(round_obj)
         # Single-foursome rounds (casual play, one-group cup days) complete on

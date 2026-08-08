@@ -7,6 +7,7 @@ round, read the scorecard, and see the leaderboard, while non-designated users
 remain blocked. Own-account access is preserved.
 """
 
+from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -16,7 +17,10 @@ from rest_framework.test import APIClient
 
 from accounts.models import Account
 from core.models import Course, Player
-from tournament.models import Round, Foursome, FoursomeMembership
+from tournament.models import (
+    Round, Foursome, FoursomeMembership, Tournament, TeamTournament,
+    RyderCupRoundConfig,
+)
 
 
 User = get_user_model()
@@ -154,3 +158,90 @@ class DelegatedScoringTests(TestCase):
         self.assertEqual(
             self.b_client.get(reverse('api-scorecard', args=[self.fs1.id]))
             .status_code, 200)  # member of fs1 → can score own group
+
+
+class CompleteRoundGatingTests(TestCase):
+    """Closing a round: strangers blocked everywhere; a casual scorer may still
+    finish their round; a CUP round is the tournament director's alone."""
+
+    def setUp(self):
+        self.acct_a = Account.objects.create(name='Gate TD')
+        self.td = User.objects.create_user(username='gtd', account=self.acct_a)
+        self.course = Course.objects.create(account=self.acct_a, name='Gate GC')
+        # Account B — a phone-matched designated scorer.
+        self.acct_b = Account.objects.create(name='Gate Scorer')
+        self.scorer = User.objects.create_user(username='gsc', account=self.acct_b)
+        self.scorer.phone = '+13105550111'
+        self.scorer.save(update_fields=['phone'])
+        # Account C — an unrelated stranger.
+        self.acct_c = Account.objects.create(name='Gate Stranger')
+        self.stranger = User.objects.create_user(username='gstr', account=self.acct_c)
+
+        self.a = APIClient(); self.a.force_authenticate(self.td)
+        self.b = APIClient(); self.b.force_authenticate(self.scorer)
+        self.c = APIClient(); self.c.force_authenticate(self.stranger)
+
+    def _round(self, *, cup=False):
+        tournament = None
+        team_tournament = None
+        if cup:
+            tournament = Tournament.objects.create(
+                account=self.acct_a, name='Gate Cup',
+                start_date=date(2026, 8, 8), total_rounds=1,
+            )
+            team_tournament = TeamTournament.objects.create(
+                tournament=tournament, cup_name='Gate Cup', players_per_team=4,
+            )
+        r = Round.objects.create(
+            account=self.acct_a, course=self.course, status='in_progress',
+            active_games=['skins'], tournament=tournament,
+        )
+        fs = Foursome.objects.create(round=r, group_number=1)
+        p = Player.objects.create(
+            account=self.acct_a, name='Bob', phone='(310) 555-0111',
+            handicap_index=Decimal('9.0'),
+        )
+        FoursomeMembership.objects.create(
+            foursome=fs, player=p, course_handicap=10, playing_handicap=10,
+            is_scorer=True,
+        )
+        if cup:
+            RyderCupRoundConfig.objects.create(
+                round=r, tournament=team_tournament,
+                nassau_point_value=Decimal('1.0'), point_multiplier=Decimal('1.0'),
+                round_format='custom',
+            )
+        return r
+
+    def _complete(self, client, r):
+        return client.post(reverse('api-round-complete', args=[r.id]))
+
+    def test_stranger_cannot_complete(self):
+        r = self._round()
+        self.assertEqual(self._complete(self.c, r).status_code, 404)
+        r.refresh_from_db()
+        self.assertEqual(r.status, 'in_progress')
+
+    def test_owner_completes_casual(self):
+        r = self._round()
+        self.assertEqual(self._complete(self.a, r).status_code, 200)
+        r.refresh_from_db()
+        self.assertEqual(r.status, 'complete')
+
+    def test_scorer_may_complete_casual(self):
+        # The delegated-scoring flow is preserved for casual rounds.
+        r = self._round()
+        self.assertEqual(self._complete(self.b, r).status_code, 200)
+        r.refresh_from_db()
+        self.assertEqual(r.status, 'complete')
+
+    def test_cup_round_is_td_only(self):
+        r = self._round(cup=True)
+        # A scorer (non-owner) is forbidden from closing a cup round.
+        self.assertEqual(self._complete(self.b, r).status_code, 403)
+        r.refresh_from_db()
+        self.assertEqual(r.status, 'in_progress')
+        # The TD (owner) can.
+        self.assertEqual(self._complete(self.a, r).status_code, 200)
+        r.refresh_from_db()
+        self.assertEqual(r.status, 'complete')

@@ -130,12 +130,17 @@ class _RoundScreenState extends State<RoundScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: isInProgress
-              ? _CompleteRoundButton(
-                  roundId: round.id,
-                  submitting: rp.submitting,
-                  allScored: round.allHolesScored,
-                  holesRemaining: round.holesRemaining,
-                )
+              // Closing a cup round ends it for the whole field — the TD's
+              // power alone.  A player or group scorer enters their own card
+              // but doesn't complete the round; casual rounds are unchanged.
+              ? ((round.isCupRound && !round.canManage)
+                  ? _WaitingForTdNote()
+                  : _CompleteRoundButton(
+                      roundId: round.id,
+                      submitting: rp.submitting,
+                      allScored: round.allHolesScored,
+                      holesRemaining: round.holesRemaining,
+                    ))
               : isComplete
                   ? FilledButton.icon(
                       onPressed: () => Navigator.of(context)
@@ -663,6 +668,26 @@ class _GameSetupCard extends StatelessWidget {
 // Complete Round button with confirmation dialog
 // ---------------------------------------------------------------------------
 
+/// Shown in place of the Complete-Round button to a cup player / scorer — the
+/// round is closed by the tournament director, not by whoever enters a card.
+class _WaitingForTdNote extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Icon(Icons.lock_clock_outlined, size: 16,
+          color: theme.colorScheme.onSurfaceVariant),
+      const SizedBox(width: 8),
+      Flexible(
+        child: Text('The tournament director completes this round.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      ),
+    ]);
+  }
+}
+
 class _CompleteRoundButton extends StatelessWidget {
   final int roundId;
   final bool submitting;
@@ -1012,6 +1037,35 @@ class _FoursomeCard extends StatelessWidget {
     'skins', 'sixes', 'nassau', 'match_play', 'points_531', 'wolf', 'rabbit',
     'irish_rumble', 'pink_ball',
   };
+
+  /// Team chip: the side's colour + its initial, so team membership survives
+  /// greyscale and print (the signal a name-tint loses for a colour-blind
+  /// reader).  Initial from the team name, falling back to the colour name.
+  Widget _teamChip(ThemeData theme, String? teamName, Color colour) {
+    final src = (teamName != null && teamName.isNotEmpty) ? teamName : '?';
+    final initial = src[0].toUpperCase();
+    return Container(
+      width: 22,
+      height: 22,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: colour,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(initial,
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: Colors.white, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  /// Normalise a tee name to one casing so a column of "White" and "RED" reads
+  /// as "White" / "Red" instead of shouting.  Empty when the golfer has no tee.
+  String _titleCaseTee(String? name) {
+    if (name == null || name.trim().isEmpty) return '';
+    return name.trim().split(RegExp(r'\s+')).map((w) =>
+        w.isEmpty ? w : w[0].toUpperCase() + w.substring(1).toLowerCase()
+    ).join(' ');
+  }
 
   /// TD-only "no-show" tool — pick a player from this foursome to
   /// remove.  Backend reconfigures any TC game on the foursome and
@@ -1600,6 +1654,14 @@ class _FoursomeCard extends StatelessWidget {
       color: isMyGroup
           ? theme.colorScheme.primaryContainer.withOpacity(0.3)
           : null,
+      // The mint border + YOUR GROUP badge mark where you're playing — a TD who
+      // is also in the field needs that even while he can act on every group.
+      shape: isMyGroup
+          ? RoundedRectangleBorder(
+              side: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+              borderRadius: BorderRadius.circular(12),
+            )
+          : null,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1615,8 +1677,9 @@ class _FoursomeCard extends StatelessWidget {
                   color: theme.colorScheme.primary,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text('My Group',
-                    style: TextStyle(color: Colors.white, fontSize: 11)),
+                child: const Text('YOUR GROUP',
+                    style: TextStyle(color: Colors.white, fontSize: 10,
+                        fontWeight: FontWeight.bold, letterSpacing: 0.5)),
               ),
             ],
             if (foursome.teeTime != null) ...[
@@ -1788,36 +1851,40 @@ class _FoursomeCard extends StatelessWidget {
           ],
           const SizedBox(height: 8),
           ...foursome.realPlayers.map((m) {
-            // In cup rounds, tint the player name + person icon with
-            // the cup team colour so the TD can spot the team split
-            // (and which player would be "the solo" in a 3-some) at
-            // a glance.  Falls back to the default on-surface colour
-            // for casual rounds.
-            final teamColor = m.cupTeamColour != null
+            // A cup golfer's team rides in a CHIP (colour + initial), not in the
+            // colour of the name — red-on-white / blue-on-white is exactly the
+            // pair a colour-blind reader can't separate, and tinting the name
+            // blocks every other use of ink on the row.  Names stay normal ink;
+            // casual rounds keep a plain person icon.
+            final chipColour = m.cupTeamColour != null
                 ? resolveTripleCupTeamColor(
-                    m.cupTeamColour, theme.colorScheme.onSurface)
+                    m.cupTeamColour, theme.colorScheme.primary)
                 : null;
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
+              padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(children: [
-                Icon(Icons.person_outline, size: 16, color: teamColor),
-                const SizedBox(width: 6),
+                if (chipColour != null)
+                  _teamChip(theme, m.cupTeamName, chipColour)
+                else
+                  Icon(Icons.person_outline, size: 18,
+                      color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 8),
                 Expanded(
+                  child: Text(m.player.name, overflow: TextOverflow.ellipsis),
+                ),
+                // Aligned Tee column (fixed width, normalised casing) so the
+                // handicaps line up instead of chasing a ragged right edge.
+                SizedBox(
+                  width: 58,
                   child: Text(
-                    m.player.name,
+                    _titleCaseTee(m.tee?.teeName),
+                    textAlign: TextAlign.right,
                     overflow: TextOverflow.ellipsis,
-                    style: teamColor != null
-                        ? TextStyle(
-                            color: teamColor, fontWeight: FontWeight.w600)
-                        : null,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ),
-                if (m.tee != null) ...[
-                  Text(m.tee!.teeName,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                  const SizedBox(width: 8),
-                ],
+                const SizedBox(width: 10),
                 Text(
                     hubHandicapLabel(m,
                         primaryHcap: primaryHcap,
@@ -1828,7 +1895,8 @@ class _FoursomeCard extends StatelessWidget {
                                     null,
                                     (a, b) => a == null || b < a ? b : a)
                             : null),
-                    style: theme.textTheme.bodySmall),
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
               ]),
             );
           }),
