@@ -6146,6 +6146,7 @@ class _BandonCupTabViewState extends State<_BandonCupTabView> {
             t1Pts    : totalT1,
             t2Pts    : totalT2,
             toWin    : toWin,
+            totalPossible: (src['total_possible'] as num?)?.toDouble(),
             cupStatus: cupStatus,
             cupName  : widget.tournamentName,
             fmtPts   : _fmtPts,
@@ -6225,11 +6226,78 @@ class _BandonCupTabViewState extends State<_BandonCupTabView> {
 
 // ── Grand total scoreboard card ───────────────────────────────────────────────
 
+/// Spatial "how close is this" clinch line: each side's banked points fill in
+/// from their end, the gap in the middle is what's still on the line, and a
+/// notch marks the clinch point (to-win).  Turns "6½ pts needed" into a glance.
+/// Shared by the Bandon-cup scoreboard and the Triple Cup overview.
+class _CupPointsBar extends StatelessWidget {
+  final double  t1Pts, t2Pts;
+  final double? toWin, totalPossible;
+  final Color   t1Colour, t2Colour;
+  final String Function(double) fmtPts;
+  const _CupPointsBar({
+    required this.t1Pts, required this.t2Pts,
+    required this.toWin, required this.totalPossible,
+    required this.t1Colour, required this.t2Colour,
+    required this.fmtPts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final total = (totalPossible != null && totalPossible! > 0)
+        ? totalPossible!
+        : (toWin != null ? (toWin! * 2 - 1) : (t1Pts + t2Pts));
+    final safeTotal = total <= 0 ? 1.0 : total;
+    final played = t1Pts + t2Pts;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      LayoutBuilder(builder: (ctx, c) {
+        final w = c.maxWidth;
+        final t1w = (t1Pts / safeTotal * w).clamp(0.0, w);
+        final t2w = (t2Pts / safeTotal * w).clamp(0.0, w);
+        final notchX =
+            toWin != null ? (toWin! / safeTotal * w).clamp(0.0, w) : null;
+        return SizedBox(
+          height: 16,
+          child: Stack(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(children: [
+                Container(color: theme.colorScheme.surfaceContainerHighest),
+                Align(alignment: Alignment.centerLeft,
+                    child: Container(width: t1w, color: t1Colour)),
+                Align(alignment: Alignment.centerRight,
+                    child: Container(width: t2w, color: t2Colour)),
+              ]),
+            ),
+            if (notchX != null)
+              Positioned(
+                left: (notchX - 1).clamp(0.0, w - 2),
+                top: -2, bottom: -2,
+                child: Container(width: 2, color: theme.colorScheme.onSurface),
+              ),
+          ]),
+        );
+      }),
+      const SizedBox(height: 8),
+      Text(
+        '${fmtPts(toWin ?? 0)} to win  ·  ${fmtPts(played)} of '
+        '${fmtPts(total)} points played',
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+    ]);
+  }
+}
+
 class _BandonCupScoreboard extends StatelessWidget {
   final String   t1Name, t2Name, cupName;
   final Color    t1Colour, t2Colour;
   final double   t1Pts, t2Pts;
   final double?  toWin;
+  /// Total cup points on the line — the points bar's full width.  Null falls
+  /// back to deriving it from to-win (to_win = total/2 + 0.5).
+  final double?  totalPossible;
   /// 'in_progress' | 'team1_won' | 'team2_won' | 'tied'
   final String   cupStatus;
   final String Function(double) fmtPts;
@@ -6241,6 +6309,7 @@ class _BandonCupScoreboard extends StatelessWidget {
     required this.cupName,  required this.fmtPts,
     this.cupStatus = 'in_progress',
     this.toWin,
+    this.totalPossible,
   });
 
   @override
@@ -6361,14 +6430,11 @@ class _BandonCupScoreboard extends StatelessWidget {
             Container(
               width: double.infinity,
               color: theme.colorScheme.surfaceContainerLow,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                tied && (t1Pts > 0 || t2Pts > 0)
-                    ? 'All Square — ${fmtPts(toWin!)} pts needed to win'
-                    : '${fmtPts(toWin!)} pts needed to win',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: _CupPointsBar(
+                t1Pts: t1Pts, t2Pts: t2Pts, toWin: toWin,
+                totalPossible: totalPossible,
+                t1Colour: t1Colour, t2Colour: t2Colour, fmtPts: fmtPts,
               ),
             ),
         ],
@@ -9058,9 +9124,60 @@ class _TripleCupOverviewView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        _clinchHeader(context, groups),
         for (final g in groups)
           _card(context, g as Map, multiGroup: groups.length > 1),
       ],
+    );
+  }
+
+  /// Cup total + clinch bar across every group.  Each Triple Cup group is worth
+  /// 4 points (Fourball + Foursomes + 2 Singles), so the cup's points on the
+  /// line is groups × 4 — the bar makes "how close is this" a glance.
+  Widget _clinchHeader(BuildContext context, List groups) {
+    final theme = Theme.of(context);
+    double t1 = 0, t2 = 0;
+    Color? t1Color, t2Color;
+    String t1Label = 'Team 1', t2Label = 'Team 2';
+    for (final g in groups) {
+      final raw =
+          Map<String, dynamic>.from(((g as Map)['summary'] as Map?) ?? const {});
+      final s = TripleCupSummary.fromJson(raw);
+      t1 += s.team1Points;
+      t2 += s.team2Points;
+      t1Color ??= s.team1Color;
+      t2Color ??= s.team2Color;
+      final n1 = (raw['team1_name'] as String?)?.trim();
+      final n2 = (raw['team2_name'] as String?)?.trim();
+      if (n1 != null && n1.isNotEmpty) t1Label = n1;
+      if (n2 != null && n2.isNotEmpty) t2Label = n2;
+    }
+    final total = groups.length * 4.0;
+    final toWin = total / 2 + 0.5;
+    String fmt(double p) =>
+        p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
+    final c1 = t1Color ?? theme.colorScheme.primary;
+    final c2 = t2Color ?? theme.colorScheme.secondary;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Column(children: [
+          Row(children: [
+            Expanded(
+              child: Text('$t1Label  ${fmt(t1)}',
+                  style: TextStyle(color: c1, fontWeight: FontWeight.bold)),
+            ),
+            Text('${fmt(t2)}  $t2Label',
+                style: TextStyle(color: c2, fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 10),
+          _CupPointsBar(
+            t1Pts: t1, t2Pts: t2, toWin: toWin, totalPossible: total,
+            t1Colour: c1, t2Colour: c2, fmtPts: fmt,
+          ),
+        ]),
+      ),
     );
   }
 
