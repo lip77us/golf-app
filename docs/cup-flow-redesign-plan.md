@@ -299,3 +299,58 @@ Corrected file ownership (the handoff's guesses were off):
 - **Radii** — chip 12 · CTA 16 · card 18 · pill 999. **Spacing** — 4-pt grid. **Borders** —
   cards / selected controls 1.5px cardBorder. **Buttons** — primary 52, bright-mint CTA 54.
 - Selected chips and segments are **pine, never mint**.
+
+---
+
+## Notes back to design (surfaced during implementation)
+
+Deviations from the mocks + open questions resolved while building. Each needs a
+designer glance to confirm or redraw.
+
+1. **Cup leaderboard "competition selector" rests on an invalid premise.** The
+   mock makes competition a *selector* because "a tournament can carry several
+   cups… unbounded." It can't today: `TeamTournament` is **OneToOne** with
+   `Tournament` — exactly one cup per tournament. So the selector solves a
+   non-problem and was **not built** (fixed 4-view tabs stay). *Design decision:*
+   drop the selector premise, or is multi-cup-per-tournament a real roadmap item
+   that should change the data model?
+
+2. **Team colour is a fixed 6-swatch palette, not a hex picker.** Several mocks
+   say "badge colour comes from the team, not a stylesheet… the hex travels with
+   the team," implying arbitrary colour. Reality: colours are one of six named
+   swatches (Red/Blue/Green/Orange/Yellow/Purple), stored by name. Unified to one
+   palette (`utils/cup_colors.dart`). *Design:* "any custom colour" isn't
+   possible without a model change — confirm 6 swatches is the intended ceiling.
+
+3. **round-groups Start Round — the derived-vs-explicit sit-out question is
+   resolved as *derived + non-blocking.*** The mock disables Start Round with a
+   named blocker ("Group 4 incomplete") and flags this as "still open." Since the
+   builder can't create an illegal group and a deliberate rest is legal, Start
+   stays **enabled** at ≥1 group; unassigned golfers are surfaced by name with an
+   **Assign** link instead of blocking. *Design:* confirm this reading.
+
+4. **Complete Round is TD-only for CUP rounds only.** The mock scopes it to the
+   TD. Implemented so; but **casual** rounds keep the delegated **scorer** able
+   to finish (not regressing that flow). A distinction the mock didn't draw —
+   confirm it's fine.
+
+5. **Segment "Starts N" is derived, not from clean per-segment data.** The
+   backend reports round-progress `holes_played` on every Triple Cup sub-match,
+   so "not begun" is inferred from *segment start hole > round thru* (Fourball 1
+   / Foursomes 7 / Singles 13). Works, but assumes the fixed Triple Cup hole map.
+
+6. **Deferred sub-features that are half-specified in the mocks** (need design
+   sign-off before building): group-builder **Shotgun** toggle + **per-course tee
+   interval memory** (needs a Course field); draft-add-players **in-picker side
+   switcher + switch-confirm**; group-bets tab **net skins** and **Nassau press**.
+
+7. **`leaderboard-group-bets` is blocked on an undesigned prerequisite** — the
+   group-bet **attach path**. See `docs/group-bet-attach-note.md`: the
+   per-foursome game machinery already exists, so it's an entry-point + ownership
+   design (player-initiated on the round hub, not a TD control), not a data
+   model. The screen is pure display once attach lands.
+
+8. **Live cup tally shows real team names pre-setup via a fallback.** Standings
+   only carry team names once a round is configured; added a fallback to the
+   drafted `TeamTournament` names/colours so a not-yet-set-up cup shows Reds/Blues
+   rather than "Team 1/2." Consistent with intent; noted for awareness.
