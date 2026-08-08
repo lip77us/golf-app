@@ -83,5 +83,15 @@ so played scorecards stay frozen.
 
 - Propagation feature committed on `main` (unpushed): `ffa523b`, `a3dd6b5`.
 - Id remap: **applied 2026-08-08** — all 13 catalog courses + their account clones
-  restamped to the new alphanumeric ids (0 numeric ids remain). Next: un-curate +
-  re-import per course when you push a rating change upstream.
+  restamped to the new alphanumeric ids (0 numeric ids remain).
+- **Tilden (tq7659nk) re-imported** 2026-08-08: Blue (W) par 72→71, Yellow (M) par
+  6→61, Yellow (W) added; White-Sixes preserved; redundant YELLOW-W deduped.
+- **Monarch Bay (1b3xwtd2) full re-import** 2026-08-08: added Marina (M/W) +
+  White/Gold Combo (M); women's tees par 71→72.
+- **Quality gate floor lowered 62→55** (services/course_quality.py) so short
+  forward tees (e.g. Tilden Yellow par 61) import without --skip-gate.
+
+Per-course activation recap: edit upstream → `remap_golf_api_ids` (done) →
+`uncurate_catalog_tees --golf-api-id <id> --apply` (add `--include-combos` for a
+true full replace) → `reimport_catalog_course --golf-api-id <id> --propagate
+--apply` → clones sync.

@@ -27,8 +27,12 @@ The same SI-permutation rule already guards the manual paste path
 ALLOWED_HOLE_COUNTS = (9, 18)
 MIN_PAR, MAX_PAR = 3, 6
 # Plausible total-par band for an 18-hole course; scaled by hole count so a
-# 9-hole course is checked against ~half (31–39).
-_TOTAL_PAR_18 = (62, 78)
+# 9-hole course is checked against ~half (28–39).  The floor is 55, not ~72:
+# legitimately short forward tees exist (e.g. Tilden's yellow tee is par 61),
+# and the corrupt "all holes wrong" cases are caught by the per-hole par (3-6)
+# and stroke-index permutation rules below.  55 still rejects an all-par-3
+# course (54) — executive/par-3 layouts remain out of scope (hole-flexibility).
+_TOTAL_PAR_18 = (55, 78)
 
 
 def _total_par_band(n):

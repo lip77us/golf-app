@@ -44,8 +44,17 @@ class ShortCourseQualityGateTests(TestCase):
              'tees': [{'name': 'White', 'holes': _holes(9)}]})
         self.assertEqual(warnings, [])
 
+    def test_short_18_hole_forward_tee_accepted(self):
+        # A legitimately short forward tee (Tilden's yellow is par 61) must pass:
+        # 11 par-3s + 7 par-4s = 61, above the 55 floor. Regression for the gate
+        # having rejected par 61 as "implausible".
+        pars = [3] * 11 + [4] * 7
+        holes = [{'number': i, 'par': pars[i - 1], 'stroke_index': i, 'yards': 300}
+                 for i in range(1, 19)]
+        self.assertEqual(validate_tee_holes(holes), [])
+
     def test_9_hole_par_band_is_scaled(self):
-        # 9 par-3s = total 27, below the scaled ~31 floor for 9 holes -> rejected
+        # 9 par-3s = total 27, below the scaled ~28 floor for 9 holes -> rejected
         # (consistent with the 18-hole band rejecting a par-3 course; executive
         # courses are out of scope).
         holes = [{'number': i, 'par': 3, 'stroke_index': i, 'yards': 150}
