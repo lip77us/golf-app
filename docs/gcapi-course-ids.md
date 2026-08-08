@@ -88,6 +88,8 @@ so played scorecards stay frozen.
   6→61, Yellow (W) added; White-Sixes preserved; redundant YELLOW-W deduped.
 - **Monarch Bay (1b3xwtd2) full re-import** 2026-08-08: added Marina (M/W) +
   White/Gold Combo (M); women's tees par 71→72.
+- **Corica South (f5cnws7n) full re-import** 2026-08-08: Yellow (M) par 72→70;
+  re-rated slopes across all tees; added Team Match Combo (M) + II.
 - **Quality gate floor lowered 62→55** (services/course_quality.py) so short
   forward tees (e.g. Tilden Yellow par 61) import without --skip-gate.
 
