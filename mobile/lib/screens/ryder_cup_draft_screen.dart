@@ -154,14 +154,35 @@ class _RyderCupDraftScreenState extends State<RyderCupDraftScreen> {
         .where((p) => !draftedIds.contains(p.id))
         .toList();
 
+    // Golfers already seated on OTHER sides — shown locked with their side, so
+    // the roster reads complete instead of making the captain hunt for a name.
+    final taken = <_TakenGolfer>[];
+    for (final t in _summary!.teams) {
+      if (t.teamId == team.teamId) continue;
+      for (final p in t.players) {
+        taken.add(_TakenGolfer(
+          name: p.name, index: p.handicapIndex,
+          teamName: t.name, colour: _teamColor(t.colour)));
+      }
+    }
+    taken.sort((a, b) => a.name.compareTo(b.name));
+
     if (available.isEmpty) {
       _showSnack('All players are already assigned to a team.');
       return;
     }
 
+    final sideSize = _summary!.playersPerTeam < 1 ? 1 : _summary!.playersPerTeam;
     final chosen = await showDialog<List<PlayerProfile>>(
       context: context,
-      builder: (_) => _PlayerPickerDialog(players: available),
+      builder: (_) => _PlayerPickerDialog(
+        players      : available,
+        teamName     : team.name,
+        teamColour   : _teamColor(team.colour),
+        sideSize     : sideSize,
+        currentCount : team.players.length,
+        taken        : taken,
+      ),
     );
     if (chosen == null || chosen.isEmpty || !mounted) return;
 
@@ -690,28 +711,60 @@ class _TeamCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  Color _teamColor(String colour) {
-    switch (colour.toLowerCase()) {
-      case 'red':    return Colors.red;
-      case 'blue':   return Colors.blue;
-      case 'green':  return Colors.green;
-      case 'yellow': return Colors.amber;
-      case 'orange': return Colors.deepOrange;
-      case 'purple': return Colors.purple;
-      case 'black':  return Colors.black87;
-      default:       return Colors.grey;
-    }
+/// Team badge colour from the stored colour name.  Shared by the team cards and
+/// the add-players picker so a side's badge is the same everywhere.
+// TODO(cup): the six design swatches are hex — carry the hex on the team so any
+// custom colour has a visible badge (bug-bundle item), instead of this fixed set.
+Color _teamColor(String colour) {
+  switch (colour.toLowerCase()) {
+    case 'red':    return Colors.red;
+    case 'blue':   return Colors.blue;
+    case 'green':  return Colors.green;
+    case 'yellow': return Colors.amber;
+    case 'orange': return Colors.deepOrange;
+    case 'purple': return Colors.purple;
+    case 'black':  return Colors.black87;
+    default:       return Colors.grey;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Player picker dialog
+// Player picker dialog — "Add to <side>"
 // ---------------------------------------------------------------------------
+// Names the side it fills (badge + count), caps selection at the side's open
+// slots, and shows golfers already drafted elsewhere as locked "On <side>".
+
+/// A golfer already seated on another side (shown locked in the picker).
+class _TakenGolfer {
+  final String name;
+  final String index;
+  final String teamName;
+  final Color  colour;
+  const _TakenGolfer({
+    required this.name,
+    required this.index,
+    required this.teamName,
+    required this.colour,
+  });
+}
 
 class _PlayerPickerDialog extends StatefulWidget {
-  final List<PlayerProfile> players;
-  const _PlayerPickerDialog({required this.players});
+  final List<PlayerProfile> players;   // available (undrafted) golfers
+  final String              teamName;  // the side being filled
+  final Color               teamColour;
+  final int                 sideSize;
+  final int                 currentCount;   // golfers already on this side
+  final List<_TakenGolfer>  taken;          // seated on other sides
+  const _PlayerPickerDialog({
+    required this.players,
+    required this.teamName,
+    required this.teamColour,
+    required this.sideSize,
+    required this.currentCount,
+    required this.taken,
+  });
 
   @override
   State<_PlayerPickerDialog> createState() => _PlayerPickerDialogState();
@@ -719,13 +772,20 @@ class _PlayerPickerDialog extends StatefulWidget {
 
 class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
   String _search = '';
-  /// IDs of players currently checked.  Selection persists across
-  /// search-term changes so users can search "Sm", check Smith, clear
-  /// the search, then check Jones — and submit both together.
+  /// IDs of golfers currently held (staged), persisted across search changes.
   final Set<int> _selectedIds = <int>{};
+
+  /// Open slots on this side — the most golfers we'll hold before Add.
+  int get _slotsLeft =>
+      (widget.sideSize - widget.currentCount).clamp(0, widget.sideSize);
+  bool get _capReached => _selectedIds.length >= _slotsLeft;
 
   List<PlayerProfile> get _filtered => widget.players
       .where((p) => p.name.toLowerCase().contains(_search.toLowerCase()))
+      .toList();
+
+  List<_TakenGolfer> get _filteredTaken => widget.taken
+      .where((t) => t.name.toLowerCase().contains(_search.toLowerCase()))
       .toList();
 
   void _toggle(PlayerProfile p) {
@@ -735,45 +795,69 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
   }
 
   void _commit() {
-    final chosen = widget.players
-        .where((p) => _selectedIds.contains(p.id))
-        .toList();
+    final chosen =
+        widget.players.where((p) => _selectedIds.contains(p.id)).toList();
     Navigator.pop(context, chosen);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme    = Theme.of(context);
     final filtered = _filtered;
-    final count = _selectedIds.length;
+    final taken    = _filteredTaken;
+    final staged   = _selectedIds.length;
+    final toPick   = (_slotsLeft - staged).clamp(0, widget.sideSize);
 
-    // Shrink the result area when the on-screen keyboard is up so the
-    // bottom rows aren't tucked behind the keyboard / prediction bar
-    // (the original 400px fixed height left rows unreachable on iOS).
     final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
     final maxH = MediaQuery.sizeOf(context).height;
-    final dialogH = (maxH - viewInsets - 200).clamp(220.0, 480.0);
+    final dialogH = (maxH - viewInsets - 220).clamp(240.0, 480.0);
+
+    // Roster line under the title — reads "4 of 8 on this side · pick 4 more",
+    // and states itself instead of silently ignoring taps once the side fills.
+    final String rosterLine;
+    if (_slotsLeft == 0) {
+      rosterLine = '${widget.currentCount} of ${widget.sideSize} — this side is full';
+    } else if (_capReached) {
+      rosterLine = '${widget.teamName} is full — deselect to swap';
+    } else {
+      rosterLine = '${widget.currentCount} of ${widget.sideSize} on this side · '
+          'pick $toPick more${staged > 0 ? ' · holding $staged' : ''}';
+    }
 
     return AlertDialog(
-      // Title shows live selection count so the user can verify before
-      // hitting Add — important for multi-select where it's easy to lose
-      // track of checked rows after scrolling.
-      title: Row(children: [
-        const Expanded(child: Text('Add players')),
-        if (count > 0)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text('$count',
-                style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.bold)),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+      title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(width: 12, height: 12,
+              decoration: BoxDecoration(
+                  color: widget.teamColour, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('Add to ${widget.teamName}',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
           ),
+          if (staged > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text('$staged',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold)),
+            ),
+        ]),
+        const SizedBox(height: 4),
+        Text(rosterLine,
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: _capReached && _slotsLeft > 0
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant)),
       ]),
-      contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      contentPadding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
       content: SizedBox(
         width: 320,
         height: dialogH,
@@ -791,37 +875,62 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
               contentPadding : EdgeInsets.symmetric(vertical: 8),
             ),
             onChanged:   (v) => setState(() => _search = v),
-            // Enter just dismisses the keyboard — multi-select shouldn't
-            // auto-commit since users typically tap several boxes after
-            // each search.
             onSubmitted: (_) => FocusScope.of(context).unfocus(),
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: filtered.isEmpty
+            child: (filtered.isEmpty && taken.isEmpty)
                 ? Center(
-                    child: Text(
-                      'No matches.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant),
-                    ),
+                    child: Text('No matches.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
                   )
-                : ListView.builder(
+                : ListView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) {
-                      final p = filtered[i];
-                      final selected = _selectedIds.contains(p.id);
-                      return CheckboxListTile(
-                        dense: true,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        value: selected,
-                        onChanged: (_) => _toggle(p),
-                        title: Text(p.name),
-                        subtitle: Text('Index ${p.handicapIndex}'),
-                      );
-                    },
+                    children: [
+                      ...filtered.map((p) {
+                        final selected = _selectedIds.contains(p.id);
+                        // Cap: once the open slots are held, unselected rows
+                        // disable rather than silently swallowing taps.
+                        final enabled = selected || !_capReached;
+                        return CheckboxListTile(
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          value: selected,
+                          onChanged: enabled ? (_) => _toggle(p) : null,
+                          title: Text(p.name),
+                          subtitle: Text('Index ${p.handicapIndex}'),
+                        );
+                      }),
+                      if (taken.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+                          child: Text('Already drafted (${taken.length})',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                        ),
+                        ...taken.map((t) => ListTile(
+                          dense: true,
+                          enabled: false,
+                          leading: Icon(Icons.lock_outline, size: 18,
+                              color: theme.colorScheme.onSurfaceVariant),
+                          title: Text(t.name),
+                          subtitle: t.index.isEmpty ? null : Text('Index ${t.index}'),
+                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Container(width: 8, height: 8,
+                                decoration: BoxDecoration(
+                                    color: t.colour, shape: BoxShape.circle)),
+                            const SizedBox(width: 4),
+                            Text('On ${t.teamName}',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant)),
+                          ]),
+                        )),
+                      ],
+                    ],
                   ),
           ),
         ]),
@@ -832,12 +941,8 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: count == 0 ? null : _commit,
-          child: Text(count == 0
-              ? 'Add'
-              : count == 1
-                  ? 'Add 1 player'
-                  : 'Add $count players'),
+          onPressed: staged == 0 ? null : _commit,
+          child: Text(staged == 0 ? 'Add' : 'Add $staged'),
         ),
       ],
     );
