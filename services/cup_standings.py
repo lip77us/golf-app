@@ -109,16 +109,58 @@ def _compute_cup_status(team1_pts: float, team2_pts: float,
     return ('in_progress', None)
 
 
+def _derive_group_counts(round_obj) -> dict:
+    """
+    Pre-setup projection: derive {game_type: groups} from the tournament's side
+    size when the wizard didn't record per-game counts (it no longer does — the
+    group count is a single derived quantity now, see Spine B).  Groups follow
+    the same ceil(roster / 4) rule the draft and round setup use, with
+    roster = players_per_team across every side.
+
+    Only a SINGLE-cup-format round is projected: a multi-format round's split
+    across formats is genuinely ambiguous without the setup screen, so it stays
+    unprojected (0.0) rather than guessing.  Returns {} when there's no team
+    tournament, no side size, or not exactly one cup game.
+    """
+    import math
+    from core.models import GameType
+    tt = getattr(round_obj.tournament, 'team_tournament', None)
+    if tt is None:
+        return {}
+    num_sides = tt.teams.count()
+    roster    = (tt.players_per_team or 0) * num_sides
+    if roster <= 0:
+        return {}
+    cup_games = []
+    for g in (round_obj.active_games or []):
+        try:
+            if GameType(g) in GAME_MULTIPLIERS:
+                cup_games.append(g)
+        except ValueError:
+            continue
+    if len(cup_games) != 1:
+        return {}
+    groups = math.ceil(roster / 4)
+    return {cup_games[0]: groups}
+
+
 def _planned_possible(round_obj) -> float:
     """
     Compute total_possible from Round.cup_group_counts + Round.game_point_values.
     Wizard-time plan used for rounds not yet configured through the setup screen.
     Irish Rumble: 2 foursomes = 1 pairing = pv x 1  (units = groups // 2)
     All others  : each foursome is its own contest   (units = groups)
+
+    cup_group_counts is empty for rounds created by the current wizard (group
+    count isn't entered any more), so fall back to deriving it live from the
+    draft's side size — that's what makes the standings projection appear before
+    the rounds are set up.
     """
     from core.models import GameType
     counts = round_obj.cup_group_counts or {}
     pvs    = round_obj.game_point_values or {}
+    if not counts:
+        counts = _derive_group_counts(round_obj)
     if not counts:
         return 0.0
     total = 0.0

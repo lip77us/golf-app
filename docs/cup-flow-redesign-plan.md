@@ -128,10 +128,19 @@ group count purely from roster size (`8→[4,4]`, `14→[4,4,3,3]`), consumed cl
 > **Spine B core is complete (B1–B4): side size is the single input, group count derives from it
 > everywhere — the wizard no longer asks, the draft sets side size and gates Lock on it, and
 > round setup derives the target from the roster.**
-> - **Follow-ups:** delete the wizard's vestigial group-count plumbing (`_roundCupGroupCounts`,
->   `onGroupCountsChanged`); derive each round's `cup_group_counts` from the now-real side size so
->   the pre-setup "points to win" projects; show the **handicap index** on the round-setup picker
->   and the draft roster (`CupPlayer` doesn't carry it yet).
+>
+> **Spine B follow-ups — all landed:**
+> - **Handicap index** now shows on the draft roster + round-setup picker (`CupPlayer.handicapIndex`,
+>   emitted by `ryder_cup_summary`).
+> - **Vestigial group-count plumbing deleted** — `_roundCupGroupCounts` +
+>   `onGroupCountsChanged` + `_RoundGameSlots.currentGroupCounts` removed from the wizard (the map
+>   was write-only once B2 stopped asking; `createRound` still sends `cup_group_counts: {}`).
+> - **"Points to win" projects pre-setup** — `cup_standings._planned_possible` now falls back to
+>   `_derive_group_counts(round)`, which reads the live side size off the draft
+>   (`players_per_team × sides → ceil(roster/4) groups`) instead of the empty stored counts. Only a
+>   single-cup-format round is projected; a multi-format round stays unprojected rather than guessing
+>   its split. Read-time derivation — no persisted `cup_group_counts`, so it can't go stale when the
+>   side size changes. Verified: roster 8 → 2 groups → 8.0 possible (triple_cup); 302 scoring tests green.
 
 ### Corollary — make `type` / `format` a stored fact
 

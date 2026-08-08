@@ -222,16 +222,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   // ---- Cup Round Games (step 3 for cup tournaments) ----
   // Per-round game plan: round index (0 = round 1, 1 = round 2, …) →
-  // Cup game types per round.  Each unique game type appears once; the count
-  // of how many groups play it is in _roundCupGroupCounts.
+  // Cup game types per round.  Each unique game type appears once.
   // e.g. {0: ['nassau', 'irish_rumble']}
+  // Group count is NOT entered here — it derives from the draft's side size
+  // (see Spine B); the standings projection reads it live off the roster.
   final Map<int, List<String>>        _roundCupGames       = {};
   // Cup point values per game type per round: round index → game_type → pts.
   // e.g. {0: {'nassau': 1.0, 'singles_nassau': 2.0}}  Default 1.0.
   final Map<int, Map<String, double>> _roundCupPoints      = {};
-  // Number of groups playing each game type per round.
-  // e.g. {0: {'nassau': 2, 'irish_rumble': 2}}
-  final Map<int, Map<String, int>>    _roundCupGroupCounts = {};
 
   // ---- Step 1: Round details (course, dates, handicap — NO game selection) ----
   List<CourseInfo>  _courses        = [];
@@ -1089,7 +1087,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           numRounds           : _numRounds,
           roundCupGames       : _roundCupGames,
           roundCupPoints      : _roundCupPoints,
-          roundCupGroupCounts : _roundCupGroupCounts,
           selectedCourseId    : _selectedCourseId,
           additionalRounds    : _additionalRounds,
           courses             : _courses,
@@ -1110,8 +1107,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               }),
           onPointsChanged     : (roundIdx, points) =>
               setState(() => _roundCupPoints[roundIdx] = points),
-          onGroupCountsChanged: (roundIdx, counts) =>
-              setState(() => _roundCupGroupCounts[roundIdx] = counts),
         );
       case _StepKind.sideGame:
         return _StepSideGame(
@@ -3130,28 +3125,24 @@ class _Step3CupRoundGames extends StatelessWidget {
   final int                                   numRounds;
   final Map<int, List<String>>                roundCupGames;
   final Map<int, Map<String, double>>         roundCupPoints;
-  final Map<int, Map<String, int>>            roundCupGroupCounts;
   final int?                                  selectedCourseId;
   final List<_RoundDraft>                     additionalRounds;
   final List<CourseInfo>                      courses;
   final DateTime                              date;
   final void Function(int roundIdx, List<String> games)           onChanged;
   final void Function(int roundIdx, Map<String, double> points)   onPointsChanged;
-  final void Function(int roundIdx, Map<String, int> counts)      onGroupCountsChanged;
 
   const _Step3CupRoundGames({
     super.key,
     required this.numRounds,
     required this.roundCupGames,
     required this.roundCupPoints,
-    required this.roundCupGroupCounts,
     required this.selectedCourseId,
     required this.additionalRounds,
     required this.courses,
     required this.date,
     required this.onChanged,
     required this.onPointsChanged,
-    required this.onGroupCountsChanged,
   });
 
   String _courseName(int? courseId) {
@@ -3179,10 +3170,8 @@ class _Step3CupRoundGames extends StatelessWidget {
             date              : r == 0 ? date : additionalRounds[r - 1].date,
             currentGames      : roundCupGames[r] ?? [],
             currentPoints     : roundCupPoints[r] ?? {},
-            currentGroupCounts: roundCupGroupCounts[r] ?? {},
             onChanged         : (games) => onChanged(r, games),
             onPointsChanged   : (pts) => onPointsChanged(r, pts),
-            onGroupCountsChanged: (counts) => onGroupCountsChanged(r, counts),
           ),
           if (r < numRounds - 1) const SizedBox(height: 16),
         ],
@@ -3198,10 +3187,8 @@ class _RoundGameSlots extends StatefulWidget {
   final DateTime                date;
   final List<String>            currentGames;
   final Map<String, double>     currentPoints;
-  final Map<String, int>        currentGroupCounts;
   final void Function(List<String>)           onChanged;
   final void Function(Map<String, double>)    onPointsChanged;
-  final void Function(Map<String, int>)       onGroupCountsChanged;
 
   const _RoundGameSlots({
     required this.roundIndex,
@@ -3210,10 +3197,8 @@ class _RoundGameSlots extends StatefulWidget {
     required this.date,
     required this.currentGames,
     required this.currentPoints,
-    required this.currentGroupCounts,
     required this.onChanged,
     required this.onPointsChanged,
-    required this.onGroupCountsChanged,
   });
 
   @override
@@ -3303,14 +3288,9 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
       if (picked == 'triple_cup') {
         widget.onChanged(const ['triple_cup']);
         widget.onPointsChanged(const {'triple_cup': 1.0});
-        widget.onGroupCountsChanged(const {'triple_cup': 1});
         return;
       }
-      // Add to games list and default to 1 group
       widget.onChanged([...widget.currentGames, picked]);
-      final updatedCounts = Map<String, int>.from(widget.currentGroupCounts);
-      updatedCounts.putIfAbsent(picked, () => 1);
-      widget.onGroupCountsChanged(updatedCounts);
     });
   }
 
