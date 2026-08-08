@@ -96,6 +96,8 @@ so played scorecards stay frozen.
   148→134 (outlier fix); added Green (M) + Blue (W).
 - **Metropolitan (f19r40nr) full re-import** 2026-08-08: Blue (M) slope 124→126;
   B/W Combo consolidated to GCAPI's Blue/White Combo (M+W), 8 dupes removed.
+- **Corica North (qfv3y37x) full re-import** 2026-08-08: re-rated slopes (Black M
+  118→126 etc.); added Black (W) + Blue (W). Catalog-only (no clones).
 - **Quality gate floor lowered 62→55** (services/course_quality.py) so short
   forward tees (e.g. Tilden Yellow par 61) import without --skip-gate.
 
