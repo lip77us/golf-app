@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
 import '../utils/shared_round.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/cup_tally.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/shared_round_card.dart';
@@ -785,6 +786,11 @@ class _TournamentCard extends StatelessWidget {
     }
 
     return [
+      // Live cup tally + clinch bar — "are we up, how close" without a tap.
+      CupTallyLoader(
+        tournamentId: tournament.id,
+        padding: const EdgeInsets.only(top: 12, bottom: 4),
+      ),
       const SizedBox(height: 12),
       Row(children: [
         Icon(

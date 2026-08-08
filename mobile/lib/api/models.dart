@@ -1055,6 +1055,9 @@ class Round {
   /// (i.e. a RyderCupRoundConfig exists on the backend).
   /// When true, score entry skips all game setup screens.
   final bool isCupRound;
+  /// Parent tournament id, or null for a standalone casual round.  Used by the
+  /// round hub to fetch the cup standings (live tally).
+  final int? tournamentId;
   /// Irish Rumble balls-per-segment config — list of
   /// {start_hole, end_hole, balls_to_count} maps.  Empty when IR is not active.
   final List<Map<String, dynamic>> irBallsConfig;
@@ -1092,6 +1095,7 @@ class Round {
     this.netMaxDoubleBogey = true,
     required this.foursomes,
     this.isCupRound    = false,
+    this.tournamentId,
     this.irBallsConfig = const [],
     this.watchToken,
     this.canManage     = false,
@@ -1115,6 +1119,7 @@ class Round {
         netPercent:   j['net_percent']   as int?    ?? 100,
         netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? true,
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
+        tournamentId: j['tournament_id'] as int?,
         watchToken:   j['watch_token']   as String?,
         canManage:    j['can_manage']    as bool?   ?? false,
         isCasual:       j['is_casual']        as bool? ?? false,

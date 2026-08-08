@@ -5,6 +5,7 @@ import '../ui_labels.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../widgets/cup_tally.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../widgets/round_chat_button.dart';
@@ -493,6 +494,12 @@ class _RoundInfoCard extends StatelessWidget {
                   .toList(),
             ),
           ],
+          // Live cup tally + clinch bar on the header the player is already on.
+          if (round.isCupRound && round.tournamentId != null)
+            CupTallyLoader(
+              tournamentId: round.tournamentId!,
+              padding: const EdgeInsets.only(top: 12),
+            ),
         ]),
       ),
     );

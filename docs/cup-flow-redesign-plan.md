@@ -231,6 +231,16 @@ Corrected file ownership (the handoff's guesses were off):
 | `cup-leaderboard` 🟡 **partial (points bar)** | **Spatial points bar** (clinch line): each side's banked points fill from its end, a notch marks to-win, caption "N to win · X of Y points played" — replaces the plain "X pts needed" text | New shared `_CupPointsBar` widget; wired into `_BandonCupScoreboard` (the cup standings tab — verified on device: notch at 4.5/8, "4.5 to win · 0 of 8 points played") and an aggregate **clinch header** prepended to `_TripleCupOverviewView` (Triple Cup = groups × 4 pts; shows once `by_group` populates in live play). **Deferred (large/coupled in the 10K-line file, higher regression risk):** the competition-**selector**-vs-fixed-4-view nav restructure (`_initTabs`, coupled to cup-type inference), and the per-segment **labeled cells** (Final stamp / dashed "Starts N") — the cup match card already carries segment badges + Thru-in-header + AS-grey, so those are refinements, best done as a dedicated pass |
 | `leaderboard-group-bets` | new tab in `leaderboard_screen.dart` `_initTabs` | Skins / Nassau / rabbit **settled from gross already entered**, grouped by foursome — a tab at group scope, **not a second scoring flow** |
 
+> **Shared live cup tally ✅ landed.** The team tally + clinch bar that each Phase-3 surface kept
+> deferring is now one widget — `widgets/cup_tally.dart`: `CupTally` (team line + points bar/notch
+> or a winner/tied banner) + `CupTallyLoader` (fetches `getTournamentCupStandings`, self-hides on
+> load/empty/error). Dropped into the **cup-hub tournament card** and the **round-hub header**
+> (needing a new `tournament_id` on `RoundSerializer` + `Round.tournamentId`); the Triple Cup
+> overview already carries the same bar from its own data. `cup_standings_summary` now falls back to
+> the **drafted team names/colours** when no round is configured yet, so a pre-setup cup shows real
+> sides (Reds/Blues) rather than "Team 1/2". Verified on device: card + round hub both show
+> "Reds 0–0 Blues · 4.5 to win · 0 of 8 points played" with the notch.
+
 **Two things to know:**
 
 - The **leaderboard rebuild is coupled to Spine A/B landing first** — its tabs are derived from

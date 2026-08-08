@@ -675,7 +675,7 @@ class RoundSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Round
         fields = [
-            'id', 'round_number', 'date', 'course', 'status',
+            'id', 'round_number', 'date', 'course', 'status', 'tournament_id',
             'active_games', 'primary_game', 'game_point_values', 'bet_unit',
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'num_holes', 'starting_hole',

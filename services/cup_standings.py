@@ -288,6 +288,18 @@ def cup_standings_summary(tournament) -> dict:
             'total_possible': round(r_possible, 2),
         })
 
+    # Names/colours come from a configured round's live summary; a cup that
+    # hasn't had a round set up yet has none, so fall back to the drafted teams
+    # so the tally shows the real sides (not "Team 1/2") before setup.
+    if team1_name is None:
+        tt = getattr(tournament, 'team_tournament', None)
+        if tt is not None:
+            teams = list(tt.teams.order_by('team_number'))
+            if len(teams) >= 1:
+                team1_name, team1_colour = teams[0].name, teams[0].colour
+            if len(teams) >= 2:
+                team2_name, team2_colour = teams[1].name, teams[1].colour
+
     total_possible = round(total_possible, 2)
     to_win         = total_possible / 2 + 0.5
     cup_status, winner_team = _compute_cup_status(
