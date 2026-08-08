@@ -92,6 +92,8 @@ so played scorecards stay frozen.
   re-rated slopes across all tees; added Team Match Combo (M) + II.
 - **Chardonnay (0m4sda7m) full re-import** 2026-08-08: re-rated slopes/ratings +
   Magnum (W) hole SI; added Double Mag./Imperial (M) + Imperial (W).
+- **Red Rock Arroyo (7xmh8n3b) full re-import** 2026-08-08: Gold (M) slope
+  148→134 (outlier fix); added Green (M) + Blue (W).
 - **Quality gate floor lowered 62→55** (services/course_quality.py) so short
   forward tees (e.g. Tilden Yellow par 61) import without --skip-gate.
 
