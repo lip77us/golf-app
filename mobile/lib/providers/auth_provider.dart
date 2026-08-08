@@ -3,12 +3,12 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 
-class AuthProvider extends ChangeNotifier {
+class AuthProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const _tokenKey       = 'auth_token';
   // Remembered last-used account name so the login screen can
   // pre-fill it on next launch.  Account names are typically stable
@@ -56,6 +56,29 @@ class AuthProvider extends ChangeNotifier {
   Future<void> Function()? onAuthenticated;
   Future<void> Function()? onLoggingOut;
 
+  /// Observe app lifecycle so a startup profile fetch that failed all its
+  /// retries can recover when the app next comes to the foreground.
+  AuthProvider() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Token trusted but profile never hydrated (the startup /auth/me/ exhausted
+    // its retries during a transient outage) → try again on resume so the app
+    // self-heals without a relaunch.
+    if (state == AppLifecycleState.resumed &&
+        _token != null && _player == null) {
+      unawaited(_refreshProfileInBackground());
+    }
+  }
+
   ApiClient get client => ApiClient(
         token: _token,
         onSessionExpired: () => logout(silent: true),
@@ -101,28 +124,38 @@ class AuthProvider extends ChangeNotifier {
   /// connection), then backs off on failure. Keeps the session on transient
   /// errors; clears it only on a genuine 401, or bails if the user logs out
   /// meanwhile.
+  /// Guards against overlapping hydration runs (e.g. a resume firing while the
+  /// startup attempt is still backing off).
+  bool _hydrating = false;
+
   Future<void> _refreshProfileInBackground() async {
-    for (var attempt = 0; attempt < 5; attempt++) {
-      // First pass fires immediately; later retries back off so a flaky
-      // cold-start connection gets time to settle without hammering.
-      if (attempt > 0) {
-        await Future.delayed(Duration(seconds: 2 * attempt));
+    if (_hydrating) return;
+    _hydrating = true;
+    try {
+      for (var attempt = 0; attempt < 5; attempt++) {
+        // First pass fires immediately; later retries back off so a flaky
+        // cold-start connection gets time to settle without hammering.
+        if (attempt > 0) {
+          await Future.delayed(Duration(seconds: 2 * attempt));
+        }
+        final token = _token;
+        if (token == null) return;   // logged out in the meantime
+        try {
+          _applyProfile(await ApiClient(token: token).me());
+          notifyListeners();
+          return;
+        } on AuthException {
+          _token = null;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(_tokenKey);
+          notifyListeners();
+          return;
+        } catch (e) {
+          // still offline — keep retrying (and resume will try again later)
+        }
       }
-      final token = _token;
-      if (token == null) return;   // logged out in the meantime
-      try {
-        _applyProfile(await ApiClient(token: token).me());
-        notifyListeners();
-        return;
-      } on AuthException {
-        _token = null;
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(_tokenKey);
-        notifyListeners();
-        return;
-      } catch (e) {
-        // still offline — keep retrying
-      }
+    } finally {
+      _hydrating = false;
     }
   }
 
