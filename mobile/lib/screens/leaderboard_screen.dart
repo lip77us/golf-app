@@ -7190,117 +7190,92 @@ class _TripleCupLiveRows extends StatelessWidget {
     final leftColor  = leftIsT1 ? t1Colour : t2Colour;
     final rightColor = leftIsT1 ? t2Colour : t1Colour;
 
-    // Surface in-progress match status next to the cup-points header
-    // so the TD / spectator can see how the live matches are going
-    // without expanding.  Resolved matches don't appear here — their
-    // contribution is baked into the t1/t2 totals already.  Pending
-    // matches (played == 0) are also skipped: nothing meaningful to
-    // show yet.  Each bit carries its leader's team colour so multiple
-    // simultaneous singles render in distinct colours ("1 UP thru 3"
-    // in red, "2 UP thru 3" in blue, etc.) and AS stays neutral.
-    final liveBits = <({String text, Color color})>[];
-    for (final m in matches) {
-      final played    = (m['holes_played']      as num?)?.toInt() ?? 0;
-      final marginRaw = (m['overall_holes_up'] as num?)?.toInt() ?? 0;
-      final marginAbs = marginRaw.abs();
-      final resolved  = m['is_resolved'] as bool? ?? false;
-      if (resolved || played == 0) continue;
-      final text = marginAbs == 0
-          ? 'AS thru $played'
-          : '$marginAbs UP thru $played';
-      final color = marginRaw > 0
-          ? t1Colour
-          : marginRaw < 0
-              ? t2Colour
-              : theme.colorScheme.onSurfaceVariant;
-      liveBits.add((text: text, color: color));
-    }
-
+    // The four match segments are the line that matters most, so they're shown
+    // as labelled cells (always visible) rather than folded into a comma-run in
+    // a collapsed header.  The header keeps just the rollup score + a "pts left"
+    // hint; each segment states itself below.
     final header = Row(children: [
       Text(fmtPts(leftScore),
           style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: leftColor)),
+              fontSize: 18, fontWeight: FontWeight.bold, color: leftColor)),
       const SizedBox(width: 6),
       Text('–', style: TextStyle(
-          fontSize: 14,
-          color: theme.colorScheme.onSurfaceVariant)),
+          fontSize: 14, color: theme.colorScheme.onSurfaceVariant)),
       const SizedBox(width: 6),
       Text(fmtPts(rightScore),
           style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: rightColor)),
+              fontSize: 18, fontWeight: FontWeight.bold, color: rightColor)),
       const SizedBox(width: 10),
       Expanded(
-        // When something is live, prioritise its status — the "X pts
-        // left" is implicit context.  Show that hint only when nothing
-        // is in flight (all pending or all resolved).  Each live bit
-        // is its own TextSpan so multi-match strings render with each
-        // match in its leader's colour (e.g. red "1 UP thru 3", grey
-        // "AS thru 3" separated by a neutral comma).
-        child: liveBits.isNotEmpty
-            ? Text.rich(
-                TextSpan(
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600),
-                  children: [
-                    for (var i = 0; i < liveBits.length; i++) ...[
-                      if (i > 0) const TextSpan(text: ', '),
-                      TextSpan(
-                        text: liveBits[i].text,
-                        style: TextStyle(color: liveBits[i].color),
-                      ),
-                    ],
-                  ],
-                ),
-                overflow: TextOverflow.ellipsis,
-              )
-            : Text(
-                remaining > 0
-                    ? '${fmtPts(remaining)} pt${remaining == 1 ? '' : 's'} left'
-                    : 'All matches resolved',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant),
-                overflow: TextOverflow.ellipsis,
-              ),
+        child: Text(
+          remaining > 0
+              ? '${fmtPts(remaining)} pt${remaining == 1 ? '' : 's'} left'
+              : 'All matches resolved',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
     ]);
 
-    return Theme(
-      // Strip ExpansionTile's default vertical padding so the row
-      // sits flush with the rest of the card's content.
-      data: theme.copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(top: 8),
-        title: header,
-        children: matches.map((m) => _TripleCupSubMatchRow(
-              match:     m,
-              t1Colour:  t1Colour,
-              t2Colour:  t2Colour,
-              t1Name:    t1Name,
-              t2Name:    t2Name,
-              fmtPts:    fmtPts,
-            )).toList(),
-      ),
-    );
+    // How far the group has played — its furthest scored hole.  A segment whose
+    // start hole is beyond this hasn't begun (the backend reports round-progress
+    // holes on every sub-match, so "played == 0" never distinguishes them).
+    final roundThru = matches.fold<int>(0, (mx, m) {
+      final hp = (m['holes_played'] as num?)?.toInt() ?? 0;
+      return hp > mx ? hp : mx;
+    });
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      header,
+      const SizedBox(height: 8),
+      ...matches.map((m) => _TripleCupSubMatchRow(
+            match:     m,
+            t1Colour:  t1Colour,
+            t2Colour:  t2Colour,
+            t1Name:    t1Name,
+            t2Name:    t2Name,
+            roundThru: roundThru,
+            fmtPts:    fmtPts,
+          )),
+    ]);
   }
+}
+
+/// The hole a Triple Cup segment tees off on — its segments are fixed by hole
+/// (Fourball 1–6, Foursomes 7–12, Singles 13–18), so a not-yet-begun segment
+/// can name where it starts instead of showing a misleading "AS".
+int? _segmentStartHole(String label) {
+  final l = label.toLowerCase();
+  if (l.startsWith('fourball') || l.startsWith('four ball') ||
+      l.startsWith('four-ball')) return 1;
+  if (l.startsWith('foursome') || l.startsWith('alt')) return 7;
+  if (l.startsWith('singles')) return 13;
+  return null;
 }
 
 class _TripleCupSubMatchRow extends StatelessWidget {
   final Map<String, dynamic> match;
   final Color  t1Colour, t2Colour;
   final String t1Name,   t2Name;
+  final int    roundThru;
   final String Function(double) fmtPts;
   const _TripleCupSubMatchRow({
     required this.match,
     required this.t1Colour, required this.t2Colour,
     required this.t1Name,   required this.t2Name,
+    required this.roundThru,
     required this.fmtPts,
   });
+
+  /// A segment hasn't begun if no holes are in yet, or its start hole is still
+  /// beyond how far the group has played (the backend reports round-progress
+  /// holes on every sub-match, so it otherwise reads a misleading "AS").
+  bool _notBegun(String label, int played) {
+    if (played == 0) return true;
+    final start = _segmentStartHole(label);
+    return start != null && start > roundThru;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -7316,22 +7291,23 @@ class _TripleCupSubMatchRow extends StatelessWidget {
     String status;
     Color statusColor;
     if (isResolved) {
-      // Resolved matches show the winning team's name (in team color)
-      // rather than a "1–0" score — the points are already aggregated
-      // in the foursome rollup header above and on the big scoreboard.
-      // "Halved" stays as text for ties.
+      // Resolved matches carry a Final stamp so "1 UP" doesn't read the same
+      // whether the point is banked or still in play; the winner shows in the
+      // team colour (the leader mark), or grey "Halved" for a tie.
       if (result == 'team1') {
-        status = t1Name;
+        status = '$t1Name · Final';
         statusColor = t1Colour;
       } else if (result == 'team2') {
-        status = t2Name;
+        status = '$t2Name · Final';
         statusColor = t2Colour;
       } else {
-        status = 'Halved';
+        status = 'Halved · Final';
         statusColor = theme.colorScheme.onSurfaceVariant;
       }
-    } else if (played == 0) {
-      status = '—';
+    } else if (_notBegun(label, played)) {
+      // Not begun — name the hole it starts on rather than a misleading "AS".
+      final startHole = _segmentStartHole(label);
+      status = startHole != null ? 'Starts $startHole' : 'Not started';
       statusColor = theme.colorScheme.onSurfaceVariant;
     } else if (marginAbs == 0) {
       status = 'AS thru $played';
