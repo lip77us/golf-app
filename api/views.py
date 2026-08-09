@@ -578,9 +578,16 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'label'   : 'One Round Ryder Cup',
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
-                 'summary': triple_cup_summary(fs)}
+                 # tee_time + player_ids let the Cup Detail tab float the
+                 # viewer's own group to the top and order the rest by start
+                 # time (computing the summary once via the single-item loop).
+                 'tee_time': fs.tee_time.strftime('%H:%M') if fs.tee_time else None,
+                 'player_ids': list(
+                     fs.memberships.values_list('player_id', flat=True)),
+                 'summary': _tcs}
                 for fs in foursomes
-                if triple_cup_summary(fs) is not None
+                for _tcs in (triple_cup_summary(fs),)
+                if _tcs is not None
             ],
         }
 

@@ -409,8 +409,9 @@ class _RoundScreenState extends State<RoundScreen> {
                       route = '/triple-cup-setup';
                     } else if (fsGames.contains('triple_cup')) {
                       // Configured Triple Cup → straight to score entry (same as
-                      // every other game).  The cup-standings home (/triple-cup)
-                      // is reachable from the leaderboard, not the play flow.
+                      // every other game).  (The standalone cup-standings screen
+                      // /triple-cup is no longer linked — the leaderboard's Cup
+                      // Detail tab shows per-group standings inline.)
                       route = '/score-entry';
                     } else {
                       // Everything configured (or no setup required) →

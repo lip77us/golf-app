@@ -125,8 +125,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     // 3. "My Foursome" — only earns a tab in multi-foursome rounds (tournaments,
     //    multi-group play), where it isolates the viewer's group. In a single-
     //    foursome round it just duplicates the game tab, so require 2+ groups.
+    //    Triple Cup skips it: the Cup Detail tab floats the viewer's own group
+    //    to the top instead, so a separate tab would be redundant.
     final myPid = context.read<AuthProvider>().player?.id;
     if (myPid != null &&
+        !isTripleCupRound &&
         _foursomeCount(lb) > 1 &&
         _viewerIsInAnyFoursome(lb, myPid)) {
       games.add('__my_foursome__');
@@ -596,8 +599,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     }
     if (g == '__my_foursome__') return 'My Foursome';
     if (g == 'settlement') return 'Settlement';
-    // Triple Cup is one tab now — cup total + clinch bar over the match cards.
-    if (g == 'triple_cup') return 'Cup';
+    // Triple Cup is one tab now — cup total + clinch bar over the match cards,
+    // viewer's own group first.
+    if (g == 'triple_cup') return 'Cup Detail';
     if (g == 'match_18') return 'Singles Match';
     // A heads-up, Overall-only Nassau is a Singles Match — label it as such.
     // (2-v-2 Overall-only is Fourball, not a Singles Match, so require one
@@ -735,9 +739,30 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _SkinsGroupCard.new);
       case 'spots':
         return _ByGroupView(data: data, builder: _SpotsGroupCard.new);
-      case 'triple_cup':
+      case 'triple_cup': {
+        // Float the viewer's own group to the top, then order the rest by tee
+        // time; flag the viewer's group so its card can label itself.
+        final myPid = context.read<AuthProvider>().player?.id;
+        bool isMine(Map g) =>
+            myPid != null &&
+            ((g['player_ids'] as List?)?.contains(myPid) ?? false);
+        final groups = (data['by_group'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
+        final sorted = [...groups]..sort((a, b) {
+            final am = isMine(a), bm = isMine(b);
+            if (am != bm) return am ? -1 : 1;   // my group first
+            final at = (a['tee_time'] as String?) ?? '~';  // nulls last
+            final bt = (b['tee_time'] as String?) ?? '~';
+            return at.compareTo(bt);            // "HH:MM" sorts chronologically
+          });
+        final sortedData = {
+          ...data,
+          'by_group': [
+            for (final g in sorted) {...g, '_is_my_group': isMine(g)},
+          ],
+        };
         return _ByGroupView(
-          data: data,
+          data: sortedData,
           builder: _TripleCupGroupCard.new,
           header: tournamentId != null
               ? _TripleCupScoreboardLoader(
@@ -746,6 +771,7 @@ class _GameView extends StatelessWidget {
                 )
               : null,
         );
+      }
       case 'multi_skins':
         return _MultiSkinsView(data: data);
       case 'nassau':
@@ -9174,6 +9200,19 @@ String? _tcMatchSoLine(Map<String, dynamic> match, int teamNumber) {
   return players.map((p) => fmt(p['strokes_off'])).join(' / ');
 }
 
+/// "08:20" → "8:20 AM"; null/blank/unparseable → null (header omits it).
+String? _fmtCupTeeTime(String? hhmm) {
+  if (hhmm == null || hhmm.trim().isEmpty) return null;
+  final parts = hhmm.split(':');
+  if (parts.length < 2) return null;
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null) return null;
+  final period = h < 12 ? 'AM' : 'PM';
+  final h12 = h % 12 == 0 ? 12 : h % 12;
+  return '$h12:${m.toString().padLeft(2, '0')} $period';
+}
+
 class _TripleCupGroupCard extends StatelessWidget {
   final Map<String, dynamic> group;
   const _TripleCupGroupCard({required this.group});
@@ -9228,48 +9267,50 @@ class _TripleCupGroupCard extends StatelessWidget {
     String fmt(double p) =>
         p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
 
-    final foursomeId = group['foursome_id'] as int?;
+    final isMyGroup = group['_is_my_group'] as bool? ?? false;
+    final teeStr    = _fmtCupTeeTime(group['tee_time'] as String?);
     return Card(
-      child: InkWell(
-        onTap: foursomeId == null
-            ? null
-            : () => Navigator.of(context)
-                .pushNamed('/triple-cup', arguments: foursomeId),
-        child: Padding(
+      child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Group label + (my group) + tee time on its own full-width line so
+          // it has room for all three (the score moves to the line below).
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(text: 'Group ${group['group_number']}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (isMyGroup)
+                TextSpan(text: '  (my group)',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary)),
+              if (teeStr != null)
+                TextSpan(text: '  ·  $teeStr',
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+            ]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          // "Triple Cup" label left, live cup score right (color follows team).
           Row(children: [
-            Text('Group ${group['group_number']}',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right,
-                size: 16, color: theme.colorScheme.onSurfaceVariant),
+            Text('Triple Cup',
+                style: TextStyle(
+                    fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
             const Spacer(),
-            // Live cup score — team 1 on the left, team 2 on the right
-            // (matches score entry / cup tab; color follows the team).
             Text(fmt(t1Pts),
                 style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: t1Color)),
+                    fontSize: 12, fontWeight: FontWeight.bold, color: t1Color)),
             Text(' – ',
                 style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurfaceVariant)),
+                    fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
             Text(fmt(t2Pts),
                 style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: t2Color)),
+                    fontSize: 12, fontWeight: FontWeight.bold, color: t2Color)),
             Text(' of $possible',
                 style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurfaceVariant)),
+                    fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
           ]),
-          const SizedBox(height: 4),
-          Text('Triple Cup',
-              style: TextStyle(
-                  fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
           if (t1Roster.isNotEmpty || t2Roster.isNotEmpty) ...[
             const SizedBox(height: 4),
             Row(children: [
@@ -9413,7 +9454,6 @@ class _TripleCupGroupCard extends StatelessWidget {
           // per-foursome payouts.  Cup-level settlement (if any) lives
           // on the tournament-level Bandon Cup card.
         ]),
-      ),
       ),
     );
   }
