@@ -51,6 +51,10 @@ wanted: Poppy Ridge — Championship 18 (`manual-poppy-ridge-champ18`), Sheep Ra
 (`manual-sheep-ranch`). Also many acct-1/2/4/7 hand-entered courses have no
 `golf_api_id` at all (Bandon, etc.).
 
+PENDING: Sheep Ranch scorecard emailed to GolfCourseAPI ~2026-08-08 for addition.
+When it lands: grab the new slug via search, stamp `manual-sheep-ranch` → real id
+on the CatalogCourse (+ any account clones), then `reimport_catalog_course`.
+
 ## Full workflow to update a course's ratings
 
 1. Edit the course upstream at **https://golfcourseapi.com/course-update** so it
