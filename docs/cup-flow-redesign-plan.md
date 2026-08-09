@@ -354,3 +354,54 @@ designer glance to confirm or redraw.
    only carry team names once a round is configured; added a fallback to the
    drafted `TeamTournament` names/colours so a not-yet-set-up cup shows Reds/Blues
    rather than "Team 1/2." Consistent with intent; noted for awareness.
+
+### Cup leaderboard — reworked during a live-testing pass (Aug 2026)
+
+Driven by real testing on the 8-group Tilden cup. All built, verified on device,
+merged to `main`. These change how the shipped Cup leaderboard differs from the
+mocks — each wants a designer glance to confirm or redraw. (Also captured in the
+Engineering→Design artifact.)
+
+9. **Triple Cup leaderboard collapsed to one "Cup Detail" tab.** The separate
+   *Overview* (big pill scores) and *My Foursome* tabs were removed — Overview
+   read as "more space showing less data," My Foursome just duplicated a group
+   card. Now one tab: the two-panel cup scoreboard (big team numbers + the
+   even-line bar) on top, then a card per group. *Confirm the consolidation.*
+
+10. **Viewer's own group floats to the top of Cup Detail; the rest sort by tee
+    time.** Replaces the My Foursome tab. Each group header reads
+    `Group 4 (my group) · 8:30 AM` (own-group flag + start time on the header).
+    Backend adds `tee_time` + `player_ids` per group to drive it. *Confirm.*
+
+11. **Live match card: full names once up top, initials in the four rows.** Each
+    side is named in full once ("Brian Kerss & Alan Petersen"), then the four
+    segment rows use initials (`BK / AP vs RS / RW`) to stay compact. A solo
+    side's **Phantom** is named in the header, real golfer first
+    ("Charlie Wicke & Phantom"), so the lone "P" in the Fourball row is
+    explained. *Confirm the name-once pattern + Phantom surfacing.*
+
+12. **Group cards no longer drill in.** The tap-through to a standalone per-group
+    cup-standings screen was removed — a Triple Cup has no per-foursome bet, so
+    it was noise; the segment detail already lives on the card. The `/triple-cup`
+    read-only screen is now orphaned (flagged for cleanup). *Confirm no per-group
+    drill-in is wanted.*
+
+13. **Cup bar marker is the even/tied line, not to-win.** It sat at to-win
+    (16.5/32, ~1.5% right of centre) so a tie didn't align with the divider
+    between the team blocks. Now dead-centre (the balance point); whoever's fill
+    crosses it leads. "16.5 to win" stays in the text. *Confirm the marker means
+    balance, not clinch.*
+
+14. **"Points decided," not "points played"** (`0 of 32 points decided`) — a cup
+    point isn't earned until its match is decided. *Confirm the term.*
+
+15. **New surface — live tee-time editing under Round setup.** The tee-time
+    pencil only lived in initial setup (saves via a full re-setup), so there was
+    no way to adjust one group's time on a running cup. Added an **Edit tee
+    times** editor (tap a group → picker → saves immediately via `setTeeTimes`,
+    non-destructive) with an optional **"shift the rest"** cascade of the later
+    groups. *Not in the mocks — may want styling.*
+
+(Also fixed in passing, not design-relevant: Triple Cup segment "thru N" was
+counting the segment's full hole range instead of scored holes, so every
+Fourball read "thru 6"; now counts only decided holes.)
