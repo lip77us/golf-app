@@ -437,10 +437,6 @@ def cup_round_live_summary(round_obj) -> dict | None:
         )
         t1_names = [p.short_name for p in (t1.players.all() if t1 else []) if p.pk in fs_pids]
         t2_names = [p.short_name for p in (t2.players.all() if t2 else []) if p.pk in fs_pids]
-        # Full names too — the cup live card names each team once in full at the
-        # top, then uses the short labels in the per-segment rows.
-        t1_names_full = [p.name for p in (t1.players.all() if t1 else []) if p.pk in fs_pids]
-        t2_names_full = [p.name for p in (t2.players.all() if t2 else []) if p.pk in fs_pids]
 
         if gtype == GameType.NASSAU:
             from services.nassau import nassau_summary as _ns
@@ -651,6 +647,23 @@ def cup_round_live_summary(round_obj) -> dict | None:
                     'is_resolved'     : result is not None,
                 })
 
+            # Full-name roster for the card's team header — union across every
+            # sub-match (deduped, in first-seen order) so it names EVERYONE who
+            # appears in the rows, including a Phantom that fills a solo side.
+            # (The team roster alone omits phantoms, which then show only as the
+            # unexplained "P" in the Fourball row.)
+            def _roster_full(team_key):
+                seen, out = set(), []
+                for tcm in tcs.get('matches', []):
+                    for n in tcm[team_key]['players']:
+                        n = (n or '').strip()
+                        if n and n not in seen:
+                            seen.add(n)
+                            out.append(n)
+                return out
+            t1_full = _roster_full('team1') or t1_names
+            t2_full = _roster_full('team2') or t2_names
+
             # points_available scales with the actual match plan (3 for 1v1,
             # 4 otherwise) so the cup display matches what's playable.
             n_matches    = len(tcs.get('matches', []))
@@ -662,8 +675,8 @@ def cup_round_live_summary(round_obj) -> dict | None:
                 'game_type'         : 'triple_cup',
                 'game_label'        : 'One Round Ryder Cup',
                 'groups'            : [fs.group_number],
-                'team1_players_full': t1_names_full,
-                'team2_players_full': t2_names_full,
+                'team1_players_full': t1_full,
+                'team2_players_full': t2_full,
                 'team1_players'     : t1_names,
                 'team2_players'     : t2_names,
                 'point_value'       : pv,
