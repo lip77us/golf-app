@@ -651,7 +651,14 @@ def cup_round_live_summary(round_obj) -> dict | None:
             # sub-match (deduped, in first-seen order) so it names EVERYONE who
             # appears in the rows, including a Phantom that fills a solo side.
             # (The team roster alone omits phantoms, which then show only as the
-            # unexplained "P" in the Fourball row.)
+            # unexplained "P" in the Fourball row.)  Real golfers list first,
+            # any Phantom last, so it reads "Charlie Wicke & Phantom".
+            _phantom_names = {
+                (p.get('name') or '').strip()
+                for tcm in tcs.get('matches', [])
+                for p in tcm.get('players', [])
+                if p.get('is_phantom')
+            }
             def _roster_full(team_key):
                 seen, out = set(), []
                 for tcm in tcs.get('matches', []):
@@ -660,7 +667,9 @@ def cup_round_live_summary(round_obj) -> dict | None:
                         if n and n not in seen:
                             seen.add(n)
                             out.append(n)
-                return out
+                # Reals first, phantoms last (stable within each group).
+                return [n for n in out if n not in _phantom_names] + \
+                       [n for n in out if n in _phantom_names]
             t1_full = _roster_full('team1') or t1_names
             t2_full = _roster_full('team2') or t2_names
 
