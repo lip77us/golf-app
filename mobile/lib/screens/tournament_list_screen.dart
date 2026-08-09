@@ -18,6 +18,7 @@ import 'tournament_leaderboard_screen.dart';
 import 'ryder_cup_draft_screen.dart';
 import 'ryder_cup_scoreboard_screen.dart';
 import 'cup_round_setup_screen.dart';
+import 'cup_tee_times_screen.dart';
 
 class TournamentListScreen extends StatefulWidget {
   const TournamentListScreen({super.key});
@@ -552,6 +553,11 @@ class _TournamentListScreenState extends State<TournamentListScreen>
                       gamePointValues : round.gamePointValues,
                     )))
                 .then((_) { if (mounted) _load(); }),
+            onEditTeeTimes: (round) => Navigator.of(context)
+                .push(MaterialPageRoute(
+                    builder: (_) =>
+                        CupTeeTimesScreen(roundId: round.id)))
+                .then((_) { if (mounted) _load(); }),
             onChangeCupGame: (round) => _showChangeCupGameSheet(round, t),
             onRecalculateCupPoints: (round) async {
               final client = context.read<AuthProvider>().client;
@@ -603,6 +609,7 @@ class _TournamentCard extends StatelessWidget {
   final void Function(RoundSummary round) onSetupCupRound;
   final void Function(RoundSummary round) onRecalculateCupPoints;
   final void Function(RoundSummary round) onChangeCupGame;
+  final void Function(RoundSummary round) onEditTeeTimes;
   final VoidCallback onDelete;
 
   const _TournamentCard({
@@ -618,6 +625,7 @@ class _TournamentCard extends StatelessWidget {
     required this.onSetupCupRound,
     required this.onRecalculateCupPoints,
     required this.onChangeCupGame,
+    required this.onEditTeeTimes,
     required this.onDelete,
   });
 
@@ -853,6 +861,16 @@ class _TournamentCard extends StatelessWidget {
                       : 'Set up cup round',
                   onTap: () => onSetupCupRound(r),
                 ),
+                // Live tee-time edit — only meaningful once the round's groups
+                // exist (setup done), and pointless while it's still pending.
+                if (r.status != 'pending')
+                  _ActionButton(
+                    icon : Icons.schedule_outlined,
+                    label: multiRound
+                        ? 'R${r.roundNumber} · Edit tee times'
+                        : 'Edit tee times',
+                    onTap: () => onEditTeeTimes(r),
+                  ),
                 _ActionButton(
                   icon : Icons.swap_horiz_outlined,
                   label: multiRound
