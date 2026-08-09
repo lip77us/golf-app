@@ -634,7 +634,14 @@ def cup_round_live_summary(round_obj) -> dict | None:
                     't1_pts'          : t1p,
                     't2_pts'          : t2p,
                     'status'          : tcm['status'],
-                    'holes_played'    : len(tcm.get('holes', [])),
+                    # `holes` carries the segment's FULL fixed range (unplayed
+                    # holes included, with null scores, for the scorecard grid),
+                    # so len() over-counts.  Count only holes actually scored —
+                    # a hole has a `winner` set only once its result is in.
+                    'holes_played'    : sum(
+                        1 for h in tcm.get('holes', [])
+                        if h.get('winner') is not None
+                    ),
                     'overall_holes_up': tcm.get('holes_up_final', 0),
                     'finished_on_hole': tcm.get('finished_on_hole'),
                     'is_resolved'     : result is not None,
