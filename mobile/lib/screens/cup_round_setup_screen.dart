@@ -854,6 +854,12 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         onSetAllTees       : _setAllTees,
         onTeeTimeShift     : (delta) => setState(() =>
             _teeTimeCtrl.text = _shiftTeeTime(_teeTimeCtrl.text, delta)),
+        onTeeTimePick      : () async {
+          final picked = await _pickTeeTime(context, _teeTimeCtrl.text);
+          if (picked != null) {
+            setState(() => _teeTimeCtrl.text = picked);
+          }
+        },
       );
       case _BuildStep.matchups:  return _MatchupBuilder(
         matchupA     : _matchupA,
@@ -1062,6 +1068,7 @@ class _GroupBuilder extends StatelessWidget {
   final void Function(int pid, int teeId) onPickTee;
   final ValueChanged<int>  onSetAllTees;
   final ValueChanged<int>  onTeeTimeShift;
+  final VoidCallback        onTeeTimePick;
 
   const _GroupBuilder({
     required this.foursomeNumber,
@@ -1084,6 +1091,7 @@ class _GroupBuilder extends StatelessWidget {
     required this.onPickTee,
     required this.onSetAllTees,
     required this.onTeeTimeShift,
+    required this.onTeeTimePick,
   });
 
   String get _rule {
@@ -1206,9 +1214,25 @@ class _GroupBuilder extends StatelessWidget {
           ),
           Expanded(
             child: Center(
-              child: Text(_friendlyTeeTime(teeTime),
-                  style: theme.textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold)),
+              child: InkWell(
+                onTap: onTeeTimePick,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 4),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(_friendlyTeeTime(teeTime),
+                          style: theme.textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 6),
+                      Icon(Icons.edit, size: 16,
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ]),
+                  ),
+                ),
+              ),
             ),
           ),
           OutlinedButton(
@@ -1217,7 +1241,7 @@ class _GroupBuilder extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 6),
-        Text(caption,
+        Text('$caption · tap the time to set it',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
       ]),
