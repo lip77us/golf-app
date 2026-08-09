@@ -29,6 +29,7 @@ class _CupTeeTimesScreenState extends State<CupTeeTimesScreen> {
   String?        _error;
   List<Foursome> _foursomes = [];
   int?           _savingGroup;   // group_number currently being saved
+  bool           _busy = false;  // a batch (cascade) shift is in flight
 
   @override
   void initState() {
@@ -70,29 +71,47 @@ class _CupTeeTimesScreenState extends State<CupTeeTimesScreen> {
     return '$h12:${t.minute.toString().padLeft(2, '0')} $period';
   }
 
+  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
+
+  String _hhmm(int minutes) {
+    final m = minutes.clamp(0, 24 * 60 - 1);
+    return '${(m ~/ 60).toString().padLeft(2, '0')}:'
+        '${(m % 60).toString().padLeft(2, '0')}';
+  }
+
+  String _deltaLabel(int deltaMin) {
+    final a = deltaMin.abs();
+    final mag = a >= 60
+        ? '${a ~/ 60}h${a % 60 == 0 ? '' : ' ${a % 60}m'}'
+        : '$a min';
+    return '$mag ${deltaMin > 0 ? 'later' : 'earlier'}';
+  }
+
+  /// PATCH [entries] ({group_number, tee_time}) and merge the echo back.
+  Future<void> _persist(List<Map<String, dynamic>> entries) async {
+    final updated = await _client.setTeeTimes(widget.roundId, entries);
+    if (!mounted) return;
+    final byGroup = {for (final f in updated) f.groupNumber: f};
+    setState(() {
+      _foursomes =
+          _foursomes.map((f) => byGroup[f.groupNumber] ?? f).toList();
+    });
+  }
+
   Future<void> _edit(Foursome fs) async {
+    final oldTod = _parse(fs.teeTime);
     final picked = await showTimePicker(
       context: context,
-      initialTime: _parse(fs.teeTime) ?? const TimeOfDay(hour: 8, minute: 0),
+      initialTime: oldTod ?? const TimeOfDay(hour: 8, minute: 0),
     );
     if (picked == null || !mounted) return;
-    final hhmm = '${picked.hour.toString().padLeft(2, '0')}:'
-        '${picked.minute.toString().padLeft(2, '0')}';
+    final hhmm = _hhmm(_toMin(picked));
 
     setState(() => _savingGroup = fs.groupNumber);
     try {
-      final updated = await _client.setTeeTimes(widget.roundId, [
-        {'group_number': fs.groupNumber, 'tee_time': hhmm},
-      ]);
+      await _persist([{'group_number': fs.groupNumber, 'tee_time': hhmm}]);
       if (!mounted) return;
-      // Merge the server's echo back by group number (it may return the full
-      // set or just the changed one — either way this is correct).
-      final byGroup = {for (final f in updated) f.groupNumber: f};
-      setState(() {
-        _foursomes =
-            _foursomes.map((f) => byGroup[f.groupNumber] ?? f).toList();
-        _savingGroup = null;
-      });
+      setState(() => _savingGroup = null);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Group ${fs.groupNumber} · ${_friendly(hhmm)} saved'),
         duration: const Duration(seconds: 1),
@@ -101,8 +120,63 @@ class _CupTeeTimesScreenState extends State<CupTeeTimesScreen> {
       if (!mounted) return;
       setState(() => _savingGroup = null);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save tee time: $e')),
-      );
+        SnackBar(content: Text('Could not save tee time: $e')));
+      return;
+    }
+
+    // Offer to shift every later group by the same amount, so the TD doesn't
+    // have to move each remaining group by hand (only when the time actually
+    // moved and there are later groups with a time to shift).
+    if (oldTod == null || !mounted) return;
+    final deltaMin = _toMin(picked) - _toMin(oldTod);
+    final later = _foursomes
+        .where((f) => f.groupNumber > fs.groupNumber && f.teeTime != null)
+        .toList();
+    if (deltaMin == 0 || later.isEmpty) return;
+
+    final shift = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Shift later groups?'),
+        content: Text(
+          'Move the ${later.length} later group'
+          '${later.length == 1 ? '' : 's'} ${_deltaLabel(deltaMin)} too, '
+          'keeping the same spacing?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Just this group')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Shift the rest')),
+        ],
+      ),
+    );
+    if (shift != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      final entries = <Map<String, dynamic>>[];
+      for (final f in later) {
+        final t = _parse(f.teeTime);
+        if (t == null) continue;
+        entries.add({
+          'group_number': f.groupNumber,
+          'tee_time'    : _hhmm(_toMin(t) + deltaMin),
+        });
+      }
+      await _persist(entries);
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${entries.length} later '
+            'group${entries.length == 1 ? '' : 's'} shifted'),
+        duration: const Duration(seconds: 1)));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not shift later groups: $e')));
     }
   }
 
@@ -169,7 +243,7 @@ class _CupTeeTimesScreenState extends State<CupTeeTimesScreen> {
                                               .colorScheme.onSurfaceVariant),
                                     ],
                                   ),
-                            onTap: _savingGroup == null
+                            onTap: (_savingGroup == null && !_busy)
                                 ? () => _edit(fs)
                                 : null,
                           );

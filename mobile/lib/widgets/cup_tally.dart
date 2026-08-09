@@ -99,7 +99,9 @@ class CupTally extends StatelessWidget {
       final w = c.maxWidth;
       final t1w = (t1Pts / total * w).clamp(0.0, w);
       final t2w = (t2Pts / total * w).clamp(0.0, w);
-      final notchX = toWin != null ? (toWin! / total * w).clamp(0.0, w) : null;
+      // Even line = dead centre (a tie reads as balanced); whoever's fill
+      // crosses it is ahead.  To-win (0.5 past centre) stays in the text below.
+      final notchX = w / 2;
       return SizedBox(
         height: 14,
         child: Stack(children: [
@@ -113,12 +115,11 @@ class CupTally extends StatelessWidget {
                   child: Container(width: t2w, color: t2Colour)),
             ]),
           ),
-          if (notchX != null)
-            Positioned(
-              left: (notchX - 1).clamp(0.0, w - 2),
-              top: -2, bottom: -2,
-              child: Container(width: 2, color: theme.colorScheme.onSurface),
-            ),
+          Positioned(
+            left: (notchX - 1).clamp(0.0, w - 2),
+            top: -2, bottom: -2,
+            child: Container(width: 2, color: theme.colorScheme.onSurface),
+          ),
         ]),
       );
     });
