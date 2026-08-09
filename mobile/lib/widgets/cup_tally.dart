@@ -81,7 +81,7 @@ class CupTally extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           '${_fmtPts(toWin ?? 0)} to win  ·  ${_fmtPts(t1Pts + t2Pts)} of '
-          '${_fmtPts(_total)} points played',
+          '${_fmtPts(_total)} points decided',
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),

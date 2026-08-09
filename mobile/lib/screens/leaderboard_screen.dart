@@ -6295,7 +6295,7 @@ class _CupPointsBar extends StatelessWidget {
       const SizedBox(height: 8),
       Text(
         '${fmtPts(toWin ?? 0)} to win  ·  ${fmtPts(played)} of '
-        '${fmtPts(total)} points played',
+        '${fmtPts(total)} points decided',
         style: theme.textTheme.bodySmall
             ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
       ),
