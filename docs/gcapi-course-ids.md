@@ -98,6 +98,10 @@ so played scorecards stay frozen.
   B/W Combo consolidated to GCAPI's Blue/White Combo (M+W), 8 dupes removed.
 - **Corica North (qfv3y37x) full re-import** 2026-08-08: re-rated slopes (Black M
   118→126 etc.); added Black (W) + Blue (W). Catalog-only (no clones).
+- **Fairways of Halfmoon (edjn213j) full re-import** 2026-08-08: Blue (M)
+  consolidated to GCAPI's Black (M); added White (W).
+- **All 8 differing courses reconciled to GHIN/GCAPI as of 2026-08-08.** The
+  other 6 catalog courses were already in sync.
 - **Quality gate floor lowered 62→55** (services/course_quality.py) so short
   forward tees (e.g. Tilden Yellow par 61) import without --skip-gate.
 
