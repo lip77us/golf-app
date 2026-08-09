@@ -437,6 +437,10 @@ def cup_round_live_summary(round_obj) -> dict | None:
         )
         t1_names = [p.short_name for p in (t1.players.all() if t1 else []) if p.pk in fs_pids]
         t2_names = [p.short_name for p in (t2.players.all() if t2 else []) if p.pk in fs_pids]
+        # Full names too — the cup live card names each team once in full at the
+        # top, then uses the short labels in the per-segment rows.
+        t1_names_full = [p.name for p in (t1.players.all() if t1 else []) if p.pk in fs_pids]
+        t2_names_full = [p.name for p in (t2.players.all() if t2 else []) if p.pk in fs_pids]
 
         if gtype == GameType.NASSAU:
             from services.nassau import nassau_summary as _ns
@@ -658,6 +662,8 @@ def cup_round_live_summary(round_obj) -> dict | None:
                 'game_type'         : 'triple_cup',
                 'game_label'        : 'One Round Ryder Cup',
                 'groups'            : [fs.group_number],
+                'team1_players_full': t1_names_full,
+                'team2_players_full': t2_names_full,
                 'team1_players'     : t1_names,
                 'team2_players'     : t2_names,
                 'point_value'       : pv,
