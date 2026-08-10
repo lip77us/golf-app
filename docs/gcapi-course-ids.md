@@ -106,6 +106,14 @@ so played scorecards stay frozen.
   consolidated to GCAPI's Black (M); added White (W).
 - **All 8 differing courses reconciled to GHIN/GCAPI as of 2026-08-08.** The
   other 6 catalog courses were already in sync.
+
+⚠️ **THESE RE-IMPORTS RAN AGAINST THE LOCAL DB (`localhost`/`golf_app_db`), NOT
+PROD.** Production's catalog still has the dead numeric ids + stale data. To fix
+prod, re-run the whole sequence pointed at the prod DB (Railway service shell /
+prod `DATABASE_URL`): `remap_golf_api_ids --apply`, then per course
+`uncurate_catalog_tees --golf-api-id <id> [--include-combos] --apply` →
+`reimport_catalog_course --golf-api-id <id> --propagate --apply`
+(+ the YELLOW-W / B/W combo dedups). Verify with `check_catalog_drift` after.
 - **Quality gate floor lowered 62→55** (services/course_quality.py) so short
   forward tees (e.g. Tilden Yellow par 61) import without --skip-gate.
 
