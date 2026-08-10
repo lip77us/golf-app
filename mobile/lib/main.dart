@@ -359,6 +359,23 @@ class _GolfAppState extends State<GolfApp> {
         navigatorObservers:   [appRouteObserver],
         title: 'Halved',
         debugShowCheckedModeBanner: false,
+        // Cap the OS "Larger Text" accessibility setting so an extreme system
+        // font size can't blow up the score-grid / leaderboard layouts. We still
+        // HONOR smaller/moderate bumps (up to 1.3x) — this only clamps the top
+        // end; it does not force text small. Applied app-wide via the builder so
+        // every screen inherits the clamped MediaQuery.
+        builder: (context, child) {
+          final mq = MediaQuery.of(context);
+          return MediaQuery(
+            data: mq.copyWith(
+              textScaler: mq.textScaler.clamp(
+                minScaleFactor: 1.0,
+                maxScaleFactor: 1.3,
+              ),
+            ),
+            child: child!,
+          );
+        },
         theme:     _halvedTheme(Brightness.light),
         darkTheme: _halvedTheme(Brightness.dark),
         // The app's visuals are built around a light "paper scorecard" look
