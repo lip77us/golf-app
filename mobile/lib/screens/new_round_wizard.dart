@@ -1351,6 +1351,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       _cupReviewRounds() {
     final courseMap = {for (final c in _courses) c.id: c};
     final labels = {
+      // Mixed-cup titles as a base so a mixed-only game (Chapman, scramble…)
+      // never shows as a raw slug; the catalog then overrides shared ids.
+      for (final g in _kMixedGames) g.$1: g.$2,
       for (final g in kGameCatalog) g.id: g.displayName,
       for (final (v, l) in kChampionshipGames) v: l,
     };
@@ -4802,18 +4805,16 @@ class _StepCupReview extends StatelessWidget {
             Text(DateFormat('EEEE, MMMM d, yyyy').format(r.date),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            // Games wrap on their own line — a mixed cup can list several, which
+            // a fixed right-side pill can't hold (it starved the course column
+            // and overflowed).
+            Text(r.game,
+                style: TextStyle(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12)),
           ]),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(
-              color: _pineChipBg, borderRadius: BorderRadius.circular(999)),
-          child: Text(r.game,
-              style: TextStyle(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11)),
         ),
       ]),
     );
