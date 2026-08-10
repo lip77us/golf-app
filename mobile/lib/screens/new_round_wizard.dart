@@ -231,6 +231,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // Cup point values per game type per round: round index → game_type → pts.
   // e.g. {0: {'nassau': 1.0, 'singles_nassau': 2.0}}  Default 1.0.
   final Map<int, Map<String, double>> _roundCupPoints      = {};
+  // Mixed cup: how many UNITS of each game a round runs — foursomes for
+  // foursome games, twosomes for singles, 1/0 for a one-match game (Rumble).
+  // round index → game_type → count.  The count IS the pick: >0 means it's in
+  // the day.  Persisted as Round.cup_group_counts so totals are real.
+  final Map<int, Map<String, int>>    _roundCupCounts      = {};
+  // Mixed cup: golfers expected per side — the roster meter's target. No prior
+  // step supplies a headcount (the draft is later), so the TD sets it here.
+  int                                 _cupSideSize         = 16;
 
   // ---- Step 1: Round details (course, dates, handicap — NO game selection) ----
   List<CourseInfo>  _courses        = [];
@@ -704,6 +712,34 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // those happen later via "Assign Teams" and "Set Up Round N" on the
   // tournament card.
 
+  /// Mixed cup: turn a round's drawn counts into the persistable
+  /// (games, point_values, cup_group_counts).  Only games the engine can score
+  /// persist; counts become foursome-equivalent units so the backend's
+  /// total_possible (Σ units × pts × multiplier) lands on the drawn total.
+  (List<String>, Map<String, double>, Map<String, int>) _mixedRoundPayload(int r) {
+    const mul = {
+      'nassau': 3, 'quota_nassau': 3, 'singles_nassau': 6,
+      'singles_18': 2, 'irish_rumble': 1,
+    };
+    final counts = _roundCupCounts[r] ?? const {};
+    final prices = _roundCupPoints[r] ?? const {};
+    final games = <String>[];
+    final pts   = <String, double>{};
+    final grp   = <String, int>{};
+    for (final g in _kMixedGames) {
+      final c = counts[g.$1] ?? 0;
+      if (c <= 0 || !_mixedScoreable(g)) continue;
+      final m = mul[g.$1];
+      if (m == null) continue;
+      final units = (c * _mixedSeg(g) / m).round();
+      if (units <= 0) continue;
+      games.add(g.$1);
+      pts[g.$1] = prices[g.$1] ?? 1.0;
+      grp[g.$1] = units;
+    }
+    return (games, pts, grp);
+  }
+
   Future<void> _createCupTournament() async {
     final client  = context.read<AuthProvider>().client;
     final dateStr = DateFormat('yyyy-MM-dd').format(_date);
@@ -722,10 +758,19 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     //    Save unique game types and per-game point values.  Group counts are
     //    NOT set here — they derive from the draft's side size, so total_possible
     //    stays unknown until then rather than being guessed.
-    final round1Games  = List<String>.from(_roundCupGames[0] ?? []);
-    final round1Points = Map<String, double>.from(_roundCupPoints[0] ?? {});
-    for (final g in round1Games) {
-      round1Points.putIfAbsent(g, () => 1.0);
+    final bool mixed = _cupFormat == 'mixed';
+    List<String>        round1Games;
+    Map<String, double> round1Points;
+    Map<String, int>    round1Counts;
+    if (mixed) {
+      (round1Games, round1Points, round1Counts) = _mixedRoundPayload(0);
+    } else {
+      round1Games  = List<String>.from(_roundCupGames[0] ?? []);
+      round1Points = Map<String, double>.from(_roundCupPoints[0] ?? {});
+      for (final g in round1Games) {
+        round1Points.putIfAbsent(g, () => 1.0);
+      }
+      round1Counts = const {}; // derived from the draft's side size, not entered
     }
     // Field-wide side game plays every round (no cup points / group count).
     if (_tournamentSideGame != 'none') round1Games.add(_tournamentSideGame);
@@ -735,7 +780,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       date            : dateStr,
       activeGames     : round1Games,
       gamePointValues : round1Points,
-      cupGroupCounts  : const {}, // derived from the draft's side size, not entered
+      cupGroupCounts  : round1Counts,
       roundNumber     : 1,
       handicapMode    : _handicapMode,
       netPercent      : _netPercent,
@@ -747,10 +792,18 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     for (int i = 0; i < _additionalRounds.length; i++) {
       final draft        = _additionalRounds[i];
       final draftDate    = DateFormat('yyyy-MM-dd').format(draft.date);
-      final roundGames   = List<String>.from(_roundCupGames[i + 1] ?? []);
-      final roundPoints  = Map<String, double>.from(_roundCupPoints[i + 1] ?? {});
-      for (final g in roundGames) {
-        roundPoints.putIfAbsent(g, () => 1.0);
+      List<String>        roundGames;
+      Map<String, double> roundPoints;
+      Map<String, int>    roundCounts;
+      if (mixed) {
+        (roundGames, roundPoints, roundCounts) = _mixedRoundPayload(i + 1);
+      } else {
+        roundGames  = List<String>.from(_roundCupGames[i + 1] ?? []);
+        roundPoints = Map<String, double>.from(_roundCupPoints[i + 1] ?? {});
+        for (final g in roundGames) {
+          roundPoints.putIfAbsent(g, () => 1.0);
+        }
+        roundCounts = const {};
       }
       if (_tournamentSideGame != 'none') roundGames.add(_tournamentSideGame);
       await client.createRound(
@@ -759,7 +812,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         date            : draftDate,
         activeGames     : roundGames,
         gamePointValues : roundPoints,
-        cupGroupCounts  : const {}, // derived from the draft's side size, not entered
+        cupGroupCounts  : roundCounts,
         roundNumber     : i + 2,
         handicapMode    : _handicapMode,
         netPercent      : _netPercent,
@@ -1083,6 +1136,28 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           }),
         );
       case _StepKind.cupGamePlan:
+        if (_cupFormat == 'mixed') {
+          return _MixedGamesByRound(
+            numRounds        : _numRounds,
+            roundCounts      : _roundCupCounts,
+            roundPoints      : _roundCupPoints,
+            sideSize         : _cupSideSize,
+            selectedCourseId : _selectedCourseId,
+            additionalRounds : _additionalRounds,
+            courses          : _courses,
+            date             : _date,
+            onCount          : (r, game, count) => setState(() {
+              final m = _roundCupCounts.putIfAbsent(r, () => {});
+              if (count <= 0) { m.remove(game); } else { m[game] = count; }
+              // active_games = the games with a count this round
+              _roundCupGames[r] = m.keys.toList();
+              _roundCupPoints.putIfAbsent(r, () => {}).putIfAbsent(game, () => 1.0);
+            }),
+            onPrice          : (r, game, pts) => setState(() =>
+                _roundCupPoints.putIfAbsent(r, () => {})[game] = pts),
+            onSideSize       : (n) => setState(() => _cupSideSize = n.clamp(2, 64)),
+          );
+        }
         return _Step3CupRoundGames(
           numRounds           : _numRounds,
           roundCupGames       : _roundCupGames,
@@ -3108,6 +3183,460 @@ class _StepSideGame extends StatelessWidget {
       ),
     );
   }
+}
+
+// ===========================================================================
+// Step 3 (Cup, MIXED) — Games & points by round
+// ===========================================================================
+//
+// A mixed cup runs several point-bearing games in a day; each foursome plays
+// one.  You set HOW MANY of each game runs (the count is the pick — >0 means
+// it's in the day), then what each match is worth, and the totals follow.
+//
+// NOTE (scaffold ahead of scoring): the one-ball formats (Chapman, two-man
+// scramble, scramble) are drawn and priced but the app can't score them yet —
+// `scoreable:false`.  Singles are counted in twosomes as drawn; the engine
+// prices per foursome (two singles each), so an ODD twosome can't fully persist
+// until the backend gains an odd-twosome shape.  Totals shown here are the
+// drawn/intended values; persisted `cup_group_counts` are foursome-equivalent.
+
+// (id, title, descriptor, family, perSideCost, segments, isOneMatch, scoreable)
+// family: 'foursome' (2 a side inside the group) | 'twosome' (1 a side) |
+//         'match' (one blue-four vs one red-four, on/off)
+const _kMixedGames = <(String, String, String, String, int, int, bool, bool)>[
+  ('nassau',           'Nassau pairs',      '2 v 2 inside a foursome — one match each',
+      'foursome', 2, 3, false, true),
+  ('fourball',         'Fourball',          '2 v 2 best-ball inside a foursome',
+      'foursome', 2, 1, false, false),
+  ('two_man_chapman',  'Two-man Chapman',   '2 v 2 inside a foursome — one ball a pair',
+      'foursome', 2, 1, false, false),
+  ('two_man_scramble', 'Two-man scramble',  '2 v 2 inside a foursome — one ball a pair',
+      'foursome', 2, 1, false, false),
+  ('singles_18',       'Singles',           '1 v 1 — counted in twosomes',
+      'twosome', 1, 1, false, true),
+  ('singles_nassau',   'Singles Nassau',    '1 v 1 — front, back and overall',
+      'twosome', 1, 3, false, true),
+  ('irish_rumble',     'Irish Rumble',      'One match only — a blue foursome against a red foursome',
+      'match', 4, 1, true, true),
+  ('scramble',         'Scramble',          'One match only — a blue foursome against a red foursome',
+      'match', 4, 1, true, false),
+];
+
+typedef _MixedGame = (String, String, String, String, int, int, bool, bool);
+
+int _mixedSeg(_MixedGame g)      => g.$6;
+int _mixedPerSide(_MixedGame g)  => g.$5;
+bool _mixedOneMatch(_MixedGame g)=> g.$7;
+bool _mixedScoreable(_MixedGame g)=> g.$8;
+
+/// Points a game contributes = matches × price × segments.  For a one-match
+/// game the count is 0/1.
+double _mixedPoints(_MixedGame g, int count, double price) =>
+    count * price * _mixedSeg(g);
+
+/// Golfers committed on one side by a game's count.
+int _mixedCommitted(_MixedGame g, int count) => count * _mixedPerSide(g);
+
+String _fmtPts(double v) =>
+    v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(1);
+
+class _MixedGamesByRound extends StatelessWidget {
+  final int                            numRounds;
+  final Map<int, Map<String, int>>     roundCounts;
+  final Map<int, Map<String, double>>  roundPoints;
+  final int                            sideSize;
+  final int?                           selectedCourseId;
+  final List<_RoundDraft>              additionalRounds;
+  final List<CourseInfo>               courses;
+  final DateTime                       date;
+  final void Function(int roundIdx, String game, int count) onCount;
+  final void Function(int roundIdx, String game, double pts) onPrice;
+  final ValueChanged<int>              onSideSize;
+
+  const _MixedGamesByRound({
+    required this.numRounds,
+    required this.roundCounts,
+    required this.roundPoints,
+    required this.sideSize,
+    required this.selectedCourseId,
+    required this.additionalRounds,
+    required this.courses,
+    required this.date,
+    required this.onCount,
+    required this.onPrice,
+    required this.onSideSize,
+  });
+
+  String _courseName(int? id) => id == null
+      ? '—'
+      : courses.firstWhere((c) => c.id == id,
+              orElse: () => CourseInfo(id: id, name: '—')).name;
+
+  double _roundTotal(int r) {
+    final counts = roundCounts[r] ?? const {};
+    final pts    = roundPoints[r] ?? const {};
+    double t = 0;
+    for (final g in _kMixedGames) {
+      final c = counts[g.$1] ?? 0;
+      if (c > 0) t += _mixedPoints(g, c, pts[g.$1] ?? 1.0);
+    }
+    return t;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    double cupTotal = 0;
+    for (int r = 0; r < numRounds; r++) cupTotal += _roundTotal(r);
+    final toWin = cupTotal <= 0 ? 0.0 : (cupTotal / 2).floorToDouble() + 1;
+
+    return _pinnedStep(
+      context,
+      title: 'Games & points by round',
+      subtitle: 'Set how many of each game a day runs, then what each match is '
+          'worth. Totals follow.',
+      children: [
+        for (int r = 0; r < numRounds; r++) ...[
+          _MixedRoundCard(
+            roundNumber : r + 1,
+            courseName  : r == 0
+                ? _courseName(selectedCourseId)
+                : _courseName(additionalRounds[r - 1].courseId),
+            date        : r == 0 ? date : additionalRounds[r - 1].date,
+            counts      : roundCounts[r] ?? const {},
+            points      : roundPoints[r] ?? const {},
+            sideSize    : sideSize,
+            roundTotal  : _roundTotal(r),
+            onCount     : (g, c) => onCount(r, g, c),
+            onPrice     : (g, p) => onPrice(r, g, p),
+            onSideSize  : onSideSize,
+          ),
+          const SizedBox(height: 16),
+        ],
+        // ── Cup total panel ──────────────────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B1F1A),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (int r = 0; r < numRounds; r++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(children: [
+                  Expanded(
+                    child: Text('Round ${r + 1}',
+                        style: const TextStyle(color: Color(0xFF9DB0A3), fontSize: 13)),
+                  ),
+                  Text('${_fmtPts(_roundTotal(r))} pts',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                ]),
+              ),
+            const Divider(color: Color(0xFF26332B), height: 18),
+            Row(children: [
+              const Expanded(
+                child: Text('Points to play',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+              Text(_fmtPts(cupTotal),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
+            ]),
+            const SizedBox(height: 4),
+            Row(children: [
+              const Expanded(
+                child: Text('To win the cup',
+                    style: TextStyle(color: Color(0xFF7FC98A), fontWeight: FontWeight.w700)),
+              ),
+              Text(_fmtPts(toWin),
+                  style: const TextStyle(
+                      color: Color(0xFF7FC98A), fontWeight: FontWeight.w800, fontSize: 18)),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Chapman, two-man scramble and scramble are drawn but not scored yet; '
+          'their points are indicative.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+class _MixedRoundCard extends StatefulWidget {
+  final int                   roundNumber;
+  final String                courseName;
+  final DateTime              date;
+  final Map<String, int>      counts;
+  final Map<String, double>   points;
+  final int                   sideSize;
+  final double                roundTotal;
+  final void Function(String game, int count)  onCount;
+  final void Function(String game, double pts) onPrice;
+  final ValueChanged<int>     onSideSize;
+
+  const _MixedRoundCard({
+    required this.roundNumber,
+    required this.courseName,
+    required this.date,
+    required this.counts,
+    required this.points,
+    required this.sideSize,
+    required this.roundTotal,
+    required this.onCount,
+    required this.onPrice,
+    required this.onSideSize,
+  });
+
+  @override
+  State<_MixedRoundCard> createState() => _MixedRoundCardState();
+}
+
+class _MixedRoundCardState extends State<_MixedRoundCard> {
+  int get _committed {
+    int c = 0;
+    for (final g in _kMixedGames) {
+      c += _mixedCommitted(g, widget.counts[g.$1] ?? 0);
+    }
+    return c;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final committed = _committed;
+    final over = committed > widget.sideSize;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Header
+          Row(children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: Text('R${widget.roundNumber}',
+                  style: TextStyle(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(widget.courseName,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text('${DateFormat('EEE, MMM d').format(widget.date)} · '
+                    '2 sides of ${widget.sideSize}',
+                    style: theme.textTheme.bodySmall),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          // Game rows
+          for (final g in _kMixedGames) _gameRow(theme, g),
+          const Divider(height: 22),
+          // Roster meter
+          Row(children: [
+            Expanded(
+              child: Text('Committed per side',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+            _sideSizeStepper(theme),
+            const SizedBox(width: 10),
+            Text('$committed of ${widget.sideSize}',
+                style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: over ? theme.colorScheme.error : theme.colorScheme.primary)),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+            committed == 0
+                ? 'Pick games to fill the day.'
+                : over
+                    ? '${committed - widget.sideSize} over a side of ${widget.sideSize}.'
+                    : committed == widget.sideSize
+                        ? 'Every golfer on both sides has a match.'
+                        : '${widget.sideSize - committed} per side without a match yet.',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: over
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text('${_fmtPts(widget.roundTotal)} pts this round',
+                style: theme.textTheme.labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _gameRow(ThemeData theme, _MixedGame g) {
+    final count = widget.counts[g.$1] ?? 0;
+    final price = widget.points[g.$1] ?? 1.0;
+    final active = count > 0;
+    final seg = _mixedSeg(g);
+    final unitNoun = switch (g.$4) {
+      'foursome' => count == 1 ? 'foursome' : 'foursomes',
+      'twosome'  => count == 1 ? 'twosome' : 'twosomes',
+      _          => 'match',
+    };
+    final pts = _mixedPoints(g, count, price);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Flexible(
+                  child: Text(g.$2,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: active
+                              ? theme.colorScheme.onSurface
+                              : theme.colorScheme.onSurfaceVariant)),
+                ),
+                if (!_mixedScoreable(g)) ...[
+                  const SizedBox(width: 6),
+                  _tag(theme, 'SOON'),
+                ],
+              ]),
+              Text(g.$3,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          // Count control — On/Off for a one-match game, stepper otherwise.
+          if (_mixedOneMatch(g))
+            Switch(
+              value: active,
+              onChanged: (v) => widget.onCount(g.$1, v ? 1 : 0),
+            )
+          else
+            _stepper(
+              value: count,
+              onDown: count > 0 ? () => widget.onCount(g.$1, count - 1) : null,
+              onUp: () => widget.onCount(g.$1, count + 1),
+            ),
+        ]),
+        if (active) ...[
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(
+              child: Text(
+                _mixedOneMatch(g)
+                    ? '${_mixedPerSide(g)} per side'
+                    : '$count $unitNoun'
+                        '${seg > 1 ? ' × $seg segments' : ''} · '
+                        '${_mixedCommitted(g, count)} per side',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+            _priceStepper(theme, g, price, seg),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 44,
+              child: Text('${_fmtPts(pts)} pt${pts == 1 ? '' : 's'}',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ]),
+        ],
+      ]),
+    );
+  }
+
+  Widget _priceStepper(ThemeData theme, _MixedGame g, double price, int seg) {
+    final unit = seg > 1 ? 'seg' : 'match';
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      _roundIconBtn(Icons.remove,
+          price > 1 ? () => widget.onPrice(g.$1, price - 1) : null),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Text('${_fmtPts(price)} / $unit',
+            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+      ),
+      _roundIconBtn(Icons.add, () => widget.onPrice(g.$1, price + 1)),
+    ]);
+  }
+
+  Widget _sideSizeStepper(ThemeData theme) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _roundIconBtn(Icons.remove,
+              widget.sideSize > 2 ? () => widget.onSideSize(widget.sideSize - 2) : null),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text('${widget.sideSize}/side',
+                style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+          ),
+          _roundIconBtn(Icons.add, () => widget.onSideSize(widget.sideSize + 2)),
+        ],
+      );
+
+  Widget _stepper({required int value, VoidCallback? onDown, VoidCallback? onUp}) =>
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        _roundIconBtn(Icons.remove, onDown),
+        SizedBox(
+          width: 24,
+          child: Text('$value',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+        ),
+        _roundIconBtn(Icons.add, onUp),
+      ]);
+
+  Widget _roundIconBtn(IconData icon, VoidCallback? onTap) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 30, height: 30,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+              color: onTap == null
+                  ? theme.colorScheme.outlineVariant
+                  : theme.colorScheme.primary),
+        ),
+        child: Icon(icon,
+            size: 16,
+            color: onTap == null
+                ? theme.colorScheme.outlineVariant
+                : theme.colorScheme.primary),
+      ),
+    );
+  }
+
+  Widget _tag(ThemeData theme, String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Text(text,
+            style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+                fontSize: 9)),
+      );
 }
 
 // ===========================================================================
