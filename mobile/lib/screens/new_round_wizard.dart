@@ -147,7 +147,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // "Games by round" remains the source of truth; solo format is functional
   // (it chooses the championship game).
   _EventType _eventType  = _EventType.cup;
-  String     _cupFormat  = 'triple';   // triple | singles | fourball
+  String     _cupFormat  = 'mixed';    // mixed | triple  (triple = exclusive)
   String     _soloFormat = 'stroke';   // stroke | stableford
 
   // ---- Tournament side game (cup, non-exclusive formats only) ----
@@ -577,9 +577,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     switch (_eventType) {
       case _EventType.cup:
         const names = {
+          'mixed': 'Mixed cup',
           'triple': 'Triple Cup',
-          'singles': 'Singles',
-          'fourball': 'Fourball',
         };
         return 'Cup play · ${names[_cupFormat] ?? 'Cup'}';
       case _EventType.solo:
@@ -1452,11 +1451,16 @@ class _Step1TypeFormat extends StatelessWidget {
   });
 
   // (value, title, subtitle, exclusive)
+  // Mixed cup is the default — a day of several games, each foursome plays one.
+  // Triple Cup is the exclusive preset that spends all 18 holes on its own four
+  // segments, so it can't run alongside anything (Singles / Fourball are no
+  // longer tournament-wide formats — they're games in a Mixed cup's day).
   static const _cupFormats = <(String, String, String, bool)>[
+    ('mixed', 'Mixed cup',
+        '1 to several games a day — Irish Rumble, Nassau pairs, Chapman, Singles. '
+        'Each foursome plays one, with points set per match.', false),
     ('triple', 'Triple Cup',
-        'Fourball, Foursomes and two Singles per group — four points a group.', true),
-    ('singles', 'Singles', 'One match per pairing.', false),
-    ('fourball', 'Fourball', 'One better-ball match per group.', false),
+        'A preset day: Fourball, Foursomes and two Singles per group — four points a group.', true),
   ];
   static const _soloFormats = <(String, String, String, bool)>[
     ('stroke', 'Stroke play', 'Gross or net against the field.', false),
@@ -1684,9 +1688,14 @@ class _Step1TypeFormat extends StatelessWidget {
 
   Widget _consequenceStrip(BuildContext context) {
     final theme = Theme.of(context);
+    final isCup = eventType == _EventType.cup;
+    // A Mixed cup can't say up front how scores come in — it depends on the game
+    // each foursome plays, decided at round setup.
     final scoresIn = _isTriple
         ? 'Per golfer in Fourball, per pair in Foursomes'
-        : 'Per golfer';
+        : isCup
+            ? 'Depends on the game each foursome plays — set at round setup'
+            : 'Per golfer';
     final lb = switch (eventType) {
       _EventType.cup  => 'Side against side',
       _EventType.solo => 'Field, gross or net',
@@ -1695,7 +1704,10 @@ class _Step1TypeFormat extends StatelessWidget {
     };
     final bets = _isTriple
         ? 'Available — the Fourball segment has individual gross'
-        : 'Available — individual gross is on the card';
+        : isCup
+            ? 'Only in games that keep individual gross — Nassau pairs and '
+              'Singles, not Irish Rumble, scramble or Chapman'
+            : 'Available — individual gross is on the card';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
