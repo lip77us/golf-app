@@ -443,6 +443,22 @@ def cup_singles_summary(foursome) -> dict | None:
         # differential) — shown in parentheses beside the player abbreviation.
         p1_strokes_total = sum(d.get('p1_strokes', 0) for d in detail.values())
         p2_strokes_total = sum(d.get('p2_strokes', 0) for d in detail.values())
+        # Full prospective hole plan (every hole, played or not) so the
+        # leaderboard strip can show the whole stroke pattern up front, not just
+        # holes already entered.  Net fills in per hole as scores are posted.
+        net_by_hole = {h['hole_number']: h for h in holes}
+        hole_plan = [
+            {
+                'hole_number' : hn,
+                'par'         : detail[hn].get('par'),
+                'stroke_index': detail[hn].get('stroke_index'),
+                'p1_strokes'  : detail[hn].get('p1_strokes', 0),
+                'p2_strokes'  : detail[hn].get('p2_strokes', 0),
+                'p1_net'      : net_by_hole.get(hn, {}).get('p1_net'),
+                'p2_net'      : net_by_hole.get(hn, {}).get('p2_net'),
+            }
+            for hn in sorted(detail.keys())
+        ]
 
         # Compute each Nassau sub-match independently.
         f9  = _compute_sub_match(holes, 1,  9)
@@ -480,6 +496,7 @@ def cup_singles_summary(foursome) -> dict | None:
             'b9_finished_on_hole': b9['finished_on_hole'],
 
             'holes': holes,
+            'hole_plan': hole_plan,
         })
 
     # Pull team colours from the cup config if available.

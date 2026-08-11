@@ -15,7 +15,9 @@ Scoring
                       strokes allocated by hole stroke_index.
   The strokes_off reference is the lowest playing_handicap IN EACH FOURSOME
   (the low player in the group plays to 0), matching the match games; in a
-  cup each group is its own match.  Single-foursome rounds are unaffected.
+  cup each group is its own match.  For SINGLES the reference is the lower of
+  the 1-v-1 pairing, so it reflects the strokes given in that match.
+  Single-foursome rounds are unaffected.
 * Net-double-bogey cap: when Round.net_max_double_bogey is on, every
   per-hole effective score is capped at par + 2 (net par + 2 in gross
   terms).  When the flag is off, raw adjusted scores feed the total.
@@ -83,20 +85,36 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
     # 9-hole / back-9 round); a full round reduces to the standard allocation.
     strokes_fns = {fs.pk: make_strokes_fn(fs) for fs in foursomes}
 
-    # For strokes_off: the reference is the lowest playing_handicap IN EACH
-    # FOURSOME (group), not across the whole field.  This matches the canonical
-    # strokes-off rule ("the low player in the foursome plays to 0") and every
-    # match game (nassau, sixes, …), so the Stroke Play tab shows the same
-    # strokes each golfer actually got in their match — in a cup each group is
-    # its own match.  Single-foursome rounds are unaffected: the group low IS
-    # the field low.
-    low_hcp_by_fs: dict = {}
+    # For strokes_off: each player's reference low.  For team games it's the
+    # lowest playing_handicap in the FOURSOME (the low player plays to 0), which
+    # matches every match game (nassau, sixes, …).  For SINGLES the competition
+    # is the 1-v-1 pairing, so each player anchors on the LOWER of their own
+    # match — the Stroke Play tab then shows the strokes each golfer actually
+    # gets in their singles match, not the foursome low.  Single-foursome rounds
+    # are unaffected: the group low IS the field low.
+    low_hcp_by_pid: dict = {}
     if handicap_mode == HandicapMode.STROKES_OFF:
+        from games.models import MatchPlayBracket
         for fs in foursomes:
-            hcps = [m.playing_handicap for m in fs.memberships.all()
+            real = [m for m in fs.memberships.all()
                     if not m.player.is_phantom
                     and (_subset is None or m.player_id in _subset)]
-            low_hcp_by_fs[fs.pk] = min(hcps) if hcps else 0
+            fs_low = min((m.playing_handicap for m in real), default=0)
+            # Singles pairings anchor each player on their opponent, not the
+            # group.  Falls back to the foursome low for team games.
+            pairing_low = {}
+            bracket = (MatchPlayBracket.objects
+                       .filter(foursome=fs, bracket_type='cup_singles')
+                       .prefetch_related('matches').first())
+            if bracket:
+                hcp = {m.player_id: m.playing_handicap for m in real}
+                for mp in bracket.matches.all():
+                    if mp.player1_id in hcp and mp.player2_id in hcp:
+                        lo = min(hcp[mp.player1_id], hcp[mp.player2_id])
+                        pairing_low[mp.player1_id] = lo
+                        pairing_low[mp.player2_id] = lo
+            for m in real:
+                low_hcp_by_pid[m.player_id] = pairing_low.get(m.player_id, fs_low)
 
     qs = (
         HoleScore.objects
@@ -134,7 +152,8 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                     else:  # STROKES_OFF
                         si = m.tee.hole(hole).get('stroke_index', 18)
                         so_diff = round(
-                            max(0, m.playing_handicap - low_hcp_by_fs.get(fs.pk, 0))
+                            max(0, m.playing_handicap
+                                - low_hcp_by_pid.get(m.player_id, 0))
                             * net_percent / 100)
                         s = _strokes_on_hole(so_diff, si)
                     if s > 0:
@@ -181,7 +200,8 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
             # Scale the strokes-off differential by net_percent, matching the
             # app-wide SO allowance (nassau.py / multi_skins.py / points_531.py).
             so       = round(
-                max(0, membership.playing_handicap - low_hcp_by_fs.get(fid, 0))
+                max(0, membership.playing_handicap
+                    - low_hcp_by_pid.get(pid, 0))
                 * net_percent / 100)
             adjusted = hs['gross_score'] - _strokes_on_hole(so, si)
 

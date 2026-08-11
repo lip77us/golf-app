@@ -58,7 +58,7 @@ from django.db import transaction
 
 from core.models import HandicapMode, MatchStatus, GameType
 from games.models import NassauGame, NassauTeam, NassauHoleScore, NassauPress
-from scoring.handicap import build_score_index
+from scoring.handicap import build_score_index, _strokes_on_hole
 from scoring.models import HoleScore
 
 
@@ -1464,8 +1464,12 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
         for m in participant_memberships:
             pid = m.player_id
             g   = gross_index.get(pid, {}).get(hn)
-            net = score_index.get(pid, {}).get(hn)
-            strokes = max(0, g - net) if (g is not None and net is not None) else 0
+            # Prospective strokes: allocate the player's in-play handicap by
+            # stroke index so the scorecard shows the FULL stroke plan (dots on
+            # every hole a stroke falls, not just holes already played).  On a
+            # played hole this equals gross − net.
+            si      = si_by_hole.get(hn) or 18
+            strokes = _strokes_on_hole(phcp_by_pid.get(pid, 0), si)
             row_scores.append({'player_id': pid, 'gross': g, 'strokes': strokes})
         scorecard_holes.append({
             'hole'         : hn,

@@ -8478,7 +8478,9 @@ class _CupSinglesGroupCard extends StatelessWidget {
               // Round progress — per-hole nets + hole winner, from the match's
               // own holes list (same information as the score-entry card).
               _singlesHoleStrip(
-                (m['holes'] as List? ?? const []),
+                // Prospective plan (all holes) so the stroke dots show up front;
+                // falls back to played holes for older payloads.
+                (m['hole_plan'] as List? ?? m['holes'] as List? ?? const []),
                 leftLbl, rightLbl, p1OnLeft, leftColor, rightColor, theme,
               ),
             ];
