@@ -277,12 +277,40 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
 
   // ── Game filtering ─────────────────────────────────────────────────────────
 
+  /// Foursome drafts committed per game so far.
+  Map<String, int> _builtPerGame() {
+    final m = <String, int>{};
+    for (final f in _foursomes) {
+      m[f.gameType] = (m[f.gameType] ?? 0) + 1;
+    }
+    return m;
+  }
+
+  /// Games in the round's plan that still need a group (built < target).
+  /// Empty for a round with no mixed plan (Triple Cup / legacy).
+  Set<String> _remainingGames() {
+    final counts = widget.cupGroupCounts;
+    if (counts.isEmpty) return {};
+    final built = _builtPerGame();
+    return {
+      for (final e in counts.entries)
+        if (e.value > 0 && (built[e.key] ?? 0) < e.value) e.key,
+    };
+  }
+
   /// Games to show in the picker, filtered to the round's game plan.
   /// Falls back to the full list if no plan was saved (older tournaments).
+  /// For a MIXED cup (cup_group_counts set) the picker is a worklist — only
+  /// games that still have a group to build; when the plan is complete the
+  /// list is empty (and the review step hides "Add another group").
   List<(String, String, IconData)> get _filteredGames {
     final avail = widget.availableGames;
-    if (avail.isEmpty) return _kCupGames;
-    return _kCupGames.where((g) => avail.contains(g.$1)).toList();
+    final base = avail.isEmpty
+        ? _kCupGames
+        : _kCupGames.where((g) => avail.contains(g.$1)).toList();
+    if (widget.cupGroupCounts.isEmpty) return base;
+    final remaining = _remainingGames();
+    return base.where((g) => remaining.contains(g.$1)).toList();
   }
 
   // ── Validation for current builder step ────────────────────────────────────
@@ -933,6 +961,10 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         onEditTeeTime  : _editFoursomeTeeTime,
         onClearTeeTime : _clearFoursomeTeeTime,
         onAddAnother   : _startNewFoursome,
+        // Mixed cup: once every planned group is built there's nothing left to
+        // add, so the review offers only "Start Round".
+        canAddAnother  :
+            widget.cupGroupCounts.isEmpty || _remainingGames().isNotEmpty,
         onAssign       : _assignGolfer,
         submitError    : _submitError,
         sittingOut     : _sittingOut,
@@ -1610,6 +1642,9 @@ class _ReviewPage extends StatelessWidget {
   final Future<void> Function(int) onEditTeeTime;
   final void Function(int)   onClearTeeTime;
   final VoidCallback         onAddAnother;
+  /// False once a mixed cup's plan is fully built — hides "Add another group"
+  /// so the TD can only finish (Start Round).  Always true for Triple/legacy.
+  final bool                 canAddAnother;
   final ValueChanged<int>    onAssign;
   final String?              submitError;
   final List<CupPlayer>      sittingOut;
@@ -1626,6 +1661,7 @@ class _ReviewPage extends StatelessWidget {
     required this.onEditTeeTime,
     required this.onClearTeeTime,
     required this.onAddAnother,
+    this.canAddAnother = true,
     required this.onAssign,
     this.submitError,
     this.sittingOut = const [],
@@ -1768,11 +1804,21 @@ class _ReviewPage extends StatelessWidget {
         ...foursomes.asMap().entries.map((e) => _groupCard(theme, e.key, e.value)),
 
         const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: onAddAnother,
-          icon: const Icon(Icons.add),
-          label: Text('Add group ${foursomes.length + 1}'),
-        ),
+        if (canAddAnother)
+          OutlinedButton.icon(
+            onPressed: onAddAnother,
+            icon: const Icon(Icons.add),
+            label: Text('Add group ${foursomes.length + 1}'),
+          )
+        else
+          Row(children: [
+            Icon(Icons.check_circle,
+                size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Every planned group is built.',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.primary)),
+          ]),
 
         if (sittingOut.isNotEmpty) _unassignedSection(theme),
 
