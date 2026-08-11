@@ -147,6 +147,10 @@ class CupRoundSetupScreen extends StatefulWidget {
   /// Applied automatically when committing each foursome — no per-foursome
   /// text field is shown when this is non-empty.
   final Map<String, double> gamePointValues;
+  /// Mixed-cup per-game plan (foursome-equivalent units) — how many of each
+  /// game the wizard sized this round for.  Drives the worklist header ("what's
+  /// left to build").  Empty for Triple Cup / legacy rounds.
+  final Map<String, int> cupGroupCounts;
 
   const CupRoundSetupScreen({
     super.key,
@@ -157,6 +161,7 @@ class CupRoundSetupScreen extends StatefulWidget {
     required this.courseName,
     this.availableGames  = const [],
     this.gamePointValues = const {},
+    this.cupGroupCounts  = const {},
   });
 
   @override
@@ -684,12 +689,18 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
   Future<void> _submit() async {
     setState(() { _submitting = true; _submitError = null; });
     try {
+      // Group numbers follow tee time: submit foursomes in tee-time order so the
+      // backend (which numbers by submission order) gives Group 1 to the
+      // earliest tee time.  Nulls (no time set) sort last.
+      final sorted = [..._foursomes]
+        ..sort((a, b) => (a.teeTime ?? '~').compareTo(b.teeTime ?? '~'));
+
       // Build flat ordered player list for setupRound.
       // Players from each foursome appear in order; backend groups first-N
       // into group 1, next-N into group 2, etc. (randomise=false).
       // Singles groups may have 2 real players → backend adds 2 phantoms.
       final flatPlayers = <Map<String, int>>[];
-      for (final f in _foursomes) {
+      for (final f in sorted) {
         for (final pid in f.playerIds) {
           final entry = <String, int>{'player_id': pid};
           final teeId = f.playerTees[pid];
@@ -713,8 +724,8 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
       final team2Id = teams.length > 1  ? teams[1].teamId : null;
 
       final foursomesPayload = <Map<String, dynamic>>[];
-      for (int i = 0; i < _foursomes.length && i < fullRound.foursomes.length; i++) {
-        final draft = _foursomes[i];
+      for (int i = 0; i < sorted.length && i < fullRound.foursomes.length; i++) {
+        final draft = sorted[i];
         final fs    = fullRound.foursomes[i];
         foursomesPayload.add({
           'foursome_id' : fs.id,
@@ -739,8 +750,8 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
 
       // 3. Set tee times where provided.
       final teeEntries = <Map<String, dynamic>>[];
-      for (int i = 0; i < _foursomes.length && i < fullRound.foursomes.length; i++) {
-        final t = _foursomes[i].teeTime;
+      for (int i = 0; i < sorted.length && i < fullRound.foursomes.length; i++) {
+        final t = sorted[i].teeTime;
         if (t != null) {
           teeEntries.add({
             'group_number': fullRound.foursomes[i].groupNumber,
@@ -793,6 +804,43 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
     );
   }
 
+  /// Mixed-cup worklist header: what the wizard sized this round for vs. what's
+  /// been built so far, per game.  Null for Triple Cup / rounds with no plan.
+  Widget? _worklistStrip() {
+    final counts = widget.cupGroupCounts;
+    if (counts.isEmpty || _roundFormat == 'triple_cup') return null;
+    final entries = counts.entries.where((e) => e.value > 0).toList();
+    if (entries.isEmpty) return null;
+    // built per game = committed foursome drafts assigned that game (each
+    // foursome is one foursome-equivalent unit, matching the count basis).
+    final built = <String, int>{};
+    for (final f in _foursomes) {
+      built[f.gameType] = (built[f.gameType] ?? 0) + 1;
+    }
+    final allDone = entries.every((e) => (built[e.key] ?? 0) >= e.value);
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFF0B1F1A),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(allDone ? 'All matches built' : 'Round plan — left to build',
+            style: const TextStyle(
+                color: Color(0xFF9DB0A3),
+                fontSize: 12,
+                fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final e in entries)
+            _WorklistChip(
+              label: _gameLabel(e.key),
+              built: built[e.key] ?? 0,
+              target: e.value,
+            ),
+        ]),
+      ]),
+    );
+  }
+
   Widget _buildBody() {
     switch (_buildStep) {
       case _BuildStep.gameType:
@@ -800,7 +848,9 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         // picker.  Picking "One Day Ryder Cup" locks the wizard to
         // triple_cup for every foursome.  Locked once a foursome is
         // committed so we can't produce a mixed-format payload.
+        final worklist = _worklistStrip();
         return Column(children: [
+          if (worklist != null) worklist,
           _RoundFormatToggle(
             value: _roundFormat,
             locked: _foursomes.isNotEmpty,
@@ -1903,6 +1953,41 @@ class _ReviewPage extends StatelessWidget {
 
 /// "Round Format" preset toggle shown above the per-foursome game
 /// picker.  Two choices: Custom (admin picks a game type per
+/// One pill in the mixed-cup worklist header: "<game>  built/target", tinted
+/// green (with a check) once every unit of that game has a group.
+class _WorklistChip extends StatelessWidget {
+  final String label;
+  final int    built, target;
+  const _WorklistChip({
+    required this.label, required this.built, required this.target,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final done = built >= target;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: done ? const Color(0xFF1A2A20) : const Color(0xFF16221C),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+            color: done ? const Color(0xFF7FC98A) : const Color(0xFF26332B)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (done) ...[
+          const Icon(Icons.check, size: 13, color: Color(0xFF7FC98A)),
+          const SizedBox(width: 4),
+        ],
+        Text('$label  $built/$target',
+            style: TextStyle(
+                color: done ? const Color(0xFF7FC98A) : Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+}
+
 /// foursome, the historic behaviour) or One Day Ryder Cup (locks
 /// every foursome to Triple Cup — fourball + foursomes + 2 singles).
 /// Becomes read-only once any foursome has been committed so a

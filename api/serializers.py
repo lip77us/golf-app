@@ -677,6 +677,9 @@ class RoundSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'round_number', 'date', 'course', 'status', 'tournament_id',
             'active_games', 'primary_game', 'game_point_values', 'bet_unit',
+            # Mixed-cup per-game plan (foursome-equivalent units) so the group
+            # builder can show a worklist of what's left to build.
+            'cup_group_counts',
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'num_holes', 'starting_hole',
             'scramble_config', 'notes', 'foursomes',
@@ -699,6 +702,7 @@ class RoundListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'round_number', 'date', 'course_id', 'course_name',
             'status', 'active_games', 'game_point_values', 'bet_unit',
+            'cup_group_counts',
         ]
         read_only_fields = ['id']
 

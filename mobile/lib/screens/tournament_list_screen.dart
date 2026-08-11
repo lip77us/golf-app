@@ -551,6 +551,7 @@ class _TournamentListScreenState extends State<TournamentListScreen>
                       courseName      : round.courseName,
                       availableGames  : round.activeGames,
                       gamePointValues : round.gamePointValues,
+                      cupGroupCounts  : round.cupGroupCounts,
                     )))
                 .then((_) { if (mounted) _load(); }),
             onEditTeeTimes: (round) => Navigator.of(context)

@@ -527,6 +527,9 @@ class RoundSummary {
   /// Cup point values per game type, e.g. {'nassau': 1.0, 'singles': 2.0}.
   /// Set at wizard time; applied automatically in CupRoundSetupScreen.
   final Map<String, double> gamePointValues;
+  /// Mixed-cup per-game plan — foursome-equivalent units to build for each game,
+  /// e.g. {'nassau': 3, 'singles_18': 1}.  Drives the group-builder worklist.
+  final Map<String, int> cupGroupCounts;
 
   const RoundSummary({
     required this.id,
@@ -538,6 +541,7 @@ class RoundSummary {
     required this.activeGames,
     required this.betUnit,
     this.gamePointValues = const {},
+    this.cupGroupCounts = const {},
   });
 
   factory RoundSummary.fromJson(Map<String, dynamic> j) => RoundSummary(
@@ -551,6 +555,8 @@ class RoundSummary {
         betUnit        : double.parse(j['bet_unit'].toString()),
         gamePointValues: (j['game_point_values'] as Map<String, dynamic>? ?? {})
             .map((k, v) => MapEntry(k, (v as num).toDouble())),
+        cupGroupCounts : (j['cup_group_counts'] as Map<String, dynamic>? ?? {})
+            .map((k, v) => MapEntry(k, (v as num).toInt())),
       );
 
   String get statusLabel {
