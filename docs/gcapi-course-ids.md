@@ -51,9 +51,11 @@ wanted: Poppy Ridge — Championship 18 (`manual-poppy-ridge-champ18`), Sheep Ra
 (`manual-sheep-ranch`). Also many acct-1/2/4/7 hand-entered courses have no
 `golf_api_id` at all (Bandon, etc.).
 
-PENDING: Sheep Ranch scorecard emailed to GolfCourseAPI ~2026-08-08 for addition.
-When it lands: grab the new slug via search, stamp `manual-sheep-ranch` → real id
-on the CatalogCourse (+ any account clones), then `reimport_catalog_course`.
+Sheep Ranch: GCAPI ADDED it as `8mcwprkp` (Bandon Dunes / Sheep Ranch). Relinked
+`manual-sheep-ranch` → `8mcwprkp` on LOCAL 2026-08-10 via `relink_catalog_course`
+(Royal Blue M/W par 72→68; added Black (W) + Green (W)). PROD pending: run
+`relink_catalog_course --from manual-sheep-ranch --to 8mcwprkp --apply` in the
+Railway "Golf App" terminal after the deploy.
 
 ## Full workflow to update a course's ratings
 
@@ -82,6 +84,8 @@ so played scorecards stay frozen.
 - `check_catalog_drift` — diff catalog vs live GCAPI (needs the remap first to resolve).
 - `sync_catalog_tees` — push catalog tees to account copies (eager propagation).
 - `mark_catalog_curated` — protect/un-protect a catalog course's tees (reverse of un-curate).
+- `relink_catalog_course` — repoint a catalog course to a NEW GCAPI slug + reimport
+  (for a synthetic course GCAPI later adds, e.g. Sheep Ranch).
 - `fix_prod_catalog` — **one-shot idempotent** wrapper of the whole sequence (remap +
   per-course reimport + rename dedups). Dry-run by default (runs in a transaction
   and rolls back); `--apply` commits. This is the prod path.
