@@ -2,7 +2,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 from core.models import MatchStatus, TeamSelectMethod, HandicapMode, Player, GameType
-from tournament.models import Round, Foursome
+from tournament.models import Round, Foursome, TournamentTeam
 
 
 # ---------------------------------------------------------------------------
@@ -1958,6 +1958,42 @@ class ScrambleHoleScore(models.Model):
 
     def __str__(self):
         return f"Scramble — Group {self.foursome.group_number} — Hole {self.hole_number} — {self.gross_score}"
+
+
+class TeamHoleScore(models.Model):
+    """One side's score for a single hole in a "team ball" cup format.
+
+    The side plays one ball, so there is no per-golfer score — the row is the
+    side.  Serves every one-ball game:
+      * Scramble — the whole group is one side → one row per hole.
+      * Foursomes / Two-man Chapman — two pairs share the group → two rows per
+        hole, one per side.
+    The side is a :class:`TournamentTeam`.  ``chosen_player`` is reserved for a
+    future drive-tracking layer (unused in v1 — the group polices its own
+    drive/turn rules; the app records only the team score).
+    """
+    foursome         = models.ForeignKey(
+                         Foursome, on_delete=models.CASCADE,
+                         related_name='team_hole_scores')
+    team             = models.ForeignKey(
+                         TournamentTeam, on_delete=models.CASCADE,
+                         related_name='+')
+    hole_number      = models.PositiveSmallIntegerField(
+                         validators=[MinValueValidator(1), MaxValueValidator(18)])
+    gross_score      = models.PositiveSmallIntegerField(null=True, blank=True)
+    handicap_strokes = models.PositiveSmallIntegerField(default=0)
+    net_score        = models.PositiveSmallIntegerField(null=True, blank=True)
+    chosen_player    = models.ForeignKey(
+                         Player, on_delete=models.SET_NULL, null=True, blank=True,
+                         related_name='+')
+
+    class Meta:
+        unique_together = ('foursome', 'team', 'hole_number')
+        ordering = ['hole_number']
+
+    def __str__(self):
+        return (f"TeamHoleScore — Group {self.foursome.group_number} — "
+                f"team {self.team_id} — Hole {self.hole_number} — {self.gross_score}")
 
 
 class ScrambleResult(models.Model):

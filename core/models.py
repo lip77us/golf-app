@@ -29,6 +29,16 @@ class GameType(models.TextChoices):
     SIXES           = 'sixes',           'Sixes'
     PINK_BALL       = 'pink_ball',       'Pink Ball'
     SCRAMBLE        = 'scramble',        'Scramble'
+    # Team-ball cup formats — one ball a side, entered as a single team score
+    # per hole (no per-golfer score).  All route through TeamHoleScore + the
+    # team score-entry screen; the app records only the team score and does not
+    # track drives / turn order.  Scramble (above) is the 4-a-side one-group
+    # form (blue group vs red group, stroke-play net total); these two are the
+    # 2-a-side pair forms played 2v2 inside one group (match play):
+    #   FOURSOMES       — alternate shot (partners alternate on one ball).
+    #   TWO_MAN_CHAPMAN — both drive, swap, pick one ball, alternate in.
+    FOURSOMES       = 'foursomes',       'Foursomes'
+    TWO_MAN_CHAPMAN = 'two_man_chapman', 'Two-man Chapman'
     STABLEFORD      = 'stableford',      'Stableford'
     SKINS           = 'skins',           'Skins'
     # Multi-Foursome Skins: round-level skins pool across every participating
