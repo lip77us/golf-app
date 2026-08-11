@@ -82,6 +82,9 @@ so played scorecards stay frozen.
 - `check_catalog_drift` — diff catalog vs live GCAPI (needs the remap first to resolve).
 - `sync_catalog_tees` — push catalog tees to account copies (eager propagation).
 - `mark_catalog_curated` — protect/un-protect a catalog course's tees (reverse of un-curate).
+- `fix_prod_catalog` — **one-shot idempotent** wrapper of the whole sequence (remap +
+  per-course reimport + rename dedups). Dry-run by default (runs in a transaction
+  and rolls back); `--apply` commits. This is the prod path.
 
 ## Status
 
