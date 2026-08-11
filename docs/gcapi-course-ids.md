@@ -110,13 +110,14 @@ so played scorecards stay frozen.
 - **All 8 differing courses reconciled to GHIN/GCAPI as of 2026-08-08.** The
   other 6 catalog courses were already in sync.
 
-⚠️ **THESE RE-IMPORTS RAN AGAINST THE LOCAL DB (`localhost`/`golf_app_db`), NOT
-PROD.** Production's catalog still has the dead numeric ids + stale data. To fix
-prod, re-run the whole sequence pointed at the prod DB (Railway service shell /
-prod `DATABASE_URL`): `remap_golf_api_ids --apply`, then per course
-`uncurate_catalog_tees --golf-api-id <id> [--include-combos] --apply` →
-`reimport_catalog_course --golf-api-id <id> --propagate --apply`
-(+ the YELLOW-W / B/W combo dedups). Verify with `check_catalog_drift` after.
+✅ **APPLIED TO PROD 2026-08-10** via `fix_prod_catalog --apply` (run in the
+Railway "Golf App" service Terminal). Prod dry-run showed 11 ids remapped (2 not
+found — Lake Chabot `19760` + Sequoyah `24539` aren't in prod's catalog; both
+were in-sync, not in the fix set), all 8 differing courses re-imported
+(data_version 1→2), White-Sixes held, and the rename dedups removed the leftover
+YELLOW-W (×11 clones) / B/W Combo (×4) / Fairways Blue (×1), all unreferenced.
+`check_catalog_drift` confirmed in-sync afterward. Re-running `fix_prod_catalog`
+is a safe idempotent no-op.
 - **Quality gate floor lowered 62→55** (services/course_quality.py) so short
   forward tees (e.g. Tilden Yellow par 61) import without --skip-gate.
 
