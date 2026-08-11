@@ -53,8 +53,12 @@ class _RoundChatButtonState extends State<RoundChatButton> {
       final res =
           await context.read<AuthProvider>().client.getMessages(widget.roundId);
       if (mounted) setState(() => _unread = res.unread);
-    } on ApiException {
-      // Best-effort badge — leave it as-is on any error (offline, 404, …).
+    } on ApiException catch (e) {
+      // A 404 means the round is gone or this user can't read it — that never
+      // recovers, so stop polling instead of hitting the endpoint every 25s.
+      // Other errors (offline, 5xx) are transient: keep the badge and keep the
+      // timer running so it recovers on its own.
+      if (e.statusCode == 404) _poll?.cancel();
     }
   }
 
