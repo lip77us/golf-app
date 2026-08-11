@@ -7214,8 +7214,8 @@ class _IRLiveRows extends StatelessWidget {
 
     String _fmtVsPar(int? v) {
       if (v == null) return '–';
-      if (v == 0) return 'E';
-      return v > 0 ? '+$v' : '$v';
+      if (v == 0) return 'even';
+      return v > 0 ? '$v over' : '${-v} under';
     }
 
     // Detect which of t1/t2 is the "red" team (higher red channel = left side),
@@ -7242,45 +7242,59 @@ class _IRLiveRows extends StatelessWidget {
       rColor = rightColour;
     }
 
+    final worth = '${fmtPts(pv)} pt${pv >= 2 ? 's' : ''} to the cup';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          // Left (red team)
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                _fmtVsPar(leftVsPar),
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: lColor),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                leftHoles > 0 ? 'thru $leftHoles' : '–',
-                style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ]),
-          ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(
+          children: [
+            // Left (red team)
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  _fmtVsPar(leftVsPar),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: lColor),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  leftHoles > 0 ? 'thru $leftHoles' : '–',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ]),
+            ),
 
-          // Right (blue team)
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(
-                _fmtVsPar(rightVsPar),
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: rColor),
-                textAlign: TextAlign.end,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                rightHoles > 0 ? 'thru $rightHoles' : '–',
-                style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant),
-                textAlign: TextAlign.end,
-              ),
-            ]),
-          ),
-        ],
-      ),
+            // Right (blue team)
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(
+                  _fmtVsPar(rightVsPar),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: rColor),
+                  textAlign: TextAlign.end,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  rightHoles > 0 ? 'thru $rightHoles' : '–',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
+                  textAlign: TextAlign.end,
+                ),
+              ]),
+            ),
+          ],
+        ),
+        // Stroke play: the low net total takes the whole price; a tie halves it.
+        const Divider(height: 14),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('Low net total takes',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          Text(worth,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+        ]),
+      ]),
     );
   }
 }
