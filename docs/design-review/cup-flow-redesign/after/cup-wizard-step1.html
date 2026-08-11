@@ -53,6 +53,7 @@ p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
 .cap .r.bet b{font-weight:600}
 .cap .r.bet.no b{color:var(--warn)}
 .cap .r.bet.yes b{color:var(--pine)}
+.cap .r.bet.part b{color:#8A6B1F}
 .plan{background:var(--deepPine);border-radius:15px;padding:14px 15px 15px;color:#DDEBE2}
 .plan .ph{display:flex;align-items:baseline;gap:8px;margin-bottom:11px}
 .plan h3{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7FA694;margin:0}
@@ -94,7 +95,8 @@ p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
 <ul>
 <li>Type and format are the <b>first and only</b> question on step 1. Everything downstream is a consequence of them.</li>
 <li>The step list is <b>derived and shown immediately</b>. A cup on Triple Cup has six steps left; stroke play has six of a different shape; Stableford has seven. Nobody is told &ldquo;4 of 4&rdquo; and then handed eight more screens.</li>
-<li><b>A cup can mix formats across rounds</b> &mdash; Triple Cup one day, Singles the next. Triple Cup is exclusive because its segments own all 18 holes, so nothing else can run alongside it.</li>
+<li><b>Cup format is not a tournament-level answer.</b> The shipped step makes you pick one of Triple Cup, Singles or Fourball for the whole cup &mdash; but a real cup day runs several games at once, and each foursome plays one of them. So step 1 asks only whether the cup is <b>the Triple Cup preset</b> or a <b>mixed cup</b>; Singles, Fourball, Irish Rumble, Nassau pairs and the rest become games you stock and price on <a href="cup-games-by-round-mixed.html">Games &amp; points by round</a>, and seat on <a href="round-game-assignment.html">Games by group</a>.</li>
+<li><b>Triple Cup stays exclusive</b> because its segments own all 18 holes, so nothing else can run alongside it &mdash; which is why it is still worth naming at step 1: it is the one answer that removes later steps.</li>
 <li><b>Scoring unit is a property of the format, not the type.</b> A two-man team can be one ball or two; a four-man team can be one card or four. That is why the strip reads off the format and not the type above it.</li>
 <li>The two numbers agree: the header counts <b>this step plus what remains</b>, and the panel is titled for what is left.</li>
 <li>Because the list is real, the progress bar can be honest about position.</li>
@@ -135,9 +137,9 @@ p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
 <div class="opts" id="fmts"></div>
 
 <div class="cap">
-<div class="r"><span>Scores in</span><b id="cUnit">Per golfer in Fourball, per pair in Foursomes</b></div>
+<div class="r"><span>Scores in</span><b id="cUnit">Depends on the game each foursome plays &mdash; set at round setup</b></div>
 <div class="r"><span>Leaderboard</span><b id="cLb">Side against side</b></div>
-<div class="r bet yes" id="cBetRow"><span>Group bets</span><b id="cBet">Available &mdash; the Fourball segment has individual gross</b></div>
+<div class="r bet part" id="cBetRow"><span>Group bets</span><b id="cBet">Only in games that keep individual gross &mdash; Nassau pairs and Singles, not Irish Rumble, scramble or Chapman</b></div>
 </div>
 
 <div class="plan">
@@ -151,9 +153,8 @@ p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
 </div>
 <script>
 var FMT={
-cup:[['triple','Triple Cup','Fourball, Foursomes and two Singles per group \u2014 four points a group.',1,'mixed'],
-     ['singles','Singles','One match per pairing.',0,'golfer'],
-     ['fourball','Fourball','One better-ball match per group.',0,'golfer']],
+cup:[['mixed','Mixed cup','1 to several games a day \u2014 Irish Rumble, Nassau pairs, Chapman, Singles. Each foursome plays one, with the ability to assign points for each match.',0,'varies'],
+     ['triple','Triple Cup','A preset day: Fourball, Foursomes and two Singles per group \u2014 four points a group.',1,'mixed']],
 solo:[['stroke','Stroke play','Gross or net against the field.',0,'golfer'],
       ['stableford','Stableford','Points per hole against par.',0,'golfer']],
 pair:[['bestball','Best ball','Both play their own ball; the better score counts on each hole.',0,'golfer'],
@@ -166,10 +167,11 @@ var UNIT={
 golfer:['Per golfer','Available \u2014 individual gross is on the card'],
 pair:['Per pair \u2014 one ball','Unavailable \u2014 no individual gross to read'],
 group:['Per group \u2014 one ball','Unavailable \u2014 no individual gross to read'],
-mixed:['Per golfer in Fourball, per pair in Foursomes','Available \u2014 the Fourball segment has individual gross']};
+mixed:['Per golfer in Fourball, per pair in Foursomes','Available \u2014 the Fourball segment has individual gross'],
+varies:['Depends on the game each foursome plays \u2014 set at round setup','Only in games that keep individual gross \u2014 Nassau pairs and Singles, not Irish Rumble, scramble or Chapman']};
 var LB={cup:'Side against side',solo:'Field, gross or net',pair:'Pairs against the field',quad:'Groups against the field'};
 var LBL={cup:'Cup format',solo:'Scoring',pair:'Two-man format',quad:'Four-man format'};
-var type='cup',fmt='triple',excl=true,unit='mixed';
+var type='cup',fmt='mixed',excl=false,unit='varies';
 function paintFmts(){
   var list=FMT[type],only=list.length===1;
   document.getElementById('fmlb').textContent=LBL[type];
@@ -184,15 +186,15 @@ function paintCaps(){
   document.getElementById('cUnit').textContent=u[0];
   document.getElementById('cLb').textContent=LB[type];
   document.getElementById('cBet').textContent=u[1];
-  var row=document.getElementById('cBetRow'),ok=u[1].indexOf('Available \u2014')===0;
-  row.classList.toggle('yes',ok);row.classList.toggle('no',!ok);
+  var row=document.getElementById('cBetRow'),ok=u[1].indexOf('Available \u2014')===0,part=u[1].indexOf('Only in')===0;
+  row.classList.toggle('yes',ok);row.classList.toggle('part',part);row.classList.toggle('no',!ok&&!part);
 }
 function plan(){
   var s=[{b:'Event details',d:'Name, course, dates'}];
   if(type==='cup'){
     s.push({b:'Teams',d:'Count, colours, names and badges'});
     s.push({b:'Handicap',d:'Net, gross or strokes off the low index'});
-    s.push({b:'Points by round',d:'Format, segment order, points and stake \u2014 totals follow from your groups',rep:1});
+    s.push({b:'Games & points by round',d:'Stock each day with games and price them \u2014 totals follow from your groups',rep:1});
     if(excl)s.push({b:'Tournament side game',d:'Skipped \u2014 Triple Cup is exclusive',skip:true});
     else s.push({b:'Tournament side game',d:'Field-wide and tracked \u2014 Irish Rumble, Pink Ball'});
     s.push({b:'Draft',d:'Add players and assign them to teams'});

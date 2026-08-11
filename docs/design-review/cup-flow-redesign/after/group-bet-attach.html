@@ -1,0 +1,187 @@
+<!-- @dsCard group="Cup Flow" name="Attach a group game" subtitle="Player-initiated from the round hub, gated to a member of the group. One Attach to option — this group, several groups, or the tournament — never two at once" viewport="900x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved &middot; Attach a group game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes i{font-style:normal;font-weight:600;color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:5px}
+.was{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12.5px;line-height:1.6}
+.was table{border-collapse:collapse;width:100%}
+.was td{padding:4px 0;vertical-align:top}
+.was td:first-child{color:#9AA8A0;width:96px;font-weight:600}
+.demo{background:#0B1F1A;border-radius:12px;padding:10px 12px;margin:0 0 12px;color:#9EBCAD;font-size:11.5px}
+.demo b{display:block;color:#fff;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:7px}
+.demo .btns{display:flex;gap:6px}
+.demo button{flex:1;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#DDEBE2;border-radius:8px;padding:7px 4px;font:700 12px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.demo button.on{background:var(--brightMint);border-color:var(--brightMint);color:#08301F}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:11px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px}
+.body{padding:10px 16px 100px;height:706px;overflow-y:auto}
+.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:22px;margin:4px 0 4px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:12.5px;line-height:1.5;margin:0 0 14px}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:16px 0 7px;display:flex;align-items:baseline;gap:7px}
+.games{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.games button{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 11px 12px;text-align:left;cursor:pointer;font-family:"Spline Sans",system-ui,sans-serif}
+.games button b{display:block;font-size:14px;font-weight:600;margin-bottom:2px}
+.games button small{display:block;font-size:11px;color:var(--muted);line-height:1.35}
+.games button.on{border-color:var(--pine);border-width:2px;padding:10px 10px 11px;background:#F4FAF6}
+.att{display:flex;flex-direction:column;gap:7px}
+.opt{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 12px;cursor:pointer}
+.opt.on{border-color:var(--pine);border-width:2px;padding:10px 11px;background:#F4FAF6}
+.opt .rd{width:20px;height:20px;border-radius:50%;border:2px solid #C0CFC5;flex:none;margin-top:1px;position:relative}
+.opt.on .rd{border-color:var(--pine)}
+.opt.on .rd:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--pine)}
+.opt .d{flex:1;min-width:0}
+.opt .d b{display:block;font-size:14px;font-weight:600;line-height:1.3}
+.opt .d small{display:block;font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:2px}
+.opt.off{opacity:.5;cursor:not-allowed}
+.scope{background:var(--card);border:1px solid var(--cardBorder);border-radius:13px;padding:11px 12px;margin-top:8px}
+.scope .sh{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.scope .row{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #EFF4F0;font-size:13px}
+.scope .row:last-child{border-bottom:none}
+.scope .row .ck{width:20px;height:20px;border-radius:6px;border:2px solid #C0CFC5;flex:none;position:relative}
+.scope .row.on .ck{background:var(--pine);border-color:var(--pine)}
+.scope .row.on .ck:after{content:"";position:absolute;left:5px;top:2px;width:6px;height:10px;border:2.5px solid #fff;border-top:0;border-left:0;transform:rotate(42deg)}
+.scope .row span{flex:1;font-weight:600}
+.scope .row small{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
+.scope p{margin:9px 0 0;font-size:11.5px;color:var(--muted);line-height:1.45}
+.stake{display:flex;align-items:center;gap:9px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:0 12px;height:48px}
+.stake span{font-size:13px;color:var(--muted);flex:none}
+.stake input{border:none;outline:none;background:transparent;flex:1;min-width:0;font:600 15px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);font-variant-numeric:tabular-nums}
+.note{display:flex;gap:8px;align-items:flex-start;background:#F2F6F2;border:1px solid #DFE8E1;border-radius:12px;padding:10px 12px;margin-top:11px;font-size:12px;color:var(--muted);line-height:1.5}
+.note b{color:var(--deepPine)}
+.note.warn{background:#FDF3E7;border-color:#EFD9B8;color:#7A4E12}
+.note.warn b{color:#5D3A0B}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.bottom .next[disabled]{background:#C4D3C8;color:#7E8E84;cursor:not-allowed}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Attach a group game</h1>
+<p>The missing prerequisite for <a href="leaderboard-group-bets.html">group bets</a>. That tab settles skins, Nassau and rabbit from gross already entered &mdash; but nothing in the cup flow lets a foursome <b>have</b> such a game in the first place, so it renders over an empty source.</p>
+<p>Nothing new is needed underneath. The per-group game machinery already exists, and so does the control that decides a game&rsquo;s reach: the <b>Attach to</b> option that multi-group skins uses. This screen extends that one option to reach a tournament, and puts an entry point on the round hub.</p>
+<div class="was"><table>
+<tr><td>Entry</td><td><b>Player-initiated</b>, from the group&rsquo;s own card on the <a href="cup-round-hub.html">round hub</a> &mdash; not a TD control and not a wizard step.</td></tr>
+<tr><td>Who</td><td>Any <b>member of that group</b>. The same auth that lets someone in the group write scores.</td></tr>
+<tr><td>Reach</td><td>One <b>Attach to</b> option: this group, several groups, or the tournament. Never two.</td></tr>
+<tr><td>Settles</td><td>From gross already entered. No second scorecard.</td></tr>
+</table></div>
+<div class="demo"><b>Attach to</b><div class="btns"><button data-a="one">This group</button><button class="on" data-a="many">Several groups</button><button data-a="tour">Tournament</button></div></div>
+<h3>Decisions</h3>
+<ul>
+<li><b>Reach is one option, not a set of switches.</b> Multi-group skins already asks a game how far it reaches; a tournament is one more answer to that same question rather than a second question beside it. Two independent controls would let a game be attached to four groups <i>and</i> the tournament, which has no meaning &mdash; the pot would be counted twice and the two settlements would disagree. A single-select makes that state unreachable instead of validating against it after the fact.</li>
+<li><b>The tournament option is not a TD power.</b> Attaching to the tournament widens who a foursome is playing against; it does not change anything the TD set. The cup, its points and its rounds are untouched. So it stays with the group, gated to a member of the group, and the TD is not asked to approve a wager he is not in.</li>
+<li><b>The entry point is the group&rsquo;s own card.</b> A game belongs to the foursome, so it starts where the foursome is &mdash; the card on the round hub that already says <i>your group</i>. Putting it in the wizard would make the TD answer for every foursome; putting it on the leaderboard would ask people to set a bet from the screen that reports it.</li>
+<li><b>The scope list names groups, not a count.</b> Several groups means <i>which</i> ones, and money makes that precise: a golfer needs to read the names before he is in for the pot. The list is every group in the round with its tee time, and the group you are in is checked and locked.</li>
+<li><b>Tournament reach states its own size.</b> Choosing it says how many groups and how many golfers it will take in, because <i>the tournament</i> is an abstraction and the pot is not.</li>
+<li><b>The field-wide side game stays separate.</b> <a href="cup-side-game.html">Irish Rumble or Pink Ball</a> is the TD&rsquo;s, set in the wizard, played by every foursome by instruction. This is the opposite: opted into by the people paying for it. They can coexist, and neither one names the other.</li>
+<li><b>Settlement reads gross that is already there.</b> Nothing on this screen asks for a second card &mdash; that is what makes attaching cheap enough to do on the first tee.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Whether a golfer can decline after the game is attached. Somebody in the group sets it for the group, which is how it works on the tee &mdash; but the app makes it durable in a way a handshake is not.</li>
+<li>Net skins on a tournament-wide attach needs the stroke dots repeated per group; the <a href="leaderboard-group-bets.html">bets tab</a> carries the same open question.</li>
+<li>Whether attaching after the round is under way should be allowed, and from which hole it counts.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>7:52</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Group game</span></div>
+<div class="body">
+<h2 class="hd">Add a game for Group 1</h2>
+<p class="sub">Yours and the people you are playing with. The tournament does not see it, and the TD does not set it up.</p>
+
+<div class="lb">Game</div>
+<div class="games" id="games">
+<button class="on" data-g="skins"><b>Skins</b><small>Low score wins the hole, carries when tied</small></button>
+<button data-g="nassau"><b>Nassau</b><small>Front, back and overall</small></button>
+<button data-g="rabbit"><b>Rabbit</b><small>Held until somebody takes it</small></button>
+<button data-g="wolf"><b>Wolf</b><small>Rotating pick each hole</small></button>
+</div>
+
+<div class="lb">Attach to</div>
+<div class="att" id="att">
+<div class="opt" data-a="one"><span class="rd"></span><span class="d"><b>This group only</b><small>Group 1 &mdash; four golfers</small></span></div>
+<div class="opt on" data-a="many"><span class="rd"></span><span class="d"><b>Several groups</b><small>One pot across the groups you pick</small></span></div>
+<div class="opt" data-a="tour"><span class="rd"></span><span class="d"><b>The whole tournament</b><small>Every group in Round 1 &mdash; 4 groups, 16 golfers</small></span></div>
+</div>
+
+<div id="pane"></div>
+
+<div class="lb">Stake</div>
+<div class="stake"><span>$</span><input value="5" inputmode="numeric"><span id="stk">a skin</span></div>
+
+<div class="note" id="note"><span><b>Settled from the scores you are already entering.</b> No second card, and it shows up on the <b>Group bets</b> tab of the leaderboard as the round goes.</span></div>
+</div>
+<div class="bottom"><button class="back">Cancel</button><button class="next" id="go">Start skins</button></div>
+</div>
+<script>
+var GROUPS=[['Group 1','8:00','Bucko, Webb, Miller, Malat'],['Group 2','8:08','Wong, Comer, Sanders, Lajoie'],['Group 3','8:16','Ford, Dunne, Kane, Reilly'],['Group 4','8:24','Shaw, Hines, Pratt, Ochoa']];
+var att='many',game='skins',picked=[0,1];
+var NAMES={skins:'skins',nassau:'a Nassau',rabbit:'rabbit',wolf:'wolf'};
+var UNIT={skins:'a skin',nassau:'a side',rabbit:'the rabbit',wolf:'a hole'};
+function pane(){
+  var p=document.getElementById('pane');
+  if(att==='many'){
+    p.innerHTML='<div class="scope"><div class="sh">Groups in this pot</div>'+GROUPS.map(function(g,i){
+      var on=picked.indexOf(i)>-1,lock=i===0;
+      return '<div class="row'+(on?' on':'')+'" data-i="'+i+'"'+(lock?' style="opacity:.75"':'')+'><span class="ck"></span><span>'+g[0]+(lock?' &mdash; yours':'')+'</span><small>'+g[1]+'</small></div>';
+    }).join('')+'<p id="scp"></p></div>';
+    p.querySelectorAll('.row').forEach(function(r){
+      r.addEventListener('click',function(){
+        var i=+r.dataset.i;if(i===0)return;
+        var at=picked.indexOf(i);if(at>-1)picked.splice(at,1);else picked.push(i);
+        draw();
+      });
+    });
+    var n=picked.length;
+    document.getElementById('scp').innerHTML=n<2
+      ?'Pick at least one more group, or attach to this group only.'
+      :'<b style="color:#0B1F1A">'+n+' groups &middot; '+(n*4)+' golfers</b> in one pot.';
+  } else if(att==='tour'){
+    p.innerHTML='<div class="note"><span><b>Every group in Round 1 is in</b> &mdash; 4 groups, 16 golfers, one pot. A group added later joins from the hole it starts on.</span></div>';
+  } else {
+    p.innerHTML='<div class="note"><span><b>Bucko, Webb, Miller and Malat.</b> Nobody outside Group 1 sees it.</span></div>';
+  }
+}
+function draw(){
+  document.querySelectorAll('#games button').forEach(function(b){b.classList.toggle('on',b.dataset.g===game)});
+  document.querySelectorAll('#att .opt').forEach(function(o){o.classList.toggle('on',o.dataset.a===att)});
+  document.querySelectorAll('.demo button').forEach(function(b){b.classList.toggle('on',b.dataset.a===att)});
+  pane();
+  document.getElementById('stk').textContent=UNIT[game];
+  var ok=att!=='many'||picked.length>1;
+  var go=document.getElementById('go');
+  go.disabled=!ok;
+  go.textContent=ok?'Start '+NAMES[game]:'Pick another group';
+}
+document.querySelectorAll('#games button').forEach(function(b){b.addEventListener('click',function(){game=b.dataset.g;draw()})});
+document.querySelectorAll('#att .opt').forEach(function(o){o.addEventListener('click',function(){att=o.dataset.a;draw()})});
+document.querySelectorAll('.demo button').forEach(function(b){b.addEventListener('click',function(){att=b.dataset.a;draw()})});
+draw();
+</script>
+</body>
+</html>

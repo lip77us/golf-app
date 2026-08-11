@@ -71,6 +71,8 @@ label.fl{display:block;font-size:11px;font-weight:700;letter-spacing:.5px;text-t
 .sw button.tk{opacity:.3;cursor:not-allowed}
 .sw button.tk:after{content:"";position:absolute;width:30px;height:2px;background:var(--deepPine);transform:rotate(-45deg)}
 .hint{font-size:11.5px;color:#9AA8A0;margin-top:9px}
+.swn{font-size:11.5px;color:var(--muted);margin-top:7px}
+.swn b{font-weight:600;color:var(--deepPine)}
 .bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
 .bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
@@ -102,6 +104,7 @@ label.fl{display:block;font-size:11px;font-weight:700;letter-spacing:.5px;text-t
 <h3>Other fixes on this step</h3>
 <ul>
 <li><b>Colours are swatches, not tinted word-pills.</b> The shipped control renders the colour name in that colour with a pale fill, so unselected options read as disabled. A filled square with a check is unambiguous.</li>
+<li><b>The palette is six named colours, and the name is what is stored.</b> Red, Blue, Green, Orange, Yellow, Purple &mdash; a team wears a name, and every surface resolves that name through one palette so a badge is identical on the draft, the round hub and the leaderboard. Six is the ceiling: it is as many as stay distinguishable at 20&nbsp;px and legible on white, and more sides than the cup formats support. The swatch row is named in a caption rather than under each square, because six labels do not fit at 375&nbsp;px.</li>
 <li><b>A colour taken by another team is struck through and locked.</b> Two teams could previously pick the same colour, which makes the whole red/blue system meaningless.</li>
 <li><b>2 teams is genuinely selected on arrival</b> and <b>Next</b> is enabled &mdash; the shipped screen highlights 2 but keeps Next disabled until a chip is tapped.</li>
 <li><b>The cup name is not asked here.</b> It belongs to <a href="cup-event-details.html">event details</a> at step 2, and asking twice is how the shipped flow ended up with three owners for the player list. The name is whatever the captain typed &mdash; nothing is appended, so a cup called <i>Tilden Ryder Cup</i> was typed in full.</li>
@@ -135,13 +138,14 @@ label.fl{display:block;font-size:11px;font-weight:700;letter-spacing:.5px;text-t
 <div class="bg"><div class="fld"><input class="bd" maxlength="2" value="B"></div><div class="bglb">Badge</div></div>
 </div>
 <div class="sw">
-<button class="on" data-c="#B93327"><i style="background:#B93327"></i></button>
-<button class="tk" data-c="#1B4C99"><i style="background:#1B4C99"></i></button>
-<button data-c="#1D7A4C"><i style="background:#1D7A4C"></i></button>
-<button data-c="#D2691E"><i style="background:#D2691E"></i></button>
-<button data-c="#E0B411"><i style="background:#E0B411"></i></button>
-<button data-c="#6B4CA8"><i style="background:#6B4CA8"></i></button>
+<button class="on" data-c="#B93327" data-n="Red" title="Red"><i style="background:#B93327"></i></button>
+<button class="tk" data-c="#1B4C99" data-n="Blue" title="Blue — taken by Team Miller"><i style="background:#1B4C99"></i></button>
+<button data-c="#1D7A4C" data-n="Green" title="Green"><i style="background:#1D7A4C"></i></button>
+<button data-c="#D2691E" data-n="Orange" title="Orange"><i style="background:#D2691E"></i></button>
+<button data-c="#E0B411" data-n="Yellow" title="Yellow"><i style="background:#E0B411"></i></button>
+<button data-c="#6B4CA8" data-n="Purple" title="Purple"><i style="background:#6B4CA8"></i></button>
 </div>
+<div class="swn">Wearing <b>Red</b> &middot; Blue is taken by Team Miller</div>
 </div>
 
 <div class="tc" data-team="2">
@@ -151,13 +155,14 @@ label.fl{display:block;font-size:11px;font-weight:700;letter-spacing:.5px;text-t
 <div class="bg"><div class="fld"><input class="bd" maxlength="2" value="M"></div><div class="bglb">Badge</div></div>
 </div>
 <div class="sw">
-<button class="tk" data-c="#B93327"><i style="background:#B93327"></i></button>
-<button class="on" data-c="#1B4C99"><i style="background:#1B4C99"></i></button>
-<button data-c="#1D7A4C"><i style="background:#1D7A4C"></i></button>
-<button data-c="#D2691E"><i style="background:#D2691E"></i></button>
-<button data-c="#E0B411"><i style="background:#E0B411"></i></button>
-<button data-c="#6B4CA8"><i style="background:#6B4CA8"></i></button>
+<button class="tk" data-c="#B93327" data-n="Red" title="Red — taken by Team Bucko"><i style="background:#B93327"></i></button>
+<button class="on" data-c="#1B4C99" data-n="Blue" title="Blue"><i style="background:#1B4C99"></i></button>
+<button data-c="#1D7A4C" data-n="Green" title="Green"><i style="background:#1D7A4C"></i></button>
+<button data-c="#D2691E" data-n="Orange" title="Orange"><i style="background:#D2691E"></i></button>
+<button data-c="#E0B411" data-n="Yellow" title="Yellow"><i style="background:#E0B411"></i></button>
+<button data-c="#6B4CA8" data-n="Purple" title="Purple"><i style="background:#6B4CA8"></i></button>
 </div>
+<div class="swn">Wearing <b>Blue</b> &middot; Red is taken by Team Bucko</div>
 </div>
 
 <div class="dup" id="dup"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h0M10.3 3.9 2.6 17.2A1.9 1.9 0 0 0 4.3 20h15.4a1.9 1.9 0 0 0 1.7-2.8L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg><span>Both teams use the badge <b class="bl">B</b>. Colour still tells them apart, but a different letter reads faster on the scorecard.</span></div>

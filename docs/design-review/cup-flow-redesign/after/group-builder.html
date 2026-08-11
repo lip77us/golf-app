@@ -156,7 +156,7 @@ p.sub{color:var(--muted);font-size:12.5px;margin:4px 0 14px}
 <h3>Side games are not the TD&rsquo;s business</h3>
 <p>An earlier pass put a <b>group bet</b> control on this card &mdash; skins, Nassau, rabbit, per group. Removed. A wager inside a foursome is between those four people, and nothing about it needs a tournament director&rsquo;s hand: he is not in it, does not collect it, and cannot be asked to remember it while seating sixteen golfers.</p>
 <ul>
-<li><b>The foursome starts its own.</b> There is already a mechanism for a group to open a side game and attach it to their tournament entry &mdash; the same one multi-group skins will use. This screen should not duplicate it, and a TD-facing control would make the captain the owner of a decision that is not his.</li>
+<li><b>The foursome starts its own.</b> There is already a mechanism for a group to open a side game and attach it to their tournament entry &mdash; the same one multi-group skins will use. <a href="group-bet-attach.html">That screen is drawn.</a> This screen should not duplicate it, and a TD-facing control would make the captain the owner of a decision that is not his.</li>
 <li><b>What stays here is what only the TD can set:</b> who is in the group, which tee each golfer plays, when they go out, and whether the field is sequential or shotgun. Those are field-management facts. A bet is not.</li>
 <li><b>The wizard&rsquo;s side-game step is a different thing</b> and still belongs there &mdash; <a href="cup-side-game.html">Irish Rumble or Pink Ball</a> is played by every foursome and ranked across the field, so somebody has to declare it once for everyone. That is the test: if it needs one answer for the whole field, it is the TD&rsquo;s; if it settles among four, it is theirs.</li>
 <li>The <b>cup match</b> in a 1 v 1 group is still not called a Nassau on this screen, even though it is one in structure &mdash; that word belongs to the group&rsquo;s own game.</li>
@@ -165,6 +165,14 @@ p.sub{color:var(--muted);font-size:12.5px;margin:4px 0 14px}
 <ul>
 <li><b>Stroke or Stableford:</b> the team chips and the <i>2 v 2</i> rule drop out; the check becomes a simple count of 2&ndash;4. Everything else is identical, which is what makes this worth building once.</li>
 <li><b>Odd fields:</b> a group of three is legal for stroke play and needs a phantom for cup play &mdash; the check is the right place to say so.</li>
+</ul>
+<h3>Shotgun rules</h3>
+<ul>
+<li><b>One group to a hole, assigned on creation.</b> A new group takes the lowest free hole, so a TD who adds four groups gets 1, 2, 3, 4 without touching the picker. Taken holes are locked in it rather than hidden, because the useful question on the picker is <i>who is on 7</i>, not <i>what is left</i>.</li>
+<li><b>Above 18 groups it is a double shotgun</b> &mdash; 1A and 1B share a hole and go out together. The picker offers the B slot only once every hole is taken, so the second wave cannot start before the first is full. <b>Not drawn.</b></li>
+<li><b>One time for the field.</b> In shotgun the per-group tee time collapses to a single round value; the interval control is hidden rather than disabled, because there is no interval to set.</li>
+<li><b>Formats that define segments by hole cannot shotgun.</b> Triple Cup&rsquo;s Fourball 1&ndash;6 / Foursomes 7&ndash;12 / Singles 13&ndash;18 would hand a group starting on 9 a different game from a group starting on 2, so the toggle is struck with that reason rather than left to fail at scoring.</li>
+<li><b>The interval belongs to the course, not the round.</b> A new field on the course record, in minutes, default 10. The builder writes it when a TD changes it and reads it as the default for every later round at that course &mdash; which is what makes it worth storing at all. Ten common values are offered; the field accepts any integer.</li>
 </ul>
 <h3>Still open</h3>
 <ul>

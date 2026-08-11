@@ -1,0 +1,238 @@
+<!-- @dsCard group="Cup Flow" name="Games by group" subtitle="Round setup: each foursome plays one game; cross-foursome games pair a blue group against a red one, and the screen refuses to start unbalanced" viewport="1340x1040" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Games by group</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:30px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:340px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.col{flex:none}
+.cap{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px 4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px}
+.appbar .step{margin-left:auto;font-size:12px;color:var(--muted);font-weight:600}
+.meta{margin:4px 16px 0;font-size:12px;color:var(--muted);line-height:1.5}
+.meta b{color:var(--deepPine);font-weight:600}
+.body{padding:10px 14px 96px;overflow-y:auto;height:660px;position:relative}
+.gsec{margin-bottom:14px}
+.ghd{display:flex;align-items:baseline;gap:8px;margin:0 2px 7px}
+.ghd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14.5px}
+.ghd .pt{font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--pine);background:#E7EFE9;border-radius:6px;padding:2px 7px}
+.ghd .ct{margin-left:auto;font-size:11.5px;color:#93A29A;font-weight:600}
+.mt{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:10px 12px;margin-bottom:8px}
+.mt.warn{border-color:#E4B9B3;background:#FDF6F5}
+.side{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px;padding:4px 0}
+.side .chip{min-width:20px;height:20px;padding:0 4px;border-radius:6px;color:#fff;font:700 11px/20px "Spline Sans",system-ui,sans-serif;text-align:center}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.side .who{min-width:0}
+.side .who b{display:block;font-size:13px;font-weight:600}
+.side .who small{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
+.side .tee{font-size:11.5px;color:#93A29A;font-variant-numeric:tabular-nums}
+.dvd{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#B0BEB5}
+.dvd:before,.dvd:after{content:"";flex:1;height:1px;background:#EDF2EE}
+.inside{font-size:11px;color:#93A29A;margin-top:6px;padding-top:6px;border-top:1px solid #EDF2EE}
+.miss{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:#8A3226;line-height:1.5;margin-top:8px;padding-top:8px;border-top:1px solid #F0D8D4}
+.miss b{font-weight:700}
+.fix{border:1.5px solid #D3DED6;background:#fff;border-radius:10px;padding:7px 11px;font:600 12px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer;margin-top:9px}
+.un{background:var(--card);border:1px dashed #C9D8CE;border-radius:14px;padding:11px 12px;margin-bottom:8px}
+.un .r{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px;padding:5px 0}
+.un .r b{font-size:13px;font-weight:600}
+.un .r small{display:block;font-size:11.5px;color:var(--muted)}
+.un .pick{border:1.5px solid var(--pine);background:#fff;border-radius:9px;padding:6px 11px;font:600 12px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.tally{background:var(--deepPine);color:#fff;border-radius:14px;padding:12px 13px;margin-bottom:12px}
+.tally h4{margin:0 0 7px;font:700 11px/1 "Spline Sans",system-ui,sans-serif;letter-spacing:.5px;text-transform:uppercase;color:var(--brightMint)}
+.tally .l{display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0;color:#C7D6CD}
+.tally .l b{color:#fff;font-weight:600;font-variant-numeric:tabular-nums}
+.tally .l.big{border-top:1px solid rgba(255,255,255,.16);margin-top:6px;padding-top:8px;color:#fff;font-size:13.5px}
+.nav{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid #D6E1D8;padding:11px 16px 20px;display:flex;gap:10px}
+.nav button{border-radius:13px;padding:13px 0;font:700 14.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;border:none;flex:1}
+.nav .b{background:transparent;border:1.5px solid #D3DED6;color:var(--deepPine);flex:0 0 96px}
+.nav .p{background:var(--pine);color:#fff}
+.nav .p[disabled]{background:#B7C7BC;color:#F1F6F2;cursor:not-allowed}
+.scrim{position:absolute;inset:0;background:rgba(11,31,26,.42);z-index:5}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-radius:22px 22px 0 0;padding:18px 16px 22px;box-shadow:0 -10px 40px rgba(6,18,14,.25)}
+.sheet .grab{width:38px;height:4px;border-radius:2px;background:#D6E1D8;margin:0 auto 14px}
+.sheet h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px;margin:0 0 4px}
+.sheet .sub{font-size:12.5px;color:var(--muted);line-height:1.5;margin:0 0 13px}
+.opt{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;border:1.5px solid #E3EBE5;border-radius:12px;padding:10px 12px;margin-bottom:7px;cursor:pointer}
+.opt b{font-size:13.5px;font-weight:600}
+.opt small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.opt .tag{font-size:10.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--pine);background:#E7EFE9;border-radius:6px;padding:3px 7px}
+.opt.on{border-color:var(--pine);background:#F2F9F5}
+.opt.off{opacity:.5}
+.opt.off .tag{color:#8A3226;background:#F7E7E4}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Games by group</h1>
+<p>Priced in the wizard, seated here. Round setup already builds the foursomes; this is the step that says <b>which game each foursome plays</b>, once the people are real.</p>
+<p>Two shapes of match, and the difference decides the whole screen:</p>
+<h3>Inside a foursome</h3>
+<ul>
+<li>Nassau pairs, Chapman, Fourball, Singles &mdash; the group is two blue and two red (or one and one), so the match is <b>contained</b>. Assigning the game is the whole job.</li>
+</ul>
+<h3>Between two foursomes</h3>
+<ul>
+<li>Irish Rumble and a four-man scramble put <b>one ball per side</b>, so the foursome is all blue or all red and needs an opposite number. The screen pairs them and shows the match as two stacked sides.</li>
+<li><b>Red against blue, always.</b> A blue foursome with no red opponent is not a match, so it is drawn as an incomplete one &mdash; named, with the fix offered &mdash; and Start Round stays disabled until every game balances.</li>
+</ul>
+<h3>Reading the screen</h3>
+<ul>
+<li><b>Grouped by game, not by group number.</b> A captain checks the day one game at a time &mdash; &ldquo;is the Rumble even?&rdquo; &mdash; and the count sits in each game&rsquo;s header.</li>
+<li>Points come along for the ride: each game header carries the value set in the wizard, and the tally at the bottom is the first honest <b>points in play</b> for the round, because only now do the matches exist.</li>
+<li>An <b>odd twosome</b> is not an error. It takes Singles and pays its point like anything else.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Whether the app should propose an assignment &mdash; pair the Rumble foursomes by tee time, drop leftovers into Singles &mdash; and let the captain correct it, rather than starting empty.</li>
+<li>Mixed sizes: a two-man scramble is a foursome carrying two matches, not one. Drawn here as one row per match, but the tee sheet still says four golfers.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="cap">1 &middot; Assigned and balanced</div>
+<div class="phone">
+<div class="status"><span>6:58</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Round 1 &middot; Games</span><span class="step">Step 7 of 7</span></div>
+<div class="meta">Tilden &middot; Sat 12 Sep &middot; <b>9 groups</b> &middot; 34 playing &middot; tee times from 8:00</div>
+<div class="body">
+
+<div class="gsec">
+<div class="ghd"><b>Irish Rumble</b><span class="pt">2 pts</span><span class="ct">2 matches</span></div>
+<div class="mt">
+<div class="side"><span class="chip b">B</span><span class="who"><b>Group 1</b><small>Bucko, Webb, Ford, Dunne</small></span><span class="tee">8:00</span></div>
+<div class="dvd">vs</div>
+<div class="side"><span class="chip a">M</span><span class="who"><b>Group 2</b><small>Miller, Malat, Kane, Reilly</small></span><span class="tee">8:08</span></div>
+</div>
+<div class="mt">
+<div class="side"><span class="chip b">B</span><span class="who"><b>Group 3</b><small>Wong, Comer, Shaw, Hines</small></span><span class="tee">8:16</span></div>
+<div class="dvd">vs</div>
+<div class="side"><span class="chip a">M</span><span class="who"><b>Group 4</b><small>Sanders, Lajoie, Pratt, Ochoa</small></span><span class="tee">8:24</span></div>
+</div>
+</div>
+
+<div class="gsec">
+<div class="ghd"><b>Nassau pairs</b><span class="pt">1 pt/seg</span><span class="ct">2 matches</span></div>
+<div class="mt">
+<div class="side"><span class="chip b">B</span><span class="who"><b>Group 5</b><small>Kerss &amp; Petersen</small></span><span class="tee">8:32</span></div>
+<div class="dvd">vs</div>
+<div class="side"><span class="chip a">M</span><span class="who"><b>same group</b><small>Cisneros &amp; Wicke</small></span><span class="tee"></span></div>
+<div class="inside">Contained &mdash; 2 v 2 inside the foursome. Front, back and overall.</div>
+</div>
+<div class="mt">
+<div class="side"><span class="chip b">B</span><span class="who"><b>Group 6</b><small>Kang &amp; Iyer</small></span><span class="tee">8:40</span></div>
+<div class="dvd">vs</div>
+<div class="side"><span class="chip a">M</span><span class="who"><b>same group</b><small>Lipkin &amp; Boyd</small></span><span class="tee"></span></div>
+<div class="inside">Contained &mdash; 2 v 2 inside the foursome. Front, back and overall.</div>
+</div>
+</div>
+
+<div class="gsec">
+<div class="ghd"><b>Chapman</b><span class="pt">2 pts</span><span class="ct">1 match</span></div>
+<div class="mt">
+<div class="side"><span class="chip b">B</span><span class="who"><b>Group 7</b><small>Neal &amp; Baptiste</small></span><span class="tee">8:48</span></div>
+<div class="dvd">vs</div>
+<div class="side"><span class="chip a">M</span><span class="who"><b>same group</b><small>Ortiz &amp; Mehta</small></span><span class="tee"></span></div>
+<div class="inside">Contained &mdash; one ball a side from the second shot.</div>
+</div>
+</div>
+
+<div class="gsec">
+<div class="ghd"><b>Scramble</b><span class="pt">2 pts</span><span class="ct">1 match</span></div>
+<div class="mt">
+<div class="side"><span class="chip b">B</span><span class="who"><b>Group 8</b><small>Hahn, Ruiz, Doyle, Frame</small></span><span class="tee">8:56</span></div>
+<div class="dvd">vs</div>
+<div class="side"><span class="chip a">M</span><span class="who"><b>Group 9</b><small>Okonkwo, Rand, Tulley, Vance</small></span><span class="tee">9:04</span></div>
+</div>
+</div>
+
+<div class="gsec">
+<div class="ghd"><b>Singles</b><span class="pt">1 pt</span><span class="ct">1 match</span></div>
+<div class="mt">
+<div class="side"><span class="chip b">B</span><span class="who"><b>Group 10</b><small>Ferris</small></span><span class="tee">9:12</span></div>
+<div class="dvd">vs</div>
+<div class="side"><span class="chip a">M</span><span class="who"><b>same group</b><small>Cho</small></span><span class="tee"></span></div>
+<div class="inside">The odd twosome. Not an error &mdash; it plays for its point like any other match.</div>
+</div>
+</div>
+
+<div class="tally">
+<h4>Points in play &mdash; Round 1</h4>
+<div class="l"><span>Irish Rumble &middot; 2 matches</span><b>4</b></div>
+<div class="l"><span>Nassau pairs &middot; 2 &times; 3 segments</span><b>6</b></div>
+<div class="l"><span>Chapman &middot; 1 match</span><b>2</b></div>
+<div class="l"><span>Scramble &middot; 1 match</span><b>2</b></div>
+<div class="l"><span>Singles &middot; 1 match</span><b>1</b></div>
+<div class="l big"><span>Round 1 total</span><b>15 points</b></div>
+</div>
+</div>
+<div class="nav"><button class="b">Back</button><button class="p">Start Round</button></div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap">2 &middot; Unbalanced &mdash; and the fix</div>
+<div class="phone">
+<div class="status"><span>6:58</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Round 1 &middot; Games</span><span class="step">Step 7 of 7</span></div>
+<div class="meta">Tilden &middot; Sat 12 Sep &middot; <b>9 groups</b> &middot; 34 playing &middot; <b>1 game unbalanced</b></div>
+<div class="body">
+
+<div class="gsec">
+<div class="ghd"><b>Irish Rumble</b><span class="pt">2 pts</span><span class="ct">1 match &middot; 1 waiting</span></div>
+<div class="mt">
+<div class="side"><span class="chip b">B</span><span class="who"><b>Group 1</b><small>Bucko, Webb, Ford, Dunne</small></span><span class="tee">8:00</span></div>
+<div class="dvd">vs</div>
+<div class="side"><span class="chip a">M</span><span class="who"><b>Group 2</b><small>Miller, Malat, Kane, Reilly</small></span><span class="tee">8:08</span></div>
+</div>
+<div class="mt warn">
+<div class="side"><span class="chip b">B</span><span class="who"><b>Group 3</b><small>Wong, Comer, Shaw, Hines</small></span><span class="tee">8:16</span></div>
+<div class="dvd">vs</div>
+<div class="side"><span class="chip a" style="background:#D8C3C0">?</span><span class="who"><b style="color:#8A3226">No Marauders foursome</b><small>Irish Rumble puts one ball a side &mdash; this group needs an opposite number</small></span><span class="tee"></span></div>
+<div class="miss"><span>&#9888;</span><span><b>Group 3 has nobody to play.</b> Give a Marauders foursome the Rumble, or move Group 3 to a contained game.</span></div>
+<button class="fix">Assign an opponent</button>
+</div>
+</div>
+
+<div class="gsec">
+<div class="ghd"><b>Not assigned</b><span class="ct">1 group</span></div>
+<div class="un">
+<div class="r"><span class="chip a">M</span><span><b>Group 4</b><small>Sanders, Lajoie, Pratt, Ochoa &middot; 8:24</small></span><button class="pick">Pick game</button></div>
+</div>
+</div>
+
+
+</div>
+<div class="nav"><button class="b">Back</button><button class="p" disabled>Start Round</button></div>
+<div class="scrim"></div>
+<div class="sheet">
+<div class="grab"></div>
+<h2>Group 4 &mdash; pick a game</h2>
+<p class="sub">All four are Marauders, so this foursome can take a one-ball game against a Bandits foursome, or split for a contained match.</p>
+<div class="opt on"><span><b>Irish Rumble</b><small>Pairs with Group 3 &middot; balances the Rumble</small></span><span class="tag">2 pts</span></div>
+<div class="opt"><span><b>Scramble</b><small>Needs a Bandits foursome &mdash; none free</small></span><span class="tag">2 pts</span></div>
+<div class="opt off"><span><b>Nassau pairs</b><small>Contained &mdash; needs two of each side in the group</small></span><span class="tag">All one side</span></div>
+<div class="opt off"><span><b>Chapman</b><small>Contained &mdash; needs two of each side in the group</small></span><span class="tag">All one side</span></div>
+</div>
+</div>
+</div>
+</body>
+</html>

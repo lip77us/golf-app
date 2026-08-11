@@ -38,17 +38,19 @@ switching sides on the draft), the behaviour is drawn deliberately and described
 column — implement the behaviour, not just the still.
 
 Two things are deliberately *not* final:
-- **Group bets attached by a foursome** — the mechanism (something like multi-group skins) is
-  not designed. `after/leaderboard-group-bets.html` shows settlement only.
+- **Net skins and the Nassau press** on the group-bets tab. Not specified — do not build them.
 - **Pairings** (two-man tournaments). Named by the wizard, no screen exists. See "Not drawn yet"
   in `HANDOFF.md`. Do not invent it.
+
+The group-bet **attach path** — previously the open mechanism — is now drawn at
+`after/group-bet-attach.html`. It reuses the **multi-group skins** attach control.
 
 ## What's in this bundle
 
 ```
 HANDOFF.md              the spec — phased, diff-shaped
 README.md               this file
-after/                  the redesign, 16 screens
+after/                  the redesign, 17 screens
 before/                 the shipped build, captures 01–28 recreated as HTML,
                         plus set-tees-standalone.html (the standalone Set Tees screen)
 foundations/            colours, typography, spacing & radii
@@ -74,6 +76,7 @@ Numbers in `HANDOFF.md` (`13`, `24`…) always mean the file of that number in `
 | `cup-round-hub.html` | play | Team chips, aligned tee/CH columns, score entry scoped by role. | `05` |
 | `cup-leaderboard.html` | play | Competition selector split from view tabs; segment results as cells. | `04` |
 | `cup-hub.html` | play | Live score on the tournament card; one primary action plus a grouped disclosure. | `01` |
+| `group-bet-attach.html` | play | Attach a game to the foursome. One Attach to option — this group, several groups, or the tournament. Never two. | — |
 | `leaderboard-group-bets.html` | play | Skins, Nassau, rabbit settled from gross already entered. A tab at group scope. | — |
 | `cup-create-flow-map.html` | — | Diagnosis and divergence table. Reference, not a screen to build. | — |
 
@@ -124,6 +127,9 @@ state) · mint `#1D9E75` (accent) · brightMint `#3BD89A` (CTA, live, "the hole"
 
 **Semantic** — win `#3BD89A` · owe `#F0916E` · warning `#B24225` · disabledFill `#D3DAD5`
 · disabledText `#93A099`
+
+**Team palette** — six named colours, stored by name and resolved through one palette:
+Red · Blue · Green · Orange · Yellow · Purple. No custom hex.
 
 **Team / game** — team1 `#1976D2` · team2 `#EF6C00` (colour-blind-safe pair) · win green.700
 `#388E3C` · loss red.700 `#D32F2F` · neutral grey.600 `#757575`. Green/red/grey mean

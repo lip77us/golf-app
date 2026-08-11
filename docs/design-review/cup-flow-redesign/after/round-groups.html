@@ -1,4 +1,4 @@
-<!-- @dsCard group="Cup Flow" name="Groups for this round" subtitle="Step 7 hub: composition, tee time and tees per group, unassigned golfers named, and a Start Round that states its blocker" viewport="900x1000" -->
+<!-- @dsCard group="Cup Flow" name="Groups for this round" subtitle="Step 7 hub: composition, tee time and tees per group, unassigned golfers named and assignable, and a Start Round that does not block on a sit-out" viewport="900x1000" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -74,8 +74,8 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 .sr .nm{flex:1;font-size:13.5px;font-weight:600}
 .sr .nm small{display:block;font-size:11px;color:var(--muted);font-weight:500}
 .sr a{font-size:12.5px;font-weight:600;text-decoration:none}
-.blk{display:flex;gap:8px;align-items:flex-start;background:#FDF3E7;border:1px solid #EFD9B8;border-radius:12px;padding:10px 12px;margin-top:11px;font-size:12px;color:#7A4E12;line-height:1.5}
-.blk b{color:#5D3A0B}
+.blk{display:flex;gap:8px;align-items:flex-start;background:#F2F6F2;border:1px solid #DFE8E1;border-radius:12px;padding:10px 12px;margin-top:11px;font-size:12px;color:var(--muted);line-height:1.5}
+.blk b{color:var(--deepPine)}
 </style>
 </head>
 <body>
@@ -86,20 +86,19 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 <div class="was"><table>
 <tr><td>Was</td><td>Group rows, a <b>sitting out</b> list, and <b>Start Round</b> enabled regardless of state.</td></tr>
 <tr><td>Now</td><td>Each row carries <b>composition, tee time and tees</b> &mdash; the three things that go wrong on the first tee.</td></tr>
-<tr><td>Start</td><td><b>Disabled with the reason named</b>, and the reason is tappable.</td></tr>
+<tr><td>Start</td><td><b>Enabled once one group exists.</b> Unassigned golfers are named with an <b>Assign</b> link rather than held against the round.</td></tr>
 </table></div>
 <h3>Decisions</h3>
 <ul>
 <li><b>This is the hub of step 7, not a summary.</b> Every group is reached from here, added from here, and checked from here. It is the screen a captain stands on while the group builder opens and closes over it.</li>
-<li><b>Composition is repeated per row</b> because a legal group and a complete group are different states. Group 3 is a legal 1 v 2 and playable; Group 4 holds two Marauders and no opponent, so it is neither.</li>
-<li><b>Unassigned golfers are listed by name, not counted.</b> A number tells a captain there is a problem; the names tell him which two friends are about to be left behind.</li>
-<li><b>Start Round states the blocker</b> and links to it. A disabled button with no sentence beside it is the most common complaint about the shipped flow.</li>
+<li><b>Composition is repeated per row</b> because a legal group and a full group are different states. Group 3 is a legal 2 v 2 like the rest; a 1 v 2 would be legal too, just smaller.</li>
+<li><b>Unassigned golfers are listed by name, not counted.</b> A number tells a captain there is a problem; the names tell him exactly who is not teeing off.</li>
+<li><b>Start Round does not block on a sit-out.</b> The <a href="group-builder.html">builder</a> cannot seat an illegal group in the first place, and a golfer left out is usually a deliberate rest rather than a mistake &mdash; so the button is live once one group exists, and the golfers not in one are named above it. Blocking here would stop a legitimate round on a fact the captain already knows.</li>
 <li><b>Tee times read as a sequence</b> down the list, so an interval mistake is visible as a gap rather than found by arithmetic.</li>
 <li><b>No bets on this list.</b> A wager inside a foursome is theirs, started through their own entry &mdash; the same mechanism multi-group skins uses. This screen carries only what the TD sets: golfers, tees, tee time, start format.</li>
 </ul>
 <h3>Still open</h3>
 <ul>
-<li>Whether <i>sitting out</i> should be explicit or derived. Derived is honest but flags every deliberate rest as a problem; a <i>sitting out by choice</i> mark would silence it, at the cost of a step.</li>
 <li>Reordering groups. Tee times imply the order, so dragging a group ought to renumber and re-time it &mdash; which is a bigger interaction than it looks.</li>
 </ul>
 </div>
@@ -108,11 +107,11 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 <div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Round 1 &middot; Groups</span><span class="stp">Step 7 of 7</span></div>
 <div class="body">
 <h2 class="hd">Tilden &middot; Sat 12 Sep</h2>
-<p class="sub">Triple Cup &middot; 16 drafted &middot; tee times from 8:00, 8 minute interval</p>
+<p class="sub">Triple Cup &middot; 18 drafted &middot; tee times from 8:00, 8 minute interval</p>
 <div class="tally">
 <div><b>4</b><small>GROUPS</small></div>
-<div><b>13</b><small>ASSIGNED</small></div>
-<div class="warn"><b>3</b><small>UNASSIGNED</small></div>
+<div><b>16</b><small>PLAYING</small></div>
+<div><b>2</b><small>SITTING OUT</small></div>
 </div>
 
 <div class="lb">Groups <span>tap to edit</span></div>
@@ -130,29 +129,28 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 </div>
 
 <div class="g">
-<div class="ghd"><b>Group 3</b><span class="tm">8:16</span><span class="comp">1 v 2</span><span class="cv">&#8250;</span></div>
-<div class="rost"><span><span class="chip a">B</span><b>Ford</b></span><span class="r"><span class="chip b">M</span><b>Kane, Reilly</b></span></div>
+<div class="ghd"><b>Group 3</b><span class="tm">8:16</span><span class="comp">2 v 2</span><span class="cv">&#8250;</span></div>
+<div class="rost"><span><span class="chip a">B</span><b>Ford, Dunne</b></span><span class="r"><span class="chip b">M</span><b>Kane, Reilly</b></span></div>
 <div class="meta"><span>All White tees</span></div>
 </div>
 
-<div class="g inc">
-<div class="ghd"><b>Group 4</b><span class="tm">8:24</span><span class="comp bad">0 v 2 &middot; needs a Bandit</span><span class="cv">&#8250;</span></div>
-<div class="rost"><span><span class="chip a">B</span><b class="em">Nobody seated</b></span><span class="r"><span class="chip b">M</span><b>Pratt, Ochoa</b></span></div>
-<div class="meta"><span>Tees not set</span></div>
+<div class="g">
+<div class="ghd"><b>Group 4</b><span class="tm">8:24</span><span class="comp">2 v 2</span><span class="cv">&#8250;</span></div>
+<div class="rost"><span><span class="chip a">B</span><b>Shaw, Hines</b></span><span class="r"><span class="chip b">M</span><b>Pratt, Ochoa</b></span></div>
+<div class="meta"><span>White &middot; 2 on Gold</span></div>
 </div>
 
 <button class="add">&#43; Add group 5</button>
 
-<div class="lb">Not in a group <span>3 Bandits &middot; every Marauder is seated</span></div>
+<div class="lb">Not in a group <span>1 Bandit &middot; 1 Marauder</span></div>
 <div class="sit">
-<div class="sr"><span class="av">CD</span><span class="nm">Dunne, Chris<small><span style="color:var(--t1)">Bandits</span> &middot; index 6.2</small></span><a href="group-builder.html">Assign</a></div>
 <div class="sr"><span class="av">EV</span><span class="nm">Vance, Ed<small><span style="color:var(--t1)">Bandits</span> &middot; index 13.9</small></span><a href="group-builder.html">Assign</a></div>
-<div class="sr"><span class="av">JS</span><span class="nm">Shaw, Joe<small><span style="color:var(--t1)">Bandits</span> &middot; index 8.4</small></span><a href="group-builder.html">Assign</a></div>
+<div class="sr"><span class="av">RL</span><span class="nm">Lajoie, Ray<small><span style="color:var(--t2)">Marauders</span> &middot; index 11.4</small></span><a href="group-builder.html">Assign</a></div>
 </div>
 
-<div class="blk"><span><b>Group 4 has no Bandit in it</b>, so there is no match to play. All three unassigned golfers are Bandits &mdash; seat one there, and the last two need two Marauders freed up or a fifth group.</span></div>
+<div class="blk"><span><b>Two golfers are not in a group</b> and will not score this round. Assign them, or start &mdash; a golfer can be added to a group after the round is under way.</span></div>
 </div>
-<div class="bottom"><button class="back">Back</button><button class="next" disabled>Start Round &mdash; Group 4 incomplete</button></div>
+<div class="bottom"><button class="back">Back</button><button class="next">Start Round</button></div>
 </div>
 </body>
 </html>

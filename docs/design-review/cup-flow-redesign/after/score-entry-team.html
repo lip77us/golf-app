@@ -1,0 +1,223 @@
+<!-- @dsCard group="Cup Flow" name="Team score entry — Scramble, Foursomes, Chapman" subtitle="One ball a side: the row is the side, not the golfer. Two rows for a foursome game, two rows for a scramble match" viewport="2120x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Team score entry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:330px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.notes table{width:100%;border-collapse:collapse;font-size:12px;margin:0 0 11px}
+.notes td{padding:5px 0;border-top:1px solid #D6E1D8;color:var(--muted);vertical-align:top}
+.notes td:first-child{width:96px;color:var(--deepPine);font-weight:600;padding-right:10px}
+.col{flex:none}
+.cap{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px 4px}
+.cap span{display:block;font-weight:500;letter-spacing:0;text-transform:none;font-size:12px;color:#93A29A;margin-top:2px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 2px}
+.appbar .ic{font-size:16px;color:var(--muted)}
+.appbar .ttl{flex:1;text-align:center;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16px;line-height:1.15}
+.appbar .ttl small{display:block;font-family:"Spline Sans",sans-serif;font-size:11px;font-weight:500;color:var(--muted);margin-top:1px}
+.body{padding:10px 16px 0;overflow-y:auto;height:672px}
+.banner{display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:9px 13px;margin-bottom:10px;font-size:12.5px;font-weight:600}
+.banner .team{display:flex;align-items:center;gap:6px}
+.banner .dot{width:9px;height:9px;border-radius:50%}
+.d1{background:var(--t1)}.d2{background:var(--t2)}
+.banner .st{color:var(--muted);font-weight:600;font-size:12px}
+.card{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;overflow:hidden;margin-bottom:12px}
+.hh{background:#E7EEE9;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--muted)}
+.hh b{font-family:"Schibsted Grotesk",sans-serif;color:var(--deepPine);font-size:16px}
+.trow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--cardBorder)}
+.trow .side{flex:1;min-width:0}
+.trow .side b{display:block;font-weight:600;font-size:14px;display:flex;align-items:center;gap:7px}
+.trow .side b i{min-width:19px;height:19px;padding:0 3px;border-radius:6px;color:#fff;font:700 10.5px/19px "Spline Sans",system-ui,sans-serif;text-align:center;font-style:normal;flex:none}
+.trow .side b i.a{background:var(--t1)}.trow .side b i.b{background:var(--t2)}
+.trow .side small{display:block;font-size:11.5px;color:var(--muted);margin-top:3px;padding-left:26px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gets{font-size:10.5px;color:var(--pine);font-weight:700;background:#EAF3EE;border-radius:6px;padding:3px 7px;flex:none}
+.sbox{width:46px;height:46px;border-radius:11px;border:1.5px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;font-variant-numeric:tabular-nums;flex:none}
+.sbox.u{color:var(--under);border:2px solid var(--under);border-radius:50%}
+.sbox.open{border:2px solid var(--pine);color:var(--pine)}
+.sbox{position:relative}
+.sbox i{position:absolute;top:5px;right:6px;width:5px;height:5px;border-radius:50%;background:var(--pine)}
+.sbox i+i{right:14px}
+.hot{background:rgba(15,110,86,.06)}
+.picker{border:2px solid var(--pine);border-radius:12px;margin:8px 14px 12px;padding:9px 6px;display:flex;gap:6px;justify-content:center}
+.opt{min-width:44px;height:50px;border-radius:9px;border:1.5px solid var(--cardBorder);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:19px}
+.opt small{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}
+.opt.sel{border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.15)}
+.opt.u{color:var(--under)}
+.note{display:flex;gap:8px;align-items:flex-start;background:#F7FAF7;border:1px solid #E3EBE5;border-radius:12px;padding:9px 12px;font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:12px}
+.note b{color:var(--deepPine);font-weight:600}
+.st2{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:11px 14px;font-size:13px;margin-bottom:16px}
+.st2 .h{font-weight:700;font-size:12px;margin-bottom:7px;letter-spacing:.3px;text-transform:uppercase;color:#93A29A}
+.st2 .l{display:flex;justify-content:space-between;color:var(--muted);padding:3px 0;font-size:12.5px}
+.st2 .l b{color:var(--deepPine);font-weight:700;font-variant-numeric:tabular-nums}
+.st2 .l b.a{color:var(--t1)}.st2 .l b.b{color:var(--t2)}
+.st2 .tl{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
+.st2 .tl .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.st2 .tl .tn{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st2 .tl em{font-style:normal;font-size:11.5px;color:#93A29A;font-variant-numeric:tabular-nums}
+.st2 .tl b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;min-width:62px;text-align:right}
+.st2 .tl b.a{color:var(--t1)}.st2 .tl b.b{color:var(--t2)}
+.spec{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--pine);margin:6px 2px 8px;display:flex;align-items:center;gap:8px}
+.spec:after{content:"";flex:1;height:1px;background:#D6E1D8}
+.sn{font-size:11.5px;color:var(--muted);line-height:1.55;margin:0 2px 18px}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 20px;display:flex;gap:10px;background:linear-gradient(transparent,var(--surface) 26%)}
+.prev{flex:1;height:50px;border-radius:14px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font:700 14px/1 "Spline Sans",system-ui,sans-serif}
+.next{flex:2;height:50px;border-radius:14px;border:none;background:var(--pine);color:#fff;font:700 14px/1 "Spline Sans",system-ui,sans-serif}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Team score entry</h1>
+<p>Scramble, Foursomes and Chapman all put <b>one ball in play per side</b>. There is no per-golfer score to collect, so the row stops being a golfer and becomes a side.</p>
+<p>Everything else stays where a player already expects it: the hole header, the score box, the inline picker under the row being edited, the match state at the bottom. Only the row label changes.</p>
+<h3>How many rows</h3>
+<table>
+<tr><td>Foursomes<br>Chapman</td><td><b>2 rows.</b> Both pairs are in the group &mdash; four golfers, two balls, and the match is decided on this phone.</td></tr>
+<tr><td>Scramble<br>Irish Rumble</td><td><b>1 row.</b> The group <i>is</i> one side. The four it plays against is a separate group on a separate phone, so there is no second score to enter.</td></tr>
+</table>
+<h3>Scramble and Rumble are stroke play</h3>
+<ul>
+<li><b>There is no hole-by-hole match to run</b> when the two sides are in different groups. The card keeps a <b>running net total</b> and the opposing group sits on the line below it, named and in its own colour, so a side playing an hour ahead can see where it stands. <b>Net only</b> &mdash; gross is not the competition and both numbers on one line is one too many.</li>
+<li><b>Points are for the win, not per stroke.</b> Stroke play here decides a winner; it does not pay by margin. A per-stroke price would make the cup total unknowable until the last card is in, and the number a captain is playing toward &mdash; <i>16&frac12; to win</i> &mdash; is the thing the whole format exists to produce. Low net total takes the match&rsquo;s points, and a tie halves them.</li>
+</ul>
+<h3>What the row carries</h3>
+<ul>
+<li><b>The side&rsquo;s name and its members</b>, team colour first. A four is listed in initials, a pair in full &mdash; the row has to be readable by whoever is holding the phone, who may not be in it.</li>
+<li><b>The stroke, as a chip and a dot</b> &mdash; nothing else. The row is the casual singles row with a pair&rsquo;s name in place of a golfer&rsquo;s: name, <i>gets 1</i>, score box. The two combined handicaps decide who receives; how that was arrived at belongs on the group&rsquo;s setup screen, not on every hole.</li>
+<li><b>A dot above the score</b>, the same mark score entry uses everywhere else, rather than a written-out <i>gross 5 &middot; net 4</i>. The dot already says a stroke fell here; spelling out the subtraction is a second explanation of one fact.</li>
+<li><b>One box</b>, tapped to open the picker below the row. Identical to individual entry, so the gesture carries over untouched.</li>
+</ul>
+<h3>Deliberately not tracked</h3>
+<ul>
+<li><b>Drives used</b> in a scramble, <b>whose turn</b> it is in Foursomes, <b>which ball</b> was picked in Chapman. These are rules the group polices at the tee; recording them adds a tap on every hole and changes no score.</li>
+<li>The format line under the title states the rule as a reminder &mdash; not an enforcement, and never a blocking prompt.</li>
+</ul>
+<h3>Open</h3>
+<ul>
+<li>Score entry&rsquo;s singles progress card still shows stroke dots on played holes only &mdash; the leaderboard shows the full plan. Worth aligning.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="cap">Scramble<span>1 row &middot; your four, one ball, stroke play</span></div>
+<div class="phone">
+<div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Scramble<small>Your four &middot; one ball &middot; stroke play, net</small></span><span class="ic">&#9729;</span><span class="ic">&#9998;</span></div>
+<div class="body">
+<div class="banner"><span class="team"><span class="dot d1"></span>Team Bucko &middot; Group 1</span><span class="st">vs Group 2 &middot; 8:10 AM</span></div>
+<div class="card">
+<div class="hh"><span><b>Hole 7</b></span><span>Par 4 &middot; 412 yds &middot; SI 3</span></div>
+<div class="trow hot"><span class="side"><b><i class="a">B</i>Team Bucko</b><small>AB / CK / DB / SW</small></span><span class="gets">gets 1</span><span class="sbox open">&ndash;<i></i></span></div>
+<div class="picker"><span class="opt u">3<small>bird</small></span><span class="opt sel">4<small>par</small></span><span class="opt">5<small>bog</small></span><span class="opt">6<small>dbl</small></span></div>
+</div>
+<div class="note"><span>&#9432;</span><span><b>Drives are not tracked.</b> Play your minimum-drive rule at the tee &mdash; the app records the team score only.</span></div>
+<div class="st2">
+<div class="h">Stroke play &middot; net</div>
+<div class="tl"><span class="dot d1"></span><span class="tn">Team Bucko</span><em>thru 6</em><b class="a">3 under</b></div>
+<div class="tl"><span class="dot d2"></span><span class="tn">Team Miller</span><em>thru 4</em><b class="b">1 under</b></div>
+<div class="l" style="border-top:1px solid #EEF3EF;margin-top:6px;padding-top:7px"><span>Low net total takes</span><b>2 pts to the cup</b></div>
+</div>
+</div>
+<div class="bottom"><button class="prev">&#8249; Hole 6</button><button class="next">Hole 8 &#8250;</button></div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap">Foursomes<span>2 rows &middot; alternate shot</span></div>
+<div class="phone">
+<div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Foursomes<small>Alternate shot &middot; one ball a pair &middot; net</small></span><span class="ic">&#9729;</span><span class="ic">&#9998;</span></div>
+<div class="body">
+<div class="banner"><span class="team"><span class="dot d1"></span>Bronson / Kang</span><span class="st">AS thru 6</span><span class="team">Brown / Sanders<span class="dot d2"></span></span></div>
+<div class="card">
+<div class="hh"><span><b>Hole 7</b></span><span>Par 4 &middot; 412 yds &middot; SI 3</span></div>
+<div class="trow"><span class="side"><b><i class="a">B</i>Al Bronson &amp; Chris Kang</b></span><span class="gets">gets 1</span><span class="sbox">5<i></i></span></div>
+<div class="trow hot"><span class="side"><b><i class="b">M</i>Alex Brown &amp; Rob Sanders</b></span><span class="sbox open">&ndash;</span></div>
+<div class="picker"><span class="opt u">3<small>bird</small></span><span class="opt sel">4<small>par</small></span><span class="opt">5<small>bog</small></span><span class="opt">6<small>dbl</small></span></div>
+</div>
+<div class="note"><span>&#9432;</span><span><b>Turn order is not tracked.</b> Enter the score for the hole for your team ball.</span></div>
+<div class="st2">
+<div class="h">Match &middot; thru 6</div>
+<div class="l"><span>All square</span><b>AS</b></div>
+<div class="l"><span>Worth</span><b>2 pts to the cup</b></div>
+</div>
+</div>
+<div class="bottom"><button class="prev">&#8249; Hole 6</button><button class="next">Hole 8 &#8250;</button></div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap">Two-man Chapman<span>2 rows &middot; one ball a pair after the second shot</span></div>
+<div class="phone">
+<div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Chapman<small>Both drive, swap, pick one &middot; net</small></span><span class="ic">&#9729;</span><span class="ic">&#9998;</span></div>
+<div class="body">
+<div class="banner"><span class="team"><span class="dot d1"></span>Wong / Wicke</span><span class="st">2 UP thru 6</span><span class="team">Lipkin / Comer<span class="dot d2"></span></span></div>
+<div class="card">
+<div class="hh"><span><b>Hole 7</b></span><span>Par 4 &middot; 412 yds &middot; SI 3</span></div>
+<div class="trow"><span class="side"><b><i class="a">B</i>Gabe Wong &amp; Charlie Wicke</b></span><span class="sbox">4</span></div>
+<div class="trow hot"><span class="side"><b><i class="b">M</i>Marc Lipkin &amp; Sam Comer</b></span><span class="gets">gets 1</span><span class="sbox open">&ndash;<i></i></span></div>
+<div class="picker"><span class="opt u">3<small>bird</small></span><span class="opt sel">4<small>par</small></span><span class="opt">5<small>bog</small></span><span class="opt">6<small>dbl</small></span></div>
+</div>
+<div class="note"><span>&#9432;</span><span><b>Which ball you kept is not tracked.</b> Enter the score for the hole for your team ball.</span></div>
+<div class="st2">
+<div class="h">Match &middot; thru 6</div>
+<div class="l"><span>Wong / Wicke</span><b class="a">2 UP</b></div>
+<div class="l"><span>Worth</span><b>2 pts to the cup</b></div>
+</div>
+</div>
+<div class="bottom"><button class="prev">&#8249; Hole 6</button><button class="next">Hole 8 &#8250;</button></div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap">Under the card<span>Five combos, three shapes</span></div>
+<div class="phone" style="height:812px">
+<div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">What sits below the hole<small>The one block that changes per game</small></span></div>
+<div class="body" style="height:706px">
+<div class="spec">1 &middot; Foursomes &nbsp;&middot;&nbsp; 2 &middot; Two-man Chapman</div>
+<div class="st2">
+<div class="h">Match &middot; thru 6</div>
+<div class="l"><span>Wong / Wicke</span><b class="a">2 UP</b></div>
+<div class="l"><span>Worth</span><b>2 pts to the cup</b></div>
+</div>
+<p class="sn">One result, so one line. The pair that is up, by how much, and what the match pays. Same block for both games &mdash; the format changes how the ball gets round, not how the match reads.</p>
+<div class="spec">3 &middot; Foursomes Nassau &nbsp;&middot;&nbsp; 4 &middot; Chapman Nassau</div>
+<div class="st2">
+<div class="h">Nassau &middot; thru 6</div>
+<div class="l"><span>Front &middot; holes 1&ndash;9</span><b class="a">2 UP</b></div>
+<div class="l"><span>Back &middot; holes 10&ndash;18</span><b style="color:#B4C0B8;font-weight:600">not started</b></div>
+<div class="l"><span>Overall</span><b class="a">2 UP</b></div>
+<div class="l" style="border-top:1px solid #EEF3EF;margin-top:5px;padding-top:7px"><span>Worth</span><b>1 pt &times; 3 = 3 pts</b></div>
+</div>
+<p class="sn">Three segments, three lines, each carrying its own state &mdash; a back nine that has not begun says so rather than reading all square. The price line multiplies out, because a Nassau is the one game where the points a player is looking at are not the number set at step 5.</p>
+<div class="spec">5 &middot; Scramble &nbsp;&middot;&nbsp; Irish Rumble</div>
+<div class="st2">
+<div class="h">Stroke play &middot; net</div>
+<div class="tl"><span class="dot d1"></span><span class="tn">Team Bucko</span><em>thru 6</em><b class="a">3 under</b></div>
+<div class="tl"><span class="dot d2"></span><span class="tn">Team Miller</span><em>thru 4</em><b class="b">1 under</b></div>
+<div class="l" style="border-top:1px solid #EEF3EF;margin-top:6px;padding-top:7px"><span>Low net total takes</span><b>2 pts to the cup</b></div>
+</div>
+<p class="sn">A running total, not a match. Both sides on the card, each with its own <b>thru</b>, because they are rarely on the same hole. The low net total takes the whole price; a tie halves it. Margin does not pay, so the cup total stays a fixed number all day.</p>
+</div>
+</div>
+</div>
+</body>
+</html>

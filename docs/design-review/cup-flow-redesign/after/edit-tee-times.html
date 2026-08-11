@@ -1,0 +1,134 @@
+<!-- @dsCard group="Cup Flow" name="Edit tee times — live" subtitle="New surface: change one group's time on a running round, then offer to shift the later groups by the same amount" viewport="1340x1000" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Edit tee times</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:30px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:340px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.new{display:inline-block;background:#0B1F1A;color:#3BD89A;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:3px 8px;border-radius:999px;margin-bottom:9px}
+.col{flex:none}
+.cap{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px 4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:4px 16px 6px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:20px}
+.sub{margin:0 16px 10px;font-size:12.5px;color:var(--muted);line-height:1.5}
+.body{padding:0 14px 26px;overflow:hidden;height:660px;position:relative}
+.list{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;overflow:hidden}
+.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid #EEF3EF}
+.row:first-child{border-top:none}
+.row .g{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
+.row .p{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
+.time{display:inline-flex;align-items:center;gap:7px;border:1.5px solid #D3DED6;background:#F7FAF7;border-radius:10px;padding:7px 11px;font:700 14px/1 "Spline Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums;cursor:pointer}
+.time svg{width:14px;height:14px;stroke:var(--pine);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.row.on .time{border-color:var(--pine);background:#EAF6F0;color:var(--pine)}
+.row.done .time{border-color:#C9D8CE;background:#fff}
+.row .st{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#93A29A;margin-top:5px;display:block;text-align:right}
+.hint{font-size:12px;color:var(--muted);margin:12px 4px 0;line-height:1.5}
+.scrim{position:absolute;inset:0;background:rgba(11,31,26,.42)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:22px 22px 0 0;padding:20px 18px 24px;box-shadow:0 -10px 40px rgba(6,18,14,.25)}
+.sheet .grab{width:38px;height:4px;border-radius:2px;background:#D6E1D8;margin:0 auto 15px}
+.sheet h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px;margin:0 0 7px}
+.sheet p{font-size:13px;color:var(--muted);line-height:1.55;margin:0 0 14px}
+.sheet p b{color:var(--deepPine);font-weight:600}
+.prev{background:#F5F9F6;border:1px solid #E3EBE5;border-radius:12px;padding:10px 13px;margin-bottom:16px}
+.prev div{display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;font-variant-numeric:tabular-nums;color:var(--muted)}
+.prev div b{color:var(--deepPine);font-weight:600}
+.prev div s{color:#A9B6AD}
+.btn{display:block;width:100%;border:none;border-radius:13px;padding:14px 0;font:700 14.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;margin-bottom:9px}
+.btn.p{background:var(--pine);color:#fff}
+.btn.s{background:transparent;color:var(--deepPine);border:1.5px solid #D3DED6}
+.toast{position:absolute;left:14px;right:14px;bottom:20px;background:var(--deepPine);color:#fff;border-radius:12px;padding:12px 14px;font-size:12.5px;display:flex;align-items:center;gap:10px}
+.toast b{color:var(--brightMint);font-weight:600}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<span class="new">New surface</span>
+<h1>Edit tee times &mdash; live</h1>
+<p>The tee-time pencil only existed in initial setup, and saving there means re-running setup. On a running cup a starter change &mdash; a group goes off ten minutes late &mdash; had nowhere to go.</p>
+<p>This adds <b>Edit tee times</b> under Round setup: the round&rsquo;s groups in tee-time order, tap a time, save on the spot.</p>
+<h3>Behaviour</h3>
+<ul>
+<li><b>Each change saves immediately.</b> No save bar, no confirm step &mdash; a starter is standing on the tee, not filling in a form.</li>
+<li><b>Then it offers the cascade.</b> Moving one group almost always moves the ones behind it, so after a change the sheet offers to shift every later group by the same amount. The prompt states the amount and lists the groups it would touch, old time struck through.</li>
+<li><b>Shifting is opt-in, once.</b> &ldquo;Only this group&rdquo; dismisses it; the sheet does not come back for that edit.</li>
+<li>Groups that have <b>already started</b> keep their time as a plain value and sit out of the shift &mdash; their time is a fact, not a plan.</li>
+</ul>
+<h3>Open</h3>
+<ul>
+<li>Whether a shift should notify the affected players, and in what words.</li>
+<li>Interval-based rounds (shotgun off) already have an interval in group setup &mdash; a later pass could offer &ldquo;re-space all&rdquo; instead of a per-group nudge.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="cap">1 &middot; The list</div>
+<div class="phone">
+<div class="status"><span>9:04</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Edit tee times</span></div>
+<div class="sub">Round 1 &middot; Tilden Ryder Cup. Changes save as you make them.</div>
+<div class="body">
+<div class="list">
+<div class="row done"><div><div class="g">Group 1</div><div class="p">Bucko, Webb, Miller, Malat</div></div><div><span class="time">8:00 AM</span><span class="st">Started</span></div></div>
+<div class="row done"><div><div class="g">Group 2</div><div class="p">Wicke, Lajoie, Comer</div></div><div><span class="time">8:10 AM</span><span class="st">Started</span></div></div>
+<div class="row done"><div><div class="g">Group 3</div><div class="p">Wong, Kang, Lipkin, Cisneros</div></div><div><span class="time">8:20 AM</span><span class="st">Started</span></div></div>
+<div class="row on"><div><div class="g">Group 4</div><div class="p">Kerss, Petersen, Sanders, Webb</div></div><div><span class="time"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"/></svg>8:30 AM</span></div></div>
+<div class="row"><div><div class="g">Group 5</div><div class="p">Hahn, Ruiz, Doyle, Frame</div></div><div><span class="time"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"/></svg>8:40 AM</span></div></div>
+<div class="row"><div><div class="g">Group 6</div><div class="p">Neal, Baptiste, Cho, Iyer</div></div><div><span class="time"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"/></svg>8:50 AM</span></div></div>
+<div class="row"><div><div class="g">Group 7</div><div class="p">Ferris, Okonkwo, Rand, Tulley</div></div><div><span class="time"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"/></svg>9:00 AM</span></div></div>
+<div class="row"><div><div class="g">Group 8</div><div class="p">Vance, Ortiz, Mehta, Boyd</div></div><div><span class="time"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4Z"/></svg>9:10 AM</span></div></div>
+</div>
+<div class="hint">Groups already on the course keep their start time.</div>
+</div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap">2 &middot; After a change</div>
+<div class="phone">
+<div class="status"><span>9:04</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Edit tee times</span></div>
+<div class="sub">Round 1 &middot; Tilden Ryder Cup. Changes save as you make them.</div>
+<div class="body">
+<div class="list">
+<div class="row done"><div><div class="g">Group 3</div><div class="p">Wong, Kang, Lipkin, Cisneros</div></div><div><span class="time">8:20 AM</span><span class="st">Started</span></div></div>
+<div class="row on"><div><div class="g">Group 4</div><div class="p">Kerss, Petersen, Sanders, Webb</div></div><div><span class="time">8:40 AM</span><span class="st">Saved</span></div></div>
+<div class="row"><div><div class="g">Group 5</div><div class="p">Hahn, Ruiz, Doyle, Frame</div></div><div><span class="time">8:40 AM</span></div></div>
+<div class="row"><div><div class="g">Group 6</div><div class="p">Neal, Baptiste, Cho, Iyer</div></div><div><span class="time">8:50 AM</span></div></div>
+</div>
+<div class="scrim"></div>
+<div class="sheet">
+<div class="grab"></div>
+<h2>Shift the groups behind it?</h2>
+<p>Group 4 moved back <b>10 minutes</b>. The four groups after it can move by the same amount, keeping the interval.</p>
+<div class="prev">
+<div><b>Group 5</b><span><s>8:40</s> &rarr; 8:50 AM</span></div>
+<div><b>Group 6</b><span><s>8:50</s> &rarr; 9:00 AM</span></div>
+<div><b>Group 7</b><span><s>9:00</s> &rarr; 9:10 AM</span></div>
+<div><b>Group 8</b><span><s>9:10</s> &rarr; 9:20 AM</span></div>
+</div>
+<button class="btn p">Shift 4 later groups</button>
+<button class="btn s">Only this group</button>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

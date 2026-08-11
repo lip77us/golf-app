@@ -1,4 +1,4 @@
-<!-- @dsCard group="Cup Flow" name="Cup leaderboard — nav + match rows" subtitle="Competition selector split from view tabs; four segment results as cells instead of a comma run" viewport="900x1000" -->
+<!-- @dsCard group="Cup Flow" name="Cup leaderboard — one Cup Detail tab" subtitle="Reworked in live testing: one tab, my group first with its tee time, names once then initials, even-line marker, points decided" viewport="900x1000" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -19,6 +19,7 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 .notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
 .notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
 .notes li{margin-bottom:4px}
+.built{display:inline-block;background:#0F6E56;color:#fff;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:3px 8px;border-radius:999px;margin-bottom:9px}
 .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
 .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
 .appbar{display:flex;align-items:center;gap:12px;padding:4px 16px 2px}
@@ -27,10 +28,9 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 .appbar .sp{margin-left:auto;display:flex;gap:14px;align-items:center}
 .appbar svg{width:21px;height:21px;stroke:var(--deepPine);fill:none;stroke-width:1.9;stroke-linecap:round}
 .appbar .dots{font-size:19px;letter-spacing:2px}
-.compsel{margin:6px 16px 0;display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--cardBorder);border-radius:12px;padding:9px 12px;cursor:pointer}
-.compsel b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
-.compsel small{color:var(--muted);font-size:12px}
-.compsel .cv{margin-left:auto;color:var(--pine);font-size:11px}
+.comphd{margin:2px 16px 0;padding:0 0 2px}
+.comphd b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
+.comphd small{color:var(--muted);font-size:12px}
 .tabs{display:flex;gap:4px;margin:10px 16px 4px;background:#DFE8E1;border-radius:12px;padding:3px}
 .tabs button{flex:1;border:none;background:transparent;border-radius:9px;padding:8px 0;font:600 13px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
 .tabs button.on{background:var(--card);color:var(--deepPine);box-shadow:0 1px 2px rgba(11,31,26,.1)}
@@ -51,54 +51,61 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 .bfoot b{color:var(--deepPine);font-weight:600}
 .sec{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:4px 2px 8px;display:flex;align-items:center;gap:8px}
 .sec:after{content:"";flex:1;height:1px;background:#D6E1D8}
-.m{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:11px 13px 12px;margin-bottom:10px}
-.mhd{display:flex;align-items:center;gap:8px}
+.m{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:11px 13px 6px;margin-bottom:10px}
+.m.mine{border-color:#BFD8CC;box-shadow:0 0 0 1px #BFD8CC inset}
+.mhd{display:flex;align-items:baseline;gap:7px}
 .mhd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
-.mhd .thru{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.mhd .me{font-size:11.5px;font-weight:600;color:var(--pine)}
+.mhd .tt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .mhd .tot{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
 .mhd .tot span:first-child{color:var(--t1)}.mhd .tot span:last-child{color:var(--t2)}
 .mhd .tot em{color:#9AA8A0;font-style:normal;font-weight:600;padding:0 2px}
-.vs{display:flex;align-items:center;gap:8px;margin:8px 0 10px;font-size:13.5px}
-.vs .s{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
-.vs .s.r{flex-direction:row-reverse;text-align:right}
-.vs .s span{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vs .x{color:#9AA8A0;font-size:11.5px;font-weight:600;flex:none}
+.thru{font-size:11.5px;color:#93A29A;font-variant-numeric:tabular-nums;margin-top:1px}
+.vs{display:grid;gap:3px;margin:7px 0 3px;font-size:13px}
+.vs .s{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:7px}
+.vs .s span{font-weight:600;text-wrap:pretty}
+.vs .x{color:#9AA8A0;font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding-left:27px}
 .chip{min-width:20px;height:20px;padding:0 3px;border-radius:6px;color:#fff;font:700 11px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
 .chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
-.segs{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-.sg{border:1px solid #E6EDE7;border-radius:11px;padding:7px 9px 8px;background:#FAFCFA}
-.sg .l{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#93A29A}
-.sg .r{display:flex;align-items:baseline;gap:6px;margin-top:3px;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
-.sg .r i{width:8px;height:8px;border-radius:3px;flex:none;align-self:center}
-.sg .r u{text-decoration:none;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#93A29A;margin-left:auto}
-.sg.lead-a .r{color:var(--t1)}.sg.lead-a .r i{background:var(--t1)}
-.sg.lead-b .r{color:var(--t2)}.sg.lead-b .r i{background:var(--t2)}
-.sg.as .r{color:var(--muted);font-weight:600}.sg.as .r i{background:#C3CFC6}
-.sg.ns{background:transparent;border-style:dashed}
-.sg.ns .r{color:#9AA8A0;font-weight:600;font-size:12.5px}.sg.ns .r i{display:none}
+.sr{display:grid;grid-template-columns:60px 1fr auto;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #EEF3EF}
+.sr .l{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#93A29A}
+.sr .i{font-size:12.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr .r{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.sr .r i{width:8px;height:8px;border-radius:3px;flex:none}
+.sr .r u{text-decoration:none;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#93A29A}
+.sr.lead-a .r{color:var(--t1)}.sr.lead-a .r i{background:var(--t1)}
+.sr.lead-b .r{color:var(--t2)}.sr.lead-b .r i{background:var(--t2)}
+.sr.as .r{color:var(--muted);font-weight:600}.sr.as .r i{background:#C3CFC6}
+.sr.ns .r{color:#9AA8A0;font-weight:600;font-size:12.5px}.sr.ns .r i{display:none}
+.sr.ns .i{color:#B4C0B8}
 </style>
 </head>
 <body>
 <a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
 <div class="notes">
-<h1>Cup leaderboard &mdash; nav + match rows</h1>
-<p>Two problems, one screen. The tab strip mixes <b>which competition</b> with <b>which view</b>, so five tabs scroll and clip mid-word. And the line that matters most &mdash; four match segments &mdash; is set as prose in the smallest type on the page: <i>&ldquo;1 UP thru 6, AS thru 6, AS thru 6, AS thru 6&rdquo;</i>.</p>
+<span class="built">Built &amp; merged &mdash; Aug 2026</span>
+<h1>Cup leaderboard &mdash; one Cup Detail tab</h1>
+<p>Live testing on an eight-group cup reworked this screen after handoff. What is drawn here is <b>what shipped</b>; the mock is redrawn to match so the rest of the pack stays true.</p>
 <h3>Navigation</h3>
 <ul>
-<li><b>Competition is a selector</b>, not a tab. A tournament can carry several cups, and that count is unbounded &mdash; a tab strip cannot be.</li>
-<li><b>Views are a fixed segmented control</b> of four that fits 390px with no scroll, so the reader always sees every view available.</li>
-<li>The <b>&ldquo;One Round Ryder Cup&rdquo; badge</b> came off every match card. It held the same value on all of them, so it carried no information; it now sits once, under the competition name, next to the points rule.</li>
+<li><b>Overview, Details and My Foursome collapsed into one Cup Detail tab.</b> Overview showed less data in more space, and My Foursome only duplicated a group card. The two-panel scoreboard sits on top, then a card per group.</li>
+<li><b>Your group floats to the top</b> &mdash; that is what replaces My Foursome &mdash; and the rest follow in tee-time order. The header carries the start time, so <i>Group 4 (my group) &middot; 8:30 AM</i> tells a player both where they are and when they go.</li>
 </ul>
-<h3>Match cards</h3>
+<h3>Group cards</h3>
 <ul>
-<li><b>Four segment cells</b> replace the comma run. Each names its segment, so you can see that Fourball is won and the singles have not started &mdash; the shipped string cannot express that.</li>
-<li><b>Colour plus a square</b> marks the leader, and a completed segment is stamped <b>Final</b> &mdash; without it, <i>1 UP</i> reads the same whether the point is banked or still in play. <i>AS</i> is deliberately grey, because all-square is not a result. Segments not yet begun are dashed and name the hole they start on instead of showing a misleading <i>AS</i>.</li>
-<li><b>Thru moves to the header</b> &mdash; it was repeated four times per card for a single value.</li>
-<li>The <b>points bar</b> makes the clinch line spatial: 12 points are in play, so the notch sits at 6&frac12; &mdash; &ldquo;how close is this&rdquo; is a glance, not arithmetic.</li>
+<li><b>Full names once, initials in the rows.</b> Each side is named in full at the top of the card; the four segment rows use <i>BK / AP vs RS / RW</i> to stay compact at 390px.</li>
+<li>A solo side&rsquo;s <b>Phantom is named in the header</b>, real golfer first &mdash; &ldquo;Charlie Wicke &amp; Phantom&rdquo; &mdash; so the lone <i>P</i> in the Fourball row is explained where it appears.</li>
+<li><b>Cards no longer drill in.</b> A Triple Cup has no per-foursome bet, so the standalone per-group screen carried nothing the card does not already show.</li>
 </ul>
-<h3>Still open</h3>
+<h3>The bar and the count</h3>
 <ul>
-<li>Segment cells assume four per group. Formats with 2 or 6 need the grid to reflow, not scroll.</li>
+<li><b>The marker is the even line, not the clinch line.</b> It sits dead centre, on the divider between the two team blocks: whichever fill crosses it is ahead. Putting it at to-win meant a tied cup did not line up with the divider. &ldquo;16&frac12; to win&rdquo; stays in the text underneath.</li>
+<li><b>&ldquo;Points decided,&rdquo; not &ldquo;points played.&rdquo;</b> A cup point is not earned until its match is decided, however many holes have been played.</li>
+</ul>
+<h3>Open</h3>
+<ul>
+<li>Segment rows assume four per group. Formats with 2 or 6 need the list to reflow, not scroll.</li>
+<li>Live tee-time editing is a new surface the mocks did not cover &mdash; drawn separately in <a href="edit-tee-times.html">Edit tee times</a>.</li>
 </ul>
 </div>
 <div class="phone">
@@ -106,52 +113,59 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 <div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Leaderboard</span><span class="sp">
 <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.4A8 8 0 1 1 21 12Z"/></svg>
 <span class="dots">&#8942;</span></span></div>
-<div class="compsel"><span><b>Tilden Ryder Cup</b><br><small>One-Round Triple Cup &middot; 1 pt per segment</small></span><span class="cv">&#9660;</span></div>
-<div class="tabs"><button class="on">Live</button><button>Overview</button><button>Details</button><button>Mine</button></div>
+<div class="comphd"><b>Tilden Ryder Cup</b><small>One-Round Triple Cup &middot; 1 pt per segment</small></div>
+<div class="tabs"><button class="on">Cup Detail</button><button>Group games</button></div>
 <div class="body">
 
 <div class="board">
 <div class="bt">
-<div class="a"><span class="nm"><i>B</i>Team Bucko</span><div class="v">1</div></div>
-<div class="b"><span class="nm"><i>M</i>Team Miller</span><div class="v">1</div></div>
+<div class="a"><span class="nm"><i>B</i>Team Bucko</span><div class="v">3</div></div>
+<div class="b"><span class="nm"><i>M</i>Team Miller</span><div class="v">2</div></div>
 </div>
-<div class="bar"><i class="ma" style="width:8.3%"></i><i class="mid" style="left:54.2%"></i><i class="mb" style="width:8.3%"></i></div>
-<div class="bfoot"><span><b>6&frac12;</b> to win</span><span>2 of 12 points played</span></div>
-</div>
-
-<div class="sec">Live now</div>
-
-<div class="m">
-<div class="mhd"><b>Group 1</b><span class="thru">Thru 6</span><span class="tot"><span>1</span><em>&ndash;</em><span>0</span></span></div>
-<div class="vs"><span class="s"><span class="chip a">B</span><span>Bucko &amp; Webb</span></span><span class="x">vs</span><span class="s r"><span class="chip b">M</span><span>Miller &amp; Malat</span></span></div>
-<div class="segs">
-<div class="sg lead-a"><div class="l">Fourball</div><div class="r"><i></i>1 UP<u>Final</u></div></div>
-<div class="sg ns"><div class="l">Foursomes</div><div class="r">Starts 7</div></div>
-<div class="sg ns"><div class="l">Singles 1</div><div class="r">Starts 13</div></div>
-<div class="sg ns"><div class="l">Singles 2</div><div class="r">Starts 13</div></div>
-</div>
+<div class="bar"><i class="ma" style="width:9.4%"></i><i class="mid"></i><i class="mb" style="width:6.3%"></i></div>
+<div class="bfoot"><span><b>16&frac12;</b> to win</span><span>5 of 32 points decided</span></div>
 </div>
 
-<div class="m">
-<div class="mhd"><b>Group 2</b><span class="thru">Thru 8</span><span class="tot"><span>0</span><em>&ndash;</em><span>1</span></span></div>
-<div class="vs"><span class="s"><span class="chip a">B</span><span>Wong &amp; Comer</span></span><span class="x">vs</span><span class="s r"><span class="chip b">M</span><span>Sanders &amp; Lajoie</span></span></div>
-<div class="segs">
-<div class="sg lead-b"><div class="l">Fourball</div><div class="r"><i></i>2 UP<u>Final</u></div></div>
-<div class="sg lead-a"><div class="l">Foursomes</div><div class="r"><i></i>1 UP</div></div>
-<div class="sg ns"><div class="l">Singles 1</div><div class="r">Starts 13</div></div>
-<div class="sg ns"><div class="l">Singles 2</div><div class="r">Starts 13</div></div>
-</div>
+<div class="sec">Groups</div>
+
+<div class="m mine">
+<div class="mhd"><b>Group 4</b><span class="me">my group</span><span class="tt">&middot; 8:30 AM</span><span class="tot"><span>1</span><em>&ndash;</em><span>0</span></span></div>
+<div class="vs"><span class="s"><span class="chip a">B</span><span>Brian Kerss &amp; Alan Petersen</span></span><span class="x">vs</span><span class="s"><span class="chip b">M</span><span>Rob Sanders &amp; Ryan Webb</span></span></div>
+<div class="sr lead-a"><span class="l">Fourball</span><span class="i">BK / AP vs RS / RW</span><span class="r"><i></i>1 UP<u>Final</u></span></div>
+<div class="sr as"><span class="l">Foursomes</span><span class="i">BK / AP vs RS / RW</span><span class="r"><i></i>AS</span></div>
+<div class="sr ns"><span class="l">Singles 1</span><span class="i">BK vs RS</span><span class="r">Starts 13</span></div>
+<div class="sr ns"><span class="l">Singles 2</span><span class="i">AP vs RW</span><span class="r">Starts 13</span></div>
+<div class="thru">Thru 8</div>
 </div>
 
 <div class="m">
-<div class="mhd"><b>Group 3</b><span class="thru">Thru 4</span><span class="tot"><span>0</span><em>&ndash;</em><span>0</span></span></div>
-<div class="vs"><span class="s"><span class="chip a">B</span><span>Gabe &amp; Kang</span></span><span class="x">vs</span><span class="s r"><span class="chip b">M</span><span>Lipkin &amp; Cisneros</span></span></div>
-<div class="segs">
-<div class="sg as"><div class="l">Fourball</div><div class="r"><i></i>AS</div></div>
-<div class="sg ns"><div class="l">Foursomes</div><div class="r">Starts 7</div></div>
-<div class="sg ns"><div class="l">Singles 1</div><div class="r">Starts 13</div></div>
-<div class="sg ns"><div class="l">Singles 2</div><div class="r">Starts 13</div></div>
+<div class="mhd"><b>Group 1</b><span class="tt">&middot; 8:00 AM</span><span class="tot"><span>1</span><em>&ndash;</em><span>1</span></span></div>
+<div class="vs"><span class="s"><span class="chip a">B</span><span>Dave Bucko &amp; Steve Webb</span></span><span class="x">vs</span><span class="s"><span class="chip b">M</span><span>Jon Miller &amp; Nick Malat</span></span></div>
+<div class="sr lead-a"><span class="l">Fourball</span><span class="i">DB / SW vs JM / NM</span><span class="r"><i></i>1 UP<u>Final</u></span></div>
+<div class="sr lead-b"><span class="l">Foursomes</span><span class="i">DB / SW vs JM / NM</span><span class="r"><i></i>2 UP<u>Final</u></span></div>
+<div class="sr as"><span class="l">Singles 1</span><span class="i">DB vs JM</span><span class="r"><i></i>AS</span></div>
+<div class="sr ns"><span class="l">Singles 2</span><span class="i">SW vs NM</span><span class="r">Starts 13</span></div>
+<div class="thru">Thru 13</div>
 </div>
+
+<div class="m">
+<div class="mhd"><b>Group 2</b><span class="tt">&middot; 8:10 AM</span><span class="tot"><span>0</span><em>&ndash;</em><span>1</span></span></div>
+<div class="vs"><span class="s"><span class="chip a">B</span><span>Charlie Wicke &amp; Phantom</span></span><span class="x">vs</span><span class="s"><span class="chip b">M</span><span>Ed Lajoie &amp; Sam Comer</span></span></div>
+<div class="sr lead-b"><span class="l">Fourball</span><span class="i">CW / P vs EL / SC</span><span class="r"><i></i>2 UP<u>Final</u></span></div>
+<div class="sr as"><span class="l">Foursomes</span><span class="i">CW / P vs EL / SC</span><span class="r"><i></i>AS</span></div>
+<div class="sr ns"><span class="l">Singles 1</span><span class="i">CW vs EL</span><span class="r">Starts 13</span></div>
+<div class="sr ns"><span class="l">Singles 2</span><span class="i">P vs SC</span><span class="r">Starts 13</span></div>
+<div class="thru">Thru 11</div>
+</div>
+
+<div class="m">
+<div class="mhd"><b>Group 3</b><span class="tt">&middot; 8:20 AM</span><span class="tot"><span>1</span><em>&ndash;</em><span>0</span></span></div>
+<div class="vs"><span class="s"><span class="chip a">B</span><span>Gabe Wong &amp; Chris Kang</span></span><span class="x">vs</span><span class="s"><span class="chip b">M</span><span>Marc Lipkin &amp; Luis Cisneros</span></span></div>
+<div class="sr lead-a"><span class="l">Fourball</span><span class="i">GW / CK vs ML / LC</span><span class="r"><i></i>3 UP<u>Final</u></span></div>
+<div class="sr as"><span class="l">Foursomes</span><span class="i">GW / CK vs ML / LC</span><span class="r"><i></i>AS</span></div>
+<div class="sr ns"><span class="l">Singles 1</span><span class="i">GW vs ML</span><span class="r">Starts 13</span></div>
+<div class="sr ns"><span class="l">Singles 2</span><span class="i">CK vs LC</span><span class="r">Starts 13</span></div>
+<div class="thru">Thru 9</div>
 </div>
 
 </div>

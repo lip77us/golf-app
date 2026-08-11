@@ -1,4 +1,4 @@
-<!-- @dsCard group="Cup Flow" name="Add players to a side" subtitle="Step 6 of 7. Side size set here and the group count derived from it. Side switcher with per-side fill counts. The team being filled is named in the header, the count runs against the roster size, and already-drafted golfers say which side has them" viewport="900x1000" -->
+<!-- @dsCard group="Cup Flow" name="Add players to a side" subtitle="Step 6 of 7. Side size set here and the group count derived from it. The side being filled is set by the entry point and named in the header, the count runs against the roster size, and already-drafted golfers say which side has them" viewport="900x1000" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -87,15 +87,6 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 .prog i{display:block;height:100%;width:85.7%;background:var(--pine)}
 .lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 7px;display:flex;align-items:baseline;gap:7px}
 .lb em{margin-left:auto;font-style:normal;font-weight:500;letter-spacing:0;text-transform:none;font-size:11.5px;color:#9AA8A0}
-.tsw{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px}
-.tsw button{display:flex;align-items:center;gap:7px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:9px 10px;cursor:pointer;text-align:left;font-family:"Spline Sans",system-ui,sans-serif;min-width:0}
-.tsw button .chip{margin:0}
-.tsw button .d{flex:1;min-width:0}
-.tsw button .d b{display:block;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tsw button .d small{display:block;font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:1px}
-.tsw button.on{border-width:2px;padding:8px 9px}
-.tsw button.done .d small{color:var(--pine);font-weight:600}
-.tsw button .d small u{text-decoration:none;display:block;color:#8A5216;font-weight:700}
 .hold{margin:-6px 0 12px;font-size:11.5px;color:var(--muted);line-height:1.45}
 .hold b{color:var(--deepPine)}
 .szr{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:11px 12px 12px;margin-bottom:15px}
@@ -109,17 +100,6 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 .szout.odd{background:#FDF3E7;color:#7A4E12}
 .szout.odd b{color:#5D3A0B}
 .szh{margin:9px 0 0;font-size:11px;color:var(--muted);line-height:1.5}
-.cscrim{position:absolute;inset:0;background:rgba(11,31,26,.42);opacity:0;pointer-events:none;transition:opacity .2s}
-.cscrim.on{opacity:1;pointer-events:auto}
-.csheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:22px 22px 0 0;box-shadow:0 -8px 34px rgba(6,18,14,.26);transform:translateY(102%);transition:transform .24s cubic-bezier(.32,.72,0,1);padding:18px 18px 24px}
-.csheet.on{transform:none}
-.csheet b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px;line-height:1.25;margin-bottom:6px}
-.csheet p{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.5}
-.cfb{display:flex;flex-direction:column;gap:8px}
-.cfb button{height:50px;border-radius:14px;font:700 14.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
-.cfb .p{background:var(--pine);border:none;color:#fff}
-.cfb .s{background:var(--card);border:1.5px solid var(--cardBorder);color:var(--deepPine)}
-.cfb .t{background:transparent;border:none;color:var(--muted);height:40px;font-weight:600}
 </style>
 </head>
 <body>
@@ -129,24 +109,23 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 <p>Shipped step 23 is a searchable roster with checkboxes and no statement of what it is filling. Two teams drafting in turn see the same screen twice, and nothing on it says which turn this is or how many picks are left.</p>
 <div class="was"><table>
 <tr><td>Was</td><td>Title <b>Add Players</b>. No team, no count, no indication that a golfer is already drafted elsewhere.</td></tr>
-<tr><td>Now</td><td>A <b>side switcher</b> with both fill counts, the side in the header with its badge, and a roster line reading <b>4 of 8 &middot; pick 4 more</b>.</td></tr>
+<tr><td>Now</td><td>The side in the header with its badge, and a roster line reading <b>4 of 8 &middot; pick 4 more</b>.</td></tr>
 <tr><td>Groups</td><td><b>Derived here</b> from side size &mdash; the first step where a roster exists to derive it from.</td></tr>
-<tr><td>Commit</td><td>Staged and named: <b>hold, then Add</b>. Switching sides mid-pick <b>offers to add first</b>. The shipped screen never says whether a check is written.</td></tr>
+<tr><td>Commit</td><td>Staged and named: <b>hold, then Add</b>. The shipped screen never says whether a check is written.</td></tr>
 <tr><td>Taken</td><td>Golfers on another side are <b>shown but locked</b>, labelled with the team holding them.</td></tr>
 </table></div>
 <div class="demo"><b>Teams in this cup</b><div class="btns"><button class="on" data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></div></div>
+<div class="demo"><b>Entered from &mdash; side being filled</b><div class="btns" id="dside"></div></div>
 <h3>Decisions</h3>
 <ul>
 <li><b>Side size is set here, and the group count falls out of it.</b> Nothing before this step can answer it &mdash; <a href="cup-wizard-step1.html">step 1</a> was asked and it was removed, <a href="cup-games-by-round.html">step 5</a> shows a rate because it cannot know. The draft is the first moment a roster exists, so it is the first moment 8 a side can mean 4 groups of 4. One number, stated once, and every later step reads it.</li>
 <li><b>It is a target, not a gate</b> &mdash; the label says <i>aiming for</i>. The stepper sets what the sides are aiming at; the pips and <i>pick 4 more</i> measure against it, and the derived line describes the cup being built rather than the golfers currently seated. Lowering it below what is already seated unseats the extras rather than leaving a side over its cap.</li>
 <li><b>An odd total is allowed and named.</b> Fourteen golfers is three groups and a threesome, which is legal &mdash; so the derived line says a group will be short instead of blocking a real roster.</li>
-<li><b>The side being filled is switchable, not fixed.</b> A captain drafting for two sides was previously stuck on whichever one he entered from. The switcher carries each side&rsquo;s fill count, so it doubles as the answer to <i>where am I</i>.</li>
+<li><b>The side is set by the entry point, not chosen here.</b> The draft board already has an <b>Add</b> per team, so arriving on this screen has already answered which side is being filled. A switcher inside the picker would be a second control for a question that was just asked &mdash; and it would need a rule for picks held against the side you are leaving. The header names the side instead, so a captain who tapped the wrong Add sees it before he picks.</li>
 <li><b>It is a two-column grid, not a row</b>, so three and four sides wrap to a second line instead of clipping their names. A single row cannot carry four team names at this width. Switch the count above to see it &mdash; the roster cap follows, 8 a side at two teams and 4 at four.</li>
-<li><b>Badge colour comes from the team, not a stylesheet.</b> <a href="cup-design-teams.html">Step 3</a> offers six swatches, so any fixed set of colour classes would leave a side with an invisible badge. The hex travels with the team through the chip, the border and the pips.</li>
-<li><b>Picks are held, then committed.</b> Tapping a golfer stages him &mdash; ghosted pip, a <i>&#43;n holding</i> line on the side&rsquo;s own count, and nothing written. <b>Add</b> is what puts them on the roster. A draft is a sequence of deliberate moves and a captain reads the group he is about to hand over before handing it over, so per-tap commit would be the wrong model even though it is fewer taps.</li>
-<li><b>The staged count sits on the side it belongs to,</b> not just in the button. The switcher is where a captain reads the state of the draft, so a pick in hand has to show up there or the two numbers disagree.</li>
-<li><b>Switching sides offers to add first.</b> Requiring <i>Add</i> before the switcher works would be a modal rule enforced by a dead control; silently discarding would lose deliberate work. So the switch asks, names the count, and puts the likely answer first &mdash; <i>Add 2 to the Bandits, then switch</i>. Dropping them stays available, because a captain who changed his mind mid-pick should not have to commit to undo.</li>
-<li><b>The picks still do not travel.</b> A selection means &ldquo;these go to the Bandits&rdquo;; the prompt exists so that sentence gets finished rather than carried into a different one.</li>
+<li><b>Badge colour comes from the team, not a stylesheet.</b> <a href="cup-design-teams.html">Step 3</a> stores one of six named colours, so any fixed set of colour classes would leave a side with an invisible badge. The name resolves through the palette into the chip, the border and the pips.</li>
+<li><b>Picks are held, then committed.</b> Tapping a golfer stages him &mdash; ghosted pip, a <i>&#43;n holding</i> line on the count, and nothing written. <b>Add</b> is what puts them on the roster. A draft is a sequence of deliberate moves and a captain reads the group he is about to hand over before handing it over, so per-tap commit would be the wrong model even though it is fewer taps.</li>
+<li><b>Held picks do not survive leaving.</b> Backing out with picks in hand discards them, because a selection means &ldquo;these go to the Bandits&rdquo; and that sentence is only true on this screen.</li>
 <li><b>The step number is on the screen.</b> This is 6 of 7, and the draft is the step most likely to be entered from a link rather than walked to &mdash; so it has to say where it sits.</li>
 <li><b>Entitlement is the only thing this screen sets.</b> It answers who is in the tournament and on which side. Not which group, not which round &mdash; those belong to the builder, and keeping them out is what stops the third duplicate list.</li>
 <li><b>Taken golfers stay visible.</b> Hiding them makes a captain search for a name that is not there and doubt the roster. Locked with <i>On Blue</i> attached answers the question in place.</li>
@@ -171,8 +150,6 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 <div class="szout" id="szout">16 golfers &middot; <b>4 groups</b> of 4 &mdash; two from each side</div>
 <p class="szh" id="szh">Set here because the draft is where the roster becomes real. Every later step reads this: <a href="cup-games-by-round.html">points</a> resolve their totals from it, and <a href="round-groups.html">round setup</a> opens with this many groups.</p>
 </div>
-<div class="lb">Filling</div>
-<div class="tsw" id="tsw"></div>
 <div class="who"><span class="chip a" id="wchip">B</span><h2 id="wname">Add to Bandits</h2></div>
 <p class="cnt"><b id="have">4</b> of <b id="cap">8</b> on this side<span id="held"></span> &middot; <span id="need">pick 4 more</span></p>
 <div class="pips" id="pips"></div>
@@ -186,16 +163,6 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 <div class="list" id="dlist"></div>
 </div>
 <div class="bottom"><button class="back">Cancel</button><button class="next" id="add" disabled>Add golfers</button></div>
-<div class="cscrim" id="cscrim"></div>
-<div class="csheet" id="csheet">
-<b id="cfT">Add 2 to the Bandits first?</b>
-<p id="cfP">You are holding two picks for the Bandits. Switching to the Marauders will leave them unassigned.</p>
-<div class="cfb">
-<button class="p" id="cfSave">Add them, then switch</button>
-<button class="s" id="cfDrop">Switch and drop them</button>
-<button class="t" id="cfCancel">Stay here</button>
-</div>
-</div>
 </div>
 <script>
 var ALL=[{n:'Bandits',b:'B',c:'#B93327'},{n:'Marauders',b:'M',c:'#1B4C99'},{n:'Renegades',b:'R',c:'#1D7A4C'},{n:'Outlaws',b:'O',c:'#D2691E'}];
@@ -207,22 +174,16 @@ var G=[
 ['CD','Dunne, Chris','6.2',null],['EV','Vance, Ed','13.9',null],['JS','Shaw, Joe','8.4',null],['BH','Hines, Bob','10.7',null],
 ['LP','Pratt, Lee','15.3',null],['MO','Ochoa, Marco','18.1',null]];
 function count(t){return G.filter(function(g){return g[3]===t}).length}
+function drawSideDemo(){
+  var d=document.getElementById('dside');
+  d.innerHTML=TEAMS.map(function(t,i){return '<button data-s="'+i+'" class="'+(i===act?'on':'')+'">'+t.n+'</button>'}).join('');
+  d.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click',function(){act=+b.dataset.s;PICKS=[];draw()});
+  });
+}
 function draw(){
   var T=TEAMS[act],on=count(act),left=CAP-on-PICKS.length;
-  document.getElementById('tsw').innerHTML=TEAMS.map(function(t,i){
-    var c=count(i),full=c>=CAP;
-    var stg=(i===act&&PICKS.length)?'<u>&#43;'+PICKS.length+' holding</u>':'';
-    return '<button data-t="'+i+'" class="'+(i===act?'on':'')+(full?' done':'')+'" style="'+(i===act?'border-color:'+t.c:'')+'">'+
-    '<span class="chip" style="background:'+t.c+'">'+t.b+'</span><span class="d"><b>'+t.n+'</b><small>'+c+' of '+CAP+(full?' \u00b7 full':'')+stg+'</small></span></button>';
-  }).join('');
-  document.getElementById('tsw').querySelectorAll('button').forEach(function(b){
-    b.addEventListener('click',function(){
-      var to=+b.dataset.t;
-      if(to===act)return;
-      if(PICKS.length){askSwitch(to);return}
-      act=to;draw();
-    });
-  });
+  drawSideDemo();
   var tot=TEAMS.length*CAP,grp=Math.ceil(tot/4),odd=tot%4!==0;
   document.getElementById('szv').textContent=CAP;
   document.getElementById('szdn').disabled=CAP<=2;
@@ -270,30 +231,11 @@ function draw(){
   btn.disabled=PICKS.length===0;
   btn.textContent=PICKS.length?'Add '+PICKS.length+' to '+T.n:'Add golfers';
   document.getElementById('hold').innerHTML=PICKS.length
-    ?'<b>Holding '+PICKS.length+'.</b> Not on the side until you tap Add. Switch sides and we will offer to add them first.'
+    ?'<b>Holding '+PICKS.length+'.</b> Not on the side until you tap Add.'
     :(left>0?'Nothing is written yet &mdash; tap a golfer to hold him, then <b>Add</b> to put the picks on this side.'
-            :'<b>'+T.n+' are complete.</b> Switch to another side, or head back to lock the draft.');
-}
-var pending=null;
-function askSwitch(to){
-  pending=to;
-  var T=TEAMS[act],D=TEAMS[to],n=PICKS.length;
-  document.getElementById('cfT').textContent='Add '+n+' to the '+T.n+' first?';
-  document.getElementById('cfP').textContent='You are holding '+(n===1?'one pick':n+' picks')+' for the '+T.n+'. Switching to the '+D.n+' will leave '+(n===1?'him':'them')+' unassigned.';
-  document.getElementById('cfSave').textContent='Add '+n+' to the '+T.n+', then switch';
-  document.getElementById('cfDrop').textContent='Switch and drop '+(n===1?'him':'them');
-  document.getElementById('csheet').classList.add('on');
-  document.getElementById('cscrim').classList.add('on');
-}
-function closeAsk(){
-  document.getElementById('csheet').classList.remove('on');
-  document.getElementById('cscrim').classList.remove('on');
+            :'<b>'+T.n+' are complete.</b> Head back to the board to fill another side, or lock the draft.');
 }
 function commit(){PICKS.forEach(function(i){G[i][3]=act});PICKS=[]}
-document.getElementById('cfSave').addEventListener('click',function(){commit();act=pending;closeAsk();draw()});
-document.getElementById('cfDrop').addEventListener('click',function(){PICKS=[];act=pending;closeAsk();draw()});
-document.getElementById('cfCancel').addEventListener('click',function(){closeAsk()});
-document.getElementById('cscrim').addEventListener('click',closeAsk);
 function setCap(n){
   CAP=Math.max(2,Math.min(12,n));PICKS=[];
   for(var t=0;t<TEAMS.length;t++){
@@ -308,43 +250,9 @@ document.getElementById('add').addEventListener('click',function(){
   if(!PICKS.length)return;
   commit();draw();
 });
-document.querySelectorAll('.demo button').forEach(function(b){
+document.querySelectorAll('.demo .btns button[data-n]').forEach(function(b){
   b.addEventListener('click',function(){
-    var pending=null;
-function askSwitch(to){
-  pending=to;
-  var T=TEAMS[act],D=TEAMS[to],n=PICKS.length;
-  document.getElementById('cfT').textContent='Add '+n+' to the '+T.n+' first?';
-  document.getElementById('cfP').textContent='You are holding '+(n===1?'one pick':n+' picks')+' for the '+T.n+'. Switching to the '+D.n+' will leave '+(n===1?'him':'them')+' unassigned.';
-  document.getElementById('cfSave').textContent='Add '+n+' to the '+T.n+', then switch';
-  document.getElementById('cfDrop').textContent='Switch and drop '+(n===1?'him':'them');
-  document.getElementById('csheet').classList.add('on');
-  document.getElementById('cscrim').classList.add('on');
-}
-function closeAsk(){
-  document.getElementById('csheet').classList.remove('on');
-  document.getElementById('cscrim').classList.remove('on');
-}
-function commit(){PICKS.forEach(function(i){G[i][3]=act});PICKS=[]}
-document.getElementById('cfSave').addEventListener('click',function(){commit();act=pending;closeAsk();draw()});
-document.getElementById('cfDrop').addEventListener('click',function(){PICKS=[];act=pending;closeAsk();draw()});
-document.getElementById('cfCancel').addEventListener('click',function(){closeAsk()});
-document.getElementById('cscrim').addEventListener('click',closeAsk);
-function setCap(n){
-  CAP=Math.max(2,Math.min(12,n));PICKS=[];
-  for(var t=0;t<TEAMS.length;t++){
-    var seat=G.map(function(g,i){return [g,i]}).filter(function(x){return x[0][3]===t});
-    seat.slice(CAP).forEach(function(x){G[x[1]][3]=null});
-  }
-  draw();
-}
-document.getElementById('szdn').addEventListener('click',function(){setCap(CAP-1)});
-document.getElementById('szup').addEventListener('click',function(){setCap(CAP+1)});
-document.getElementById('add').addEventListener('click',function(){
-  if(!PICKS.length)return;
-  commit();draw();
-});
-document.querySelectorAll('.demo button').forEach(function(x){x.classList.remove('on')});
+    document.querySelectorAll('.demo .btns button[data-n]').forEach(function(x){x.classList.remove('on')});
     b.classList.add('on');
     var n=+b.dataset.n;
     TEAMS=ALL.slice(0,n);CAP=Math.floor(16/n);act=0;PICKS=[];

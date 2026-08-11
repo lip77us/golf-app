@@ -1,0 +1,238 @@
+<!-- @dsCard group="Cup Flow" name="Cup leaderboard — mixed cup (Nassau &amp; Singles tabs)" subtitle="Built in live testing: one Stroke Play tab, full names in match headers, per-hole Round Progress grid, prospective green stroke dots" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Cup leaderboard (mixed)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:360px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.built{display:inline-block;background:#0F6E56;color:#fff;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:3px 8px;border-radius:999px;margin-bottom:9px}
+.phone{width:390px;height:872px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1;cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:20px}
+.appbar .sp{margin-left:auto;display:flex;gap:14px;align-items:center}
+.appbar svg{width:21px;height:21px;stroke:var(--deepPine);fill:none;stroke-width:1.9;stroke-linecap:round}
+.appbar .dots{font-size:19px;letter-spacing:2px}
+.comphd{margin:2px 16px 0}
+.comphd b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
+.comphd small{color:var(--muted);font-size:12px}
+.tabs{display:flex;gap:4px;margin:10px 16px 4px;background:#DFE8E1;border-radius:12px;padding:3px}
+.tabs button{flex:1;border:none;background:transparent;border-radius:9px;padding:8px 4px;font:600 12px/1.15 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--deepPine);box-shadow:0 1px 2px rgba(11,31,26,.1)}
+.body{padding:10px 14px 26px;overflow-y:auto;height:672px}
+.sec{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:4px 2px 8px;display:flex;align-items:center;gap:8px}
+.sec:after{content:"";flex:1;height:1px;background:#D6E1D8}
+.m{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:11px 13px 10px;margin-bottom:12px}
+.m.mine{border-color:#BFD8CC;box-shadow:0 0 0 1px #BFD8CC inset}
+.mhd{display:flex;align-items:baseline;gap:7px;margin-bottom:8px}
+.mhd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14px}
+.mhd .me{font-size:11.5px;font-weight:600;color:var(--pine)}
+.mhd .tt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.names{display:grid;gap:3px;font-size:13px;margin-bottom:9px}
+.names .s{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:7px}
+.names .s span{font-weight:600;text-wrap:pretty}
+.names .x{color:#9AA8A0;font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding-left:27px}
+.chip{min-width:20px;height:20px;padding:0 3px;border-radius:6px;color:#fff;font:700 11px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:4px}
+.seg div{border:1px solid #E6ECE7;border-radius:11px;padding:7px 4px 8px;text-align:center}
+.seg .l{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#93A29A;display:block;margin-bottom:3px}
+.seg .r{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
+.seg .r.a{color:var(--t1)}.seg .r.b{color:var(--t2)}.seg .r.as{color:var(--muted)}.seg .r.ns{color:#B4C0B8;font-size:12.5px}
+.prog{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#93A29A;margin:11px 0 5px;padding-top:9px;border-top:1px solid #EEF3EF}
+.grid{overflow-x:auto;margin:0 -13px;padding:0 13px}
+.gw{display:grid;grid-template-columns:64px repeat(10,30px);row-gap:0}
+.gw>span{font-size:11px;font-variant-numeric:tabular-nums;text-align:center;padding:5px 0;line-height:1.1}
+.gw>span.h{font-weight:700;font-size:9.5px;letter-spacing:.4px;text-transform:uppercase;color:#93A29A;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gw .hd span,.gw>span.meta{color:var(--muted);font-weight:600}
+.gw>span.hole{font-weight:700;color:var(--deepPine)}
+.gw .rule{grid-column:1/-1;height:1px;background:#E1E9E2;margin:4px 0 3px}
+.gw>span.sc{position:relative;font-weight:600;font-size:12.5px;color:var(--deepPine)}
+.gw>span.sc.empty{color:#C6D1C8}
+.gw>span.sc i{position:absolute;top:3px;right:5px;width:5px;height:5px;border-radius:50%;background:var(--pine)}
+.gw>span.sc i+i{right:11px}
+.gw>span.sc.wa{background:rgba(185,51,39,.13)}
+.gw>span.sc.wb{background:rgba(27,76,153,.13)}
+.gw>span.sc.wt{border-radius:6px 6px 0 0}
+.gw>span.sc.wbm{border-radius:0 0 6px 6px}
+.gw>span.sc.ws{border-radius:6px}
+.gw>span.pl{text-align:left;font-weight:600;font-size:11.5px;color:var(--deepPine);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gw>span.pl.b2{color:var(--t2)}.gw>span.pl.a2{color:var(--t1)}
+.fade{position:relative}
+.fade:after{content:"";position:absolute;top:0;right:-1px;bottom:0;width:26px;background:linear-gradient(90deg,rgba(255,255,255,0),#fff 78%);pointer-events:none}
+.legend{font-size:11px;color:#93A29A;margin-top:7px;display:flex;align-items:center;gap:6px}
+.legend i{width:5px;height:5px;border-radius:50%;background:var(--pine);display:inline-block}
+.tot2{display:flex;align-items:center;gap:10px;margin-top:9px;border-top:1px solid #EEF3EF;padding-top:8px;font-size:12px;color:var(--muted)}
+.tot2 span{flex:1}
+.tot2 b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px;color:var(--deepPine);font-variant-numeric:tabular-nums}
+.tot2 b.under{color:#D32F2F}.tot2 b.over{color:var(--deepPine)}.tot2 b.even{color:var(--deepPine)}
+.tot2 em{font-style:normal;font-size:11.5px;color:#93A29A;font-variant-numeric:tabular-nums}
+.tot2 .tmn{display:flex;align-items:center;gap:7px;font-weight:600;color:var(--deepPine)}
+.tot2 .tmn i{min-width:18px;height:18px;padding:0 3px;border-radius:5px;color:#fff;font:700 10px/18px "Spline Sans",system-ui,sans-serif;text-align:center;font-style:normal;flex:none}
+.tot2 b{min-width:34px;text-align:right}
+.gw>span.pl.tm{font-weight:700}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<span class="built">Built &amp; merged &mdash; Aug 2026</span>
+<h1>Cup leaderboard &mdash; mixed cup</h1>
+<p>A two-game mixed cup (Four Ball Nassau + Singles Nassau) gets a tab per game. Drawn to match what shipped in the Aug live-testing pass, so the pack stays true to the build.</p>
+<h3>One Stroke Play tab</h3>
+<ul>
+<li>The blank championship <b>Stroke Play</b> tab is gone on cup rounds &mdash; the cup <i>is</i> the championship. Only the per-round scores remain, so no tab shares a name with another.</li>
+</ul>
+<h3>Match headers</h3>
+<ul>
+<li><b>Full names on both sides.</b> &ldquo;Al Bronson &amp; Chris Kang vs Alex Brown &amp; Rob Sanders&rdquo; &mdash; initials alone produced &ldquo;AB vs AB&rdquo;.</li>
+<li>The Singles card&rsquo;s separate roster row was dropped: the per-match rows already name everyone in the group.</li>
+</ul>
+<h3>Round Progress grid</h3>
+<ul>
+<li>Each match card now carries the <b>per-hole grid</b> &mdash; Hole, Par, Index, a divider, then a row per player &mdash; the same shape score entry and sixes casual use. The card result alone left the tab reading &ldquo;no additional info&rdquo;.</li>
+<li>Rows are labelled <b>abbreviation + strokes issued</b>, &ldquo;AY (12)&rdquo;, with full names still in the header. Mirrors the Nassau grid&rsquo;s strokes-in-play convention.</li>
+</ul>
+<h3>Who won the hole</h3>
+<ul>
+<li><b>The winning side&rsquo;s cells are tinted in its team colour</b>, spanning both players of the pair so the block reads as one side rather than two scores. A halved hole is left plain &mdash; most holes halve, and tinting them would make the card a wall of colour with nothing to find.</li>
+<li>It uses the <b>net</b> score, the same number the match is decided on, so the tint and the running result never disagree.</li>
+<li>Stroke-play cards (Scramble, Rumble) carry no tint: there is no hole to win, only a total.</li>
+</ul>
+<h3>Stroke dots</h3>
+<ul>
+<li><b>The whole stroke plan shows up front</b>, allocated by index across every hole a stroke falls &mdash; played or not. Deriving dots from gross&nbsp;&minus;&nbsp;net meant an empty card showed almost nothing.</li>
+<li><b>Green everywhere</b> (<i>colorScheme.primary</i>). Red clashed on team-coloured rows. Team colours and won-by markers are unchanged.</li>
+</ul>
+<h3>Scramble reads as a card, not a match</h3>
+<ul>
+<li><b>Two rows, one per side</b> &mdash; the team is the competitor, so the grid holds team scores with the <b>team stroke</b> dotted on the same plan as everyone else.</li>
+<li><b>Each side carries its own <i>thru</i></b>. The two groups go out at different times and are rarely on the same hole, so a single &ldquo;thru 10&rdquo; on the card would be wrong for one of them.</li>
+<li><b>The number to par is the score</b>, in the standard convention &mdash; <i>under par red, over par and level dark</i>. It is what a golfer reads first, so it is the only figure set large.</li>
+<li><b>Nothing else while it is running.</b> A net total mid-round is a number without a reference. Gross and net are added beside the to-par figure once all 18 are in, where they are worth recording.</li>
+</ul>
+<h3>Open</h3>
+<ul>
+<li>Score entry&rsquo;s singles progress card still shows dots on played holes only. Worth closing for consistency, not blocking.</li>
+<li>See <a href="cup-leaderboard.html">Cup leaderboard</a> for the Triple Cup board.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>12:37</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Leaderboard</span><span class="sp">
+<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.4A8 8 0 1 1 21 12Z"/></svg>
+<span class="dots">&#8942;</span></span></div>
+<div class="comphd"><b>Summer Mixed Cup</b><small>Four Ball Nassau &middot; Singles Nassau &middot; strokes off</small></div>
+<div class="tabs"><button>Cup Detail</button><button class="on">Four Ball Nassau</button><button>Singles Nassau</button><button>Scramble</button></div>
+<div class="body">
+
+<div class="sec">Four Ball Nassau &middot; 3 pts each</div>
+
+<div class="m mine">
+<div class="mhd"><b>Group 4</b><span class="me">my group</span><span class="tt">&middot; 8:30 AM</span></div>
+<div class="names"><span class="s"><span class="chip a">B</span><span>Al Bronson &amp; Chris Kang</span></span><span class="x">vs</span><span class="s"><span class="chip b">M</span><span>Alex Brown &amp; Rob Sanders</span></span></div>
+<div class="seg"><div><span class="l">Front</span><span class="r a">2 UP</span></div><div><span class="l">Back</span><span class="r ns">&mdash;</span></div><div><span class="l">Overall</span><span class="r a">2 UP</span></div></div>
+<div class="prog">Round progress &middot; thru 8</div>
+<div class="grid fade"><div class="gw">
+<span class="h">Hole</span><span class="hole">1</span><span class="hole">2</span><span class="hole">3</span><span class="hole">4</span><span class="hole">5</span><span class="hole">6</span><span class="hole">7</span><span class="hole">8</span><span class="hole">9</span><span class="hole">10</span>
+<span class="h">Par</span><span class="meta">4</span><span class="meta">5</span><span class="meta">3</span><span class="meta">4</span><span class="meta">4</span><span class="meta">4</span><span class="meta">3</span><span class="meta">5</span><span class="meta">4</span><span class="meta">4</span>
+<span class="h">Index</span><span class="meta">7</span><span class="meta">3</span><span class="meta">17</span><span class="meta">11</span><span class="meta">1</span><span class="meta">9</span><span class="meta">15</span><span class="meta">5</span><span class="meta">13</span><span class="meta">8</span>
+<span class="rule"></span>
+<span class="pl a2">AB (4)</span><span class="sc wa wt">5</span><span class="sc wa wt">5<i></i></span><span class="sc">3</span><span class="sc">4</span><span class="sc wa wt">5<i></i></span><span class="sc">4</span><span class="sc">3</span><span class="sc">5</span><span class="sc empty">&ndash;</span><span class="sc empty">&ndash;</span>
+<span class="pl a2">CK (11)</span><span class="sc wa wbm">4<i></i></span><span class="sc wa wbm">6<i></i></span><span class="sc">4</span><span class="sc">5<i></i></span><span class="sc wa wbm">5<i></i></span><span class="sc">5<i></i></span><span class="sc">3</span><span class="sc">5<i></i></span><span class="sc empty">&ndash;</span><span class="sc empty"><i></i>&ndash;</span>
+<span class="pl b2">AB (0)</span><span class="sc">4</span><span class="sc">5</span><span class="sc">4</span><span class="sc">5</span><span class="sc">6</span><span class="sc">4</span><span class="sc wb wt">2</span><span class="sc">5</span><span class="sc empty">&ndash;</span><span class="sc empty">&ndash;</span>
+<span class="pl b2">RS (9)</span><span class="sc">5<i></i></span><span class="sc">6<i></i></span><span class="sc">3</span><span class="sc">4</span><span class="sc">6<i></i></span><span class="sc">5<i></i></span><span class="sc wb wbm">4</span><span class="sc">5<i></i></span><span class="sc empty">&ndash;</span><span class="sc empty"><i></i>&ndash;</span>
+</div></div>
+<div class="legend"><i></i> stroke received &nbsp;&middot;&nbsp; tint marks the side that won the hole</div>
+</div>
+
+<div class="m">
+<div class="mhd"><b>Group 1</b><span class="tt">&middot; 8:00 AM</span></div>
+<div class="names"><span class="s"><span class="chip a">B</span><span>Dave Bucko &amp; Steve Webb</span></span><span class="x">vs</span><span class="s"><span class="chip b">M</span><span>Jon Miller &amp; Nick Malat</span></span></div>
+<div class="seg"><div><span class="l">Front</span><span class="r b">1 UP</span></div><div><span class="l">Back</span><span class="r as">AS</span></div><div><span class="l">Overall</span><span class="r b">1 UP</span></div></div>
+<div class="prog">Round progress &middot; thru 13</div>
+<div class="grid fade"><div class="gw">
+<span class="h">Hole</span><span class="hole">1</span><span class="hole">2</span><span class="hole">3</span><span class="hole">4</span><span class="hole">5</span><span class="hole">6</span><span class="hole">7</span><span class="hole">8</span><span class="hole">9</span><span class="hole">10</span>
+<span class="h">Par</span><span class="meta">4</span><span class="meta">5</span><span class="meta">3</span><span class="meta">4</span><span class="meta">4</span><span class="meta">4</span><span class="meta">3</span><span class="meta">5</span><span class="meta">4</span><span class="meta">4</span>
+<span class="h">Index</span><span class="meta">7</span><span class="meta">3</span><span class="meta">17</span><span class="meta">11</span><span class="meta">1</span><span class="meta">9</span><span class="meta">15</span><span class="meta">5</span><span class="meta">13</span><span class="meta">8</span>
+<span class="rule"></span>
+<span class="pl a2">DB (2)</span><span class="sc">4</span><span class="sc">5</span><span class="sc">3</span><span class="sc">4</span><span class="sc">5<i></i></span><span class="sc">4</span><span class="sc">3</span><span class="sc">5</span><span class="sc">4</span><span class="sc">5</span>
+<span class="pl a2">SW (14)</span><span class="sc">6<i></i></span><span class="sc">6<i></i></span><span class="sc">4</span><span class="sc">5<i></i></span><span class="sc">6<i></i></span><span class="sc">5<i></i></span><span class="sc">4</span><span class="sc">7<i></i></span><span class="sc">5<i></i></span><span class="sc">5<i></i></span>
+<span class="pl b2">JM (0)</span><span class="sc">4</span><span class="sc">5</span><span class="sc wb wt">2</span><span class="sc">4</span><span class="sc">4</span><span class="sc">4</span><span class="sc">3</span><span class="sc">5</span><span class="sc">4</span><span class="sc">4</span>
+<span class="pl b2">NM (7)</span><span class="sc">5<i></i></span><span class="sc">6<i></i></span><span class="sc wb wbm">3</span><span class="sc">5</span><span class="sc">5<i></i></span><span class="sc">4</span><span class="sc">3</span><span class="sc">6<i></i></span><span class="sc">4</span><span class="sc">5</span>
+</div></div>
+<div class="legend"><i></i> stroke received &nbsp;&middot;&nbsp; tint marks the side that won the hole</div>
+</div>
+
+<div class="sec">Scramble &middot; 2 pts &middot; net stroke play</div>
+
+<div class="m">
+<div class="mhd"><b>Groups 1 &amp; 2</b><span class="tt">&middot; 8:00 / 8:10 AM</span></div>
+<div class="names"><span class="s"><span class="chip a">B</span><span>Bucko &middot; DB / SW / GW / CW</span></span><span class="x">vs</span><span class="s"><span class="chip b">M</span><span>Miller &middot; JM / NM / ML / SC</span></span></div>
+<div class="prog">Round progress</div>
+<div class="grid fade"><div class="gw">
+<span class="h">Hole</span><span class="hole">1</span><span class="hole">2</span><span class="hole">3</span><span class="hole">4</span><span class="hole">5</span><span class="hole">6</span><span class="hole">7</span><span class="hole">8</span><span class="hole">9</span><span class="hole">10</span>
+<span class="h">Par</span><span class="meta">4</span><span class="meta">5</span><span class="meta">3</span><span class="meta">4</span><span class="meta">4</span><span class="meta">4</span><span class="meta">3</span><span class="meta">5</span><span class="meta">4</span><span class="meta">4</span>
+<span class="h">Index</span><span class="meta">7</span><span class="meta">3</span><span class="meta">17</span><span class="meta">11</span><span class="meta">1</span><span class="meta">9</span><span class="meta">15</span><span class="meta">5</span><span class="meta">13</span><span class="meta">8</span>
+<span class="rule"></span>
+<span class="pl a2 tm">Bucko (3)</span><span class="sc">4</span><span class="sc">4<i></i></span><span class="sc">3</span><span class="sc">4</span><span class="sc">4<i></i></span><span class="sc">4</span><span class="sc">3</span><span class="sc">4</span><span class="sc">4</span><span class="sc">4</span>
+<span class="pl b2 tm">Miller (2)</span><span class="sc">4</span><span class="sc">4</span><span class="sc">3</span><span class="sc">3</span><span class="sc">4<i></i></span><span class="sc">4</span><span class="sc">3</span><span class="sc">5</span><span class="sc empty">&ndash;</span><span class="sc empty">&ndash;</span>
+</div></div>
+<div class="tot2"><span class="tmn"><i class="chip a">B</i>Bucko</span><em>thru 10</em><b class="under">&minus;4</b></div>
+<div class="tot2" style="border:none;padding-top:0;margin-top:2px"><span class="tmn"><i class="chip b">M</i>Miller</span><em>thru 8</em><b class="under">&minus;3</b></div>
+</div>
+
+<div class="m">
+<div class="mhd"><b>Groups 5 &amp; 6</b><span class="tt">&middot; 8:40 / 8:50 AM</span><span class="me" style="margin-left:auto">final</span></div>
+<div class="names"><span class="s"><span class="chip a">B</span><span>Bucko &middot; AB / CK / BK / AP</span></span><span class="x">vs</span><span class="s"><span class="chip b">M</span><span>Miller &middot; AB / RS / RW / EL</span></span></div>
+<div class="prog">Round progress &middot; all 18 in</div>
+<div class="grid fade"><div class="gw">
+<span class="h">Hole</span><span class="hole">1</span><span class="hole">2</span><span class="hole">3</span><span class="hole">4</span><span class="hole">5</span><span class="hole">6</span><span class="hole">7</span><span class="hole">8</span><span class="hole">9</span><span class="hole">10</span>
+<span class="h">Par</span><span class="meta">4</span><span class="meta">5</span><span class="meta">3</span><span class="meta">4</span><span class="meta">4</span><span class="meta">4</span><span class="meta">3</span><span class="meta">5</span><span class="meta">4</span><span class="meta">4</span>
+<span class="h">Index</span><span class="meta">7</span><span class="meta">3</span><span class="meta">17</span><span class="meta">11</span><span class="meta">1</span><span class="meta">9</span><span class="meta">15</span><span class="meta">5</span><span class="meta">13</span><span class="meta">8</span>
+<span class="rule"></span>
+<span class="pl a2 tm">Bucko (3)</span><span class="sc">4</span><span class="sc">4<i></i></span><span class="sc">3</span><span class="sc">4</span><span class="sc">4<i></i></span><span class="sc">4</span><span class="sc">3</span><span class="sc">5</span><span class="sc">4</span><span class="sc">4</span>
+<span class="pl b2 tm">Miller (2)</span><span class="sc">4</span><span class="sc">4</span><span class="sc">3</span><span class="sc">4</span><span class="sc">4<i></i></span><span class="sc">4</span><span class="sc">3</span><span class="sc">5</span><span class="sc">4</span><span class="sc">3</span>
+</div></div>
+<div class="tot2"><span class="tmn"><i class="chip a">B</i>Bucko</span><em>gross 69 &middot; net 66</em><b class="under">&minus;6</b></div>
+<div class="tot2" style="border:none;padding-top:0;margin-top:2px"><span class="tmn"><i class="chip b">M</i>Miller</span><em>gross 67 &middot; net 65</em><b class="under">&minus;7</b></div>
+<div class="legend" style="color:var(--t2);font-weight:600">Miller take the 2 points with the win</div>
+</div>
+
+<div class="sec">Singles Nassau &middot; 1 pt each</div>
+
+<div class="m">
+<div class="mhd"><b>Group 4 &middot; Match 1</b><span class="tt">&middot; 8:30 AM</span></div>
+<div class="names"><span class="s"><span class="chip a">B</span><span>Al Bronson</span></span><span class="x">vs</span><span class="s"><span class="chip b">M</span><span>Alex Brown</span></span></div>
+<div class="seg"><div><span class="l">Front</span><span class="r as">AS</span></div><div><span class="l">Back</span><span class="r ns">&mdash;</span></div><div><span class="l">Overall</span><span class="r as">AS</span></div></div>
+<div class="prog">Round progress &middot; thru 8</div>
+<div class="grid fade"><div class="gw">
+<span class="h">Hole</span><span class="hole">1</span><span class="hole">2</span><span class="hole">3</span><span class="hole">4</span><span class="hole">5</span><span class="hole">6</span><span class="hole">7</span><span class="hole">8</span><span class="hole">9</span><span class="hole">10</span>
+<span class="h">Par</span><span class="meta">4</span><span class="meta">5</span><span class="meta">3</span><span class="meta">4</span><span class="meta">4</span><span class="meta">4</span><span class="meta">3</span><span class="meta">5</span><span class="meta">4</span><span class="meta">4</span>
+<span class="h">Index</span><span class="meta">7</span><span class="meta">3</span><span class="meta">17</span><span class="meta">11</span><span class="meta">1</span><span class="meta">9</span><span class="meta">15</span><span class="meta">5</span><span class="meta">13</span><span class="meta">8</span>
+<span class="rule"></span>
+<span class="pl a2">AB (4)</span><span class="sc">5</span><span class="sc wa ws">5<i></i></span><span class="sc">3</span><span class="sc">4</span><span class="sc wa ws">5<i></i></span><span class="sc">4</span><span class="sc">3</span><span class="sc">5</span><span class="sc empty">&ndash;</span><span class="sc empty">&ndash;</span>
+<span class="pl b2">AB (0)</span><span class="sc wb ws">4</span><span class="sc">5</span><span class="sc">3</span><span class="sc">4</span><span class="sc">6</span><span class="sc">4</span><span class="sc wb ws">2</span><span class="sc">5</span><span class="sc empty">&ndash;</span><span class="sc empty">&ndash;</span>
+</div></div>
+<div class="legend"><i></i> low player in the match plays to 0 &nbsp;&middot;&nbsp; tint marks the side that won the hole</div>
+</div>
+
+</div>
+</div>
+</body>
+</html>

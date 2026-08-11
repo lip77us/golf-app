@@ -1,0 +1,270 @@
+<!-- @dsCard group="Cup Flow" name="Group builder — mixed cup" subtitle="The group's game is the first question; it sets how many golfers and from which side, and the day's plan tracks what is left to build" viewport="1740x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Group builder — mixed cup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A3226;--t1:#B93327;--t2:#1B4C99}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:30px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:340px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.col{flex:none}
+.cap{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px 4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);display:flex;flex-direction:column}
+.status{flex:none;height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{flex:none;display:flex;align-items:center;gap:12px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .step{margin-left:auto;font-size:12px;color:var(--muted);font-weight:600}
+.plan{flex:none;margin:6px 14px 0;background:var(--deepPine);border-radius:13px;padding:9px 11px;color:#C7D6CD}
+.plan h4{margin:0 0 6px;font:700 10.5px/1 "Spline Sans",system-ui,sans-serif;letter-spacing:.5px;text-transform:uppercase;color:var(--brightMint)}
+.plan .pls{display:flex;flex-wrap:wrap;gap:5px}
+.plan .pls span{font-size:11.5px;background:rgba(255,255,255,.1);border-radius:7px;padding:3px 8px}
+.plan .pls b{color:#fff;font-weight:700;font-variant-numeric:tabular-nums}
+.plan .pls span.done{color:#8FA79A}
+.body{padding:10px 14px 14px;overflow-y:auto;flex:1;min-height:0}
+.lb{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:2px 2px 6px}
+.games{display:grid;gap:6px;margin-bottom:12px}
+.gm{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:9px 11px;cursor:pointer}
+.gm b{font-size:13.5px;font-weight:600}
+.gm small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.wl{display:grid;gap:7px;margin-bottom:12px}
+.wr{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:10px 12px;cursor:pointer}
+.wr .mk{min-width:22px;height:22px;padding:0 6px;border-radius:8px;border:1.5px solid #C9D8CE;background:#fff;font:700 11px/20px "Spline Sans",system-ui,sans-serif;color:var(--pine);text-align:center}
+.wr b{font-size:13.5px;font-weight:600}
+.wr small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.wr .act{font-size:11.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--pine);white-space:nowrap}
+.wr.done{background:#F4F8F5;border-color:#E3EBE5}
+.wr.done .mk{background:var(--pine);border-color:var(--pine);color:#fff}
+.wr.done b{color:var(--muted);font-weight:500}
+.wr.done .act{color:#93A29A}
+.wr.half{border-color:#E4B9B3;background:#FDF6F5}
+.wr.half .act{color:var(--warn)}
+.wr.half .mk{border-color:#E4B9B3;color:var(--warn)}
+.chg{border:1.5px solid #D3DED6;background:#fff;border-radius:9px;padding:6px 11px;font:600 12px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.gm .left{font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--pine);background:#E7EFE9;border-radius:6px;padding:3px 8px;white-space:nowrap}
+.gm.on{border-color:var(--pine);background:#F2F9F5}
+.gm.full{opacity:.5}
+.gm.full .left{color:#93A29A;background:#EEF3EF}
+.rule{background:#F5F9F6;border:1px solid #E3EBE5;border-radius:12px;padding:10px 12px;font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px}
+.rule b{color:var(--deepPine);font-weight:600}
+.rule.warn{background:#FDF6F5;border-color:#E4B9B3;color:var(--warn)}
+.slots{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.slot{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:9px 10px;min-height:62px}
+.slot .sh{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#93A29A;margin-bottom:6px}
+.chip{min-width:19px;height:19px;padding:0 4px;border-radius:6px;color:#fff;font:700 10.5px/19px "Spline Sans",system-ui,sans-serif;text-align:center}
+.chip.a{background:var(--t1)}.chip.b{background:var(--t2)}
+.slot .p{font-size:13px;font-weight:600;padding:2px 0}
+.slot .p small{display:block;font-size:11px;font-weight:400;color:var(--muted)}
+.slot.empty{border-style:dashed;display:flex;align-items:center;justify-content:center;color:var(--pine);font-size:12.5px;font-weight:600}
+.pair{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:12px;padding:10px 12px;margin-bottom:12px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px}
+.pair b{font-size:13px;font-weight:600}
+.pair small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.pair .go{border:1.5px solid #D3DED6;background:#fff;border-radius:9px;padding:6px 10px;font:600 12px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.tee{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:11px 12px;margin-bottom:12px}
+.tee .th{display:flex;align-items:baseline;gap:8px;margin-bottom:7px}
+.tee .th b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14px}
+.tee .th small{margin-left:auto;font-size:11.5px;color:var(--muted)}
+.tee .tt{display:flex;align-items:center;gap:8px}
+.tee .tv{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px;font-variant-numeric:tabular-nums}
+.tee .tb{border:1.5px solid #D3DED6;background:#fff;border-radius:9px;padding:6px 10px;font:600 12px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.tee .hint{font-size:11.5px;color:#93A29A;margin-top:7px}
+.alw{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:11px 12px;margin-bottom:12px}
+.alw .ah{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+.alw .ah b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14px}
+.alw .ah .std{font-size:9.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:5px;padding:3px 6px}
+.alw .ah .std.edited{color:#6B5A32;background:#F6EDD9}
+.alw .ah .ed{margin-left:auto;border:1.5px solid #D3DED6;background:#fff;border-radius:9px;padding:5px 10px;font:600 12px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.alw .sub{font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:8px}
+.alw .rows{border-top:1px solid #EEF3EF;padding-top:7px}
+.alw .ar{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0}
+.alw .ar span:first-child{flex:1;font-weight:600}
+.alw .ar em{font-style:normal;color:var(--muted);font-variant-numeric:tabular-nums}
+.alw .ar b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;min-width:26px;text-align:right}
+.alw .out{margin-top:8px;border-top:1px solid #EEF3EF;padding-top:8px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.alw .out b{color:var(--deepPine);font-weight:700;font-variant-numeric:tabular-nums}
+.scrim{position:absolute;inset:0;background:rgba(11,31,26,.42);z-index:5}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-radius:22px 22px 0 0;padding:14px 16px 18px;box-shadow:0 -10px 40px rgba(6,18,14,.25)}
+.sheet .grab{width:38px;height:4px;border-radius:2px;background:#D6E1D8;margin:0 auto 10px}
+.sheet h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px;margin:0 0 3px}
+.sheet .sub{font-size:12.5px;color:var(--muted);line-height:1.45;margin:0 0 11px}
+.pct .pl{display:flex;align-items:center;margin-bottom:6px}
+.pct .pl span{font-size:13px;font-weight:600}
+.pct .pl b{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px;font-variant-numeric:tabular-nums}
+.pct input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;background:#DCE6DE;outline:none;margin:0}
+.pct input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--pine);cursor:pointer;border:none}
+.ticks{display:flex;justify-content:space-between;font-size:10.5px;color:#93A29A;margin-top:5px}
+.fsr{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:4px}
+.fsr label>span:first-child{display:block;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.fi{display:flex;align-items:center;gap:6px;border:1.5px solid var(--cardBorder);border-radius:11px;padding:9px 11px}
+.fi input{border:none;outline:none;width:100%;font:700 16px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);background:transparent;font-variant-numeric:tabular-nums}
+.fi i{font-style:normal;font-size:13px;color:var(--muted)}
+.dflt{border:1px solid #E3EBE5;background:#F7FAF7;border-radius:12px;padding:10px 12px;margin:11px 0 0;font-size:11.5px;line-height:1.6;color:var(--muted)}
+.dflt table{width:100%;border-collapse:collapse}
+.dflt td{padding:3px 0;vertical-align:top}
+.dflt td:first-child{color:var(--deepPine);font-weight:600;width:128px}
+.dflt td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.reset{display:block;width:100%;margin-top:11px;border:1.5px solid #D3DED6;background:#fff;border-radius:12px;padding:10px 0;font:600 13px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.go{display:block;width:100%;border:none;border-radius:13px;padding:13px 0;font:700 14.5px/1 "Spline Sans",system-ui,sans-serif;background:var(--pine);color:#fff;cursor:pointer;margin-top:9px}
+.nav{flex:none;background:var(--surface);border-top:1px solid #D6E1D8;padding:11px 16px 20px;display:flex;gap:10px}
+.nav button{flex:1;border-radius:13px;padding:13px 0;font:700 14.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;border:none}
+.nav .b{background:transparent;border:1.5px solid #D3DED6;color:var(--deepPine);flex:0 0 96px}
+.nav .p{background:var(--pine);color:#fff}
+.nav .p[disabled]{background:#B7C7BC;color:#F1F6F2;cursor:not-allowed}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Group builder &mdash; mixed cup</h1>
+<p>The Triple Cup builder can open with the golfer list, because every group plays the same thing. A mixed cup cannot: until you know the group&rsquo;s game, you do not know <b>how many golfers it holds or which sides they come from</b>.</p>
+<p>So the day&rsquo;s plan is the worklist. Every match step 5 paid for is listed as a thing to build, and the captain <b>picks which one to build next</b> &mdash; the app never decides the order.</p>
+<h3>The game decides the shape</h3>
+<ul>
+<li><b>Nassau pairs, Chapman, Fourball</b> &rarr; a foursome, 2 per side. The builder shows two slots a side and refuses to save a 3&ndash;1.</li>
+<li><b>Singles, Singles Nassau</b> &rarr; a twosome, 1 per side.</li>
+<li><b>Irish Rumble, Scramble</b> &rarr; four from <b>one</b> side. It is one entry on the list that builds <b>two</b> groups, because half a match is not a thing a captain can save.</li>
+</ul>
+<h3>The plan is the worklist</h3>
+<ul>
+<li>Step 5 said how many of each game Saturday runs, so every match is known before anyone is placed. The list shows them all: built ones with their group and tee time, unbuilt ones as work.</li>
+<li><b>Order is the captain&rsquo;s.</b> Build the Rumble first because those eight are standing there, or leave the singles for last. Group numbers are assigned by tee time on save, so working out of order costs nothing.</li>
+<li>The counter strip is the same arithmetic as the step-5 meter, read from the other end: there it was golfers to place, here it is matches left to build. A game with nothing left reads <b>built</b>.</li>
+</ul>
+<h3>Carried over from the Triple Cup builder</h3>
+<ul>
+<li>Tee time defaults to the previous group plus the interval, and the interval is remembered per course.</li>
+<li><b>Shotgun is available here</b> and it was not for Triple Cup &mdash; a mixed day has no shared segment split to protect, so groups can start on different holes.</li>
+</ul>
+<h3>Allowance is set on the match</h3>
+<ul>
+<li><b>Every game arrives with its allowance already filled in</b> &mdash; the USGA number for that format. A captain who wants the standard does nothing; the card states what will be applied and moves on.</li>
+<li><b>It sits on the match, not the cup.</b> A Chapman group and a Singles group in the same round take different allowances, and the only screen that knows which game a group is playing is this one.</li>
+<li>Two shapes, following the Triple Cup Foursomes control: a <b>percentage per golfer</b> where each golfer plays a ball, and a <b>combined side handicap</b> &mdash; weights on the low and high index &mdash; where the side plays one.</li>
+<li><b>The card shows the result, not just the setting.</b> Course handicap, the percentage, and the strokes it produces &mdash; so a wrong number is visible before the round starts rather than argued about on the 4th tee.</li>
+<li>Changed from standard, the badge says so. There is nothing to hunt for and nothing hidden behind an advanced screen.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>A Rumble is one row that builds <b>two</b> groups. Drawn here as a single entry that opens both halves in turn &mdash; whether the second half should be its own row is open.</li>
+<li>Whether an edited allowance should offer &ldquo;apply to every Chapman match this round&rdquo;. Eight matches of the same game means eight identical edits.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="cap">1 &middot; Pick what to build next</div>
+<div class="phone">
+<div class="status"><span>2:31</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Round 1 &middot; Tilden Park GC</span><span class="step">3 of 8 built</span></div>
+<div class="plan">
+<h4>Saturday&rsquo;s plan &mdash; left to build</h4>
+<div class="pls"><span>Nassau pairs <b>1</b></span><span>Chapman <b>2</b></span><span>Singles <b>2</b></span><span class="done">Rumble <b>built</b></span></div>
+</div>
+<div class="body">
+<div class="lb">Matches to build &mdash; tap one</div>
+<div class="rule" style="margin-bottom:9px"><b>Build them in any order.</b> Group numbers are set by tee time when you save, not by the order you work in.</div>
+<div class="wl">
+<div class="wr done"><span class="mk">&#10003;</span><span><b>3 built</b><small>Rumble &middot; Groups 1&ndash;2, Nassau pairs &middot; Groups 3&ndash;4</small></span><span class="act">Show</span></div>
+<div class="wr"><span class="mk">2v2</span><span><b>Nassau pairs &middot; 3</b><small>2 per side &middot; front, back and overall</small></span><span class="act">Build</span></div>
+<div class="wr"><span class="mk">2v2</span><span><b>Two-man Chapman &middot; 1</b><small>2 per side &middot; one ball a pair</small></span><span class="act">Build</span></div>
+<div class="wr"><span class="mk">2v2</span><span><b>Two-man Chapman &middot; 2</b><small>2 per side &middot; one ball a pair</small></span><span class="act">Build</span></div>
+<div class="wr"><span class="mk">1v1</span><span><b>Singles</b><small>1 per side &middot; two twosomes to build</small></span><span class="act">Build</span></div>
+</div>
+</div>
+<div class="nav"><button class="b">Back</button><button class="p" disabled>Start Round</button></div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap">2 &middot; Building the one you picked</div>
+<div class="phone">
+<div class="status"><span>2:33</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Nassau pairs &middot; 3 of 3</span><span class="step">3 of 8 built</span></div>
+<div class="plan">
+<h4>Saturday&rsquo;s plan &mdash; left to build</h4>
+<div class="pls"><span>Nassau pairs <b>1</b></span><span>Chapman <b>2</b></span><span>Singles <b>2</b></span><span class="done">Rumble <b>built</b></span></div>
+</div>
+<div class="body">
+<div class="games">
+<div class="gm on"><span><b>Nassau pairs</b><small>2 per side &middot; front, back and overall</small></span><button class="chg">Change</button></div>
+</div>
+<div class="rule"><b>Nassau pairs needs a foursome:</b> two Bandits and two Marauders. Front, back and overall are scored inside this group.</div>
+<div class="slots">
+<div class="slot"><div class="sh"><span class="chip b">B</span>Bandits</div><div class="p">Brian Kerss<small>Index 8.4 &middot; White</small></div><div class="p">Alan Petersen<small>Index 11.2 &middot; White</small></div></div>
+<div class="slot"><div class="sh"><span class="chip a">M</span>Marauders</div><div class="p">Rob Sanders<small>Index 9.1 &middot; White</small></div><div class="slot empty" style="border:none;min-height:26px;justify-content:flex-start;padding:0">&#43; Add a Marauder</div></div>
+</div>
+<div class="alw">
+<div class="ah"><b>Allowance</b><span class="std">Standard</span><button class="ed">Change</button></div>
+<div class="sub">90% of course handicap, strokes off the low player in the match.</div>
+<div class="rows">
+<div class="ar"><span>Brian Kerss</span><em>10 &times; 90%</em><b>9</b></div>
+<div class="ar"><span>Alan Petersen</span><em>13 &times; 90%</em><b>12</b></div>
+<div class="ar"><span>Rob Sanders</span><em>11 &times; 90%</em><b>10</b></div>
+<div class="ar"><span>&mdash;</span><em>not set</em><b>&ndash;</b></div>
+</div>
+<div class="out"><span>Low in the match plays to 0</span><b>+3 / +2 / 0</b></div>
+</div>
+<div class="tee">
+<div class="th"><b>Tee time</b><small>Interval 10 min</small></div>
+<div class="tt"><span class="tv">8:40 AM</span><button class="tb">&minus;5 min</button><button class="tb">+5 min</button></div>
+<div class="hint">Next free slot after Group 4 (8:30 AM). This time decides the group number. Shotgun is available for this round.</div>
+</div>
+</div>
+<div class="nav"><button class="b">Back</button><button class="p" disabled>Save group</button></div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap">3 &middot; Changing it</div>
+<div class="phone">
+<div class="status"><span>2:34</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Two-man Chapman &middot; 1 of 2</span><span class="step">3 of 8 built</span></div>
+<div class="plan">
+<h4>Saturday&rsquo;s plan &mdash; left to build</h4>
+<div class="pls"><span>Nassau pairs <b>1</b></span><span>Chapman <b>2</b></span><span>Singles <b>2</b></span><span class="done">Rumble <b>built</b></span></div>
+</div>
+<div class="body">
+<div class="games"><div class="gm on"><span><b>Two-man Chapman</b><small>2 per side &middot; one ball a pair</small></span><button class="chg">Change</button></div></div>
+</div>
+<div class="nav"><button class="b">Back</button><button class="p" disabled>Save group</button></div>
+<div class="scrim"></div>
+<div class="sheet">
+<div class="grab"></div>
+<h2>Chapman allowance</h2>
+<p class="sub">One ball a pair means one handicap for the pair, so the allowance is a side number rather than a percentage per golfer.</p>
+<div class="fsr">
+<label><span>Low index %</span><span class="fi"><input value="60"><i>%</i></span></label>
+<label><span>High index %</span><span class="fi"><input value="40"><i>%</i></span></label>
+</div>
+<div class="dflt"><table>
+<tr><td>Bandits</td><td>60% of 8.4 &#43; 40% of 11.2 = <b>9.5</b></td></tr>
+<tr><td>Marauders</td><td>60% of 9.1 &#43; 40% of 14.6 = <b>11.3</b></td></tr>
+<tr><td>Match</td><td>Marauders get <b>2</b></td></tr>
+</table></div>
+<div class="dflt"><b style="color:#0B1F1A;display:block;margin-bottom:5px">Standard by game</b><table>
+<tr><td>Singles</td><td>100% per golfer</td></tr>
+<tr><td>Fourball / Nassau pairs</td><td>90% per golfer</td></tr>
+<tr><td>Irish Rumble</td><td>100% per golfer</td></tr>
+<tr><td>Foursomes</td><td>50% low &#43; 50% high</td></tr>
+<tr><td>Chapman</td><td>60% low &#43; 40% high</td></tr>
+<tr><td colspan="2" style="color:#5C6B62;font-weight:400;text-align:left;padding-top:6px">A Nassau variant takes its base game&rsquo;s allowance.</td></tr>
+<tr><td>Scramble</td><td>25 / 20 / 15 / 10%</td></tr>
+</table></div>
+<button class="reset">Reset to standard</button>
+<button class="go">Done</button>
+</div>
+</div>
+</div>
+</body>
+</html>

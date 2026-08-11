@@ -1,0 +1,295 @@
+<!-- @dsCard group="Cup Flow" name="Games &amp; points by round" subtitle="Pick the games first, then say how many foursomes or twosomes play each; the field meter shows what is still unplaced and the points follow" viewport="1340x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Games &amp; points by round</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A3226}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:30px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:340px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.notes table{width:100%;border-collapse:collapse;font-size:12px;margin:0 0 11px}
+.notes td{padding:5px 0;border-top:1px solid #D6E1D8;color:var(--muted);vertical-align:top}
+.notes td:first-child{width:126px;color:var(--deepPine);font-weight:600;padding-right:10px}
+.col{flex:none}
+.cap{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px 4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:4px 16px 2px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px}
+.appbar .step{margin-left:auto;font-size:12px;color:var(--muted);font-weight:600}
+.lede{margin:6px 16px 0}
+.lede b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.lede small{display:block;color:var(--muted);font-size:12.5px;line-height:1.5;margin-top:3px}
+.body{padding:12px 14px 96px;overflow-y:auto;height:660px;position:relative}
+.r{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:12px 13px 10px;margin-bottom:12px}
+.rhd{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
+.rhd i{font-style:normal;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14px;background:#E7EFE9;color:var(--pine);border-radius:7px;padding:2px 7px}
+.rhd b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
+.rhd small{color:var(--muted);font-size:12px;margin-left:auto}
+.rsub{font-size:12px;color:var(--muted);margin-bottom:6px}
+.g{padding:9px 0;border-top:1px solid #EEF3EF}
+.g .top{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px}
+.g .n{font-weight:600;font-size:13.5px}
+.g .u{font-size:11px;color:#93A29A;margin-top:2px}
+.cnt{display:flex;align-items:center;gap:7px}
+.cnt button{width:27px;height:27px;border-radius:9px;border:1.5px solid #D3DED6;background:#fff;font:700 15px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.cnt .v{min-width:52px;text-align:center;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
+.cnt .v small{display:block;font-family:"Spline Sans",sans-serif;font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#93A29A}
+.mathline{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:10px;margin-top:7px;font-size:11.5px;color:var(--muted)}
+.mathline>em{min-width:0}
+.mathline>span{white-space:nowrap}
+.mathline em{font-style:normal}
+.mathline b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:13px;color:var(--deepPine);font-variant-numeric:tabular-nums}
+.pstep{display:inline-flex;align-items:center;gap:5px;border:1.5px solid #D3DED6;border-radius:9px;padding:3px 5px;background:#F7FAF7}
+.pstep button{width:20px;height:20px;border-radius:6px;border:1.5px solid #D3DED6;background:#fff;font:700 12px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.pstep .pv{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:12.5px;color:var(--deepPine);font-variant-numeric:tabular-nums;min-width:12px;text-align:center}
+.pstep .pu{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#93A29A}
+.meter{margin-top:9px;border-top:1px solid #EEF3EF;padding-top:9px}
+.mrow{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:5px}
+.mrow b{color:var(--deepPine);font-weight:600;font-variant-numeric:tabular-nums}
+.track{height:8px;border-radius:5px;background:#E7EDE8;display:flex;overflow:hidden}
+.track i{display:block;height:100%}
+.track .used{background:var(--pine)}
+.track .left{background:#C9D8CE}
+.left-note{font-size:11.5px;color:var(--warn);margin-top:7px;line-height:1.45}
+.left-note.ok{color:var(--pine)}
+.add{display:block;width:100%;margin:8px 0 2px;border:1.5px dashed #C9D8CE;background:transparent;border-radius:12px;padding:10px 0;font:600 13px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.excl{display:flex;gap:8px;align-items:flex-start;background:#FBF6EC;border:1px solid #EEE0C4;border-radius:11px;padding:9px 11px;font-size:11.5px;color:#6B5A32;line-height:1.5;margin-bottom:12px}
+.excl b{color:#4A3D1C;font-weight:700}
+.tot{background:var(--deepPine);color:#fff;border-radius:16px;padding:13px 14px;margin-bottom:14px}
+.tot h4{margin:0 0 8px;font:700 11px/1 "Spline Sans",system-ui,sans-serif;letter-spacing:.5px;text-transform:uppercase;color:var(--brightMint)}
+.tot .l{display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0;color:#C7D6CD}
+.tot .l b{color:#fff;font-weight:600;font-variant-numeric:tabular-nums}
+.tot .l.big{border-top:1px solid rgba(255,255,255,.16);margin-top:6px;padding-top:8px;font-size:13.5px;color:#fff}
+.nav{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid #D6E1D8;padding:11px 16px 20px;display:flex;gap:10px}
+.nav button{flex:1;border-radius:13px;padding:13px 0;font:700 14.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;border:none}
+.nav .b{background:transparent;border:1.5px solid #D3DED6;color:var(--deepPine);flex:0 0 96px}
+.nav .p{background:var(--pine);color:#fff}
+.scrim{position:absolute;inset:0;background:rgba(11,31,26,.42);z-index:5}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-radius:22px 22px 0 0;padding:14px 16px 14px;box-shadow:0 -10px 40px rgba(6,18,14,.25);max-height:772px;display:flex;flex-direction:column}
+.sheet .grab{width:38px;height:4px;border-radius:2px;background:#D6E1D8;margin:0 auto 10px;flex:none}
+.sheet h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px;margin:0 0 3px}
+.sheet .sub{font-size:12.5px;color:var(--muted);line-height:1.45;margin:0 0 9px}
+.cat{overflow-y:auto;flex:1;min-height:0}
+.fam{margin:9px 2px 5px}
+.fam b{display:block;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#93A29A}
+.fam small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.opt{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;border:1.5px solid #E3EBE5;border-radius:12px;padding:6px 9px 6px 11px;margin-bottom:5px}
+.opt b{font-size:13px;font-weight:600}
+.opt small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.opt small em{font-style:normal;font-weight:600;color:var(--pine)}
+.opt .need{display:block;font-size:10.5px;color:#93A29A;margin-top:2px}
+.opt .need em{font-style:normal;font-weight:600;color:var(--pine)}
+.opt.on{border-color:var(--pine);background:#F2F9F5}
+.stp{display:flex;align-items:center;gap:6px}
+.stp button{width:26px;height:26px;border-radius:8px;border:1.5px solid #D3DED6;background:#fff;font:700 14px/1 "Spline Sans",system-ui,sans-serif;color:var(--pine);cursor:pointer}
+.stp .v{min-width:48px;text-align:center;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14.5px;font-variant-numeric:tabular-nums}
+.tog{display:inline-block;border-radius:999px;padding:6px 14px;font:700 12px/1 "Spline Sans",system-ui,sans-serif;border:1.5px solid #D3DED6;background:#fff;color:#93A29A;cursor:pointer}
+.tog.on{background:var(--pine);border-color:var(--pine);color:#fff}
+.cnt .tog{padding:7px 16px}
+.stp .v small{display:block;font-family:"Spline Sans",sans-serif;font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#93A29A}
+.opt.zero .v{color:#B0BEB5}
+.opt.excl{border-style:dashed}
+.opt.excl .stp button{opacity:.45}
+.foot{flex:none;border-top:1px solid #EDF2EE;margin-top:10px;padding-top:10px}
+.foot .fl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px}
+.foot .fl b{color:var(--deepPine);font-weight:600;font-variant-numeric:tabular-nums}
+.go{display:block;width:100%;border:none;border-radius:13px;padding:13px 0;font:700 14.5px/1 "Spline Sans",system-ui,sans-serif;background:var(--pine);color:#fff;cursor:pointer;margin-top:8px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Games &amp; points by round</h1>
+<p>The step asks a round to choose <b>one</b> format. A cup that is not a Triple Cup does not work that way: a day is a set of games running side by side, and each foursome plays exactly one of them.</p>
+<p>Two questions, in this order. <b>Which games</b> does this day run &mdash; then <b>how much of the field</b> plays each, and <b>what is each worth</b>. By this step the sides are sized, so the field is a known quantity and the arithmetic is real.</p>
+<h3>Every game counts in its own unit</h3>
+<p>Asking for &ldquo;how many matches&rdquo; would make the captain do the division. Each game is counted in the thing it is actually built from:</p>
+<table>
+<tr><td>Counted in foursomes</td><td>Fourball, Nassau pairs, Two-man Chapman, Chapman Nassau, Foursomes, Foursomes Nassau. Two per side inside the group &mdash; one match each.</td></tr>
+<tr><td>Counted in twosomes</td><td>Singles, Singles Nassau. One per side &mdash; one match each.</td></tr>
+<tr><td>One match at most</td><td>Irish Rumble, Scramble. <b>On or off.</b> The whole group is one side, so the match is a blue foursome against a red one: 4 per side, 8 golfers, and there is no second one to count.</td></tr>
+</table>
+<h3>The count is the pick</h3>
+<ul>
+<li>There is no checkbox. <b>A game is in the day when its count is above zero</b>, so picking and sizing are one gesture instead of two screens.</li>
+<li>Each row states what one costs <b>per side</b> &mdash; a Nassau foursome is 2 per side, a Singles twosome 1, a Rumble match 4.</li>
+</ul>
+<h3>The field meter</h3>
+<ul>
+<li>The meter counts <b>against one side</b>, not the whole field. Every match is red against blue and takes the same number from each, so the honest target is the roster size &mdash; 16 here &mdash; and one number covers both sides.</li>
+<li>Golfers not yet committed are named as a number, not an error &mdash; a captain may deliberately leave a pair for the last game they add.</li>
+<li>Nothing is greyed on arithmetic alone. Overcommitting is shown as a number over the target, so the captain fixes the count they meant to change rather than the one the app chose.</li>
+</ul>
+<h3>Points</h3>
+<ul>
+<li>The foursome-against-foursome games are a <b>toggle, not a count</b>: one match or none, capped at 8 golfers.</li>
+<li><b>Priced on the round card, next to the count</b> &mdash; the stepper on the right of each row sets what one match of that game is worth, and the round total beside it updates. Per game, per day: Irish Rumble can be worth 2 on Saturday and 1 on Sunday.</li>
+<li>Multi-segment games show the multiplication: Nassau pays front, back and overall, so <b>1 pt &times; 3</b> is 3 a match.</li>
+<li>Because both the count and the price are set here, the <b>round total is real</b> &mdash; and so is the cup total and the number it takes to win.</li>
+</ul>
+<h3>Carried forward</h3>
+<ul>
+<li><b>Every match is red against blue</b>, enforced when the foursomes are seated on <a href="round-game-assignment.html">Games by group</a>. This step sets how many of each; that step says who.</li>
+<li><b>Triple Cup stays exclusive</b> &mdash; it spends all 18 holes, so it replaces the list.</li>
+</ul>
+<h3>Every team game comes in two</h3>
+<p>A game that pays <b>one result</b> and the same game paying <b>front, back and overall</b> are different games to a captain: they cost different points and change how a day is priced. So each is its own row rather than a segment switch hidden inside one.</p>
+<table>
+<tr><td>Fourball<br>Nassau pairs</td><td>Best ball of the pair &mdash; one match, or three segments.</td></tr>
+<tr><td>Two-man Chapman<br>Chapman Nassau</td><td>Both drive, swap, then one ball &mdash; one match, or three segments.</td></tr>
+<tr><td>Foursomes<br>Foursomes Nassau</td><td>Alternate shot &mdash; one match, or three segments.</td></tr>
+</table>
+<p>All six count the same way, <b>2 per side per foursome</b>, and a Nassau variant takes its base game&rsquo;s handicap allowance. <b>Foursomes</b> is what a real multi-day Ryder Cup runs alongside fourball; a mixed cup that cannot offer it cannot run one.</p>
+<p><i>Naming:</i> the list reads cleaner as <b>Fourball / Fourball Nassau</b> to match the other two pairs, but <i>Nassau pairs</i> is the name already in the app. Worth settling before the strings are written.</p>
+<h3>Settled</h3>
+<ul>
+<li><b>A halved match splits the point</b> &mdash; &frac12; to each side, always, in every game. Not a per-game setting.</li>
+<li><b>One cup-wide handicap allowance</b>, set once in the wizard, applies to every game in every round.</li>
+<li><b>The point unit is free per round.</b> Irish Rumble can pay per match on Saturday and Nassau per segment on Sunday; the stepper on each round card is the only place it is set.</li>
+<li><b>An odd twosome gets a Phantom partner</b>, as the Triple Cup does &mdash; offered automatically once the counts leave a golfer over.</li>
+</ul>
+</div>
+
+<div class="col">
+<div class="cap">1 &middot; Counts, then points</div>
+<div class="phone">
+<div class="status"><span>2:40</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="step">5 of 7</span></div>
+<div class="lede"><b>Games &amp; points by round</b><small>Set how many of each game a day runs, then what each match is worth. Totals follow.</small></div>
+<div class="body">
+
+<div class="r">
+<div class="rhd"><i>R1</i><b>Tilden Park GC</b><small>Sat 12 Sep</small></div>
+<div class="rsub">2 sides of 16 &middot; 32 golfers &middot; 8 foursomes</div>
+
+<div class="g">
+<div class="top"><div><div class="n">Irish Rumble</div><div class="u">One match only &mdash; a blue foursome against a red foursome</div></div>
+<div class="cnt"><span class="tog on">On</span></div></div>
+<div class="mathline"><em>2 foursomes &middot; 4 per side</em><span><span class="pstep"><button>&minus;</button><span class="pv">2</span><button>+</button><span class="pu">pts / match</span></span> <b>2 pts</b></span></div>
+</div>
+
+<div class="g">
+<div class="top"><div><div class="n">Nassau pairs</div><div class="u">2 v 2 inside a foursome &mdash; one match each</div></div>
+<div class="cnt"><button>&minus;</button><span class="v">3<small>foursomes</small></span><button>+</button></div></div>
+<div class="mathline"><em>3 matches &times; 3 segments &middot; 6 per side</em><span><span class="pstep"><button>&minus;</button><span class="pv">1</span><button>+</button><span class="pu">pt / seg</span></span> <b>9 pts</b></span></div>
+</div>
+
+<div class="g">
+<div class="top"><div><div class="n">Two-man Chapman</div><div class="u">2 v 2 inside a foursome &mdash; one ball a pair</div></div>
+<div class="cnt"><button>&minus;</button><span class="v">2<small>foursomes</small></span><button>+</button></div></div>
+<div class="mathline"><em>2 matches &middot; 4 per side</em><span><span class="pstep"><button>&minus;</button><span class="pv">2</span><button>+</button><span class="pu">pts / match</span></span> <b>4 pts</b></span></div>
+</div>
+
+<div class="g">
+<div class="top"><div><div class="n">Singles</div><div class="u">1 v 1 &mdash; counted in twosomes</div></div>
+<div class="cnt"><button>&minus;</button><span class="v">2<small>twosomes</small></span><button>+</button></div></div>
+<div class="mathline"><em>2 matches &middot; 2 per side</em><span><span class="pstep"><button>&minus;</button><span class="pv">1</span><button>+</button><span class="pu">pt / match</span></span> <b>2 pts</b></span></div>
+</div>
+
+<div class="meter">
+<div class="mrow"><span>Committed per side</span><b>16 of 16</b></div>
+<div class="track"><i class="used" style="width:100%"></i></div>
+<div class="left-note ok">Every golfer on both sides has a match. 8 matches, 8 foursomes.</div>
+</div>
+<button class="add">&#43; Edit Saturday&rsquo;s games</button>
+</div>
+
+<div class="r">
+<div class="rhd"><i>R2</i><b>Tilden Park GC</b><small>Sun 13 Sep</small></div>
+<div class="rsub">2 sides of 16 &middot; 32 golfers &middot; 8 foursomes</div>
+
+<div class="g">
+<div class="top"><div><div class="n">Singles Nassau</div><div class="u">1 v 1 &mdash; counted in twosomes</div></div>
+<div class="cnt"><button>&minus;</button><span class="v">12<small>twosomes</small></span><button>+</button></div></div>
+<div class="mathline"><em>12 matches &times; 3 segments &middot; 12 per side</em><span><span class="pstep"><button>&minus;</button><span class="pv">1</span><button>+</button><span class="pu">pt / seg</span></span> <b>36 pts</b></span></div>
+</div>
+
+<div class="g">
+<div class="top"><div><div class="n">Scramble</div><div class="u">One match only &mdash; four a side, one ball</div></div>
+<div class="cnt"><span class="tog on">On</span></div></div>
+<div class="mathline"><em>2 foursomes &middot; 4 per side</em><span><span class="pstep"><button>&minus;</button><span class="pv">2</span><button>+</button><span class="pu">pts / match</span></span> <b>2 pts</b></span></div>
+</div>
+
+<div class="meter">
+<div class="mrow"><span>Committed per side</span><b>16 of 16</b></div>
+<div class="track"><i class="used" style="width:100%"></i></div>
+<div class="left-note ok">Every golfer on both sides has a match. 13 matches, 8 foursomes.</div>
+</div>
+<button class="add">&#43; Edit Sunday&rsquo;s games</button>
+</div>
+
+<div class="excl"><span>&#9888;</span><span><b>Triple Cup is exclusive.</b> It spends all 18 holes on its own four segments, so choosing it for a round replaces that round&rsquo;s game list.</span></div>
+
+<div class="tot">
+<h4>Cup total</h4>
+<div class="l"><span>Round 1 &middot; 4 games</span><b>17 points</b></div>
+<div class="l"><span>Round 2 &middot; 2 games</span><b>38 points</b></div>
+<div class="l big"><span>Points to play</span><b>55</b></div>
+<div class="l big"><span>To win the cup</span><b>28</b></div>
+</div>
+
+<button class="add" style="margin-bottom:90px">&#43; Add a round</button>
+</div>
+<div class="nav"><button class="b">Back</button><button class="p">Next</button></div>
+</div>
+</div>
+
+<div class="col">
+<div class="cap">2 &middot; Adding games to a day</div>
+<div class="phone">
+<div class="status"><span>2:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="step">5 of 7</span></div>
+<div class="lede"><b>Games &amp; points by round</b><small>Set how many of each game a day runs, then what each match is worth. Totals follow.</small></div>
+<div class="body">
+<div class="r">
+<div class="rhd"><i>R1</i><b>Tilden Park GC</b><small>Sat 12 Sep</small></div>
+<div class="rsub">2 sides of 16 &middot; 32 golfers &middot; 8 foursomes</div>
+</div>
+</div>
+<div class="nav"><button class="b">Back</button><button class="p">Next</button></div>
+<div class="scrim"></div>
+<div class="sheet">
+<div class="grab"></div>
+<h2>Saturday&rsquo;s games</h2>
+<p class="sub">Every match takes the same number from each side &mdash; the meter counts against a side of 16.</p>
+<div class="cat">
+<div class="fam"><b>Counted in foursomes</b><small>Two a side inside the group &mdash; one match each. Every one has a Nassau variant paying front, back and overall.</small></div>
+<div class="opt zero"><span><b>Fourball</b><small>Best ball of the pair, one match: <em>2 per side per foursome</em></small></span><span class="stp"><button>&minus;</button><span class="v">0<small>foursomes</small></span><button>+</button></span></div>
+<div class="opt on"><span><b>Nassau pairs</b><small>Fourball, front &#43; back &#43; overall: <em>2 per side per foursome</em></small></span><span class="stp"><button>&minus;</button><span class="v">3<small>foursomes</small></span><button>+</button></span></div>
+<div class="opt on"><span><b>Two-man Chapman</b><small>One ball a pair, one match: <em>2 per side per foursome</em></small></span><span class="stp"><button>&minus;</button><span class="v">2<small>foursomes</small></span><button>+</button></span></div>
+<div class="opt zero"><span><b>Chapman Nassau</b><small>Chapman, front &#43; back &#43; overall: <em>2 per side per foursome</em></small></span><span class="stp"><button>&minus;</button><span class="v">0<small>foursomes</small></span><button>+</button></span></div>
+<div class="opt zero"><span><b>Foursomes</b><small>Alternate shot, one match: <em>2 per side per foursome</em></small></span><span class="stp"><button>&minus;</button><span class="v">0<small>foursomes</small></span><button>+</button></span></div>
+<div class="opt zero"><span><b>Foursomes Nassau</b><small>Alternate shot, front &#43; back &#43; overall: <em>2 per side per foursome</em></small></span><span class="stp"><button>&minus;</button><span class="v">0<small>foursomes</small></span><button>+</button></span></div>
+<div class="fam"><b>Counted in twosomes</b><small>One a side &mdash; one match each</small></div>
+<div class="opt on"><span><b>Singles</b><small>1v1 <em>1 per side per Twosome</em></small></span><span class="stp"><button>&minus;</button><span class="v">2<small>twosomes</small></span><button>+</button></span></div>
+<div class="opt zero"><span><b>Singles Nassau</b><small>Front, back and overall 1v1 <em>1 per side per Twosome</em></small></span><span class="stp"><button>&minus;</button><span class="v">0<small>twosomes</small></span><button>+</button></span></div>
+<div class="fam"><b>Foursome against foursome</b><small>One match at most &mdash; a blue four against a red four</small></div>
+<div class="opt on"><span><b>Irish Rumble</b><small>Different ball counts per hole. <em>4 per side for the Match</em></small></span><span class="stp"><span class="tog on">On</span></span></div>
+<div class="opt zero"><span><b>Scramble</b><small>4 shots on every hole with some drive requirements. <em>4 per side for the match</em></small></span><span class="stp"><span class="tog">Off</span></span></div>
+</div>
+<div class="foot">
+<div class="fl" style="color:#6B5A32"><span>Triple Cup</span><b style="color:#6B5A32;font-weight:600">Exclusive &mdash; replaces this list</b></div>
+<div class="fl"><span>Committed per side</span><b>16 of 16</b></div>
+<div class="track"><i class="used" style="width:100%"></i></div>
+<div class="fl" style="margin-top:6px"><span>4 games &middot; 8 matches</span><b>Nobody left over</b></div>
+<button class="go">Done</button>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>
