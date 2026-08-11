@@ -3203,11 +3203,9 @@ class _StepSideGame extends StatelessWidget {
 const _kMixedGames = <(String, String, String, String, int, int, bool, bool)>[
   ('nassau',           'Nassau pairs',      '2 v 2 inside a foursome — one match each',
       'foursome', 2, 3, false, true),
-  ('fourball',         'Fourball',          '2 v 2 best-ball inside a foursome',
-      'foursome', 2, 1, false, false),
   ('two_man_chapman',  'Two-man Chapman',   '2 v 2 inside a foursome — one ball a pair',
       'foursome', 2, 1, false, false),
-  ('two_man_scramble', 'Two-man scramble',  '2 v 2 inside a foursome — one ball a pair',
+  ('foursomes',        'Foursomes',         'Alternate shot — 2 v 2, one ball a pair',
       'foursome', 2, 1, false, false),
   ('singles_18',       'Singles',           '1 v 1 — counted in twosomes',
       'twosome', 1, 1, false, true),
@@ -3215,7 +3213,7 @@ const _kMixedGames = <(String, String, String, String, int, int, bool, bool)>[
       'twosome', 1, 3, false, true),
   ('irish_rumble',     'Irish Rumble',      'One match only — a blue foursome against a red foursome',
       'match', 4, 1, true, true),
-  ('scramble',         'Scramble',          'One match only — a blue foursome against a red foursome',
+  ('scramble',         'Scramble',          'One match only — four a side, one ball',
       'match', 4, 1, true, false),
 ];
 
