@@ -2135,6 +2135,12 @@ class ApiClient {
     String roundFormat = 'custom',
     required List<Map<String, dynamic>> foursomes,
     List<Map<String, dynamic>> irishRumblePairings = const [],
+    /// Irish Rumble balls variant for the round (round-level config):
+    /// 'classic' | 'arizona_shuffle' | 'shuffle' | 'custom'.  Only consulted
+    /// when the round includes an Irish Rumble foursome.
+    String? irishRumbleVariant,
+    /// Per-hole balls (18 ints) — only sent/used when variant == 'custom'.
+    List<int>? irishRumbleCustomBalls,
   }) async {
     final data = await _post('/rounds/$roundId/ryder-cup/setup/', {
       'nassau_point_value'  : nassauPointValue,
@@ -2143,6 +2149,10 @@ class ApiClient {
       'round_format'        : roundFormat,
       'foursomes'           : foursomes,
       'irish_rumble_pairings': irishRumblePairings,
+      if (irishRumbleVariant != null)
+        'irish_rumble_variant': irishRumbleVariant,
+      if (irishRumbleCustomBalls != null)
+        'irish_rumble_custom_balls': irishRumbleCustomBalls,
     });
     return data as Map<String, dynamic>;
   }

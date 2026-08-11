@@ -25,8 +25,46 @@ Public API
 from django.db import transaction
 
 from games.models import MatchPlayBracket, MatchPlayMatch, MatchPlayHoleResult
-from scoring.handicap import build_match_play_score_index
+from scoring.handicap import build_match_play_score_index, _strokes_on_hole
 from tournament.models import FoursomeMembership
+
+
+def match_play_hole_detail(foursome, p1_id, p2_id) -> dict:
+    """Per-hole par / stroke-index / handicap-strokes for a 1-v-1 pairing.
+
+    Returns ``{hole_number: {'par', 'stroke_index', 'p1_strokes',
+    'p2_strokes'}}`` for holes 1-18.  The strokes are the standard match-play
+    allocation — the lower-handicap player gets 0, the higher gets the
+    differential allocated by stroke index — so a leaderboard/scorecard can draw
+    the stroke dots without re-deriving the allowance.  Par / stroke_index come
+    from player 1's tee (falling back to player 2's).
+    """
+    mem = {
+        m.player_id: m
+        for m in foursome.memberships
+        .select_related('player', 'tee')
+        .filter(player_id__in=[p1_id, p2_id], player__is_phantom=False)
+    }
+    m1, m2 = mem.get(p1_id), mem.get(p2_id)
+    if not m1 or not m2:
+        return {}
+    hcp1 = m1.playing_handicap or 0
+    hcp2 = m2.playing_handicap or 0
+    so1 = max(0, hcp1 - hcp2)   # strokes player 1 receives
+    so2 = max(0, hcp2 - hcp1)   # strokes player 2 receives
+    disp_tee = m1.tee or m2.tee
+    out = {}
+    for h in range(1, 19):
+        p1_si = m1.tee.hole(h).get('stroke_index', 18) if m1.tee_id else 18
+        p2_si = m2.tee.hole(h).get('stroke_index', 18) if m2.tee_id else 18
+        hd = disp_tee.hole(h) if disp_tee else {}
+        out[h] = {
+            'par'         : hd.get('par'),
+            'stroke_index': hd.get('stroke_index'),
+            'p1_strokes'  : _strokes_on_hole(so1, p1_si) if so1 > 0 else 0,
+            'p2_strokes'  : _strokes_on_hole(so2, p2_si) if so2 > 0 else 0,
+        }
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +429,20 @@ def cup_singles_summary(foursome) -> dict | None:
             .order_by('hole_number')
             .values('hole_number', 'p1_net', 'p2_net', 'holes_up_after')
         )
+        # Enrich each hole with par / stroke-index / per-player strokes so the
+        # scorecard + leaderboard can draw the stroke dots.
+        detail = match_play_hole_detail(
+            foursome, match.player1_id, match.player2_id)
+        for h in holes:
+            d = detail.get(h['hole_number'], {})
+            h['par']          = d.get('par')
+            h['stroke_index'] = d.get('stroke_index')
+            h['p1_strokes']   = d.get('p1_strokes', 0)
+            h['p2_strokes']   = d.get('p2_strokes', 0)
+        # Total strokes each player is issued over the match (the match-play
+        # differential) — shown in parentheses beside the player abbreviation.
+        p1_strokes_total = sum(d.get('p1_strokes', 0) for d in detail.values())
+        p2_strokes_total = sum(d.get('p2_strokes', 0) for d in detail.values())
 
         # Compute each Nassau sub-match independently.
         f9  = _compute_sub_match(holes, 1,  9)
@@ -398,11 +450,15 @@ def cup_singles_summary(foursome) -> dict | None:
         all18 = _compute_sub_match(holes, 1, 18)
 
         matches_out.append({
-            'match_id'   : match.id,
-            'player1'    : match.player1.short_name,
-            'player1_id' : match.player1_id,
-            'player2'    : match.player2.short_name,
-            'player2_id' : match.player2_id,
+            'match_id'      : match.id,
+            'player1'         : match.player1.short_name,
+            'player1_full'    : match.player1.name,
+            'player1_id'      : match.player1_id,
+            'player1_strokes' : p1_strokes_total,
+            'player2'         : match.player2.short_name,
+            'player2_full'    : match.player2.name,
+            'player2_id'      : match.player2_id,
+            'player2_strokes' : p2_strokes_total,
 
             # Overall 18-hole match (from backend match record)
             'status'          : match.status,

@@ -5349,6 +5349,26 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                             style: theme.textTheme.bodySmall,
                           )),
                   ]),
+                  // Stroke-index (hole handicap) row — shows which holes are
+                  // hardest and, read with the stroke dots, where strokes fall.
+                  Row(children: [
+                    SizedBox(
+                      width: _labelColW, height: _rowH,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Index',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant)),
+                      ),
+                    ),
+                    for (final h in holeRange)
+                      holeCell(h,
+                          child: Text(
+                            '${scorecard.holeData(h)?.strokeIndex ?? "-"}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant),
+                          )),
+                  ]),
                   Container(
                     height: 1,
                     width: _labelColW + _cellW * holeRange.length,
@@ -9526,6 +9546,18 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
             )),
     ]));
 
+    // ── Stroke-index (hole handicap) row ─────────────────────────────────────
+    rows.add(Row(children: [
+      labelCell('Index'),
+      for (final h in holeRange)
+        holeCell(h,
+            child: Text(
+              '${scorecard.holeData(h)?.strokeIndex ?? "-"}',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            )),
+    ]));
+
     rows.add(Container(
       height: 1, width: totalW,
       color: theme.colorScheme.outlineVariant,
@@ -9542,14 +9574,21 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
         holeMap[hm['hole_number'] as int] = hm;
       }
 
+      // Player abbreviation + strokes issued in parens ("AB (2)").
+      String withStrokes(String nameKey, String strokesKey) {
+        final n  = m[nameKey] as String? ?? '?';
+        final st = m[strokesKey] as int? ?? 0;
+        return st > 0 ? '$n ($st)' : n;
+      }
       final blueP = t1IsBlue
-          ? (m['player1'] as String? ?? '?')
-          : (m['player2'] as String? ?? '?');
+          ? withStrokes('player1', 'player1_strokes')
+          : withStrokes('player2', 'player2_strokes');
       final redP  = t1IsBlue
-          ? (m['player2'] as String? ?? '?')
-          : (m['player1'] as String? ?? '?');
+          ? withStrokes('player2', 'player2_strokes')
+          : withStrokes('player1', 'player1_strokes');
 
-      Widget scoreCell(int h, String? scoreStr, Color nameColor) {
+      Widget scoreCell(int h, String? scoreStr, Color nameColor,
+          {int strokes = 0}) {
         final isCur = h == cur;
         return GestureDetector(
           onTap: onTap == null ? null : () => onTap(h),
@@ -9567,17 +9606,46 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
                       width: 1.2)
                   : null,
             ),
-            child: Text(scoreStr ?? '·',
-                style: TextStyle(
-                    fontSize: 11,
-                    color: scoreStr != null
-                        ? nameColor
-                        : theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                    fontWeight: scoreStr != null
-                        ? FontWeight.w600
-                        : FontWeight.normal)),
+            child: Stack(children: [
+              Center(
+                child: Text(scoreStr ?? '·',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: scoreStr != null
+                            ? nameColor
+                            : theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                        fontWeight: scoreStr != null
+                            ? FontWeight.w600
+                            : FontWeight.normal)),
+              ),
+              // Handicap-stroke dots (match-play differential) — top-right.
+              if (strokes > 0)
+                Positioned(
+                  top: 2, right: 2,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(
+                      strokes.clamp(0, 2),
+                      (i) => Container(
+                        width: 4, height: 4,
+                        margin: const EdgeInsets.only(left: 1),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ]),
           ),
         );
+      }
+
+      int strokesFor(int h, bool wantP1) {
+        final hd = holeMap[h];
+        if (hd == null) return 0;
+        return (hd[wantP1 ? 'p1_strokes' : 'p2_strokes'] as int?) ?? 0;
       }
 
       // Orange player (team 2) on top
@@ -9590,6 +9658,7 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
                 ? '${t1IsBlue ? holeMap[h]!['p2_net'] : holeMap[h]!['p1_net']}'
                 : null,
             redColor,
+            strokes: strokesFor(h, !t1IsBlue),
           ),
       ]));
 
@@ -9603,6 +9672,7 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
                 ? '${t1IsBlue ? holeMap[h]!['p1_net'] : holeMap[h]!['p2_net']}'
                 : null,
             blueColor,
+            strokes: strokesFor(h, t1IsBlue),
           ),
       ]));
 

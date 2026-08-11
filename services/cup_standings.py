@@ -437,6 +437,10 @@ def cup_round_live_summary(round_obj) -> dict | None:
         )
         t1_names = [p.short_name for p in (t1.players.all() if t1 else []) if p.pk in fs_pids]
         t2_names = [p.short_name for p in (t2.players.all() if t2 else []) if p.pk in fs_pids]
+        # Full names for the cup-board card header (the card names each team
+        # once up top in full, then uses shorts in the segment rows).
+        t1_names_full = [p.name for p in (t1.players.all() if t1 else []) if p.pk in fs_pids]
+        t2_names_full = [p.name for p in (t2.players.all() if t2 else []) if p.pk in fs_pids]
 
         if gtype == GameType.NASSAU:
             from services.nassau import nassau_summary as _ns
@@ -487,6 +491,8 @@ def cup_round_live_summary(round_obj) -> dict | None:
                 'groups'            : [fs.group_number],
                 'team1_players'     : t1_names,
                 'team2_players'     : t2_names,
+                'team1_players_full': t1_names_full,
+                'team2_players_full': t2_names_full,
                 'point_value'       : pv,
                 'team1_points'      : round(t1_match, 2),
                 'team2_points'      : round(t2_match, 2),
@@ -787,6 +793,8 @@ def cup_round_live_summary(round_obj) -> dict | None:
                 individual.append({
                     'player1'            : mp.player1.short_name if mp.player1_id else '?',
                     'player2'            : mp.player2.short_name if mp.player2_id else '?',
+                    'player1_full'       : mp.player1.name if mp.player1_id else '?',
+                    'player2_full'       : mp.player2.name if mp.player2_id else '?',
                     'result'             : ovr_result,
                     't1_pts'             : t1p,
                     't2_pts'             : t2p,

@@ -11,10 +11,11 @@ Scoring
 * Per-hole score is adjusted per LowNetRoundConfig (or defaults to full net):
     - 'net'         : gross − strokes (playing_handicap × net_percent / 100)
     - 'gross'       : raw gross score
-    - 'strokes_off' : gross − max(0, own_handicap − round_low_handicap),
+    - 'strokes_off' : gross − max(0, own_handicap − foursome_low_handicap),
                       strokes allocated by hole stroke_index.
-  The strokes_off reference is the lowest playing_handicap across ALL
-  foursomes in the round.
+  The strokes_off reference is the lowest playing_handicap IN EACH FOURSOME
+  (the low player in the group plays to 0), matching the match games; in a
+  cup each group is its own match.  Single-foursome rounds are unaffected.
 * Net-double-bogey cap: when Round.net_max_double_bogey is on, every
   per-hole effective score is capped at par + 2 (net par + 2 in gross
   terms).  When the flag is off, raw adjusted scores feed the total.
@@ -82,11 +83,20 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
     # 9-hole / back-9 round); a full round reduces to the standard allocation.
     strokes_fns = {fs.pk: make_strokes_fn(fs) for fs in foursomes}
 
-    # For strokes_off: round-wide lowest playing_handicap (real players only)
-    low_hcp = 0
+    # For strokes_off: the reference is the lowest playing_handicap IN EACH
+    # FOURSOME (group), not across the whole field.  This matches the canonical
+    # strokes-off rule ("the low player in the foursome plays to 0") and every
+    # match game (nassau, sixes, …), so the Stroke Play tab shows the same
+    # strokes each golfer actually got in their match — in a cup each group is
+    # its own match.  Single-foursome rounds are unaffected: the group low IS
+    # the field low.
+    low_hcp_by_fs: dict = {}
     if handicap_mode == HandicapMode.STROKES_OFF:
-        all_hcps = [m.playing_handicap for m in membership_map.values()]
-        low_hcp  = min(all_hcps) if all_hcps else 0
+        for fs in foursomes:
+            hcps = [m.playing_handicap for m in fs.memberships.all()
+                    if not m.player.is_phantom
+                    and (_subset is None or m.player_id in _subset)]
+            low_hcp_by_fs[fs.pk] = min(hcps) if hcps else 0
 
     qs = (
         HoleScore.objects
@@ -124,7 +134,8 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                     else:  # STROKES_OFF
                         si = m.tee.hole(hole).get('stroke_index', 18)
                         so_diff = round(
-                            max(0, m.playing_handicap - low_hcp) * net_percent / 100)
+                            max(0, m.playing_handicap - low_hcp_by_fs.get(fs.pk, 0))
+                            * net_percent / 100)
                         s = _strokes_on_hole(so_diff, si)
                     if s > 0:
                         plan[hole] = s
@@ -170,7 +181,8 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
             # Scale the strokes-off differential by net_percent, matching the
             # app-wide SO allowance (nassau.py / multi_skins.py / points_531.py).
             so       = round(
-                max(0, membership.playing_handicap - low_hcp) * net_percent / 100)
+                max(0, membership.playing_handicap - low_hcp_by_fs.get(fid, 0))
+                * net_percent / 100)
             adjusted = hs['gross_score'] - _strokes_on_hole(so, si)
 
         # ── Net-double-bogey cap (round-level toggle) ───────────────────────

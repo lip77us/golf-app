@@ -109,10 +109,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 as List? ??
             [])
             .any((g) => (g as Map<String, dynamic>)['is_cup_match'] == true);
-    if (lb.isCupRound || hasCupNassau) {
+    final isCup = lb.isCupRound || hasCupNassau;
+    if (isCup) {
       games.add('__bandon_cup__');
     }
-    if (lb.tournamentId != null && lb.tournamentActiveGames.isNotEmpty) {
+    // A cup IS its own championship — the __bandon_cup__ tab covers it, and the
+    // per-round Stroke Play scores live on the low_net_round tab below.  Adding
+    // the championship tab here produced a second, blank/redundant "Stroke Play"
+    // tab, so suppress it for cup rounds.
+    if (lb.tournamentId != null &&
+        lb.tournamentActiveGames.isNotEmpty &&
+        !isCup) {
       games.add('__championship__');
     }
 
@@ -2904,7 +2911,8 @@ class _MsScorecardState extends State<_MsScorecard> {
                     width: 4, height: 4,
                     margin: const EdgeInsets.only(left: 1),
                     decoration: BoxDecoration(
-                      color: isWinner ? winFg : Colors.red.shade700,
+                      // Neutral green, matching the score-entry stroke dots.
+                      color: isWinner ? winFg : theme.colorScheme.primary,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -3677,6 +3685,9 @@ class _NassauGroupCard extends StatelessWidget {
 
     final t1Names = nas.team1.map((p) => p.shortName).join(' & ');
     final t2Names = nas.team2.map((p) => p.shortName).join(' & ');
+    // Full names for the cup-match header (named once up top).
+    final t1Full = nas.team1.map((p) => p.name).join(' & ');
+    final t2Full = nas.team2.map((p) => p.name).join(' & ');
 
     // Team colors: use actual cup team colours for cup matches, orange for casual
     final t1Color    = isCupMatch
@@ -3719,22 +3730,25 @@ class _NassauGroupCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Header: team1 (left) vs team2 (right)
-            Row(children: [
+            // Header: team1 (left) vs team2 (right) — full names, wrap to 2 lines
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: Padding(
-                padding: const EdgeInsets.only(right: 14),
-                child: Text(t1Names, textAlign: TextAlign.end,
+                padding: const EdgeInsets.only(right: 10),
+                child: Text(t1Full, textAlign: TextAlign.end,
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall?.copyWith(
                         color: t1Color, fontWeight: FontWeight.bold)),
               )),
-              SizedBox(width: 68, child: Center(
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Text('vs.', style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onSurfaceVariant)),
-              )),
+              ),
               Expanded(child: Padding(
-                padding: const EdgeInsets.only(left: 14),
-                child: Text(t2Names,
+                padding: const EdgeInsets.only(left: 10),
+                child: Text(t2Full,
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall?.copyWith(
                         color: team2Color, fontWeight: FontWeight.bold)),
               )),
@@ -3755,6 +3769,17 @@ class _NassauGroupCard extends StatelessWidget {
             _cupSegRow('F9',  nas.front9,  t1Color, team2Color, theme),
             _cupSegRow('B9',  nas.back9,   t1Color, team2Color, theme),
             _cupSegRow('All', nas.overall, t1Color, team2Color, theme),
+            // Round Progress — the per-hole grid (gross + strokes-off dots +
+            // hole-winner tint), same as the score-entry Round Progress card.
+            if (scHoles.isNotEmpty) ...[
+              const Divider(height: 16),
+              _MsScorecard(
+                holes: scHoles,
+                participants: scPlayers,
+                holesInPlay: scHolesInPlay,
+                legend: null,
+              ),
+            ],
           ]),
         ),
       );
@@ -6721,28 +6746,35 @@ class _BandonCupLiveCard extends StatelessWidget {
               Builder(builder: (ctx) {
                 // Red team always on left — detect by comparing red channel.
                 final leftIsT1   = true /* team 1 always on the left, matching score entry order */;
-                final leftPly    = leftIsT1 ? t1Players : t2Players;
+                // Name each pair in full up top (falls back to shorts when the
+                // backend didn't send full names); wraps to two lines like the
+                // Triple Cup / Quota headers rather than truncating.
+                final leftPly    = leftIsT1 ? t1PlayersFull : t2PlayersFull;
                 final leftColor  = leftIsT1 ? t1Colour  : t2Colour;
-                final rightPly   = leftIsT1 ? t2Players : t1Players;
+                final rightPly   = leftIsT1 ? t2PlayersFull : t1PlayersFull;
                 final rightColor = leftIsT1 ? t2Colour  : t1Colour;
-                return Row(children: [
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   Expanded(child: Padding(
-                    padding: const EdgeInsets.only(right: 14),
+                    padding: const EdgeInsets.only(right: 10),
                     child: Text(leftPly.join(' & '),
                         textAlign: TextAlign.end,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: leftColor,
                             fontWeight: FontWeight.bold, fontSize: 13)),
                   )),
-                  SizedBox(
-                    width: 68,
-                    child: Center(child: Text('vs.',
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text('vs.',
                         style: TextStyle(fontSize: 12,
-                            color: Theme.of(ctx).colorScheme.onSurfaceVariant))),
+                            color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
                   ),
                   Expanded(child: Padding(
-                    padding: const EdgeInsets.only(left: 14),
+                    padding: const EdgeInsets.only(left: 10),
                     child: Text(rightPly.join(' & '),
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: rightColor,
                             fontWeight: FontWeight.bold, fontSize: 13)),
@@ -6788,7 +6820,10 @@ class _BandonCupLiveCard extends StatelessWidget {
                   )),
                 ]);
               })
-            else
+            // Singles (Nassau / 18) name each player in full on their own match
+            // row below, so the "who's in the group" roster header is redundant
+            // noise — skip it for singles.
+            else if (gameType != 'singles_nassau' && gameType != 'singles_18')
               Row(children: [
                 Expanded(child: Text(t1Players.join(', '),
                     style: TextStyle(color: t1Colour, fontWeight: FontWeight.w600,
@@ -7726,8 +7761,13 @@ class _CupSinglesLiveRows extends StatelessWidget {
       children: pending.asMap().entries.expand<Widget>((entry) {
         final i = entry.key;
         final m = entry.value;
-        final p1          = m['player1']      as String? ?? '?';  // t1
-        final p2          = m['player2']      as String? ?? '?';  // t2
+        String nameOf(String fullKey, String shortKey) {
+          final f = m[fullKey] as String?;
+          return (f != null && f.isNotEmpty && f != '?')
+              ? f : (m[shortKey] as String? ?? '?');
+        }
+        final p1          = nameOf('player1_full', 'player1');  // t1
+        final p2          = nameOf('player2_full', 'player2');  // t2
         final holesPlayed = m['holes_played'] as int?    ?? 0;
 
         // Arrange names so red team is always on the left.
@@ -8157,6 +8197,141 @@ class _CupSinglesGroupCard extends StatelessWidget {
     );
   }
 
+
+  // ── Per-hole progress strip — hole #, each player's net, winning cell
+  //    tinted.  Built from the match's own `holes` list (hole_number, p1_net,
+  //    p2_net); no scorecard object needed on the leaderboard. ───────────────
+  static Widget _singlesHoleStrip(
+    List holesRaw,
+    String leftLabel, String rightLabel,
+    bool p1OnLeft, Color leftColor, Color rightColor, ThemeData theme,
+  ) {
+    final holes = holesRaw
+        .map((h) => Map<String, dynamic>.from(h as Map))
+        .where((h) => h['hole_number'] != null)
+        .toList()
+      ..sort((a, b) =>
+          (a['hole_number'] as int).compareTo(b['hole_number'] as int));
+    if (holes.isEmpty) return const SizedBox.shrink();
+
+    const double labelW = 64, cellW = 30, rowH = 24;
+
+    Widget label(String t, {Color? color}) => SizedBox(
+      width: labelW, height: rowH,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+                color: color ?? theme.colorScheme.onSurfaceVariant,
+                fontWeight: color != null ? FontWeight.w700 : FontWeight.normal)),
+      ),
+    );
+    Widget cell(Widget child, {Color? bg}) => Container(
+      width: cellW, height: rowH, alignment: Alignment.center,
+      decoration: bg == null
+          ? null
+          : BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
+      child: child,
+    );
+
+    Widget netCell(Map<String, dynamic> h, bool leftSide, Color color) {
+      final p1 = h['p1_net'] as int?;
+      final p2 = h['p2_net'] as int?;
+      final ln = p1OnLeft ? p1 : p2;
+      final rn = p1OnLeft ? p2 : p1;
+      final myNet    = leftSide ? ln : rn;
+      final otherNet = leftSide ? rn : ln;
+      final won = myNet != null && otherNet != null && myNet < otherNet;
+      // Handicap-stroke dots — this side's player is p1 when leftSide==p1OnLeft.
+      final wantP1  = leftSide == p1OnLeft;
+      final strokes =
+          (h[wantP1 ? 'p1_strokes' : 'p2_strokes'] as int?) ?? 0;
+      return cell(
+        Stack(children: [
+          Center(
+            child: Text(myNet?.toString() ?? '·',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: won ? FontWeight.bold : FontWeight.normal,
+                    color: won ? color : theme.colorScheme.onSurface)),
+          ),
+          if (strokes > 0)
+            Positioned(
+              top: 1, right: 1,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(
+                  strokes.clamp(0, 2),
+                  (i) => Container(
+                    width: 4, height: 4,
+                    margin: const EdgeInsets.only(left: 1),
+                    decoration: BoxDecoration(
+                      // Neutral green, matching the score-entry stroke dots.
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle),
+                  ),
+                ),
+              ),
+            ),
+        ]),
+        bg: won ? color.withOpacity(0.14) : null,
+      );
+    }
+
+    Widget netRow(bool leftSide, Color color) => Row(children: [
+      label(leftSide ? leftLabel : rightLabel, color: color),
+      for (final h in holes) netCell(h, leftSide, color),
+    ]);
+
+    final hasPar = holes.any((h) => h['par'] != null);
+    final hasSi  = holes.any((h) => h['stroke_index'] != null);
+    final totalW = labelW + cellW * holes.length;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Round progress',
+            style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+        const SizedBox(height: 4),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              label('Hole'),
+              for (final h in holes)
+                cell(Text('${h['hole_number']}',
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold))),
+            ]),
+            if (hasPar)
+              Row(children: [
+                label('Par'),
+                for (final h in holes)
+                  cell(Text('${h['par'] ?? '–'}',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(fontStyle: FontStyle.italic))),
+              ]),
+            if (hasSi)
+              Row(children: [
+                label('Index'),
+                for (final h in holes)
+                  cell(Text('${h['stroke_index'] ?? '–'}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant))),
+              ]),
+            Container(
+              height: 1, width: totalW,
+              color: theme.colorScheme.outlineVariant,
+              margin: const EdgeInsets.symmetric(vertical: 2),
+            ),
+            netRow(true, leftColor),
+            netRow(false, rightColor),
+          ]),
+        ),
+      ]),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     final theme      = Theme.of(context);
@@ -8213,24 +8388,41 @@ class _CupSinglesGroupCard extends StatelessWidget {
           children: matches.asMap().entries.expand<Widget>((entry) {
             final i           = entry.key;
             final m           = entry.value;
-            final p1Raw       = m['player1']      as String? ?? '?';
-            final p2Raw       = m['player2']      as String? ?? '?';
+            // Full names (fall back to the short label when absent).
+            String nameOf(String fullKey, String shortKey) {
+              final f = m[fullKey] as String?;
+              return (f != null && f.isNotEmpty) ? f : (m[shortKey] as String? ?? '?');
+            }
+            final p1Raw       = nameOf('player1_full', 'player1');
+            final p2Raw       = nameOf('player2_full', 'player2');
             final holesPlayed = m['holes_played'] as int?    ?? 0;
+            // Abbreviation + strokes-issued for the progress-strip row labels
+            // ("AB (2)") — full names are already in the header above.
+            String abbrLabel(String shortKey, String strokesKey) {
+              final s  = m[shortKey] as String? ?? '?';
+              final st = m[strokesKey] as int? ?? 0;
+              return st > 0 ? '$s ($st)' : s;
+            }
+            final p1Lbl = abbrLabel('player1', 'player1_strokes');
+            final p2Lbl = abbrLabel('player2', 'player2_strokes');
             // Arrange so red team is on the left.
             final leftName  = p1OnLeft ? p1Raw : p2Raw;
             final rightName = p1OnLeft ? p2Raw : p1Raw;
+            final leftLbl   = p1OnLeft ? p1Lbl : p2Lbl;
+            final rightLbl  = p1OnLeft ? p2Lbl : p1Lbl;
             return [
               if (i > 0) const Divider(height: 22),
 
               // Header: red player on left, blue player on right
-              Row(children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(child: Padding(
-                  padding: const EdgeInsets.only(right: 14),
+                  padding: const EdgeInsets.only(right: 10),
                   child: Text(leftName, textAlign: TextAlign.end,
+                      maxLines: 2, overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
                           color: leftColor, fontWeight: FontWeight.bold)),
                 )),
-                SizedBox(width: 68, child: Center(
+                SizedBox(width: 60, child: Center(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Text('vs.', style: TextStyle(
                         fontSize: 12,
@@ -8244,8 +8436,9 @@ class _CupSinglesGroupCard extends StatelessWidget {
                   ]),
                 )),
                 Expanded(child: Padding(
-                  padding: const EdgeInsets.only(left: 14),
+                  padding: const EdgeInsets.only(left: 10),
                   child: Text(rightName,
+                      maxLines: 2, overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
                           color: rightColor, fontWeight: FontWeight.bold)),
                 )),
@@ -8281,6 +8474,12 @@ class _CupSinglesGroupCard extends StatelessWidget {
                 m['finished_on_hole']    as int?,
                 18,
                 leftColor, rightColor, theme, p1OnLeft: p1OnLeft,
+              ),
+              // Round progress — per-hole nets + hole winner, from the match's
+              // own holes list (same information as the score-entry card).
+              _singlesHoleStrip(
+                (m['holes'] as List? ?? const []),
+                leftLbl, rightLbl, p1OnLeft, leftColor, rightColor, theme,
               ),
             ];
           }).toList(),

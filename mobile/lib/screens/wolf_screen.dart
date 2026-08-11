@@ -1161,13 +1161,13 @@ class _WolfDecisionSheet extends StatelessWidget {
                   width: 5, height: 5,
                   margin: const EdgeInsets.only(left: 2),
                   decoration: BoxDecoration(
-                      color: Colors.red.shade700, shape: BoxShape.circle),
+                      color: theme.colorScheme.primary, shape: BoxShape.circle),
                 ),
               ),
               const SizedBox(width: 4),
               Text('gets ${slot.strokes}',
                   style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.red.shade700, fontWeight: FontWeight.w600)),
+                      color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
             ],
             if (isWolf) ...[
               const SizedBox(width: 6),

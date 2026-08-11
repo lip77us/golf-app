@@ -8341,6 +8341,17 @@ class RyderCupRoundSetupView(APIView):
         )
         if has_ir:
             from games.models import IrishRumbleConfig
+            from services.irish_rumble import (
+                compute_segments, par_by_hole_for_round,
+            )
+            # Variant is chosen by the TD at group-setup time (round-level).
+            # Fall back to the classic escalating 1/2/3/4 default when the
+            # client sends nothing (older clients / no explicit pick).
+            ir_variant = d.get('irish_rumble_variant') or 'classic'
+            ir_custom  = (d.get('irish_rumble_custom_balls')
+                          if ir_variant == 'custom' else None)
+            par_by_hole = par_by_hole_for_round(round_obj)
+            ir_segments = compute_segments(ir_variant, par_by_hole, ir_custom)
             IrishRumbleConfig.objects.update_or_create(
                 round = round_obj,
                 defaults = dict(
@@ -8348,12 +8359,9 @@ class RyderCupRoundSetupView(APIView):
                     net_percent   = round_obj.net_percent,
                     entry_fee     = 0,
                     payouts       = [],
-                    segments      = [
-                        {'start_hole': 1,  'end_hole': 6,  'balls_to_count': 1},
-                        {'start_hole': 7,  'end_hole': 12, 'balls_to_count': 2},
-                        {'start_hole': 13, 'end_hole': 17, 'balls_to_count': 3},
-                        {'start_hole': 18, 'end_hole': 18, 'balls_to_count': 4},
-                    ],
+                    variant       = ir_variant,
+                    custom_balls  = ir_custom,
+                    segments      = ir_segments,
                 ),
             )
 

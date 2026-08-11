@@ -25,6 +25,7 @@ import '../providers/auth_provider.dart';
 import '../utils/cup_colors.dart';
 import '../utils/grouping.dart';
 import '../widgets/error_view.dart';
+import '../widgets/irish_rumble_variant.dart';
 import '../widgets/tee_assignment.dart' show TeePicker;
 
 // ---------------------------------------------------------------------------
@@ -196,6 +197,12 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
   String?        _gameType;
   final Set<int> _selectedIds = {};
   int?           _irishRumbleTeamIdx; // which team (0 or 1) for Irish Rumble
+
+  // Irish Rumble is a ROUND-level game (one IrishRumbleConfig per round), so the
+  // balls variant is chosen once and applies to every IR match in the round.
+  // 'classic' | 'arizona_shuffle' | 'shuffle' | 'custom'.
+  String    _irVariant     = 'classic';
+  List<int> _irCustomBalls = List.filled(18, 2);
   // Per-player tee selection for the current foursome draft: playerId → teeId
   final Map<int, int> _playerTees = {};
   final _teeTimeCtrl   = TextEditingController();
@@ -220,6 +227,18 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
   /// The drafted roster size (all sides' players).
   int get _rosterSize =>
       _cup == null ? 0 : _cup!.teams.expand((t) => t.players).length;
+
+  /// Per-hole pars (18) from the first course tee, for the Irish Rumble
+  /// par-based / custom variant preview.  Falls back to all-par-4 if the tee
+  /// carries no hole data.
+  List<int> get _holePars {
+    if (_courseTees.isEmpty) return List.filled(18, 4);
+    final holes = [..._courseTees.first.holes]
+      ..sort((a, b) => ((a['number'] as num?) ?? 0)
+          .compareTo((b['number'] as num?) ?? 0));
+    if (holes.length < 18) return List.filled(18, 4);
+    return [for (final h in holes.take(18)) (h['par'] as num?)?.toInt() ?? 4];
+  }
 
   /// Group count DERIVED from the roster — never entered.  Same helper the
   /// casual path uses: groups = ceil(roster / 4).  This is the target the
@@ -499,7 +518,11 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
       case _BuildStep.matchups:
         setState(() => _buildStep = _BuildStep.group);
       case _BuildStep.review:
-        _startNewFoursome();
+        // Back on the review step exits the setup flow.  (Adding another group
+        // is the explicit "Add group" button — NOT a back action.  Wiring it to
+        // _startNewFoursome() here made Back bounce group→review→group forever
+        // with no way to pop the screen.)
+        Navigator.of(context).pop();
     }
   }
 
@@ -768,12 +791,17 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         });
       }
 
+      final hasIrishRumble =
+          _foursomes.any((f) => f.gameType == 'irish_rumble');
       await _client.postRyderCupRoundSetup(
         widget.roundId,
         nassauPointValue : 1.0,
         pointMultiplier  : 1.0,
         roundFormat      : _roundFormat,
         foursomes        : foursomesPayload,
+        irishRumbleVariant: hasIrishRumble ? _irVariant : null,
+        irishRumbleCustomBalls:
+            hasIrishRumble && _irVariant == 'custom' ? _irCustomBalls : null,
       );
 
       // 3. Set tee times where provided.
@@ -877,21 +905,27 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         // triple_cup for every foursome.  Locked once a foursome is
         // committed so we can't produce a mixed-format payload.
         final worklist = _worklistStrip();
+        // A mixed cup already chose its formats in the wizard (captured as a
+        // plan in cupGroupCounts), so don't re-offer the Round Format preset —
+        // showing "Triple Cup" here would let it silently override the plan.
+        // The toggle is only for a legacy round with no pre-chosen plan.
+        final hasMixedPlan = widget.cupGroupCounts.isNotEmpty;
         return Column(children: [
           if (worklist != null) worklist,
-          _RoundFormatToggle(
-            value: _roundFormat,
-            locked: _foursomes.isNotEmpty,
-            onChanged: (v) => setState(() {
-              _roundFormat = v;
-              if (v == 'triple_cup') {
-                _gameType = 'triple_cup';
-              } else if (_gameType == 'triple_cup') {
-                _gameType = null;
-              }
-            }),
-          ),
-          if (_roundFormat == 'triple_cup')
+          if (!hasMixedPlan)
+            _RoundFormatToggle(
+              value: _roundFormat,
+              locked: _foursomes.isNotEmpty,
+              onChanged: (v) => setState(() {
+                _roundFormat = v;
+                if (v == 'triple_cup') {
+                  _gameType = 'triple_cup';
+                } else if (_gameType == 'triple_cup') {
+                  _gameType = null;
+                }
+              }),
+            ),
+          if (!hasMixedPlan && _roundFormat == 'triple_cup')
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: _TripleCupFormatNote(),
@@ -909,6 +943,12 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         foursomeNumber     : _foursomes.length + 1,
         gameType           : _gameType!,
         teams              : _teams,
+        irVariant          : _irVariant,
+        irCustomBalls      : _irCustomBalls,
+        holePars           : _holePars,
+        onIrVariantChanged : (v) => setState(() => _irVariant = v),
+        onIrCustomBall     : (idx, val) =>
+            setState(() => _irCustomBalls[idx] = val),
         selectedIds        : _selectedIds,
         assignedIds        : _assignedIds,
         irishRumbleTeamIdx : _irishRumbleTeamIdx,
@@ -1151,11 +1191,23 @@ class _GroupBuilder extends StatelessWidget {
   final ValueChanged<int>  onSetAllTees;
   final ValueChanged<int>  onTeeTimeShift;
   final VoidCallback        onTeeTimePick;
+  // Irish Rumble balls variant (round-level; only used when gameType is
+  // irish_rumble).
+  final String             irVariant;
+  final List<int>          irCustomBalls;
+  final List<int>          holePars;
+  final ValueChanged<String> onIrVariantChanged;
+  final void Function(int holeIdx, int value) onIrCustomBall;
 
   const _GroupBuilder({
     required this.foursomeNumber,
     required this.gameType,
     required this.teams,
+    required this.irVariant,
+    required this.irCustomBalls,
+    required this.holePars,
+    required this.onIrVariantChanged,
+    required this.onIrCustomBall,
     required this.selectedIds,
     required this.assignedIds,
     required this.irishRumbleTeamIdx,
@@ -1218,6 +1270,30 @@ class _GroupBuilder extends StatelessWidget {
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 16),
+
+        // ── Irish Rumble balls variant (round-level — applies to every IR
+        //     match in this round) ────────────────────────────────────────────
+        if (gameType == 'irish_rumble') ...[
+          IrishRumbleVariantPicker(
+            variant: irVariant,
+            onChanged: onIrVariantChanged,
+          ),
+          const SizedBox(height: 12),
+          IrishRumbleSegmentPreview(
+            variant: irVariant,
+            holePars: holePars,
+            customBalls: irCustomBalls,
+          ),
+          if (irVariant == 'custom') ...[
+            const SizedBox(height: 12),
+            IrishRumbleCustomBallsEditor(
+              holePars: holePars,
+              customBalls: irCustomBalls,
+              onChanged: onIrCustomBall,
+            ),
+          ],
+          const SizedBox(height: 20),
+        ],
 
         // ── Tee time (proposed = previous group + interval) ──────────────────
         _teeTimeCard(theme),

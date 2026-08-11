@@ -105,9 +105,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         _StepKind.handicap,
         _StepKind.cupDesign,
         _StepKind.cupGamePlan,
-        // Struck when the format is exclusive (Triple Cup owns all 18 holes),
-        // so there's no room for a field-wide game beside it.
-        if (!_cupFormatExclusive) _StepKind.sideGame,
+        // No tournament side-game step in cup play — field-wide side games belong
+        // to individual tournaments. A cup's point-bearing games (incl. Irish
+        // Rumble) are set on the games-by-round plan above.
         _StepKind.review,
       ];
     }
@@ -121,11 +121,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       _StepKind.review,
     ];
   }
-
-  /// True when the chosen cup format owns every hole (Triple Cup), leaving no
-  /// room for a field-wide side game — so that step is dropped from the flow.
-  bool get _cupFormatExclusive =>
-      _eventType == _EventType.cup && _cupFormat == 'triple';
 
   /// Number of wizard steps for the current type (excludes post-creation).
   int get _totalSteps => _stepFlow.length;
@@ -1310,7 +1305,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             cupName       : _nameCtrl.text.trim(),
             handicapMode  : _handicapMode,
             netPercent    : _netPercent,
-            sideGame      : _tournamentSideGame,
             teams         : _cupReviewTeams(),
             rounds        : _cupReviewRounds(),
             createError   : _createError,
@@ -4579,7 +4573,6 @@ class _StepCupReview extends StatelessWidget {
   final String cupName;
   final String handicapMode;
   final int    netPercent;
-  final String sideGame;
   final List<({String name, String badge, String colour})> teams;
   final List<({String label, String course, DateTime date, String game})> rounds;
   final String? createError;
@@ -4588,7 +4581,6 @@ class _StepCupReview extends StatelessWidget {
     required this.cupName,
     required this.handicapMode,
     required this.netPercent,
-    required this.sideGame,
     required this.teams,
     required this.rounds,
     this.createError,
@@ -4614,13 +4606,6 @@ class _StepCupReview extends StatelessWidget {
     }
   }
 
-  String get _sideGameLabel {
-    switch (sideGame) {
-      case 'irish_rumble': return 'Irish Rumble';
-      case 'pink_ball':    return 'Pink Ball';
-      default:             return 'None';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -4662,7 +4647,6 @@ class _StepCupReview extends StatelessWidget {
                   ? 'Every golfer plays off the lowest index in the group'
                   : null,
               first: true),
-          _kv(context, 'Side game', _sideGameLabel),
         ]),
         // ── What happens after saving ──
         _sectionCard(context, 'What happens after saving', [
