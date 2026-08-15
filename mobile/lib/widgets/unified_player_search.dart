@@ -284,6 +284,11 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
           controller: _ctrl,
           onChanged: _onChanged,
           textInputAction: TextInputAction.search,
+          // Without a handler the keyboard's "search" key does nothing, so
+          // there is no way to close the keyboard from the keyboard — and it
+          // covers the wizard's Next button.  Results are already live as you
+          // type, so submitting just means "done typing".
+          onSubmitted: (_) => FocusScope.of(context).unfocus(),
           decoration: InputDecoration(
             hintText: 'name or phone',
             prefixIcon: const Icon(Icons.search),

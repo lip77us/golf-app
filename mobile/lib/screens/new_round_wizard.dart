@@ -2406,6 +2406,10 @@ class _Step2Players extends StatelessWidget {
             child: GolfTextField(
               hint: 'Search players…',
               prefixIcon: Icons.search,
+              // Give the keyboard a working "done" — otherwise it can't be
+              // closed from the keyboard and covers the bottom action button.
+              textInputAction: TextInputAction.search,
+              onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
               onChanged: onSearch,
             ),
           ),

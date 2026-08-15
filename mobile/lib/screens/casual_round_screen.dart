@@ -677,7 +677,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       );
     }
 
-    return SingleChildScrollView(
+    // Tap anywhere off a field, or drag the list, to dismiss the keyboard —
+    // it otherwise sits over the Next button with no way to close it.
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -955,6 +961,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             const SizedBox(height: 80),
           ], // ── end step 3
         ],
+      ),
       ),
     );
   }

@@ -370,6 +370,10 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
             child: GolfTextField(
               hint: 'Search players…',
               prefixIcon: Icons.search,
+              // Give the keyboard a working "done" — otherwise it can't be
+              // closed from the keyboard and covers the bottom action button.
+              textInputAction: TextInputAction.search,
+              onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
               onChanged: (s) => setState(() => _search = s),
             ),
           ),
@@ -411,6 +415,9 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
         child: filtered.isEmpty
             ? const Center(child: Text('No players found.'))
             : ListView.builder(
+                // Scrolling the roster also puts the keyboard away.
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 itemCount: filtered.length,
                 itemBuilder: (_, i) {
                   final p   = filtered[i];
