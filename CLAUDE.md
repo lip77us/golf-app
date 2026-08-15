@@ -1228,3 +1228,65 @@ generous, settlement pool-local (no cross-game/-account $ netting).
   "Playing in another group" section adds connected (on-app) golfers to the
   roster. The linked round's leaderboard shows the pool tab automatically; the
   host shares the link via the leaderboard's existing "Share spectator link".
+
+## Survivor (`survivor`) — implemented (3-player horse race, primary game)
+
+A three-man **horse race**. On an **elimination hole** the strictly worst score
+is knocked out — if the two worst scores TIE, nobody goes and the elimination
+repeats on the next hole. The surviving two then play a **decider** head-to-head;
+strictly low wins the Survivor, a tie carries the same two forward. The moment a
+Survivor settles a fresh one starts on the very next hole with all three back in,
+so a full 18 yields **up to nine**. Design doc: `docs/survivor.md`.
+
+**The last hole in play order** can host neither an elimination nor a carry, so
+it settles whatever is standing: three alive → strictly low wins outright, any
+tie for low is **no blood**; two alive → low wins, a tie **splits** the
+eliminated player's entry (+½ / +½ / −1).
+
+**Settlement:** every player antes `Round.bet_unit` per Survivor (pot = 3×), so a
+win is **+2 / −1 / −1**. Zero-sum in every outcome. `max_liability` is
+`(holes + 1) // 2` — NOT `holes // 2`: a Survivor needs two holes *except* one
+that starts on the last hole, which settles there in one (nine on 18, five on a
+nine-holer).
+
+**Handicaps:** Net (with %) / Gross / Strokes-Off-Low, **full-round allocation
+only** — there is deliberately no `handicap_allocation` field. A Survivor's
+length isn't known until it ends, so a per-leg spread would re-create the
+"strokes moved onto an already-played hole" defect fixed in `services/rabbit.py`.
+
+**Backend:** `core.GameType.SURVIVOR`; `games.SurvivorGame` /
+`SurvivorHoleResult` (migration `games/0062`, + `tournament/0051` enum refresh);
+`services/survivor.py` (`setup_survivor`, `calculate_survivor`,
+`survivor_summary`) — the engine walks the play order carrying `alive`, and only
+FULLY-SCORED holes advance state (Rabbit's convention). Survivor *legs* are
+derived at summary time, not stored, so they move when a score is edited.
+`SurvivorSetupSerializer` (handicap only — everything else derives from the
+scores); `SurvivorSetupView`/`SurvivorResultView` (`foursome_for_scorer`); routes
+`foursomes/<id>/survivor/{,setup/}`; recalc dispatch + leaderboard block;
+`survivor_game` in `get_configured_games`. Round chat announces each settled
+Survivor via `_emit_survivor_results` (keyed on the leg's FIRST hole, matching
+the Sixes convention, so a re-run can't double-post). Tests:
+`scoring/tests/test_survivor.py` (24), `api/test_survivor.py` (11),
+`SurvivorEventTests` in `scoring/tests/test_messaging_events.py` (6).
+
+**Mobile:** catalog entry (`GameIds.survivor`, exactPlayers 3,
+`hostsOverlaySideGames`); `SurvivorSummary`/`SurvivorLeg`/`SurvivorHole`/
+`SurvivorHoleEntry`/`SurvivorPlayerTotal`; `client.get/postSurvivorSetup`;
+`RoundProvider.loadSurvivor`/`setSurvivorSummary`; `survivor_setup_screen.dart`
+(`/survivor-setup` — the thinnest setup in the app: handicap + stake, defaults to
+Strokes-Off); `survivor_screen.dart` (`/survivor` — dedicated play screen built
+from `rabbit_screen.dart`, with an OUT badge on an eliminated row and a by-hole
+grid tinting the winner green / the knocked-out red). Leaderboard
+`_SurvivorGroupCard` uses the shared `_MsScorecard` grid. **The shared grid
+gained an `eliminated` per-score flag** (red cell) alongside `winner_id` (green);
+every other game omits it, so they're unchanged.
+
+**Note on the play screen's alive-state:** who is alive on an UNSCORED hole
+isn't in that hole's payload, so the banner walks BACK to the last scored hole of
+the same Survivor and carries the roster forward (resetting across a Survivor
+boundary, stepping on if that hole settled it). Without it the group would tee
+off on a decider with the banner still reading "elimination".
+
+**Deferred:** `seed_demo` round; watch-page renderer; mid-round withdrawal
+settlement (three players IS the format — the universal unblocker still lets the
+round complete); tournament use (casual-only for v1).
