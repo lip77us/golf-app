@@ -33,6 +33,7 @@ template.
 import random
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -485,7 +486,8 @@ class Command(BaseCommand):
                           f"{rounds.filter(status='in_progress').count()} in progress)")
         self.stdout.write(f"  Tournaments  : {Tournament.objects.filter(account=account).count()}")
         self.stdout.write("")
-        self.stdout.write("  Logins (account name + username + password):")
+        self.stdout.write("  Logins — username + password (LOCAL DEV ONLY;")
+        self.stdout.write("           password login is DISABLED in production):")
         for r in ROSTER:
             if r.get('login'):
                 role = 'admin' if r.get('admin') else 'member'
@@ -493,9 +495,31 @@ class Command(BaseCommand):
                     f"    {account.name} / {r['login']:<16} / {self.password}   ({role})"
                 )
         self.stdout.write("")
-        self.stdout.write("  For App Store review notes:")
-        self.stdout.write(f"    Account: {account.name}   Username: reviewer   "
-                          f"Password: {self.password}")
-        self.stdout.write("    Test account deletion with the non-admin login "
-                          "'reviewer_delete' (Settings → Delete Account).")
+
+        # App Store review: the reviewer signs in with PHONE + CODE, never a
+        # username/password — prod has password login turned off, so handing
+        # Apple the credentials above is a guaranteed "can't sign in" rejection.
+        # Print what's actually configured on THIS environment, and say so
+        # loudly when it isn't (the seed can't fix that; it's service env).
+        bypass_phone = (getattr(settings, 'REVIEW_BYPASS_PHONE', '') or '').strip()
+        bypass_code  = (getattr(settings, 'REVIEW_BYPASS_CODE', '') or '').strip()
+        self.stdout.write("  For App Store review notes — the reviewer signs in")
+        self.stdout.write("  with PHONE + CODE on the phone screen, NOT a username:")
+        if bypass_phone and bypass_code:
+            first = bypass_phone.split(',')[0].strip().lstrip('+')
+            # App Store Connect wants the digits the reviewer actually types.
+            if len(first) == 11 and first.startswith('1'):
+                first = first[1:]
+            self.stdout.write(self.style.SUCCESS(
+                f"    User name: {first}   Password: {bypass_code}"))
+            self.stdout.write(f"    (bypass numbers: {bypass_phone})")
+            self.stdout.write("    Test account deletion with the second number "
+                              "(Settings → Delete Account).")
+        else:
+            self.stdout.write(self.style.ERROR(
+                "    REVIEW_BYPASS_PHONE / REVIEW_BYPASS_CODE are NOT set on "
+                "this environment —"))
+            self.stdout.write(self.style.ERROR(
+                "    the reviewer will not be able to sign in. Set both on the "
+                "service, then re-check."))
         self.stdout.write(self.style.SUCCESS("=" * 64))
