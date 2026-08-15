@@ -1290,3 +1290,24 @@ off on a decider with the banner still reading "elimination".
 **Deferred:** watch-page renderer; mid-round withdrawal
 settlement (three players IS the format — the universal unblocker still lets the
 round complete); tournament use (casual-only for v1).
+
+## Release tags
+
+Every marketing version is tagged `v<version>` (annotated), pointing at the
+commit that set that version's **final build number** — the code the shipped IPA
+was actually built from. The annotation records the full `version+build`, the
+date, and whether it reached the **App Store** or was **TestFlight only**
+(everything before `v2.5.1` was TestFlight only; 2.5.1 was the first public
+release).
+
+Backfilled from `mobile/pubspec.yaml` history on 2026-08-15 (`v1.0.0` … `v2.6.0`,
+19 tags). **Going forward, tag at release time** rather than backfilling:
+
+```
+git tag -a v2.7.0 -m "2.7.0+23 — App Store release" <bump-commit>
+git push origin v2.7.0
+```
+
+Useful because the version lives only in `pubspec.yaml`; without tags there is
+nothing in history marking what shipped when.
+`git log v2.5.1..v2.6.0 --oneline` is the "what's in this release" diff.
