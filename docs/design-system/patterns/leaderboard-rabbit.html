@@ -1,4 +1,4 @@
-<!-- @dsCard group="Scorecards & leaderboards" name="Leaderboard — Rabbit" subtitle="_RabbitGroupCard — holder/money rows, segment breakdown, by-hole winner strip" -->
+<!-- @dsCard group="Scorecards & leaderboards" name="Leaderboard — Rabbit" subtitle="_RabbitGroupCard — holder/money rows, segment breakdown with won-on, shared scorecard grid" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -33,22 +33,25 @@
   .segrow .who.loose{color:var(--muted);font-weight:500}
   .segrow .inplay{color:var(--muted);font-size:11px}
   .foot{color:var(--muted);font-size:12px;margin-top:10px;line-height:1.4}
-  .byhole{display:grid;grid-template-columns:52px repeat(6,1fr);gap:3px;align-items:center;margin-top:2px}
-  .byhole .lbl{color:var(--muted);font-size:12px;grid-column:1}
-  .cell{border:1px solid var(--cardBorder);border-radius:7px;padding:3px 0 4px;text-align:center;background:#F7FAF7}
-  .cell .h{display:block;font-size:9.5px;color:var(--muted);line-height:1.2}
-  .cell .w{display:block;font-size:12.5px;font-weight:700;color:var(--pine);line-height:1.3;font-variant-numeric:tabular-nums}
-  .cell .w.halved{color:var(--muted);font-weight:500}
-  .cell.lock{border-color:var(--pine);background:#E7F1EC}
-  .cell.todo{background:transparent}
-  .cell.todo .w{color:var(--cardBorder)}
-  .legend{color:var(--muted);font-size:11px;margin-top:7px;display:flex;gap:12px;flex-wrap:wrap}
+  .gscroll{overflow-x:auto;margin-top:2px}
+  table{border-collapse:separate;border-spacing:2px;font-size:11px;font-variant-numeric:tabular-nums}
+  th,td{text-align:center;white-space:nowrap;padding:0}
+  th{font-size:9.5px;color:var(--muted);font-weight:600;padding-bottom:2px}
+  th.lbl,td.lbl{text-align:left;font-weight:700;font-size:11px;position:sticky;left:0;background:var(--card);padding-right:4px}
+  td .c{width:26px;height:24px;border-radius:4px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;font-weight:600;position:relative}
+  td .c.win{background:#DFF0E2;border-color:#7CC48A;color:#1B5E20;font-weight:700}
+  td .c.dim{color:var(--muted)}
+  td .c .dot{position:absolute;top:1.5px;right:1.5px;width:3.5px;height:3.5px;border-radius:50%;background:var(--loss)}
+  .parrow td .c{background:#EDF3ED;color:var(--muted);font-weight:600}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+  .sw.g{background:#DFF0E2;border:1px solid #7CC48A}
+  .legend{color:var(--muted);font-size:11px;margin-top:7px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 </style>
 </head>
 <body>
 <a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
   <h1>Leaderboard — Rabbit</h1>
-  <p class="sub">One card per group. Header line = <b>Rabbit — {handicap} · {format} · accumulate</b> with a status pill. Per-player rows show the runner icon, segments won, and money. The segment breakdown lists each match’s holder (or “Loose”). Below it, a read-only by-hole strip shows who took the rabbit on each hole — an initial when a player won the hole outright, a dash when it was halved and the rabbit carried. The cell that closed a segment is outlined. Entry stays on the play screen; this is summary only.</p></p>
+  <p class="sub">One card per group. Header line = <b>Rabbit — {handicap} · {format} · accumulate</b> with a status pill. Per-player rows show the runner icon, segments won, and money. The segment breakdown lists each match’s holder (or “Loose”); a leg the holder can no longer be caught in reads <b>won on {hole}</b> — with extra rabbits off the leg still plays out, so the range alone can’t say it’s already settled. Below it the <b>shared scorecard grid</b> (the same widget Sixes / Wolf / Survivor use) shows gross per player per hole with stroke dots, the hole’s winner tinted green. Entry stays on the play screen; this is summary only.</p>
 
   <div class="tabs"><span>Stroke Play</span><span class="on">Rabbit</span><span>Settlement</span></div>
 
@@ -61,40 +64,34 @@
 
     <div class="divider"></div>
     <div class="seghead">Segments</div>
-    <div class="segrow"><span class="r">Holes 1–6</span><span class="who">Rabbit: Paul</span></div>
+    <div class="segrow"><span class="r">Holes 1–6</span><span class="who">Rabbit: Paul · won on 5</span></div>
     <div class="segrow"><span class="r">Holes 7–12</span><span class="who">Rabbit: Paul</span><span class="inplay">in play</span></div>
     <div class="segrow"><span class="r">Holes 13–18</span><span class="who loose">Loose</span><span class="inplay">in play</span></div>
 
     <div class="divider"></div>
-    <div class="seghead">By hole</div>
-    <div class="byhole">
-      <span class="lbl">1–6</span>
-      <div class="cell"><span class="h">1</span><span class="w halved">–</span></div>
-      <div class="cell"><span class="h">2</span><span class="w">P</span></div>
-      <div class="cell"><span class="h">3</span><span class="w">D</span></div>
-      <div class="cell"><span class="h">4</span><span class="w halved">–</span></div>
-      <div class="cell"><span class="h">5</span><span class="w">P</span></div>
-      <div class="cell lock"><span class="h">6</span><span class="w halved">–</span></div>
+    <div class="seghead">Scorecard</div>
+    <div class="gscroll">
+      <table>
+        <tr><th class="lbl">Hole</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th></tr>
+        <tr class="parrow"><td class="lbl">Par</td>
+          <td><span class="c">4</span></td><td><span class="c">4</span></td><td><span class="c">3</span></td>
+          <td><span class="c">5</span></td><td><span class="c">4</span></td><td><span class="c">4</span></td>
+          <td><span class="c">3</span></td><td><span class="c">4</span></td><td><span class="c">4</span></td></tr>
+        <tr><td class="lbl">Paul</td>
+          <td><span class="c">4</span></td><td><span class="c win">4</span></td><td><span class="c">5</span></td>
+          <td><span class="c">4</span></td><td><span class="c win">4<span class="dot"></span></span></td><td><span class="c">5</span></td>
+          <td><span class="c win">4<span class="dot"></span></span></td><td><span class="c dim">–</span></td><td><span class="c dim">–</span></td></tr>
+        <tr><td class="lbl">Dave</td>
+          <td><span class="c win">4</span></td><td><span class="c">5</span></td><td><span class="c win">4</span></td>
+          <td><span class="c">4</span></td><td><span class="c">5</span></td><td><span class="c">5</span></td>
+          <td><span class="c">5<span class="dot"></span></span></td><td><span class="c dim">–</span></td><td><span class="c dim">–</span></td></tr>
+        <tr><td class="lbl">Sam</td>
+          <td><span class="c">5</span></td><td><span class="c">5</span></td><td><span class="c">5</span></td>
+          <td><span class="c win">3</span></td><td><span class="c">5</span></td><td><span class="c win">4</span></td>
+          <td><span class="c">5</span></td><td><span class="c dim">–</span></td><td><span class="c dim">–</span></td></tr>
+      </table>
     </div>
-    <div class="byhole">
-      <span class="lbl">7–12</span>
-      <div class="cell"><span class="h">7</span><span class="w">P</span></div>
-      <div class="cell"><span class="h">8</span><span class="w halved">–</span></div>
-      <div class="cell"><span class="h">9</span><span class="w halved">–</span></div>
-      <div class="cell todo"><span class="h">10</span><span class="w">–</span></div>
-      <div class="cell todo"><span class="h">11</span><span class="w">–</span></div>
-      <div class="cell todo"><span class="h">12</span><span class="w">–</span></div>
-    </div>
-    <div class="byhole">
-      <span class="lbl">13–18</span>
-      <div class="cell todo"><span class="h">13</span><span class="w">–</span></div>
-      <div class="cell todo"><span class="h">14</span><span class="w">–</span></div>
-      <div class="cell todo"><span class="h">15</span><span class="w">–</span></div>
-      <div class="cell todo"><span class="h">16</span><span class="w">–</span></div>
-      <div class="cell todo"><span class="h">17</span><span class="w">–</span></div>
-      <div class="cell todo"><span class="h">18</span><span class="w">–</span></div>
-    </div>
-    <div class="legend"><span>Initial = took the rabbit</span><span>– = halved, rabbit carries</span><span>Outlined = segment locked</span></div>
+    <div class="legend"><span><span class="sw g"></span>won the hole (takes / keeps the rabbit)</span><span>· = not played yet</span></div>
 
     <div class="foot">Each segment worth $5.00 — its holder wins that from every opponent&nbsp;&nbsp;•&nbsp;&nbsp;up to $15.00 at risk.</div>
   </div>
