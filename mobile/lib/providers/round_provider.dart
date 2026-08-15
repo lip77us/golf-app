@@ -93,6 +93,8 @@ class RoundProvider extends ChangeNotifier {
   HonorsSummary?   _honorsSummary;
   WolfSummary?     _wolfSummary;
   RabbitSummary?   _rabbitSummary;
+  SurvivorSummary? _survivorSummary;
+  bool             _loadingSurvivor = false;
   TripleCupSummary? _tripleCupSummary;
   MultiSkinsSummary? _multiSkinsSummary;
   NassauSummary?         _nassauSummary;
@@ -153,6 +155,8 @@ class RoundProvider extends ChangeNotifier {
   HonorsSummary?    get honorsSummary      => _honorsSummary;
   WolfSummary?      get wolfSummary        => _wolfSummary;
   RabbitSummary?    get rabbitSummary      => _rabbitSummary;
+  SurvivorSummary?  get survivorSummary    => _survivorSummary;
+  bool              get loadingSurvivor    => _loadingSurvivor;
   TripleCupSummary? get tripleCupSummary   => _tripleCupSummary;
   MultiSkinsSummary? get multiSkinsSummary  => _multiSkinsSummary;
   NassauSummary?        get nassauSummary      => _nassauSummary;
@@ -217,6 +221,7 @@ class RoundProvider extends ChangeNotifier {
     _honorsSummary           = null;
     _wolfSummary             = null;
     _rabbitSummary           = null;
+    _survivorSummary         = null;
     _tripleCupSummary        = null;
     _multiSkinsSummary       = null;
     _nassauSummary           = null;
@@ -331,6 +336,7 @@ class RoundProvider extends ChangeNotifier {
       _honorsSummary    = null;
       _wolfSummary      = null;
       _rabbitSummary    = null;
+      _survivorSummary  = null;
       // Was previously left set — stale single-elim match-play data leaked
       // team colours onto the next foursome's (e.g. stroke-play) rows.
       _matchPlayData    = null;
@@ -825,6 +831,30 @@ class RoundProvider extends ChangeNotifier {
   /// returns a fresh one) so the screen repaints without a round-trip.
   void setRabbitSummary(RabbitSummary summary) {
     _rabbitSummary = summary;
+    notifyListeners();
+  }
+
+  /// Load the Survivor summary for the active foursome.  Non-fatal on network
+  /// errors so the entry screen keeps working offline.
+  Future<void> loadSurvivor(int foursomeId) async {
+    _loadingSurvivor = true;
+    notifyListeners();
+    try {
+      _survivorSummary = await _client.getSurvivorSummary(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadSurvivor error: $e');
+    } finally {
+      _loadingSurvivor = false;
+      notifyListeners();
+    }
+  }
+
+  /// Replace the cached Survivor summary directly (e.g. after a setup POST
+  /// returns a fresh one) so the screen repaints without a round-trip.
+  void setSurvivorSummary(SurvivorSummary summary) {
+    _survivorSummary = summary;
     notifyListeners();
   }
 

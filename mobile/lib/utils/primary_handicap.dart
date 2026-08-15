@@ -33,6 +33,9 @@ Future<(String mode, int netPercent)> primaryHandicapFor(
       case 'rabbit':
         final s = await client.getRabbitSummary(foursomeId);
         return (s.handicapMode, s.netPercent);
+      case 'survivor':
+        final s = await client.getSurvivorSummary(foursomeId);
+        return (s.handicapMode, s.netPercent);
       case 'match_play':
         final m = await client.getMatchPlay(foursomeId);
         final h = m['handicap'] as Map?;

@@ -1651,6 +1651,31 @@ class ApiClient {
     return RabbitSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  // ---- Survivor ----
+
+  /// GET /api/foursomes/{id}/survivor/
+  Future<SurvivorSummary> getSurvivorSummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/survivor/');
+    return SurvivorSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST /api/foursomes/{id}/survivor/setup/
+  ///
+  /// Create (or replace) the Survivor game.  The handicap is the only thing
+  /// to configure — how many Survivors there are, how long each runs, and
+  /// where the boundaries fall all come out of the scores.
+  Future<SurvivorSummary> postSurvivorSetup(
+    int foursomeId, {
+    String handicapMode = 'net',
+    int    netPercent   = 100,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/survivor/setup/', {
+      'handicap_mode': handicapMode,
+      'net_percent'  : netPercent,
+    });
+    return SurvivorSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Multi-Foursome Skins (round-scoped) ----
 
   /// GET /api/rounds/{id}/multi-skins/

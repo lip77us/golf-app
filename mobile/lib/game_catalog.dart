@@ -52,6 +52,12 @@ class GameIds {
   /// outright catches it and runs ahead; held until beaten.  Owns its own
   /// per-hole score-entry screen, so mutually exclusive with other games.
   static const String rabbit     = 'rabbit';
+  /// Survivor — 3-player horse race.  On an elimination hole the worst score
+  /// is knocked out (the two worst tying eliminates nobody); the surviving
+  /// two then play a decider head-to-head, and a fresh Survivor starts on the
+  /// next hole.  Owns its own per-hole score-entry screen, so mutually
+  /// exclusive with the other entry-owning games.
+  static const String survivor   = 'survivor';
   /// Match Play single-elimination bracket — 4-person foursome plays
   /// two 9-hole semi-finals on holes 1–9, then Final + 3rd-place
   /// consolation on holes 10–18.  Casual + tournament side game.
@@ -280,7 +286,7 @@ const List<GameMeta> kGameCatalog = [
                     GameIds.points531, GameIds.skins, GameIds.match18,
                     GameIds.strokePlay, GameIds.stableford, GameIds.tripleCup,
                     GameIds.matchPlay, GameIds.threePersonMatch,
-                    GameIds.wolf, GameIds.rabbit},
+                    GameIds.wolf, GameIds.rabbit, GameIds.survivor},
   ),
   GameMeta(
     id           : GameIds.points531,
@@ -437,6 +443,20 @@ const List<GameMeta> kGameCatalog = [
                    GameIds.skins, GameIds.wolf, GameIds.strokePlay,
                    GameIds.stableford, GameIds.tripleCup, GameIds.matchPlay,
                    GameIds.threePersonMatch},
+  ),
+  GameMeta(
+    id          : GameIds.survivor,
+    displayName : 'Survivor',
+    casual      : true,
+    exactPlayers: 3,
+    // Owns its own per-hole entry screen (who's alive changes hole to hole),
+    // so it can't share a foursome's entry flow. Individual-ball, so it can
+    // still host leaderboard-only overlays over each player's gross.
+    hostsOverlaySideGames: true,
+    excludes    : {GameIds.sixes, GameIds.points531, GameIds.nassau,
+                   GameIds.skins, GameIds.wolf, GameIds.rabbit,
+                   GameIds.strokePlay, GameIds.stableford, GameIds.tripleCup,
+                   GameIds.matchPlay, GameIds.threePersonMatch},
   ),
   GameMeta(
     id           : GameIds.tripleCup,

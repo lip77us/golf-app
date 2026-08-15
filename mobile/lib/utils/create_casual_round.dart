@@ -78,6 +78,8 @@ class CasualRoundLaunch {
       return ('/wolf-setup', fsArg());
     case GameIds.rabbit:
       return ('/rabbit-setup', fsArg());
+    case GameIds.survivor:
+      return ('/survivor-setup', fsArg());
     case GameIds.tripleCup:
       return ('/triple-cup-setup', fsArg());
     case GameIds.multiSkins:

@@ -803,6 +803,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _WolfGroupCard.new);
       case 'rabbit':
         return _ByGroupView(data: data, builder: _RabbitGroupCard.new);
+      case 'survivor':
+        return _ByGroupView(data: data, builder: _SurvivorGroupCard.new);
       case 'settlement':
         return _SettlementView(data: data);
       case 'singles_nassau':
@@ -5177,6 +5179,211 @@ class _RabbitGroupCard extends StatelessWidget {
                   'Each segment worth \$${betUnit.formatBet()} — its holder '
                   'wins that from every opponent'
                   '${numSeg > 1 ? '  •  up to \$${pot.formatBet()} at risk' : ''}.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Leaderboard card for a Survivor foursome.  Shows the standings (Survivors
+/// won + money), one row per Survivor with its range / winner / payout, and
+/// the shared scorecard grid with each hole's winner tinted.
+class _SurvivorGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  const _SurvivorGroupCard({required this.group});
+
+  static String _hcapLabel(Map hcap) {
+    final mode = hcap['mode']?.toString() ?? 'net';
+    if (mode == 'gross') return 'Gross';
+    if (mode == 'strokes_off') return 'SO';
+    final pct = (hcap['net_percent'] as num?)?.toInt() ?? 100;
+    return pct == 100 ? 'Net' : 'Net ($pct%)';
+  }
+
+  static String _fmtMoney(double v) {
+    if (v == 0) return '—';
+    final sign = v > 0 ? '+' : '−';
+    return '$sign\$${v.abs().formatBet()}';
+  }
+
+  /// "Holes 7–9", or "Hole 18" for a Survivor that started on the last hole.
+  static String _range(Map<String, dynamic> sv) {
+    final lo = sv['start_hole'], hi = sv['end_hole'];
+    if (lo == null) return '—';
+    if (hi == null || hi == lo) return 'Hole $lo';
+    return 'Holes $lo–$hi';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final summary = group['summary'] as Map<String, dynamic>? ?? const {};
+    final hcap    = summary['handicap'] as Map<String, dynamic>? ?? const {};
+    final status  = summary['status']?.toString() ?? 'pending';
+    final players = (summary['players']   as List? ?? const []);
+    final svs     = (summary['survivors'] as List? ?? const []);
+    final money   = summary['money'] as Map<String, dynamic>? ?? const {};
+    final betUnit = (money['bet_unit'] as num?)?.toDouble() ?? 0.0;
+    final maxLia  = (money['max_liability'] as num?)?.toDouble() ?? 0.0;
+
+    final sc        = summary['scorecard'] as Map<String, dynamic>? ?? const {};
+    final scHoles   = (sc['holes'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scPlayers = (sc['players'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scHolesInPlay = (sc['holes_in_play'] as List? ?? const [])
+        .map((e) => e as int)
+        .toList();
+
+    final singleGroup = group['_single_group'] == true;
+    String statusLabel;
+    switch (status) {
+      case 'complete':    statusLabel = 'Final';       break;
+      case 'in_progress': statusLabel = 'In progress'; break;
+      default:            statusLabel = 'Pending';     break;
+    }
+    final decided = svs.where((s) =>
+        (s as Map)['outcome'] != 'live').length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (!singleGroup) ...[
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Divider(height: 12),
+          ],
+          Row(children: [
+            Expanded(
+              child: Text('Survivor — ${_hcapLabel(hcap)}'
+                  '${decided > 0 ? ' · $decided decided' : ''}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(statusLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+
+          if (players.isEmpty)
+            Text('No players yet.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant))
+          else
+            ...players.map((p) {
+              final r    = p as Map<String, dynamic>;
+              final name = r['name']?.toString() ?? '';
+              final mny  = (r['money'] as num?)?.toDouble() ?? 0.0;
+              final won  = (r['survivors_won'] as num?)?.toInt() ?? 0;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(children: [
+                  Expanded(
+                      child: Text(name,
+                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                  Icon(Icons.emoji_events_outlined, size: 14,
+                      color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 2),
+                  Text('$won',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                  if (betUnit > 0) ...[
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 72,
+                      child: Text(_fmtMoney(mny),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: mny > 0 ? Colors.green.shade700
+                                : mny < 0 ? Colors.red.shade700
+                                          : theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ]),
+              );
+            }),
+
+          if (svs.isNotEmpty) ...[
+            const Divider(height: 20),
+            Text('Survivors',
+                style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+            const SizedBox(height: 4),
+            ...svs.map((x) {
+              final sv      = x as Map<String, dynamic>;
+              final outcome = sv['outcome']?.toString() ?? 'live';
+              final winner  = sv['winner_short']?.toString();
+              final out     = sv['eliminated_short']?.toString();
+              final payout  = (sv['payout'] as num?)?.toDouble() ?? 0.0;
+
+              String label;
+              Color? color = theme.colorScheme.primary;
+              switch (outcome) {
+                case 'won':
+                  label = '$winner wins${out == null ? '' : ' · $out out'}';
+                case 'split':
+                  label = 'Split · ${out ?? '?'} pays';
+                case 'no_blood':
+                  label = 'No blood';
+                  color = theme.colorScheme.onSurfaceVariant;
+                default:
+                  label = out == null
+                      ? 'Everyone still in' : '$out out — decider';
+                  color = theme.colorScheme.onSurfaceVariant;
+              }
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 1),
+                child: Row(children: [
+                  SizedBox(width: 92,
+                    child: Text(_range(sv), style: theme.textTheme.bodySmall)),
+                  Expanded(
+                    child: Text(label,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600, color: color)),
+                  ),
+                  if (outcome == 'live')
+                    Text('in play', style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant))
+                  else if (payout > 0)
+                    Text('\$${payout.formatBet()}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.w600)),
+                ]),
+              );
+            }),
+          ],
+
+          if (scHoles.isNotEmpty) ...[
+            const Divider(height: 20),
+            _MsScorecard(
+              holes:        scHoles,
+              participants: scPlayers,
+              legend:       'green = won the hole',
+              holesInPlay:  scHolesInPlay,
+            ),
+          ],
+
+          if (betUnit > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                  'Everyone antes \$${betUnit.formatBet()} per Survivor — the '
+                  'winner takes the pot'
+                  '${maxLia > 0 ? '  •  up to \$${maxLia.formatBet()} at risk' : ''}.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant)),
             ),

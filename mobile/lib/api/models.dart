@@ -3017,6 +3017,267 @@ class WolfSummary {
 }
 
 // ---------------------------------------------------------------------------
+// Survivor
+// ---------------------------------------------------------------------------
+
+/// Per-player running total for a Survivor game.
+class SurvivorPlayerTotal {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final double money;
+  final int    survivorsWon;
+  /// Handicap actually in play after the game's mode + percentage.
+  final int    phcpInPlay;
+
+  const SurvivorPlayerTotal({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    required this.money,
+    required this.survivorsWon,
+    required this.phcpInPlay,
+  });
+
+  factory SurvivorPlayerTotal.fromJson(Map<String, dynamic> j) =>
+      SurvivorPlayerTotal(
+        playerId:     j['player_id']     as int,
+        name:         j['name']          as String? ?? '',
+        shortName:    j['short_name']    as String? ?? '',
+        money:        (j['money']        as num?)?.toDouble() ?? 0.0,
+        survivorsWon: j['survivors_won'] as int?    ?? 0,
+        phcpInPlay:   j['phcp_in_play']  as int?    ?? 0,
+      );
+}
+
+/// One Survivor — an elimination hole (or several) plus the decider that
+/// settled it.  Length and boundaries come from the scores, not from config.
+class SurvivorLeg {
+  final int     index;
+  final int?    startHole;
+  final int?    endHole;
+  final int     holes;
+  final int?    eliminatedId;
+  final String? eliminatedShort;
+  final int?    winnerId;
+  final String? winnerShort;
+  /// 'won' | 'split' | 'no_blood' | 'live'.
+  final String  outcome;
+  final bool    complete;
+  final double  value;      // the stake each player antes
+  final double  payout;     // to the winner (or each half of a split)
+
+  const SurvivorLeg({
+    required this.index,
+    required this.startHole,
+    required this.endHole,
+    required this.holes,
+    required this.eliminatedId,
+    required this.eliminatedShort,
+    required this.winnerId,
+    required this.winnerShort,
+    required this.outcome,
+    required this.complete,
+    required this.value,
+    required this.payout,
+  });
+
+  bool get isLive    => outcome == 'live';
+  bool get isSplit   => outcome == 'split';
+  bool get isNoBlood => outcome == 'no_blood';
+
+  /// "Holes 7-9", or "Hole 18" for a Survivor that started on the last hole.
+  String get rangeLabel {
+    if (startHole == null) return '—';
+    if (endHole == null || endHole == startHole) return 'Hole $startHole';
+    return 'Holes $startHole\u2013$endHole';
+  }
+
+  factory SurvivorLeg.fromJson(Map<String, dynamic> j) => SurvivorLeg(
+        index:           j['index']            as int?    ?? 0,
+        startHole:       j['start_hole']       as int?,
+        endHole:         j['end_hole']         as int?,
+        holes:           j['holes']            as int?    ?? 0,
+        eliminatedId:    j['eliminated_id']    as int?,
+        eliminatedShort: j['eliminated_short'] as String?,
+        winnerId:        j['winner_id']        as int?,
+        winnerShort:     j['winner_short']     as String?,
+        outcome:         j['outcome']          as String? ?? 'live',
+        complete:        j['complete']         as bool?   ?? false,
+        value:           (j['value']           as num?)?.toDouble() ?? 0.0,
+        payout:          (j['payout']          as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+/// One player's state on a Survivor hole.
+class SurvivorHoleEntry {
+  final int     playerId;
+  final String  shortName;
+  final String  name;
+  final int?    netScore;
+  final int?    gross;
+  /// Handicap strokes on this hole — defined for unscored holes too, so the
+  /// dots show the whole plan up front.
+  final int     strokes;
+  /// Was this player still in the Survivor going into this hole?
+  final bool    isAlive;
+  /// Did this hole knock them out?
+  final bool    isEliminated;
+  /// Did this hole win them the Survivor?
+  final bool    isWinner;
+
+  const SurvivorHoleEntry({
+    required this.playerId,
+    required this.shortName,
+    required this.name,
+    required this.netScore,
+    required this.gross,
+    required this.strokes,
+    required this.isAlive,
+    required this.isEliminated,
+    required this.isWinner,
+  });
+
+  factory SurvivorHoleEntry.fromJson(Map<String, dynamic> j) =>
+      SurvivorHoleEntry(
+        playerId:     j['player_id']     as int,
+        shortName:    j['short_name']    as String? ?? '',
+        name:         j['name']          as String? ?? '',
+        netScore:     j['net_score']     as int?,
+        gross:        j['gross']         as int?,
+        strokes:      j['strokes']       as int?  ?? 0,
+        isAlive:      j['is_alive']      as bool? ?? true,
+        isEliminated: j['is_eliminated'] as bool? ?? false,
+        isWinner:     j['is_winner']     as bool? ?? false,
+      );
+}
+
+/// One hole of a Survivor game.
+class SurvivorHole {
+  final int     hole;
+  final int?    survivor;   // which Survivor this hole belonged to
+  /// 'elimination' | 'decider' | 'final' — null until the hole is scored.
+  final String? role;
+  final int?    par;
+  final int?    eliminatedId;
+  final String? eliminatedShort;
+  final int?    winnerId;
+  final String? winnerShort;
+  /// 'eliminated' | 'no_elimination' | 'won' | 'carried' | 'split' | 'no_blood'
+  final String? event;
+  final List<SurvivorHoleEntry> entries;
+
+  const SurvivorHole({
+    required this.hole,
+    required this.survivor,
+    required this.role,
+    required this.par,
+    required this.eliminatedId,
+    required this.eliminatedShort,
+    required this.winnerId,
+    required this.winnerShort,
+    required this.event,
+    required this.entries,
+  });
+
+  bool get isScored => event != null;
+
+  factory SurvivorHole.fromJson(Map<String, dynamic> j) => SurvivorHole(
+        hole:            j['hole']             as int,
+        survivor:        j['survivor']         as int?,
+        role:            j['role']             as String?,
+        par:             j['par']              as int?,
+        eliminatedId:    j['eliminated_id']    as int?,
+        eliminatedShort: j['eliminated_short'] as String?,
+        winnerId:        j['winner_id']        as int?,
+        winnerShort:     j['winner_short']     as String?,
+        event:           j['event']            as String?,
+        entries: ((j['entries'] as List?) ?? const [])
+            .map((e) => SurvivorHoleEntry.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+class SurvivorSummary {
+  final String status;
+  final String handicapMode;
+  final int    netPercent;
+  final List<SurvivorLeg>         survivors;
+  final List<SurvivorPlayerTotal> players;
+  final List<SurvivorHole>        holes;
+  /// Shared scorecard-grid block (the same shape Sixes / Wolf / Rabbit emit).
+  final Map<String, dynamic>      scorecard;
+  // Current live state.
+  final int       currentSurvivor;
+  final List<int> currentAliveIds;
+  /// 'elimination' while three are alive, 'decider' once one is out.
+  final String    currentRole;
+  final double    betUnit;
+  final double    pot;            // three entries
+  final double    maxLiability;
+
+  const SurvivorSummary({
+    required this.status,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.survivors,
+    required this.players,
+    required this.holes,
+    required this.scorecard,
+    required this.currentSurvivor,
+    required this.currentAliveIds,
+    required this.currentRole,
+    required this.betUnit,
+    required this.pot,
+    required this.maxLiability,
+  });
+
+  bool get isNet        => handicapMode == 'net';
+  bool get isGross      => handicapMode == 'gross';
+  bool get isStrokesOff => handicapMode == 'strokes_off';
+
+  /// True once one player is out and the surviving two are playing for it.
+  bool get isDecider => currentRole == 'decider';
+
+  SurvivorHole? holeFor(int hole) {
+    for (final h in holes) {
+      if (h.hole == hole) return h;
+    }
+    return null;
+  }
+
+  factory SurvivorSummary.fromJson(Map<String, dynamic> j) {
+    final hcap    = j['handicap'] as Map<String, dynamic>? ?? const {};
+    final money   = j['money']    as Map<String, dynamic>? ?? const {};
+    final current = j['current']  as Map<String, dynamic>? ?? const {};
+    return SurvivorSummary(
+      status:       j['status'] as String? ?? 'pending',
+      handicapMode: hcap['mode'] as String? ?? 'net',
+      netPercent:   hcap['net_percent'] as int? ?? 100,
+      survivors: ((j['survivors'] as List?) ?? const [])
+          .map((e) => SurvivorLeg.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      players: ((j['players'] as List?) ?? const [])
+          .map((e) => SurvivorPlayerTotal.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      holes: ((j['holes'] as List?) ?? const [])
+          .map((e) => SurvivorHole.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      scorecard: (j['scorecard'] as Map<String, dynamic>?) ?? const {},
+      currentSurvivor: current['survivor'] as int? ?? 1,
+      currentAliveIds: ((current['alive_ids'] as List?) ?? const [])
+          .map((e) => e as int)
+          .toList(),
+      currentRole:  current['role'] as String? ?? 'elimination',
+      betUnit:      (money['bet_unit']      as num?)?.toDouble() ?? 0.0,
+      pot:          (money['pot']           as num?)?.toDouble() ?? 0.0,
+      maxLiability: (money['max_liability'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // Rabbit
 // ---------------------------------------------------------------------------
 

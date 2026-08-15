@@ -403,6 +403,13 @@ class _RoundScreenState extends State<RoundScreen> {
                     } else if (fsGames.contains('rabbit')) {
                       // Configured Rabbit owns its own score-entry screen.
                       route = '/rabbit';
+                    } else if (fsGames.contains('survivor') &&
+                        !fs.configuredGames.contains('survivor')) {
+                      // Survivor needs its handicap picked before play.
+                      route = '/survivor-setup';
+                    } else if (fsGames.contains('survivor')) {
+                      // Configured Survivor owns its own score-entry screen.
+                      route = '/survivor';
                     } else if (fsGames.contains('triple_cup') &&
                         !fs.configuredGames.contains('triple_cup')) {
                       // Triple Cup needs team assignment + handicap config.
@@ -943,6 +950,7 @@ Future<void> _showAddSideGameSheet(
     'fourball':   '/fourball-setup',
     'wolf':       '/wolf-setup',
     'rabbit':     '/rabbit-setup',
+    'survivor':   '/survivor-setup',
     'triple_cup': '/triple-cup-setup',
     'sixes':      '/sixes-setup',
   };
@@ -1043,6 +1051,7 @@ class _FoursomeCard extends StatelessWidget {
   // Games that make sense to toggle per-foursome (excludes round-level-only games)
   static const _perFoursomeGames = {
     'skins', 'sixes', 'nassau', 'match_play', 'points_531', 'wolf', 'rabbit',
+    'survivor',
     'irish_rumble', 'pink_ball',
   };
 
