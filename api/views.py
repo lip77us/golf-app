@@ -198,6 +198,10 @@ def _recalculate_games(foursome: Foursome) -> None:
         from services.rabbit import calculate_rabbit
         calculate_rabbit(foursome)
 
+    if 'survivor' in active_games:
+        from services.survivor import calculate_survivor
+        calculate_survivor(foursome)
+
     from games.models import ThreePersonMatch as _TPM
     _tpm_in_games = 'three_person_match' in active_games
     _tpm_exists   = _TPM.objects.filter(foursome=foursome).exists()
@@ -888,6 +892,17 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
                  'summary': rabbit_summary(fs)}
+                for fs in foursomes
+            ],
+        }
+
+    if 'survivor' in active_games:
+        from services.survivor import survivor_summary
+        games['survivor'] = {
+            'label'   : 'Survivor',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': survivor_summary(fs)}
                 for fs in foursomes
             ],
         }
@@ -5671,6 +5686,44 @@ class RabbitResultView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.rabbit import rabbit_summary
         return Response(rabbit_summary(foursome))
+
+
+# ---------------------------------------------------------------------------
+# Survivor
+# ---------------------------------------------------------------------------
+
+class SurvivorSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/survivor/setup/
+    Body: { "handicap_mode": "net"|"gross"|"strokes_off", "net_percent": 0..200 }
+
+    Creates (or replaces) the Survivor game, then runs calculate_survivor so
+    any scores already on file are reflected in the first summary.  Idempotent.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import SurvivorSetupSerializer
+        ser = SurvivorSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.survivor import (
+            setup_survivor, calculate_survivor, survivor_summary)
+        setup_survivor(
+            foursome,
+            handicap_mode = d.get('handicap_mode', 'net'),
+            net_percent   = d.get('net_percent', 100),
+        )
+        calculate_survivor(foursome)
+        return Response(survivor_summary(foursome), status=status.HTTP_201_CREATED)
+
+
+class SurvivorResultView(APIView):
+    """GET /api/foursomes/{id}/survivor/"""
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.survivor import survivor_summary
+        return Response(survivor_summary(foursome))
 
 
 # ---------------------------------------------------------------------------

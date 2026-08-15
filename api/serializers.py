@@ -539,6 +539,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             ('wolf_game',          'wolf'),
             ('rabbit_game',        'rabbit'),
             ('honors_game',        'honors'),
+            ('survivor_game',      'survivor'),
             ('triple_cup_game',    'triple_cup'),
         ]:
             try:
@@ -1575,6 +1576,21 @@ class RabbitSetupSerializer(serializers.Serializer):
                         choices=['per_segment', 'full_round'],
                         default='per_segment')
     extra_rabbits = serializers.BooleanField(default=False)
+
+
+class SurvivorSetupSerializer(serializers.Serializer):
+    """
+    Set up (or replace) the Survivor game for a foursome (3 real players).
+
+    There is nothing else to configure: the number of Survivors, their
+    lengths, and their boundaries all fall out of the scores.  Handicaps are
+    full-round in every mode — see docs/survivor.md for why a per-segment
+    allocation can't work when a leg's length isn't known until it ends.
+    """
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'], default='net')
+    net_percent   = serializers.IntegerField(
+                        min_value=0, max_value=200, default=100)
 
 
 class WolfOrderSerializer(serializers.Serializer):

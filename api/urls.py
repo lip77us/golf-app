@@ -138,6 +138,10 @@ urlpatterns = [
     path('foursomes/<int:pk>/rabbit/',       views.RabbitResultView.as_view(), name='api-rabbit-result'),
     path('foursomes/<int:pk>/rabbit/setup/', views.RabbitSetupView.as_view(),  name='api-rabbit-setup'),
 
+    # ---- Survivor ----
+    path('foursomes/<int:pk>/survivor/',       views.SurvivorResultView.as_view(), name='api-survivor-result'),
+    path('foursomes/<int:pk>/survivor/setup/', views.SurvivorSetupView.as_view(),  name='api-survivor-setup'),
+
     # ---- Triple Cup (One-Round Ryder Cup) ----
     path('foursomes/<int:pk>/triple-cup/',                  views.TripleCupResultView.as_view(),         name='api-triple-cup-result'),
     path('foursomes/<int:pk>/triple-cup/setup/',            views.TripleCupSetupView.as_view(),          name='api-triple-cup-setup'),
