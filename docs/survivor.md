@@ -243,7 +243,9 @@ and a `survivor` block to `_build_leaderboard`; add `survivor_game` to
    format is decided here; get it right in isolation.
 2. **API + leaderboard block.**
 3. **Mobile** — setup screen, play screen, leaderboard card.
-4. **`seed_demo` round** so it's demoable and screenshot-able.
+4. ~~**`seed_demo` round**~~ — dropped. `seed_demo` is deliberately not kept
+   current with new games (Fourball, Honors and Spots aren't in it either);
+   App Review doesn't exercise the individual games.
 
 ---
 

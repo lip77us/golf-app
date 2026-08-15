@@ -1287,6 +1287,6 @@ the same Survivor and carries the roster forward (resetting across a Survivor
 boundary, stepping on if that hole settled it). Without it the group would tee
 off on a decider with the banner still reading "elimination".
 
-**Deferred:** `seed_demo` round; watch-page renderer; mid-round withdrawal
+**Deferred:** watch-page renderer; mid-round withdrawal
 settlement (three players IS the format — the universal unblocker still lets the
 round complete); tournament use (casual-only for v1).
