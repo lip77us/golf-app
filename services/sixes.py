@@ -814,7 +814,7 @@ def sixes_player_hole_strokes(foursome) -> dict:
     """
     segments = list(
         SixesSegment.objects.filter(foursome=foursome)
-        .prefetch_related('teams__players')
+        .prefetch_related('teams__players', 'hole_results')
         .order_by('segment_number', 'start_hole')
     )
     if not segments:
@@ -888,19 +888,42 @@ def sixes_player_hole_strokes(foursome) -> dict:
             return list(range(seg.start_hole, seg.end_hole + 1))
         return order[sp:ep + 1]
 
+    def _played_holes(seg, seg_holes):
+        """`seg_holes` trimmed at the closeout, matching what calculate_sixes
+        actually SCORED.  A match that ends early hands its remaining holes to
+        the next match, which allocates its own strokes over them — so keeping
+        this match's strokes there would show a dot on a hole that never
+        receives the stroke.  (calculate_sixes undoes them for scoring; this is
+        the display half of that undo.)  Same early-end detection as the segment
+        label: hole COUNT, so a wrapped shotgun range is safe."""
+        results = list(seg.hole_results.all())
+        if (seg.status in ('complete', 'halved')
+                and results and len(results) < len(seg_holes)):
+            last = max(results, key=lambda hr: pos_of.get(hr.hole_number, -1))
+            end  = pos_of.get(last.hole_number)
+            if end is not None:
+                return [h for h in seg_holes if pos_of.get(h, -1) <= end]
+        return seg_holes
+
     # A placeholder index carrying every hole in play, so the overlay helper
     # allocates each segment's strokes across ITS holes whether or not they've
     # been scored yet (prospective).
     placeholder = {m.player_id: {h: 0 for h in order} for m in memberships}
 
     for idx, seg in enumerate(standard):
+        seg_holes = _seg_holes(seg)
+        # Allocate over the FULL window — that's the plan the golfers played to,
+        # and it's what calculate_sixes overlaid — then keep only the holes this
+        # match actually got to.
         applied = _overlay_so_strokes_for_segment(
             seg, idx, player_so, member_by_pid,
             {pid: dict(hs) for pid, hs in placeholder.items()},
-            _seg_holes(seg),
+            seg_holes,
         )
+        kept = set(_played_holes(seg, seg_holes))
         for pid, hs in applied.items():
-            out.setdefault(pid, {}).update(hs)
+            out.setdefault(pid, {}).update(
+                {h: s for h, s in hs.items() if h in kept})
 
     for seg in extras:
         for m in memberships:

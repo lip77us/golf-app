@@ -379,3 +379,74 @@ class SixesRessegmentTests(TestCase):
         # hole 18's intermediate 0.
         self.assertEqual(seg1['holes'][-1]['hole'], 3, seg1)
         self.assertEqual(seg1['holes'][-1]['margin'], 2, seg1)
+
+
+class SixesStrokeStabilityTests(TestCase):
+    """A closeout repositions the LATER matches; it must never change the
+    strokes on a hole that has already been played."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.round.bet_unit = 5
+        self.round.save(update_fields=['bet_unit'])
+        # Dana gets SO=9 → 3 strokes in each of the three matches.
+        self.fs = make_foursome(
+            self.round,
+            [('Ann', 0), ('Ben', 0), ('Cal', 0), ('Dana', 9)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        A, B, C, D = (self.pid['Ann'], self.pid['Ben'],
+                      self.pid['Cal'], self.pid['Dana'])
+        setup_sixes(self.fs, _team_data(A, B, C, D),
+                    handicap_mode='strokes_off',
+                    handicap_allocation='per_segment')
+
+    def _strokes(self, player_id):
+        calculate_sixes(self.fs)
+        return dict(sixes_player_hole_strokes(self.fs).get(player_id, {}))
+
+    def test_closeout_never_moves_strokes_on_a_played_hole(self):
+        A, B, C, D = (self.pid['Ann'], self.pid['Ben'],
+                      self.pid['Cal'], self.pid['Dana'])
+        played: dict = {}
+
+        def check(hole):
+            """Score `hole`, then assert no earlier hole's strokes changed."""
+            now = self._strokes(D)
+            for h, s in played.items():
+                assert now.get(h, 0) == s, \
+                    f'hole {h} strokes moved {s} → {now.get(h, 0)} ' \
+                    f'after hole {hole} (match closeout re-spread)'
+            played[hole] = now.get(hole, 0)
+
+        # Match 1 (holes 1-6): team 1 wins 1, 2, 3, 4 → 4 up with 2 to play,
+        # so it closes out on hole 4 and match 2 starts on hole 5.
+        for h in range(1, 5):
+            check(h)
+            submit_hole(self.fs, h, [(A, 3), (B, 3), (C, 6), (D, 6)])
+        # Match 2 now runs 5-10 and closes out on hole 8; match 3 runs 9-14.
+        for h in range(5, 9):
+            check(h)
+            submit_hole(self.fs, h, [(A, 3), (B, 3), (C, 6), (D, 6)])
+        for h in range(9, 19):
+            check(h)
+            submit_hole(self.fs, h, [(A, 4), (B, 4), (C, 4), (D, 5)])
+        check(18)
+
+    def test_closeout_drops_the_handed_over_holes_strokes(self):
+        # A match that ends early hands its remaining holes to the next match,
+        # which allocates its OWN strokes over them.  calculate_sixes undoes the
+        # finished match's strokes there; the stroke dots must do the same, or a
+        # dot shows on a hole that never receives the stroke (hole 10 below).
+        A, B, C, D = (self.pid['Ann'], self.pid['Ben'],
+                      self.pid['Cal'], self.pid['Dana'])
+        for h in range(1, 9):            # match 1 ends on 4, match 2 on 8
+            submit_hole(self.fs, h, [(A, 3), (B, 3), (C, 6), (D, 6)])
+        # Match 1 (window 1-6, ended on 4) → holes 1, 2.  Match 2 (window 5-10,
+        # ended on 8) → hole 5.  Match 3 (window 9-14) → 9, 11, 14.  Extra
+        # (15-18, full-round SI <= 9) → 18.
+        assert sorted(self._strokes(D)) == [1, 2, 5, 9, 11, 14, 18], \
+            sorted(self._strokes(D))
