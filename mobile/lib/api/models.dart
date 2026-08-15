@@ -3060,6 +3060,12 @@ class RabbitSegment {
   final String? holderShort;
   final int    lead;
   final bool   complete;
+  /// The hole the leg became mathematically safe on, when that's before its
+  /// last hole — the holder's lead can no longer be caught.  With extra
+  /// rabbits ON the leg ENDS there so this equals [endHole]; with them OFF the
+  /// leg plays out its full range and this is the only signal it's settled.
+  /// Null while the leg is still live (or from a server predating the field).
+  final int?   decidedOn;
   final double value;       // per-leg stake (bet_unit, or bet_unit/2 for 1-hole extra)
   final double payout;
 
@@ -3073,12 +3079,19 @@ class RabbitSegment {
     required this.holderShort,
     required this.lead,
     required this.complete,
+    this.decidedOn,
     this.value = 0.0,
     required this.payout,
   });
 
   /// True when this leg is a single-hole extra (settles for half the stake).
   bool get isHalf => isExtra && holes == 1;
+
+  /// True when the leg was settled before its last hole AND still ran holes
+  /// after that — i.e. the range on screen overstates what was actually being
+  /// played for.  (With extra rabbits on, the leg ends on [decidedOn], so this
+  /// is false and the range already tells the truth.)
+  bool get decidedEarly => decidedOn != null && decidedOn != endHole;
 
   factory RabbitSegment.fromJson(Map<String, dynamic> j) => RabbitSegment(
         index:       j['index']       as int? ?? 0,
@@ -3090,6 +3103,7 @@ class RabbitSegment {
         holderShort: j['holder_short'] as String?,
         lead:        j['lead']        as int? ?? 0,
         complete:    j['complete']    as bool? ?? false,
+        decidedOn:   j['decided_on']  as int?,
         value:       (j['value']      as num?)?.toDouble() ?? 0.0,
         payout:      (j['payout']     as num?)?.toDouble() ?? 0.0,
       );

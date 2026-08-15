@@ -310,6 +310,19 @@ def _advance_rabbit(holder, lead, nets, real_ids, accumulate):
     return holder, lead, RabbitHoleResult.HELD, winner        # tie for low
 
 
+def _is_decided(holder, lead, holes_left: int) -> bool:
+    """True when the leg can no longer be taken off `holder`.
+
+    The holder drops one off their lead per hole they're beaten and only loses
+    the rabbit at zero, so a lead greater than the holes remaining is safe —
+    and stays safe, since each further hole costs at most one from each side.
+    This is the same test the early-lock scheduler uses; with extra rabbits OFF
+    the leg still plays out its full range, so we record WHERE it was decided
+    rather than ending it there.
+    """
+    return holder is not None and lead > holes_left
+
+
 def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
     """Compute the leg schedule + per-hole state from the current scores.
 
@@ -348,8 +361,8 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
         fully_scored = 0
         for idx, seg_holes in enumerate(
                 segment_hole_lists(foursome, game.num_segments), start=1):
-            holder, lead = None, 0
-            for hole in seg_holes:
+            holder, lead, decided_on = None, 0, None
+            for i, hole in enumerate(seg_holes):
                 complete, nets = _hole_nets(score_index, real_ids, hole)
                 if not complete:
                     continue                       # skip unscored; state carries
@@ -359,12 +372,15 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
                 rows.append(RabbitHoleResult(
                     game=game, hole_number=hole, segment=idx,
                     winner_id=winner, holder_id=holder, lead=lead, event=event))
+                if decided_on is None and _is_decided(
+                        holder, lead, len(seg_holes) - 1 - i):
+                    decided_on = hole
             complete = bool(seg_holes) and all(
                 _hole_nets(score_index, real_ids, h)[0] for h in seg_holes)
             segments.append({
                 'index': idx, 'is_extra': False, 'holes': list(seg_holes),
                 'holder': holder, 'lead': lead, 'complete': complete,
-                'value': bet_unit,
+                'decided_on': decided_on, 'value': bet_unit,
             })
         seg_lists = segment_hole_lists(foursome, game.num_segments)
         return (rows, segments, fully_scored,
@@ -467,6 +483,7 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
                             entries[h] -= s
 
             holder, lead, end_pos, cur = None, 0, window_end, pos
+            decided_on = None
             while cur <= window_end:
                 hole = positions[cur]
                 complete, nets = _hole_nets(idx, real_ids, hole)
@@ -477,9 +494,12 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
                     rows.append(RabbitHoleResult(
                         game=game, hole_number=hole, segment=seg_idx,
                         winner_id=winner, holder_id=holder, lead=lead, event=event))
-                    if can_lock and holder is not None and lead > (window_end - cur):
-                        end_pos = cur              # decided early → leg ends here
-                        break
+                    if decided_on is None and _is_decided(
+                            holder, lead, window_end - cur):
+                        decided_on = hole
+                        if can_lock:
+                            end_pos = cur          # decided early → leg ends here
+                            break
                 cur += 1
 
             # Locked early: the tail of the window goes to the next leg, so take
@@ -507,7 +527,7 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
             segments.append({
                 'index': seg_idx, 'is_extra': is_extra, 'holes': list(leg_holes),
                 'holder': holder, 'lead': lead, 'complete': leg_complete,
-                'value': value,
+                'decided_on': decided_on, 'value': value,
             })
             pos = end_pos + 1
             if is_extra:
@@ -595,6 +615,7 @@ def rabbit_summary(foursome) -> dict:
             'segments'     : [],
             'players'      : [],
             'holes'        : [],
+            'scorecard'    : {'players': [], 'holes': [], 'holes_in_play': []},
             'current'      : {'holder_id': None, 'holder_short': None,
                               'lead': 0, 'segment': 1},
             'money'        : {'bet_unit': bet_unit, 'entry': bet_unit,
@@ -686,6 +707,39 @@ def rabbit_summary(foursome) -> dict:
             'entries'     : entries,
         })
 
+    # Scorecard block for the leaderboard card — same shape Wolf / Sixes emit, so
+    # the shared grid widget renders it: gross + stroke dots per player per hole,
+    # with the hole's outright winner tinted.  (`holes_out` above stays as-is —
+    # it carries the rabbit-specific holder/lead trail the play screen needs.)
+    sample_si = {}
+    if sample_tee is not None:
+        for h in order:
+            sample_si[h] = sample_tee.hole(h).get('stroke_index')
+    scorecard = {
+        'players': [
+            {'player_id': pid, 'name': by_pid[pid].name,
+             'short_name': by_pid[pid].short_name}
+            for pid in real_ids
+        ],
+        'holes': [
+            {
+                'hole'        : h['hole'],
+                'par'         : h['par'],
+                'stroke_index': sample_si.get(h['hole']),
+                'winner_id'   : h['winner_id'],
+                'winner_short': h['winner_short'],
+                'scores': [
+                    {'player_id': e['player_id'],
+                     'gross'    : e['gross'],
+                     'strokes'  : e['strokes']}
+                    for e in h['entries']
+                ],
+            }
+            for h in holes_out
+        ],
+        'holes_in_play': list(order),
+    }
+
     # Segments — one entry per leg (standard + any extras), settled zero-sum.
     money_by_pid = {pid: 0.0 for pid in real_ids}
     seg_out: list = []
@@ -709,6 +763,11 @@ def rabbit_summary(foursome) -> dict:
             'is_extra'    : s['is_extra'],
             'start_hole'  : seg_holes[0] if seg_holes else None,
             'end_hole'    : seg_holes[-1] if seg_holes else None,
+            # The hole the leg became mathematically safe on, when that's before
+            # its last hole.  With extra rabbits ON the leg ends there, so this
+            # equals end_hole; with them OFF the leg plays out and this is the
+            # only signal the result is already settled.
+            'decided_on'  : s.get('decided_on'),
             'holes'       : len(seg_holes),
             'holder_id'   : holder_id,
             'holder_short': short(holder_id) if holder_id else None,
@@ -751,6 +810,7 @@ def rabbit_summary(foursome) -> dict:
         'segments'     : seg_out,
         'players'      : players_out,
         'holes'        : holes_out,
+        'scorecard'    : scorecard,
         'current'      : {
             'holder_id'   : cur_holder,
             'holder_short': short(cur_holder) if cur_holder else None,

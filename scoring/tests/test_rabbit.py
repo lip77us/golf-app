@@ -518,3 +518,65 @@ class RabbitTests(TestCase):
         final = self._glenn_strokes(rabbit_summary(fs), G)
         for h, s in played.items():
             assert final[h] == s, (h, s, final[h])
+
+    def _decided_probe(self, extras):
+        """Leg 2 clinched on hole 11 (lead 2, one hole left).  Returns the
+        summary's segment rows."""
+        rnd = make_round(self.tee.course)
+        rnd.bet_unit = 6
+        rnd.save(update_fields=['bet_unit'])
+        fs = make_foursome(
+            rnd, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        A, B, C = pid['Ann'], pid['Ben'], pid['Cal']
+        setup_rabbit(fs, handicap_mode='gross', num_segments=3,
+                     accumulate=True, extra_rabbits=extras)
+        for h in range(1, 7):
+            submit_hole(fs, h, [(A, 4), (B, 4), (C, 4)])
+        submit_hole(fs, 7, [(A, 3), (B, 4), (C, 4)])       # Ann grabs
+        for h in (8, 9, 10):
+            submit_hole(fs, h, [(A, 4), (B, 4), (C, 4)])
+        submit_hole(fs, 11, [(A, 3), (B, 4), (C, 4)])      # lead 2, 1 to play
+        calculate_rabbit(fs)
+        return rabbit_summary(fs)['segments']
+
+    def test_leg_decided_early_is_flagged_without_extras(self):
+        # Extra rabbits OFF: the leg still PLAYS its full 7-12 range (hole 12
+        # counts for nothing), so the range alone can't say the rabbit is
+        # already won.  decided_on names the hole it was settled on.
+        segs = self._decided_probe(extras=False)
+        assert (segs[1]['start_hole'], segs[1]['end_hole']) == (7, 12), segs
+        assert segs[1]['decided_on'] == 11, segs[1]
+        # Legs still running are not "decided".
+        assert segs[2]['decided_on'] is None, segs[2]
+
+    def test_leg_decided_early_matches_the_lock_with_extras(self):
+        # Extra rabbits ON: the leg ENDS where it was decided, so the two agree.
+        segs = self._decided_probe(extras=True)
+        assert segs[1]['end_hole'] == 11 and segs[1]['decided_on'] == 11, segs[1]
+
+    def test_summary_emits_a_scorecard_block(self):
+        # The leaderboard card renders the shared grid widget, which needs the
+        # Wolf/Sixes-shaped scorecard block: per-hole gross + strokes per player,
+        # plus winner_id so the hole winner's cell is tinted.
+        rnd = make_round(self.tee.course)
+        rnd.bet_unit = 6
+        rnd.save(update_fields=['bet_unit'])
+        fs = make_foursome(
+            rnd, [('Ann', 0), ('Ben', 0), ('Cal', 4)], tee=self.tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        A, B, C = pid['Ann'], pid['Ben'], pid['Cal']
+        setup_rabbit(fs, handicap_mode='strokes_off', num_segments=3)
+        submit_hole(fs, 5, [(A, 3), (B, 4), (C, 5)])
+        calculate_rabbit(fs)
+        sc = rabbit_summary(fs)['scorecard']
+        assert [p['player_id'] for p in sc['players']] == [A, B, C], sc['players']
+        assert sc['holes_in_play'] == list(range(1, 19)), sc['holes_in_play']
+        h5 = next(h for h in sc['holes'] if h['hole'] == 5)
+        assert h5['winner_id'] == A, h5
+        assert h5['stroke_index'] == 1 and h5['par'] == 4, h5
+        by_pid = {s['player_id']: s for s in h5['scores']}
+        assert by_pid[A]['gross'] == 3 and by_pid[C]['gross'] == 5, h5
+        assert by_pid[C]['strokes'] == 1, h5      # hardest hole of the first six

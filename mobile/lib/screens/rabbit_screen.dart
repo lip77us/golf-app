@@ -1173,7 +1173,11 @@ class _SegmentStrip extends StatelessWidget {
                           ? (s.complete ? 'Halved' : 'Loose')
                           : 'Rabbit: ${s.holderShort}'
                             '${summary.accumulate ? ' (+${s.lead})' : ''}'
-                            '${s.isHalf ? ' · ½' : ''}',
+                            '${s.isHalf ? ' · ½' : ''}'
+                            // Settled before its last hole: the rest are still
+                            // played but can't change the result, so say where
+                            // it was won instead of reading as all-live.
+                            '${s.decidedEarly ? ' · won on ${s.decidedOn}' : ''}',
                       style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: s.holderShort == null
