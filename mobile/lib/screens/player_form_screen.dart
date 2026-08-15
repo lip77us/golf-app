@@ -155,8 +155,19 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
             ? 'Player Details'
             : _isEdit ? 'Edit Player' : 'Add Player'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+      // Tap anywhere off a field to dismiss the keyboard.  Handicap Index and
+      // Phone open numeric keypads, which have NO return key on iOS — without
+      // this (and the drag-to-dismiss + keyboard-height padding below) the
+      // keyboard could not be closed and it covered the Add Player button.
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        // Reserve the keyboard's height so the save button can always be
+        // scrolled clear of it.
+        padding: EdgeInsets.fromLTRB(
+            20, 20, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
         child: Opacity(
           opacity: widget.readOnly ? 0.7 : 1.0,
           child: AbsorbPointer(
@@ -302,6 +313,7 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
           ),
             ),
           ),
+        ),
         ),
       ),
     );
