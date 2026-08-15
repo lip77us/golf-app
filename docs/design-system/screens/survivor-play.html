@@ -1,0 +1,137 @@
+<!-- @dsCard group="Games" name="Survivor (play)" subtitle="SurvivorScreen — phase banner, OUT row, outcome, Survivors strip, by-hole grid" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Survivor (play)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--win:#388E3C;--warn:#B24225;--out:#C62828}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 14px 10px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:18px;flex:1;text-align:center}
+  .body{padding:0 12px;overflow-y:auto;height:636px}
+  /* phase banner — green once it's a decider, pine while eliminating */
+  .banner{border-radius:8px;padding:11px 12px;margin:2px 0 12px;background:rgba(56,142,60,.10);border:1px solid rgba(56,142,60,.45)}
+  .banner .top{display:flex;align-items:center;gap:6px}
+  .banner .ic{font-size:16px;color:var(--win)}
+  .banner b{color:var(--win);font-size:14px;font-family:"Schibsted Grotesk",sans-serif}
+  .banner small{display:block;color:var(--muted);font-size:12px;margin-top:3px;line-height:1.4}
+  .hh{position:relative;background:#E1EAE2;border-radius:8px;padding:10px 44px;text-align:center;margin-bottom:12px}
+  .hh .n{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px}
+  .hh .sub{font-size:12px;color:var(--muted)}
+  .hh .help{position:absolute;top:6px;right:8px;color:var(--pine);font-size:16px}
+  .card{border:1px solid var(--cardBorder);border-radius:8px;overflow:hidden;background:var(--card)}
+  .prow{display:flex;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid var(--cardBorder)}
+  .prow:first-child{border-top:none}
+  /* eliminated: greyed wash + OUT badge, and its score no longer counts */
+  .prow.out{background:rgba(92,107,98,.10)}
+  .prow.out .nm{color:var(--muted)}
+  .badge{font-size:9px;font-weight:700;letter-spacing:.4px;color:var(--muted);background:rgba(92,107,98,.22);border-radius:4px;padding:1px 5px}
+  .nm{flex:1;font-weight:600}
+  .gets{font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px}
+  .dots{display:flex;gap:2px;justify-content:center;height:6px;margin-bottom:2px}
+  .dot{width:4px;height:4px;border-radius:50%;background:var(--under)}
+  .box{width:40px;height:36px;border-radius:6px;border:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700}
+  .box.win{color:var(--win)}
+  .box.dim{color:var(--muted)}
+  .scorecell{display:flex;flex-direction:column;align-items:center}
+  .active{margin:6px 8px 6px 0;border-radius:2px;background:rgba(15,110,86,.10);border-top:1.5px solid var(--pine);border-bottom:1.5px solid var(--pine);border-right:1.5px solid var(--pine);border-left:4px solid var(--pine)}
+  .active .prow{border-top:none;background:transparent}
+  .picker{display:flex;gap:6px;justify-content:center;padding:8px 6px 10px}
+  .opt{min-width:40px;height:46px;border-radius:9px;border:1px solid var(--cardBorder);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:17px}
+  .opt small{font-size:8px;color:var(--muted);text-transform:uppercase;margin-top:1px}
+  .opt.sel{border:2px solid var(--pine)}
+  .opt.u{color:var(--under)}
+  .outcome{border-radius:6px;padding:8px 10px;margin:10px 0;font-size:13px;font-weight:600;background:rgba(56,142,60,.08);border:1px solid rgba(56,142,60,.4);color:var(--win)}
+  .seg{border:1px solid var(--cardBorder);border-radius:8px;padding:10px;margin:12px 0;background:var(--card)}
+  .seg .h{font-size:12px;font-weight:700;color:var(--pine);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
+  .segrow{display:flex;align-items:center;padding:3px 0;font-size:13px}
+  .segrow .r{width:96px;color:var(--muted);font-size:12px}
+  .segrow .who{flex:1;font-weight:600;color:var(--pine)}
+  .segrow .who.quiet{color:var(--muted);font-weight:500}
+  .segrow .pay{color:var(--win);font-weight:600;font-size:12px}
+  .segrow .inplay{color:var(--muted);font-size:11px}
+  .grid{border:1px solid var(--cardBorder);border-radius:8px;padding:10px;background:var(--card)}
+  .grid .h{font-size:12px;font-weight:700;color:var(--pine);text-transform:uppercase;letter-spacing:.3px}
+  .grid .lg{font-size:10.5px;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0;margin-left:8px}
+  .gscroll{overflow-x:auto;margin-top:6px}
+  table{border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
+  td,th{padding:3px 6px;text-align:center;white-space:nowrap}
+  td.lbl,th.lbl{text-align:left;font-weight:700;position:sticky;left:0;background:var(--card)}
+  /* the two marks that carry the game: green took it, red went out */
+  .gwin{color:var(--win);font-weight:700;background:rgba(56,142,60,.13);border-radius:3px}
+  .gout{color:var(--out);font-weight:700;background:rgba(198,40,40,.13);border-radius:3px}
+  .svrow td{color:var(--pine);font-weight:700;font-size:10px;font-style:italic}
+  .svrow td.lbl{font-style:italic;color:var(--muted)}
+  .money{display:flex;gap:14px;margin-top:8px;font-size:12px;font-weight:600}
+  .money .pos{color:var(--win)} .money .neg{color:var(--warn)}
+  .note{color:var(--muted);font-size:10.5px;margin-top:4px;line-height:1.45}
+  .bottom{position:absolute;left:0;right:0;bottom:0;padding:10px 12px 16px;display:flex;gap:8px;background:linear-gradient(transparent,var(--surface) 26%)}
+  .prev{flex:1;height:48px;border-radius:12px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font-weight:700;font-size:14px}
+  .next{flex:1;height:48px;border-radius:12px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:14px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">✕</span><span class="ttl">Survivor</span><span class="ic">💬</span><span class="ic">📊</span><span class="ic">⋮</span></div>
+    <div class="body">
+      <!-- Decider phase: Sam is out, the other two are playing for it -->
+      <div class="banner">
+        <div class="top"><span class="ic">🏆</span><b>Survivor 3 — decider</b></div>
+        <small>Paul v Dave for it · Sam is out. Low score wins; a tie carries to the next hole.</small>
+      </div>
+
+      <div class="hh"><div class="n">Hole 8</div><div class="sub">Par 4 · 412 yds · SI 3</div><div class="help">？</div></div>
+
+      <div class="card">
+        <div class="prow"><span class="nm">Paul</span><span class="gets">gets 1</span>
+          <span class="scorecell"><span class="dots"><span class="dot"></span></span><span class="box win">4</span></span></div>
+        <div class="prow out"><span class="badge">OUT</span><span class="nm">Sam</span>
+          <span class="scorecell"><span class="dots"></span><span class="box dim">4</span></span></div>
+      </div>
+      <!-- Dave: tapped-to-edit, inline picker open -->
+      <div class="active">
+        <div class="prow"><span class="nm">Dave</span><span class="gets">gets 1</span>
+          <span class="scorecell"><span class="dots"><span class="dot"></span></span><span class="box" style="border-color:var(--pine);border-width:2px">5</span></span></div>
+        <div class="picker"><span class="opt u">3<small>bird</small></span><span class="opt">4<small>par</small></span><span class="opt sel">5<small>bog</small></span><span class="opt">6<small>dbl</small></span></div>
+      </div>
+
+      <div class="outcome">🏆 Paul wins Survivor 3!</div>
+
+      <div class="seg">
+        <div class="h">Survivors</div>
+        <div class="segrow"><span class="r">Holes 1–2</span><span class="who">Paul wins · Sam out</span><span class="pay">$10.00</span></div>
+        <div class="segrow"><span class="r">Holes 3–6</span><span class="who">Dave wins · Paul out</span><span class="pay">$10.00</span></div>
+        <div class="segrow"><span class="r">Holes 7–8</span><span class="who">Paul wins · Sam out</span><span class="pay">$10.00</span></div>
+        <div class="segrow"><span class="r">Hole 9</span><span class="who quiet">Everyone still in</span><span class="inplay">in play</span></div>
+      </div>
+
+      <div class="grid">
+        <div class="h">Survivor by hole <span class="lg">green = won it · red = knocked out</span></div>
+        <div class="gscroll">
+          <table>
+            <tr><th class="lbl">Hole</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th></tr>
+            <tr><td class="lbl">Paul</td><td>4</td><td class="gwin">4</td><td>5</td><td>4</td><td class="gout">6</td><td>–</td><td>4</td><td class="gwin">4</td><td>–</td></tr>
+            <tr><td class="lbl">Dave</td><td>5</td><td>5</td><td>4</td><td>4</td><td>4</td><td class="gwin">4</td><td>5</td><td>5</td><td>–</td></tr>
+            <tr><td class="lbl">Sam</td><td class="gout">6</td><td>–</td><td>5</td><td>5</td><td>5</td><td>5</td><td class="gout">6</td><td>4</td><td>–</td></tr>
+            <tr class="svrow"><td class="lbl">Survivor</td><td>1</td><td>1</td><td>2</td><td>2</td><td>2</td><td>2</td><td>3</td><td>3</td><td>4</td></tr>
+          </table>
+        </div>
+        <div class="money"><span class="pos">Paul: +$15.00</span><span class="neg">Sam: −$15.00</span><span>Dave: —</span></div>
+        <div class="note">Everyone antes $5.00 per Survivor — the winner takes the pot (+2 / −1 / −1). A Survivor takes at least two holes, so a full 18 pays out up to nine times.</div>
+      </div>
+      <div style="height:12px"></div>
+    </div>
+    <div class="bottom"><button class="prev">‹ Hole 7</button><button class="next">Hole 9 ›</button></div>
+  </div>
+</body>
+</html>
