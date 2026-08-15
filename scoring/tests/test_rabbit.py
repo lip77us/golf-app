@@ -11,7 +11,8 @@ from django.test import TestCase
 
 from services.rabbit import calculate_rabbit, setup_rabbit, rabbit_summary
 
-from ._helpers import make_foursome, make_round, make_tee, submit_hole
+from ._helpers import (DEFAULT_HOLES, make_foursome, make_round, make_tee,
+                       submit_hole)
 
 
 class RabbitTests(TestCase):
@@ -179,10 +180,12 @@ class RabbitTests(TestCase):
         assert money[self.sn['Cal']] == -9.0, money
         assert abs(sum(money.values())) < 1e-9
 
-    def test_extra_holes_use_full_round_allocation(self):
-        # Strokes-Off + per-segment + extras: the fixed 1-6/7-12/13-18 spread no
-        # longer fits once early locks shift the legs.  Standard legs re-spread
-        # over their REAL holes; extra legs fall back to full-round strokes.
+    def test_early_locks_do_not_move_strokes(self):
+        # Strokes-Off + per-segment + extras: each leg spreads its share over its
+        # whole WINDOW, and an early lock hands the unplayed tail (and its
+        # strokes) to the next leg, which allocates its own.  Played holes are
+        # therefore never touched.  Same rule Sixes uses — this scenario produces
+        # the identical allocation there.
         rnd = make_round(self.tee.course)
         rnd.bet_unit = 6
         rnd.save(update_fields=['bet_unit'])
@@ -213,31 +216,31 @@ class RabbitTests(TestCase):
             return next(e['net_score'] for e in h['entries']
                         if e['player_id'] == player_id)
 
-        # Extra leg (13-16): full-round allocation — Cal's 9 strokes fall on the
-        # nine lowest stroke-index holes (SI 1-9).  Hole 14 is SI 2 (stroke →
-        # net 5); hole 13 is SI 10 (NO stroke → net 6), even though the old
-        # fixed-segment spread would have put a stroke there.
-        assert net(14, C) == 5, s['holes']
-        assert net(13, C) == 6, s['holes']
-        # Standard leg 1 (1-4) re-spread over its real holes — hardest three are
-        # SI 3/7/9 = holes 2/1/4 (stroke → net 5); hole 3 (SI 15) gets none.
-        assert net(4, C) == 5
-        assert net(3, C) == 6
-
-        # The advertised per-hole `strokes` must track the engine (gross − net)
-        # even after early locks reshuffled the legs — i.e. it is recalculated
-        # across the SHIFTED hole set, not the fixed 1-6/7-12/13-18 ranges.
+        # Cal's 9 strokes-off split 3·3·3, each leg over its own window:
+        #   leg 1 window 1-6  → 5/2/1, locks on 4 → hole 5 handed on   → 1, 2
+        #   leg 2 window 5-10 → 5/9/10, locks on 8 → 9, 10 handed on   → 5
+        #   leg 3 window 9-14 → 14/11/9, locks on 12 → 13, 14 handed on→ 9, 11
+        #   extra 13-18 (full-round SI<=9) → 14/18, locks on 16        → 14
+        #   extra 17-18 (full-round)                                   → 18
         def strokes(hole, player_id):
             h = next(x for x in s['holes'] if x['hole'] == hole)
             return next(e['strokes'] for e in h['entries']
                         if e['player_id'] == player_id)
+        assert [h for h in range(1, 19) if strokes(h, C)] == \
+            [1, 2, 5, 9, 11, 14, 18], \
+            [h for h in range(1, 19) if strokes(h, C)]
+
+        # A leg's own closeout never shortens its allocation window, so holes it
+        # DID play keep what they were issued: hole 3/4 got no stroke from leg 1
+        # (window 1-6 put them on 5/2/1) and still don't.
+        assert net(3, C) == 6 and net(4, C) == 6, s['holes']
+
+        # The advertised per-hole `strokes` still tracks what the engine scored.
         for h in s['holes']:
             for e in h['entries']:
                 if e['gross'] is not None and e['net_score'] is not None:
                     assert e['strokes'] == e['gross'] - e['net_score'], \
                         (h['hole'], e)
-        assert strokes(14, C) == 1 and strokes(13, C) == 0   # extra leg full-round
-        assert strokes(4, C) == 1 and strokes(3, C) == 0     # std leg 1 re-spread
 
     def test_extra_rabbits_forced_off_in_stop_mode(self):
         g = setup_rabbit(self.fs, handicap_mode='gross', accumulate=False,
@@ -406,3 +409,112 @@ class RabbitTests(TestCase):
         assert money[self.sn['Ben']] == -18.0, money
         assert money[self.sn['Cal']] == -18.0, money
         assert abs(sum(money.values())) < 1e-9
+
+    # ── Stroke allocation must never move onto a played hole ──────────────────
+
+    def _hardest_12_tee(self):
+        """Test tee where hole 12 is the HARDEST hole on the course (SI 1) —
+        swaps the default stroke indexes of holes 5 and 12."""
+        holes = [dict(h) for h in DEFAULT_HOLES]
+        si = {5: 16, 12: 1}
+        for h in holes:
+            if h['number'] in si:
+                h['stroke_index'] = si[h['number']]
+        return make_tee(self.tee.course, tee_name='Blue', holes=holes)
+
+    def _glenn_strokes(self, summary, pid):
+        """{hole: strokes} for the stroke-receiving player."""
+        out = {}
+        for h in summary['holes']:
+            e = next(x for x in h['entries'] if x['player_id'] == pid)
+            out[h['hole']] = e['strokes']
+        return out
+
+    def test_stroke_hole_handed_to_the_next_leg(self):
+        # Reported from a real round, then pinned to the exact case that matters:
+        # hole 12 is the hardest on the course, so Glenn's 4 strokes split 2/1/1
+        # over the sixes as holes 1 + 2, hole 12, hole 14.  Leg 2 locks at hole
+        # 11, handing hole 12 to leg 3 (window 12-17).
+        #
+        #   * hole 11 — already played — must NOT gain a stroke (the bug), and
+        #   * leg 3 must put its stroke on hole 12, the hardest hole of its own
+        #     window, and NOT on 13-17.
+        tee = self._hardest_12_tee()
+        rnd = make_round(tee.course)
+        rnd.bet_unit = 6
+        rnd.save(update_fields=['bet_unit'])
+        fs = make_foursome(
+            rnd, [('Ann', 0), ('Ben', 0), ('Glenn', 4)], tee=tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        A, B, G = pid['Ann'], pid['Ben'], pid['Glenn']
+
+        setup_rabbit(fs, handicap_mode='strokes_off', num_segments=3,
+                     handicap_allocation='per_segment',
+                     accumulate=True, extra_rabbits=True)
+
+        # Before a ball is struck: 2 on the first six, 1 on the second, 1 on the
+        # third — holes 1 + 2, hole 12, hole 14.
+        calculate_rabbit(fs)
+        before = self._glenn_strokes(rabbit_summary(fs), G)
+        assert [h for h, s in before.items() if s] == [1, 2, 12, 14], before
+
+        # Leg 1 is halved (every hole tied), so it runs its full six.  Ann then
+        # grabs the rabbit on 7 and wins 11 → lead 2 with one hole left in the
+        # leg, so leg 2 locks on hole 11.
+        for h in (1, 2):
+            submit_hole(fs, h, [(A, 4), (B, 4), (G, 5)])   # Glenn strokes → tied
+        for h in (3, 4, 5, 6):
+            submit_hole(fs, h, [(A, 4), (B, 4), (G, 4)])
+        submit_hole(fs, 7, [(A, 3), (B, 4), (G, 4)])
+        for h in (8, 9, 10):
+            submit_hole(fs, h, [(A, 4), (B, 4), (G, 4)])
+        submit_hole(fs, 11, [(A, 3), (B, 4), (G, 4)])
+        calculate_rabbit(fs)
+        s = rabbit_summary(fs)
+
+        # Leg 2 locked on 11; leg 3 runs 12-17.
+        segs = [(x['start_hole'], x['end_hole']) for x in s['segments']]
+        assert segs[1] == (7, 11) and segs[2] == (12, 17), segs
+
+        after = self._glenn_strokes(s, G)
+        # Nothing appeared on a played hole — hole 11 above all.
+        for h in range(1, 12):
+            assert after[h] == before[h], (h, before[h], after[h])
+        assert after[11] == 0, after
+        # Leg 3 puts its stroke on hole 12 (hardest of ITS window) and nowhere
+        # else; leg 2's stroke there was handed on, so hole 12 carries exactly 1.
+        assert after[12] == 1, after
+        assert all(after[h] == 0 for h in range(13, 19)), after
+
+    def test_no_played_hole_ever_changes_strokes(self):
+        # The invariant behind all of the above, checked hole by hole across a
+        # whole round with three early locks and two extras: once a hole has
+        # been played, the strokes it carries are final.
+        tee = self._hardest_12_tee()
+        rnd = make_round(tee.course)
+        rnd.bet_unit = 6
+        rnd.save(update_fields=['bet_unit'])
+        fs = make_foursome(
+            rnd, [('Ann', 0), ('Ben', 0), ('Glenn', 9)], tee=tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        A, B, G = pid['Ann'], pid['Ben'], pid['Glenn']
+        setup_rabbit(fs, handicap_mode='strokes_off', num_segments=3,
+                     handicap_allocation='per_segment',
+                     accumulate=True, extra_rabbits=True)
+
+        played: dict = {}
+        for hole in range(1, 19):
+            calculate_rabbit(fs)
+            now = self._glenn_strokes(rabbit_summary(fs), G)
+            for h, s in played.items():
+                assert now[h] == s, \
+                    f'hole {h} strokes moved {s} → {now[h]} before hole {hole}'
+            played[hole] = now[hole]
+            # Ann laps the field, so every leg locks as early as it can.
+            submit_hole(fs, hole, [(A, 3), (B, 6), (G, 6)])
+        calculate_rabbit(fs)
+        final = self._glenn_strokes(rabbit_summary(fs), G)
+        for h, s in played.items():
+            assert final[h] == s, (h, s, final[h])
