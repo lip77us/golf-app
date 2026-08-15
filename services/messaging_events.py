@@ -358,6 +358,8 @@ def _emit_match_results(foursome):
         _emit_match_play_results(foursome)
     if 'triple_cup' in games:
         _emit_triple_cup_results(foursome)
+    if 'survivor' in games:
+        _emit_survivor_results(foursome)
 
 
 _NINE = {
@@ -572,6 +574,57 @@ def _emit_sixes_results(foursome):
               body=body,
               data={'type': 'match_result', 'game': 'sixes',
                     'segment': where, 'winner': winner},
+              push_category='match_result', push_title='Match result')
+
+
+def _emit_survivor_results(foursome):
+    """Announce each Survivor once it's settled.
+
+    Keyed on the Survivor's FIRST hole (the Sixes convention) rather than its
+    index, so re-running after a later score lands on the same event.
+    """
+    from services.survivor import survivor_summary
+    s = survivor_summary(foursome)
+    if not s:
+        return
+    round_obj = foursome.round
+    names = {p['player_id']: p['name'] for p in s.get('players', [])}
+    for sv in s.get('survivors', []):
+        if not sv.get('complete'):
+            continue
+        start, end = sv.get('start_hole'), sv.get('end_hole')
+        if start is None:
+            continue
+        where = (f'hole {start}' if end in (None, start)
+                 else f'holes {start}-{end}')
+        outcome = sv.get('outcome')
+        index   = sv.get('index')
+        winner  = names.get(sv.get('winner_id'))
+        out     = names.get(sv.get('eliminated_id'))
+
+        if outcome == 'won' and winner:
+            body = f'{winner} won Survivor {index} over {where}'
+            body += f' — {out} went out.' if out else '.'
+        elif outcome == 'split':
+            # Tied on the last hole: the two left standing split the entry of
+            # the player who was already eliminated.
+            still_in = [n for pid, n in names.items()
+                        if pid != sv.get('eliminated_id')]
+            body = (f'Survivor {index} was tied on the last hole — '
+                    f'{_side_names(still_in)} split'
+                    f'{f" {out}’s" if out else " the"} entry.')
+        elif outcome == 'no_blood':
+            body = (f'Survivor {index} over {where} was tied for low — '
+                    f'no blood.')
+        else:
+            continue
+
+        _emit(round_obj,
+              event_key=f'survivor:{round_obj.id}:{foursome.id}:{start}',
+              body=body,
+              data={'type': 'match_result', 'game': 'survivor',
+                    'survivor': index, 'holes': where, 'outcome': outcome,
+                    'winner': winner, 'eliminated': out},
               push_category='match_result', push_title='Match result')
 
 

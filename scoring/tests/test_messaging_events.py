@@ -456,3 +456,81 @@ class RoundLifecycleEventTests(TestCase):
         ev.emit_round_complete(rnd)
         self.assertEqual(len(_events(rnd, 'round_complete')), 1)
         self.assertEqual(len(_events(rnd, 'score_report')), 0)
+
+
+class SurvivorEventTests(TestCase):
+    """Round chat announces each Survivor as it's settled."""
+
+    def setUp(self):
+        self.tee   = make_tee(make_course())
+        self.round = make_round(self.tee.course, active_games=['survivor'])
+        self.round.bet_unit = 5
+        self.round.save(update_fields=['bet_unit'])
+        self.ann = make_player('Ann Baker',   0, short_name='Ann')
+        self.ben = make_player('Ben Carter',  0, short_name='Ben')
+        self.cal = make_player('Cal Diaz',    0, short_name='Cal')
+        self.fs = make_foursome(
+            self.round,
+            [(self.ann, 0), (self.ben, 0), (self.cal, 0)],
+            tee=self.tee)
+        from services.survivor import setup_survivor
+        setup_survivor(self.fs, handicap_mode='gross')
+
+    def _play(self, hole, a, b, c):
+        from services.survivor import calculate_survivor
+        submit_hole(self.fs, hole, [(self.ann, a), (self.ben, b), (self.cal, c)])
+        calculate_survivor(self.fs)
+        ev.emit_score_events(self.fs, hole, [])
+
+    def _results(self):
+        return [m for m in _events(self.round, 'match_result')
+                if (m.data or {}).get('game') == 'survivor']
+
+    def test_winner_announced_with_who_went_out(self):
+        self._play(1, 4, 5, 6)                  # Cal out — nothing settled yet
+        self.assertEqual(self._results(), [])
+        self._play(2, 4, 5, 4)                  # Ann takes it
+        msgs = self._results()
+        self.assertEqual(len(msgs), 1, [m.body for m in msgs])
+        self.assertIn('Ann Baker won Survivor 1', msgs[0].body)
+        self.assertIn('holes 1-2', msgs[0].body)
+        self.assertIn('Cal Diaz went out', msgs[0].body)
+        self.assertEqual(msgs[0].data['outcome'], 'won')
+        self.assertEqual(msgs[0].data['winner'], 'Ann Baker')
+
+    def test_each_survivor_announced_once(self):
+        self._play(1, 4, 5, 6); self._play(2, 4, 5, 4)      # Ann
+        self._play(3, 6, 4, 5); self._play(4, 6, 4, 5)      # Ben
+        msgs = self._results()
+        self.assertEqual(len(msgs), 2, [m.body for m in msgs])
+        self.assertIn('Ann Baker won Survivor 1', msgs[0].body)
+        self.assertIn('Ben Carter won Survivor 2', msgs[1].body)
+
+    def test_idempotent_no_reannounce(self):
+        self._play(1, 4, 5, 6); self._play(2, 4, 5, 4)
+        ev.emit_score_events(self.fs, 2, [])                 # re-run
+        ev.emit_score_events(self.fs, 2, [])
+        self.assertEqual(len(self._results()), 1)
+
+    def test_split_on_the_last_hole_is_announced(self):
+        for h in range(1, 17, 2):                            # 8 Survivors
+            self._play(h, 4, 5, 6); self._play(h + 1, 4, 5, 4)
+        self._play(17, 4, 5, 6)                              # Cal out
+        self._play(18, 4, 4, 3)                              # Ann + Ben tie
+        last = self._results()[-1]
+        self.assertIn('tied on the last hole', last.body)
+        self.assertIn('Cal Diaz’s entry', last.body)
+        self.assertEqual(last.data['outcome'], 'split')
+
+    def test_no_blood_on_the_last_hole_is_announced(self):
+        for h in range(1, 17, 2):
+            self._play(h, 4, 5, 6); self._play(h + 1, 4, 5, 4)
+        self._play(17, 4, 4, 4)                              # no elimination
+        self._play(18, 4, 4, 6)                              # tied for low
+        last = self._results()[-1]
+        self.assertIn('no blood', last.body)
+        self.assertEqual(last.data['outcome'], 'no_blood')
+
+    def test_a_live_survivor_is_not_announced(self):
+        self._play(1, 4, 5, 6)                               # Cal out only
+        self.assertEqual(self._results(), [])
