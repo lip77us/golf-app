@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.5.1)
+# App Store listing copy — Halved (v2.6.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -21,15 +21,17 @@ https://halved.golf/support
 ## Primary category
 Sports  (Secondary: optional, e.g. Utilities)
 
-## Keywords (100 max) — refreshed for 2.2.0
-vegas,wolf,sixes,stableford,spots,handicap,foursome,matchplay,scorecard,tournament,settle,stakes
+## Keywords (100 max) — refreshed for 2.6.0 (98 chars)
+vegas,wolf,sixes,stableford,spots,handicap,foursome,matchplay,scorecard,tournament,settle,survivor
+(Dropped `stakes` to fit `survivor` — the new game's name is worth more as a
+search term, and `stakes` is a gambling-adjacent word we'd rather not lead on.)
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
-## Promotional text (170 max, editable without review) — 168 chars
-Now see exactly where every player's handicap strokes fall — hole by hole, all
-18, in every game. Plus live results, group chat, and a one-tap settle-up & 9
-hole games.
+## Promotional text (170 max, editable without review) — 165 chars
+New: Survivor — worst score is knocked out, and the last two standing duel for
+the hole. Plus a rebuilt cup setup, clearer stroke dots, and live results all
+round.
 
 ## Description (4000 max)
 Halved keeps score for the games golfers really play. Set up a round, pick your
@@ -43,6 +45,7 @@ GAMES YOU CAN PLAY
 • Sixes — 2v2 best ball with rotating partners
 • Wolf
 • Rabbit
+• Survivor — three players, last one standing takes the hole
 • Points 5-3-1
 • Stableford, with a custom points table
 • Spots — a side game for one-putts, sandies, barkies and more
@@ -89,7 +92,29 @@ seconds, with no spreadsheets and no napkin math.
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
 
-## What's New (v2.5.1)
+## What's New (v2.6.0)
+A brand-new game, and a cup that's easier to build:
+
+• Survivor — a new game for three players. Everyone plays the hole and the
+  worst score is knocked out; the two left standing then play the next hole
+  head-to-head to take it. Win one and a fresh Survivor starts on the very next
+  hole, so a full round can play out up to nine of them. Net, gross or
+  strokes-off-the-low-player, and the group chat calls each result as it lands.
+• A rebuilt cup setup — choose the games and points round by round, with a plan
+  that shows what's still to fill in before you can start. Mixed formats in one
+  cup are now the default, with the classic Triple Cup a one-tap preset.
+• Clearer cup leaderboards — see where every stroke falls before you play the
+  hole, with singles strokes anchored on the pairing you're actually against.
+• Rabbit — handicap strokes now stay exactly where they were set at the start of
+  the round; a leg that's already won is called out instead of looking live; and
+  the leaderboard shows the full scorecard with each hole's winner highlighted.
+• Sixes — corrected the stroke dots on holes handed from one match to the next.
+• Bigger type, intact layouts — very large system font sizes no longer push
+  screens out of shape.
+• Fixes — the keyboard can always be dismissed when adding or searching for
+  players, so the button underneath is never out of reach.
+
+## What's New (v2.5.1) — previous
 New games and a cleaner home screen:
 
 • Triple Nassau — a brand-new game. Play three 1-on-1 Nassaus at once (you
