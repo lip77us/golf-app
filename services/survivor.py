@@ -438,8 +438,12 @@ def survivor_summary(foursome) -> dict:
                 'winner_id'   : h['winner_id'],
                 'winner_short': h['winner_short'],
                 'scores': [
-                    {'player_id': e['player_id'], 'gross': e['gross'],
-                     'strokes': e['strokes']}
+                    {'player_id' : e['player_id'],
+                     'gross'     : e['gross'],
+                     'strokes'   : e['strokes'],
+                     # Drives the red cell on the shared grid, the way
+                     # winner_id drives the green one.
+                     'eliminated': e['is_eliminated']}
                     for e in h['entries']
                 ],
             }

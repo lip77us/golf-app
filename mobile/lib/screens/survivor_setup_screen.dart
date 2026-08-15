@@ -42,7 +42,9 @@ class SurvivorSetupScreen extends StatefulWidget {
 }
 
 class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
-  String _mode       = 'net';
+  // Strokes-Off is the usual way this is played — the low handicap plays to
+  // scratch and everyone else gets the difference.
+  String _mode       = 'strokes_off';
   int    _netPercent = 100;
 
   final TextEditingController _betCtrl = TextEditingController();

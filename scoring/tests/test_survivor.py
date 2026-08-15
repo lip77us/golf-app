@@ -359,3 +359,7 @@ class SurvivorTests(TestCase):
         h1 = next(h for h in sc['holes'] if h['hole'] == 1)
         assert h1['par'] == 4 and h1['stroke_index'] == 7, h1
         assert {x['player_id']: x['gross'] for x in h1['scores']} == {A: 4, B: 5, C: 6}
+        # The grid tints the hole winner green and the knocked-out player red,
+        # so the block has to carry both marks.
+        assert {x['player_id']: x['eliminated'] for x in h1['scores']} == \
+            {A: False, B: False, C: True}, h1

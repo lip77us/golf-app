@@ -2781,6 +2781,10 @@ class _MsScorecardState extends State<_MsScorecard> {
     final holes  = widget.holes;
     final winBg  = Colors.green.shade100;
     final winFg  = Colors.green.shade900;
+    // Survivor marks the player knocked out on a hole; every other game omits
+    // the flag, so these are inert there.
+    final outBg  = Colors.red.shade100;
+    final outFg  = Colors.red.shade900;
     final deadBg = Colors.grey.shade200;
 
     final holeMap = {for (final h in holes) (h['hole'] as int): h};
@@ -2867,6 +2871,8 @@ class _MsScorecardState extends State<_MsScorecard> {
         return SizedBox(width: _cellW, height: _rowH);
       }
       final isWinner = entry['winner_id'] == playerId;   // Skins per-player win
+      // Survivor: this hole knocked the player out of the current Survivor.
+      final isOut = mine['eliminated'] == true;
       // Nassau: the whole winning TEAM's cells get tinted in their colour.
       final winnerTeam = entry['winner_team'] as int?;
       final myTeam     = teamOf[playerId];
@@ -2882,8 +2888,12 @@ class _MsScorecardState extends State<_MsScorecard> {
         cellBg     = winBg;
         cellFg     = winFg;
         cellBorder = Border.all(color: Colors.green.shade400, width: 1);
+      } else if (isOut) {
+        cellBg     = outBg;
+        cellFg     = outFg;
+        cellBorder = Border.all(color: Colors.red.shade400, width: 1);
       }
-      final highlight = teamWin || isWinner;
+      final highlight = teamWin || isWinner || isOut;
 
       return Container(
         width: _cellW, height: _rowH,
@@ -5372,7 +5382,7 @@ class _SurvivorGroupCard extends StatelessWidget {
             _MsScorecard(
               holes:        scHoles,
               participants: scPlayers,
-              legend:       'green = won the hole',
+              legend:       'green = won the hole · red = knocked out',
               holesInPlay:  scHolesInPlay,
             ),
           ],
