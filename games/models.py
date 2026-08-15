@@ -3038,3 +3038,135 @@ class FourballHoleResult(models.Model):
 
     def __str__(self):
         return f"Hole {self.hole_number} — {self.game}"
+
+
+# ---------------------------------------------------------------------------
+# SURVIVOR (3-player horse race — eliminate the worst, then head-to-head)
+# ---------------------------------------------------------------------------
+
+class SurvivorGame(models.Model):
+    """
+    The Survivor game for one Foursome (exactly 3 real players; phantoms
+    ignored).  See docs/survivor.md for the full design.
+
+    A Survivor runs in two phases:
+
+      * ELIMINATION — all three play; the strictly worst score is knocked
+        out.  If the two WORST scores tie, nobody goes and the elimination
+        repeats on the next hole with all three still in.
+      * DECIDER — the surviving two play head-to-head; the strictly lower
+        score wins the Survivor.  A tie carries the same two to the next
+        hole.
+
+    The moment a Survivor is decided a fresh one starts on the very next
+    hole with all three back in, so an 18-hole round yields at most nine
+    (each takes a minimum of two holes).
+
+    The round's LAST hole in play order can host neither an elimination nor
+    a carry, so it settles whatever is standing:
+
+      * three alive — the strictly low score wins outright; ANY tie for low
+        is no blood and nobody pays;
+      * two alive   — the strictly low score wins; a tie splits the
+        eliminated player's entry.
+
+    Settlement: every player antes Round.bet_unit per Survivor, so the pot
+    is 3 × bet_unit and the winner nets +2 while the others are −1 each.
+    A split is +½ / +½ / −1.  Zero-sum in every case.
+
+    Handicaps are full-round only — a Survivor's length isn't known until it
+    ends, so there is nothing stable to spread a per-segment allocation
+    across (see docs/survivor.md).
+    """
+    foursome      = models.OneToOneField(
+                        Foursome, on_delete=models.CASCADE,
+                        related_name='survivor_game',
+                    )
+    status        = models.CharField(
+                        max_length=20,
+                        choices=MatchStatus.choices,
+                        default=MatchStatus.PENDING,
+                    )
+    handicap_mode = models.CharField(
+                        max_length=20,
+                        choices=HandicapMode.choices,
+                        default=HandicapMode.NET,
+                        help_text="How per-hole scores are adjusted for ranking.",
+                    )
+    net_percent   = models.PositiveSmallIntegerField(
+                        default=100,
+                        validators=[MinValueValidator(0), MaxValueValidator(200)],
+                        help_text="Percentage of playing handicap applied when "
+                                  "handicap_mode='net' or 'strokes_off'.",
+                    )
+
+    def __str__(self):
+        return f"Survivor — foursome {self.foursome_id}"
+
+
+class SurvivorHoleResult(models.Model):
+    """
+    Calculated per-hole state for a SurvivorGame.  One row per hole that has
+    a gross score for all three real players.
+
+    survivor_index: 1-based; which Survivor this hole belonged to.
+    role:           what the hole was being played AS.
+    eliminated:     the player knocked out on this hole, if any.
+    winner:         the player who won the Survivor on this hole, if any.
+    event:          what happened —
+                      'eliminated'     — the worst score went out
+                      'no_elimination' — the two worst tied, all three carry
+                      'won'            — the Survivor was decided
+                      'carried'        — the final two tied, they carry
+                      'split'          — final two tied on the LAST hole
+                      'no_blood'       — three alive tied for low on the LAST hole
+    """
+    ELIMINATION = 'elimination'
+    DECIDER     = 'decider'
+    FINAL       = 'final'
+    ROLE_CHOICES = [
+        (ELIMINATION, 'Elimination'), (DECIDER, 'Decider'), (FINAL, 'Final hole'),
+    ]
+
+    ELIMINATED     = 'eliminated'
+    NO_ELIMINATION = 'no_elimination'
+    WON            = 'won'
+    CARRIED        = 'carried'
+    SPLIT          = 'split'
+    NO_BLOOD       = 'no_blood'
+    EVENT_CHOICES = [
+        (ELIMINATED, 'Eliminated'), (NO_ELIMINATION, 'No elimination'),
+        (WON, 'Won'), (CARRIED, 'Carried'), (SPLIT, 'Split'),
+        (NO_BLOOD, 'No blood'),
+    ]
+
+    game           = models.ForeignKey(
+                        SurvivorGame, on_delete=models.CASCADE,
+                        related_name='hole_results',
+                     )
+    hole_number    = models.PositiveSmallIntegerField(
+                        validators=[MinValueValidator(1), MaxValueValidator(18)]
+                     )
+    survivor_index = models.PositiveSmallIntegerField(default=1)
+    role           = models.CharField(
+                        max_length=12, choices=ROLE_CHOICES, default=ELIMINATION,
+                     )
+    eliminated     = models.ForeignKey(
+                        Player, on_delete=models.SET_NULL, null=True, blank=True,
+                        related_name='survivor_holes_eliminated',
+                     )
+    winner         = models.ForeignKey(
+                        Player, on_delete=models.SET_NULL, null=True, blank=True,
+                        related_name='survivor_holes_won',
+                     )
+    event          = models.CharField(
+                        max_length=16, choices=EVENT_CHOICES, default=NO_ELIMINATION,
+                     )
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        return (f"Hole {self.hole_number} — Survivor {self.survivor_index} "
+                f"({self.event})")

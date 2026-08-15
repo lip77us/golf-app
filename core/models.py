@@ -142,6 +142,20 @@ class GameType(models.TextChoices):
     # pay-above / pay-leader / pool).  Engine in services/honors.py and
     # games/models.py HonorsGame/HonorsHoleResult.
     HONORS          = 'honors',          'Honors'
+    # Survivor: a 3-player horse race.  On an ELIMINATION hole the worst
+    # score is knocked out (the two worst tying eliminates nobody and the
+    # hole repeats); the surviving two then play a DECIDER hole head-to-head
+    # for the pot, a tie carrying them to the next hole.  The moment a
+    # Survivor is decided a fresh one starts on the very next hole with all
+    # three back in — so an 18-hole round yields up to nine.  The round's
+    # LAST hole settles whatever is standing: with three alive the low ball
+    # wins outright (any tie for low is no blood), with two alive a tie
+    # splits the eliminated player's entry.  Every player antes the stake per
+    # Survivor, so the winner is +2 and the others −1 each.  Net (with %) /
+    # Gross / Strokes-Off-Low, full-round allocation only (a Survivor's
+    # length isn't known until it ends).  Engine in services/survivor.py and
+    # games/models.py SurvivorGame/SurvivorHoleResult.  See docs/survivor.md.
+    SURVIVOR        = 'survivor',        'Survivor'
 
 
 class RoundStatus(models.TextChoices):
