@@ -1,0 +1,106 @@
+<!-- @dsCard group="Scorecards & leaderboards" name="Leaderboard — Survivor" subtitle="_SurvivorGroupCard — standings, Survivors breakdown, shared scorecard grid with won/knocked-out tints" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Leaderboard — Survivor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--win:#388E3C;--loss:#D32F2F;--out:#C62828;--under:#D32F2F}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface);color:var(--deepPine);font-family:"Spline Sans",system-ui,sans-serif;padding:28px}
+  h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:22px;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 18px;font-size:13px;max-width:560px;line-height:1.5}
+  p.sub b{color:var(--deepPine)}
+  .tabs{display:flex;gap:16px;border-bottom:1px solid var(--cardBorder);margin-bottom:14px;font-size:13px;font-weight:600;color:var(--muted)}
+  .tabs .on{color:var(--pine);border-bottom:2px solid var(--pine);padding-bottom:8px}
+  .card{max-width:400px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:18px;padding:14px 16px}
+  .hrow{display:flex;justify-content:space-between;align-items:center}
+  .title{font-weight:700;font-size:14px}
+  .pill{font-size:11px;color:var(--muted);background:#E1EAE2;border-radius:10px;padding:2px 8px}
+  .prow{display:flex;align-items:center;padding:4px 0;font-size:14px;margin-top:2px}
+  .nm{flex:1;font-weight:600}
+  .cup{color:var(--muted);font-size:13px;margin-right:2px}
+  .won{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+  .amt{width:72px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .pos{color:var(--win)} .neg{color:var(--loss)} .zero{color:var(--muted)}
+  .divider{height:1px;background:var(--cardBorder);margin:14px 0 8px}
+  .seghead{font-weight:700;font-size:12.5px;color:var(--pine);margin-bottom:4px}
+  .segrow{display:flex;align-items:center;padding:2px 0;font-size:13px}
+  .segrow .r{width:92px;color:var(--muted);font-size:12.5px}
+  .segrow .who{flex:1;font-weight:600;color:var(--pine)}
+  .segrow .who.quiet{color:var(--muted);font-weight:500}
+  .segrow .pay{color:var(--win);font-weight:600;font-size:12px;font-variant-numeric:tabular-nums}
+  .segrow .inplay{color:var(--muted);font-size:11px}
+  /* shared scorecard grid (_MsScorecard) — the same widget Sixes / Wolf / Rabbit use */
+  .gscroll{overflow-x:auto;margin-top:2px}
+  table{border-collapse:separate;border-spacing:2px;font-size:11px;font-variant-numeric:tabular-nums}
+  th,td{text-align:center;white-space:nowrap;padding:0}
+  th{font-size:9.5px;color:var(--muted);font-weight:600;padding-bottom:2px}
+  th.lbl,td.lbl{text-align:left;font-weight:700;font-size:11px;position:sticky;left:0;background:var(--card);padding-right:4px}
+  td .c{width:26px;height:24px;border-radius:4px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;font-weight:600;position:relative}
+  /* the two tints the game turns on: green took the hole, red went out on it */
+  td .c.win{background:#DFF0E2;border-color:#7CC48A;color:#1B5E20;font-weight:700}
+  td .c.out{background:#FADBDB;border-color:#E39494;color:var(--out);font-weight:700}
+  td .c.dim{color:var(--muted)}
+  td .c .dot{position:absolute;top:1.5px;right:1.5px;width:3.5px;height:3.5px;border-radius:50%;background:var(--under)}
+  .parrow td .c{background:#EDF3ED;color:var(--muted);font-weight:600}
+  .legend{color:var(--muted);font-size:11px;margin-top:7px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+  .sw.g{background:#DFF0E2;border:1px solid #7CC48A}
+  .sw.r{background:#FADBDB;border:1px solid #E39494}
+  .foot{color:var(--muted);font-size:12px;margin-top:10px;line-height:1.4}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <h1>Leaderboard — Survivor</h1>
+  <p class="sub">One card per group. Header line = <b>Survivor — {handicap} · {n} decided</b> with a status pill. Per-player rows show Survivors won and money. The breakdown lists each Survivor’s range and how it ended — <b>won</b>, <b>split</b> (final two tied on the last hole), <b>no blood</b>, or still in play. Below it the <b>shared scorecard grid</b> (the same widget Sixes / Wolf / Rabbit use) shows gross per player per hole with stroke dots; the hole’s winner is tinted <b>green</b> and the player knocked out on it <b>red</b>. The red tint is a Survivor-only flag on the shared grid — every other game omits it and is unchanged. Entry stays on the play screen; this is summary only.</p>
+
+  <div class="tabs"><span>Stroke Play</span><span class="on">Survivor</span><span>Settlement</span></div>
+
+  <div class="card">
+    <div class="hrow"><span class="title">Survivor — SO · 3 decided</span><span class="pill">In progress</span></div>
+
+    <div class="prow"><span class="nm">Paul</span><span class="cup">🏆</span><span class="won">2</span><span class="amt pos">+$15.00</span></div>
+    <div class="prow"><span class="nm">Dave</span><span class="cup">🏆</span><span class="won">1</span><span class="amt zero">—</span></div>
+    <div class="prow"><span class="nm">Sam</span><span class="cup">🏆</span><span class="won">0</span><span class="amt neg">−$15.00</span></div>
+
+    <div class="divider"></div>
+    <div class="seghead">Survivors</div>
+    <div class="segrow"><span class="r">Holes 1–2</span><span class="who">Paul wins · Sam out</span><span class="pay">$10.00</span></div>
+    <div class="segrow"><span class="r">Holes 3–6</span><span class="who">Dave wins · Paul out</span><span class="pay">$10.00</span></div>
+    <div class="segrow"><span class="r">Holes 7–8</span><span class="who">Paul wins · Sam out</span><span class="pay">$10.00</span></div>
+    <div class="segrow"><span class="r">Hole 9</span><span class="who quiet">Everyone still in</span><span class="inplay">in play</span></div>
+
+    <div class="divider"></div>
+    <div class="seghead">Scorecard</div>
+    <div class="gscroll">
+      <table>
+        <tr><th class="lbl">Hole</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th></tr>
+        <tr class="parrow"><td class="lbl">Par</td>
+          <td><span class="c">4</span></td><td><span class="c">4</span></td><td><span class="c">3</span></td>
+          <td><span class="c">5</span></td><td><span class="c">4</span></td><td><span class="c">4</span></td>
+          <td><span class="c">3</span></td><td><span class="c">4</span></td><td><span class="c">4</span></td></tr>
+        <tr><td class="lbl">Paul</td>
+          <td><span class="c">4</span></td><td><span class="c win">4</span></td><td><span class="c">5</span></td>
+          <td><span class="c">4</span></td><td><span class="c out">6</span></td><td><span class="c dim">–</span></td>
+          <td><span class="c">4<span class="dot"></span></span></td><td><span class="c win">4</span></td><td><span class="c dim">–</span></td></tr>
+        <tr><td class="lbl">Dave</td>
+          <td><span class="c">5</span></td><td><span class="c">5</span></td><td><span class="c">4</span></td>
+          <td><span class="c">4</span></td><td><span class="c">4</span></td><td><span class="c win">4</span></td>
+          <td><span class="c">5<span class="dot"></span></span></td><td><span class="c">5</span></td><td><span class="c dim">–</span></td></tr>
+        <tr><td class="lbl">Sam</td>
+          <td><span class="c out">6</span></td><td><span class="c dim">–</span></td><td><span class="c">5</span></td>
+          <td><span class="c">5</span></td><td><span class="c">5</span></td><td><span class="c">5</span></td>
+          <td><span class="c out">6</span></td><td><span class="c">4</span></td><td><span class="c dim">–</span></td></tr>
+      </table>
+    </div>
+    <div class="legend"><span><span class="sw g"></span>won the hole</span><span><span class="sw r"></span>knocked out</span><span>· = out for the rest of that Survivor</span></div>
+
+    <div class="foot">Everyone antes $5.00 per Survivor — the winner takes the pot&nbsp;&nbsp;•&nbsp;&nbsp;up to $45.00 at risk.</div>
+  </div>
+</body>
+</html>
