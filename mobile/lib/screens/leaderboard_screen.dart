@@ -4954,6 +4954,18 @@ class _RabbitGroupCard extends StatelessWidget {
     final pot     = (money['pot'] as num?)?.toDouble() ?? (betUnit * 3);
     final numSeg  = (summary['num_segments'] as num?)?.toInt() ?? 1;
 
+    // Sixes-style scorecard grid: gross per player per hole with the hole
+    // winner's cell tinted.  Absent from a server predating the block, in which
+    // case the compact by-hole initials strip below is still rendered.
+    final sc        = summary['scorecard'] as Map<String, dynamic>? ?? const {};
+    final scHoles   = (sc['holes'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scPlayers = (sc['players'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final scHolesInPlay = (sc['holes_in_play'] as List? ?? const [])
+        .map((e) => e as int)
+        .toList();
+
     final singleGroup = group['_single_group'] == true;
     String statusLabel;
     switch (status) {
@@ -5044,6 +5056,10 @@ class _RabbitGroupCard extends StatelessWidget {
               final lo  = seg['start_hole']; final hi = seg['end_hole'];
               final holder = seg['holder_short']?.toString();
               final complete = seg['complete'] as bool? ?? false;
+              // Settled before its last hole: the leg still PLAYS out (extra
+              // rabbits off), so the range alone reads as though it's all live.
+              final decidedOn = seg['decided_on'] as int?;
+              final decidedEarly = decidedOn != null && decidedOn != hi;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 1),
                 child: Row(children: [
@@ -5053,14 +5069,15 @@ class _RabbitGroupCard extends StatelessWidget {
                     child: Text(
                       holder == null
                           ? (complete ? 'Halved' : 'Loose')
-                          : 'Rabbit: $holder',
+                          : 'Rabbit: $holder'
+                            '${decidedEarly ? ' · won on $decidedOn' : ''}',
                       style: theme.textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: holder == null
                               ? theme.colorScheme.onSurfaceVariant
                               : theme.colorScheme.primary)),
                   ),
-                  if (!complete)
+                  if (!complete && !decidedEarly)
                     Text('in play', style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
                 ]),
@@ -5072,7 +5089,7 @@ class _RabbitGroupCard extends StatelessWidget {
           // when they won the hole outright, a dash when it was halved and the
           // rabbit carried); unplayed holes are faint and the segment-locking
           // cell is outlined.  Read-only; entry lives on the play screen.
-          if (holes.isNotEmpty && segs.isNotEmpty) ...[
+          if (scHoles.isEmpty && holes.isNotEmpty && segs.isNotEmpty) ...[
             const Divider(height: 20),
             Text('By hole',
                 style: theme.textTheme.labelMedium?.copyWith(
@@ -5141,6 +5158,16 @@ class _RabbitGroupCard extends StatelessWidget {
                 ]),
               );
             }),
+          ],
+
+          if (scHoles.isNotEmpty) ...[
+            const Divider(height: 20),
+            _MsScorecard(
+              holes:        scHoles,
+              participants: scPlayers,
+              legend:       'green = won the hole (takes / keeps the rabbit)',
+              holesInPlay:  scHolesInPlay,
+            ),
           ],
 
           if (betUnit > 0)
