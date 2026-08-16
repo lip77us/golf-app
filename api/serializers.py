@@ -13,6 +13,7 @@ Organised into sections:
 """
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
 from core.models import Player, Tee
@@ -495,14 +496,14 @@ class FoursomeSerializer(serializers.ModelSerializer):
                     from core.models import GameType as GT
                     if cup_cfg.game_type in (GT.SINGLES_NASSAU, GT.SINGLES_18):
                         return [cup_cfg.game_type]
-                except Exception:
+                except ObjectDoesNotExist:
                     pass
             return games
         try:
             cup_cfg   = obj.ryder_cup_foursome_config
             game_key  = self._CUP_GAME_TYPE_MAP.get(cup_cfg.game_type, cup_cfg.game_type)
             return [game_key]
-        except Exception:
+        except ObjectDoesNotExist:
             pass
         return []
 
@@ -528,7 +529,11 @@ class FoursomeSerializer(serializers.ModelSerializer):
             pass
         if obj.triple_nassau_games.exists():
             games.append('triple_nassau')
-        # OneToOne relationships — safe to check via hasattr
+        # OneToOne relationships — a missing row raises RelatedObjectDoesNotExist.
+        # Catch ONLY that: a bare `except Exception` here silently swallows real
+        # DB errors (e.g. an unapplied migration leaving a column missing), which
+        # aborts the surrounding transaction and makes the *next* query blow up
+        # with a misleading "current transaction is aborted".
         for attr, key in [
             ('skins_game',         'skins'),
             ('spots_game',         'spots'),
@@ -545,7 +550,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             try:
                 getattr(obj, attr)
                 games.append(key)
-            except Exception:
+            except ObjectDoesNotExist:
                 pass
         # FK relationships — check if any rows exist
         if obj.sixes_segments.exists():
@@ -568,7 +573,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             game_key = self._CUP_GAME_TYPE_MAP.get(cup_cfg.game_type, cup_cfg.game_type)
             if game_key not in games:
                 games.append(game_key)
-        except Exception:
+        except ObjectDoesNotExist:
             pass
         # Round-level casual games (Stroke Play / Stableford) have their config
         # on the Round, not the foursome — report them here too so the hub can
@@ -577,12 +582,12 @@ class FoursomeSerializer(serializers.ModelSerializer):
         try:
             rnd.low_net_config
             games.append('low_net_round')
-        except Exception:
+        except ObjectDoesNotExist:
             pass
         try:
             rnd.stableford_config
             games.append('stableford')
-        except Exception:
+        except ObjectDoesNotExist:
             pass
         return games
 
@@ -1582,15 +1587,22 @@ class SurvivorSetupSerializer(serializers.Serializer):
     """
     Set up (or replace) the Survivor game for a foursome (3 real players).
 
-    There is nothing else to configure: the number of Survivors, their
-    lengths, and their boundaries all fall out of the scores.  Handicaps are
-    full-round in every mode — see docs/survivor.md for why a per-segment
-    allocation can't work when a leg's length isn't known until it ends.
+    Beyond the handicap there is only the Zombie Option: the number of
+    Survivors, their lengths, and their boundaries all fall out of the scores.
+    Handicaps are full-round in every mode — see docs/survivor.md for why a
+    per-segment allocation can't work when a leg's length isn't known until it
+    ends.
+
+    zombie_option — when on, the eliminated player keeps playing and can go
+    strictly low outright on a decider to come back in, sending a decider out
+    in their place.  Off by default; see
+    docs/design-review/handoff-survivor-zombie/SPEC.md.
     """
     handicap_mode = serializers.ChoiceField(
                         choices=['net', 'gross', 'strokes_off'], default='net')
     net_percent   = serializers.IntegerField(
                         min_value=0, max_value=200, default=100)
+    zombie_option = serializers.BooleanField(default=False)
 
 
 class WolfOrderSerializer(serializers.Serializer):

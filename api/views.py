@@ -5695,7 +5695,8 @@ class RabbitResultView(APIView):
 class SurvivorSetupView(APIView):
     """
     POST /api/foursomes/{id}/survivor/setup/
-    Body: { "handicap_mode": "net"|"gross"|"strokes_off", "net_percent": 0..200 }
+    Body: { "handicap_mode": "net"|"gross"|"strokes_off", "net_percent": 0..200,
+            "zombie_option": true|false }
 
     Creates (or replaces) the Survivor game, then runs calculate_survivor so
     any scores already on file are reflected in the first summary.  Idempotent.
@@ -5713,6 +5714,7 @@ class SurvivorSetupView(APIView):
             foursome,
             handicap_mode = d.get('handicap_mode', 'net'),
             net_percent   = d.get('net_percent', 100),
+            zombie_option = d.get('zombie_option', False),
         )
         calculate_survivor(foursome)
         return Response(survivor_summary(foursome), status=status.HTTP_201_CREATED)

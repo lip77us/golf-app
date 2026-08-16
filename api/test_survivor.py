@@ -23,7 +23,9 @@ HOLES = [{'number': n, 'par': 4, 'stroke_index': n, 'yards': 400}
          for n in range(1, 19)]
 
 
-class SurvivorEndpointTests(TestCase):
+class _SurvivorApiMixin:
+    """Shared fixture: a 3-player casual Survivor round + post helpers."""
+
     def setUp(self):
         self.acct = Account.objects.create(name='Survivor Club')
         self.user = User.objects.create_user(username='td', account=self.acct)
@@ -63,6 +65,9 @@ class SurvivorEndpointTests(TestCase):
         return self.client.post(
             reverse('api-survivor-setup', args=[self.fs.id]), body,
             format='json')
+
+
+class SurvivorEndpointTests(_SurvivorApiMixin, TestCase):
 
     # ── Setup / result ───────────────────────────────────────────────────────
 
@@ -181,3 +186,80 @@ class SurvivorEndpointTests(TestCase):
         client.force_authenticate(other)
         resp = client.get(reverse('api-survivor-result', args=[self.fs.id]))
         self.assertEqual(resp.status_code, 404)
+
+
+class SurvivorZombieEndpointTests(_SurvivorApiMixin, TestCase):
+    """The Zombie Option over the wire — the setting round-trips, and the
+    per-hole flags the play screen needs come through the summary.
+    (The resurrection maths is covered by scoring/tests/test_survivor.py.)"""
+
+    def test_option_defaults_off(self):
+        resp = self._setup()
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertFalse(resp.data['zombie_option'])
+
+    def test_option_round_trips(self):
+        resp = self._setup(zombie_option=True)
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertTrue(resp.data['zombie_option'])
+
+        got = self.client.get(reverse('api-survivor-result', args=[self.fs.id]))
+        self.assertTrue(got.data['zombie_option'])
+
+    def test_rejects_a_non_boolean(self):
+        resp = self._setup(zombie_option='maybe')
+        self.assertEqual(resp.status_code, 400, resp.data)
+
+    def test_summary_flags_the_zombie_row(self):
+        A, B, C = self.ids
+        self._submit(1, [(A, 4), (B, 5), (C, 6)])      # C eliminated
+        self._submit(2, [(A, 4), (B, 5), (C, 6)])      # decider, C is the Zombie
+        resp = self._setup(zombie_option=True)
+        self.assertEqual(resp.status_code, 201, resp.data)
+        h2 = next(h for h in resp.data['holes'] if h['hole'] == 2)
+        by_pid = {e['player_id']: e for e in h2['entries']}
+        self.assertTrue(by_pid[C]['is_zombie'])
+        self.assertFalse(by_pid[C]['is_alive'])
+        self.assertFalse(by_pid[A]['is_zombie'])
+
+    def test_summary_reports_a_resurrection(self):
+        A, B, C = self.ids
+        self._submit(1, [(A, 4), (B, 5), (C, 6)])      # C out
+        self._submit(2, [(A, 5), (B, 6), (C, 4)])      # C low outright → back in
+        resp = self._setup(zombie_option=True)
+        h2 = next(h for h in resp.data['holes'] if h['hole'] == 2)
+        self.assertEqual(h2['event'], 'resurrected')
+        self.assertEqual(h2['resurrected_id'], C)
+        self.assertEqual(h2['eliminated_id'], B)       # higher decider goes out
+        by_pid = {e['player_id']: e for e in h2['entries']}
+        self.assertTrue(by_pid[C]['is_resurrected'])
+        # Same Survivor, still unsettled — nothing has paid.
+        self.assertEqual(len(resp.data['survivors']), 1)
+        self.assertEqual(resp.data['survivors'][0]['outcome'], 'live')
+
+    def test_scorecard_block_carries_the_resurrection_mark(self):
+        A, B, C = self.ids
+        self._submit(1, [(A, 4), (B, 5), (C, 6)])
+        self._submit(2, [(A, 5), (B, 6), (C, 4)])
+        resp = self._setup(zombie_option=True)
+        sc2 = next(h for h in resp.data['scorecard']['holes'] if h['hole'] == 2)
+        marks = {x['player_id']: x for x in sc2['scores']}
+        self.assertTrue(marks[C]['resurrected'])       # plum
+        self.assertTrue(marks[B]['eliminated'])        # red
+        self.assertFalse(marks[A]['resurrected'])
+
+    def test_a_kill_on_the_last_hole_pays_nothing_but_counts(self):
+        A, B, C = self.ids
+        for h in range(1, 17, 2):                      # 8 Survivors to A
+            self._submit(h,     [(A, 4), (B, 5), (C, 6)])
+            self._submit(h + 1, [(A, 4), (B, 5), (C, 6)])
+        self._submit(17, [(A, 4), (B, 5), (C, 6)])     # C out
+        self._submit(18, [(A, 5), (B, 6), (C, 4)])     # C low on the last → kill
+        resp = self._setup(zombie_option=True)
+        last = resp.data['survivors'][-1]
+        self.assertEqual(last['outcome'], 'killed')
+        self.assertEqual(last['payout'], 0.0)
+        self.assertEqual(last['killed_by_id'], C)
+        totals = {p['player_id']: p for p in resp.data['players']}
+        self.assertEqual(totals[C]['survivors_won'], 1)   # credited the kill
+        self.assertEqual(totals[C]['money'], -40.0)       # but paid nothing for it
