@@ -363,3 +363,204 @@ class SurvivorTests(TestCase):
         # so the block has to carry both marks.
         assert {x['player_id']: x['eliminated'] for x in h1['scores']} == \
             {A: False, B: False, C: True}, h1
+
+
+class SurvivorZombieTests(TestCase):
+    """The Zombie Option — docs/design-review/handoff-survivor-zombie/SPEC.md.
+
+    The eliminated player (the Zombie) keeps playing; going strictly low
+    outright on a decider brings them back and sends a decider out instead.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.round.bet_unit = 5
+        self.round.save(update_fields=['bet_unit'])
+        self.fs = make_foursome(
+            self.round,
+            [('Ann', 0), ('Ben', 0), ('Cal', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.sn = {m.player.name: m.player.short_name
+                   for m in self.fs.memberships.select_related('player')}
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=True)
+
+    def _play(self, hole, a, b, c):
+        submit_hole(self.fs, hole, [(self.pid['Ann'], a), (self.pid['Ben'], b),
+                                    (self.pid['Cal'], c)])
+
+    def _summary(self):
+        calculate_survivor(self.fs)
+        return survivor_summary(self.fs)
+
+    def _hole(self, s, hole):
+        return next(x for x in s['holes'] if x['hole'] == hole)
+
+    def _state(self, s, hole):
+        """(alive shorts, zombie short) going into `hole`."""
+        h = self._hole(s, hole)
+        alive = [e['short_name'] for e in h['entries'] if e['is_alive']]
+        zomb  = next((e['short_name'] for e in h['entries'] if e['is_zombie']),
+                     None)
+        return alive, zomb
+
+    def _money(self, s):
+        return {p['short_name']: p['money'] for p in s['players']}
+
+    def _trophies(self, s):
+        return {p['short_name']: p['survivors_won'] for p in s['players']}
+
+    # ── The spec's worked-examples table ─────────────────────────────────────
+
+    def test_zombie_tied_for_low_is_not_enough(self):
+        # Row 1 — Zombie 5, deciders 5 and 6: a tie for low does NOT resurrect,
+        # so the hole resolves normally and Ann takes the Survivor.
+        self._play(1, 4, 5, 6)                  # Cal out, Cal is the Zombie
+        self._play(2, 5, 6, 5)                  # Cal ties Ann for low
+        s = self._summary()
+        assert self._hole(s, 2)['event'] == 'won', self._hole(s, 2)
+        assert s['survivors'][0]['winner_short'] == self.sn['Ann']
+        assert s['survivors'][0]['outcome'] == 'won'
+
+    def test_zombie_low_outright_sends_the_higher_decider_out(self):
+        # Row 2 — Zombie 4, deciders 5 and 6: Cal is back in and Ben, the
+        # higher of the two, goes to Zombieville.  Same Survivor continues.
+        self._play(1, 4, 5, 6)                  # Cal out
+        self._play(2, 5, 6, 4)                  # Cal low outright
+        s = self._summary()
+        h2 = self._hole(s, 2)
+        assert h2['event'] == 'resurrected', h2
+        assert h2['resurrected_short'] == self.sn['Cal']
+        assert h2['eliminated_short'] == self.sn['Ben']
+        # Still Survivor 1, still live — nothing has paid.
+        assert len(s['survivors']) == 1 and s['survivors'][0]['outcome'] == 'live'
+        assert s['current']['survivor'] == 1
+        assert self._money(s) == {self.sn['Ann']: 0.0, self.sn['Ben']: 0.0,
+                                  self.sn['Cal']: 0.0}
+
+    def test_zombie_low_outright_with_deciders_tied_brings_all_three_back(self):
+        # Row 3 — Zombie 4, deciders tied on 6: nobody to send out, so all
+        # three are alive again and the Survivor carries on as an elimination.
+        self._play(1, 4, 5, 6)                  # Cal out
+        self._play(2, 6, 6, 4)                  # Cal low, deciders tie
+        s = self._summary()
+        h2 = self._hole(s, 2)
+        assert h2['event'] == 'resurrected' and h2['eliminated_short'] is None, h2
+        alive, zomb = self._state(s, 3)
+        assert sorted(alive) == sorted(self.sn.values()) and zomb is None
+        assert s['current']['role'] == 'elimination'
+        assert s['current']['survivor'] == 1
+
+    def test_zombie_worse_resolves_the_hole_normally(self):
+        self._play(1, 4, 5, 6)                  # Cal out
+        self._play(2, 4, 5, 7)                  # Cal worst — irrelevant
+        s = self._summary()
+        assert self._hole(s, 2)['event'] == 'won'
+        assert s['survivors'][0]['winner_short'] == self.sn['Ann']
+
+    # ── State carried across a resurrection ──────────────────────────────────
+
+    def test_the_survivor_number_does_not_increment_on_a_resurrection(self):
+        self._play(1, 4, 5, 6)                  # Cal out
+        self._play(2, 5, 6, 4)                  # Cal back, Ben out
+        self._play(3, 5, 6, 4)                  # Cal wins it outright
+        s = self._summary()
+        assert len(s['survivors']) == 1, self._legs_dbg(s)
+        leg = s['survivors'][0]
+        assert (leg['start_hole'], leg['end_hole']) == (1, 3), leg
+        assert leg['winner_short'] == self.sn['Cal'] and leg['outcome'] == 'won'
+        # Ben was the Zombie when it settled, so Ben pays the eliminated share.
+        assert self._money(s) == {self.sn['Cal']: 10.0, self.sn['Ann']: -5.0,
+                                  self.sn['Ben']: -5.0}
+
+    def _legs_dbg(self, s):
+        return [(x['index'], x['start_hole'], x['end_hole'], x['outcome'])
+                for x in s['survivors']]
+
+    def test_zombie_row_is_flagged_on_the_decider_hole(self):
+        self._play(1, 4, 5, 6)                  # Cal out
+        self._play(2, 4, 5, 6)                  # decider, Cal is the Zombie
+        s = self._summary()
+        alive, zomb = self._state(s, 2)
+        assert sorted(alive) == sorted([self.sn['Ann'], self.sn['Ben']]), alive
+        assert zomb == self.sn['Cal']
+
+    def test_a_decider_hole_needs_all_three_scores(self):
+        # The resurrection test is about the Zombie's score, so the hole can't
+        # resolve until they post it.
+        self._play(1, 4, 5, 6)                  # Cal out
+        submit_hole(self.fs, 2, [(self.pid['Ann'], 4), (self.pid['Ben'], 5)])
+        s = self._summary()
+        assert self._hole(s, 2)['event'] is None, self._hole(s, 2)
+        assert s['survivors'][0]['outcome'] == 'live'
+        # Cal posts, and now it resolves.
+        self._play(2, 4, 5, 6)
+        s = self._summary()
+        assert self._hole(s, 2)['event'] == 'won'
+
+    # ── The last hole ────────────────────────────────────────────────────────
+
+    def _to_hole(self, upto):
+        """Ann wins a Survivor every two holes up to (not including) `upto`."""
+        for h in range(1, upto, 2):
+            self._play(h,     4, 5, 6)
+            self._play(h + 1, 4, 5, 6)
+
+    def test_zombie_win_on_the_last_hole_kills_the_survivor(self):
+        self._to_hole(17)                       # 8 Survivors to Ann, holes 1-16
+        self._play(17, 4, 5, 6)                 # Cal out
+        self._play(18, 5, 6, 4)                 # Cal low outright on the last
+        s = self._summary()
+        h18 = self._hole(s, 18)
+        assert h18['event'] == 'killed', h18
+        last = s['survivors'][-1]
+        assert last['outcome'] == 'killed' and last['payout'] == 0.0, last
+        assert last['killed_by_short'] == self.sn['Cal'], last
+        # Pays nothing — the totals are the first eight Survivors only …
+        assert self._money(s) == {self.sn['Ann']: 80.0, self.sn['Ben']: -40.0,
+                                  self.sn['Cal']: -40.0}
+        # … but Cal is credited the trophy for the kill.
+        assert self._trophies(s) == {self.sn['Ann']: 8, self.sn['Ben']: 0,
+                                     self.sn['Cal']: 1}
+
+    def test_a_survivor_can_reach_the_last_hole_unsettled_for_no_blood(self):
+        # Resurrections keep the same Survivor alive all the way to 18, where
+        # three are in and they tie for low → no blood, nothing carried.
+        for h in range(1, 17, 2):
+            self._play(h,     4, 5, 6)          # Cal out
+            self._play(h + 1, 6, 6, 4)          # Cal low, deciders tie → 3 alive
+        self._play(17, 5, 5, 5)                 # all tie → nobody eliminated
+        self._play(18, 4, 4, 4)                 # three alive, tied for low
+        s = self._summary()
+        assert len(s['survivors']) == 1, self._legs_dbg(s)
+        leg = s['survivors'][0]
+        assert (leg['start_hole'], leg['end_hole']) == (1, 18), leg
+        assert leg['outcome'] == 'no_blood' and leg['payout'] == 0.0, leg
+        assert self._money(s) == {self.sn['Ann']: 0.0, self.sn['Ben']: 0.0,
+                                  self.sn['Cal']: 0.0}
+
+    # ── Option off ───────────────────────────────────────────────────────────
+
+    def test_option_off_never_resurrects(self):
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=False)
+        self._play(1, 4, 5, 6)                  # Cal out
+        self._play(2, 5, 6, 4)                  # Cal low — ignored entirely
+        s = self._summary()
+        assert self._hole(s, 2)['event'] == 'won'
+        assert s['survivors'][0]['winner_short'] == self.sn['Ann']
+        assert all(not e['is_zombie'] for h in s['holes'] for e in h['entries'])
+
+    def test_option_is_reported_in_the_summary(self):
+        assert self._summary()['zombie_option'] is True
+        setup_survivor(self.fs, handicap_mode='gross')
+        assert self._summary()['zombie_option'] is False
+
+    def test_settlement_stays_zero_sum_with_a_kill_in_the_mix(self):
+        self._to_hole(17)
+        self._play(17, 4, 5, 6)
+        self._play(18, 5, 6, 4)                 # killed
+        money = self._money(self._summary())
+        assert abs(sum(money.values())) < 1e-9, money

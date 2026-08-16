@@ -87,7 +87,15 @@ The Survivors strip lists each Survivor with its hole range, result and payout; 
 and the three marks. Legend: *green = won it · red = knocked out · plum = Zombie back in*. Header
 shows a "🧟 Zombie on" pill when the option is on.
 
-## Open question
+## Open question — RESOLVED
 
 Whether the trophy count should show a Survivor killed on 18 by the Zombie at all. Drawn as: not
 counted, no trophy, no money. Flagged for product.
+
+**Product answer (Paul, 2026-08-16): credit the Zombie a trophy.** Killing a Survivor on 18 is a
+real achievement, so it counts — but it still pays nothing, since nothing settles. The trophy count
+therefore means "Survivors you DECIDED", not "Survivors you won".
+
+Built that way: `outcome = 'killed'` carries `winner_id = <the Zombie>` (so the standings count it)
+while settlement skips it entirely, and the leg also reports `killed_by_id` / `killed_by_short` so
+the strip can read "Killed by Sam on 18".

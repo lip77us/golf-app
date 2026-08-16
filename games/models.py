@@ -3099,6 +3099,14 @@ class SurvivorGame(models.Model):
                         help_text="Percentage of playing handicap applied when "
                                   "handicap_mode='net' or 'strokes_off'.",
                     )
+    # Zombie Option (docs/design-review/handoff-survivor-zombie/SPEC.md).
+    zombie_option = models.BooleanField(
+                        default=False,
+                        help_text="When on, the eliminated player (the Zombie) "
+                                  "keeps playing; going strictly low on a decider "
+                                  "hole brings them back in and sends a decider "
+                                  "out instead, so a Survivor can run long.",
+                    )
 
     def __str__(self):
         return f"Survivor — foursome {self.foursome_id}"
@@ -3111,8 +3119,12 @@ class SurvivorHoleResult(models.Model):
 
     survivor_index: 1-based; which Survivor this hole belonged to.
     role:           what the hole was being played AS.
-    eliminated:     the player knocked out on this hole, if any.
-    winner:         the player who won the Survivor on this hole, if any.
+    eliminated:     the player knocked out on this hole, if any — including the
+                    decider sent to Zombieville by a resurrection.
+    resurrected:    the Zombie who came back in on this hole, if any.
+    winner:         the player who DECIDED the Survivor on this hole, if any.
+                    On a 'killed' hole that's the Zombie who killed it — they're
+                    credited the trophy even though nothing pays.
     event:          what happened —
                       'eliminated'     — the worst score went out
                       'no_elimination' — the two worst tied, all three carry
@@ -3120,6 +3132,11 @@ class SurvivorHoleResult(models.Model):
                       'carried'        — the final two tied, they carry
                       'split'          — final two tied on the LAST hole
                       'no_blood'       — three alive tied for low on the LAST hole
+                      'resurrected'    — the Zombie went low outright and is back
+                                         in; a decider goes out in their place
+                                         (or all three are back if they tied)
+                      'killed'         — the Zombie went low outright on the LAST
+                                         hole: the Survivor dies and pays nothing
     """
     ELIMINATION = 'elimination'
     DECIDER     = 'decider'
@@ -3134,10 +3151,13 @@ class SurvivorHoleResult(models.Model):
     CARRIED        = 'carried'
     SPLIT          = 'split'
     NO_BLOOD       = 'no_blood'
+    RESURRECTED    = 'resurrected'
+    KILLED         = 'killed'
     EVENT_CHOICES = [
         (ELIMINATED, 'Eliminated'), (NO_ELIMINATION, 'No elimination'),
         (WON, 'Won'), (CARRIED, 'Carried'), (SPLIT, 'Split'),
-        (NO_BLOOD, 'No blood'),
+        (NO_BLOOD, 'No blood'), (RESURRECTED, 'Resurrected'),
+        (KILLED, 'Killed by the Zombie'),
     ]
 
     game           = models.ForeignKey(
@@ -3154,6 +3174,10 @@ class SurvivorHoleResult(models.Model):
     eliminated     = models.ForeignKey(
                         Player, on_delete=models.SET_NULL, null=True, blank=True,
                         related_name='survivor_holes_eliminated',
+                     )
+    resurrected    = models.ForeignKey(
+                        Player, on_delete=models.SET_NULL, null=True, blank=True,
+                        related_name='survivor_holes_resurrected',
                      )
     winner         = models.ForeignKey(
                         Player, on_delete=models.SET_NULL, null=True, blank=True,

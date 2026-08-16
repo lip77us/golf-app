@@ -24,9 +24,19 @@ carry, so it settles whatever is standing:
 * two alive   — the strictly low score wins; a tie **splits** the eliminated
   player's entry.
 
+**The Zombie Option** (off by default, docs/design-review/handoff-survivor-zombie/
+SPEC.md): when on, the eliminated player — the *Zombie* — keeps playing through
+the decider.  Going **strictly low outright** on a decider hole brings them back
+in; the higher of the two deciders then goes to Zombieville in their place, or if
+the deciders tie all three are back.  Either way the SAME Survivor keeps running
+— the index does not increment — so it can run to the last hole unsettled, which
+is no blood and carries nothing.  A Zombie who goes low on the LAST hole *kills*
+the Survivor: it pays nothing, and the Zombie is credited the trophy.
+
 Settlement: every player antes ``Round.bet_unit`` per Survivor, so the pot is
 3 × bet_unit and the winner nets +2 while the others are −1 each.  A split is
-+½ / +½ / −1.  Zero-sum in every case.
++½ / +½ / −1.  A killed or no-blood Survivor pays nothing.  Zero-sum in every
+case.
 
 Handicaps mirror Points 5-3-1 / Rabbit (Net %, Gross, Strokes-Off-Low), but
 **full-round allocation only** — a Survivor's length isn't known until it ends,
@@ -59,6 +69,7 @@ def setup_survivor(
     foursome,
     handicap_mode: str = HandicapMode.NET,
     net_percent: int = 100,
+    zombie_option: bool = False,
 ) -> 'SurvivorGame':
     """Create (or replace) the Survivor game for a foursome.  Safe to call
     again — the prior game + its hole results are dropped first."""
@@ -67,6 +78,7 @@ def setup_survivor(
         foursome      = foursome,
         handicap_mode = handicap_mode,
         net_percent   = max(0, min(200, int(net_percent))),
+        zombie_option = bool(zombie_option),
         status        = MatchStatus.PENDING,
     )
 
@@ -165,21 +177,30 @@ def _sole_best(scores: dict):
 def _run_survivor(game, foursome, score_index, real_ids):
     """Walk the play order and build the Survivor schedule.
 
-    Returns (rows, survivors, fully_scored):
+    Returns (rows, survivors, fully_scored, state_by_hole):
       * rows      — unsaved SurvivorHoleResult instances (scored holes only)
       * survivors — [{index, holes, eliminated, winner, outcome, complete}];
-                    outcome is 'won' | 'split' | 'no_blood' | 'live'
+                    outcome is 'won' | 'split' | 'no_blood' | 'killed' | 'live'
       * fully_scored — count of fully-scored holes
+      * state_by_hole — {hole: (alive_ids_before, zombie_id_before)}, so the
+                    summary can say who was in play on each hole without
+                    re-deriving it from the rows.
 
     Only fully-scored holes advance the state; an unscored hole is skipped and
     the state carries (same convention as services/rabbit.py), so a group that
     posts hole 6 before hole 5 still reads correctly once both land.
+
+    With the Zombie Option ON a decider hole needs ALL THREE scores, not just
+    the two still alive — the resurrection test is about the Zombie's score, so
+    the hole can't resolve until they post it.
     """
     order = play_order(foursome.round, foursome)
     rows: list = []
     survivors: list = []
     fully_scored = 0
+    state_by_hole: dict = {}
 
+    zombie_on = bool(getattr(game, 'zombie_option', False))
     last_hole = order[-1] if order else None
     alive     = list(real_ids)
     idx       = 1
@@ -201,19 +222,28 @@ def _run_survivor(game, foursome, score_index, real_ids):
         idx += 1
 
     for hole in order:
-        complete, scores = _hole_scores(score_index, alive, hole)
+        # With the option on the Zombie's score is part of the hole: the
+        # resurrection test needs it, so the hole isn't resolvable without it.
+        needed = list(alive)
+        if zombie_on and eliminated_id is not None:
+            needed.append(eliminated_id)
+        complete, scores = _hole_scores(score_index, needed, hole)
         if not complete:
             continue                       # skip unscored; state carries
         fully_scored += 1
         holes.append(hole)
+        state_by_hole[hole] = (list(alive), eliminated_id)
         is_last = hole == last_hole
+        # Only the players still in decide the hole; the Zombie is judged
+        # separately, below.
+        live_scores = {pid: sc for pid, sc in scores.items() if pid in alive}
 
         if len(alive) > 2:
             # ── Elimination phase ────────────────────────────────────────
             if is_last:
                 # No room to eliminate AND decide: the low ball takes it, and
                 # any tie for low is no blood.
-                winner = _sole_best(scores)
+                winner = _sole_best(live_scores)
                 rows.append(SurvivorHoleResult(
                     game=game, hole_number=hole, survivor_index=idx,
                     role=SurvivorHoleResult.FINAL, winner_id=winner,
@@ -222,7 +252,7 @@ def _run_survivor(game, foursome, score_index, real_ids):
                 close('won' if winner else 'no_blood', winner)
                 continue
 
-            out = _sole_worst(scores)
+            out = _sole_worst(live_scores)
             rows.append(SurvivorHoleResult(
                 game=game, hole_number=hole, survivor_index=idx,
                 role=SurvivorHoleResult.ELIMINATION, eliminated_id=out,
@@ -234,22 +264,52 @@ def _run_survivor(game, foursome, score_index, real_ids):
             continue
 
         # ── Decider phase (two alive) ────────────────────────────────────
-        winner = _sole_best(scores)
+        role = SurvivorHoleResult.FINAL if is_last else SurvivorHoleResult.DECIDER
+
+        # Zombie first: strictly lower than BOTH deciders brings them back.
+        # A tie for low is not enough.
+        if zombie_on and eliminated_id is not None:
+            zombie_score = scores[eliminated_id]
+            if zombie_score < min(live_scores.values()):
+                if is_last:
+                    # Nothing left to play for: the Survivor dies unpaid, and
+                    # the Zombie is credited with having decided it.
+                    rows.append(SurvivorHoleResult(
+                        game=game, hole_number=hole, survivor_index=idx,
+                        role=role, resurrected_id=eliminated_id,
+                        winner_id=eliminated_id,
+                        event=SurvivorHoleResult.KILLED))
+                    close('killed', eliminated_id)
+                    continue
+
+                # Back in.  The higher decider takes their place; if the two
+                # deciders tie there is nobody to send out and all three are
+                # back.  Either way this is the SAME Survivor — no close().
+                worst = _sole_worst(live_scores)
+                rows.append(SurvivorHoleResult(
+                    game=game, hole_number=hole, survivor_index=idx,
+                    role=role, resurrected_id=eliminated_id,
+                    eliminated_id=worst,
+                    event=SurvivorHoleResult.RESURRECTED))
+                if worst is None:
+                    alive, eliminated_id = list(real_ids), None
+                else:
+                    alive = [pid for pid in real_ids if pid != worst]
+                    eliminated_id = worst
+                continue
+
+        winner = _sole_best(live_scores)
         if winner is not None:
             rows.append(SurvivorHoleResult(
                 game=game, hole_number=hole, survivor_index=idx,
-                role=(SurvivorHoleResult.FINAL if is_last
-                      else SurvivorHoleResult.DECIDER),
-                winner_id=winner, event=SurvivorHoleResult.WON))
+                role=role, winner_id=winner, event=SurvivorHoleResult.WON))
             close('won', winner)
             continue
 
         # Tied: the last hole splits the eliminated player's entry, anything
         # earlier carries the same two forward.
         rows.append(SurvivorHoleResult(
-            game=game, hole_number=hole, survivor_index=idx,
-            role=(SurvivorHoleResult.FINAL if is_last
-                  else SurvivorHoleResult.DECIDER),
+            game=game, hole_number=hole, survivor_index=idx, role=role,
             event=(SurvivorHoleResult.SPLIT if is_last
                    else SurvivorHoleResult.CARRIED)))
         if is_last:
@@ -266,7 +326,7 @@ def _run_survivor(game, foursome, score_index, real_ids):
             'complete'   : False,
         })
 
-    return rows, survivors, fully_scored
+    return rows, survivors, fully_scored, state_by_hole
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +352,7 @@ def calculate_survivor(foursome) -> list:
     score_index = _score_index(game, foursome)
     holes_total = len(play_order(foursome.round, foursome))
 
-    rows, _survivors, fully_scored = _run_survivor(
+    rows, _survivors, fully_scored, _state = _run_survivor(
         game, foursome, score_index, real_ids)
 
     if rows:
@@ -324,6 +384,7 @@ def _empty_summary(bet_unit) -> dict:
     return {
         'status'    : 'pending',
         'handicap'  : {'mode': HandicapMode.NET, 'net_percent': 100},
+        'zombie_option': False,
         'survivors' : [],
         'players'   : [],
         'holes'     : [],
@@ -351,8 +412,9 @@ def survivor_summary(foursome) -> dict:
     order       = play_order(foursome.round, foursome)
     score_index = _score_index(game, foursome)
     alloc       = _alloc_by_hole(game, foursome, order)
+    zombie_on   = bool(game.zombie_option)
 
-    rows, survivors, _ = _run_survivor(
+    rows, survivors, _, state_by_hole = _run_survivor(
         game, foursome, score_index, real_ids)
     results = {r.hole_number: r for r in rows}
 
@@ -378,24 +440,17 @@ def survivor_summary(foursome) -> dict:
             par_by_hole[h] = info.get('par')
             si_by_hole[h]  = info.get('stroke_index')
 
-    # Which Survivor each hole belonged to, and who was alive going into it.
-    sv_of, alive_of = {}, {}
-    for s in survivors:
-        out = s['eliminated']
-        seen_out = False
-        for h in s['holes']:
-            sv_of[h] = s['index']
-            alive_of[h] = ([pid for pid in real_ids if pid != out]
-                           if seen_out else list(real_ids))
-            if out is not None and results.get(h) is not None \
-                    and results[h].eliminated_id == out:
-                seen_out = True
+    # Which Survivor each hole belonged to.  Who was alive (and who was the
+    # Zombie) going INTO each hole comes straight from the engine walk rather
+    # than being re-derived here — with resurrections the roster can change
+    # more than once inside a single Survivor.
+    sv_of = {h: sv['index'] for sv in survivors for h in sv['holes']}
 
     # Per-hole grid, in play order.
     holes_out: list = []
     for hole in order:
         r = results.get(hole)
-        live = alive_of.get(hole, list(real_ids))
+        live, zombie = state_by_hole.get(hole, (list(real_ids), None))
         entries = []
         for pid in real_ids:
             entries.append({
@@ -406,7 +461,11 @@ def survivor_summary(foursome) -> dict:
                 'gross'        : gross_index.get(pid, {}).get(hole),
                 'strokes'      : alloc.get(pid, {}).get(hole, 0),
                 'is_alive'     : pid in live,
+                # Out of the Survivor but still playing it — only ever set with
+                # the Zombie Option on; drives the plum row and score box.
+                'is_zombie'    : bool(zombie_on and pid == zombie),
                 'is_eliminated': bool(r and r.eliminated_id == pid),
+                'is_resurrected': bool(r and r.resurrected_id == pid),
                 'is_winner'    : bool(r and r.winner_id == pid),
             })
         holes_out.append({
@@ -416,6 +475,8 @@ def survivor_summary(foursome) -> dict:
             'par'              : par_by_hole.get(hole),
             'eliminated_id'    : r.eliminated_id if r else None,
             'eliminated_short' : short(r.eliminated_id) if (r and r.eliminated_id) else None,
+            'resurrected_id'   : r.resurrected_id if r else None,
+            'resurrected_short': short(r.resurrected_id) if (r and r.resurrected_id) else None,
             'winner_id'        : r.winner_id if r else None,
             'winner_short'     : short(r.winner_id) if (r and r.winner_id) else None,
             'event'            : r.event if r else None,
@@ -443,7 +504,9 @@ def survivor_summary(foursome) -> dict:
                      'strokes'   : e['strokes'],
                      # Drives the red cell on the shared grid, the way
                      # winner_id drives the green one.
-                     'eliminated': e['is_eliminated']}
+                     'eliminated': e['is_eliminated'],
+                     # …and the plum one when a Zombie comes back.
+                     'resurrected': e['is_resurrected']}
                     for e in h['entries']
                 ],
             }
@@ -477,6 +540,10 @@ def survivor_summary(foursome) -> dict:
                     money_by_pid[pid] += payout
         sv_out.append({
             'index'            : s['index'],
+            # 'killed' credits the Zombie the trophy (winner_id) while paying
+            # nothing — the product call on design's open question.
+            'killed_by_id'     : winner if s['outcome'] == 'killed' else None,
+            'killed_by_short'  : short(winner) if s['outcome'] == 'killed' else None,
             'start_hole'       : holes[0] if holes else None,
             'end_hole'         : holes[-1] if holes else None,
             'holes'            : len(holes),
@@ -527,6 +594,7 @@ def survivor_summary(foursome) -> dict:
         'status'    : game.status,
         'handicap'  : {'mode': game.handicap_mode,
                        'net_percent': game.net_percent},
+        'zombie_option': zombie_on,
         'survivors' : sv_out,
         'players'   : players_out,
         'holes'     : holes_out,
