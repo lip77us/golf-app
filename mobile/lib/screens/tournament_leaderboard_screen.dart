@@ -16,6 +16,7 @@ import '../utils/route_observer.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/stroke_play_strip.dart';
+import '../widgets/synced_scroll_group.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'tournament_stableford_setup_screen.dart';
 
@@ -108,6 +109,14 @@ class _TournamentLeaderboardScreenState
       for (final g in activeGames) {
         if (gamesMap.containsKey(g) && !tabs.contains(g)) tabs.add(g);
       }
+      // The day bet is not a tournament-level active game — it belongs to the
+      // final round — but it IS a tab, and it is the LAST one. Tabs are named
+      // for what they pay, so it comes after the side games rather than
+      // beside a cut-off tournament name.
+      for (final k in gamesMap.keys) {
+        final g = k as String;
+        if (!tabs.contains(g) && g == 'day_bet') tabs.add(g);
+      }
 
       setState(() {
         _payload = payload;
@@ -141,6 +150,18 @@ class _TournamentLeaderboardScreenState
     'stableford_championship': 'Stableford',
     'match_play'   : 'Mini Singles Bracket',
   };
+
+  /// Tabs read the name the TD set — the ball game as he typed it, and
+  /// "Day bet · R2" for the round it pays on.
+  String _tabLabel(String g) {
+    final data = (_payload?['games'] as Map? ?? {})[g];
+    final fromServer = (data is Map ? data['label'] : null)?.toString();
+    if (fromServer != null && fromServer.isNotEmpty) {
+      // The championship keeps its friendlier local label.
+      if (g == 'day_bet' || g == 'pink_ball') return fromServer;
+    }
+    return _labels[g] ?? gameDisplayName(g);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,8 +201,7 @@ class _TournamentLeaderboardScreenState
             ? TabBar(
                 controller  : _tabCtrl,
                 isScrollable: true,
-                tabs: _tabs.map((g) =>
-                    Tab(text: _labels[g] ?? gameDisplayName(g))).toList(),
+                tabs: _tabs.map((g) => Tab(text: _tabLabel(g))).toList(),
               )
             : null,
       ),
@@ -251,9 +271,190 @@ class _GameView extends StatelessWidget {
         return _StablefordChampView(data: data);
       case 'match_play':
         return _MatchPlayChampView(data: data);
+      case 'day_bet':
+        return _DayBetView(data: data);
       default:
         return Center(child: Text('Unknown game: $gameKey'));
     }
+  }
+}
+
+// ===========================================================================
+// Day bet — the final round's stroke play side bet
+// ===========================================================================
+
+/// The only board in the set whose result is not knowable while it is being
+/// played, so it is drawn honestly rather than tidily.
+///
+/// The temptation is to hide the ineligible. That makes the board jump at the
+/// end with no explanation, so instead the championship money winners stay in
+/// place **in italic**, with one line at the top saying what the italic means.
+/// The Mini Singles finalists are a different case entirely: they are playing
+/// a match rather than posting a card, so they are neither charged nor ranked
+/// and get no row at all.
+class _DayBetView extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _DayBetView({required this.data});
+
+  static String _ntp(int? v) =>
+      v == null ? '—' : (v == 0 ? 'E' : (v > 0 ? '+$v' : '$v'));
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final results = (data['results'] as List? ?? []).cast<Map<String, dynamic>>();
+    final fee     = (data['entry_fee'] as num? ?? 0).toDouble();
+    final pool    = (data['pool'] as num? ?? 0).toDouble();
+    final places  = data['places_supported'] as int? ?? 0;
+    final provisional = data['provisional'] as bool? ?? true;
+    final absent  = data['absent_count'] as int? ?? 0;
+
+    if (results.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Text('No scores in the final round yet.',
+              textAlign: TextAlign.center),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Wrap(spacing: 12, runSpacing: 4, children: [
+              _InfoChip('Round', '${data['round_number']}'),
+              if (fee > 0) _InfoChip('Entry', '\$${fee.toStringAsFixed(0)}'),
+              _InfoChip('Pool', '\$${pool.toStringAsFixed(0)}'),
+              _InfoChip('Places', '$places'),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        InlineMessage(
+          kind: InlineMessageKind.info,
+          text: 'Italic rows are currently in the 36-hole money. They are not '
+              'eligible for this bet and are not charged for it — their entry '
+              'is returned when the championship closes. Positions and the '
+              'pool firm up then.',
+        ),
+        const SizedBox(height: 8),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(children: const [
+            Expanded(child: Text('Player',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+            SizedBox(width: 46, child: Text('Net',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
+            SizedBox(width: 52, child: Text('Prize',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
+          ]),
+        ),
+
+        ...results.map((r) {
+          final eligible = r['eligible'] as bool? ?? true;
+          final payout   = (r['payout'] as num?)?.toDouble();
+          final thru     = r['holes_played'] as int? ?? 0;
+          final reason   = r['ineligible_reason'] as String?;
+          return Card(
+            margin: const EdgeInsets.only(bottom: 6),
+            elevation: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(children: [
+                SizedBox(
+                  width: 28,
+                  child: Text('${r['rank']}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        r['player_name']?.toString() ?? '—',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          // Italic marks a row that cannot collect.
+                          fontStyle: eligible
+                              ? FontStyle.normal : FontStyle.italic,
+                          color: eligible
+                              ? null : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        // A net score without its holes is not comparable, so
+                        // Thru sits under the name rather than in a sorted
+                        // column of its own.
+                        reason ?? (thru >= 18 ? 'F' : 'thru $thru'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: 46,
+                  child: Text(_ntp(r['net_to_par'] as int?),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontStyle: eligible
+                              ? FontStyle.normal : FontStyle.italic,
+                          color: _dayBetNetColor(r, eligible, theme))),
+                ),
+                SizedBox(
+                  width: 52,
+                  child: Text(
+                    payout != null && payout > 0
+                        ? '\$${payout.toStringAsFixed(0)}' : '',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: provisional
+                            ? FontWeight.w500 : FontWeight.w700,
+                        fontStyle: provisional
+                            ? FontStyle.italic : FontStyle.normal,
+                        color: provisional
+                            ? theme.colorScheme.onSurfaceVariant
+                            : Colors.green.shade700),
+                  ),
+                ),
+              ]),
+            ),
+          );
+        }),
+
+        const SizedBox(height: 14),
+        Text(
+          [
+            if (absent > 0)
+              data['absent_note']?.toString() ?? '',
+            data['dq_note']?.toString() ?? '',
+            if (provisional) 'Nothing settles until every round is closed.',
+          ].where((s) => s.isNotEmpty).join(' '),
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+
+  static Color? _dayBetNetColor(
+      Map<String, dynamic> r, bool eligible, ThemeData theme) {
+    if (!eligible) return theme.colorScheme.onSurfaceVariant;
+    return toParColor(r['net_to_par'] as int?) ?? theme.colorScheme.onSurface;
   }
 }
 
@@ -354,6 +555,53 @@ class _LowNetChampView extends StatefulWidget {
 class _LowNetChampViewState extends State<_LowNetChampView> {
   final Set<String> _expanded = {};
 
+  /// Four round columns fit beside a name and a total; six do not. So the
+  /// round columns are their own horizontal strip, every row scrolls with the
+  /// header, and it opens on the most recent round.
+  final _strip = SyncedScrollGroup();
+  bool _openedOnNewest = false;
+
+  static const double _roundColW = 44;
+  static const int    _visibleRoundCols = 4;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _openedOnNewest) return;
+      _openedOnNewest = true;
+      _strip.jumpToEnd();
+    });
+  }
+
+  @override
+  void dispose() {
+    _strip.dispose();
+    super.dispose();
+  }
+
+  /// The round columns, as one horizontally-scrolling strip capped at four
+  /// visible columns. Header and every row share an offset, so what sits
+  /// under R4 is always R4.
+  Widget _roundStrip(int totalRounds, Widget Function(int roundIndex) cell) {
+    final shown = totalRounds < _visibleRoundCols
+        ? totalRounds : _visibleRoundCols;
+    return SizedBox(
+      width: _roundColW * shown,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        controller: _strip.attach(),
+        physics: totalRounds <= _visibleRoundCols
+            ? const NeverScrollableScrollPhysics()
+            : const ClampingScrollPhysics(),
+        child: Row(children: [
+          for (int r = 0; r < totalRounds; r++)
+            SizedBox(width: _roundColW, child: cell(r)),
+        ]),
+      ),
+    );
+  }
+
   static String _thruLabel(int holesPlayed, int totalHoles) {
     if (holesPlayed <= 0)          return '—';
     if (holesPlayed >= totalHoles) return 'F';
@@ -393,6 +641,10 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
         .cast<Map<String, dynamic>>();
     final hasPrize    = payouts.isNotEmpty;
     final hmode       = widget.data['handicap_mode'] as String? ?? 'net';
+    final countingRule = widget.data['counting_rule'] as String?;
+    // Money is a PROJECTION until the round closes. A golfer thru 1 showing
+    // \$48 in green was the single most misleading thing on the live board.
+    final projected   = (widget.data['rounds_played'] as int? ?? 0) < totalRounds;
 
     if (results.isEmpty) {
       return const Center(
@@ -411,21 +663,18 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
         Card(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(children: [
+            child: Wrap(spacing: 12, runSpacing: 4, crossAxisAlignment:
+                WrapCrossAlignment.center, children: [
               _InfoChip('Mode', _modeLabel(hmode)),
-              const SizedBox(width: 12),
               if ((widget.data['net_percent'] as int? ?? 100) != 100)
                 _InfoChip('Hcp %', '${widget.data['net_percent']}%'),
-              if (entryFee > 0) ...[
-                const SizedBox(width: 12),
+              if (entryFee > 0)
                 _InfoChip('Entry', '\$${entryFee.toStringAsFixed(0)}'),
-              ],
-              const Spacer(),
-              Text(
-                '${widget.data['rounds_played'] ?? 0} / $totalRounds rounds',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant),
-              ),
+              // The counting rule belongs on the board that applies it —
+              // "Best 4 of 6" — so a golfer can see why a column is struck.
+              if (countingRule != null) _InfoChip('Counts', countingRule),
+              _InfoChip('Rounds',
+                  '${widget.data['rounds_played'] ?? 0} / $totalRounds'),
             ]),
           ),
         ),
@@ -441,12 +690,13 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
             if (totalRounds > 1)
-              for (int r = 1; r <= totalRounds; r++)
-                SizedBox(width: 40,
-                    child: Text('R$r Net',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 10,
-                            fontWeight: FontWeight.w600))),
+              _roundStrip(
+                totalRounds,
+                (r) => Text('R${r + 1}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w600)),
+              ),
             const SizedBox(width: 46, child: Text('Net',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
@@ -468,6 +718,10 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
           final roundNtps   = (r['round_ntps']  as List? ?? [])
               .map((v) => v as int).toList();
           final roundHoles  = (r['round_holes'] as List? ?? []);
+          final roundCounts = (r['round_counts'] as List? ?? [])
+              .map((v) => v == true).toList();
+          final roundComplete = (r['round_complete'] as List? ?? [])
+              .map((v) => v == true).toList();
           final roundLabels = (r['round_labels'] as List? ?? [])
               .map((v) => v.toString()).toList();
           final payout      = (r['payout'] as num?)?.toDouble();
@@ -512,7 +766,10 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                             TextSpan(text: name,
                                 style: const TextStyle(fontWeight: FontWeight.w500)),
                             TextSpan(
-                              text: ' ($handicap)',
+                              // CH everywhere — the card, the rotation sheet
+                              // and this board all showed a different label
+                              // for one number.
+                              text: '  CH $handicap',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.normal,
@@ -537,21 +794,37 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                         ),
                       ),
                       if (totalRounds > 1)
-                        for (int ri = 0; ri < totalRounds; ri++) ...[
-                          SizedBox(
-                            width: 40,
-                            child: ri < roundNtps.length
-                                ? Text(_ntpLabel(roundNtps[ri]),
-                                    textAlign: TextAlign.center,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                        color: _ntpColor(roundNtps[ri], theme),
-                                        fontWeight: FontWeight.w500))
-                                : Text('—',
-                                    textAlign: TextAlign.center,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                        color: theme.colorScheme.onSurfaceVariant)),
-                          ),
-                        ],
+                        _roundStrip(totalRounds, (ri) {
+                          if (ri >= roundNtps.length) {
+                            return Text('—',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant));
+                          }
+                          // Best-N: a dropped round is STRUCK THROUGH, not
+                          // hidden, so a golfer can see what he is throwing
+                          // away — and it moves as scores land. A round still
+                          // in progress is amber: it shows and its holes are
+                          // on the card, but it never displaces a finished one.
+                          final counts   = ri < roundCounts.length
+                              ? roundCounts[ri] : true;
+                          final complete = ri < roundComplete.length
+                              ? roundComplete[ri] : true;
+                          return Text(
+                            _ntpLabel(roundNtps[ri]),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: !counts
+                                  ? theme.colorScheme.onSurfaceVariant
+                                  : (complete
+                                      ? _ntpColor(roundNtps[ri], theme)
+                                      : Colors.amber.shade800),
+                              fontWeight: FontWeight.w500,
+                              decoration: counts
+                                  ? null : TextDecoration.lineThrough,
+                            ),
+                          );
+                        }),
                       SizedBox(
                         width: 46,
                         child: Text(_ntpLabel(ntp),
@@ -567,9 +840,17 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                             payout != null && payout > 0
                                 ? '\$${payout.toStringAsFixed(0)}' : '',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.green.shade700),
+                            // Muted italic while it is a projection; full
+                            // weight only once every round is closed.
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: projected
+                                    ? FontWeight.w500 : FontWeight.w700,
+                                fontStyle: projected
+                                    ? FontStyle.italic : FontStyle.normal,
+                                color: projected
+                                    ? theme.colorScheme.onSurfaceVariant
+                                    : Colors.green.shade700),
                           ),
                         ),
                       SizedBox(
@@ -627,16 +908,36 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
           );
         }),
 
-        // The net-double-bogey cap only bites at FULL net (100%) — it caps the
-        // NET, not the raw score. Explain it in stroke terms so "par + 2" isn't
-        // read as a gross ceiling: a hole counts up to par + 2 PLUS strokes.
-        if (hmode != 'gross' &&
-            (widget.data['net_percent'] as int? ?? 100) == 100) ...[
-          const SizedBox(height: 16),
+        // Money is a projection until the last card is in — the muted italic
+        // above needs the sentence that explains it.
+        if (hasPrize && projected) ...[
+          const SizedBox(height: 14),
           Text(
-            'Net double-bogey cap: each hole’s net is limited to par + 2 — '
-            'so it counts for at most par + 2 plus any handicap strokes you get '
-            'on that hole.',
+            'Projected — pays on the final standing.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic),
+          ),
+        ],
+
+        // ONE line, once, on every net board. The shipped footnote argued with
+        // itself — it capped at a number and then added to it.
+        if (hmode != 'gross') ...[
+          const SizedBox(height: 10),
+          Text(
+            'No hole counts for more than net double bogey — par + 2, plus any '
+            'strokes you get on that hole.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ],
+        if (countingRule != null && countingRule.startsWith('Best')) ...[
+          const SizedBox(height: 8),
+          Text(
+            '$countingRule. A struck round is dropped from the total; an amber '
+            'one is still being played and cannot displace a finished round.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant),
@@ -939,6 +1240,18 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
     'match_play'   : 'Mini Singles Bracket',
   };
 
+  /// Tabs read the name the TD set — the ball game as he typed it, and
+  /// "Day bet · R2" for the round it pays on.
+  String _tabLabel(String g) {
+    final data = (_payload?['games'] as Map? ?? {})[g];
+    final fromServer = (data is Map ? data['label'] : null)?.toString();
+    if (fromServer != null && fromServer.isNotEmpty) {
+      // The championship keeps its friendlier local label.
+      if (g == 'day_bet' || g == 'pink_ball') return fromServer;
+    }
+    return _labels[g] ?? gameDisplayName(g);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -965,6 +1278,14 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
       final tabs = <String>[];
       for (final g in activeGames) {
         if (gamesMap.containsKey(g) && !tabs.contains(g)) tabs.add(g);
+      }
+      // The day bet is not a tournament-level active game — it belongs to the
+      // final round — but it IS a tab, and it is the LAST one. Tabs are named
+      // for what they pay, so it comes after the side games rather than
+      // beside a cut-off tournament name.
+      for (final k in gamesMap.keys) {
+        final g = k as String;
+        if (!tabs.contains(g) && g == 'day_bet') tabs.add(g);
       }
 
       if (_tabCtrl == null || _tabCtrl!.length != tabs.length) {
@@ -1026,7 +1347,7 @@ class _ChampionshipTabViewState extends State<ChampionshipTabView>
         TabBar(
           controller  : _tabCtrl,
           isScrollable: true,
-          tabs: _tabs.map((g) => Tab(text: _labels[g] ?? gameDisplayName(g))).toList(),
+          tabs: _tabs.map((g) => Tab(text: _tabLabel(g))).toList(),
         ),
         Expanded(
           child: TabBarView(
