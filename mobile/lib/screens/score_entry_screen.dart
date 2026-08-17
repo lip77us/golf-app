@@ -8215,9 +8215,12 @@ class _MatchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use short names so "p1 vs p2" fits beside the status summary in the
-    // bottom card without truncation.  Falls back to full names on the
-    // off chance _short is missing (older payload, etc.).
+    // The engine's SURNAME pairing — "Detomasi vs Gunst". short_name defaults
+    // to initials, so this row read "AB vs AD", which identifies nobody; a
+    // surname fits the same width, disambiguates better, and reads the way
+    // golfers actually say a match. Falls back to short names, then full
+    // names, for a payload from before the engine sent `pairing`.
+    final pairing = (match['pairing'] as String?)?.trim();
     final p1     = (match['player1_short'] ?? match['player1']) as String? ?? '?';
     final p2     = (match['player2_short'] ?? match['player2']) as String? ?? '?';
     final label  = match['label']   as String? ?? 'Match';
@@ -8239,7 +8242,7 @@ class _MatchRow extends StatelessWidget {
         // Players
         Expanded(
           child: Text(
-            '$p1 vs $p2',
+            (pairing != null && pairing.isNotEmpty) ? pairing : '$p1 vs $p2',
             style: theme.textTheme.bodySmall,
             overflow: TextOverflow.ellipsis,
           ),

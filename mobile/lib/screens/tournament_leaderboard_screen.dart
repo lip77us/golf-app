@@ -731,6 +731,10 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
           final roundHoles  = (r['round_holes'] as List? ?? []);
           final roundCounts = (r['round_counts'] as List? ?? [])
               .map((v) => v == true).toList();
+          final roundInPlay = (r['round_holes_in_play'] as List? ?? []);
+          // Per-round net strokes — the strip's Tot column.
+          final roundTotals = (r['round_totals'] as List? ?? [])
+              .map((v) => v as int).toList();
           final roundComplete = (r['round_complete'] as List? ?? [])
               .map((v) => v == true).toList();
           final roundLabels = (r['round_labels'] as List? ?? [])
@@ -900,13 +904,23 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                                     fontWeight: FontWeight.bold),
                               ),
                             ),
-                          // Same colored per-hole strip as the per-round Stroke
-                          // Play tab (net/gross vs par + stroke dots), so the
-                          // championship reads identically.
+                          // The SAME card as the per-round Stroke Play tab —
+                          // and the same ARGUMENTS, which is what was missing.
+                          // Passing only `holes` drew just the holes that had a
+                          // score and no Out/In/Tot; holesInPlay renders the
+                          // whole card with unplayed holes blank, and the round
+                          // totals give it its summary columns.
                           strokePlayHoleStrip(
                             context,
                             holes:   (roundHoles[ri] as List),
-                            showNet: hmode != 'gross',
+                            holesInPlay: ri < roundInPlay.length
+                                ? (roundInPlay[ri] as List).cast<int>()
+                                : null,
+                            showNet:  hmode != 'gross',
+                            netTotal: ri < roundTotals.length
+                                ? roundTotals[ri] : null,
+                            netToPar: ri < roundNtps.length
+                                ? roundNtps[ri] : null,
                           ),
                           if (ri < roundHoles.length - 1)
                             const SizedBox(height: 12),

@@ -24,6 +24,7 @@ import '../utils/golfer_invite.dart';
 import '../widgets/course_search_field.dart';
 import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
+import '../widgets/tee_assignment.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
 import 'player_form_screen.dart';
@@ -3891,89 +3892,6 @@ class _Step3GroupsAndTees extends StatelessWidget {
     required this.onChangeGroupSizes,
   });
 
-  /// Set every golfer's tee at once — overall, or for one sex.
-  ///
-  /// Sixteen golfers meant sixteen separate dropdowns, so a TD would give up
-  /// and assign tees group-by-group from the round hub instead, after the
-  /// tournament already existed. Most fields play two tees; this makes that
-  /// two taps.
-  Widget _bulkTees(BuildContext context) {
-    final theme = Theme.of(context);
-    if (courseTees.isEmpty) {
-      return InlineMessage(
-        kind: InlineMessageKind.warn,
-        text: 'This course has no tees set up yet, so tees cannot be assigned '
-            'here. Add them from Manage Courses.',
-      );
-    }
-
-    final men   = orderedPlayers.where((p) => p.sex == 'M').length;
-    final women = orderedPlayers.where((p) => p.sex == 'W').length;
-    final unset = orderedPlayers.where((p) => playerTees[p.id] == null).length;
-
-    return SectionCard(
-      title: 'Set tees',
-      trailing: unset == 0
-          ? null
-          : Text('$unset unset',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(
-          'Pick a tee for the whole field, or one per sex — then change any '
-          'individual golfer below.',
-          style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant, height: 1.4),
-        ),
-        const SizedBox(height: 8),
-        _bulkRow(context, 'Everyone', orderedPlayers.length,
-            (p) => true),
-        if (men > 0 && women > 0) ...[
-          _bulkRow(context, 'Men',   men,   (p) => p.sex == 'M'),
-          _bulkRow(context, 'Women', women, (p) => p.sex == 'W'),
-        ],
-      ]),
-    );
-  }
-
-  Widget _bulkRow(BuildContext context, String label, int count,
-      bool Function(PlayerProfile) matches) {
-    final theme = Theme.of(context);
-    // Only offer tees that make sense for the group being set — a women's tee
-    // for "Men" would be a menu item nobody wants.
-    final tees = courseTees.where((t) {
-      if (label == 'Men')   return t.sex == 'M' || t.sex == null;
-      if (label == 'Women') return t.sex == 'W' || t.sex == null;
-      return true;
-    }).toList();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(children: [
-        SizedBox(
-          width: 92,
-          child: Text('$label · $count',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-        ),
-        Expanded(
-          child: Wrap(spacing: 6, runSpacing: 4, children: [
-            for (final t in tees)
-              ActionChip(
-                label: Text(t.teeName, style: const TextStyle(fontSize: 11)),
-                visualDensity: VisualDensity.compact,
-                onPressed: () {
-                  for (final p in orderedPlayers) {
-                    if (matches(p)) onPickTee(p.id, t);
-                  }
-                },
-              ),
-          ]),
-        ),
-      ]),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme       = Theme.of(context);
@@ -3997,7 +3915,24 @@ class _Step3GroupsAndTees extends StatelessWidget {
           'golfer.',
       children: [
           const SizedBox(height: 8),
-          _bulkTees(context),
+          // The SAME tee UI as casual round setup and Edit Tee Boxes:
+          // golfers grouped by sex, a prominent "Set all" per group, per-player
+          // overrides, and a loud warning chip until every golfer has one.
+          // The wizard used to hand-roll a bare dropdown per row, which is why
+          // assigning sixteen tees here was worse than doing it in the hub.
+          TeeAssignmentList(
+            players:   orderedPlayers,
+            tees:      courseTees,
+            picks:     {
+              for (final p in orderedPlayers)
+                if (playerTees[p.id] != null) p.id: playerTees[p.id]!.id,
+            },
+            onChanged: (pid, teeId) {
+              final tee = courseTees.where((t) => t.id == teeId).firstOrNull;
+              if (tee != null) onPickTee(pid, tee);
+            },
+            subtitle: (p) => 'Index ${p.handicapIndex}',
+          ),
           const SizedBox(height: 8),
           // Group legend chips + Edit Sizes affordance
           Row(children: [
@@ -4069,11 +4004,6 @@ class _Step3GroupsAndTees extends StatelessWidget {
                       _groupColors[(groupNum - 1) % _groupColors.length];
                   final tee      = playerTees[player.id];
 
-                  // Only show tees that match this player's sex, plus unisex.
-                  final playerTeeOptions = courseTees
-                      .where((t) => t.sex == player.sex || t.sex == null)
-                      .toList();
-
                   // First player in a group gets a stronger top border
                   final isGroupStart = isGroupBoundary(idx, sizes);
 
@@ -4120,28 +4050,16 @@ class _Step3GroupsAndTees extends StatelessWidget {
                                     fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 2),
-                              DropdownButton<TeeInfo>(
-                                value: (tee != null &&
-                                        playerTeeOptions.contains(tee))
-                                    ? tee
-                                    : null,
-                                isDense: true,
-                                underline: const SizedBox.shrink(),
-                                hint: Text('Pick tee',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant)),
+                              // Tees are set in the list above, not per drag
+                              // row — the row's job here is group order. Its
+                              // tee just READS back so the grouping and the
+                              // assignment can be checked against each other.
+                              Text(
+                                tee?.teeName ?? 'No tee yet',
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurface),
-                                items: playerTeeOptions
-                                    .map((t) => DropdownMenuItem(
-                                          value: t,
-                                          child: Text(t.teeName),
-                                        ))
-                                    .toList(),
-                                onChanged: (t) {
-                                  if (t != null) onPickTee(player.id, t);
-                                },
+                                    color: tee == null
+                                        ? theme.colorScheme.error
+                                        : theme.colorScheme.onSurfaceVariant),
                               ),
                             ],
                           ),

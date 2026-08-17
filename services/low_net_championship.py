@@ -79,6 +79,7 @@ def _aggregate_rounds(tournament, handicap_mode: str, net_percent: int) -> dict:
                 'rows'    : [],
             })
             entry['rows'].append({
+                'holes_in_play': list(range(1, expected + 1)),
                 'total'       : data['total'],
                 'par'         : data['par_played'],
                 'holes'       : data['holes_played'],
@@ -107,6 +108,10 @@ def _aggregate_rounds(tournament, handicap_mode: str, net_percent: int) -> dict:
             'round_pars'    : [r['par'] for r in rows],
             'round_holes'   : [r['hole_detail'] for r in rows],
             'round_labels'  : [r['label'] for r in rows],
+            # Which holes the round actually plays, so the board can draw the
+            # WHOLE card (unplayed holes blank) rather than only the holes with
+            # a score — matching the per-round Stroke Play tab.
+            'round_holes_in_play': [r['holes_in_play'] for r in rows],
             'round_counts'  : counts,
             'round_complete': [r['is_complete'] for r in rows],
         }
@@ -212,6 +217,7 @@ def low_net_championship_standings(tournament) -> list:
             # finished round — see services/round_counting.py).
             'round_counts'  : data.get('round_counts', []),
             'round_complete': data.get('round_complete', []),
+            'round_holes_in_play': data.get('round_holes_in_play', []),
             'payout'        : rank_payout.get(r),
         })
 
@@ -338,6 +344,7 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
                 'round_labels'  : s.get('round_labels', []),
                 'round_counts'  : s.get('round_counts', []),
                 'round_complete': s.get('round_complete', []),
+                'round_holes_in_play': s.get('round_holes_in_play', []),
                 'payout'        : s['payout'],
             }
             for s in standings
