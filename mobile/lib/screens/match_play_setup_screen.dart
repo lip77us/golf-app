@@ -690,7 +690,11 @@ class _MatchPlaySetupScreenState extends State<MatchPlaySetupScreen> {
     return Text(
       'Front 9 — Two semi-finals run simultaneously.\n'
       'Seed 1 vs Seed 4 · Seed 2 vs Seed 3.\n'
-      'Ties after hole 9 go to sudden death using back-9 scores.\n\n'
+      'All square after nine and the match simply plays on into the back '
+      'nine — it never splits and never goes to a card-off. The first hole '
+      'either golfer takes outright ends it, and the pair whose match already '
+      'resolved tee off on 10 on schedule against an opponent the bracket '
+      'cannot name yet.\n\n'
       'Back 9 — Both semi winners play the Final (1st/2nd);\n'
       'both losers play for 3rd/4th.\n'
       'Ties after 18 use last-hole-won.',

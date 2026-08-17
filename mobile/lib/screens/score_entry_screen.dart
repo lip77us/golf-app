@@ -965,6 +965,40 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   ///
   /// Mid-round withdrawals relax this: a player who withdrew before *hole*
   /// isn't required, and a hole abandoned at a withdrawal needs no score.
+  /// The line under a disabled next-hole button, naming who the group is
+  /// still waiting on. Same rule the whole spec runs on: nothing is disabled
+  /// without saying why.
+  ///
+  /// Names up to two golfers, then falls back to a count — four names would
+  /// wrap onto three lines on the narrowest screen, and at that point the
+  /// group has not started the hole anyway.
+  Widget _missingScoresNote(
+      BuildContext ctx, List<Membership> players, Map<int, int> scores) {
+    final waiting = players
+        .where((m) =>
+            !m.isWithdrawnOnHole(_selectedHole) &&
+            !_isInactiveAltShotPlayerAt(m.player.id, _selectedHole) &&
+            !scores.containsKey(m.player.id))
+        .map((m) => m.player.shortName.isNotEmpty
+            ? m.player.shortName
+            : m.player.name)
+        .toList();
+    if (waiting.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(ctx);
+    final text = waiting.length <= 2
+        ? 'Waiting on ${waiting.join(" and ")}'
+        : '${waiting.length} scores to go';
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        text,
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+
   bool _allScored(List<Membership> players, Map<int, int> scores, int hole) {
     if (_killedHoles(players).contains(hole)) return true;
     return players.every((m) =>
@@ -1920,23 +1954,31 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // permanent slot down here.)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-            child: Row(children: [
-              Expanded(
-                child: Builder(builder: (_) {
-                  final prev = _prevHoleInOrder(rp);
-                  return OutlinedButton.icon(
-                    onPressed: prev != null ? _retreat : null,
-                    icon: const Icon(Icons.chevron_left, size: 20),
-                    label: Text(prev != null ? 'Hole $prev' : 'Previous'),
-                  );
-                }),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildPrimaryActionButton(
-                  ctx, rp, sc, players, par, allDone, isComplete,
+            child: Column(children: [
+              Row(children: [
+                Expanded(
+                  child: Builder(builder: (_) {
+                    final prev = _prevHoleInOrder(rp);
+                    return OutlinedButton.icon(
+                      onPressed: prev != null ? _retreat : null,
+                      icon: const Icon(Icons.chevron_left, size: 20),
+                      label: Text(prev != null ? 'Hole $prev' : 'Previous'),
+                    );
+                  }),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildPrimaryActionButton(
+                    ctx, rp, sc, players, par, allDone, isComplete,
+                  ),
+                ),
+              ]),
+              // Nothing is disabled without saying why. The next-hole button
+              // used to go grey and silent on a screen where three of four
+              // scores were already in; this names exactly who is missing,
+              // and it disappears the moment the last score lands.
+              if (!allDone && !isComplete)
+                _missingScoresNote(ctx, players, scores),
             ]),
           ),
         ],
@@ -7243,6 +7285,14 @@ class _MatchPlayStatusBar extends StatelessWidget {
   /// but truncated to fit inside a narrow chip.  Uses short names so each chip
   /// stays compact even when player names are long.
   String _chipBody(Map<String, dynamic> match) {
+    // The server owns this sentence now — "Gunst 4&2", "All square thru 11",
+    // "1 UP thru 11" — because the rules behind it (a halved semi playing on,
+    // a back-9 match scored against an opponent the bracket cannot name yet)
+    // live in the engine. The client only shortens it to chip width.
+    final line = (match['line'] as String?)?.trim();
+    if (line != null && line.isNotEmpty) return _compact(line);
+
+    // Fallback for a payload from before the engine sent `line`.
     final status      = match['status']      as String;
     final result      = match['result']      as String?;
     final holes       = match['holes']       as List? ?? [];
@@ -7250,16 +7300,11 @@ class _MatchPlayStatusBar extends StatelessWidget {
     final p2          = (match['player2_short'] ?? match['player2']) as String? ?? '?';
     final winnerShort = (match['winner_short'] ?? match['winner_name']) as String?;
     final finishedOn  = match['finished_hole'] as int?;
-    final tieBreak    = match['tie_break']   as String?;
     final round       = match['round']       as int;
-    final playersTbd  = match['players_tbd'] as bool? ?? false;
-
-    if (playersTbd) return '—';
 
     if (status == 'complete') {
       if (result == 'halved') return 'AS';
       if (winnerShort == null) return 'done';
-      if (tieBreak == 'sudden_death')  return '$winnerShort (SD)';
       if (finishedOn != null) {
         final scheduledEnd = round == 1 ? 9 : 18;
         final remaining    = scheduledEnd - finishedOn;
@@ -7275,20 +7320,26 @@ class _MatchPlayStatusBar extends StatelessWidget {
 
     if (holes.isEmpty) return status == 'pending' ? '—' : '…';
 
-    final last    = holes.last as Map<String, dynamic>;
-    final holeNum = last['hole']   as int? ?? 0;
-    final margin  = last['margin'] as int? ?? 0;
-
-    // Sudden death in progress (round-1 semi beyond hole 9)
-    if (round == 1 && holeNum > 9) {
-      if (margin == 0) return 'AS SD';
-      final leader = margin > 0 ? p1 : p2;
-      return '$leader SD';
-    }
-
+    final last   = holes.last as Map<String, dynamic>;
+    final margin = last['margin'] as int? ?? 0;
     if (margin == 0) return 'AS';
     final leader = margin > 0 ? p1 : p2;
     return '$leader ${margin.abs()}Up';
+  }
+
+  /// Chip-width form of the engine's match line. A chip has room for a few
+  /// characters, so "All square" becomes "AS" and a halved match keeps only
+  /// the name that took the trophy.
+  static String _compact(String line) {
+    if (line.startsWith('Halved — ')) {
+      final who = line.substring(9).split(' ').first;
+      return 'AS ($who)';
+    }
+    if (line == 'Halved') return 'AS';
+    if (line == 'Not started') return '—';
+    return line
+        .replaceFirst('All square', 'AS')
+        .replaceFirst(' thru ', ' T');
   }
 
   // Light tints of the player1 (blue) / player2 (orange) name colours, so a
@@ -7314,7 +7365,7 @@ class _MatchPlayStatusBar extends StatelessWidget {
     final holeNum = last['hole']   as int? ?? 0;
     final margin  = last['margin'] as int? ?? 0;
 
-    if (round == 1 && holeNum > 9) return Colors.amber.shade100; // sudden death
+    if (round == 1 && holeNum > 9) return Colors.amber.shade100; // playing on
     if (margin == 0)  return theme.colorScheme.surfaceContainer;
     return margin > 0 ? GameColors.team1Bg : GameColors.team2Bg;
   }
@@ -8029,7 +8080,7 @@ class _MatchPlayStatusCard extends StatelessWidget {
 
     // Back-9 match: no semi winner confirmed yet (e.g. both tied after F9).
     if (playersTbd) return 'Awaiting semi results';
-    // Back-9 match: one semi confirmed, other still in sudden death.
+    // Back-9 match: one semi confirmed, the other still level and playing on.
     if (playersTentative && status != 'complete') return 'Tracking live — SD';
 
     if (status == 'pending' && holes.isEmpty) return 'Waiting for scores';
@@ -8037,7 +8088,7 @@ class _MatchPlayStatusCard extends StatelessWidget {
     if (status == 'complete') {
       if (result == 'halved') return 'Halved';
       if (winnerShort == null) return 'Complete';
-      if (tieBreak == 'sudden_death')  return '$winnerShort wins (SD)';
+      if (tieBreak == 'played_on') return '$winnerShort (played on)';
       if (tieBreak == 'last_hole_won') return '$winnerShort wins (last hole)';
       if (finishedOn != null) {
         final scheduledEnd = round == 1 ? 9 : 18;

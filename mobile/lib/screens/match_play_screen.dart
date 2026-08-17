@@ -349,13 +349,20 @@ class _MatchCard extends StatelessWidget {
     if (status == 'pending' && holes.isEmpty) return 'Waiting for scores';
 
     if (status == 'complete') {
-      if (result == 'halved') return 'Halved — All Square';
-      if (winnerName == null) return 'Complete';
-      if (tieBreak == 'sudden_death') {
-        return '$winnerName wins — sudden death hole $finishedOn';
+      if (result == 'halved') {
+        // A halved match SPLITS THE MONEY. Only the trophy and the next-stage
+        // seat need one name, and they come off the last hole won.
+        final trophy = match['trophy_player'] as String?;
+        if (tieBreak == 'last_hole_won' && trophy != null) {
+          return 'Halved — money splits · $trophy on the last hole won';
+        }
+        return 'Halved — money splits';
       }
-      if (tieBreak == 'last_hole_won') {
-        return '$winnerName wins — last hole';
+      if (winnerName == null) return 'Complete';
+      if (tieBreak == 'played_on') {
+        // Not sudden death: the match played ON into the back nine and ended
+        // on the first hole either golfer took outright.
+        return '$winnerName wins — played on to hole $finishedOn';
       }
       if (finishedOn != null) {
         final scheduledEnd = round == 1 ? 9 : 18;
@@ -378,13 +385,17 @@ class _MatchCard extends StatelessWidget {
     final lastHoleNum = last['hole'] as int? ?? 0;
     final margin      = last['margin'] as int? ?? 0;
 
-    // Detect sudden death in progress: round-1 semi playing beyond hole 9.
+    // A level semi PLAYING ON past hole 9. It never splits and never goes to a
+    // card-off: the first hole either golfer takes outright ends it.
     if (round == 1 && lastHoleNum > 9) {
-      if (margin == 0) return 'All Square — sudden death thru $lastHoleNum';
+      if (margin == 0) {
+        return 'All square — playing on, settled against the final from '
+               'hole 10';
+      }
       // Theoretically shouldn't occur (SD would complete on a decisive hole),
       // but guard defensively.
       final leader = margin > 0 ? p1 : p2;
-      return '$leader leads — sudden death thru $lastHoleNum';
+      return '$leader leads — playing on thru $lastHoleNum';
     }
 
     if (margin == 0) return 'All Square thru $lastHoleNum';
@@ -739,7 +750,9 @@ class _HoleStrip extends StatelessWidget {
 
     if (sdHoleNums.isEmpty) return mainStrip;
 
-    // Sudden-death extension row with an amber "SD" label.
+    // The holes a level semi played ON into. Labelled for what it is: the
+    // match continuing, not a separate sudden-death contest borrowing the
+    // final's first hole.
     final sdRow = Row(
       children: [
         Container(
@@ -750,7 +763,7 @@ class _HoleStrip extends StatelessWidget {
             border:       Border.all(color: Colors.amber.shade700),
           ),
           child: Text(
-            'SD',
+            'ON',
             style: TextStyle(
                 fontSize: 8,
                 fontWeight: FontWeight.bold,

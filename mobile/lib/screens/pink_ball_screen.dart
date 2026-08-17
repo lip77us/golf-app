@@ -1316,6 +1316,11 @@ class _BallLostCard extends StatelessWidget {
       );
     }
 
+    // ONE control for one act. The shipped card carried a radio circle on the
+    // left AND a switch on the right: either could have been the control and
+    // neither was labelled as the one that counted. The switch is the control,
+    // and because flipping it ENDS the group's game the label carries the
+    // consequence rather than describing a checkbox.
     return Card(
       color: lost ? theme.colorScheme.errorContainer : null,
       child: InkWell(
@@ -1324,24 +1329,34 @@ class _BallLostCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(children: [
-            Icon(
-              lost ? Icons.cancel : Icons.circle_outlined,
-              color: lost
-                  ? theme.colorScheme.error
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                'Lost the $gameName on this hole',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: lost
-                      ? theme.colorScheme.onErrorContainer
-                      : null,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Lost the $gameName on this hole',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: lost
+                          ? theme.colorScheme.onErrorContainer
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Ends the game for this group — the last group still '
+                    'holding it wins',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: lost
+                          ? theme.colorScheme.onErrorContainer
+                          : theme.colorScheme.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(width: 12),
             Switch(
               value: lost,
               onChanged: onChanged,
@@ -1387,7 +1402,7 @@ class _PinkBallMatchPlayCard extends StatelessWidget {
     if (status == 'complete') {
       if (result == 'halved') return 'Halved';
       if (winnerName == null) return 'Complete';
-      if (tieBreak == 'sudden_death') return '$winnerName wins (SD)';
+      if (tieBreak == 'played_on') return '$winnerName (played on)';
       if (tieBreak == 'last_hole_won') return '$winnerName wins (last hole)';
       if (finishedOn != null) {
         final scheduledEnd = round == 1 ? 9 : 18;
