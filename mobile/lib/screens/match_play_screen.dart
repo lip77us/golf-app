@@ -111,7 +111,8 @@ class _MatchPlayScreenState extends State<MatchPlayScreen> {
     final showExit = isCasualSingle && _hasAnyScore;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Match Play'),
+        // One name on every surface — setup, board, payout row and chat.
+        title: const Text('Mini Singles Bracket'),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),

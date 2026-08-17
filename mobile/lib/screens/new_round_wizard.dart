@@ -1,3 +1,5 @@
+import 'dart:ui' show FontFeature;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +23,7 @@ import '../utils/add_halved_golfer.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/course_search_field.dart';
 import '../widgets/payout_config_field.dart';
+import '../widgets/section_card.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
 import 'player_form_screen.dart';
@@ -52,13 +55,16 @@ class _RoundDraft {
 enum _StepKind {
   typeFormat,   // What kind of event — scoring unit + format (asked first)
   eventDetails, // New/existing, name, event course, rounds by date
-  handicap,     // Handicap mode (+ net double-bogey cap)
+  handicap,     // Cup: handicap mode (+ net double-bogey cap)
+  scoring,      // Individual: method, cap-as-a-rule, allowance, rounds counted
+  stablefordPoints, // Individual + Stableford only: the points table
   cupDesign,    // Cup: team count + colours
   cupGamePlan,  // Cup: per-round game plan
   sideGame,     // Cup: field-wide side game (struck when format is exclusive)
   players,      // Non-cup: player selection
   groups,       // Non-cup: group assignment + tees
-  games,        // Non-cup: side games + buy-ins
+  payouts,      // Individual: the championship pot, on its own
+  games,        // Individual: side games, each with its entry fee
   review,       // Review → create
 }
 
@@ -111,12 +117,19 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         _StepKind.review,
       ];
     }
-    return const [
+    // Individual play — the eight steps the create-flow map settles on. Seven
+    // show for a one-round stroke-play event: Stableford adds the points
+    // table (the max is not a question, so stroke play does not), and the day
+    // bet only appears on the side-game step when the event has more than one
+    // round. The header count reads this list, so it is always honest.
+    return [
       _StepKind.typeFormat,
       _StepKind.eventDetails,
-      _StepKind.handicap,
+      _StepKind.scoring,
+      if (_soloFormat == 'stableford') _StepKind.stablefordPoints,
       _StepKind.players,
       _StepKind.groups,
+      _StepKind.payouts,
       _StepKind.games,
       _StepKind.review,
     ];
@@ -248,8 +261,50 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   int               _netPercent     = 100;
   bool              _netMaxDoubleBogey = true;
 
+  // ---- Individual play: rounds counted (best N of M) ----
+  // Null = every round counts. Only ASKED above two rounds — below that there
+  // is no answer worth giving, so the block does not render and the value
+  // stays null.
+  int? _roundsToCount;
+
+  // ---- Individual play: the Stableford points table ----
+  // Chosen per tournament, never a global preference: a club's Sunday game
+  // and its member-guest use different scales. Negatives are valid — the TD
+  // sets the points as he sees fit and the screen reports what an unusual
+  // table implies rather than arguing with it.
+  static const Map<String, List<int>> _kStablefordPresets = {
+    // albatross, eagle, birdie, par, bogey, double+
+    'Standard'       : [5, 4, 3, 2, 1, 0],
+    'Modified (pro)' : [8, 5, 2, 0, -1, -3],
+    'Reward birdies' : [6, 4, 3, 1, 0, -1],
+  };
+  List<int> _stablefordPoints = const [5, 4, 3, 2, 1, 0];
+  String    _stablefordPreset = 'Standard';
+
   // ---- Step 4: Side-game selection + buy-in config ----
   final Set<String> _activeGames = {}; // no defaults — user picks
+
+  // ---- Individual play: per-side-game entry fees ----
+  // Entry is a FLAT FEE PER SIDE GAME, taken at signup, so a golfer's games
+  // are known before round one and the side-game step never has to reopen
+  // mid-tournament. Held here and posted at create time.
+  int _rumbleEntryFee   = 0;
+  int _ballEntryFee     = 0;
+  int _dayBetEntryFee   = 0;
+  int _dayBetNumPayouts = 3;
+  List<int> _dayBetPayouts = const [0, 0, 0, 0];
+
+  // ---- Individual play: Mini Singles Bracket ----
+  // Two pots, funded differently: a day-1 side bet entered per golfer and paid
+  // inside each group, and a day-2 pot carved off the TOP of the championship
+  // pool (no day-2 entry, which is why 4th has nothing to refund).
+  int       _miniDay1Fee        = 0;
+  int       _miniDay1NumPayouts = 3;
+  List<int> _miniDay1Payouts    = const [0, 0, 0, 0];
+  int       _miniDay2NumPayouts = 3;
+  List<int> _miniDay2Payouts    = const [0, 0, 0, 0];
+  int       _miniCarvePct       = 25;
+  String    _miniEmptySeatRule  = 'promote';   // promote | points | short
 
   // Stroke Play Championship entry fee / payouts entered in Step 4.
   // Applied automatically to the tournament during _createRound().
@@ -489,6 +544,15 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         }
         return _existingTournament != null && _selectedCourseId != null;
       case _StepKind.handicap:
+      case _StepKind.scoring:
+      case _StepKind.stablefordPoints:
+        // Every answer on these steps is valid — the TD sets the points as he
+        // sees fit, and there is always a live method and allowance.
+        return true;
+      case _StepKind.payouts:
+        // A tournament can run for a trophy. An unbalanced table is stated in
+        // the balance line rather than blocking a keystroke, and settlement
+        // refuses to close on it later — with the game named.
         return true;
       case _StepKind.cupDesign:
         // One name (the tournament name) covers the cup, and 2 teams is a
@@ -569,6 +633,21 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     if (!_handicapModeTouched) _handicapMode = _defaultHandicapForFormat();
   }
 
+  /// `[24, 10, 6, 0]` → `[{place: 1, amount: 24}, …]`, dropping unpaid places.
+  static List<Map<String, dynamic>> _payoutList(int count, List<int> amounts) {
+    final out = <Map<String, dynamic>>[];
+    for (int i = 0; i < count && i < amounts.length; i++) {
+      if (amounts[i] > 0) {
+        out.add({'place': i + 1, 'amount': amounts[i].toDouble()});
+      }
+    }
+    return out;
+  }
+
+  static bool _listEq(List<int> a, List<int> b) =>
+      a.length == b.length &&
+      List.generate(a.length, (i) => a[i] == b[i]).every((x) => x);
+
   /// The standard handicap mode for the chosen type.  Cup formats are
   /// foursome-based match play (Triple Cup, Singles, Fourball) and play off the
   /// low index (SO Low); individual/field play defaults to Net.
@@ -607,6 +686,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         courseId: _selectedCourseId,
         date    : baseDate.add(const Duration(days: 1)),
       ));
+      _clampRoundsToCount();
     });
   }
 
@@ -616,7 +696,18 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     setState(() {
       _additionalRounds.removeAt(additionalIndex);
       _numRounds = _additionalRounds.length + 1;
+      _clampRoundsToCount();
     });
+  }
+
+  /// "Best 3 of 4" cannot survive the tournament shrinking to two rounds.
+  /// Dropping back to "every round counts" is the honest answer — it is also
+  /// the only one the Scoring step would offer at that size.
+  void _clampRoundsToCount() {
+    final n = _roundsToCount;
+    if (n != null && (_numRounds <= 2 || n >= _numRounds)) {
+      _roundsToCount = null;
+    }
   }
 
   /// Labels for the type step's "what's left after this step" panel — read off
@@ -631,6 +722,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               (label: 'Event details', sub: 'Name, course and rounds', perRound: false),
             _StepKind.handicap =>
               (label: 'Handicap', sub: 'How strokes are given', perRound: false),
+            _StepKind.scoring =>
+              (label: 'Scoring', sub: 'Method, handicap and rounds counted', perRound: false),
+            _StepKind.stablefordPoints =>
+              (label: 'Points table', sub: 'The Stableford scale', perRound: false),
+            _StepKind.payouts =>
+              (label: 'Payouts', sub: 'The 36-hole money', perRound: false),
             _StepKind.cupDesign =>
               (label: 'Cup design', sub: 'Teams and colours', perRound: false),
             _StepKind.cupGamePlan =>
@@ -642,7 +739,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _StepKind.groups =>
               (label: 'Groups & tees', sub: 'Assign groups and tees', perRound: true),
             _StepKind.games =>
-              (label: 'Side games', sub: 'Field games and buy-ins', perRound: false),
+              (label: 'Side games', sub: 'The four you set, each with its fee', perRound: false),
             _StepKind.review =>
               (label: 'Review', sub: 'Save & create', perRound: false),
             _StepKind.typeFormat =>
@@ -860,6 +957,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         startDate  : dateStr,
         activeGames: _tournamentActiveGames.toList(),
         totalRounds: _numRounds,
+        // Individual-play scoring is set ONCE here; every round and every
+        // board reads it back rather than each carrying its own copy.
+        scoringMethod: _soloFormat == 'stableford' ? 'stableford' : 'stroke',
+        handicapMode : _handicapMode == 'gross' ? 'gross' : 'net',
+        netPercent   : _netPercent,
+        roundsToCount: _roundsToCount,
+        miniSinglesCarvePct:
+            _activeGames.contains(GameIds.matchPlay) ? _miniCarvePct : 0,
       );
       tournamentId = t.id;
     } else {
@@ -905,10 +1010,32 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         netPercent  : _netPercent,
         entryFee    : _lowNetEntryFee.toDouble(),
         payouts     : payoutList,
-        pointsTable : const {
-          'albatross': 5, 'eagle': 4, 'birdie': 3,
-          'par': 2, 'bogey': 1, 'double': 0,
+        // The table the TD set on the points step — never a hardcoded
+        // standard scale. A club's Sunday game and its member-guest use
+        // different ones.
+        pointsTable : {
+          'albatross': _stablefordPoints[0],
+          'eagle'    : _stablefordPoints[1],
+          'birdie'   : _stablefordPoints[2],
+          'par'      : _stablefordPoints[3],
+          'bogey'    : _stablefordPoints[4],
+          'double'   : _stablefordPoints[5],
         },
+      );
+    }
+    if (!mounted) return;
+
+    // 1d. Mini Singles Bracket — optional, at the TD's discretion. Nothing
+    // downstream may assume it: no carve-out is taken and no day-2 foursome
+    // is reserved unless this posts.
+    if (tournamentId != null && _activeGames.contains(GameIds.matchPlay)) {
+      await client.postMiniSinglesSetup(
+        tournamentId,
+        day1EntryFee : _miniDay1Fee.toDouble(),
+        day1Payouts  : _payoutList(_miniDay1NumPayouts, _miniDay1Payouts),
+        day2Payouts  : _payoutList(_miniDay2NumPayouts, _miniDay2Payouts),
+        emptySeatRule: _miniEmptySeatRule,
+        carvePct     : _miniCarvePct,
       );
     }
     if (!mounted) return;
@@ -1001,6 +1128,32 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     }
     if (!mounted) return;
 
+    // The day bet lives on the FINAL round, so it can only be posted once the
+    // rounds exist. Fee and places are the TD's; the pool and the paid places
+    // resize themselves at play time as eligibility resolves.
+    if (_numRounds > 1 &&
+        _activeGames.contains('day_bet') &&
+        _dayBetEntryFee > 0 &&
+        tournamentId != null) {
+      try {
+        final t = await client.getTournament(tournamentId);
+        final rounds = [...t.rounds]
+          ..sort((a, b) => a.roundNumber.compareTo(b.roundNumber));
+        if (rounds.isNotEmpty) {
+          await client.postDayBetSetup(
+            rounds.last.id,
+            entryFee: _dayBetEntryFee.toDouble(),
+            payouts : _payoutList(_dayBetNumPayouts, _dayBetPayouts),
+          );
+        }
+      } catch (_) {
+        // A day bet that could not be priced is not worth failing the whole
+        // tournament for — the TD can set it from the round's own screen, and
+        // the post-create checklist will say it is not set.
+      }
+    }
+    if (!mounted) return;
+
     final needsConfig =
         _activeGames.contains(GameIds.irishRumble) ||
         _activeGames.contains(GameIds.strokePlay)  ||
@@ -1032,11 +1185,15 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       child: Scaffold(
         appBar: AppBar(
           leading: BackButton(onPressed: _back),
+          // "New Tournament", not "New Round". A round is a thing INSIDE the
+          // tournament, created for each date — and this flow creates both.
+          // The old header said Round while step 2 named an event with two of
+          // them and the last step read "Create Round".
           title: Text(_isPostCreate
-              ? (_isCupTournament ? 'Tournament Created' : 'Game Setup')
+              ? 'Tournament Created'
               : (_isCupTournament
                   ? 'New Cup Tournament  (${_step + 1} of $_totalSteps)'
-                  : 'New Round  (${_step + 1} of $_totalSteps)')),
+                  : 'New Tournament  (${_step + 1} of $_totalSteps)')),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(4),
             child: LinearProgressIndicator(
@@ -1270,35 +1427,92 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _groupSizesOverride = sizes;
           }),
         );
+      case _StepKind.scoring:
+        return _StepScoring(
+          soloFormat   : _soloFormat,
+          handicapMode : _handicapMode,
+          netPercent   : _netPercent,
+          numRounds    : _numRounds,
+          roundsToCount: _roundsToCount,
+          onPickFormat : (f) => setState(() {
+            _soloFormat = f;
+            _applyTypeFormat();
+          }),
+          onChangeHandicap: (mode, pct) => setState(() {
+            _handicapMode = mode;
+            _netPercent   = pct;
+            _handicapModeTouched = true;
+          }),
+          onChangeRoundsToCount: (n) => setState(() => _roundsToCount = n),
+        );
+      case _StepKind.stablefordPoints:
+        return _StepStablefordPoints(
+          tournamentName: _createNewTournament
+              ? _nameCtrl.text.trim()
+              : (_existingTournament?.name ?? ''),
+          numRounds : _numRounds,
+          presets   : _kStablefordPresets,
+          preset    : _stablefordPreset,
+          points    : _stablefordPoints,
+          onPickPreset: (name) => setState(() {
+            _stablefordPreset = name;
+            final table = _kStablefordPresets[name];
+            if (table != null) _stablefordPoints = List<int>.from(table);
+          }),
+          onEditPoint: (i, v) => setState(() {
+            final next = List<int>.from(_stablefordPoints);
+            next[i] = v;
+            _stablefordPoints = next;
+            // Editing any value flips the chip to Custom, so the state is
+            // always readable rather than three chips with none marked.
+            _stablefordPreset = _kStablefordPresets.entries
+                .any((e) => _listEq(e.value, next))
+                ? _kStablefordPresets.entries
+                    .firstWhere((e) => _listEq(e.value, next)).key
+                : 'Custom';
+          }),
+        );
+      case _StepKind.payouts:
+        return _StepPayouts(
+          isStableford: _tournamentActiveGames
+              .contains(GameIds.championshipStableford),
+          numPlayers  : _selectedIds.length,
+          entryFee    : _lowNetEntryFee,
+          numPayouts  : _lowNetNumPayouts,
+          payouts     : _lowNetPayouts,
+          carvePct    : _miniCarvePct,
+          miniSinglesOn: _activeGames.contains(GameIds.matchPlay),
+          onChanged   : (fee, nPays, pays) => setState(() {
+            _lowNetEntryFee   = fee;
+            _lowNetNumPayouts = nPays;
+            _lowNetPayouts    = pays;
+          }),
+        );
+      // Individual play only — the cup flow prices its games on the
+      // per-round plan and never reaches this step.
       case _StepKind.games:
-        return _Step4Games(
-          activeGames               : _activeGames,
-          groupSizeList             : _effectiveGroupSizes,
-          onToggleGame              : (g, on) => setState(() {
+        return _StepSideGames(
+          activeGames: _activeGames,
+          numPlayers : _selectedIds.length,
+          numRounds  : _numRounds,
+          onToggle   : (g, on) => setState(() {
             on ? _activeGames.add(g) : _activeGames.remove(g);
           }),
-          hasTournamentLowNet       : _tournamentActiveGames.contains(GameIds.championshipStrokePlay),
-          hasTournamentStableford   : _tournamentActiveGames.contains(GameIds.championshipStableford),
-          numPlayers                : _selectedIds.length,
-          initialLowNetFee          : _lowNetEntryFee,
-          initialLowNetNumPayouts   : _lowNetNumPayouts,
-          initialLowNetPayouts      : _lowNetPayouts,
-          onLowNetConfigChanged     : (fee, nPays, pays) => setState(() {
-            _lowNetEntryFee    = fee;
-            _lowNetNumPayouts  = nPays;
-            _lowNetPayouts     = pays;
-          }),
-          hasTournamentMatchPlay    : _tournamentActiveGames.contains(GameIds.singlesNassau),
-          initialMatchPlayFee       : _matchPlayEntryFee,
-          initialMatchPlayNumPayouts: _matchPlayNumPayouts,
-          initialMatchPlayPayouts   : _matchPlayPayouts,
-          onMatchPlayConfigChanged  : (fee, nPays, pays) => setState(() {
-            _matchPlayEntryFee    = fee;
-            _matchPlayNumPayouts  = nPays;
-            _matchPlayPayouts     = pays;
-          }),
-          hasAnyTournamentGame      : _tournamentActiveGames.isNotEmpty,
+          rumbleFee  : _rumbleEntryFee,
+          ballFee    : _ballEntryFee,
+          onRumbleFee: (v) => setState(() => _rumbleEntryFee = v),
+          onBallFee  : (v) => setState(() => _ballEntryFee = v),
+          miniDay1Fee      : _miniDay1Fee,
+          miniCarvePct     : _miniCarvePct,
+          miniEmptySeatRule: _miniEmptySeatRule,
+          onMiniDay1Fee      : (v) => setState(() => _miniDay1Fee = v),
+          onMiniCarvePct     : (v) => setState(() => _miniCarvePct = v),
+          onMiniEmptySeatRule: (v) =>
+              setState(() => _miniEmptySeatRule = v),
+          dayBetFee  : _dayBetEntryFee,
+          onDayBetFee: (v) => setState(() => _dayBetEntryFee = v),
         );
+
       case _StepKind.review:
         if (_isCupTournament) {
           return _StepCupReview(
@@ -1325,6 +1539,17 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           orderedPlayers       : _orderedPlayers,
           playerTees           : _playerTees,
           groupSizes           : _effectiveGroupSizes,
+          // Each game names its own price at review — entry was taken at
+          // signup, so by this point every game already has one.
+          sideGameFees         : {
+            GameIds.irishRumble: _rumbleEntryFee,
+            GameIds.pinkBall   : _ballEntryFee,
+            GameIds.matchPlay  : _miniDay1Fee,
+            'day_bet'          : _dayBetEntryFee,
+          },
+          championshipFee      : _lowNetEntryFee,
+          carvePct             : _activeGames.contains(GameIds.matchPlay)
+              ? _miniCarvePct : 0,
           createError          : _createError,
         );
     }
@@ -1440,7 +1665,9 @@ class _BottomBar extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2,
                           color: Colors.white))
                   : Icon(isCupTournament ? Icons.arrow_forward : Icons.flag),
-              label: Text(isCupTournament ? 'Save & draft teams' : 'Create Round'),
+              label: Text(isCupTournament
+                  ? 'Save & draft teams'
+                  : 'Create Tournament'),
             )
           else
             FilledButton(
@@ -1791,6 +2018,12 @@ class _Step1TypeFormat extends StatelessWidget {
       child: Column(children: [
         _stripRow(context, 'Scores in', scoresIn),
         _stripRow(context, 'Leaderboard', lb),
+        // Which games the TD gets to set. Naming them here is what stops the
+        // side-game step being a surprise, and it is where "Mini Singles
+        // Bracket" is first said — the name every later surface reads back.
+        if (eventType == _EventType.solo)
+          _stripRow(context, 'Side games',
+              'The ball game · Irish Rumble · Mini Singles Bracket'),
         _stripRow(context, 'Group bets', bets, valueColor: theme.colorScheme.primary),
       ]),
     );
@@ -2344,6 +2577,978 @@ class _StepHandicap extends StatelessWidget {
         ),
       ]),
     );
+  }
+}
+
+// ===========================================================================
+// Scoring — individual play
+// ===========================================================================
+
+/// One step for both methods, set ONCE for the tournament: every round and
+/// every board reads from it.
+///
+/// Three things separate this from the Cup's Handicap step:
+///
+///  * **The max is a rule, not a setting.** The shipped build had a Net
+///    Double-Bogey Cap toggle, default on — one setting wearing a format's
+///    clothes, and the field cannot tell from a leaderboard which way it was
+///    set. It is always on, stated with a worked ceiling so a golfer who
+///    picks up knows exactly what lands on his card.
+///  * **No strokes off.** SO Low is a Cup mechanism: it exists so a match
+///    plays off the low golfer, and against a field there is no low golfer to
+///    play off. It must not render on this type.
+///  * **Rounds that count**, asked only above two rounds.
+class _StepScoring extends StatelessWidget {
+  final String  soloFormat;          // stroke | stableford
+  final String  handicapMode;        // net | gross
+  final int     netPercent;
+  final int     numRounds;
+  final int?    roundsToCount;
+  final ValueChanged<String> onPickFormat;
+  final void Function(String mode, int pct) onChangeHandicap;
+  final ValueChanged<int?>   onChangeRoundsToCount;
+
+  const _StepScoring({
+    required this.soloFormat,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.numRounds,
+    required this.roundsToCount,
+    required this.onPickFormat,
+    required this.onChangeHandicap,
+    required this.onChangeRoundsToCount,
+  });
+
+  bool get _isStableford => soloFormat == 'stableford';
+
+  @override
+  Widget build(BuildContext context) {
+    return _pinnedStep(
+      context,
+      title: 'How is it scored?',
+      subtitle: 'Set once for the tournament. Every round and every board '
+          'reads from this.',
+      children: [
+        _methodPicker(context),
+        const SizedBox(height: 16),
+        if (_isStableford) _stablefordNote(context) else _capRule(context),
+        const SizedBox(height: 16),
+        _handicapBlock(context),
+        // Only asked above two rounds — a one or two-round event counts
+        // everything and there is no interesting answer to give.
+        if (numRounds > 2) ...[
+          const SizedBox(height: 16),
+          _roundsThatCount(context),
+        ],
+        const SizedBox(height: 16),
+        _flightsDeferred(context),
+      ],
+    );
+  }
+
+  // ── Method ────────────────────────────────────────────────────────────
+  Widget _methodPicker(BuildContext context) {
+    final theme = Theme.of(context);
+    return SectionCard(
+      title: 'Method',
+      child: Column(children: [
+        for (final (value, label, blurb) in const [
+          ('stroke', 'Stroke play',
+           'Gross and net against the field. Every hole is capped at net '
+           'double bogey.'),
+          ('stableford', 'Stableford',
+           'Points per hole against par. Standard or modified scale, set on '
+           'the next step.'),
+        ])
+          RadioListTile<String>(
+            value: value,
+            groupValue: soloFormat,
+            onChanged: (v) { if (v != null) onPickFormat(v); },
+            contentPadding: EdgeInsets.zero,
+            title: Text(label,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            subtitle: Text(blurb, style: theme.textTheme.bodySmall),
+          ),
+      ]),
+    );
+  }
+
+  // ── The cap, stated as a rule with a worked ceiling ───────────────────
+  Widget _capRule(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return SectionCard(
+      title: 'Net double bogey max',
+      trailing: Chip(
+        label: const Text('Always on', style: TextStyle(fontSize: 11)),
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+          'Every hole is capped at par + 2 + the strokes you get there. '
+          'Nobody wrecks a net total on one hole, and nobody has to remember '
+          'to pick up.',
+          style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
+        ),
+        const SizedBox(height: 10),
+        for (final (situation, ceiling) in const [
+          ('Par 4 · gets 1 stroke', 'net double is 7'),
+          ('Par 3 · no stroke',     'net double is 5'),
+          ('Par 5 · gets 2 strokes','net double is 9'),
+        ])
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(children: [
+              Expanded(child: Text(situation,
+                  style: theme.textTheme.bodySmall)),
+              Text(ceiling,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.primary)),
+            ]),
+          ),
+        const SizedBox(height: 8),
+        Text(
+          'It protects a net total, not a hole result — group bets and skins '
+          'still read the real gross. The gross board ignores the cap; the net '
+          'board applies it.',
+          style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
+        ),
+      ]),
+    );
+  }
+
+  Widget _stablefordNote(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return SectionCard(
+      title: 'Points, high to low',
+      child: Text(
+        'Points are figured off net score per hole, so the handicap answer '
+        'below still applies. A hole that scores nothing needs no ceiling — '
+        'the net double bogey max is not used under Stableford. The max keeps '
+        'a blow-up hole at a ceiling; Stableford stops scoring it at all.',
+        style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
+      ),
+    );
+  }
+
+  // ── Handicap — net or gross, and an allowance ─────────────────────────
+  Widget _handicapBlock(BuildContext context) {
+    final theme = Theme.of(context);
+    return SectionCard(
+      title: 'Handicap',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        HandicapModeSelector(
+          mode:            handicapMode,
+          netPercent:      netPercent,
+          // Strokes off the low index needs a single opponent to anchor to.
+          // Against a field there is no low man, so it is not offered — it
+          // survives on the Mini Singles Bracket alone.
+          allowStrokesOff: false,
+          onModeChanged:   (m) => onChangeHandicap(m, netPercent),
+          onPercentChanged:(p) => onChangeHandicap(handicapMode, p),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Applies to the whole field. Strokes off the low index is Cup-only '
+          'and is not offered here.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ]),
+    );
+  }
+
+  // ── Rounds that count ─────────────────────────────────────────────────
+  Widget _roundsThatCount(BuildContext context) {
+    final theme = Theme.of(context);
+    final options = <int?>[null, for (int n = numRounds - 1; n >= 2; n--) n];
+    return SectionCard(
+      title: 'Rounds that count',
+      trailing: Text(
+        roundsToCount == null
+            ? 'All $numRounds'
+            : 'Best $roundsToCount of $numRounds',
+        style: theme.textTheme.labelMedium
+            ?.copyWith(color: theme.colorScheme.primary,
+                       fontWeight: FontWeight.w700),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Wrap(spacing: 8, children: [
+          for (final n in options)
+            ChoiceChip(
+              selected: roundsToCount == n,
+              onSelected: (_) => onChangeRoundsToCount(n),
+              label: Text(n == null ? 'All $numRounds' : 'Best $n'),
+            ),
+        ]),
+        const SizedBox(height: 10),
+        Text(
+          "A golfer's worst round is dropped, so somebody who sits one out on "
+          'a 36-hole day stays in the championship. The dropped round is '
+          'struck through on the board, not hidden, and it moves as scores '
+          'land. A round still in progress never displaces a finished one.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+        ),
+      ]),
+    );
+  }
+
+  // ── Flights — drawn, not hidden ───────────────────────────────────────
+  /// Nothing is disabled without saying why. Flights are a real intention and
+  /// a real absence, so the row states both rather than vanishing.
+  Widget _flightsDeferred(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return SectionCard(
+      title: 'Flights',
+      trailing: Chip(
+        label: const Text('NOT YET', style: TextStyle(fontSize: 9.5)),
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+      ),
+      child: Text(
+        'One board for everyone. Splitting the field into flights would give '
+        'each its own board and its own payout — it changes what the '
+        'leaderboard IS, so it is not something to switch on halfway. Not '
+        'built yet, and nothing else on this step depends on it.',
+        style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// Payouts — the championship pot, on its own
+// ===========================================================================
+
+/// Split out of the combined games+money step. Money was being collected in
+/// two places, one round late: the championship fee here and side games ticked
+/// here but priced afterwards, on a checklist that only appeared once the round
+/// existed. Entry is a flat fee per game taken at signup, so each fee now sits
+/// beside the game that charges it — and this step is left with one pot.
+///
+/// Splitting it also fixes the clipped section header: the fee fields are never
+/// on screen without the pot they belong to.
+class _StepPayouts extends StatefulWidget {
+  final bool      isStableford;
+  final int       numPlayers;
+  final int       entryFee;
+  final int       numPayouts;
+  final List<int> payouts;
+  /// Carve-out currently set for Mini Singles day 2. Zero when the bracket is
+  /// off — nothing here may assume it exists.
+  final int       carvePct;
+  final bool      miniSinglesOn;
+  final void Function(int fee, int numPayouts, List<int> payouts) onChanged;
+
+  const _StepPayouts({
+    required this.isStableford,
+    required this.numPlayers,
+    required this.entryFee,
+    required this.numPayouts,
+    required this.payouts,
+    required this.carvePct,
+    required this.miniSinglesOn,
+    required this.onChanged,
+  });
+
+  @override
+  State<_StepPayouts> createState() => _StepPayoutsState();
+}
+
+class _StepPayoutsState extends State<_StepPayouts> {
+  late final TextEditingController _feeCtrl;
+  late int _numPayouts;
+  late final List<TextEditingController> _payoutCtrls;
+
+  @override
+  void initState() {
+    super.initState();
+    _feeCtrl = TextEditingController(
+        text: widget.entryFee == 0 ? '' : '${widget.entryFee}');
+    _numPayouts = widget.numPayouts;
+    _payoutCtrls = List.generate(4, (i) {
+      final v = i < widget.payouts.length ? widget.payouts[i] : 0;
+      return TextEditingController(text: v == 0 ? '' : '$v');
+    });
+    _feeCtrl.addListener(_notify);
+    for (final c in _payoutCtrls) { c.addListener(_notify); }
+  }
+
+  @override
+  void dispose() {
+    _feeCtrl.dispose();
+    for (final c in _payoutCtrls) { c.dispose(); }
+    super.dispose();
+  }
+
+  int get _fee  => int.tryParse(_feeCtrl.text.trim()) ?? 0;
+  int get _pool => _fee * widget.numPlayers;
+
+  /// What the championship places actually share. The Mini Singles day-2 pot
+  /// is a percentage off the TOP of this pool rather than a separate entry, so
+  /// the places have to balance against what is LEFT.
+  int get _carved => widget.miniSinglesOn
+      ? (_pool * widget.carvePct / 100).round()
+      : 0;
+  int get _available => _pool - _carved;
+
+  void _notify() {
+    widget.onChanged(_fee, _numPayouts,
+        _payoutCtrls.map((c) => int.tryParse(c.text.trim()) ?? 0).toList());
+  }
+
+  void _suggest() {
+    if (_available <= 0) return;
+    final suggested = suggestPayouts(_available, _numPayouts);
+    for (int i = 0; i < 4; i++) {
+      _payoutCtrls[i].text = suggested[i] == 0 ? '' : '${suggested[i]}';
+    }
+    setState(() {});
+    _notify();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = widget.isStableford
+        ? 'Stableford Championship'
+        : 'Championship';
+
+    return _pinnedStep(
+      context,
+      title: 'Payouts',
+      subtitle: 'The 36-hole money. Side games are priced on the next step.',
+      children: [
+        SectionCard(
+          title: label,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            GolfTextField(
+              controller: _feeCtrl,
+              label: 'Entry per golfer (\$)',
+              hint: '0',
+              prefixText: '\$ ',
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: false),
+            ),
+            const SizedBox(height: 8),
+            // The pool line names its SCOPE and its COUNT. Two money cards in
+            // a row look identical otherwise, and a captain should not have to
+            // count players to know which pot he is filling.
+            Text(
+              pooLine(_fee, widget.numPlayers, field: true),
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+            if (widget.miniSinglesOn && widget.carvePct > 0) ...[
+              const SizedBox(height: 10),
+              _carveOutLines(context),
+            ],
+          ]),
+        ),
+        const SizedBox(height: 16),
+        SectionCard(
+          title: 'Paid places',
+          child: PayoutConfigField(
+            pool       : _available,
+            numPayouts : _numPayouts,
+            payoutCtrls: _payoutCtrls,
+            onNumPayoutsChanged: (n) {
+              setState(() => _numPayouts = n);
+              _notify();
+            },
+            onPayoutChanged: () => setState(_notify),
+            onSuggest      : _suggest,
+          ),
+        ),
+        if (!widget.miniSinglesOn) ...[
+          const SizedBox(height: 12),
+          Text(
+            'If you switch on the Mini Singles Bracket on the next step, its '
+            'day-2 pot comes off the top of this pool and these places '
+            'rebalance against what is left.',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _carveOutLines(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(children: [
+      for (final (label, amount, strong) in [
+        ('${widget.carvePct}% to the champions\' foursome', _carved, false),
+        ('Left for the championship places', _available, true),
+      ])
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(children: [
+            Expanded(child: Text(label, style: theme.textTheme.bodySmall)),
+            Text('\$$amount',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
+                    color: strong ? theme.colorScheme.primary : null)),
+          ]),
+        ),
+    ]);
+  }
+}
+
+/// ``$10 × 8 in the field = $80`` vs ``$10 × 4 in this foursome = $40``.
+///
+/// The trap these screens set is two identical money cards over completely
+/// different pots, so the scope and the count belong in the sentence.
+String pooLine(int fee, int count, {required bool field}) =>
+    '\$$fee × $count ${field ? "in the field" : "in this foursome"} '
+    '= \$${fee * count}';
+
+// ===========================================================================
+// Side games — the four the TD sets, each with its entry fee
+// ===========================================================================
+
+/// **These are the tournament-scope games, and the only ones the TD sets.**
+/// Foursome side bets — skins, Nassau, rabbit, survivor, sixes — belong to the
+/// foursome, are set up exactly as in a casual round, and read the
+/// tournament's score entry rather than opening their own. They never appear
+/// here and never appear in settlement.
+///
+/// Entry is a flat fee per game taken at signup, so the fee sits beside the
+/// chip that turns the game on. Then post-creation has nothing left to
+/// collect, the field's entries are known before round one, and no golfer is
+/// asked for money after he has teed off.
+class _StepSideGames extends StatelessWidget {
+  final Set<String> activeGames;
+  final int         numPlayers;
+  final int         numRounds;
+  final void Function(String game, bool on) onToggle;
+
+  final int rumbleFee;
+  final int ballFee;
+  final ValueChanged<int> onRumbleFee;
+  final ValueChanged<int> onBallFee;
+
+  // Mini Singles — two pots, and the field gate.
+  final int       miniDay1Fee;
+  final int       miniCarvePct;
+  final String    miniEmptySeatRule;
+  final ValueChanged<int>    onMiniDay1Fee;
+  final ValueChanged<int>    onMiniCarvePct;
+  final ValueChanged<String> onMiniEmptySeatRule;
+
+  // Day bet — multi-round events only.
+  final int               dayBetFee;
+  final ValueChanged<int> onDayBetFee;
+
+  const _StepSideGames({
+    required this.activeGames,
+    required this.numPlayers,
+    required this.numRounds,
+    required this.onToggle,
+    required this.rumbleFee,
+    required this.ballFee,
+    required this.onRumbleFee,
+    required this.onBallFee,
+    required this.miniDay1Fee,
+    required this.miniCarvePct,
+    required this.miniEmptySeatRule,
+    required this.onMiniDay1Fee,
+    required this.onMiniCarvePct,
+    required this.onMiniEmptySeatRule,
+    required this.dayBetFee,
+    required this.onDayBetFee,
+  });
+
+  /// 9–16 golfers, three or four groups. Four is the ceiling: eight or fewer
+  /// gives a final with no semis (not a bracket), and above sixteen there are
+  /// five group winners, who cannot play a knockout in one round.
+  ({bool fits, int groups, String reason}) get _bracketField {
+    if (numPlayers < 9) {
+      return (fits: false, groups: 0,
+          reason: 'Mini Singles needs at least 9 golfers. Eight or fewer '
+              'gives a final with no semis, which is not a bracket.');
+    }
+    if (numPlayers > 16) {
+      return (fits: false, groups: 0,
+          reason: 'Mini Singles tops out at 16. Above that you get five group '
+              'winners, and five cannot play a knockout in one round — it '
+              'needs a third day.');
+    }
+    return (fits: true, groups: numPlayers >= 13 ? 4 : 3, reason: '');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme  = Theme.of(context);
+    final field  = _bracketField;
+
+    return _pinnedStep(
+      context,
+      title: 'Side games',
+      subtitle: 'The games you set for the whole field. Entry is taken at '
+          'signup, so each one is priced here.',
+      children: [
+        _GameFeeCard(
+          on      : activeGames.contains(GameIds.irishRumble),
+          title   : 'Irish Rumble',
+          blurb   : "Every group's best nets are added up and ranked against "
+                    'the whole field. Re-drawn every round.',
+          fee     : rumbleFee,
+          numPlayers: numPlayers,
+          payee   : 'a foursome, split among its real golfers',
+          onToggle: (v) => onToggle(GameIds.irishRumble, v),
+          onFee   : onRumbleFee,
+        ),
+        const SizedBox(height: 12),
+        _GameFeeCard(
+          on      : activeGames.contains(GameIds.pinkBall),
+          title   : 'The ball game',
+          blurb   : 'One ball per group, no replacements — the last group '
+                    'still holding it wins. You name it on its setup screen; '
+                    'the app never asks the colour.',
+          fee     : ballFee,
+          numPlayers: numPlayers,
+          payee   : 'a foursome, split among its real golfers',
+          onToggle: (v) => onToggle(GameIds.pinkBall, v),
+          onFee   : onBallFee,
+        ),
+        const SizedBox(height: 12),
+
+        // ── Mini Singles ────────────────────────────────────────────────
+        _GameFeeCard(
+          on      : activeGames.contains(GameIds.matchPlay),
+          title   : 'Mini Singles Bracket',
+          blurb   : numRounds > 1
+              ? 'A bracket in every group on day 1. The winners meet on day 2 '
+                'as one foursome for the title; everyone else plays a normal '
+                'stroke-play round.'
+              : 'A bracket in every group. Needs a second day for the '
+                'champions to meet, so on a one-round event it runs day 1 '
+                'only.',
+          fee     : miniDay1Fee,
+          numPlayers: numPlayers,
+          feeLabel: 'Day 1 entry per golfer (\$)',
+          payee   : 'golfers, inside each group',
+          disabledReason: field.fits ? null : field.reason,
+          onToggle: (v) => onToggle(GameIds.matchPlay, v),
+          onFee   : onMiniDay1Fee,
+          extra   : activeGames.contains(GameIds.matchPlay) && field.fits
+              ? _miniExtras(context, field.groups)
+              : null,
+        ),
+
+        // ── Day bet ─────────────────────────────────────────────────────
+        // Multi-day only. On a one-round event it is absent, and the footnote
+        // says so rather than showing a struck row for something that will
+        // never apply to this tournament.
+        const SizedBox(height: 12),
+        if (numRounds > 1)
+          _GameFeeCard(
+            on      : activeGames.contains('day_bet'),
+            title   : 'Day bet · final round',
+            blurb   : "The last day's 18-hole stroke play side bet — it pays a "
+                      'great single round from somebody out of contention. '
+                      'Winners of the 36-hole money are not eligible, and the '
+                      'Mini Singles finalists neither pay in nor are ranked.',
+            fee     : dayBetFee,
+            numPlayers: numPlayers,
+            payee   : 'golfers',
+            onToggle: (v) => onToggle('day_bet', v),
+            onFee   : onDayBetFee,
+          )
+        else
+          Text(
+            'The day bet appears on events with more than one round — it pays '
+            'a great single round from somebody already out of the 36-hole '
+            'money, so a one-round event has nothing for it to sit beside.',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+          ),
+
+        const SizedBox(height: 20),
+        _foursomeScopeNote(context),
+      ],
+    );
+  }
+
+  Widget _miniExtras(BuildContext context, int groups) {
+    final theme = Theme.of(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 12),
+      Text('$numPlayers golfers, $groups groups — fits.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 12),
+
+      // Day 2 is funded by a carve-out, not an entry.
+      Text('Day 2 — the championship carve-out',
+          style: theme.textTheme.labelMedium
+              ?.copyWith(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 4),
+      Text(
+        'A percentage off the top of the championship pool. There is no day-2 '
+        "entry, which is why 4th has nothing to refund — he is still in the "
+        'main tournament, and losing a semi on Sunday costs him nothing he '
+        'was otherwise going to win.',
+        style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+      ),
+      const SizedBox(height: 8),
+      Row(children: [
+        Text('Carve-out', style: theme.textTheme.bodyMedium),
+        const Spacer(),
+        IconButton(
+          onPressed: miniCarvePct <= 0
+              ? null
+              : () => onMiniCarvePct(miniCarvePct - 5),
+          icon: const Icon(Icons.remove_circle_outline),
+          visualDensity: VisualDensity.compact,
+        ),
+        Text('$miniCarvePct%',
+            style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700)),
+        IconButton(
+          onPressed: miniCarvePct >= 50
+              ? null
+              : () => onMiniCarvePct(miniCarvePct + 5),
+          icon: const Icon(Icons.add_circle_outline),
+          visualDensity: VisualDensity.compact,
+        ),
+      ]),
+
+      const SizedBox(height: 8),
+      // One rule for a short field AND a withdrawal, answered once here rather
+      // than being asked on Sunday morning.
+      Text('If a seat cannot be filled',
+          style: theme.textTheme.labelMedium
+              ?.copyWith(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 2),
+      Text(
+        'Three groups, or a winner who withdraws — same problem, same answer, '
+        'settled now.',
+        style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant),
+      ),
+      for (final (value, label, blurb) in const [
+        ('promote', 'Promote the best runner-up',
+         'The lowest net of the beaten finalists fills the fourth seat — and '
+         'still has to win two matches to take it.'),
+        ('points', 'Points, then a match',
+         'All three play points over the front; the two leaders play the back '
+         'nine as a match.'),
+        ('short', 'Play it short-handed',
+         'Nobody is promoted. No byes — a seat nobody earned is not handed out '
+         'as a free pass to the final.'),
+      ])
+        RadioListTile<String>(
+          value: value,
+          groupValue: miniEmptySeatRule,
+          onChanged: (v) { if (v != null) onMiniEmptySeatRule(v); },
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(label, style: theme.textTheme.bodySmall
+              ?.copyWith(fontWeight: FontWeight.w600)),
+          subtitle: Text(blurb, style: theme.textTheme.bodySmall),
+        ),
+
+      const SizedBox(height: 4),
+      Text(
+        'Handicap: strokes off low. A match has two players and a low man to '
+        'anchor to — the reverse of the field games, which inherit full net. '
+        'Change it on the Mini Singles setup screen.',
+        style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+      ),
+    ]);
+  }
+
+  Widget _foursomeScopeNote(BuildContext context) {
+    return InlineMessage(
+      kind: InlineMessageKind.info,
+      text: 'Skins, Nassau, rabbit, survivor and sixes are the foursome\'s to '
+          'set, exactly as in a casual round. They read this tournament\'s '
+          'score entry, and they settle inside the group — you never collect '
+          'for them.',
+    );
+  }
+}
+
+/// One side game: a switch, what it is, and the fee that turns it into a pot.
+///
+/// Stateful for one reason: the fee field owns a controller. Rebuilding one in
+/// `build` would reset the cursor on every keystroke the parent rebuilds for.
+class _GameFeeCard extends StatefulWidget {
+  final bool   on;
+  final String title;
+  final String blurb;
+  final int    fee;
+  final int    numPlayers;
+  final String payee;
+  final String feeLabel;
+  final String? disabledReason;
+  final Widget? extra;
+  final ValueChanged<bool> onToggle;
+  final ValueChanged<int>  onFee;
+
+  const _GameFeeCard({
+    required this.on,
+    required this.title,
+    required this.blurb,
+    required this.fee,
+    required this.numPlayers,
+    required this.payee,
+    required this.onToggle,
+    required this.onFee,
+    this.feeLabel = 'Entry per golfer (\$)',
+    this.disabledReason,
+    this.extra,
+  });
+
+  @override
+  State<_GameFeeCard> createState() => _GameFeeCardState();
+}
+
+class _GameFeeCardState extends State<_GameFeeCard> {
+  late final TextEditingController _feeCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _feeCtrl = TextEditingController(
+        text: widget.fee == 0 ? '' : '${widget.fee}');
+  }
+
+  @override
+  void dispose() {
+    _feeCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme    = Theme.of(context);
+    final muted    = theme.colorScheme.onSurfaceVariant;
+    final blocked  = widget.disabledReason != null;
+
+    return SectionCard(
+      title: widget.title,
+      trailing: Switch(
+        value: widget.on && !blocked,
+        // Nothing is disabled without saying why — the reason is printed
+        // below rather than left to a grey control.
+        onChanged: blocked ? null : widget.onToggle,
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(widget.blurb,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: muted, height: 1.45)),
+        if (blocked) ...[
+          const SizedBox(height: 8),
+          InlineMessage(
+              kind: InlineMessageKind.warn, text: widget.disabledReason!),
+        ],
+        if (widget.on && !blocked) ...[
+          const SizedBox(height: 12),
+          GolfTextField(
+            controller: _feeCtrl,
+            label: widget.feeLabel,
+            hint: '0',
+            prefixText: '\$ ',
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: false),
+            onChanged: (v) => widget.onFee(int.tryParse(v.trim()) ?? 0),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${pooLine(widget.fee, widget.numPlayers, field: true)} '
+            '· pays ${widget.payee}',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          if (widget.extra != null) widget.extra!,
+        ],
+      ]),
+    );
+  }
+}
+
+// ===========================================================================
+// Stableford points — the casual question, asked once for the tournament
+// ===========================================================================
+
+/// Casual rounds already ask this on their own setup screen, so the tournament
+/// asks the SAME question with the same table rather than inventing a second
+/// one. Three things change in tournament context:
+///
+///  * a scope line says what the table governs — this tournament, every round;
+///  * how the money settles is NOT asked here (per point makes the pot
+///    unknowable until the last card lands, and a tournament advertises
+///    1st/2nd/3rd at signup — so paid places, set on Payouts);
+///  * the active preset is marked, and editing any value flips it to Custom.
+///
+/// No floor and no validation of the table: the TD sets the points as he sees
+/// fit. Negatives, a 10 for an albatross, zero for par are all valid. The
+/// screen reports what the table implies and gets out of the way.
+class _StepStablefordPoints extends StatelessWidget {
+  static const _labels = ['ALB', 'EAG', 'BIR', 'PAR', 'BOG', 'DBL+'];
+
+  final String              tournamentName;
+  final int                 numRounds;
+  final Map<String, List<int>> presets;
+  final String              preset;
+  final List<int>           points;
+  final ValueChanged<String> onPickPreset;
+  final void Function(int index, int value) onEditPoint;
+
+  const _StepStablefordPoints({
+    required this.tournamentName,
+    required this.numRounds,
+    required this.presets,
+    required this.preset,
+    required this.points,
+    required this.onPickPreset,
+    required this.onEditPoint,
+  });
+
+  bool get _canScoreBelowZero => points.any((p) => p < 0);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _pinnedStep(
+      context,
+      title: 'Points table',
+      subtitle: 'Points awarded per hole by score vs par. Negatives allowed.',
+      children: [
+        // The scope chip: casual sets one round, and a multi-round event
+        // cannot have two scales.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Chip(
+            avatar: const Icon(Icons.emoji_events_outlined, size: 15),
+            label: Text(
+              'Applies to ${tournamentName.isEmpty ? "this tournament" : tournamentName}'
+              ' — ${numRounds == 1 ? "the round" : "all $numRounds rounds"}',
+              style: const TextStyle(fontSize: 11),
+            ),
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        SectionCard(
+          title: 'Scale',
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Wrap(spacing: 8, runSpacing: 6, children: [
+              for (final name in presets.keys)
+                ChoiceChip(
+                  selected: preset == name,
+                  onSelected: (_) => onPickPreset(name),
+                  label: Text(name),
+                ),
+              // Live builds showed three chips with none marked. Editing any
+              // value lands here, so the state is always readable.
+              ChoiceChip(
+                selected: preset == 'Custom',
+                onSelected: (_) => onPickPreset('Custom'),
+                label: const Text('Custom'),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            Row(children: [
+              for (int i = 0; i < 6; i++) ...[
+                Expanded(child: _PointsCell(
+                  label: _labels[i],
+                  value: points[i],
+                  onChanged: (v) => onEditPoint(i, v),
+                )),
+                if (i < 5) const SizedBox(width: 6),
+              ],
+            ]),
+          ]),
+        ),
+
+        if (_canScoreBelowZero) ...[
+          const SizedBox(height: 14),
+          InlineMessage(
+            kind: InlineMessageKind.warn,
+            text: 'This table can score below zero, so the net double-bogey '
+                'max now matters — a hole is capped at par + 2 plus strokes '
+                'before its points are read. On a standard table a double or '
+                'worse already scores nothing, so the cap changes nothing.',
+          ),
+        ],
+
+        const SizedBox(height: 14),
+        SectionCard(
+          title: 'How the money settles',
+          child: Text(
+            'Paid places, set on the Payouts step. Per point is a casual '
+            'game — a tournament prize has to be knowable at signup, and a '
+            'per-point price means nobody can state it until the field '
+            'finishes.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One editable bucket in the points table. Steps rather than a keyboard —
+/// the values are small and the whole table has to stay on one line.
+class _PointsCell extends StatelessWidget {
+  final String label;
+  final int    value;
+  final ValueChanged<int> onChanged;
+
+  const _PointsCell({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(children: [
+      Text(label,
+          style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 9.5)),
+      const SizedBox(height: 4),
+      Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.dividerColor),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(children: [
+          InkWell(
+            onTap: () => onChanged(value + 1),
+            child: const SizedBox(
+                height: 22, width: double.infinity,
+                child: Icon(Icons.keyboard_arrow_up, size: 16)),
+          ),
+          Text('$value',
+              style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()])),
+          InkWell(
+            onTap: () => onChanged(value - 1),
+            child: const SizedBox(
+                height: 22, width: double.infinity,
+                child: Icon(Icons.keyboard_arrow_down, size: 16)),
+          ),
+        ]),
+      ),
+    ]);
   }
 }
 
@@ -4240,331 +5445,6 @@ class _GroupSizeEditorState extends State<_GroupSizeEditor> {
 }
 
 // ===========================================================================
-// Step 4 — Game Selection
-// ===========================================================================
-
-class _Step4Games extends StatefulWidget {
-  final Set<String>   activeGames;
-  final List<int>     groupSizeList;
-  final void Function(String game, bool on) onToggleGame;
-  /// When true, the Stroke Play Championship buy-in section is shown first.
-  final bool          hasTournamentLowNet;
-  /// Stableford Championship selected — reuses the same buy-in UI/state, but
-  /// the header reads "Stableford" and it's posted to the Stableford config.
-  final bool          hasTournamentStableford;
-  /// Total number of selected players — pool multiplier for the championship.
-  final int           numPlayers;
-  // Stroke Play Championship buy-in
-  final int           initialLowNetFee;
-  final int           initialLowNetNumPayouts;
-  final List<int>     initialLowNetPayouts;
-  final void Function(int fee, int numPayouts, List<int> payouts)
-      onLowNetConfigChanged;
-  /// When true, the Match Play buy-in section is shown at the top of this step.
-  final bool          hasTournamentMatchPlay;
-  // Match Play buy-in — collected here and applied to all groups on creation.
-  final int           initialMatchPlayFee;
-  final int           initialMatchPlayNumPayouts;
-  final List<int>     initialMatchPlayPayouts;
-  final void Function(int fee, int numPayouts, List<int> payouts)
-      onMatchPlayConfigChanged;
-  /// True when ANY championship game (stroke play, stableford, singles
-  /// nassau, …) was picked back at step 0.  When false AND no side
-  /// games are selected, this step shows a warning explaining that the
-  /// tournament needs at least one game to proceed.
-  final bool          hasAnyTournamentGame;
-
-  const _Step4Games({
-    required this.activeGames,
-    required this.groupSizeList,
-    required this.onToggleGame,
-    this.hasTournamentLowNet        = false,
-    this.hasTournamentStableford    = false,
-    this.numPlayers                 = 0,
-    this.initialLowNetFee           = 0,
-    this.initialLowNetNumPayouts    = 3,
-    this.initialLowNetPayouts       = const [0, 0, 0, 0],
-    required this.onLowNetConfigChanged,
-    this.hasTournamentMatchPlay     = false,
-    this.initialMatchPlayFee        = 0,
-    this.initialMatchPlayNumPayouts = 3,
-    this.initialMatchPlayPayouts    = const [0, 0, 0, 0],
-    required this.onMatchPlayConfigChanged,
-    this.hasAnyTournamentGame       = false,
-  });
-
-  @override
-  State<_Step4Games> createState() => _Step4GamesState();
-}
-
-class _Step4GamesState extends State<_Step4Games> {
-  // ── Low Net (Stroke Play Championship) controllers ──
-  late final TextEditingController _lowNetFeeCtrl;
-  int _lowNetNumPayouts = 3;
-  late final List<TextEditingController> _lowNetPayoutCtrls;
-
-  // ── Match Play controllers ──
-  late final TextEditingController _feeCtrl;
-  int _numPayouts = 3;
-  late final List<TextEditingController> _payoutCtrls;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Low Net
-    _lowNetFeeCtrl = TextEditingController(
-        text: widget.initialLowNetFee == 0 ? '' : '${widget.initialLowNetFee}');
-    _lowNetNumPayouts = widget.initialLowNetNumPayouts;
-    _lowNetPayoutCtrls = List.generate(4, (i) {
-      final v = i < widget.initialLowNetPayouts.length
-          ? widget.initialLowNetPayouts[i]
-          : 0;
-      return TextEditingController(text: v == 0 ? '' : '$v');
-    });
-    _lowNetFeeCtrl.addListener(_notifyLowNet);
-    for (final c in _lowNetPayoutCtrls) c.addListener(_notifyLowNet);
-
-    // Match Play
-    _feeCtrl    = TextEditingController(
-        text: widget.initialMatchPlayFee == 0 ? '' : '${widget.initialMatchPlayFee}');
-    _numPayouts = widget.initialMatchPlayNumPayouts;
-    _payoutCtrls = List.generate(4, (i) {
-      final v = i < widget.initialMatchPlayPayouts.length
-          ? widget.initialMatchPlayPayouts[i]
-          : 0;
-      return TextEditingController(text: v == 0 ? '' : '$v');
-    });
-    _feeCtrl.addListener(_notify);
-    for (final c in _payoutCtrls) c.addListener(_notify);
-  }
-
-  @override
-  void dispose() {
-    _lowNetFeeCtrl.dispose();
-    for (final c in _lowNetPayoutCtrls) c.dispose();
-    _feeCtrl.dispose();
-    for (final c in _payoutCtrls) c.dispose();
-    super.dispose();
-  }
-
-  void _notifyLowNet() {
-    final fee     = int.tryParse(_lowNetFeeCtrl.text.trim()) ?? 0;
-    final payouts = _lowNetPayoutCtrls
-        .map((c) => int.tryParse(c.text.trim()) ?? 0)
-        .toList();
-    widget.onLowNetConfigChanged(fee, _lowNetNumPayouts, payouts);
-  }
-
-  void _suggestLowNetPayouts() {
-    final fee  = int.tryParse(_lowNetFeeCtrl.text.trim()) ?? 0;
-    final pool = fee * widget.numPlayers;
-    if (pool <= 0) return;
-    final suggested = suggestPayouts(pool, _lowNetNumPayouts);
-    for (int i = 0; i < 4; i++) {
-      _lowNetPayoutCtrls[i].text = suggested[i] == 0 ? '' : '${suggested[i]}';
-    }
-    setState(() {});
-    _notifyLowNet();
-  }
-
-  void _notify() {
-    final fee     = int.tryParse(_feeCtrl.text.trim()) ?? 0;
-    final payouts = _payoutCtrls
-        .map((c) => int.tryParse(c.text.trim()) ?? 0)
-        .toList();
-    widget.onMatchPlayConfigChanged(fee, _numPayouts, payouts);
-  }
-
-  void _suggestPayoutsWizard() {
-    final fee    = int.tryParse(_feeCtrl.text.trim()) ?? 0;
-    final nFours = widget.groupSizeList.where((s) => s == 4).length;
-    final pool   = fee * (nFours > 0 ? 4 : 3);
-    if (pool <= 0) return;
-    final suggested = suggestPayouts(pool, _numPayouts);
-    for (int i = 0; i < 4; i++) {
-      _payoutCtrls[i].text = suggested[i] == 0 ? '' : '${suggested[i]}';
-    }
-    setState(() {});
-    _notify();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme      = Theme.of(context);
-    final nFours     = widget.groupSizeList.where((s) => s == 4).length;
-    final nThrees    = widget.groupSizeList.where((s) => s == 3).length;
-    final groupCount = widget.groupSizeList.length;
-
-    final parts = <String>[];
-    if (nFours  > 0) parts.add('$nFours foursome${nFours  == 1 ? '' : 's'}');
-    if (nThrees > 0) parts.add('$nThrees threesome${nThrees == 1 ? '' : 's'}');
-    final groupSummary =
-        '$groupCount group${groupCount == 1 ? '' : 's'}: ${parts.join(', ')}';
-
-    final fee           = int.tryParse(_feeCtrl.text.trim()) ?? 0;
-    // Pool for balance / auto-suggest: prefer foursome pool, fall back to threesome.
-    final poolForSuggest = fee * (nFours > 0 ? 4 : 3);
-
-    final lowNetFee      = int.tryParse(_lowNetFeeCtrl.text.trim()) ?? 0;
-    final lowNetPool     = lowNetFee * widget.numPlayers;
-
-    // Single source of truth for "no game configured anywhere".  Both
-    // championships (step 0) and side games (this step) count.  The
-    // wizard footer disables Next/Create under the same condition.
-    final hasAnyGame = widget.hasAnyTournamentGame ||
-        widget.activeGames.isNotEmpty;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-        if (!hasAnyGame) ...[
-          const InlineMessage(
-            kind: InlineMessageKind.warn,
-            text: 'Pick at least one side game below, or go back to '
-                'step 1 and pick a championship game (Stroke Play '
-                'or Cup Play).  A tournament needs at '
-                'least one game.',
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        // ── Championship Buy-In (Stroke Play or Stableford) ────────────────────
-        if (widget.hasTournamentLowNet || widget.hasTournamentStableford) ...[
-          Text(widget.hasTournamentStableford
-                  ? 'Stableford Championship'
-                  : 'Stroke Play Championship',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(
-            'Entry fee and payouts applied to the tournament. '
-            'Leave blank to configure later.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 12),
-
-          // Entry fee
-          GolfTextField(
-            controller: _lowNetFeeCtrl,
-            label: 'Entry fee per player (\$)',
-            prefixIcon: Icons.attach_money,
-            keyboardType: TextInputType.number,
-          ),
-          if (lowNetFee > 0 && widget.numPlayers > 0) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Total pool: \$${lowNetFee * widget.numPlayers} '
-              '(${widget.numPlayers} players × \$$lowNetFee)',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-          const SizedBox(height: 16),
-
-          PayoutConfigField(
-            pool:                lowNetPool,
-            numPayouts:          _lowNetNumPayouts,
-            payoutCtrls:         _lowNetPayoutCtrls,
-            onNumPayoutsChanged: (n) {
-              setState(() => _lowNetNumPayouts = n);
-              _notifyLowNet();
-            },
-            onPayoutChanged: _notifyLowNet,
-            onSuggest:       _suggestLowNetPayouts,
-          ),
-
-          const Divider(height: 28),
-        ],
-
-        // ── Match Play Buy-In (shown first when tournament includes match play) ──
-        if (widget.hasTournamentMatchPlay) ...[
-          Text('Mini Singles Buy-In',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(
-            'Entry fee and payouts applied to all groups on creation. '
-            'Leave blank to configure each group individually after creation.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 12),
-
-          // Entry fee
-          GolfTextField(
-            controller: _feeCtrl,
-            label: 'Entry fee per player (\$)',
-            prefixIcon: Icons.attach_money,
-            keyboardType: TextInputType.number,
-          ),
-          if (fee > 0) ...[
-            const SizedBox(height: 6),
-            if (nFours > 0)
-              Text(
-                'Foursomes pool: \$${fee * 4} per group',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-            if (nThrees > 0)
-              Text(
-                'Threesomes pool: \$${fee * 3} per group',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-          ],
-          const SizedBox(height: 16),
-
-          // Shared payout config widget
-          PayoutConfigField(
-            pool:                poolForSuggest,
-            numPayouts:          _numPayouts,
-            payoutCtrls:         _payoutCtrls,
-            onNumPayoutsChanged: (n) { setState(() => _numPayouts = n); _notify(); },
-            onPayoutChanged:     _notify,
-            onSuggest:           _suggestPayoutsWizard,
-          ),
-
-          const Divider(height: 28),
-        ],
-
-        // ── Side Games ────────────────────────────────────────────────────────
-        Text('Side Games', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 4),
-        Text(
-          'Optional — pick side games to run alongside the main tournament.',
-          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          groupSummary,
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 16),
-
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            for (final meta in tournamentRoundGames)
-              GameSelectableChip(
-                gameId:     meta.id,
-                selected:   widget.activeGames.contains(meta.id),
-                onSelected: (v) => widget.onToggleGame(meta.id, v),
-              ),
-          ],
-        ),
-
-        const SizedBox(height: 16),
-      ]),
-    );
-  }
-}
-
-// ===========================================================================
 // Step 5 — Review
 // ===========================================================================
 
@@ -4924,6 +5804,13 @@ class _Step5Review extends StatelessWidget {
   /// override).  Passed in from the wizard parent so the Review step
   /// shows the same shape the TD actually saw + accepted in Step 3.
   final List<int>          groupSizes;
+  /// Entry fee per side game, keyed by game id — so each game names its own
+  /// price at review rather than being a bare chip. Entry is taken at signup,
+  /// so by this point every game already has one.
+  final Map<String, int>   sideGameFees;
+  /// Championship entry per golfer, and the carve-out taken off the top.
+  final int                championshipFee;
+  final int                carvePct;
 
   const _Step5Review({
     required this.createNew,
@@ -4938,8 +5825,21 @@ class _Step5Review extends StatelessWidget {
     required this.orderedPlayers,
     required this.playerTees,
     required this.groupSizes,
+    this.sideGameFees   = const {},
+    this.championshipFee = 0,
+    this.carvePct        = 0,
     this.createError,
   });
+
+  /// The name this game goes by everywhere — tab, review row, payout row and
+  /// chat line. "Mini Singles Bracket", never "Match Play Foursome".
+  static String _sideGameLabel(String id) => switch (id) {
+        'irish_rumble' => 'Irish Rumble',
+        'pink_ball'    => 'The ball game',
+        'match_play'   => 'Mini Singles Bracket',
+        'day_bet'      => 'Day bet · final round',
+        _              => id,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -4955,7 +5855,7 @@ class _Step5Review extends StatelessWidget {
     return _pinnedStep(
       context,
       title: 'Review',
-      subtitle: 'Tap "Create Round" to set up all foursomes and games.',
+      subtitle: 'Tap "Create Tournament" to set up all foursomes and games.',
       children: [
 
         _ReviewCard(children: [
@@ -4977,6 +5877,15 @@ class _Step5Review extends StatelessWidget {
           ],
           _ReviewRow(Icons.people,         'Players',
               '${orderedPlayers.length} players → $groupCount group(s)'),
+          if (championshipFee > 0)
+            _ReviewRow(
+              Icons.emoji_events_outlined,
+              'Championship',
+              pooLine(championshipFee, orderedPlayers.length, field: true) +
+                  (carvePct > 0
+                      ? ' · $carvePct% carved for day 2'
+                      : ''),
+            ),
         ]),
 
         if (tournamentActiveGames.isNotEmpty) ...[
@@ -4995,16 +5904,24 @@ class _Step5Review extends StatelessWidget {
 
         if (activeGames.isNotEmpty) ...[
           const SizedBox(height: 16),
-          Text('Active Games',
+          Text('Side games',
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey)),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8, runSpacing: 4,
-            children: activeGames
-                .map((g) => GameChip(label: gameLabels[g] ?? g))
-                .toList(),
-          ),
+          // ONE name per game, and each shows its fee. The shipped review
+          // listed "Stroke Play Championship" under Tournament Games and
+          // "Stroke Play" under Active Games — both true, and nothing
+          // distinguished them.
+          _ReviewCard(children: [
+            for (final g in activeGames)
+              _ReviewRow(
+                Icons.sports_golf,
+                _sideGameLabel(g),
+                sideGameFees[g] != null && sideGameFees[g]! > 0
+                    ? '\$${sideGameFees[g]} entry'
+                    : 'No entry',
+              ),
+          ]),
         ],
 
         // ── Foursome arrangement ──
@@ -5294,12 +6211,19 @@ class _Step6GameSetupState extends State<_Step6GameSetup> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Round created!',
+          Text('Tournament created',
               style: Theme.of(context).textTheme.titleLarge
                   ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
+          // A confirmation, not a to-do list. Every game already carries its
+          // entry fee — that was collected on the side-game step, at signup —
+          // so nothing here is waiting on money. What is left is rules: the
+          // ball's name, how many balls count, the bracket's seeds.
           Text(
-            'Configure your games below before players start entering scores.',
+            isCupTournament
+                ? 'Draft your teams before the first round.'
+                : 'Every game already has its entry fee. What is left is the '
+                  'rules — the ball\'s name, how many balls count, the seeds.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
@@ -5332,8 +6256,10 @@ class _Step6GameSetupState extends State<_Step6GameSetup> {
           if (hasIrishRumble) ...[
             _SetupButton(
               icon : Icons.flag_circle_outlined,
-              label: 'Configure Irish Rumble',
+              label: 'Irish Rumble',
               configured: _savedConfigs.contains(GameIds.irishRumble),
+              stateLabel: _savedConfigs.contains(GameIds.irishRumble)
+                  ? 'Set' : 'Rules not set',
               onTap: () => _openSetup(
                 GameIds.irishRumble,
                 IrishRumbleSetupScreen(roundId: roundId),
@@ -5345,8 +6271,10 @@ class _Step6GameSetupState extends State<_Step6GameSetup> {
           if (hasStrokePlay) ...[
             _SetupButton(
               icon : Icons.leaderboard_outlined,
-              label: 'Configure Stroke Play',
+              label: 'Stroke Play',
               configured: _savedConfigs.contains(GameIds.strokePlay),
+              stateLabel: _savedConfigs.contains(GameIds.strokePlay)
+                  ? 'Set' : 'Not set',
               onTap: () => _openSetup(
                 GameIds.strokePlay,
                 LowNetSetupScreen(roundId: roundId),
@@ -5358,7 +6286,9 @@ class _Step6GameSetupState extends State<_Step6GameSetup> {
           if (hasPinkBall) ...[
             _SetupButton(
               icon : Icons.circle_outlined,
-              label: 'Configure the ball game',
+              label: 'The ball game',
+              stateLabel: _savedConfigs.contains(GameIds.pinkBall)
+                  ? 'Named' : 'Needs a name',
               configured: _savedConfigs.contains(GameIds.pinkBall),
               onTap: () => _openSetup(
                 GameIds.pinkBall,
@@ -5437,37 +6367,45 @@ class _SetupButton extends StatelessWidget {
   final VoidCallback onTap;
 
   /// null → use [icon] (legacy behavior).
-  /// false → show an empty circle (this game hasn't been configured yet).
-  /// true  → show a filled flag (this game's setup has been saved).
+  /// false → not configured yet.
+  /// true  → this game's setup has been saved.
   final bool? configured;
+
+  /// What this row's state IS, in words — "Set · \$10" or "Not set".
+  ///
+  /// The shipped build drew an empty radio circle here. The circles were
+  /// progress, not selection, but they read as a pick list and Done was
+  /// enabled either way. Words cannot be misread as a choice.
+  final String? stateLabel;
 
   const _SetupButton({
     required this.icon,
     required this.label,
     required this.onTap,
     this.configured,
+    this.stateLabel,
   });
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final IconData leading;
-    final Color    leadingColor;
-    if (configured == null) {
-      leading      = icon;
-      leadingColor = scheme.primary;
-    } else if (configured!) {
-      leading      = Icons.flag_circle;
-      leadingColor = scheme.primary;
-    } else {
-      leading      = Icons.circle_outlined;
-      leadingColor = scheme.onSurfaceVariant;
-    }
+    final theme  = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final done   = configured == true;
     return Card(
       child: ListTile(
-        leading: Icon(leading, color: leadingColor),
+        leading: Icon(
+          configured == null ? icon : (done ? Icons.check_circle : icon),
+          color: done ? scheme.primary : scheme.onSurfaceVariant,
+        ),
         title: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (stateLabel != null)
+            Text(stateLabel!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: done ? scheme.primary : scheme.onSurfaceVariant,
+                    fontWeight: done ? FontWeight.w700 : FontWeight.w500)),
+          const Icon(Icons.chevron_right),
+        ]),
         onTap: onTap,
       ),
     );
