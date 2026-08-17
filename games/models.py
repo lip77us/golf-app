@@ -2021,6 +2021,78 @@ class ScrambleResult(models.Model):
 # MATCH PLAY (within foursome, 2 × 9 holes, single elimination or points)
 # ---------------------------------------------------------------------------
 
+class MiniSinglesConfig(models.Model):
+    """
+    Tournament-level configuration for the **Mini Singles Bracket** — the
+    two-stage game the individual-play spec describes
+    (docs/design-review/handoff-individual-play/SPEC.md §4).
+
+    It is not one bracket inside one foursome. It is a bracket in EVERY group
+    on day 1, and on day 2 the group winners are pulled into one foursome that
+    plays its own bracket for the title. Everyone else plays a normal
+    stroke-play round — which is exactly why it is a side game and not the
+    championship: run it as the main event and three quarters of the field is
+    out of contention on Saturday afternoon.
+
+    Optional, at the TD's discretion. Nothing downstream may assume it exists:
+    no carve-out is taken from the championship pool and no foursome is
+    reserved on day 2 unless this row is present.
+
+    Two pots, funded differently:
+
+    * **Day 1** — a side bet entered per golfer and paid inside each group
+      (``day1_entry_fee`` / ``day1_payouts``). It exists so the 3rd-place
+      match is worth playing; 3rd does not get his entry back.
+    * **Day 2** — the championship CARVE-OUT, a percentage off the top of the
+      championship pool set at tournament setup
+      (``Tournament.mini_singles_carve_pct``). There is no day-2 entry, so 4th
+      has nothing to refund.
+    """
+
+    # A short field and a withdrawal are the same problem — a seat nobody can
+    # fill — so the TD answers once at setup rather than being asked on Sunday
+    # morning.
+    EMPTY_SEAT_RULES = [
+        ('promote', 'Promote the best runner-up'),
+        ('points',  'Points, then a match'),
+        ('short',   'Play it short-handed'),
+    ]
+
+    tournament      = models.OneToOneField(
+                        'tournament.Tournament', on_delete=models.CASCADE,
+                        related_name='mini_singles_config')
+    # Strokes off low is the DEFAULT here and this is the one game where that
+    # is right: a match has two players and a low man to anchor to. It is the
+    # reverse of the field games, which inherit full net because there is no
+    # single opponent to take strokes off against. Set once, governs both days.
+    handicap_mode   = models.CharField(
+                        max_length=20, choices=HandicapMode.choices,
+                        default=HandicapMode.STROKES_OFF)
+    net_percent     = models.PositiveSmallIntegerField(default=100)
+
+    day1_entry_fee  = models.DecimalField(
+                        max_digits=8, decimal_places=2, default=0.00,
+                        help_text='Per golfer. Everybody in the field is in a '
+                                  'day-1 bracket; the pot is paid inside each group.')
+    day1_payouts    = models.JSONField(
+                        default=list,
+                        help_text="[{'place': 1, 'amount': 24.00}, …] per group.")
+    day2_payouts    = models.JSONField(
+                        default=list,
+                        help_text='Day-2 places, paid out of the championship '
+                                  'carve-out. 4th takes nothing — there is no '
+                                  'day-2 entry to refund.')
+
+    empty_seat_rule = models.CharField(
+                        max_length=10, choices=EMPTY_SEAT_RULES,
+                        default='promote',
+                        help_text='Three groups, or a winner who withdraws — '
+                                  'one rule, set once, never asked on Sunday.')
+
+    def __str__(self):
+        return f"Mini Singles config — {self.tournament}"
+
+
 class MatchPlayBracket(models.Model):
     """
     The overall match play structure for one Foursome in one Round.

@@ -317,6 +317,18 @@ class Foursome(models.Model):
                                 "multiple groups start on the same hole."
                             ),
                         )
+    # Mini Singles day 2: the champions' foursome is DERIVED, never set. The
+    # TD cannot know the four group winners when he builds Sunday's tee times,
+    # so the groups step RESERVES a group here and services/mini_singles.py
+    # swaps the winners into it once day 1 resolves. Everyone displaced takes
+    # the seat the winner vacated, so tees and tee times stay intact.
+    is_champions_foursome = models.BooleanField(
+                            default=False,
+                            help_text=(
+                                "Reserved for the Mini Singles day-2 champions. "
+                                "Filled from day 1, not by the TD."
+                            ),
+                        )
 
     class Meta:
         unique_together = ('round', 'group_number')
