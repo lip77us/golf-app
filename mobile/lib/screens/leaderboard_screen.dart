@@ -651,7 +651,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     if (g == 'pink_ball') {
       final name =
           ((lb?.games['pink_ball']?.data as Map?)?['game_name'])?.toString();
-      return (name != null && name.trim().isNotEmpty) ? name.trim() : 'Ball game';
+      return (name != null && name.trim().isNotEmpty) ? name.trim() : 'Pink Ball';
     }
     return gameDisplayName(g);
   }
@@ -1291,7 +1291,7 @@ class _RedBallView extends StatelessWidget {
     final results   = (data['results'] as List? ?? []);
     // The TD's own name for the game, on every surface.
     final rawName  = data['game_name']?.toString().trim() ?? '';
-    final gameName = rawName.isNotEmpty ? rawName : 'Ball game';
+    final gameName = rawName.isNotEmpty ? rawName : 'Pink Ball';
     final entryFee  = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
     final payouts   = (data['payouts'] as List? ?? []);
 

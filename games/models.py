@@ -1876,7 +1876,7 @@ class PinkBallConfig(models.Model):
     @property
     def display_name(self) -> str:
         """The name every surface reads. Falls back only for legacy rows."""
-        return self.game_name.strip() or 'Ball game'
+        return self.game_name.strip() or 'Pink Ball'
 
     def __str__(self):
         return f"{self.display_name} config — {self.round}"

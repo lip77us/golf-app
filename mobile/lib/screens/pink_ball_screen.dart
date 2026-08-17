@@ -45,7 +45,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
   // The TD's own name for the game. It is the string on every surface —
   // the tab, the carrier badge, the lost-ball switch and the chat line —
   // so nothing here appends the word 'Ball' to a colour any more.
-  String _gameName = 'Ball game';
+  String _gameName = 'Pink Ball';
   List<int> _order  = [];       // 18 player PKs (carrier per hole)
   bool _configLoaded = false;
 
@@ -213,7 +213,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
       setState(() {
         _gameName          = (data['game_name'] as String?)?.trim().isNotEmpty == true
             ? (data['game_name'] as String).trim()
-            : 'Ball game';
+            : 'Pink Ball';
         _order             = order;
         _configLoaded      = true;
         _ballLostOnHole    = ballLostOnHole;

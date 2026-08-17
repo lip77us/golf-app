@@ -225,7 +225,7 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
         // The screen is named for the game, not for a colour the app never
         // asks about. Before it has a name there is nothing to name it after.
         title: Text(_nameCtrl.text.trim().isEmpty
-            ? 'Ball game'
+            ? 'Pink Ball'
             : _nameCtrl.text.trim()),
       ),
       bottomNavigationBar: _loading ? null : SafeArea(

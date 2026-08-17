@@ -264,7 +264,7 @@ def red_ball_summary(round_obj) -> dict:
         entry_fee    = float(config.entry_fee)
         payouts_list = config.payouts or []
     except PinkBallConfig.DoesNotExist:
-        game_name    = 'Ball game'
+        game_name    = 'Pink Ball'
         entry_fee    = 0.0
         payouts_list = []
 

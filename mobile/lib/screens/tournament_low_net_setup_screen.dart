@@ -16,6 +16,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
 
 class TournamentLowNetSetupScreen extends StatefulWidget {
@@ -35,9 +36,12 @@ class _TournamentLowNetSetupScreenState
   // Local-only: used to estimate the prize pool (not saved to server)
   final  _numPlayersCtrl  = TextEditingController(text: '');
 
-  // Payout rows — one controller per paid place (absolute amounts)
-  final List<TextEditingController> _payoutCtrls = [];
-  int _payoutPlaces = 0;
+  // Payout rows. FOUR controllers, fixed — the same shape Irish Rumble and
+  // Pink Ball use, so all four money cards read identically. Only the first
+  // [_payoutPlaces] are active.
+  late final List<TextEditingController> _payoutCtrls =
+      List.generate(4, (_) => _makePayoutCtrl(''));
+  int _payoutPlaces = 1;
 
   bool    _loading = true;
   bool    _saving  = false;
@@ -70,8 +74,18 @@ class _TournamentLowNetSetupScreenState
     return c;
   }
 
-  double get _totalPayout =>
-      _payoutCtrls.fold(0.0, (s, c) => s + (double.tryParse(c.text.trim()) ?? 0.0));
+  /// Fill the active places with the shared suggested split — the SAME
+  /// 60/25/15 every other pot proposes. One vocabulary across the app.
+  void _suggest() {
+    final pool = (_estimatedPool ?? 0).round();
+    if (pool <= 0) return;
+    final amts = suggestPayouts(pool, _payoutPlaces);
+    setState(() {
+      for (int i = 0; i < 4; i++) {
+        _payoutCtrls[i].text = amts[i] == 0 ? '' : '${amts[i]}';
+      }
+    });
+  }
 
   /// Estimated pool = entry fee × number of players (UI helper, not saved).
   double? get _estimatedPool {
@@ -90,38 +104,24 @@ class _TournamentLowNetSetupScreenState
       final cfg    = await client.getTournamentLowNetSetup(widget.tournamentId);
       if (!mounted) return;
 
-      final ctrls = <TextEditingController>[];
-      for (final p in cfg.payouts) {
-        final amt = (p['amount'] as num? ?? 0).toDouble();
-        ctrls.add(_makePayoutCtrl(_fmt(amt)));
-      }
-
       setState(() {
         _mode       = cfg.handicapMode;
         _netPercent = cfg.netPercent;
         _entryCtrl.text = _fmt(cfg.entryFee);
-        _payoutPlaces   = ctrls.length;
-        for (final c in _payoutCtrls) c.dispose();
-        _payoutCtrls
-          ..clear()
-          ..addAll(ctrls);
+        // Up to four places — the championship pays up to three, and the
+        // shared payout construct tops out at four like every other pot.
+        final paid = cfg.payouts.take(4).toList();
+        for (int i = 0; i < 4; i++) {
+          final amt = i < paid.length
+              ? (paid[i]['amount'] as num? ?? 0).toDouble() : 0.0;
+          _payoutCtrls[i].text = amt > 0 ? _fmt(amt) : '';
+        }
+        _payoutPlaces = paid.isEmpty ? 1 : paid.length;
         _loading = false;
       });
     } catch (e) {
       if (mounted) setState(() { _error = e; _loading = false; });
     }
-  }
-
-  void _setPayoutPlaces(int n) {
-    setState(() {
-      while (_payoutCtrls.length < n) {
-        _payoutCtrls.add(_makePayoutCtrl('0'));
-      }
-      while (_payoutCtrls.length > n) {
-        _payoutCtrls.removeLast().dispose();
-      }
-      _payoutPlaces = n;
-    });
   }
 
   Future<void> _save() async {
@@ -130,9 +130,9 @@ class _TournamentLowNetSetupScreenState
       final client   = context.read<AuthProvider>().client;
       final entryFee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
       final payouts  = <Map<String, dynamic>>[];
-      for (int i = 0; i < _payoutCtrls.length; i++) {
+      for (int i = 0; i < _payoutPlaces; i++) {
         final amt = double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0;
-        payouts.add({'place': i + 1, 'amount': amt});
+        if (amt > 0) payouts.add({'place': i + 1, 'amount': amt});
       }
 
       final setup = LowNetChampionshipSetup(
@@ -300,75 +300,25 @@ class _TournamentLowNetSetupScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Places paid',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 8),
-
-                // Places stepper (0–8)
-                LayoutBuilder(builder: (context, constraints) {
-                  const maxPlaces = 8;
-                  // n buttons → (n+1) borders at 1px each
-                  final segW =
-                      ((constraints.maxWidth - (maxPlaces + 1)) / maxPlaces)
-                          .floorToDouble();
-                  return ToggleButtons(
-                    borderRadius : BorderRadius.circular(8),
-                    constraints  : BoxConstraints.tightFor(width: segW, height: 40),
-                    // Single-select: only the currently chosen count is highlighted
-                    isSelected   : List.generate(
-                        maxPlaces, (i) => i + 1 == _payoutPlaces),
-                    // Tap same button again → deselect (0 places); tap new → select it
-                    onPressed    : (i) => _setPayoutPlaces(
-                        _payoutPlaces == i + 1 ? 0 : i + 1),
-                    children     : List.generate(
-                        maxPlaces, (i) => Text('${i + 1}')),
-                  );
-                }),
-
-                const SizedBox(height: 16),
-
-                // Payout input rows
-                for (int i = 0; i < _payoutCtrls.length; i++) ...[
-                  _PayoutRow(
-                    place     : i + 1,
-                    controller: _payoutCtrls[i],
-                  ),
-                  if (i < _payoutCtrls.length - 1) const SizedBox(height: 8),
-                ],
-
-                // Total
-                if (_payoutCtrls.isNotEmpty) ...[
-                  const Divider(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Total payout',
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.bold)),
-                      Text(
-                        '\$${_totalPayout.toStringAsFixed(2)}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary),
-                      ),
-                    ],
-                  ),
-                ],
-
-                if (_payoutCtrls.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Select the number of paid places above.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  ),
-
+                // The SAME construct Irish Rumble and Pink Ball use: a paid-
+                // places stepper, an editable amount per place, the balance
+                // line on the left and Auto-suggest on the right. There was no
+                // reason for the championship to have its own — and its
+                // hand-rolled version had no auto-suggest at all, so a TD
+                // dividing a pot three ways did the arithmetic himself.
+                PayoutConfigField(
+                  pool       : (_estimatedPool ?? 0).round(),
+                  numPayouts : _payoutPlaces,
+                  payoutCtrls: _payoutCtrls,
+                  onNumPayoutsChanged: (n) =>
+                      setState(() => _payoutPlaces = n),
+                  onPayoutChanged    : () => setState(() {}),
+                  onSuggest          : _suggest,
+                ),
                 const SizedBox(height: 8),
                 Text(
-                  'Ties split the combined prize for their finishing positions equally.',
+                  'Ties split the combined prize for the places they occupy — '
+                  'a T2 pair shares 2nd and 3rd. No countbacks.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
                 ),
@@ -412,54 +362,3 @@ class _TournamentLowNetSetupScreenState
 // import above and the call site in build().  The inline ToggleButtons +
 // "Handicap %" Row overflowed by ~8 px on narrow widths and didn't match
 // the casual-side handicap UI.
-
-/// Single payout row (place + dollar input).
-class _PayoutRow extends StatelessWidget {
-  final int                   place;
-  final TextEditingController controller;
-  const _PayoutRow({required this.place, required this.controller});
-
-  static String _ordinal(int n) {
-    switch (n) {
-      case 1: return '1st';
-      case 2: return '2nd';
-      case 3: return '3rd';
-      default: return '${n}th';
-    }
-  }
-
-  static Color _placeColor(int place) {
-    switch (place) {
-      case 1: return const Color(0xFFB8860B); // dark gold
-      case 2: return const Color(0xFF708090); // slate silver
-      case 3: return const Color(0xFF8B4513); // saddle brown / bronze
-      default: return Colors.black87;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = place <= 3 ? _placeColor(place) : Colors.black87;
-    return Row(children: [
-      SizedBox(
-        width: 44,
-        child: Text(
-          _ordinal(place),
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color),
-        ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: GolfTextField(
-          controller: controller,
-          keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
-          prefixText: '\$ ',
-          textAlign: TextAlign.right,
-        ),
-      ),
-    ]);
-  }
-}
