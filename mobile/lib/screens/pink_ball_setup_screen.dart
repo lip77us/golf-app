@@ -27,7 +27,10 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
   bool    _configured = false;
   String? _error;
 
-  final _colorCtrl = TextEditingController(text: 'Pink');
+  // The app never asks the COLOUR — it asks what the group CALLS the game.
+  // No default and no memory of last week: the field starts empty every
+  // tournament, and Save does not fire until it has a name.
+  final _nameCtrl = TextEditingController();
   final _entryCtrl = TextEditingController();
 
   // Payout rows: a fixed 4 controllers (only the first [_payoutPlaces] are
@@ -51,7 +54,7 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
 
   @override
   void dispose() {
-    _colorCtrl.dispose();
+    _nameCtrl.dispose();
     _entryCtrl.dispose();
     for (final c in _payoutCtrls) c.dispose();
     super.dispose();
@@ -143,7 +146,7 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
           .cast<int>()
           .toList();
       setState(() {
-        _colorCtrl.text = data['ball_color'] as String? ?? 'Pink';
+        _nameCtrl.text = data['game_name'] as String? ?? '';
         _entryCtrl.text = fee > 0 ? _fmtAmount(fee) : '';
         _numPlayers     = data['num_players'] as int? ?? 0;
         _groupSizes     = groupSizes;
@@ -167,6 +170,15 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
   }
 
 
+  /// Why Save cannot fire, phrased as the button's own label, or null when
+  /// it can. The ball has to have a name — no default and no memory of last
+  /// week — and the places have to add to the pot.
+  String? get _saveBlocker {
+    if (_nameCtrl.text.trim().isEmpty) return 'Name the game to save';
+    if (!_poolBalanced) return 'Places must add to the pot';
+    return null;
+  }
+
   Future<void> _save() async {
     if (!_poolBalanced) {
       setState(() {
@@ -176,7 +188,7 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
       return;
     }
     final entryFee = double.tryParse(_entryCtrl.text.trim()) ?? 0.0;
-    final color    = _colorCtrl.text.trim().isEmpty ? 'Pink' : _colorCtrl.text.trim();
+    final gameName = _nameCtrl.text.trim();
     final payouts  = <Map<String, dynamic>>[];
     for (int i = 0; i < _payoutPlaces; i++) {
       // Stored as the group total prize for that place — split among the
@@ -190,7 +202,7 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
       final client = context.read<AuthProvider>().client;
       await client.postPinkBallSetup(
         widget.roundId,
-        ballColor: color,
+        gameName: gameName,
         entryFee:  entryFee,
         payouts:   payouts,
       );
@@ -210,7 +222,11 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pink Ball Setup'),
+        // The screen is named for the game, not for a colour the app never
+        // asks about. Before it has a name there is nothing to name it after.
+        title: Text(_nameCtrl.text.trim().isEmpty
+            ? 'Ball game'
+            : _nameCtrl.text.trim()),
       ),
       bottomNavigationBar: _loading ? null : SafeArea(
         top: false,
@@ -220,14 +236,18 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
             width: double.infinity,
             height: 52,
             child: FilledButton(
-              onPressed: (_saving || !_poolBalanced) ? null : _save,
+              // Nothing is disabled without saying why: when Save cannot
+              // fire, the button itself names the missing input rather than
+              // going grey and silent.
+              onPressed: (_saving || _saveBlocker != null) ? null : _save,
               child: _saving
                   ? const SizedBox(
                       width: 20, height: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : Text(
-                      _configured ? 'Save Changes' : 'Save Setup',
+                      _saveBlocker ??
+                          (_configured ? 'Save Changes' : 'Save Setup'),
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold),
                     ),
@@ -253,10 +273,42 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
                         const SizedBox(height: 16),
 
                         GolfTextField(
-                          controller: _colorCtrl,
-                          label: 'Ball Color',
-                          hint: 'e.g. Pink, Red, Yellow',
+                          controller: _nameCtrl,
+                          label: 'What do you call it?',
+                          hint: 'Pink Ball',
+                          // 16 characters is the iPhone 13 mini cap the Cup
+                          // work derived — it fits a leaderboard tab without
+                          // truncating and a carrier badge on a score-entry
+                          // row that already holds a name and a CH chip. The
+                          // field stops accepting at the cap rather than
+                          // truncating later.
+                          maxLength: 16,
                           textCapitalization: TextCapitalization.words,
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'The name you type is used everywhere — the '
+                          'leaderboard tab, the carrier badge, the lost-ball '
+                          'switch, the chat line and settlement.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 8),
+                        // One tap each — shortcuts, not a list to choose from.
+                        // Anything that fits is valid.
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            for (final s in const ['Pink Ball', 'Red Ball',
+                                                   'Devil Ball', 'Beer Ball'])
+                              ActionChip(
+                                label: Text(s),
+                                onPressed: () => setState(() {
+                                  _nameCtrl.text = s;
+                                }),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 12),
 

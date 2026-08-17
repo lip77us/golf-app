@@ -636,7 +636,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _StepKind.cupGamePlan =>
               (label: 'Games by round', sub: 'Format and points', perRound: true),
             _StepKind.sideGame =>
-              (label: 'Side game', sub: 'Field-wide — Irish Rumble, Pink Ball', perRound: false),
+              (label: 'Side game', sub: 'Field-wide — Irish Rumble, the ball game', perRound: false),
             _StepKind.players =>
               (label: 'Players', sub: 'Add the field', perRound: false),
             _StepKind.groups =>
@@ -3063,8 +3063,9 @@ class _StepSideGame extends StatelessWidget {
     ('irish_rumble', 'Irish Rumble',
         'One, two, then three balls counted across the round. Needs its own hole setup.',
         true),
-    ('pink_ball', 'Pink Ball',
-        'One marked ball rotates through the group and must survive the round.',
+    ('pink_ball', 'Ball game',
+        'One marked ball rotates through the group and must survive the round. '
+        'You name it on its setup screen.',
         true),
   ];
 
@@ -5357,7 +5358,7 @@ class _Step6GameSetupState extends State<_Step6GameSetup> {
           if (hasPinkBall) ...[
             _SetupButton(
               icon : Icons.circle_outlined,
-              label: 'Configure Pink Ball',
+              label: 'Configure the ball game',
               configured: _savedConfigs.contains(GameIds.pinkBall),
               onTap: () => _openSetup(
                 GameIds.pinkBall,

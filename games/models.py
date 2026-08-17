@@ -1824,22 +1824,42 @@ class StablefordChampionshipConfig(models.Model):
 
 class PinkBallConfig(models.Model):
     """
-    Round-level configuration for the Pink Ball survivor pool.
+    Round-level configuration for the ball game — the survivor pool where one
+    ball per group rotates and the last group still holding it wins.
 
-    ball_color  : the colour name shown in the UI ("Pink", "Red", "Yellow", …)
-    bet_unit    : entry fee per foursome; total pool = bet_unit × num_groups.
-    places_paid : number of finishing places that receive a payout (default 1 = winner takes all).
-                  Pool is split equally among paid places, then further split among tied groups
-                  within each place.
+    **The app never asks the colour.** It is commonly Pink Ball; one group buys
+    red balls and calls it Red Ball, another runs Devil Ball, or Beer Ball
+    because the ball had a stein printed on it. What the app needs to know is
+    what the group CALLS the game, so ``game_name`` is free text and that
+    string is the game's name on every surface: the leaderboard tab, the
+    carrier badge, the lost-ball control, the chat line and the settlement row.
+
+    Sixteen characters — the iPhone 13 mini cap the Cup work derived, the
+    narrowest screen supported. It fits a leaderboard tab without truncating
+    and a carrier badge on a score-entry row that already holds a name and a
+    CH chip.
+
+    **No default and no memory of last week.** The field starts empty every
+    tournament: the ball in the bag this week is the one being named, and Save
+    does not fire until it has a name (enforced at the API, not in the column,
+    so existing rows migrate cleanly). The game is re-drawn each round — the
+    name carries across, the pot does not.
+
+    See docs/design-review/handoff-individual-play/SPEC.md §6.
     """
     round       = models.OneToOneField(
                       Round, on_delete=models.CASCADE,
                       related_name='pink_ball_config'
                   )
-    ball_color  = models.CharField(max_length=50, default='Pink')
+    game_name   = models.CharField(
+                      max_length=16, blank=True, default='',
+                      help_text='What this group calls the game — "Pink Ball", '
+                                '"Devil Ball", "Beer Ball". 16 characters. No '
+                                'default; required to save.',
+                  )
     entry_fee   = models.DecimalField(
                       max_digits=8, decimal_places=2, default=0.00,
-                      help_text="Entry fee per foursome; total pool = entry_fee × num_foursomes.",
+                      help_text="Entry fee per golfer; total pool = entry_fee × field size.",
                   )
     payouts     = models.JSONField(
                       default=list,
@@ -1851,10 +1871,15 @@ class PinkBallConfig(models.Model):
                   )
 
     class Meta:
-        verbose_name = 'Pink Ball Config'
+        verbose_name = 'Ball Game Config'
+
+    @property
+    def display_name(self) -> str:
+        """The name every surface reads. Falls back only for legacy rows."""
+        return self.game_name.strip() or 'Ball game'
 
     def __str__(self):
-        return f"Pink Ball config ({self.ball_color}, ${self.bet_unit}, {self.places_paid}P) — {self.round}"
+        return f"{self.display_name} config — {self.round}"
 
 
 # ---------------------------------------------------------------------------

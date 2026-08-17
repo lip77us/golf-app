@@ -1486,7 +1486,11 @@ class StablefordChampionshipSetupSerializer(serializers.Serializer):
 
 class PinkBallSetupSerializer(serializers.Serializer):
     """POST /api/rounds/{id}/pink-ball/setup/"""
-    ball_color = serializers.CharField(max_length=50, default='Pink')
+    # The app never asks the colour — it asks what the group CALLS the
+    # game. 16 characters (the iPhone 13 mini cap), no default, and
+    # required: Save does not fire until the ball has a name.
+    game_name  = serializers.CharField(max_length=16, allow_blank=False,
+                                       trim_whitespace=True)
     entry_fee  = serializers.DecimalField(
                      max_digits=8, decimal_places=2, default='0.00',
                  )

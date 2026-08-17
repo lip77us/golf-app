@@ -645,11 +645,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       if (tn != null && tn.isNotEmpty && tn != cn) return tn;
       return 'Stroke Play';
     }
-    // Pink Ball tab tracks the configured ball colour (e.g. "Red Ball").
+    // Tabs are named for what they pay, and the ball game's name is the
+    // TD's own — "Beer Ball" if that is what he typed. The app never asks
+    // the colour, so there is no colour to append a word to.
     if (g == 'pink_ball') {
-      final color =
-          ((lb?.games['pink_ball']?.data as Map?)?['ball_color'])?.toString();
-      return (color != null && color.isNotEmpty) ? '$color Ball' : 'Pink Ball';
+      final name =
+          ((lb?.games['pink_ball']?.data as Map?)?['game_name'])?.toString();
+      return (name != null && name.trim().isNotEmpty) ? name.trim() : 'Ball game';
     }
     return gameDisplayName(g);
   }
@@ -1287,7 +1289,9 @@ class _RedBallView extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme     = Theme.of(context);
     final results   = (data['results'] as List? ?? []);
-    final ballColor = data['ball_color']?.toString() ?? 'Pink';
+    // The TD's own name for the game, on every surface.
+    final rawName  = data['game_name']?.toString().trim() ?? '';
+    final gameName = rawName.isNotEmpty ? rawName : 'Ball game';
     final entryFee  = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
     final payouts   = (data['payouts'] as List? ?? []);
 
@@ -1310,7 +1314,7 @@ class _RedBallView extends StatelessWidget {
         // Info chips — wrap so they never overflow the row.
         Wrap(spacing: 8, runSpacing: 4, children: [
           Chip(
-            label: Text('$ballColor Ball',
+            label: Text(gameName,
                 style: const TextStyle(fontSize: 11)),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,

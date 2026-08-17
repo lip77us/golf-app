@@ -6845,11 +6845,13 @@ class StablefordResultView(APIView):
 class PinkBallSetupView(APIView):
     """
     GET  /api/rounds/{id}/pink-ball/setup/
-        Returns current config (ball_color, entry_fee, payouts) plus each
-        foursome's current pink_ball_order and player list.
+        Returns current config (game_name, entry_fee, payouts) plus each
+        foursome's current ball order and player list.
 
     POST /api/rounds/{id}/pink-ball/setup/
-        Save ball_color, entry_fee, and payouts.
+        Save game_name, entry_fee, and payouts. The name is REQUIRED — the
+        app never asks the colour, and Save does not fire until the ball has
+        a name (spec §6).
     """
 
     @staticmethod
@@ -6892,12 +6894,14 @@ class PinkBallSetupView(APIView):
         try:
             config      = round_obj.pink_ball_config
             configured  = True
-            ball_color  = config.ball_color
+            game_name   = config.game_name
             entry_fee   = float(config.entry_fee)
             payouts     = config.payouts or []
         except PinkBallConfig.DoesNotExist:
             configured  = False
-            ball_color  = 'Pink'
+            # No default and no memory of last week: the field starts empty
+            # every tournament.
+            game_name   = ''
             entry_fee   = 0.00
             payouts     = []
 
@@ -6907,7 +6911,7 @@ class PinkBallSetupView(APIView):
         ]
         return Response({
             'configured' : configured,
-            'ball_color' : ball_color,
+            'game_name'  : game_name,
             'entry_fee'  : entry_fee,
             'payouts'    : payouts,
             'num_players': num_players,
@@ -6924,14 +6928,14 @@ class PinkBallSetupView(APIView):
         config, _ = PinkBallConfig.objects.update_or_create(
             round    = round_obj,
             defaults = {
-                'ball_color': d['ball_color'],
+                'game_name' : d['game_name'],
                 'entry_fee' : d['entry_fee'],
                 'payouts'   : d['payouts'],
             },
         )
         return Response({
             'configured': True,
-            'ball_color': config.ball_color,
+            'game_name' : config.game_name,
             'entry_fee' : float(config.entry_fee),
             'payouts'   : config.payouts or [],
         }, status=status.HTTP_201_CREATED)

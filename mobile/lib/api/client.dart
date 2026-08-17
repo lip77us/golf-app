@@ -2017,12 +2017,14 @@ class ApiClient {
 
   Future<Map<String, dynamic>> postPinkBallSetup(
     int roundId, {
-    required String                      ballColor,
+    // What the group CALLS the game — the app never asks the colour. 16
+    // characters, required: Save does not fire until the ball has a name.
+    required String                      gameName,
     required double                      entryFee,
     required List<Map<String, dynamic>>  payouts,
   }) async {
     final data = await _post('/rounds/$roundId/pink-ball/setup/', {
-      'ball_color': ballColor,
+      'game_name' : gameName,
       'entry_fee' : entryFee.toStringAsFixed(2),
       'payouts'   : payouts,
     });

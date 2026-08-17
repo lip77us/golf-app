@@ -42,7 +42,10 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
   bool _ballLost  = false;
   bool _saving    = false;
 
-  String _ballColor = 'Pink';
+  // The TD's own name for the game. It is the string on every surface —
+  // the tab, the carrier badge, the lost-ball switch and the chat line —
+  // so nothing here appends the word 'Ball' to a colour any more.
+  String _gameName = 'Ball game';
   List<int> _order  = [];       // 18 player PKs (carrier per hole)
   bool _configLoaded = false;
 
@@ -208,7 +211,9 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
       }
 
       setState(() {
-        _ballColor         = data['ball_color'] as String? ?? 'Pink';
+        _gameName          = (data['game_name'] as String?)?.trim().isNotEmpty == true
+            ? (data['game_name'] as String).trim()
+            : 'Ball game';
         _order             = order;
         _configLoaded      = true;
         _ballLostOnHole    = ballLostOnHole;
@@ -324,7 +329,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
       enableDrag: false,
       isScrollControlled: true,
       builder: (ctx) => _OrderSetupSheet(
-        ballColor:   _ballColor,
+        gameName:   _gameName,
         members:     orderedMembers,
         lockedCount: lockedCount,
         onConfirm: (List<int> playerOrder) async {
@@ -495,7 +500,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
 
     if (rp.loadingScorecard || sc == null || !_configLoaded) {
       return Scaffold(
-        appBar: const GolfAppBar(title: 'Pink Ball'),
+        appBar: GolfAppBar(title: _gameName),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -592,7 +597,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                 yards:            hole?.yards,
                 si:               hole?.strokeIndex,
                 carrierName:      carrierName,
-                ballColor:        _ballColor,
+                gameName:        _gameName,
                 irishRumbleBalls: _irishBallsToCount,
                 ballAlreadyLost:  _ballLostOnHole != null && _holeNumber > _ballLostOnHole!,
               ),
@@ -600,7 +605,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
 
               // ── Lost ball toggle ──────────────────────────────────────
               _BallLostCard(
-                ballColor:    _ballColor,
+                gameName:    _gameName,
                 lost:         _ballLost,
                 lockedOnHole: (_ballLostOnHole != null && _holeNumber > _ballLostOnHole!)
                     ? _ballLostOnHole
@@ -656,7 +661,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                     member:          m,
                     isCarrier:       isCarrier,
                     isHot:           isHot,
-                    ballColor:       _ballColor,
+                    gameName:       _gameName,
                     ballAlreadyLost: _ballLostOnHole != null && _holeNumber > _ballLostOnHole!,
                     par:             par,
                     grossScore:      displayed,
@@ -831,7 +836,7 @@ class _CarrierBanner extends StatelessWidget {
   final int?    yards;
   final int?    si;
   final String  carrierName;
-  final String  ballColor;
+  final String  gameName;
   /// Number of scores that count for Irish Rumble on this hole, or null if
   /// Irish Rumble is not an active game.
   final int?    irishRumbleBalls;
@@ -844,7 +849,7 @@ class _CarrierBanner extends StatelessWidget {
     this.yards,
     this.si,
     required this.carrierName,
-    required this.ballColor,
+    required this.gameName,
     this.irishRumbleBalls,
     this.ballAlreadyLost = false,
   });
@@ -890,7 +895,7 @@ class _CarrierBanner extends StatelessWidget {
                         text: carrierName,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      TextSpan(text: ' plays the $ballColor Ball'),
+                      TextSpan(text: ' carries the $gameName'),
                     ],
                   ),
                 ),
@@ -947,7 +952,7 @@ class _PlayerScoreRow extends StatelessWidget {
   final Membership         member;
   final bool               isCarrier;
   final bool               isHot;      // active entry player
-  final String             ballColor;
+  final String             gameName;
   final int                par;
   final int?               grossScore;
   final int                handicapStrokes;
@@ -959,7 +964,7 @@ class _PlayerScoreRow extends StatelessWidget {
     required this.member,
     required this.isCarrier,
     required this.isHot,
-    required this.ballColor,
+    required this.gameName,
     required this.par,
     required this.grossScore,
     required this.handicapStrokes,
@@ -1036,7 +1041,7 @@ class _PlayerScoreRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '$ballColor Ball',
+                  gameName,
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
@@ -1092,7 +1097,7 @@ class _PlayerScoreRow extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _OrderSetupSheet extends StatefulWidget {
-  final String           ballColor;
+  final String           gameName;
   final List<Membership> members;
   /// Number of leading positions that are already fixed by played holes.
   /// 0 = all positions freely reorderable.
@@ -1100,7 +1105,7 @@ class _OrderSetupSheet extends StatefulWidget {
   final Future<void> Function(List<int>) onConfirm;
 
   const _OrderSetupSheet({
-    required this.ballColor,
+    required this.gameName,
     required this.members,
     required this.lockedCount,
     required this.onConfirm,
@@ -1156,7 +1161,7 @@ class _OrderSetupSheetState extends State<_OrderSetupSheet> {
                             ? 'The first ${widget.lockedCount} position${widget.lockedCount > 1 ? 's are' : ' is'} locked by scored holes. '
                               'Drag the remaining players to set their order.'
                             : 'Drag to set the order your group will carry the '
-                              '${widget.ballColor} Ball. The rotation repeats across all 18 holes.',
+                              '${widget.gameName}. The rotation repeats across all 18 holes.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
@@ -1268,7 +1273,7 @@ class _OrderSetupSheetState extends State<_OrderSetupSheet> {
 // ---------------------------------------------------------------------------
 
 class _BallLostCard extends StatelessWidget {
-  final String  ballColor;
+  final String  gameName;
   final bool    lost;
   final void Function(bool) onChanged;
   /// Non-null when the ball was already lost on a previous hole (< current).
@@ -1276,7 +1281,7 @@ class _BallLostCard extends StatelessWidget {
   final int?    lockedOnHole;
 
   const _BallLostCard({
-    required this.ballColor,
+    required this.gameName,
     required this.lost,
     required this.onChanged,
     this.lockedOnHole,
@@ -1299,7 +1304,7 @@ class _BallLostCard extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                '$ballColor Ball lost on hole $lockedOnHole',
+                '$gameName lost on hole $lockedOnHole',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: theme.colorScheme.onSurfaceVariant,
@@ -1328,7 +1333,7 @@ class _BallLostCard extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Lost the $ballColor Ball on this hole',
+                'Lost the $gameName on this hole',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: lost

@@ -600,7 +600,7 @@ class _GameSetupCard extends StatelessWidget {
                 onPressed: () => Navigator.of(context)
                     .pushNamed('/pink-ball-setup', arguments: roundId),
                 icon: const Icon(Icons.tune, size: 18),
-                label: const Text('Configure Pink Ball'),
+                label: const Text('Configure the ball game'),
               ),
             ],
             if (hasMatchPlay) ...[

@@ -594,7 +594,10 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id                   : GameIds.pinkBall,
-    displayName          : 'Pink Ball',
+    // The app never asks the colour — the TD names the game on its setup
+    // screen, and that string is what every later surface reads. The chip
+    // is generic because at pick time the ball has no name yet.
+    displayName          : 'Ball game',
     tournament           : true,
     requiresMultiFoursome: true,
     minPlayers           : 2,
