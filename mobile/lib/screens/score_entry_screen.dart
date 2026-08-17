@@ -8066,6 +8066,13 @@ class _MatchPlayStatusCard extends StatelessWidget {
   /// cards on the score-entry screen ("Paul L wins 3&2" vs "Paul Lipkin
   /// wins 3&2" — the latter truncates).
   String _matchSummary(Map<String, dynamic> match) {
+    // The engine owns this sentence — "Gunst 4&2", "All square thru 11",
+    // "1 UP thru 11" — because the rules behind it (a halved semi playing on,
+    // a back-9 match scored against an opponent not yet named) live there. It
+    // also uses SURNAMES, so a full name never has to be truncated mid-word.
+    final line = (match['line'] as String?)?.trim();
+    if (line != null && line.isNotEmpty) return line;
+
     final status           = match['status']           as String;
     final result           = match['result']           as String?;
     final holes            = (match['holes']           as List? ?? []);

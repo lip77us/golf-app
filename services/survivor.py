@@ -582,12 +582,21 @@ def survivor_summary(foursome) -> dict:
             'survivor' : live['index'],
             'alive_ids': cur_alive,
             'role'     : 'decider' if live['eliminated'] else 'elimination',
+            # WHO the Zombie is right now — the player out of the live
+            # Survivor while the option is on. state_by_hole only covers
+            # SCORED holes, so without this the client had to re-derive the
+            # state for the hole being played, and a resurrection makes that
+            # re-derivation wrong: after a Zombie comes back in and sends a
+            # decider out, the Zombie is the DECIDER, not the man who
+            # returned. The engine already tracks it; now it says so.
+            'zombie_id': live['eliminated'] if zombie_on else None,
         }
     else:
         current = {
             'survivor' : (survivors[-1]['index'] + 1) if survivors else 1,
             'alive_ids': list(real_ids),
             'role'     : 'elimination',
+            'zombie_id': None,
         }
 
     return {
