@@ -12,8 +12,15 @@
 ///   Holes 13–17 → best 3 nets per group
 ///   Hole 18     → all 4 nets per group
 ///
-/// The net-double-bogey cap (per-hole net par + 2 max) honors the
-/// round-level `Round.net_max_double_bogey` flag; toggle it here.
+/// ONE screen: rules first, money last, one Save. It used to split into
+/// "· Game" then "· Money" behind Next/Back, but the money is four rows and no
+/// other game asks twice — the pattern is that a choice opens its own detail
+/// where it was made (Custom reveals its 18-cell editor inline).
+///
+/// The net-double-bogey cap is a RULE in a tournament — always on, stated, not
+/// switchable, because three switches for one rule can disagree and the
+/// leaderboard cannot show which one won. A casual round keeps its toggle
+/// (`Round.net_max_double_bogey`).
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -53,9 +60,6 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
   /// Player count per foursome (e.g. [4, 3]) — drives the per-group-size
   /// per-player breakdown shown under each payout field.
   List<int> _groupSizes = const [];
-
-  // 2-step wizard: 0 = game (variant/handicap), 1 = money (entry fee/payouts).
-  int _step = 0;
 
   // ── Variant ───────────────────────────────────────────────────────────────
   /// One of: 'classic', 'arizona_shuffle', 'shuffle', 'custom'.
@@ -263,9 +267,14 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ONE screen: rules first, money last, one Save. It used to split into
+    // "· Game" then "· Money" behind Next/Back — but the money is four rows,
+    // which is not a screen, and no other game asks twice. The pattern the
+    // mode picker already sets is that a choice opens its own detail where it
+    // was made (Custom reveals its 18-cell editor inline), so the only step
+    // after rules is money.
     return Scaffold(
-      appBar: AppBar(title: Text(
-          _step == 0 ? 'Irish Rumble · Game' : 'Irish Rumble · Money')),
+      appBar: AppBar(title: const Text('Irish Rumble')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null && _loading == false && !_saving
@@ -275,48 +284,57 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
                   onRetry: _load,
                 )
               : Column(children: [
-                  Expanded(child: _step == 0 ? _gameBody() : _moneyBody()),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _gameSection(),
+                          const SizedBox(height: 24),
+                          _moneySection(),
+                        ],
+                      ),
+                    ),
+                  ),
                   SafeArea(top: false, child: _nav()),
                 ]),
     );
   }
 
+  /// Why Save cannot fire, as the button's own label. Nothing is disabled
+  /// without saying why.
+  String? get _saveBlocker {
+    if (!_stakeChosen)  return 'Set the entry to save';
+    if (!_poolBalanced) return 'Places must add to the pot';
+    return null;
+  }
+
   Widget _nav() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Row(children: [
-        if (_step == 1)
-          OutlinedButton(
-            onPressed: _saving ? null : () => setState(() => _step = 0),
-            child: const Text('Back'),
-          ),
-        const Spacer(),
-        if (_step == 0)
-          FilledButton(
-            onPressed: () => setState(() => _step = 1),
-            child: const Text('Next'),
-          )
-        else
-          FilledButton(
-            onPressed: (_saving || !_poolBalanced || !_stakeChosen) ? null : _save,
-            child: _saving
-                ? const SizedBox(width: 20, height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : Text(_configured ? 'Save Changes' : 'Save Setup',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-      ]),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: (_saving || _saveBlocker != null) ? null : _save,
+          child: _saving
+              ? const SizedBox(width: 20, height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : Text(
+                  _saveBlocker ??
+                      (_configured ? 'Save Changes' : 'Save game'),
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      ),
     );
   }
 
   // ── Step 1: game (variant + handicap) ──
-  Widget _gameBody() {
+  Widget _gameSection() {
     final theme = Theme.of(context);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Borrowed-4th notice (mixed group sizes) ─────────────────────
@@ -338,17 +356,26 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
                   Expanded(
                     child: Text.rich(
                       TextSpan(children: const [
+                        // The screen does not ASK about this — it TELLS. The
+                        // borrowed 4th is built when the round is created,
+                        // automatically, and only when some other group has
+                        // four to level up to.
                         TextSpan(
-                          text: 'Threesome leveling. ',
+                          text: 'Borrowed 4th. ',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                         TextSpan(
                           text: 'This round mixes a threesome with a foursome, '
-                              'so each threesome is given a 4th ball borrowed '
-                              'from the rest of the field — every group then '
-                              'counts the same number of balls. Tip: tee the '
-                              'threesome off last so its donors have already '
-                              'posted.',
+                              'so each threesome plays a borrowed 4th — a ball '
+                              'taken from every real golfer in the other '
+                              'groups, in one fixed rotation, scored on the '
+                              "donor's own net off his own tee. Nothing to "
+                              'set. A group waiting on a donor shows a '
+                              'provisional total on three balls, and if it '
+                              'wins, the place splits among its three real '
+                              'golfers — the borrowed ball is not a person and '
+                              'cannot be paid. Tee the threesome off last so '
+                              'most donors have already posted.',
                         ),
                       ]),
                       style: theme.textTheme.bodySmall,
@@ -379,9 +406,11 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
             ),
           ],
           const SizedBox(height: 8),
+          // There is no toggle any more: the cap is a RULE, always on. The
+          // note states it flat, once, rather than pointing at a control.
           Text(
-            'Each score may be capped at net par + 2 first — see the '
-            'Net Double-Bogey Cap toggle below.',
+            'Every score is capped at net double bogey — par + 2 plus any '
+            'strokes you get on that hole — before the best nets are picked.',
             style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant),
           ),
@@ -403,29 +432,46 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
 
           const SizedBox(height: 16),
 
-          // ── Net double-bogey cap (round-level) ──────────────────────────
-          Builder(builder: (ctx) {
-            final round = ctx.watch<RoundProvider>().round;
-            if (round == null) return const SizedBox.shrink();
-            return NetDoubleBogeyCard(
-              handicapMode: _mode, netPercent: _netPercent,
-              value: round.netMaxDoubleBogey,
-              onChanged: (v) =>
-                  ctx.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v),
-            );
-          }),
+          // ── Net double-bogey cap ────────────────────────────────────────
+          // In a TOURNAMENT the cap is a rule, not a preference: three
+          // switches for one rule can disagree with each other and the
+          // leaderboard cannot show which one won. So the tournament states
+          // it and the casual round keeps its toggle.
+          if (_isTournamentRound)
+            SectionCard(
+              title: 'Net double bogey max',
+              trailing: const Chip(
+                label: Text('Always on', style: TextStyle(fontSize: 11)),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+              ),
+              child: Text(
+                'Applied to each score before the best nets are picked. Set '
+                'once for the tournament — there is nothing to switch here.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+              ),
+            )
+          else
+            Builder(builder: (ctx) {
+              final round = ctx.watch<RoundProvider>().round;
+              if (round == null) return const SizedBox.shrink();
+              return NetDoubleBogeyCard(
+                handicapMode: _mode, netPercent: _netPercent,
+                value: round.netMaxDoubleBogey,
+                onChanged: (v) =>
+                    ctx.read<RoundProvider>().updateRoundNetMaxDoubleBogey(v),
+              );
+            }),
         ],
-      ),
     );
   }
 
-  // ── Step 2: money (entry fee + payouts) ──
-  Widget _moneyBody() {
+  // ── Money: entry fee + payouts ──
+  Widget _moneySection() {
     final theme = Theme.of(context);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Entry fee ───────────────────────────────────────────────────
@@ -442,9 +488,27 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
                       const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 6),
+                // The pool line names its SCOPE and its COUNT. Irish Rumble
+                // and Mini Singles draw near-identical money cards over
+                // completely different pots — a field pool paid to a whole
+                // group, and a foursome pool paid to a golfer — so a captain
+                // reading two in a row should not have to count players to
+                // know which one he is filling.
                 Text(
-                  'Collected from each player. '
-                  'Total pool = entry fee × number of players.',
+                  _numPlayers > 0
+                      ? '\$${(double.tryParse(_entryCtrl.text.trim()) ?? 0)
+                          .toStringAsFixed(0)} × $_numPlayers in the field '
+                        '= \$${_pool.toStringAsFixed(0)} · pays a group, '
+                        'split among its real golfers'
+                      : 'Collected from each golfer in the field.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 4),
+                // No countback anywhere in this spec: plenty of bets run on a
+                // given day, so a tie can be no action.
+                Text(
+                  'Tied groups split the place — no countback.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
                 ),
@@ -490,7 +554,6 @@ class _IrishRumbleSetupScreenState extends State<IrishRumbleSetupScreen> {
 
           const SizedBox(height: 80),
         ],
-      ),
     );
   }
 }

@@ -1404,16 +1404,44 @@ GET           /api/tournaments/{id}/settlement/
 `TournamentLeaderboardView` also gained a `scoring` chip-strip block (method,
 mode, allowance, counting rule, cap note) and a `day_bet` tab.
 
-### Still to build (mobile)
-P5 remainder (Rumble setup shape: rules first, money last, one Save; the mode
-picker expands in place; the chip reads the real tie rule instead of "Winner
-takes all"), **P8** leaderboards (round-column strip opening on the newest,
-best-N strike-through, expanded rows showing all 18 with dots and tinted
-capped cells, Rumble donor strip + provisional `F*`, ball board ranked by
-survival, day-bet italics), **P9** score entry (spots stepper, one lost-ball
-switch, a pager that says why), **P10** the wizard (eight steps, "New
-Tournament", Payouts split from Side games, Stableford points step reusing the
-casual screen).
+### What landed (P5, P8–P10, mobile)
 
-**Deferred:** flights; Mini Singles above 16 golfers; per-golfer settle
-marking; a settlement text export.
+**P10 — the create flow is eight honest steps.** `New Tournament`, not
+`New Round`; `Create Tournament`, not `Create Round`. The step list is derived,
+so the header count is always true: seven shown for a one-round stroke-play
+event, Stableford adds the points table, and the day bet only appears on the
+side-game step above one round. SCORING replaces Handicap: no strokes-off
+(a Cup mechanism — there is no low golfer to play off against a field), the
+cap stated as a rule with a worked ceiling instead of a toggle, rounds-counted
+above two rounds, flights drawn as deferred rather than omitted. Money moved
+to where it is charged: PAYOUTS is the championship pot alone (with carve-out
+lines when the bracket is on) and SIDE GAMES carries a fee beside each switch.
+`_Step4Games` was DELETED rather than left unreachable — it held a second copy
+of the money model.
+
+**P9 — score entry.** One lost-ball control (it had a radio circle AND a
+switch), labelled with its consequence. The next-hole button names who it is
+waiting on instead of going grey and silent. The bracket chip renders the
+engine's own line, so a back-9 match against an unresolved semi shows a real
+result rather than a dash. All sudden-death language retired.
+
+**P8 — the boards.** `widgets/synced_scroll_group.dart` makes the round
+columns one horizontal strip: four visible, every row scrolling with the
+header, opening on the newest round. Dropped rounds are struck through and
+live ones amber. Prize is muted italic until every round closes. Day bet is a
+new last tab with italic ineligible rows. The ball board shows the carrier,
+hides ball net once the ball is dead, and its chip reads `ties split`.
+
+**P5 — Irish Rumble setup** is one screen (rules first, money last, one Save)
+instead of `· Game` → `· Money`. The cap note states the rule instead of
+pointing at a toggle that no longer exists; in a tournament the toggle itself
+is replaced by an `Always on` statement (casual keeps its switch). The
+borrowed-4th block TELLS rather than asks, and the pool line names its scope,
+its count and the tie rule.
+
+### Not built
+Settlement has an API and an engine but **no mobile screen yet** — that is the
+one surface from the packet still to draw.
+
+**Deferred by the packet:** flights; Mini Singles above 16 golfers; per-golfer
+settle marking; a settlement text export.
