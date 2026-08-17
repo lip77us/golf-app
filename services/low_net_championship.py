@@ -10,12 +10,12 @@ Rules
   _build_ln_player_totals() from services/low_net_round.py, which applies:
     - handicap adjustment per the championship config (net / gross / strokes_off)
     - double-bogey cap (max par + 2 per hole)
-* Totals are summed across every round in the tournament.
+* Totals are summed across the rounds that COUNT — every round when
+  ``Tournament.rounds_to_count`` is unset, otherwise the best N of them
+  (services/round_counting.py).  A round in progress can never displace a
+  finished one; dropped rounds stay on the board, struck through.
 * Players are ranked lowest-to-highest (low net wins).
 * Ties share the same rank; prize money for tied positions is split equally.
-* rounds_to_count on the Tournament is documented but not yet implemented —
-  all rounds always count.  The loop is structured so that N-of-M selection
-  can be added in a future pass without restructuring.
 
 Public API
 ~~~~~~~~~~
@@ -26,6 +26,7 @@ Public API
 from collections import defaultdict
 
 from services.low_net_round import _build_ln_player_totals
+from services.round_counting import select_counting_rounds
 
 
 # ---------------------------------------------------------------------------
@@ -37,55 +38,80 @@ def _aggregate_rounds(tournament, handicap_mode: str, net_percent: int) -> dict:
     Return {player_id: {'name': str, 'total': int, 'holes_played': int,
                         'par_played': int, 'rounds_played': int,
                         'round_totals': [int, ...],
-                        'round_pars':   [int, ...]}}
-    accumulated across all rounds in the tournament, ordered by round_number.
+                        'round_pars':   [int, ...],
+                        'round_counts': [bool, ...],
+                        'round_complete': [bool, ...]}}
+    across the tournament's rounds, ordered by round_number.
 
     round_pars is the par played per round (parallel to round_totals), used
-    to compute per-round net-to-par for display.
+    to compute per-round net-to-par for display.  round_counts flags which of
+    those rounds feed the cumulative total under best-N-of-M — the board draws
+    the others struck through.
 
     Players who did not play a particular round simply do not contribute
     that round's total (they still appear in the output if they played at
-    least one round).
+    least one round).  ``total``/``par_played``/``holes_played`` are the
+    COUNTING aggregates; ``rounds_played`` is every round they teed off in.
     """
     rounds = list(
         tournament.rounds
         .order_by('round_number')
         .prefetch_related('foursomes__memberships__player')
     )
+    # Individual play: the cap is a rule, not a setting, and holds at any
+    # allowance. A cup keeps the historic Net-100%-only behaviour.
+    force_cap = tournament.is_individual_play
 
-    aggregated: dict = {}
+    # Per-player, per-round rows first — the best-N selection needs to see a
+    # player's whole tournament before any of it can be summed.
+    per_player: dict = {}
 
     for round_obj in rounds:
-        round_totals = _build_ln_player_totals(round_obj, handicap_mode, net_percent)
+        round_totals = _build_ln_player_totals(
+            round_obj, handicap_mode, net_percent, force_cap=force_cap)
+        expected = round_obj.num_holes or 18
 
         for pid, data in round_totals.items():
             if data['holes_played'] == 0:
                 continue  # skip players with no holes scored this round
 
-            entry = aggregated.setdefault(pid, {
-                'name'         : data['name'],
-                'total'        : 0,
-                'holes_played' : 0,
-                'par_played'   : 0,
-                'rounds_played': 0,
-                'handicap'     : data.get('handicap', 0),
-                'round_totals' : [],   # per-round net strokes
-                'round_pars'   : [],   # par played per round (parallel)
-                'round_holes'  : [],   # per-round hole detail lists
-                'round_labels' : [],   # "R1", "R2", …
+            entry = per_player.setdefault(pid, {
+                'name'    : data['name'],
+                'handicap': data.get('handicap', 0),
+                'rows'    : [],
             })
-            entry['total']         += data['total']
-            entry['holes_played']  += data['holes_played']
-            entry['par_played']    += data['par_played']
-            entry['rounds_played'] += 1
-            entry['round_totals'].append(data['total'])
-            entry['round_pars'].append(data['par_played'])
-            holes_list = [
-                {'hole': h, **v}
-                for h, v in sorted(data.get('holes', {}).items())
-            ]
-            entry['round_holes'].append(holes_list)
-            entry['round_labels'].append(f'R{round_obj.round_number}')
+            entry['rows'].append({
+                'total'       : data['total'],
+                'par'         : data['par_played'],
+                'holes'       : data['holes_played'],
+                'net_to_par'  : data['total'] - data['par_played'],
+                'is_complete' : data['holes_played'] >= expected,
+                'label'       : f'R{round_obj.round_number}',
+                'hole_detail' : [
+                    {'hole': h, **v}
+                    for h, v in sorted(data.get('holes', {}).items())
+                ],
+            })
+
+    aggregated: dict = {}
+    for pid, entry in per_player.items():
+        rows   = entry['rows']
+        counts = select_counting_rounds(rows, tournament.rounds_to_count)
+
+        aggregated[pid] = {
+            'name'          : entry['name'],
+            'handicap'      : entry['handicap'],
+            'total'         : sum(r['total'] for r, c in zip(rows, counts) if c),
+            'holes_played'  : sum(r['holes'] for r, c in zip(rows, counts) if c),
+            'par_played'    : sum(r['par']   for r, c in zip(rows, counts) if c),
+            'rounds_played' : len(rows),
+            'round_totals'  : [r['total'] for r in rows],
+            'round_pars'    : [r['par'] for r in rows],
+            'round_holes'   : [r['hole_detail'] for r in rows],
+            'round_labels'  : [r['label'] for r in rows],
+            'round_counts'  : counts,
+            'round_complete': [r['is_complete'] for r in rows],
+        }
 
     return aggregated
 
@@ -185,6 +211,12 @@ def low_net_championship_standings(tournament) -> list:
             'round_ntps'    : round_ntps,
             'round_holes'   : data.get('round_holes', []),
             'round_labels'  : data.get('round_labels', []),
+            # Best-N-of-M: which columns feed the total. The board strikes the
+            # rest through rather than hiding them, and an incomplete round is
+            # drawn in amber (it can fill a vacancy but never displace a
+            # finished round — see services/round_counting.py).
+            'round_counts'  : data.get('round_counts', []),
+            'round_complete': data.get('round_complete', []),
             'payout'        : rank_payout.get(r),
         })
 
@@ -235,7 +267,9 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
         from tournament.models import Round as _Round
         try:
             round_obj = tournament.rounds.get(pk=round_id)
-            round_totals = _build_ln_player_totals(round_obj, hmode, npct)
+            round_totals = _build_ln_player_totals(
+                round_obj, hmode, npct,
+                force_cap=tournament.is_individual_play)
             single_round_standings = []
             for pid, data in round_totals.items():
                 if data['holes_played'] == 0:
@@ -257,6 +291,9 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
                     'round_ntps'   : [ntp] if ntp is not None else [],
                     'round_holes'  : [holes_list],
                     'round_labels' : [f'R{round_obj.round_number}'],
+                    'round_counts' : [True],
+                    'round_complete': [
+                        data['holes_played'] >= (round_obj.num_holes or 18)],
                     'payout'       : None,
                 })
             single_round_standings.sort(key=lambda x: (x['net_to_par'] if x['net_to_par'] is not None else 999, -x['holes_played']))
@@ -284,6 +321,13 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
         'payouts'       : payouts_cfg,
         'total_rounds'  : total_rounds,
         'rounds_played' : played_rounds,
+        # Best-N-of-M, for the board's chip strip ("Best 3 of 4"). Null when
+        # every round counts, which is also the only state below three rounds —
+        # the Scoring step never asks the question there.
+        'rounds_to_count': (None if round_id is not None
+                            else tournament.rounds_to_count),
+        'counting_rule' : (None if round_id is not None
+                           else tournament.counting_rule_label),
         'results'       : [
             {
                 'rank'          : s['rank'],
@@ -297,6 +341,8 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
                 'round_ntps'    : s['round_ntps'],
                 'round_holes'   : s.get('round_holes', []),
                 'round_labels'  : s.get('round_labels', []),
+                'round_counts'  : s.get('round_counts', []),
+                'round_complete': s.get('round_complete', []),
                 'payout'        : s['payout'],
             }
             for s in standings

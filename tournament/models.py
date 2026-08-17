@@ -39,9 +39,74 @@ class Tournament(models.Model):
                             default=list,
                             help_text="List of GameType values active for this tournament."
                         )
+    # --- Individual-play scoring (docs/design-review/handoff-individual-play) --
+    # Set ONCE for the tournament; every round and every board reads from here.
+    # Cup tournaments ignore these (their scoring is per-round, per-format) and
+    # keep the defaults.
+    SCORING_METHODS     = [('stroke', 'Stroke play'), ('stableford', 'Stableford')]
+    scoring_method      = models.CharField(
+                            max_length=12, choices=SCORING_METHODS, default='stroke',
+                            help_text=(
+                                "Individual play: how the championship is scored. "
+                                "One method, one board — a Stableford tournament "
+                                "does not also draw a net stroke board."
+                            ),
+                        )
+    # Net or Gross only. Strokes-off-low is a MATCH mechanism — it needs a single
+    # opponent to anchor to — so it is not offered field-wide. It survives in
+    # exactly one place: the Mini Singles Bracket, where it is the default.
+    handicap_mode       = models.CharField(
+                            max_length=20,
+                            choices=[('gross', 'Gross'), ('net', 'Net')],
+                            default='net',
+                            help_text=(
+                                "Individual play: field-wide handicap setting. The "
+                                "day-bet DQ reads this — a net event disqualifies "
+                                "the net money winners, a gross event the gross ones."
+                            ),
+                        )
+    net_percent         = models.PositiveSmallIntegerField(
+                            default=100,
+                            help_text="Allowance applied when handicap_mode='net' (0–200).",
+                        )
+    # Mini Singles day 2 is funded by a percentage carved off the TOP of the
+    # championship pool — there is no separate day-2 entry. 0 = no carve-out
+    # (which is also the state when the bracket is switched off; nothing
+    # downstream may assume the bracket exists).
+    mini_singles_carve_pct = models.PositiveSmallIntegerField(
+                            default=0,
+                            help_text=(
+                                "Percent of the championship pool carved out for "
+                                "the Mini Singles day-2 champions' foursome. "
+                                "0 = no carve-out."
+                            ),
+                        )
     created_at          = models.DateTimeField(auto_now_add=True)
 
     objects             = AccountScopedManager()
+
+    @property
+    def is_individual_play(self) -> bool:
+        """
+        True for an every-golfer-for-himself tournament — the type this spec
+        governs. A cup keeps its own per-round, per-format scoring and must not
+        pick up the individual-play rules (always-on cap, field-wide allowance,
+        best-N), so it is excluded by the presence of the cup game itself.
+        """
+        return 'team_cup' not in (self.active_games or [])
+
+    @property
+    def counts_all_rounds(self) -> bool:
+        """True when every round counts toward the championship."""
+        return not self.rounds_to_count or self.rounds_to_count >= self.total_rounds
+
+    @property
+    def counting_rule_label(self) -> str:
+        """The chip-strip string: 'All 4 rounds' / 'Best 3 of 4'."""
+        if self.counts_all_rounds:
+            n = self.total_rounds
+            return f"All {n} round{'' if n == 1 else 's'}"
+        return f"Best {self.rounds_to_count} of {self.total_rounds}"
 
     def __str__(self):
         return self.name

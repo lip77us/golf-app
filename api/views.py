@@ -1798,6 +1798,13 @@ class TournamentListView(APIView):
             start_date   = d['start_date'],
             active_games = d['active_games'],
             total_rounds = d['total_rounds'],
+            # Individual-play scoring — set once here, read by every round and
+            # every board. A cup posts the defaults and ignores them.
+            scoring_method  = d['scoring_method'],
+            handicap_mode   = d['handicap_mode'],
+            net_percent     = d['net_percent'],
+            rounds_to_count = d['rounds_to_count'],
+            mini_singles_carve_pct = d['mini_singles_carve_pct'],
         )
         return Response(TournamentSerializer(tournament).data,
                         status=status.HTTP_201_CREATED)

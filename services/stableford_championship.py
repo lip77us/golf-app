@@ -1,15 +1,21 @@
 """
 services/stableford_championship.py
 -----------------------------------
-Stableford Championship — total Stableford points accumulated across every
-round of a tournament (all rounds count; N-of-M is deferred, matching the Low
-Net Championship). Mirrors low_net_championship but ranks by points DESCENDING
-and is pool-paid. Per-round points use the tournament's own table + handicap via
-_build_stableford_totals(..., mode, net_pct, points_fn).
+Stableford Championship — total Stableford points accumulated across the rounds
+that COUNT (every round, or the best N when ``Tournament.rounds_to_count`` is
+set — services/round_counting.py). Mirrors low_net_championship but ranks by
+points DESCENDING and is pool-paid. Per-round points use the tournament's own
+table + handicap via _build_stableford_totals(..., mode, net_pct, points_fn).
+
+The card the board draws for a Stableford row is **gross and points, not
+per-hole net** — a golfer who wants his 18-hole net has the gross and the stroke
+allocation right there — so the per-round hole detail carries gross + strokes +
+points and no net column.
 """
 from collections import defaultdict
 
 from core.models import HandicapMode
+from services.round_counting import select_counting_rounds
 from services.stableford import _build_stableford_totals
 
 
@@ -19,31 +25,59 @@ def _config(tournament):
 
 def _aggregate_rounds(tournament, mode, net_pct, points_fn) -> dict:
     """{player_id: {name, points, holes_played, rounds_played,
-    round_totals:[pts per round], round_labels:['R1',...]}} across all rounds."""
+    round_totals:[pts per round], round_labels:['R1',...],
+    round_counts:[bool], round_complete:[bool], round_holes:[[...]]}}."""
     rounds = list(
         tournament.rounds.order_by('round_number')
         .prefetch_related('foursomes__memberships__player'))
-    aggregated: dict = {}
+
+    # Per-player, per-round rows first — best-N needs the whole tournament in
+    # hand before any of it can be summed.
+    per_player: dict = {}
     for round_obj in rounds:
         per = _build_stableford_totals(
             round_obj, mode=mode, net_pct=net_pct, points_fn=points_fn)
+        expected = round_obj.num_holes or 18
         for pid, data in per.items():
             if data['holes_played'] == 0:
                 continue
-            entry = aggregated.setdefault(pid, {
-                'name': data['name'], 'points': 0, 'holes_played': 0,
-                'rounds_played': 0, 'round_totals': [], 'round_labels': [],
-                'current_round': round_obj.round_number, 'current_thru': 0,
+            entry = per_player.setdefault(pid, {'name': data['name'], 'rows': []})
+            entry['rows'].append({
+                'points'     : data['points'],
+                'holes'      : data['holes_played'],
+                'is_complete': data['holes_played'] >= expected,
+                'label'      : f'R{round_obj.round_number}',
+                'number'     : round_obj.round_number,
+                'hole_detail': [
+                    {'hole': h,
+                     'points' : pts,
+                     'gross'  : (data.get('gross') or {}).get(h),
+                     'strokes': (data.get('strokes') or {}).get(h, 0)}
+                    for h, pts in sorted(data.get('holes', {}).items())
+                ],
             })
-            entry['points']        += data['points']
-            entry['holes_played']  += data['holes_played']
-            entry['rounds_played'] += 1
-            entry['round_totals'].append(data['points'])
-            entry['round_labels'].append(f'R{round_obj.round_number}')
-            # Rounds iterate in round_number order, so the last one with any
+
+    aggregated: dict = {}
+    for pid, entry in per_player.items():
+        rows = entry['rows']
+        # Higher points is better, so negate for the lower-is-better selector.
+        counts = select_counting_rounds(
+            rows, tournament.rounds_to_count, key=lambda r: -r['points'])
+        aggregated[pid] = {
+            'name'          : entry['name'],
+            'points'        : sum(r['points'] for r, c in zip(rows, counts) if c),
+            'holes_played'  : sum(r['holes'] for r, c in zip(rows, counts) if c),
+            'rounds_played' : len(rows),
+            'round_totals'  : [r['points'] for r in rows],
+            'round_labels'  : [r['label'] for r in rows],
+            'round_holes'   : [r['hole_detail'] for r in rows],
+            'round_counts'  : counts,
+            'round_complete': [r['is_complete'] for r in rows],
+            # Rows are appended in round_number order, so the last one with any
             # scores is the player's current round + holes-thru in it.
-            entry['current_round'] = round_obj.round_number
-            entry['current_thru']  = data['holes_played']
+            'current_round' : rows[-1]['number'],
+            'current_thru'  : rows[-1]['holes'],
+        }
     return aggregated
 
 
@@ -106,6 +140,9 @@ def stableford_championship_standings(tournament) -> list:
             'current_thru' : data.get('current_thru', 0),
             'round_totals' : data['round_totals'],
             'round_labels' : data['round_labels'],
+            'round_holes'  : data.get('round_holes', []),
+            'round_counts' : data.get('round_counts', []),
+            'round_complete': data.get('round_complete', []),
             'excluded'     : is_excluded,
             'payout'       : payout,
         })
@@ -128,6 +165,8 @@ def stableford_championship_summary(tournament) -> dict:
         'pool'         : round(entry_fee * len(standings), 2),
         'total_rounds' : tournament.rounds.count(),
         'rounds_played': max((s['rounds_played'] for s in standings), default=0),
+        'rounds_to_count': tournament.rounds_to_count,
+        'counting_rule': tournament.counting_rule_label,
         'table'        : table,
         'results'      : standings,
     }

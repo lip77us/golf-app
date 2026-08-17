@@ -759,8 +759,13 @@ class TournamentSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Tournament
         fields = ['id', 'name', 'start_date', 'end_date', 'total_rounds',
-                  'rounds_to_count', 'active_games', 'rounds']
+                  'rounds_to_count', 'active_games', 'rounds',
+                  'scoring_method', 'handicap_mode', 'net_percent',
+                  'mini_singles_carve_pct', 'counting_rule']
         read_only_fields = ['id']
+
+    # The chip-strip string the boards render — "All 2 rounds" / "Best 3 of 4".
+    counting_rule = serializers.CharField(read_only=True)
 
 
 # ===========================================================================
@@ -805,6 +810,28 @@ class TournamentCreateSerializer(serializers.Serializer):
     start_date   = serializers.DateField()
     active_games = serializers.ListField(child=serializers.CharField(), default=list)
     total_rounds = serializers.IntegerField(default=1, min_value=1)
+    # --- Individual-play scoring, set once for the whole tournament ----------
+    scoring_method  = serializers.ChoiceField(
+        choices=['stroke', 'stableford'], default='stroke')
+    # Net or Gross only — strokes-off-low is a match mechanism and is not
+    # offered field-wide (it survives on the Mini Singles Bracket alone).
+    handicap_mode   = serializers.ChoiceField(choices=['gross', 'net'], default='net')
+    net_percent     = serializers.IntegerField(default=100, min_value=0, max_value=200)
+    # Best-N-of-M. Null = every round counts. The Scoring step only asks above
+    # two rounds, so anything else is clamped away in validate().
+    rounds_to_count = serializers.IntegerField(
+        required=False, allow_null=True, default=None, min_value=1)
+    mini_singles_carve_pct = serializers.IntegerField(
+        default=0, min_value=0, max_value=100)
+
+    def validate(self, attrs):
+        n = attrs.get('total_rounds') or 1
+        rtc = attrs.get('rounds_to_count')
+        # "Rounds that count" is only a question above two rounds — below that
+        # there is no answer worth asking for, so normalise rather than reject.
+        if rtc is not None and (n <= 2 or rtc >= n):
+            attrs['rounds_to_count'] = None
+        return attrs
 
 
 class RoundCreateSerializer(serializers.Serializer):

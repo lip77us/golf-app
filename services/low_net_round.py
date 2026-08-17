@@ -39,7 +39,7 @@ from tournament.models import Foursome
 # ---------------------------------------------------------------------------
 
 def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
-                            participant_ids=None):
+                            participant_ids=None, force_cap=False):
     """
     Return {player_id: {'name': str, 'total': int, 'holes_played': int}}
     for all real players in the round, with handicap adjustment and the
@@ -49,14 +49,23 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
     side game (docs/parallel-games.md). None = all real players. ONLY the casual
     `low_net_round_standings` passes this from the round config; the Championship
     never does, so its scoring is unaffected.
+
+    `force_cap` is the individual-play tournament rule: the cap is ALWAYS on and
+    applies at any allowance, because the ceiling is stated in terms of the
+    strokes actually received (par + 2 + strokes on the hole) and those already
+    reflect the allowance. Casual callers leave it False and keep the historic
+    Net-100%-only behaviour.
     """
     _subset = set(participant_ids) if participant_ids else None
-    # The net-double-bogey cap only applies at full Net (100%). It's meaningless
-    # for Gross and gets weird with a reduced allowance or Strokes-Off, so it's
-    # ignored outside Net-100% regardless of the stored round flag.
-    cap_enabled = (bool(round_obj.net_max_double_bogey)
-                   and handicap_mode == HandicapMode.NET
-                   and net_percent == 100)
+    # Casually the cap only applies at full Net (100%): it's meaningless for
+    # Gross and was judged too surprising under a reduced allowance, so it's
+    # ignored outside Net-100% regardless of the stored round flag. An
+    # individual-play tournament passes force_cap and gets it at every
+    # allowance — never in Gross, where the board is meant to show the real card.
+    cap_enabled = (handicap_mode == HandicapMode.NET
+                   and (force_cap
+                        or (bool(round_obj.net_max_double_bogey)
+                            and net_percent == 100)))
 
     foursomes = list(
         Foursome.objects
