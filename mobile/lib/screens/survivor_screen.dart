@@ -1306,9 +1306,13 @@ class _SurvivorStrip extends StatelessWidget {
           style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600, color: theme.colorScheme.primary));
     }
+    // Just the winner. Naming ONE elimination reads as the whole story of the
+    // Survivor, and it is not: with the Zombie Option a golfer can be knocked
+    // out, come back, and be knocked out again inside a single Survivor, so
+    // "· X out" picks one moment out of several and implies it was the only
+    // one. The card below has every hole of it.
     return Text(
-      '${s.winnerShort} wins'
-      '${s.eliminatedShort == null ? '' : ' · ${s.eliminatedShort} out'}',
+      '${s.winnerShort} wins',
       style: theme.textTheme.bodyMedium?.copyWith(
           fontWeight: FontWeight.w600, color: theme.colorScheme.primary),
     );

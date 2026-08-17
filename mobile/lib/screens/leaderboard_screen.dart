@@ -5368,7 +5368,10 @@ class _SurvivorGroupCard extends StatelessWidget {
               Color? color = theme.colorScheme.primary;
               switch (outcome) {
                 case 'won':
-                  label = '$winner wins${out == null ? '' : ' · $out out'}';
+                  // Just the winner — see the note in survivor_screen.dart:
+                  // one named elimination reads as the whole Survivor, and
+                  // with the Zombie Option it rarely is.
+                  label = '$winner wins';
                 case 'split':
                   label = 'Split · ${out ?? '?'} pays';
                 case 'no_blood':
