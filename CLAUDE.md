@@ -1311,3 +1311,109 @@ git push origin v2.7.0
 Useful because the version lives only in `pubspec.yaml`; without tags there is
 nothing in history marking what shipped when.
 `git log v2.5.1..v2.6.0 --oneline` is the "what's in this release" diff.
+
+---
+
+## Individual play — tournament refresh (BACKEND done, mobile pending)
+
+Build of `docs/design-review/handoff-individual-play/` — fifteen design files
+plus `SPEC.md`, which restates the packet's 55 decisions as rules, state and
+edge cases and is **the document to build from**. Scope is individual-play
+tournaments (`_EventType.solo`); Cup play and casual rounds are untouched
+except where a screen is deliberately reused.
+
+**The TD sets four games only** — Irish Rumble, the ball game, Mini Singles
+Bracket and the day bet — plus the championship. Everything a foursome plays
+among itself (skins, Nassau, rabbit, survivor, sixes) is the FOURSOME's, is
+configured exactly as in a casual round, reads the tournament's score entry
+rather than opening its own, and **never appears in tournament settlement**.
+The one exception is **spots**, which needs capture on the hole.
+
+### What landed (P1–P7, all backend)
+
+**P1 — scoring settings + best-N-of-M.** `Tournament` gained
+`scoring_method` / `handicap_mode` (net|gross only — strokes-off-low is a
+match mechanism and is not offered field-wide) / `net_percent` /
+`mini_singles_carve_pct` (`tournament/0052`). `services/round_counting.py` is
+the one place best-N lives, shared by both championships: unset counts
+everything; otherwise the best N count and the rest are **struck through, not
+hidden**; and **a round in progress can never displace a finished one**
+(four holes at level par must not knock out a finished 73) though it may FILL
+a slot the finished rounds leave empty. The net double-bogey cap is a **rule,
+not a setting** — `_build_ln_player_totals(..., force_cap=True)` applies it at
+any allowance for individual play; casual keeps Net-100%-only.
+`Tournament.is_individual_play` is the type switch.
+
+**P2 — one money model.** `services/payout.py`. Ties split the money for the
+**places they occupy** (a T2 pair shares 2nd and 3rd, $16 each not $20), no
+countbacks anywhere. A place that pays a GROUP splits among its **real**
+golfers — the borrowed 4th is not a person, so a levelled group takes $23.33
+three ways rather than $17.50 four ways. Also `validate_payout_table`,
+`check_day_bet_floor`, `pool_line`, `carve_out`. **Two real defects fixed:**
+Irish Rumble and the ball game each halved a single place on a tie (leaving
+the next place unclaimed), and Rumble divided a group prize by a count that
+INCLUDED the borrowed 4th.
+
+**P3 — Mini Singles Bracket, two-stage.** `MiniSinglesConfig` (`games/0065`),
+`Foursome.is_champions_foursome` (`tournament/0053`),
+`services/mini_singles.py`. A bracket in EVERY group on day 1; the winners
+play day 2 as one foursome. **A halved match plays on** — sudden death is
+gone, and with it the collision where a semi borrowed hole 10 from the final.
+The back-9 matches are assigned and scored from hole 10 regardless, against a
+side flagged TBD: unambiguous because a pair still level can only HALVE their
+overtime holes. A halved FINAL splits 1st and 2nd; last-hole-won survives only
+for the trophy and the day-2 seat (`MatchPlayMatch.trophy_player`,
+`games/0064`). Day 2 is seeded by **day-1 margin then lowest index**, and the
+champions' foursome is filled by SWAPPING membership rows so tees and tee
+times survive. Field gate 9–16. Empty seat (short field or withdrawal): one
+rule set once — promote / points / short-handed; `points` reuses
+`services/three_person_match.py`, which already plays a tied points round on.
+
+**P4 — the day bet.** `DayBetConfig` (`games/0066`), `services/day_bet.py`.
+Final round only. Mini Singles finalists are **not here at all** (an absence,
+no row); championship money winners are **here but italic** — shown, unable to
+collect, and not charged. Places scale with the eligible field (10→3, then 2,
+then 1); an ineligible row holds a POSITION but not a PAID PLACE. The DQ reads
+the tournament's handicap setting. The P2 floor guard is enforced in the
+reducer from both directions.
+
+**P6 — the ball game is named, not coloured.** `ball_color` → `game_name`
+(16 chars, no default, required). `games/0067` is hand-written to CARRY the
+old values across (`Red` → `Red Ball`) rather than dropping them. Ranking is
+by **survival**: alive first, then latest death, and ball net shown only while
+the ball is alive. Tied groups now share a rank. Mobile renamed in the same
+commit so the client is never posting a field the API rejects.
+
+**P7 — tournament settlement.** `services/tournament_settlement.py` +
+`GET /api/tournaments/{id}/settlement/`. Separate from
+`services/settlement.py` (casual, round-scoped). The carve-out is an explicit
+TRANSFER, so the championship shows the full pool in and out with part leaving
+for day 2. Irish Rumble and the ball game appear once PER ROUND. Three checks
+block Settle and say why: every pot balances (naming the game), every round is
+closed, and collected − paid is zero.
+
+### Endpoints added
+```
+GET/POST      /api/rounds/{id}/day-bet/setup/
+GET           /api/rounds/{id}/day-bet/
+GET/POST/DEL  /api/tournaments/{id}/mini-singles/setup/
+GET           /api/tournaments/{id}/mini-singles/
+POST          /api/tournaments/{id}/mini-singles/sync-day2/
+GET           /api/tournaments/{id}/settlement/
+```
+`TournamentLeaderboardView` also gained a `scoring` chip-strip block (method,
+mode, allowance, counting rule, cap note) and a `day_bet` tab.
+
+### Still to build (mobile)
+P5 remainder (Rumble setup shape: rules first, money last, one Save; the mode
+picker expands in place; the chip reads the real tie rule instead of "Winner
+takes all"), **P8** leaderboards (round-column strip opening on the newest,
+best-N strike-through, expanded rows showing all 18 with dots and tinted
+capped cells, Rumble donor strip + provisional `F*`, ball board ranked by
+survival, day-bet italics), **P9** score entry (spots stepper, one lost-ball
+switch, a pager that says why), **P10** the wizard (eight steps, "New
+Tournament", Payouts split from Side games, Stableford points step reusing the
+casual screen).
+
+**Deferred:** flights; Mini Singles above 16 golfers; per-golfer settle
+marking; a settlement text export.

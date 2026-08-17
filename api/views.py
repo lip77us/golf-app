@@ -2136,16 +2136,152 @@ class TournamentLeaderboardView(APIView):
                         brackets.append(summary)
                     except Exception:
                         pass  # foursome has no match play bracket yet
-            games['match_play'] = {
+            block = {
                 'label'   : 'Mini Singles Bracket',
                 'brackets': brackets,
             }
+            # The two-stage view, when the tournament runs the full game.
+            from services.mini_singles import mini_singles_summary
+            two_stage = mini_singles_summary(tournament)
+            if two_stage is not None:
+                block['mini_singles'] = two_stage
+            games['match_play'] = block
+
+        # The day bet is the LAST tab and is named for what it pays —
+        # "Day bet · R2" — never a tournament name beside a cut-off word.
+        from games.models import DayBetConfig
+        from services.day_bet import day_bet_summary
+        day_bet_cfg = (DayBetConfig.objects
+                       .filter(round__tournament=tournament)
+                       .select_related('round')
+                       .order_by('-round__round_number').first())
+        if day_bet_cfg is not None:
+            summary = day_bet_summary(day_bet_cfg.round)
+            if summary is not None:
+                games['day_bet'] = {'label': summary['label'], **summary}
 
         return Response({
             'tournament_id'  : tournament.id,
             'tournament_name': tournament.name,
             'active_games'   : active_games,
+            # The chip strip: mode, allowance and the counting rule, all read
+            # from the tournament rather than guessed per board.
+            'scoring'        : {
+                'method'        : tournament.scoring_method,
+                'handicap_mode' : tournament.handicap_mode,
+                'net_percent'   : tournament.net_percent,
+                'total_rounds'  : tournament.total_rounds,
+                'rounds_to_count': tournament.rounds_to_count,
+                'counting_rule' : tournament.counting_rule_label,
+                # One line, once, on every net board.
+                'cap_note'      : ('No hole counts for more than net double '
+                                   'bogey — par + 2, plus any strokes you get '
+                                   'on that hole.'),
+            },
             'games'          : games,
+        })
+
+
+class MiniSinglesSetupView(APIView):
+    """
+    GET  /api/tournaments/{id}/mini-singles/setup/ — config or defaults.
+    POST /api/tournaments/{id}/mini-singles/setup/ — create or update.
+    DELETE — switch the bracket off.
+
+    Optional, at the TD's discretion. Nothing downstream may assume it exists:
+    no carve-out is taken and no day-2 foursome is reserved unless this row is
+    present, which is why DELETE is a real operation rather than a flag.
+    """
+    def get(self, request, pk):
+        from services.mini_singles import check_field
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        cfg = getattr(tournament, 'mini_singles_config', None)
+        n = FoursomeMembership.objects.filter(
+            foursome__round__tournament=tournament, player__is_phantom=False,
+        ).values('player_id').distinct().count()
+        ok, groups, reason = check_field(n)
+        return Response({
+            'configured'     : cfg is not None,
+            'handicap_mode'  : cfg.handicap_mode if cfg else 'strokes_off',
+            'net_percent'    : cfg.net_percent if cfg else 100,
+            'day1_entry_fee' : float(cfg.day1_entry_fee) if cfg else 0.00,
+            'day1_payouts'   : cfg.day1_payouts if cfg else [],
+            'day2_payouts'   : cfg.day2_payouts if cfg else [],
+            'empty_seat_rule': cfg.empty_seat_rule if cfg else 'promote',
+            'carve_pct'      : tournament.mini_singles_carve_pct,
+            'field'          : {'golfers': n, 'groups': groups,
+                                'fits': ok, 'reason': reason},
+        })
+
+    def post(self, request, pk):
+        from games.models import MiniSinglesConfig
+        from services.mini_singles import check_field
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+
+        n = FoursomeMembership.objects.filter(
+            foursome__round__tournament=tournament, player__is_phantom=False,
+        ).values('player_id').distinct().count()
+        ok, _groups, reason = check_field(n)
+        # Only gate a field that has actually been built — a tournament being
+        # configured before its groups exist has nothing to check yet.
+        if n and not ok:
+            return Response({'detail': reason},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        d = request.data
+        cfg, _ = MiniSinglesConfig.objects.update_or_create(
+            tournament = tournament,
+            defaults   = {
+                'handicap_mode'  : d.get('handicap_mode', 'strokes_off'),
+                'net_percent'    : int(d.get('net_percent', 100)),
+                'day1_entry_fee' : d.get('day1_entry_fee', 0.00),
+                'day1_payouts'   : d.get('day1_payouts', []),
+                'day2_payouts'   : d.get('day2_payouts', []),
+                'empty_seat_rule': d.get('empty_seat_rule', 'promote'),
+            },
+        )
+        if 'carve_pct' in d:
+            tournament.mini_singles_carve_pct = int(d['carve_pct'])
+            tournament.save(update_fields=['mini_singles_carve_pct'])
+        return self.get(request, pk)
+
+    def delete(self, request, pk):
+        from games.models import MiniSinglesConfig
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        MiniSinglesConfig.objects.filter(tournament=tournament).delete()
+        # The carve-out goes with it — nothing downstream may assume a bracket
+        # that is switched off.
+        tournament.mini_singles_carve_pct = 0
+        tournament.save(update_fields=['mini_singles_carve_pct'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MiniSinglesView(APIView):
+    """GET /api/tournaments/{id}/mini-singles/ — both stages, and the money."""
+    def get(self, request, pk):
+        from services.mini_singles import mini_singles_summary
+        tournament = tournament_for_reader(request.user, pk)
+        summary = mini_singles_summary(tournament)
+        if summary is None:
+            return Response({'configured': False})
+        return Response(summary)
+
+
+class MiniSinglesSyncView(APIView):
+    """
+    POST /api/tournaments/{id}/mini-singles/sync-day2/
+
+    Fill the reserved champions' foursome from day 1 and build its bracket.
+    Idempotent — safe to call whenever day-1 scores land.
+    """
+    def post(self, request, pk):
+        from services.mini_singles import mini_singles_summary, sync_day2_champions
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        foursome = sync_day2_champions(tournament)
+        return Response({
+            'synced'      : foursome is not None,
+            'foursome_id' : foursome.id if foursome else None,
+            'summary'     : mini_singles_summary(tournament),
         })
 
 
