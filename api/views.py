@@ -1846,6 +1846,24 @@ class TournamentDetailView(APIView):
 # Tournament — Low Net Championship
 # ---------------------------------------------------------------------------
 
+def _day_bet_floor_problem(tournament, championship_payouts):
+    """
+    The guard from services/payout.py, applied against whichever day bet this
+    tournament actually has. Returns a blocking reason or None.
+
+    Individual play only — a cup has no day bet to size against.
+    """
+    if not tournament.is_individual_play:
+        return None
+    from games.models import DayBetConfig
+    from services.payout import check_day_bet_floor
+    day_bet = DayBetConfig.objects.filter(
+        round__tournament=tournament).order_by('-round__round_number').first()
+    if day_bet is None:
+        return None
+    return check_day_bet_floor(championship_payouts, day_bet.payouts)
+
+
 class TournamentLowNetSetupView(APIView):
     """
     GET  /api/tournaments/{id}/low-net/setup/ — return current config or defaults.
@@ -1882,13 +1900,25 @@ class TournamentLowNetSetupView(APIView):
         tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         from games.models import LowNetChampionshipConfig
         d = request.data
+        payouts = d.get('payouts', [])
+
+        # Nobody should be worse off for playing better. Winning 36-hole money
+        # disqualifies a golfer from the day bet, so if the last paying
+        # championship place pays less than day-bet 1st, finishing in the money
+        # actively costs him money. Checked HERE and not only in the UI, so an
+        # API caller cannot post a table that fails it.
+        reason = _day_bet_floor_problem(tournament, payouts)
+        if reason:
+            return Response({'detail': reason},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         cfg, _ = LowNetChampionshipConfig.objects.update_or_create(
             tournament = tournament,
             defaults   = {
                 'handicap_mode': d.get('handicap_mode', 'net'),
                 'net_percent'  : int(d.get('net_percent', 100)),
                 'entry_fee'    : d.get('entry_fee', 0.00),
-                'payouts'      : d.get('payouts', []),
+                'payouts'      : payouts,
             },
         )
         return Response({
@@ -1897,6 +1927,75 @@ class TournamentLowNetSetupView(APIView):
             'entry_fee'    : float(cfg.entry_fee),
             'payouts'      : cfg.payouts,
         }, status=status.HTTP_200_OK)
+
+
+class DayBetSetupView(APIView):
+    """
+    GET  /api/rounds/{id}/day-bet/setup/ — current config or defaults.
+    POST /api/rounds/{id}/day-bet/setup/ — create or update the day bet.
+
+    POST body: ``entry_fee``, ``payouts``.
+
+    The day bet lives on the FINAL round of a multi-round individual-play
+    tournament. Posting it also re-runs the floor guard from the other side:
+    day-bet 1st may not exceed the last paying championship place, or the
+    36-hole DQ costs a golfer money.
+    """
+    def _round(self, request, pk):
+        return account_get_or_404(Round, request.user.account, pk=pk)
+
+    def get(self, request, pk):
+        round_obj = self._round(request, pk)
+        cfg = getattr(round_obj, 'day_bet_config', None)
+        return Response({
+            'entry_fee': float(cfg.entry_fee) if cfg else 0.00,
+            'payouts'  : cfg.payouts if cfg else [],
+        })
+
+    def post(self, request, pk):
+        from games.models import DayBetConfig
+        from services.payout import check_day_bet_floor
+
+        round_obj  = self._round(request, pk)
+        tournament = round_obj.tournament
+        if tournament is None:
+            return Response(
+                {'detail': 'The day bet belongs to a tournament round.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        if tournament.total_rounds < 2:
+            return Response(
+                {'detail': 'The day bet needs more than one round — it pays a '
+                           'great single round from somebody out of contention '
+                           'for the 36-hole win.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        payouts = request.data.get('payouts', [])
+        champ = getattr(tournament, 'low_net_championship_config', None) or \
+            getattr(tournament, 'stableford_championship_config', None)
+        if champ is not None:
+            reason = check_day_bet_floor(champ.payouts, payouts)
+            if reason:
+                return Response({'detail': reason},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+        cfg, _ = DayBetConfig.objects.update_or_create(
+            round    = round_obj,
+            defaults = {'entry_fee': request.data.get('entry_fee', 0.00),
+                        'payouts'  : payouts},
+        )
+        return Response({'entry_fee': float(cfg.entry_fee),
+                         'payouts'  : cfg.payouts})
+
+
+class DayBetView(APIView):
+    """GET /api/rounds/{id}/day-bet/ — the day-bet board."""
+    def get(self, request, pk):
+        from services.day_bet import day_bet_summary
+        round_obj = round_for_reader(request.user, pk)
+        summary = day_bet_summary(round_obj)
+        if summary is None:
+            return Response({'configured': False})
+        return Response(summary)
 
 
 class TournamentLowNetView(APIView):

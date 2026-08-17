@@ -2021,6 +2021,54 @@ class ScrambleResult(models.Model):
 # MATCH PLAY (within foursome, 2 × 9 holes, single elimination or points)
 # ---------------------------------------------------------------------------
 
+class DayBetConfig(models.Model):
+    """
+    The **day bet** — the final round's 18-hole stroke play side bet, and the
+    only board in the set whose result is not knowable while it is being
+    played (docs/design-review/handoff-individual-play/SPEC.md §7).
+
+    It exists to pay a great single round from somebody with nothing left to
+    play for: Brown shooting 68 on Sunday from twelfth place is the man it is
+    for. So the last round strips it down twice over, and the two exclusions
+    are not the same thing:
+
+    * **Not here at all** — the Mini Singles day-2 finalists. They are playing
+      a match, not posting a stroke card, so they are neither charged nor
+      ranked. An absence, not an exclusion; no row.
+    * **Here but italic** — the championship money winners. They play the
+      round and appear on the board but cannot collect, and do not contribute:
+      their entry is returned at settlement. Only known when the championship
+      closes, which is why they stay visible until then.
+
+    Sixteen − four − two = ten who both fund the pot and can win it. The
+    **places scale with the round, not the entry list**: ten pays three
+    places, a smaller field drops to two, then one.
+
+    The DQ reads the TOURNAMENT's own handicap setting rather than naming a
+    scoring type — a net event disqualifies the net money winners, a gross
+    event the gross ones.
+
+    Round-scoped rather than tournament-scoped so a future "a bet every day"
+    variant is a configuration change and not a rewrite; today only the final
+    round carries one.
+    """
+    round       = models.OneToOneField(
+                    Round, on_delete=models.CASCADE,
+                    related_name='day_bet_config')
+    entry_fee   = models.DecimalField(
+                    max_digits=8, decimal_places=2, default=0.00,
+                    help_text='Per eligible golfer. The ineligible do not pay '
+                              'in, so the pool is provisional until the '
+                              'championship closes.')
+    payouts     = models.JSONField(
+                    default=list,
+                    help_text="[{'place': 1, 'amount': 100.00}, …]. Trimmed to "
+                              "the number of places the eligible field supports.")
+
+    def __str__(self):
+        return f"Day bet — {self.round}"
+
+
 class MiniSinglesConfig(models.Model):
     """
     Tournament-level configuration for the **Mini Singles Bracket** — the
