@@ -1439,9 +1439,11 @@ is replaced by an `Always on` statement (casual keeps its switch). The
 borrowed-4th block TELLS rather than asks, and the pool line names its scope,
 its count and the tie rule.
 
-### Not built
-Settlement has an API and an engine but **no mobile screen yet** — that is the
-one surface from the packet still to draw.
+**P11 — settlement** (`screens/tournament_settlement_screen.dart`, reached
+from the tournament leaderboard's app bar). By golfer / by game, collects
+first sorted by amount, an itemised card per golfer where each line names the
+game that caused it, the carve-out explained on both sides, the per-game
+balance check that blocks Settle and NAMES the game, and the sum-zero footer.
 
 **Deferred by the packet:** flights; Mini Singles above 16 golfers; per-golfer
 settle marking; a settlement text export.

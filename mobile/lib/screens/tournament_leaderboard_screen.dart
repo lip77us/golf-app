@@ -17,6 +17,7 @@ import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/synced_scroll_group.dart';
+import 'tournament_settlement_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'tournament_stableford_setup_screen.dart';
 
@@ -178,6 +179,16 @@ class _TournamentLeaderboardScreenState
             icon: const Icon(Icons.visibility_outlined),
             onPressed: () =>
                 inviteWatcher(context, tournamentId: widget.tournamentId),
+          ),
+          IconButton(
+            tooltip: 'Settle up',
+            icon: const Icon(Icons.receipt_long_outlined),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => TournamentSettlementScreen(
+                tournamentId  : widget.tournamentId,
+                tournamentName: widget.tournamentName,
+              ),
+            )),
           ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           if (isStaff && activeGames.isNotEmpty)
