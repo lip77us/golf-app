@@ -473,30 +473,22 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
             .where((e) => !e.isAlive)
             .map((e) => e.playerId).firstOrNull;
       } else {
-        // Unscored: carry the state forward from the last scored hole that
-        // belongs to the SAME Survivor — a new Survivor starts all-square.
-        final order    = _playOrder(rp);
-        final startIdx = order.indexOf(_selectedHole);
-        for (int i = startIdx - 1; i >= 0; i--) {
-          final hi = summary.holeFor(order[i]);
-          if (hi == null || !hi.isScored) continue;
-          if (hi.survivor != svIndex) break;   // previous Survivor — reset
-          // The hole that settled this Survivor ends it; the next one is fresh.
-          if (hi.winnerId != null || hi.event == 'split' ||
-              hi.event == 'no_blood') {
-            svIndex = svIndex + 1;
-            break;
-          }
-          final stillIn = hi.entries
-              .where((e) => e.isAlive && !e.isEliminated)
-              .map((e) => e.playerId).toSet();
-          if (stillIn.isNotEmpty && stillIn.length < aliveIds.length) {
-            aliveIds = stillIn;
-            outId = players.map((m) => m.player.id)
-                .where((pid) => !stillIn.contains(pid)).firstOrNull;
-          }
-          break;
-        }
+        // Unscored: this is the hole the group is standing on, and the ENGINE
+        // already knows the state they are playing it under — who is alive,
+        // who is the Zombie, and which Survivor it is.
+        //
+        // This used to be re-derived by walking back to the last scored hole,
+        // which a RESURRECTION breaks: after the Zombie goes low outright and
+        // sends a decider to Zombieville, the Zombie is the DECIDER he
+        // displaced, not the man who came back. Reported from the course — a
+        // golfer won a hole as the Zombie and was still drawn as the Zombie on
+        // the next one, while the golfer he displaced read as alive.
+        svIndex  = summary.currentSurvivor;
+        aliveIds = summary.currentAliveIds.toSet();
+        outId    = summary.currentZombieId ??
+            players.map((m) => m.player.id)
+                .where((pid) => !aliveIds.contains(pid))
+                .firstOrNull;
       }
     }
     final isDecider = aliveIds.length == 2;

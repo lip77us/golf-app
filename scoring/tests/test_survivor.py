@@ -11,6 +11,8 @@ gross scores in that order.
 """
 from django.test import TestCase
 
+from games.models import SurvivorGame
+from scoring.tests._helpers import make_course, make_player
 from services.survivor import (
     calculate_survivor,
     setup_survivor,
@@ -564,3 +566,65 @@ class SurvivorZombieTests(TestCase):
         self._play(18, 5, 6, 4)                 # killed
         money = self._money(self._summary())
         assert abs(sum(money.values())) < 1e-9, money
+
+
+class SurvivorZombieCurrentStateTests(TestCase):
+    """
+    The state the group is playing the NEXT hole under.
+
+    ``state_by_hole`` only covers SCORED holes, so the client used to
+    re-derive it for the hole in hand — and a resurrection makes that
+    derivation wrong in a way that is easy to miss: after the Zombie comes
+    back in and sends a decider out, the Zombie is the DECIDER he displaced,
+    not the man who returned. Reported from the course: Tyler won hole 2 as
+    the Zombie and was still drawn as the Zombie on hole 3.
+    """
+
+    def setUp(self):
+        self.tee = make_tee(make_course())
+        self.round = make_round(self.tee.course, active_games=['survivor'])
+        self.rl   = make_player('Ryan Lipkin', 0, short_name='RL')
+        self.paul = make_player('Paul Lipkin', 0, short_name='Paul')
+        self.t    = make_player('Tyler', 0, short_name='T')
+        self.fs = make_foursome(
+            self.round, [(self.rl, 0), (self.paul, 0), (self.t, 0)], tee=self.tee)
+        SurvivorGame.objects.create(
+            foursome=self.fs, handicap_mode='gross', net_percent=100,
+            zombie_option=True, status='in_progress')
+
+    def test_the_returning_zombie_is_not_still_the_zombie(self):
+        # Hole 1: T is worst and goes out.
+        submit_hole(self.fs, 1, [(self.rl, 5), (self.paul, 5), (self.t, 6)])
+        # Hole 2: T is low OUTRIGHT so he is back in; the deciders split, so
+        # the HIGHER of them (Paul) goes to Zombieville.
+        submit_hole(self.fs, 2, [(self.rl, 5), (self.paul, 6), (self.t, 4)])
+
+        s = survivor_summary(self.fs)
+        current = s['current']
+        self.assertEqual(current['zombie_id'], self.paul.id)
+        self.assertEqual(sorted(current['alive_ids']),
+                         sorted([self.rl.id, self.t.id]))
+        self.assertEqual(current['role'], 'decider')
+
+    def test_deciders_tied_brings_all_three_back_with_no_zombie(self):
+        submit_hole(self.fs, 1, [(self.rl, 5), (self.paul, 5), (self.t, 6)])
+        # T low outright, deciders TIE — nobody to send out.
+        submit_hole(self.fs, 2, [(self.rl, 5), (self.paul, 5), (self.t, 4)])
+
+        current = survivor_summary(self.fs)['current']
+        self.assertIsNone(current['zombie_id'])
+        self.assertEqual(len(current['alive_ids']), 3)
+        self.assertEqual(current['role'], 'elimination')
+
+    def test_no_zombie_is_reported_when_the_option_is_off(self):
+        SurvivorGame.objects.filter(foursome=self.fs).update(zombie_option=False)
+        submit_hole(self.fs, 1, [(self.rl, 5), (self.paul, 5), (self.t, 6)])
+
+        # Re-fetch: creating the game populated the foursome's reverse
+        # one-to-one cache, so the in-memory copy still says the option is on.
+        from tournament.models import Foursome
+        fs = Foursome.objects.get(pk=self.fs.pk)
+        current = survivor_summary(fs)['current']
+        # T is out, but he is not a Zombie — he is simply out.
+        self.assertIsNone(current['zombie_id'])
+        self.assertNotIn(self.t.id, current['alive_ids'])

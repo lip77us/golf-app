@@ -3242,6 +3242,10 @@ class SurvivorSummary {
   // Current live state.
   final int       currentSurvivor;
   final List<int> currentAliveIds;
+  /// Who is the Zombie RIGHT NOW — the player out of the live Survivor while
+  /// the option is on. Null when there is none. The engine owns this; the
+  /// client must not re-derive it (a resurrection makes that derivation wrong).
+  final int?      currentZombieId;
   /// 'elimination' while three are alive, 'decider' once one is out.
   final String    currentRole;
   final double    betUnit;
@@ -3259,6 +3263,7 @@ class SurvivorSummary {
     required this.scorecard,
     required this.currentSurvivor,
     required this.currentAliveIds,
+    this.currentZombieId,
     required this.currentRole,
     required this.betUnit,
     required this.pot,
@@ -3299,6 +3304,7 @@ class SurvivorSummary {
           .toList(),
       scorecard: (j['scorecard'] as Map<String, dynamic>?) ?? const {},
       currentSurvivor: current['survivor'] as int? ?? 1,
+      currentZombieId: current['zombie_id'] as int?,
       currentAliveIds: ((current['alive_ids'] as List?) ?? const [])
           .map((e) => e as int)
           .toList(),
