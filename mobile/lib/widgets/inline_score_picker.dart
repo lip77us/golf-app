@@ -266,15 +266,23 @@ class _InlineScorePickerState extends State<InlineScorePicker> {
                     // par, per the preference. No border (a dark ring reads
                     // bogey-like) and no glow (par has no golf shape of its
                     // own).
+                    //
+                    // SELECTION is a DEEPER TINT, not an added outline. Par is
+                    // the one score with no shape of its own, so the 2.5px
+                    // rounded border NetScoreButton draws for a selected cell
+                    // had nothing to sit around except the bare digit — and a
+                    // box around a digit is exactly how this card draws a
+                    // bogey. Picking par made par look like a bogey.
                     decoration: BoxDecoration(
-                      color: Colors.green.shade400,
+                      color: sel ? Colors.green.shade600 : Colors.green.shade400,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: NetScoreButton(
                       score:    s,
                       par:      widget.par,
                       strokes:  widget.strokes,
-                      selected: sel,
+                      // The tint above carries the selection here.
+                      selected: false,
                       width:    40,
                       height:   40,
                       // The anchor always renders as clean par (no bogey
