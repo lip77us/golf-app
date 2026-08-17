@@ -260,8 +260,6 @@ def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
     Pass an empty ``payouts_cfg`` for a display-only mode (no prize money):
     only the round's actually-configured mode carries payouts.
     """
-    from collections import defaultdict
-
     # Sort by net-to-par (total − par_played) so rankings are always in
     # par-relative order regardless of tee/course-par differences between
     # foursomes.  Players with no holes played sort last.
@@ -309,17 +307,15 @@ def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
 
     prize_rank_map: dict = {pid: r for pid, r in eligible_ranked}
 
-    # Tied-payout splitting among eligible players.
-    pids_by_prize_rank: dict = defaultdict(list)
-    for pid, r in eligible_ranked:
-        pids_by_prize_rank[r].append(pid)
-
-    prize_rank_payout: dict = {}
-    for r, pids in pids_by_prize_rank.items():
-        n = len(pids)
-        total_prize = sum(payouts_cfg.get(r + j, 0.0) for j in range(n))
-        per_player  = round(total_prize / n, 2) if total_prize > 0 else None
-        prize_rank_payout[r] = per_player
+    # Tied players split the money for the PLACES THEY OCCUPY (services/payout.py)
+    # — a T2 pair shares 2nd and 3rd rather than taking 2nd each. None, not 0,
+    # for a rank that pays nothing: the row shows no prize at all.
+    from services.payout import split_tied_places
+    prize_rank_payout: dict = {
+        r: (amt or None)
+        for r, amt in split_tied_places(
+            payouts_cfg, [r for _pid, r in eligible_ranked]).items()
+    }
 
     # ── Build standings list ──────────────────────────────────────────────────
     standings = []

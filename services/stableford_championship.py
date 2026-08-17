@@ -12,8 +12,6 @@ per-hole net** — a golfer who wants his 18-hole net has the gross and the stro
 allocation right there — so the per-round hole detail carries gross + strokes +
 points and no net column.
 """
-from collections import defaultdict
-
 from core.models import HandicapMode
 from services.round_counting import select_counting_rounds
 from services.stableford import _build_stableford_totals
@@ -115,14 +113,13 @@ def stableford_championship_standings(tournament) -> list:
     eligible = [(pid, d) for pid, d in rows if pid not in excluded]
     prize_ranked = _rank_list(eligible)
     prize_rank_map = {pid: r for pid, _d, r in prize_ranked}
-    pids_by_rank = defaultdict(list)
-    for pid, _d, r in prize_ranked:
-        pids_by_rank[r].append(pid)
-    rank_payout = {}
-    for r, pids in pids_by_rank.items():
-        n = len(pids)
-        total_prize = sum(payouts_cfg.get(r + j, 0.0) for j in range(n))
-        rank_payout[r] = round(total_prize / n, 2) if total_prize > 0 else None
+    # Tied players split the money for the PLACES THEY OCCUPY (services/payout.py).
+    from services.payout import split_tied_places
+    rank_payout = {
+        r: (amt or None)
+        for r, amt in split_tied_places(
+            payouts_cfg, [r for _pid, _d, r in prize_ranked]).items()
+    }
 
     standings = []
     for pid, data, rank in ranked:

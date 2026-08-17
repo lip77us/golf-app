@@ -251,21 +251,15 @@ def red_ball_summary(round_obj) -> dict:
                        foursome__round=round_obj, player__is_phantom=False
                    ).count()
     pool         = round(entry_fee * num_players, 2)
-    payouts_dict = {int(p['place']): float(p['amount']) for p in payouts_list}
 
     result_list = list(results)
 
-    # Count groups at each paid rank so we can split tied payouts.
-    count_at_rank = {}
-    for r in result_list:
-        if r.rank is not None and r.rank in payouts_dict:
-            count_at_rank[r.rank] = count_at_rank.get(r.rank, 0) + 1
-
-    def _payout_for(rank):
-        if rank is None or rank not in payouts_dict:
-            return 0.0
-        n = count_at_rank.get(rank, 1)
-        return round(payouts_dict[rank] / n, 2)
+    # Tied groups split the money for the PLACES THEY OCCUPY, not a halved
+    # single place — see services/payout.py. No countback.
+    from services.payout import (payouts_by_place, per_person_share,
+                                 split_tied_places)
+    rank_payout = split_tied_places(
+        payouts_by_place(payouts_list), [r.rank for r in result_list])
 
     # Build hole-par lookup from the first available member's tee.
     # All foursomes play the same course so one tee is sufficient for par.
@@ -369,7 +363,7 @@ def red_ball_summary(round_obj) -> dict:
                 net_to_par  = net_sum - par_sum
                 carrier_net = net_sum
 
-        group_payout = _payout_for(r.rank)
+        group_payout = rank_payout.get(r.rank, 0.0)
         # `display_thru` is what spectator pages render in the Thru
         # column.  After the ball is lost, freeze at the elimination
         # hole so the row reads e.g. "Thru 8 · Lost by RyanL" instead
@@ -395,7 +389,10 @@ def red_ball_summary(round_obj) -> dict:
             'total_net_score'   : carrier_net if carrier_net is not None else r.total_net_score,
             'net_to_par'        : net_to_par,
             'payout'            : group_payout,
-            'per_person_payout' : round(group_payout / n_players, 2) if n_players else 0.0,
+            # The place pays the GROUP and splits among its real golfers — the
+            # borrowed 4th is not a person and cannot be paid.
+            'per_person_payout' : per_person_share(group_payout, n_players),
+            'split_ways'        : n_players,
         })
 
     return {

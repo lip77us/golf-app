@@ -23,8 +23,6 @@ Public API
     summary   = low_net_championship_summary(tournament)
 """
 
-from collections import defaultdict
-
 from services.low_net_round import _build_ln_player_totals
 from services.round_counting import select_counting_rounds
 
@@ -179,16 +177,13 @@ def low_net_championship_standings(tournament) -> list:
                 rank = i + 1
         ranked.append((pid, data, rank))
 
-    # Tie-split payouts: group by rank, pool all consumed places, divide evenly.
-    pids_by_rank: dict = defaultdict(list)
-    for pid, data, r in ranked:
-        pids_by_rank[r].append(pid)
-
-    rank_payout: dict = {}
-    for r, pids in pids_by_rank.items():
-        n = len(pids)
-        total_prize = sum(payouts_cfg.get(r + j, 0.0) for j in range(n))
-        rank_payout[r] = round(total_prize / n, 2) if total_prize > 0 else None
+    # Tied players split the money for the PLACES THEY OCCUPY (services/payout.py).
+    from services.payout import split_tied_places
+    rank_payout: dict = {
+        r: (amt or None)
+        for r, amt in split_tied_places(
+            payouts_cfg, [r for _pid, _data, r in ranked]).items()
+    }
 
     standings = []
     for pid, data, r in ranked:
