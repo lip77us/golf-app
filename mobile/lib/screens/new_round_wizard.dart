@@ -1433,9 +1433,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           netPercent   : _netPercent,
           numRounds    : _numRounds,
           roundsToCount: _roundsToCount,
-          onPickFormat : (f) => setState(() {
-            _soloFormat = f;
-            _applyTypeFormat();
+          // One tap back to step 1, which owns the method.
+          onChangeMethod: () => setState(() {
+            final i = _stepFlow.indexOf(_StepKind.typeFormat);
+            if (i >= 0) _step = i;
           }),
           onChangeHandicap: (mode, pct) => setState(() {
             _handicapMode = mode;
@@ -2607,7 +2608,9 @@ class _StepScoring extends StatelessWidget {
   final int     netPercent;
   final int     numRounds;
   final int?    roundsToCount;
-  final ValueChanged<String> onPickFormat;
+  /// Jump back to the step that OWNS the method, rather than duplicating its
+  /// control here.
+  final VoidCallback onChangeMethod;
   final void Function(String mode, int pct) onChangeHandicap;
   final ValueChanged<int?>   onChangeRoundsToCount;
 
@@ -2617,7 +2620,7 @@ class _StepScoring extends StatelessWidget {
     required this.netPercent,
     required this.numRounds,
     required this.roundsToCount,
-    required this.onPickFormat,
+    required this.onChangeMethod,
     required this.onChangeHandicap,
     required this.onChangeRoundsToCount,
   });
@@ -2632,7 +2635,7 @@ class _StepScoring extends StatelessWidget {
       subtitle: 'Set once for the tournament. Every round and every board '
           'reads from this.',
       children: [
-        _methodPicker(context),
+        _methodRecap(context),
         const SizedBox(height: 16),
         if (_isStableford) _stablefordNote(context) else _capRule(context),
         const SizedBox(height: 16),
@@ -2649,30 +2652,30 @@ class _StepScoring extends StatelessWidget {
     );
   }
 
-  // ── Method ────────────────────────────────────────────────────────────
-  Widget _methodPicker(BuildContext context) {
+  // ── Method — a read-back, not a second question ───────────────────────
+  /// The method was already picked on step 1, where it decides the step list.
+  /// Asking again here with a live radio group reads as being asked twice, so
+  /// this states the answer and offers one tap back to the step that owns it.
+  Widget _methodRecap(BuildContext context) {
     final theme = Theme.of(context);
     return SectionCard(
       title: 'Method',
-      child: Column(children: [
-        for (final (value, label, blurb) in const [
-          ('stroke', 'Stroke play',
-           'Gross and net against the field. Every hole is capped at net '
-           'double bogey.'),
-          ('stableford', 'Stableford',
-           'Points per hole against par. Standard or modified scale, set on '
-           'the next step.'),
-        ])
-          RadioListTile<String>(
-            value: value,
-            groupValue: soloFormat,
-            onChanged: (v) { if (v != null) onPickFormat(v); },
-            contentPadding: EdgeInsets.zero,
-            title: Text(label,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600)),
-            subtitle: Text(blurb, style: theme.textTheme.bodySmall),
+      trailing: TextButton(
+        onPressed: onChangeMethod,
+        child: const Text('Change'),
+      ),
+      child: Row(children: [
+        Icon(Icons.check_circle, size: 18, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _isStableford
+                ? 'Stableford — points per hole against par.'
+                : 'Stroke play — gross and net against the field.',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
+        ),
       ]),
     );
   }
