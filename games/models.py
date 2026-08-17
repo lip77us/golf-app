@@ -2102,6 +2102,20 @@ class MatchPlayMatch(models.Model):
                             null=True, blank=True,
                             help_text="Hole number the match was conceded/won (for early finish tracking)."
                         )
+    # A halved match SPLITS THE MONEY — 1st and 2nd are added together and
+    # shared, and nobody is played off for cash. But some things need exactly
+    # one name: the trophy, and the seat in the next stage. Those go to the
+    # LAST HOLE WON — read the card backwards to the most recent hole either
+    # golfer took outright. Null unless result == 'halved'; null even then if
+    # every hole was halved, which is a true dead heat with no last hole to
+    # read. See docs/design-review/handoff-individual-play/SPEC.md §4.
+    trophy_player       = models.ForeignKey(
+                            Player, on_delete=models.SET_NULL,
+                            null=True, blank=True,
+                            related_name='mp_trophies_on_last_hole',
+                            help_text='Halved match only: who takes the trophy '
+                                      'and the next-stage seat, by last hole won.',
+                        )
 
     def __str__(self):
         return f"R{self.round_number}: {self.player1.name} vs {self.player2.name} — {self.bracket}"

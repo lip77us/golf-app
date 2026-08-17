@@ -20,20 +20,43 @@ A match closes early when margin > holes remaining ("dormie" close).
 Handicap mode (net / gross / strokes_off) and net_percent are read from
 foursome.round — the same values used for all other games in the round.
 
-Tie-break rules (no presses)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A halved match plays on — it never splits (no presses, no card-offs)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Semi (round 1, holes 1–9):
-    If tied after hole 9 → sudden death on holes 10, 11 ... 18 using
-    the same scores already entered for the round.  The match stays
-    in_progress while the score for the deciding hole is not yet entered.
-    finished_on_hole records which hole broke the tie.
-    If all 18 holes are halved → result = 'halved' (extreme edge case).
+    All square after nine and the match simply CONTINUES into the back nine,
+    reading back from hole 10, until the first hole one of them takes
+    outright. That hole ends the semi and names the opponent.
+    ``finished_on_hole`` records it.
+
+    **Nobody waits.** The pair whose semi already resolved tee off on 10 on
+    schedule and their back-9 match is scored live against an opponent the
+    bracket cannot name yet — labelled ``1 UP vs. TBD``, never "Pending".
+    This is unambiguous rather than a guess: the pair still level can only
+    HALVE the holes they play in overtime, because the first hole they do not
+    halve is the hole that ends the semi. Their two nets are therefore one
+    number, and the waiter's result is settled as it is entered.
+
+    Concretely: while a semi is unresolved its two contenders are
+    interchangeable for scoring the back-9 matches, so the round-2 match is
+    assigned one of them and flagged TBD. Once the semi resolves, the real
+    winner replaces it and holes 10..k re-score identically, because those
+    holes were halved.
+
+    This also removes the collision the old sudden-death rule created, where
+    a semi borrowed hole 10 from the final and a semi that ran to 12 left the
+    final six holes to settle a nine-hole match.
 
 Final / 3rd Place (round 2, holes 10–18):
-    If tied after hole 18 → last-hole-won:
-        Walk back from hole 18 to find the most recent hole with a winner;
-        that player wins.
-    If ALL 9 holes were halved → result = 'halved' (true dead heat).
+    Level after 18 and the match is HALVED. The money splits — 1st and 2nd
+    are added together and shared; nobody is played off for cash.
+    Where a single NAME is needed (the trophy, and the seat in the day-2
+    champions' foursome) it goes to the LAST HOLE WON: read the card
+    backwards to the most recent hole either golfer took outright. Stored on
+    ``MatchPlayMatch.trophy_player``.
+    A halved 3rd-place match simply splits — nothing depends on the order, so
+    nothing needs breaking, and no trophy is read.
+    If ALL nine holes were halved there is no last hole to read: a true dead
+    heat, trophy_player stays null.
 
 Prize pool
 ~~~~~~~~~~
@@ -72,6 +95,79 @@ _MATCH_LABELS = {
     (2, 0): 'Final',
     (2, 1): '3rd Place',
 }
+
+
+# ---------------------------------------------------------------------------
+# Display helpers — match summaries use the surname alone
+# ---------------------------------------------------------------------------
+
+def _surname(player) -> str:
+    """
+    ``Detomasi vs Gunst``, not ``Aldo Detomasi vs Alex Gun…``.
+
+    A match summary row has about forty pixels a side. Six of eight first
+    names in the test field start with A, so a truncated first name identifies
+    nobody, while the surname fits, disambiguates better and reads the way
+    golfers say it. Falls back to the short name, then the whole name.
+    """
+    name = (player.name or '').strip()
+    if not name:
+        return (player.short_name or '').strip()
+    parts = name.split()
+    return parts[-1] if len(parts) > 1 else name
+
+
+def _feeding_semi_open(r1_matches, side: int) -> bool:
+    """True when the semi feeding this side of a back-9 match is still level."""
+    if side >= len(r1_matches):
+        return False
+    return r1_matches[side].status != 'complete'
+
+
+def _match_line(match, hole_results, players_tbd, p1_display, p2_display) -> str:
+    """
+    The one-line state the board and the score-entry card render:
+
+        Gunst 4&2                 closed out
+        All square thru 11        level, still out there
+        1 UP thru 11              scored against an opponent not yet named,
+                                  read from the named golfer's side (1 DN when
+                                  he is behind)
+
+    Never "Pending — waiting for scores". The back-9 matches are real from the
+    first tee shot on 10, which is the whole point of the playing-on rule.
+    """
+    if not hole_results:
+        return 'Not started'
+
+    thru   = hole_results[-1].hole_number
+    margin = hole_results[-1].holes_up_after
+
+    if match.status == 'complete':
+        if match.result == 'halved':
+            if match.trophy_player_id:
+                return f'Halved — {_surname(match.trophy_player)} won the last hole'
+            return 'Halved'
+        winner = match.player1 if match.result == 'player1' else match.player2
+        # "4&2" — the margin, and the holes that were left when it closed.
+        last_hole = match.start_hole + 8
+        remaining = last_hole - (match.finished_on_hole or last_hole)
+        if remaining > 0:
+            return f'{_surname(winner)} {abs(margin)}&{remaining}'
+        return f'{_surname(winner)} {abs(margin)} UP'
+
+    # Live.
+    if margin == 0:
+        return f'All square thru {thru}'
+
+    if players_tbd:
+        # Read from the named golfer's side — the other one has no name yet.
+        p1_named = p1_display != 'TBD'
+        ahead    = (margin > 0) if p1_named else (margin < 0)
+        return f'{abs(margin)} {"UP" if ahead else "DN"} thru {thru}'
+
+    holder = match.player1 if margin > 0 else match.player2
+    return f'{_surname(holder)} {abs(margin)} UP thru {thru}'
 
 
 # ---------------------------------------------------------------------------
@@ -208,16 +304,12 @@ def setup_tournament_match_play(
 
 def _play_semi(match: MatchPlayMatch, score_index: dict) -> tuple[list, int]:
     """
-    Score a 9-hole semi-final (holes 1–9) with sudden-death tie-break.
-
-    If tied after hole 9, continues scoring holes 10 ... 18 until the
-    first hole where one player wins.  Records the deciding hole in
-    match.finished_on_hole.
+    Score a 9-hole semi-final (holes 1–9). All square after nine and it PLAYS
+    ON into the back nine rather than splitting or going to a card-off.
 
     Returns a tuple of:
         - list of unsaved MatchPlayHoleResult objects
         - final holes_up value (positive = player1 leading, negative = player2)
-          This lets the caller derive the tentative leader even during SD.
 
     Mutates match.result, match.status, match.finished_on_hole.
     """
@@ -260,7 +352,10 @@ def _play_semi(match: MatchPlayMatch, score_index: dict) -> tuple[list, int]:
         match.status = 'complete'
         return results, holes_up
 
-    # ── Sudden death: tied after hole 9 ─────────────────────────────────
+    # ── All square after nine: play on into the back nine ────────────────
+    # These holes belong to the semi AND to the back-9 matches happening
+    # alongside it — by design rather than by collision. The pair can only
+    # halve them, so the first hole either takes outright ends the semi.
     for hole_num in range(10, 19):
         p1_net = score_index.get(match.player1_id, {}).get(hole_num)
         p2_net = score_index.get(match.player2_id, {}).get(hole_num)
@@ -297,18 +392,26 @@ def _play_semi(match: MatchPlayMatch, score_index: dict) -> tuple[list, int]:
 
 def _play_back9_match(match: MatchPlayMatch, score_index: dict) -> list:
     """
-    Score a 9-hole back-9 match (holes 10–18) with last-hole-won tie-break.
-    Used for both the Final and the 3rd Place match.
+    Score a 9-hole back-9 match (holes 10–18). Used for the Final and the
+    3rd-Place match.
 
-    If tied after hole 18 → the player who won the most recent hole wins.
-    If ALL 9 holes were halved → result = 'halved'.
+    Level after 18 the match is HALVED and the money splits — 1st and 2nd are
+    added together and shared. Where a single name is still needed (the
+    trophy, and the seat in the day-2 champions' foursome) it goes to the LAST
+    HOLE WON, recorded on ``match.trophy_player``; the RESULT stays 'halved'
+    so the payout reducer splits rather than paying a winner.
+
+    All nine halved is a true dead heat: there is no last hole to read, so
+    trophy_player stays null.
 
     Returns a list of unsaved MatchPlayHoleResult objects.
-    Mutates match.result, match.status, match.finished_on_hole.
+    Mutates match.result, match.status, match.finished_on_hole,
+    match.trophy_player.
     """
-    holes_up           = 0
-    results: list      = []
-    last_winner_result = None
+    holes_up            = 0
+    results: list       = []
+    last_winner_player  = None
+    match.trophy_player = None
 
     for hole_num in range(10, 19):
         p1_net = score_index.get(match.player1_id, {}).get(hole_num)
@@ -320,10 +423,10 @@ def _play_back9_match(match: MatchPlayMatch, score_index: dict) -> list:
 
         if p1_net < p2_net:
             winner, delta      = match.player1, 1
-            last_winner_result = 'player1'
+            last_winner_player = match.player1
         elif p2_net < p1_net:
             winner, delta      = match.player2, -1
-            last_winner_result = 'player2'
+            last_winner_player = match.player2
         else:
             winner, delta      = None, 0
 
@@ -349,9 +452,13 @@ def _play_back9_match(match: MatchPlayMatch, score_index: dict) -> list:
         match.result = 'player2'
         match.status = 'complete'
     else:
-        # Last-hole-won tie-break.
-        match.result = last_winner_result if last_winner_result else 'halved'
-        match.status = 'complete'
+        # HALVED. The money splits; the result stays 'halved' so the payout
+        # reducer adds the two places together and shares them. Only the
+        # trophy and the next-stage seat need one name, and they are read off
+        # the last hole won — null when every hole was halved.
+        match.result        = 'halved'
+        match.status        = 'complete'
+        match.trophy_player = last_winner_player
 
     return results
 
@@ -453,44 +560,54 @@ def calculate_tournament_match_play(foursome) -> MatchPlayBracket | None:
     def _semi_loser(semi):
         return semi.player2 if semi.result == 'player1' else semi.player1
 
-    # ── Assign round-2 players ───────────────────────────────────────────
-    # The Final / 3rd-Place only begin once BOTH semis are DECIDED (complete).
-    # A semi tied after hole 9 goes to sudden death on holes 10+, which share
-    # the back-9 holes the Final would use — so assigning finalists (or scoring
-    # the back 9) while a semi is still in SD starts the Final before the
-    # bracket is settled. Waiting for r1_complete keeps "begins after both
-    # semis resolve" literally true.
-    if r1_complete and len(r1_matches) == 2 and len(r2_matches) >= 1:
-        s1, s2 = r1_matches[0], r1_matches[1]
+    def _semi_sides(semi):
+        """
+        (winner_side, loser_side, is_tbd) for a semi.
 
-        s1_winner = _semi_winner(s1)
-        s2_winner = _semi_winner(s2)
-        s1_loser  = _semi_loser(s1)
-        s2_loser  = _semi_loser(s2)
+        While a semi is still playing on, its two contenders are
+        INTERCHANGEABLE for scoring the back-9 matches: they can only halve
+        the overtime holes, because the first hole either takes outright is
+        the hole that ends the semi. So both sides get a stand-in and the
+        match is flagged TBD; when the semi resolves, the real names replace
+        the stand-ins and holes 10..k re-score to exactly the same result.
+
+        This is what lets the resolved pair tee off on 10 on schedule and
+        carry a real, scored `1 UP vs. TBD` instead of an empty "Pending" card.
+        """
+        if semi.status == 'complete' and semi.result in ('player1', 'player2'):
+            return _semi_winner(semi), _semi_loser(semi), False
+        return semi.player1, semi.player2, True
+
+    # ── Assign round-2 players ───────────────────────────────────────────
+    # Nobody waits: the back-9 matches are assigned and scored from hole 10
+    # whether or not both semis have resolved.
+    r2_tbd = {}          # match id → True when its opponent is not yet named
+    if len(r1_matches) == 2 and len(r2_matches) >= 1:
+        s1, s2 = r1_matches[0], r1_matches[1]
+        s1_win, s1_lose, s1_tbd = _semi_sides(s1)
+        s2_win, s2_lose, s2_tbd = _semi_sides(s2)
 
         # r2_matches[0] = Final, r2_matches[1] = 3rd Place
         final = r2_matches[0]
-        final.player1 = s1_winner
-        final.player2 = s2_winner
+        final.player1, final.player2 = s1_win, s2_win
         final.save(update_fields=['player1', 'player2'])
+        r2_tbd[final.id] = s1_tbd or s2_tbd
 
         if len(r2_matches) >= 2:
             third = r2_matches[1]
-            third.player1 = s1_loser
-            third.player2 = s2_loser
+            third.player1, third.player2 = s1_lose, s2_lose
             third.save(update_fields=['player1', 'player2'])
+            r2_tbd[third.id] = s1_tbd or s2_tbd
 
     # ── Round 2: score back-9 matches ────────────────────────────────────
-    # For SO mode each round-2 match needs a freshly-built pair index —
-    # the player1/player2 just got assigned above. Only score once both semis
-    # are decided (see above), so a tied semi's SD holes never leak into the
-    # Final before its players are known.
+    # For SO mode each round-2 match needs a freshly-built pair index — the
+    # player1/player2 were just assigned above.
     for match in r2_matches:
-        if r1_complete:
-            idx = _index_for(match)
-            results = _play_back9_match(match, idx)
-            all_hole_results.extend(results)
-            match.save(update_fields=['status', 'result', 'finished_on_hole'])
+        idx = _index_for(match)
+        results = _play_back9_match(match, idx)
+        all_hole_results.extend(results)
+        match.save(update_fields=['status', 'result', 'finished_on_hole',
+                                  'trophy_player'])
 
     MatchPlayHoleResult.objects.bulk_create(all_hole_results)
 
@@ -503,13 +620,17 @@ def calculate_tournament_match_play(foursome) -> MatchPlayBracket | None:
 
     if all_complete:
         bracket.status = 'complete'
-        # Overall bracket winner = winner of the Final (r2_matches[0])
+        # Overall bracket winner = winner of the Final (r2_matches[0]). A
+        # HALVED final splits the money but still has to produce one name for
+        # the trophy and the day-2 seat, and that name is the last hole won.
         deciding = r2_matches[0] if r2_matches else (r1_matches[0] if r1_matches else None)
         if deciding:
             if deciding.result == 'player1':
                 bracket.winner = deciding.player1
             elif deciding.result == 'player2':
                 bracket.winner = deciding.player2
+            elif deciding.result == 'halved':
+                bracket.winner = deciding.trophy_player
         bracket.save(update_fields=['status', 'winner'])
     elif any_started:
         bracket.status = 'in_progress'
@@ -634,11 +755,17 @@ def tournament_match_play_summary(foursome) -> dict | None:
         gross_by[(hs['player_id'], hs['hole_number'])] = hs['gross_score']
     strokes_fn = make_strokes_fn(foursome)
 
-    def _match_scorecard(match):
+    def _match_scorecard(match, tbd_p1=False, tbd_p2=False):
         """Per-match scoring detail: every hole in the 9-hole range (plus any
-        sudden-death holes), with par, stroke index, each player's gross +
-        prospective handicap strokes (per the bracket mode) and the hole
-        winner id. Prospective — dots show before a hole is scored."""
+        overtime holes a semi played on into), with par, stroke index, each
+        player's gross + prospective handicap strokes (per the bracket mode)
+        and the hole winner id. Prospective — dots show before a hole is scored.
+
+        A side whose semi has not resolved is TBD: the match RESULT against it
+        is settled (the two still level halve every overtime hole, so their net
+        is one number) but their GROSS is not — it belongs to one of two
+        golfers. So the card names that side 'TBD' and leaves its cells empty
+        rather than printing a stand-in's card as if it were the opponent's."""
         p1id, p2id = match.player1_id, match.player2_id
         m1, m2 = member_by_pid.get(p1id), member_by_pid.get(p2id)
 
@@ -671,6 +798,13 @@ def tournament_match_play_summary(foursome) -> dict | None:
         hr_by_hole = {hr.hole_number: hr for hr in match.hole_results.all()}
         extra = sorted(h for h in hr_by_hole if h not in base)  # sudden death
         holes = []
+        def _cell(pid, hole, tbd):
+            if tbd:
+                return {'player_id': None, 'gross': None, 'strokes': 0,
+                        'tbd': True}
+            return {'player_id': pid, 'gross': gross_by.get((pid, hole)),
+                    'strokes': _strokes(pid, hole), 'tbd': False}
+
         for h in base + extra:
             hr = hr_by_hole.get(h)
             holes.append({
@@ -678,21 +812,23 @@ def tournament_match_play_summary(foursome) -> dict | None:
                 'par'          : par_by.get(h),
                 'stroke_index' : si_by.get(h),
                 'winner_id'    : hr.winner_id if hr else None,
-                'is_sd'        : h not in base,
-                'scores'       : [
-                    {'player_id': p1id, 'gross': gross_by.get((p1id, h)),
-                     'strokes': _strokes(p1id, h)},
-                    {'player_id': p2id, 'gross': gross_by.get((p2id, h)),
-                     'strokes': _strokes(p2id, h)},
-                ],
+                'is_overtime'  : h not in base,
+                'is_sd'        : h not in base,   # retired alias
+                'scores'       : [_cell(p1id, h, tbd_p1),
+                                  _cell(p2id, h, tbd_p2)],
             })
+
+        def _side(pid, player, tbd):
+            if tbd:
+                return {'player_id': None, 'name': 'TBD', 'short_name': 'TBD',
+                        'tbd': True}
+            return {'player_id': pid, 'name': player.name,
+                    'short_name': player.short_name,
+                    'surname': _surname(player), 'tbd': False}
+
         return {
-            'players': [
-                {'player_id': p1id, 'name': match.player1.name,
-                 'short_name': match.player1.short_name},
-                {'player_id': p2id, 'name': match.player2.name,
-                 'short_name': match.player2.short_name},
-            ],
+            'players': [_side(p1id, match.player1, tbd_p1),
+                        _side(p2id, match.player2, tbd_p2)],
             'holes'        : holes,
             'holes_in_play': base + extra,
         }
@@ -759,19 +895,19 @@ def tournament_match_play_summary(foursome) -> dict | None:
         if match.status != 'complete':
             return None
         if match.round_number == 1:
+            # Not sudden death: the semi PLAYED ON into the back nine and the
+            # first hole either golfer took outright ended it.
             if any(hr.hole_number > 9 for hr in hole_results):
-                return 'sudden_death'
-        elif match.round_number == 2:
-            if match.finished_on_hole is None and len(hole_results) == 9:
-                h18 = next((hr for hr in hole_results if hr.hole_number == 18), None)
-                if h18 and h18.holes_up_after == 0 and match.result != 'halved':
-                    return 'last_hole_won'
+                return 'played_on'
+        elif match.round_number == 2 and match.result == 'halved':
+            # Halved: the money splits. A trophy_player means one name was
+            # still needed and was read off the last hole won.
+            return 'last_hole_won' if match.trophy_player_id else 'dead_heat'
         return None
 
-    # Whether all Round-1 semis are DECIDED. The Final / 3rd-Place stay "TBD"
-    # (Semi N Winner) until this is true — a semi tied after 9 is still in
-    # sudden death and its winner isn't known, so the back-9 matches haven't
-    # really started (mirrors calculate_tournament_match_play's r1_complete gate).
+    # Whether all Round-1 semis are DECIDED. The Final / 3rd-Place carry a real
+    # scored result either way — that is the whole point of the playing-on rule
+    # — but their opponent is labelled TBD until the semi that feeds them ends.
     r1_complete = all(m.status == 'complete' for m in r1_matches) if r1_matches else True
 
     matches_out = []
@@ -795,34 +931,45 @@ def tournament_match_play_summary(foursome) -> dict | None:
                 'p2_net' : hr.p2_net,
                 'winner' : hr.winner.name if hr.winner else None,
                 'margin' : hr.holes_up_after,
-                'is_sd'  : r == 1 and hr.hole_number > 9,
+                # The semi played ON into these holes. `is_sd` is the retired
+                # sudden-death name, kept one release for older clients; the
+                # SD badge is gone from the board.
+                'is_overtime': r == 1 and hr.hole_number > 9,
+                'is_sd'      : r == 1 and hr.hole_number > 9,
             }
             for hr in hole_results
         ]
 
-        # players_tbd: the semis aren't all decided yet — show "Semi 1 Winner /
-        #   Semi 2 Winner" so the Final/3rd-Place don't appear to have started
-        #   while a semi is still in sudden death.
+        # A back-9 match whose feeding semi is still level plays against an
+        # opponent the bracket cannot name yet. The match IS scored and IS
+        # real — the two still level can only halve, so the result is settled
+        # as it is entered — so the side reads "TBD", never "Pending".
+        # Match summaries use the SURNAME ALONE: six of eight first names in
+        # the test field start with A, so a truncated first name identifies
+        # nobody.
+        tbd_p1 = tbd_p2 = False
         if r == 2 and not r1_complete:
+            tbd_p1 = _feeding_semi_open(r1_matches, 0)
+            tbd_p2 = _feeding_semi_open(r1_matches, 1)
+        if tbd_p1 or tbd_p2:
             players_tbd       = True
             players_tentative = False
-            if idx == 0:   # Final
-                p1_display = 'Semi 1 Winner'
-                p2_display = 'Semi 2 Winner'
-                p1_short   = 'S1 W'
-                p2_short   = 'S2 W'
-            else:          # 3rd Place
-                p1_display = 'Semi 1 Loser'
-                p2_display = 'Semi 2 Loser'
-                p1_short   = 'S1 L'
-                p2_short   = 'S2 L'
+            p1_display = 'TBD' if tbd_p1 else match.player1.name
+            p2_display = 'TBD' if tbd_p2 else match.player2.name
+            p1_short   = 'TBD' if tbd_p1 else _surname(match.player1)
+            p2_short   = 'TBD' if tbd_p2 else _surname(match.player2)
         else:
             players_tbd       = False
-            players_tentative = False   # no tentative tracking — see r1_complete
+            players_tentative = False
             p1_display        = match.player1.name
             p2_display        = match.player2.name
             p1_short          = match.player1.short_name
             p2_short          = match.player2.short_name
+
+        # The line the board and the score-entry card show for this match —
+        # "Gunst 4&2", "All square thru 11", "1 UP vs. TBD".
+        match_line = _match_line(match, hole_results, players_tbd,
+                                 p1_display, p2_display)
 
         matches_out.append({
             'id'               : match.id,
@@ -840,12 +987,24 @@ def tournament_match_play_summary(foursome) -> dict | None:
             'result'           : match.result,
             'winner_name'      : _winner_name(match),
             'winner_short'     : _winner_short(match),
+            # Match summaries read the surname alone.
+            'pairing'          : (f'{p1_short} vs {p2_short}' if players_tbd
+                                  else f'{_surname(match.player1)} vs '
+                                       f'{_surname(match.player2)}'),
+            'line'             : match_line,
+            # A halved match splits the money. trophy_* names who takes the
+            # trophy and the next-stage seat, by last hole won — the ONLY
+            # thing last-hole-won decides.
+            'trophy_player_id' : match.trophy_player_id,
+            'trophy_player'    : (match.trophy_player.name
+                                  if match.trophy_player_id else None),
             'tie_break'        : tie_break,
             'finished_hole'    : match.finished_on_hole,
             'holes'            : holes_out,
-            # Scoring detail — present once the match's players are known
-            # (semis always; final/consolation after both semis resolve).
-            'scorecard'        : None if players_tbd else _match_scorecard(match),
+            # Scoring detail — always present. A back-9 match against a semi
+            # still playing on is a real, scored match; only the unnamed
+            # side's cells are blank.
+            'scorecard'        : _match_scorecard(match, tbd_p1, tbd_p2),
         })
 
     # ── Money block ───────────────────────────────────────────────────────
@@ -858,34 +1017,84 @@ def tournament_match_play_summary(foursome) -> dict | None:
     final      = r2_matches[0] if len(r2_matches) >= 1 else None
     third_match = r2_matches[1] if len(r2_matches) >= 2 else None
 
+    def _finishers(match):
+        """
+        (higher_place_player, lower_place_player) for a decided match, or
+        (None, None) while it is unfinished.
+
+        A HALVED match still fills both places — the money is split between
+        them — so it returns both golfers rather than 'Halved' and a blank.
+        The trophy_player is listed first because that is who takes the
+        trophy and the next-stage seat; the order carries no extra money.
+        """
+        if match is None or match.status != 'complete':
+            return None, None
+        if match.result == 'player1':
+            return match.player1, match.player2
+        if match.result == 'player2':
+            return match.player2, match.player1
+        if match.trophy_player_id == match.player2_id:
+            return match.player2, match.player1
+        return match.player1, match.player2
+
+    f_hi, f_lo = _finishers(final)
+    t_hi, t_lo = _finishers(third_match)
     place_players = {
-        '1st': _winner_name(final)       if final and final.status == 'complete' else None,
-        '2nd': _loser_name(final)        if final and final.status == 'complete' else None,
-        '3rd': _winner_name(third_match) if third_match and third_match.status == 'complete' else None,
-        '4th': _loser_name(third_match)  if third_match and third_match.status == 'complete' else None,
+        '1st': f_hi.name if f_hi else None,
+        '2nd': f_lo.name if f_lo else None,
+        '3rd': t_hi.name if t_hi else None,
+        '4th': t_lo.name if t_lo else None,
     }
     place_player_ids = {
-        '1st': _winner_id(final)       if final and final.status == 'complete' else None,
-        '2nd': _loser_id(final)        if final and final.status == 'complete' else None,
-        '3rd': _winner_id(third_match) if third_match and third_match.status == 'complete' else None,
-        '4th': _loser_id(third_match)  if third_match and third_match.status == 'complete' else None,
+        '1st': f_hi.id if f_hi else None,
+        '2nd': f_lo.id if f_lo else None,
+        '3rd': t_hi.id if t_hi else None,
+        '4th': t_lo.id if t_lo else None,
     }
 
-    payouts_out = [
-        {
+    # ── Halved matches split the two places they occupy ───────────────────
+    # A halved final shares 1st and 2nd; a halved 3rd-place match shares 3rd
+    # and 4th. Nobody is played off for cash — the trophy is the only thing
+    # last-hole-won decides. `split_with` names the other golfer so the row
+    # can read "1st/2nd — split, $X each".
+    def _halved_pair(match, places):
+        if match is None or match.status != 'complete' or match.result != 'halved':
+            return None
+        total = sum(float(payout_cfg.get(p, 0.00)) for p in places)
+        return {
+            'places' : list(places),
+            'each'   : round(total / 2, 2),
+            'players': [
+                {'player_id': match.player1_id, 'name': match.player1.name},
+                {'player_id': match.player2_id, 'name': match.player2.name},
+            ],
+            'trophy_player_id': match.trophy_player_id,
+        }
+
+    splits = [s for s in (_halved_pair(final, ('1st', '2nd')),
+                          _halved_pair(third_match, ('3rd', '4th'))) if s]
+    split_by_pid = {p['player_id']: s
+                    for s in splits for p in s['players']}
+
+    payouts_out = []
+    for place in ('1st', '2nd', '3rd', '4th'):
+        pid = place_player_ids.get(place)
+        payouts_out.append({
             'place'    : place,
             'player'   : place_players.get(place),
-            'player_id': place_player_ids.get(place),
+            'player_id': pid,
             'amount'   : float(payout_cfg.get(place, 0.00)),
-        }
-        for place in ('1st', '2nd', '3rd', '4th')
-    ]
+            # Every paid place names its recipient, and a split says so.
+            'recipient': 'golfer',
+            'split'    : split_by_pid.get(pid) is not None,
+        })
 
     money = {
         'entry_fee'    : entry_fee,
         'prize_pool'   : prize_pool,
         'payout_config': {k: float(v) for k, v in payout_cfg.items()},
         'payouts'      : payouts_out,
+        'splits'       : splits,
     }
 
     return {
