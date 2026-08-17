@@ -2149,6 +2149,20 @@ class TournamentLeaderboardView(APIView):
         })
 
 
+class TournamentSettlementView(APIView):
+    """
+    GET /api/tournaments/{id}/settlement/
+
+    Every tournament-scope pot, one net number per golfer, and the TD's
+    by-game balance check. Foursome side bets are deliberately absent — the TD
+    never set them and never collected for them.
+    """
+    def get(self, request, pk):
+        from services.tournament_settlement import tournament_settlement
+        tournament = tournament_for_reader(request.user, pk)
+        return Response(tournament_settlement(tournament))
+
+
 class TournamentCupStandingsView(APIView):
     """
     GET /api/tournaments/{id}/cup-standings/

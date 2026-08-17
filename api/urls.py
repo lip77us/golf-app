@@ -44,6 +44,7 @@ urlpatterns = [
     path('tournaments/<int:pk>/watchers/',            views.TournamentWatcherView.as_view(),       name='api-tournament-watchers'),
     path('tournaments/<int:pk>/watcher-candidates/',  views.TournamentWatcherCandidatesView.as_view(), name='api-tournament-watcher-candidates'),
     path('tournaments/<int:pk>/cup-standings/',       views.TournamentCupStandingsView.as_view(), name='api-tournament-cup-standings'),
+    path('tournaments/<int:pk>/settlement/',          views.TournamentSettlementView.as_view(),   name='api-tournament-settlement'),
     path('tournaments/<int:pk>/low-net/',             views.TournamentLowNetView.as_view(),       name='api-tournament-low-net'),
     path('tournaments/<int:pk>/low-net/setup/',       views.TournamentLowNetSetupView.as_view(), name='api-tournament-low-net-setup'),
     path('tournaments/<int:pk>/stableford/',          views.TournamentStablefordView.as_view(),      name='api-tournament-stableford'),
