@@ -1291,6 +1291,32 @@ off on a decider with the banner still reading "elimination".
 settlement (three players IS the format — the universal unblocker still lets the
 round complete); tournament use (casual-only for v1).
 
+### Zombie Option — phase 3 (mobile) implemented
+Phases 1 (engine/model/tests) and 2 (API) shipped earlier; the UI did not, so
+`zombie_option` could only ever be posted as `false` and nothing surfaced it.
+Now built from `docs/design-review/handoff-survivor-zombie/`:
+- **Token:** `Halved.zombie` = `#6E4B8E` — the packet's one new colour,
+  deliberately neither the win green nor the out red, because a Zombie is
+  neither.
+- **Setup** (`survivor_setup_screen.dart`): the toggle, off by default, with the
+  three cases that actually differ (back-in-with-Zombieville, back-in-all-three,
+  no-change) and a footnote for the 18th-hole kill + no blood. **Locked once any
+  hole is scored** — the option decides who is still in the Survivor, so
+  flipping it mid-round would rewrite played holes.
+- **Play** (`survivor_screen.dart`): the knocked-out row becomes a plum ZOMBIE
+  row with a LIVE score box instead of the dimmed OUT row; the phase banner
+  names him and states his stake; a resurrection outranks the normal outcome
+  line and says the Survivor CARRIES ON (the number does not increment); the
+  by-hole grid marks the resurrection hole plum, which can sit on the same hole
+  as another player's red.
+- **Leaderboard** (`leaderboard_screen.dart`): a 🧟 Zombie-on pill on the header,
+  `killed` rendered as "Killed by X on 18 — pays nothing", a live Survivor
+  naming its Zombie, the shared `_MsScorecard` gaining a plum `resurrected` cell
+  (inert for every other game, like `eliminated`), and the three-mark legend.
+- Model/client: `SurvivorSummary.zombieOption`, `SurvivorHoleEntry.isZombie` /
+  `isResurrected`, `SurvivorHole.resurrectedId/Short`, `SurvivorLeg.killedById/
+  Short` + `isKilled`, and `postSurvivorSetup(zombieOption:)`.
+
 ## Release tags
 
 Every marketing version is tagged `v<version>` (annotated), pointing at the

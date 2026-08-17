@@ -2873,6 +2873,9 @@ class _MsScorecardState extends State<_MsScorecard> {
       final isWinner = entry['winner_id'] == playerId;   // Skins per-player win
       // Survivor: this hole knocked the player out of the current Survivor.
       final isOut = mine['eliminated'] == true;
+      // Survivor + Zombie Option: this hole is where he won his way back in.
+      // Every other game omits the flag, so it is inert there.
+      final isBack = mine['resurrected'] == true;
       // Nassau: the whole winning TEAM's cells get tinted in their colour.
       final winnerTeam = entry['winner_team'] as int?;
       final myTeam     = teamOf[playerId];
@@ -2888,12 +2891,16 @@ class _MsScorecardState extends State<_MsScorecard> {
         cellBg     = winBg;
         cellFg     = winFg;
         cellBorder = Border.all(color: Colors.green.shade400, width: 1);
+      } else if (isBack) {
+        cellBg     = Halved.zombie.withOpacity(0.18);
+        cellFg     = Halved.zombie;
+        cellBorder = Border.all(color: Halved.zombie, width: 1);
       } else if (isOut) {
         cellBg     = outBg;
         cellFg     = outFg;
         cellBorder = Border.all(color: Colors.red.shade400, width: 1);
       }
-      final highlight = teamWin || isWinner || isOut;
+      final highlight = teamWin || isWinner || isOut || isBack;
 
       return Container(
         width: _cellW, height: _rowH,
@@ -5258,6 +5265,7 @@ class _SurvivorGroupCard extends StatelessWidget {
     }
     final decided = svs.where((s) =>
         (s as Map)['outcome'] != 'live').length;
+    final zombieOn = summary['zombie_option'] == true;
 
     return Card(
       child: Padding(
@@ -5274,6 +5282,23 @@ class _SurvivorGroupCard extends StatelessWidget {
                   '${decided > 0 ? ' · $decided decided' : ''}',
                   style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
+            // Whether the Zombie Option is running changes how every result
+            // below should be read, so it is stated on the header.
+            if (zombieOn) ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Halved.zombie.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('🧟 Zombie on',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: Halved.zombie,
+                        fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 6),
+            ],
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
@@ -5349,10 +5374,22 @@ class _SurvivorGroupCard extends StatelessWidget {
                 case 'no_blood':
                   label = 'No blood';
                   color = theme.colorScheme.onSurfaceVariant;
+                case 'killed':
+                  // The Zombie took the 18th outright. It pays nothing, but he
+                  // is credited with DECIDING it — the trophy count means
+                  // "Survivors you decided", not "Survivors you won".
+                  label = 'Killed by ${sv['killed_by_short'] ?? 'the Zombie'} '
+                          'on 18 — pays nothing';
+                  color = Halved.zombie;
                 default:
+                  // A live Survivor with the option on names its Zombie: he is
+                  // the reason it might still swing.
                   label = out == null
-                      ? 'Everyone still in' : '$out out — decider';
-                  color = theme.colorScheme.onSurfaceVariant;
+                      ? 'Everyone still in'
+                      : (zombieOn ? '$out is the Zombie — decider'
+                                  : '$out out — decider');
+                  color = zombieOn && out != null
+                      ? Halved.zombie : theme.colorScheme.onSurfaceVariant;
               }
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 1),
@@ -5382,7 +5419,9 @@ class _SurvivorGroupCard extends StatelessWidget {
             _MsScorecard(
               holes:        scHoles,
               participants: scPlayers,
-              legend:       'green = won the hole · red = knocked out',
+              legend:       zombieOn
+                  ? 'green = won it · red = knocked out · plum = Zombie back in'
+                  : 'green = won the hole · red = knocked out',
               holesInPlay:  scHolesInPlay,
             ),
           ],

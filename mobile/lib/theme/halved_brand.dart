@@ -38,6 +38,11 @@ class Halved {
   static const warning = Color(0xFFB24225);
 
   // ── Disabled (buttons) ────────────────────────────────────────────────────
+  /// The Zombie Option's one colour (docs/design-review/handoff-survivor-zombie).
+  /// Deliberately neither the win green nor the out red: a Zombie is out of the
+  /// Survivor but still playing it, which is neither state.
+  static const zombie = Color(0xFF6E4B8E);
+
   static const disabledFill = Color(0xFFD3DAD5);
   static const disabledText = Color(0xFF93A099);
 

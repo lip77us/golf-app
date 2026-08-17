@@ -16,6 +16,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../theme/halved_brand.dart';
 import '../widgets/stake_field.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
@@ -45,6 +46,10 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
   // Strokes-Off is the usual way this is played — the low handicap plays to
   // scratch and everyone else gets the difference.
   String _mode       = 'strokes_off';
+  /// Off by default — plain Survivor is the game most groups mean.
+  /// Read-only once a hole is scored: it changes who is still in the Survivor,
+  /// so flipping it mid-round would rewrite holes already played.
+  bool   _zombieOption = false;
   int    _netPercent = 100;
 
   final TextEditingController _betCtrl = TextEditingController();
@@ -56,6 +61,10 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
   bool   _starting = false;
   /// True when editing an already-configured game (drives Save vs Start label).
   bool   _editing  = false;
+
+  /// True once any hole carries a score — the Zombie Option locks there.
+  bool get _anyHoleScored =>
+      _summary?.holes.any((h) => h.isScored) ?? false;
   Object? _error;
   SurvivorSummary? _summary;
 
@@ -93,9 +102,10 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
 
       setState(() {
         if (configured) {
-          _editing    = true;
-          _mode       = _summary!.handicapMode;
-          _netPercent = _summary!.netPercent;
+          _editing      = true;
+          _mode         = _summary!.handicapMode;
+          _netPercent   = _summary!.netPercent;
+          _zombieOption = _summary!.zombieOption;
         }
         _loading = false;
       });
@@ -143,6 +153,7 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
         widget.foursomeId,
         handicapMode: _mode,
         netPercent:   _netPercent,
+        zombieOption: _zombieOption,
       );
       rp.setSurvivorSummary(summary);
 
@@ -212,6 +223,91 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
     );
   }
 
+  /// The Zombie Option, with the three cases that actually differ.
+  ///
+  /// The base "How Survivor works" block below stays plain Survivor — it does
+  /// not change with the toggle, because the elimination and decider rules do
+  /// not. What changes is only what the eliminated player can still do.
+  Widget _zombieCard(ThemeData theme) {
+    const plum = Halved.zombie;
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    return _Card(
+      title: 'Zombie Option',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          activeColor: plum,
+          value: _zombieOption,
+          // Locked once a hole is scored: the option decides who is still in
+          // the Survivor, so turning it on or off mid-round would rewrite
+          // holes that have already been played.
+          onChanged: _anyHoleScored
+              ? null
+              : (v) => setState(() => _zombieOption = v),
+          title: Text(
+            _zombieOption
+                ? 'On — the knocked-out player keeps playing'
+                : 'Off — the knocked-out player sits out the decider',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            'He must go LOW OUTRIGHT on a decider hole to come back in. '
+            'A tie for low is not enough.',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+        ),
+        if (_anyHoleScored)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Locked — a hole has been scored. This decides who is still in '
+              'the Survivor, so it cannot change mid-round.',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+          ),
+        const Divider(height: 18),
+        // The three cases, in the order the spec sets them out. Zombie score
+        // first in each, matching the worked examples.
+        for (final (z, a, b, result) in const [
+          (4, 5, 6, 'Zombie back in · B goes to Zombieville. Two alive, one '
+                    'chasing, and the same Survivor keeps running.'),
+          (4, 6, 6, 'Zombie back in · the deciders tie, so there is nobody to '
+                    'send out. All three alive again.'),
+          (5, 5, 6, 'Zombie tied for low, not low outright — he stays out. A '
+                    'wins the Survivor and it pays.'),
+        ])
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(
+                width: 68,
+                child: Text('$z · $a · $b',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: z < a && z < b ? plum : muted)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(result,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: muted, height: 1.4)),
+              ),
+            ]),
+          ),
+        const SizedBox(height: 8),
+        Text(
+          'A Survivor can restart any number of times, so it can reach the '
+          '18th unsettled — that is no blood and pays nothing. And if the '
+          'Zombie takes the 18th outright the Survivor is KILLED: it pays '
+          'nothing either way, but he is credited with deciding it.',
+          style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.4),
+        ),
+      ]),
+    );
+  }
+
   Widget _buildBody() {
     final theme = Theme.of(context);
     return SingleChildScrollView(
@@ -240,6 +336,9 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
             detail: 'up to $_maxSurvivors Survivors — everyone antes the stake '
                     'on each, and the winner takes the pot',
           ),
+          const SizedBox(height: 16),
+
+          _zombieCard(theme),
           const SizedBox(height: 16),
 
           _Card(

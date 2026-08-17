@@ -21,6 +21,7 @@ import '../api/models.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../theme/halved_brand.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
@@ -520,6 +521,12 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
                     .where((m) => m.player.id == outId)
                     .map((m) => m.player.displayShort)
                     .firstOrNull,
+                zombieShort: !(summary.zombieOption) || outId == null
+                    ? null
+                    : players
+                        .where((m) => m.player.id == outId)
+                        .map((m) => m.player.displayShort)
+                        .firstOrNull,
                 isLastHole: _selectedHole == _playOrder(rp).lastOrNull,
               ),
             const SizedBox(height: 12),
@@ -536,6 +543,9 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
               summary:    summary,
               holeInfo:   holeInfo,
               aliveIds:   aliveIds,
+              // With the option on, the knocked-out player IS the Zombie —
+              // still scoring, and one low-outright hole from being back in.
+              zombieId:   (summary?.zombieOption ?? false) ? outId : null,
               editingPlayerId: _editingPlayerId,
               onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
               onEditTap: (m) => setState(() => _editingPlayerId =
@@ -766,6 +776,9 @@ class _HoleScoreCard extends StatelessWidget {
   /// Who is still alive in the current Survivor.  Anyone missing is OUT for
   /// the rest of it — their row dims and their score can't win the hole.
   final Set<int>         aliveIds;
+  /// The player who is out of this Survivor but still playing it. Null unless
+  /// the Zombie Option is on.
+  final int?             zombieId;
   final int?             editingPlayerId;  // scored row the user tapped to fix
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership) onEditTap;
@@ -784,6 +797,7 @@ class _HoleScoreCard extends StatelessWidget {
     required this.summary,
     required this.holeInfo,
     required this.aliveIds,
+    this.zombieId,
     required this.editingPlayerId,
     required this.onScoreSelected,
     required this.onEditTap,
@@ -856,6 +870,7 @@ class _HoleScoreCard extends StatelessWidget {
                 playingHandicap: m.playingHandicap,
                 lowestPlayingHandicap: _lowPlaying),
               isOut:    _isOut(m.player.id),
+              isZombie: zombieId != null && m.player.id == zombieId,
               isEditing: isEditing,
               onTap: editable ? () => onEditTap(m) : null,
               spotsActive:   spotsActive,
@@ -911,6 +926,11 @@ class _PlayerRow extends StatelessWidget {
   /// Knocked out of the CURRENT Survivor — dimmed, badged OUT, and its
   /// score is ignored by the decider.
   final bool       isOut;
+  /// Out of the Survivor but STILL PLAYING it — the Zombie Option. He keeps a
+  /// live, editable score box and a plum ZOMBIE badge rather than the dimmed
+  /// OUT row, because his score still decides something: go low outright and
+  /// he is back in.
+  final bool       isZombie;
   final bool       isEditing;  // its inline picker is currently open
   final VoidCallback? onTap;
   final bool          spotsActive;
@@ -926,6 +946,7 @@ class _PlayerRow extends StatelessWidget {
     required this.showHcap,
     required this.hcap,
     required this.isOut,
+    this.isZombie = false,
     this.isEditing = false,
     this.onTap,
     this.spotsActive = false,
@@ -949,8 +970,11 @@ class _PlayerRow extends StatelessWidget {
         // an eliminated row keeps a grey wash so it reads as out of play.
         color: active
             ? Colors.transparent
-            : (isOut ? theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.45) : null),
+            : isZombie
+                // Plum wash, not the grey out-of-play one — he is still in it.
+                ? Halved.zombie.withOpacity(0.10)
+                : (isOut ? theme.colorScheme.surfaceContainerHighest
+                              .withOpacity(0.45) : null),
         border: active
             ? const Border()
             : Border(
@@ -960,7 +984,22 @@ class _PlayerRow extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
-        if (isOut)
+        if (isZombie)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: Halved.zombie,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text('ZOMBIE',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      fontSize: 9, fontWeight: FontWeight.bold,
+                      color: Colors.white)),
+            ),
+          )
+        else if (isOut)
           Padding(
             padding: const EdgeInsets.only(right: 6),
             child: Container(
@@ -984,8 +1023,9 @@ class _PlayerRow extends StatelessWidget {
             Flexible(
               child: Text(member.player.name,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600)),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: isZombie ? Halved.zombie : null)),
             ),
             if (showHcap && hcap > 0) ...[
               const SizedBox(width: 6),
@@ -1059,6 +1099,9 @@ class _SurvivorBanner extends StatelessWidget {
   final bool         isDecider;
   final List<String> aliveShorts;
   final String?      outShort;
+  /// Named on a decider when the Zombie Option is on — his score decides
+  /// something too, so leaving him out of the banner hides half the hole.
+  final String?      zombieShort;
   /// No room on the last hole to eliminate AND decide, so it settles whatever
   /// is standing — worth saying out loud before they play it.
   final bool         isLastHole;
@@ -1069,6 +1112,7 @@ class _SurvivorBanner extends StatelessWidget {
     required this.aliveShorts,
     required this.outShort,
     required this.isLastHole,
+    this.zombieShort,
   });
 
   @override
@@ -1081,13 +1125,24 @@ class _SurvivorBanner extends StatelessWidget {
     if (isLastHole) {
       headline = 'Survivor $survivorIndex — last hole';
       detail = isDecider
-          ? 'Low score takes it. A tie splits ${outShort ?? 'the loser'}’s entry.'
+          ? (zombieShort != null
+              ? 'Low of the two takes it. A tie splits '
+                '${outShort ?? 'the loser'}’s entry — and if $zombieShort goes '
+                'low outright the Survivor is killed and pays nothing.'
+              : 'Low score takes it. A tie splits '
+                '${outShort ?? 'the loser'}’s entry.')
           : 'Low ball wins outright. Any tie for low and nobody pays.';
     } else if (isDecider) {
       headline = 'Survivor $survivorIndex — decider';
-      detail = '${aliveShorts.join(' v ')} for it'
-          '${outShort == null ? '' : ' · $outShort is out'}'
-          '. Low score wins; a tie carries to the next hole.';
+      // With a Zombie on the hole the sentence has to carry HIS stake too:
+      // he is not merely "out", he is one low-outright hole from being back in.
+      detail = zombieShort != null
+          ? '${aliveShorts.join(' v ')} for it · $zombieShort is the Zombie. '
+            'Low of the two takes it — unless $zombieShort goes low outright '
+            'and comes back in.'
+          : '${aliveShorts.join(' v ')} for it'
+            '${outShort == null ? '' : ' · $outShort is out'}'
+            '. Low score wins; a tie carries to the next hole.';
     } else {
       headline = 'Survivor $survivorIndex — elimination';
       detail = 'Worst score goes out. If the two worst tie, nobody goes and '
@@ -1135,6 +1190,23 @@ class _OutcomeLine extends StatelessWidget {
     final theme = Theme.of(context);
     String text;
     Color color = theme.colorScheme.onSurfaceVariant;
+
+    // A resurrection outranks whatever else the hole did — it is the thing
+    // that changed, and the Survivor number does NOT increment: the same
+    // Survivor keeps running.
+    if (hole.resurrectedShort != null) {
+      final sentTo = hole.eliminatedShort;
+      return Text(
+        sentTo != null
+            ? '${hole.resurrectedShort} is alive again — $sentTo goes to '
+              'Zombieville. Survivor ${hole.survivor ?? ''} carries on.'
+            : '${hole.resurrectedShort} is alive again — the deciders tied, so '
+              'all three are back in. Survivor ${hole.survivor ?? ''} carries on.',
+        style: theme.textTheme.bodySmall?.copyWith(
+            color: Halved.zombie, fontWeight: FontWeight.w600),
+      );
+    }
+
     switch (hole.event) {
       case 'eliminated':
         text = '${hole.eliminatedShort} had the worst score — knocked out.';
@@ -1328,12 +1400,19 @@ class _SurvivorGrid extends StatelessWidget {
       final out   = entry != null && !entry.isAlive;
       final won   = entry?.isWinner ?? false;
       final knocked = entry?.isEliminated ?? false;
+      // The hole he came back in on. Plum, and it can coincide with another
+      // player's red on the SAME hole — the resurrection is what sent that
+      // decider out.
+      final revived = entry?.isResurrected ?? false;
 
       Color? bg;
       Color? fg;
       if (won) {
         bg = Colors.green.shade50;
         fg = Colors.green.shade800;
+      } else if (revived) {
+        bg = Halved.zombie.withOpacity(0.20);
+        fg = Halved.zombie;
       } else if (knocked) {
         bg = theme.colorScheme.errorContainer.withOpacity(0.45);
         fg = theme.colorScheme.error;
@@ -1349,13 +1428,15 @@ class _SurvivorGrid extends StatelessWidget {
           decoration: BoxDecoration(
             color: bg,
             border: Border.all(
-              color: won ? Colors.green.shade400 : Colors.transparent),
+              color: won
+                  ? Colors.green.shade400
+                  : revived ? Halved.zombie : Colors.transparent),
             borderRadius: BorderRadius.circular(3),
           ),
           child: scoreCellWithDots(
             Text(gross?.toString() ?? '',
                 style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: (won || knocked)
+                    fontWeight: (won || knocked || revived)
                         ? FontWeight.bold : FontWeight.w500,
                     color: fg)),
             _strokesFor(m, h),

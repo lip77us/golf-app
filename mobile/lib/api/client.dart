@@ -1668,10 +1668,14 @@ class ApiClient {
     int foursomeId, {
     String handicapMode = 'net',
     int    netPercent   = 100,
+    /// Off by default. When on, the eliminated player keeps playing and can
+    /// come back in by going low outright on a decider hole.
+    bool   zombieOption = false,
   }) async {
     final data = await _post('/foursomes/$foursomeId/survivor/setup/', {
       'handicap_mode': handicapMode,
       'net_percent'  : netPercent,
+      'zombie_option': zombieOption,
     });
     return SurvivorSummary.fromJson(data as Map<String, dynamic>);
   }

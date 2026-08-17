@@ -3061,11 +3061,18 @@ class SurvivorLeg {
   final String? eliminatedShort;
   final int?    winnerId;
   final String? winnerShort;
-  /// 'won' | 'split' | 'no_blood' | 'live'.
+  /// 'won' | 'split' | 'no_blood' | 'killed' | 'live'.
+  ///
+  /// 'killed' is the Zombie taking hole 18 outright: the Survivor pays nothing,
+  /// but the Zombie IS credited the trophy — killing one is a real achievement,
+  /// so the trophy count means "Survivors you DECIDED", not "Survivors you won".
   final String  outcome;
   final bool    complete;
   final double  value;      // the stake each player antes
   final double  payout;     // to the winner (or each half of a split)
+  /// Who killed it on 18. Set only when [outcome] is 'killed'.
+  final int?    killedById;
+  final String? killedByShort;
 
   const SurvivorLeg({
     required this.index,
@@ -3080,11 +3087,15 @@ class SurvivorLeg {
     required this.complete,
     required this.value,
     required this.payout,
+    this.killedById,
+    this.killedByShort,
   });
 
   bool get isLive    => outcome == 'live';
   bool get isSplit   => outcome == 'split';
   bool get isNoBlood => outcome == 'no_blood';
+  /// The Zombie took hole 18 outright — the Survivor pays nothing.
+  bool get isKilled  => outcome == 'killed';
 
   /// "Holes 7-9", or "Hole 18" for a Survivor that started on the last hole.
   String get rangeLabel {
@@ -3106,6 +3117,8 @@ class SurvivorLeg {
         complete:        j['complete']         as bool?   ?? false,
         value:           (j['value']           as num?)?.toDouble() ?? 0.0,
         payout:          (j['payout']          as num?)?.toDouble() ?? 0.0,
+        killedById:      j['killed_by_id']     as int?,
+        killedByShort:   j['killed_by_short']  as String?,
       );
 }
 
@@ -3121,6 +3134,12 @@ class SurvivorHoleEntry {
   final int     strokes;
   /// Was this player still in the Survivor going into this hole?
   final bool    isAlive;
+  /// Out of the Survivor but STILL PLAYING it — only ever true with the Zombie
+  /// Option on. Drives the plum row and the live (editable) score box, in place
+  /// of the dimmed OUT row.
+  final bool    isZombie;
+  /// This hole is where he came back in — the plum mark on the grid.
+  final bool    isResurrected;
   /// Did this hole knock them out?
   final bool    isEliminated;
   /// Did this hole win them the Survivor?
@@ -3134,6 +3153,8 @@ class SurvivorHoleEntry {
     required this.gross,
     required this.strokes,
     required this.isAlive,
+    this.isZombie      = false,
+    this.isResurrected = false,
     required this.isEliminated,
     required this.isWinner,
   });
@@ -3147,6 +3168,8 @@ class SurvivorHoleEntry {
         gross:        j['gross']         as int?,
         strokes:      j['strokes']       as int?  ?? 0,
         isAlive:      j['is_alive']      as bool? ?? true,
+        isZombie:     j['is_zombie']     as bool? ?? false,
+        isResurrected: j['is_resurrected'] as bool? ?? false,
         isEliminated: j['is_eliminated'] as bool? ?? false,
         isWinner:     j['is_winner']     as bool? ?? false,
       );
@@ -3165,6 +3188,9 @@ class SurvivorHole {
   final String? winnerShort;
   /// 'eliminated' | 'no_elimination' | 'won' | 'carried' | 'split' | 'no_blood'
   final String? event;
+  /// The Zombie who came back in on this hole, when one did.
+  final int?    resurrectedId;
+  final String? resurrectedShort;
   final List<SurvivorHoleEntry> entries;
 
   const SurvivorHole({
@@ -3178,6 +3204,8 @@ class SurvivorHole {
     required this.winnerShort,
     required this.event,
     required this.entries,
+    this.resurrectedId,
+    this.resurrectedShort,
   });
 
   bool get isScored => event != null;
@@ -3189,6 +3217,8 @@ class SurvivorHole {
         par:             j['par']              as int?,
         eliminatedId:    j['eliminated_id']    as int?,
         eliminatedShort: j['eliminated_short'] as String?,
+        resurrectedId:   j['resurrected_id']    as int?,
+        resurrectedShort: j['resurrected_short'] as String?,
         winnerId:        j['winner_id']        as int?,
         winnerShort:     j['winner_short']     as String?,
         event:           j['event']            as String?,
@@ -3202,6 +3232,8 @@ class SurvivorSummary {
   final String status;
   final String handicapMode;
   final int    netPercent;
+  /// When on, the eliminated player keeps playing and can win his way back in.
+  final bool   zombieOption;
   final List<SurvivorLeg>         survivors;
   final List<SurvivorPlayerTotal> players;
   final List<SurvivorHole>        holes;
@@ -3218,6 +3250,7 @@ class SurvivorSummary {
 
   const SurvivorSummary({
     required this.status,
+    this.zombieOption = false,
     required this.handicapMode,
     required this.netPercent,
     required this.survivors,
@@ -3252,6 +3285,7 @@ class SurvivorSummary {
     final current = j['current']  as Map<String, dynamic>? ?? const {};
     return SurvivorSummary(
       status:       j['status'] as String? ?? 'pending',
+      zombieOption: j['zombie_option'] as bool? ?? false,
       handicapMode: hcap['mode'] as String? ?? 'net',
       netPercent:   hcap['net_percent'] as int? ?? 100,
       survivors: ((j['survivors'] as List?) ?? const [])
