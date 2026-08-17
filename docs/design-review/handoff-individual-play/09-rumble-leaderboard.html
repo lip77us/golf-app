@@ -1,0 +1,255 @@
+<!-- @dsCard group="Individual play" name="Irish Rumble — leaderboard" subtitle="IndividualRumbleLeaderboard — group ranking that opens into the full card: par, gross, dots, and the balls that counted highlighted" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Irish Rumble — leaderboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216;--count:#DCF2E4}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:92px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:844px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:23px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .ic{margin-left:auto;font-size:13px;color:var(--muted)}
+.tabs{display:flex;gap:7px;padding:0 14px 9px;overflow-x:auto;scrollbar-width:none;position:relative}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;border:1.5px solid var(--cardBorder);background:#fff;border-radius:999px;padding:7px 13px;font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.tabs button.on{border-color:var(--pine);background:#E4F2EA;color:var(--pine)}
+.body{padding:0 12px 26px;overflow-y:auto;height:735px}
+.chips{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);padding:2px 2px 10px}
+.chips b{color:var(--deepPine);font-weight:700}
+.chips .r{margin-left:auto;font-weight:600}
+.hd{display:flex;align-items:center;gap:6px;padding:0 9px 6px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.hd .g{flex:1}
+.hd i{font-style:normal;flex:none;text-align:right}
+
+.hd .tot{width:38px}
+.hd .pz{width:44px}
+.rows{display:flex;flex-direction:column;gap:7px}
+.rw{background:#fff;border:1px solid var(--cardBorder);border-radius:13px;overflow:hidden}
+.rw.lead{border-color:var(--pine);box-shadow:0 2px 10px rgba(15,110,86,.1)}
+.rwh{display:flex;align-items:center;gap:6px;padding:11px 9px;cursor:pointer}
+.rwh .pos{flex:none;width:20px;font-size:12.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.rw.lead .rwh .pos{color:var(--pine)}
+.rwh .g{flex:1;min-width:0}
+.rwh .g b{display:flex;align-items:baseline;gap:6px;font-size:14.5px;font-weight:600;line-height:1.2}
+.rwh .g b u{text-decoration:none;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+.rwh .g b u.pv{color:var(--warn)}
+.rwh .g small{display:block;font-size:10.5px;color:var(--muted);margin-top:2px;line-height:1.35}
+.rwh i{font-style:normal;flex:none;text-align:right;font-variant-numeric:tabular-nums;font-size:13.5px;font-weight:600}
+
+.rw.prov{border-color:#E8D6BC}
+.rw.prov.lead{border-color:#D8B98A}
+.rw.prov .rwh .tot{color:var(--warn)}
+.rwh .tot{width:38px}
+.rwh .pz{width:44px;font-size:12.5px;font-style:italic;font-weight:600;color:var(--muted)}
+.rwh .cv{flex:none;width:12px;color:#B6C4BB;font-size:9px}
+.det{border-top:1px solid #EDF2EE;padding:10px 9px 12px;background:#FBFDFC}
+.det h5{font-family:"Schibsted Grotesk",sans-serif;font-size:11.5px;font-weight:700;margin:0 0 8px;display:flex;align-items:baseline;gap:7px}
+.det h5 em{margin-left:auto;font-style:normal;font-size:10.5px;font-weight:600;color:var(--muted)}
+.sc{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:9px}
+.sc td,.sc th{padding:0;text-align:center;font-size:10.5px;font-variant-numeric:tabular-nums;height:23px;font-weight:600}
+.sc th{font-weight:700;color:#3C6B55;font-size:10px;letter-spacing:.2px;background:#D7E7DC}
+.sc th:first-child{border-radius:5px 0 0 5px;background:#D7E7DC}
+.sc th:last-child{border-radius:0 5px 5px 0}
+.sc tr.si td{font-size:9.5px;color:var(--muted);font-weight:600;background:#F1F6F2}
+.sc tr.si .lb{color:var(--muted);background:#F1F6F2}
+.sc .lb{width:44px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:3px}
+.sc .ot{width:26px;font-weight:700;border-left:1px solid #E2EAE4}
+.sc tr.par td{color:var(--muted);font-weight:600}
+.sc tr.par .lb{color:var(--muted)}
+.sc td.c{background:var(--count);border-radius:5px;font-weight:700;color:#0B5B44}
+.sc td.cap{box-shadow:inset 0 0 0 1.5px #E8C89B;border-radius:5px}
+.sc td.bor{font-style:italic;color:#4E6BA8}
+.sc td.e{color:#C3CFC6}
+.sc td span{position:relative;display:inline-block;padding-top:4px}
+.sc td span em{position:absolute;top:-1px;left:0;right:0;display:flex;justify-content:center;gap:1.5px}
+.sc td span em i{width:2.5px;height:2.5px;border-radius:50%;background:var(--pine);display:block}
+.sc tr.tot td{font-weight:700;border-top:1px solid #E2EAE4;color:var(--deepPine)}
+.sc tr.tot td.un{color:var(--pine)}
+.sc tr.tot td.ov{color:#8A5216}
+.sc tr.cnt td{font-size:9px;color:var(--pine);font-weight:700}
+.key{display:flex;flex-wrap:wrap;gap:9px;font-size:10px;color:var(--muted);margin-bottom:9px}
+.key span{display:inline-flex;align-items:center;gap:4px}
+.key s{text-decoration:none;width:11px;height:11px;border-radius:3px;display:block}
+.don{border-top:1px solid #EDF2EE;padding-top:9px}
+.don b{display:block;font-size:10.5px;font-weight:700;margin-bottom:5px;color:#4E6BA8}
+.don p{margin:0;font-size:10.5px;line-height:1.5;color:var(--muted)}
+.foot{font-size:11px;color:var(--muted);line-height:1.5;margin:11px 2px 0}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Irish Rumble, leaderboard</h1>
+<p>A group ranking is only half the answer. The question a golfer actually asks is <b>how did we get there</b> &mdash; and in this game that means <i>which balls counted</i>, hole by hole. So the row opens into the full card.</p>
+<h3>Five characters, or initials</h3>
+<p>Ten columns of numbers leave about forty pixels for a name, so the card uses the <b>short name</b> &mdash; capped at five characters, defaulting to <b>initials</b> when the TD has not set one. It is the same field the group already uses elsewhere, not a new one invented for this card.</p>
+<h3>Tap the row to collapse it</h3>
+<p>The card is a disclosure, not a permanent state: tapping the open row closes it, and opening another closes the first. One card at a time, so the ranking stays on screen.</p>
+<h3>Four rows, and the net is readable</h3>
+<p>No net row. Par, four gross rows and the dots carry it: a 6 with one dot on a par 4 is a net 5, and you can see it without a fifth line of numbers. Adding net rows would double the card and halve the type.</p>
+<div class="own"><table>
+<tr><td>Names</td><td>Full names on the summary row. On the card, the <b>short name</b>: five characters, defaulting to <b>initials</b> until the TD sets one. Barry Labass is <i>Bazza</i> because somebody typed it; Aldo Detomasi is <i>AD</i> because nobody did. The borrowed ball is <b>4th</b>.</td></tr>
+<tr><td>Header band</td><td>Hole numbers on the tinted band, par under it, stroke index in the lighter row &mdash; the same three-row header the live card already uses.</td></tr>
+<tr><td>Dots</td><td>Strokes received on that hole, by stroke index. Same dot convention as every other card.</td></tr>
+<tr><td>Group +/&minus;</td><td>The counted nets against par for that hole, so a 3 and a 4 on a par 4 reads <b>&minus;1</b> rather than 7. Totals read the same way as the ranking above.</td></tr>
+<tr><td>Green cell</td><td><b>This ball counted.</b> Two green cells on a hole means two nets went into the group total.</td></tr>
+<tr><td>Amber outline</td><td>Capped at net double bogey &mdash; the gross shown is not the number that counted.</td></tr>
+<tr><td>Blue italic</td><td>The borrowed 4th. Somebody else&rsquo;s ball, playing his handicap.</td></tr>
+</table></div>
+<p>No count row either. The green cells <b>are</b> the count &mdash; three of them on a par 3, one on a par 5 &mdash; so printing the number underneath would be saying the same thing twice on a card that has no room for it.</p>
+<h3>Where the borrowed ball shows</h3>
+<p>Group 2 plays three men and a <b>borrowed 4th</b>. Its row is blue and italic, and under the card a line names the donor for each hole &mdash; the rotation is fixed at setup and spread across the field, so the strip reads as eight different names rather than one shadow player.</p>
+<p>A hole where the donor has not posted shows an empty cell, and the total is marked <b>provisional</b> &mdash; on the card <i>and</i> beside the group name, as <b>F*</b> in amber. Group 2 leads by one with three borrowed nets outstanding, so a golfer reading only the ranking would otherwise see a settled winner. The board does not guess, and it does not let the row imply what the card denies.</p>
+<h3>Money</h3>
+<p>Prize is <b>italic and muted</b> while the round is live, the same projection convention as the championship board. The place pays <b>a group</b>, and splits among its real golfers &mdash; three ways for a levelled group.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether a golfer can see another group&rsquo;s card, or only his own and the leader&rsquo;s. Drawn as fully open.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:14</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Leaderboard</span><span class="ic">&#9679;&#9679;&#9679;</span></div>
+<div class="tabs"><button>Championship</button><button class="on">Irish Rumble &middot; R2</button><button>Beer Ball</button><button>Mini Singles Bracket</button></div>
+<div class="body">
+<div class="chips"><span>Mode</span><b>Shuffle</b><span>Entry</span><b>$10</b><span class="r">Pool $70</span></div>
+<div class="hd"><span style="width:20px"></span><span class="g">Group</span><i class="tot">Net</i><i class="pz">Prize</i><span style="width:12px"></span></div>
+<div class="rows" id="rows"></div>
+<p class="foot"><b style="color:var(--warn)">F*</b> is a group still waiting on a borrowed ball &mdash; its total can move when the donor posts. Balls counted per hole: <b>3 on par 3s, 2 on par 4s, 1 on par 5s</b>. Every score is capped at net double bogey before the best nets are picked. Prize is projected and pays the group, split among its real golfers.</p>
+</div>
+</div>
+<script>
+var PAR=[4,4,4,3,4,4,3,5,4,4,3,4,5,4,4,3,4,4],
+    SI=[1,7,3,11,9,17,5,13,15,10,2,12,4,18,8,16,6,14],
+    BALLS=PAR.map(function(p){return p===3?3:p===5?1:2}),
+    DONORS=['Yau','Brown','Labass','Mercer','Reilly','Vaughn','Ellis','Morgan','Mayers','Salas','Yau','Brown','Labass','Mercer','Reilly','Vaughn','Ellis','Morgan'],
+    GR=[
+      {n:'Group 1',thru:18,p:[
+        {n:'Aldo Detomasi',ch:11,g:[5,5,4,4,5,4,4,6,5,5,4,5,6,5,5,4,5,5]},
+        {n:'Alan Petersen',ch:19,g:[6,5,5,4,5,5,4,6,5,5,4,5,7,5,5,4,6,5]},
+        {n:'Anna Maiolini',ch:33,g:[7,6,6,5,7,6,5,8,6,6,5,6,8,6,6,5,7,6]},
+        {n:'Alex Gunst',ch:38,g:[7,7,6,5,8,5,5,7,6,6,5,7,8,6,6,5,7,7]}]},
+      {n:'Group 2',thru:18,lvl:1,p:[
+        {n:'Barry Labass',s:'Bazza',ch:8,g:[4,5,4,3,5,4,4,6,5,4,3,5,6,5,4,4,5,5]},
+        {n:'Alex Brown',ch:12,g:[5,4,5,4,5,5,3,6,4,4,4,5,7,5,4,4,5,5]},
+        {n:'Anthony Barrueta',s:'Tony',ch:18,g:[5,5,5,4,6,5,4,6,5,5,4,5,7,5,5,4,6,5]},
+        {n:'Borrowed 4th',s:'4th',ch:22,bor:1,g:[6,6,5,4,6,5,4,7,5,6,4,6,7,6,5,0,0,0]}]},
+      {n:'Group 3',thru:14,p:[
+        {n:'Tom Mercer',ch:6,g:[4,4,4,3,5,4,3,5,4,4,3,5,6,5,0,0,0,0]},
+        {n:'Dan Reilly',ch:14,g:[5,5,5,4,5,5,4,6,5,5,4,5,7,5,0,0,0,0]},
+        {n:'Chris Vaughn',ch:21,g:[6,5,5,4,6,5,4,7,5,6,4,6,7,6,0,0,0,0]},
+        {n:'Paul Lipkin',ch:27,g:[6,6,6,5,6,6,4,7,6,6,5,6,8,6,0,0,0,0]}]}
+    ];
+function short(p){
+  if(p.s)return p.s.slice(0,5);
+  return p.n.split(/\s+/).map(function(w){return w.charAt(0).toUpperCase()}).join('');
+}
+function fmt(r){return r===0?'E':(r>0?'+'+r:''+r)}
+function strokes(ch,h){var s=0;if(ch>=SI[h])s++;if(ch>=SI[h]+18)s++;if(ch>=SI[h]+36)s++;return s}
+function cell(p,h){
+  var gr=p.g[h];if(!gr)return null;
+  var st=strokes(p.ch,h),lim=PAR[h]+2+st,capped=gr>lim,use=capped?lim:gr;
+  return {st:st,gr:gr,capped:capped,net:use-st};
+}
+function holeNets(g,h){
+  var xs=g.p.map(function(p,i){var c=cell(p,h);return c?{i:i,net:c.net}:null}).filter(Boolean);
+  xs.sort(function(a,b){return a.net-b.net});
+  var take=xs.slice(0,BALLS[h]),ids={};take.forEach(function(x){ids[x.i]=1});
+  var waiting=g.p.some(function(p,i){return p.bor&&!p.g[h]&&g.p.some(function(o,j){return j!==i&&!o.bor&&o.g[h]})});
+  return {ids:ids,sum:take.reduce(function(s,x){return s+x.net},0),short:xs.length<BALLS[h]||waiting};
+}
+function groupTotal(g){
+  var sum=0,par=0,played=0,prov=false;
+  for(var h=0;h<18;h++){
+    if(!g.p.some(function(p){return p.g[h]}))continue;
+    var r=holeNets(g,h);sum+=r.sum;par+=PAR[h]*BALLS[h];played++;if(r.short)prov=true;
+  }
+  return {rel:sum-par,sum:sum,played:played,prov:prov};
+}
+function nine(g,off){
+  var hs=[];for(var i=0;i<9;i++)hs.push(off+i);
+  var head='<tr><th class="lb">'+(off?'Back':'Front')+'</th>'+hs.map(function(h){return '<th>'+(h+1)+'</th>'}).join('')+'<th class="ot">'+(off?'In':'Out')+'</th></tr>';
+  var par='<tr class="par"><td class="lb">Par</td>'+hs.map(function(h){return '<td>'+PAR[h]+'</td>'}).join('')+
+    '<td class="ot">'+hs.reduce(function(s,h){return s+PAR[h]},0)+'</td></tr>';
+  var si='<tr class="si"><td class="lb">SI</td>'+hs.map(function(h){return '<td>'+SI[h]+'</td>'}).join('')+'<td class="ot"></td></tr>';
+  var rows=g.p.map(function(p,pi){
+    var out=0;
+    var tds=hs.map(function(h){
+      var c=cell(p,h);
+      if(!c)return '<td class="e">&ndash;</td>';
+      out+=c.gr;
+      var counted=holeNets(g,h).ids[pi],dots='';
+      for(var k=0;k<c.st;k++)dots+='<i></i>';
+      return '<td class="'+(counted?'c ':'')+(c.capped?'cap ':'')+(p.bor?'bor':'')+'"><span>'+(c.st?'<em>'+dots+'</em>':'')+c.gr+'</span></td>';
+    }).join('');
+    return '<tr><td class="lb'+(p.bor?' bor':'')+'">'+short(p)+'</td>'+tds+'<td class="ot">'+(out||'&ndash;')+'</td></tr>';
+  }).join('');
+  var trel=0,tany=false;
+  var tot='<tr class="tot"><td class="lb">Group</td>'+hs.map(function(h){
+    if(!g.p.some(function(p){return p.g[h]}))return '<td class="e">&ndash;</td>';
+    var r=holeNets(g,h),rel=r.sum-PAR[h]*BALLS[h];trel+=rel;tany=true;
+    return '<td class="'+(rel<0?'un':rel>0?'ov':'')+'">'+fmt(rel)+'</td>';
+  }).join('')+'<td class="ot">'+(tany?fmt(trel):'&ndash;')+'</td></tr>';
+  return '<table class="sc">'+head+par+si+rows+tot+'</table>';
+}
+function card(g){
+  var t=groupTotal(g);
+  var don='';
+  if(g.lvl){
+    var seen=DONORS.slice(0,15).filter(function(d,i,a){return a.indexOf(d)===i});
+    don='<div class="don"><b>Borrowed 4th &mdash; donor by hole</b><p>'+
+      DONORS.slice(0,15).map(function(d,i){return (i+1)+' '+d}).join(' &middot; ')+
+      ' &middot; 16&ndash;18 not yet posted. '+seen.length+' different donors in a fixed rotation set at tee-off.</p></div>';
+  }
+  return '<div class="det"><h5>Hole by hole &#9652;<em>'+(t.prov?'provisional &mdash; a donor has not posted':t.played<18?'thru '+t.played:'complete')+'</em></h5>'+
+    nine(g,0)+nine(g,9)+
+    '<div class="key"><span><s style="background:var(--count)"></s>counted</span>'+
+    '<span><s style="box-shadow:inset 0 0 0 1.5px #E8C89B"></s>capped at net double</span>'+
+    '<span><s style="background:var(--pine);border-radius:50%;width:5px;height:5px"></s>stroke received</span></div>'+don+'</div>';
+}
+var list=GR.map(function(g){return {g:g,t:groupTotal(g)}});
+list.sort(function(a,b){return a.t.rel-b.t.rel});
+var prize=[70];
+
+document.getElementById('rows').innerHTML=list.map(function(x,i){
+  var g=x.g,t=x.t;
+  return '<div class="rw'+(i===0?' lead':'')+(t.prov?' prov':'')+'" data-i="'+GR.indexOf(g)+'">'+
+    '<div class="rwh"><span class="pos">'+(i+1)+'</span>'+
+    '<span class="g"><b>'+g.n+'<u class="'+(t.prov||t.played<18?'pv':'')+'">'+(t.prov?'F*':t.played===18?'F':'thru '+t.played)+'</u></b><small>'+g.p.map(function(p){return p.n}).join(' &middot; ')+'</small></span>'+
+    '<i class="tot">'+fmt(t.rel)+'</i>'+
+    '<i class="pz">'+(i===0?'$70':'')+'</i>'+
+    '<span class="cv">'+(i===0?'&#9652;':'&#9662;')+'</span></div>'+
+    (i===0?card(g):'')+'</div>';
+}).join('');
+document.getElementById('rows').addEventListener('click',function(e){
+  var r=e.target.closest('.rwh');if(!r)return;
+  var rw=r.parentNode,open=rw.querySelector('.det');
+  document.querySelectorAll('.rw').forEach(function(x){
+    var d=x.querySelector('.det');if(d)d.remove();
+    x.classList.remove('lead');var c=x.querySelector('.cv');if(c)c.innerHTML='&#9662;';
+  });
+  if(!open){rw.classList.add('lead');rw.insertAdjacentHTML('beforeend',card(GR[+rw.dataset.i]));rw.querySelector('.cv').innerHTML='&#9652;'}
+});
+</script>
+</body>
+</html>

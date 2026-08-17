@@ -1,0 +1,240 @@
+<!-- @dsCard group="Individual play" name="Irish Rumble — setup" subtitle="IndividualIrishRumbleSetup — mode picker expands in place, field-wide pool paid to a foursome, one Save" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Irish Rumble — setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:104px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 10px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .grp{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:6px;padding:4px 7px}
+.body{padding:2px 16px 100px;overflow-y:auto;height:718px}
+h2.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:23px;margin:0 0 5px}
+p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.opts{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.o{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 12px;cursor:pointer}
+.o.on{border-color:var(--pine);background:#F4FAF6}
+.o .rd{min-width:18px;height:18px;border-radius:50%;border:2px solid #C3CFC6;flex:none;margin-top:1px;position:relative}
+.o.on .rd{border-color:var(--pine)}
+.o.on .rd:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--pine)}
+.o .d{flex:1;min-width:0}
+.o .d b{display:block;font-size:14.5px;font-weight:600;line-height:1.25}
+.o .d small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.4}
+.card{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:13px 13px 14px;margin-bottom:14px}
+.card h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13.5px;font-weight:700;margin:0 0 10px;display:flex;align-items:baseline;gap:8px}
+.card h4 em{margin-left:auto;font-style:normal;font-size:11px;font-weight:600;color:var(--muted)}
+.seg{display:flex;align-items:baseline;gap:10px;padding:7px 0;font-size:13px}
+.seg+.seg{border-top:1px solid #EDF2EE}
+.seg b{flex:none;width:86px;font-weight:700;font-variant-numeric:tabular-nums}
+.seg span{color:var(--muted)}
+.grid{margin-top:4px}
+.grid .gl{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:10px 0 6px}
+.hs{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.h{border:1px solid var(--cardBorder);border-radius:8px;padding:5px 0 6px;text-align:center;cursor:pointer;background:#fff}
+.h u{display:block;text-decoration:none;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+.h i{display:block;font-style:normal;font-size:8.5px;color:var(--muted);line-height:1.3;margin-bottom:3px}
+.h b{display:block;width:20px;height:20px;margin:0 auto;border-radius:999px;background:var(--pine);color:#fff;font-size:11.5px;font-weight:700;line-height:20px}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:13.5px}
+.row+.row{border-top:1px solid #EDF2EE}
+.row .k{flex:1;min-width:0;font-weight:600}
+.row .k small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:1px;line-height:1.4}
+.row .v{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
+.row .v.mut{color:var(--muted);font-weight:500}
+.amt{flex:none;display:flex;align-items:center;gap:4px;border:1.5px solid var(--cardBorder);border-radius:10px;background:#fff;padding:0 9px;height:32px;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px}
+.amt i{font-style:normal;color:var(--muted);font-weight:500}
+.step{display:flex;align-items:center;flex:none;border:1.5px solid var(--cardBorder);border-radius:10px;overflow:hidden;background:#fff}
+.step button{width:34px;height:32px;border:none;background:#fff;color:var(--pine);font:700 16px/1 "Spline Sans",system-ui,sans-serif}
+.step span{width:30px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;border-left:1px solid var(--cardBorder);border-right:1px solid var(--cardBorder);line-height:32px}
+.bal{display:flex;align-items:center;gap:8px;border-radius:10px;padding:9px 11px;font-size:12.5px;font-weight:600;margin-top:10px;background:#E4F2EA;color:#0B5B44}
+.bal.off{background:#FDF3E7;color:var(--warn)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Irish Rumble, setup</h1>
+<p>Same shape as <a href="individual-matchplay-setup.html">Match Play</a>: <b>rules first, money last, one Save</b>. Live splits it into <b>&middot; Game</b> then <b>&middot; Money</b>; the money here is four rows, which is not a screen.</p>
+<h3>The mode picker expands in place</h3>
+<p>Your screenshot settles it: <b>Custom (per-hole)</b> already reveals its 18-cell editor inline under the radio, with the Segment Preview above it. So no game needs a second rules screen &mdash; the pattern is <b>the choice opens its own detail where it was made</b>, and the only step after rules is money. Finding 16.</p>
+<p>Kept from live, unchanged: front 9 / back 9 split, par printed under each hole number, tap to cycle <b>1&rarr;2&rarr;3&rarr;4</b>, and a preview line that reads back what the setting means.</p>
+<h3>The preview reads the mode</h3>
+<div class="own"><table>
+<tr><td>Fixed</td><td>One count, all 18 &mdash; preview is a single line.</td></tr>
+<tr><td>Shuffle</td><td>Par 3 = 3, par 4 = 2, par 5 = 1. Preview names the three bands rather than the holes.</td></tr>
+<tr><td>Custom</td><td>Preview segments the 18 into runs, so an accidental all-2s custom is obviously identical to Fixed.</td></tr>
+</table></div>
+<h3>What the cap note becomes</h3>
+<p>Live carries &ldquo;each score may be capped at net par + 2 first &mdash; see the Net Double-Bogey Cap toggle below&rdquo;. There is no toggle any more: the cap is always on. The note states it flat, once. Finding 11.</p>
+<h3>A fresh game every day</h3>
+<p>Irish Rumble is <b>re-run each round</b>, not accumulated over 36 holes: a new entry, a new pool and a new winning group every day. A golfer whose group has a bad Saturday starts level on Sunday.</p>
+<p>Which is why this screen sets <b>one day&rsquo;s</b> money. A two-day tournament runs it twice and settles it twice, and the leaderboard tab names the round.</p>
+<h3>A threesome borrows a 4th</h3>
+<p>Already built, and automatic: a group of three gets a <b>borrowed 4th</b> only when some other group has four &mdash; a 3&times;3&times;3 round has no asymmetry to fix, so nothing happens. The setup screen does not ask; it <b>tells</b>, which is the only thing missing today.</p>
+<div class="own"><table>
+<tr><td>Donor pool</td><td>Every real golfer in every other group, in one fixed shuffled rotation. The card is spread across the field rather than shadowing one player.</td></tr>
+<tr><td>Handicap</td><td>The donor&rsquo;s own net, scored on the donor&rsquo;s tee, so mixed tees and mixed gender come out right.</td></tr>
+<tr><td>Donors</td><td>Never notified. Only the threesome sees the borrowed ball.</td></tr>
+<tr><td>Lag</td><td>A donor who has not posted leaves the hole empty; the group shows a provisional total on three balls and firms up.</td></tr>
+</table></div>
+<p>Called <b>Borrowed 4th</b> on every surface, never <i>phantom</i> &mdash; the leaderboard opens a donor-by-hole strip for a levelled group, and score entry carries a borrowed-ball banner.</p>
+<h3>A three-way split pays more each, and that is fine</h3>
+<p>Settled: the place splits among the <b>real golfers in the winning group</b> &mdash; $17.50 each in a four, <b>$23.33 each in a three</b>. The borrowed ball is not a person and cannot be paid, and nobody is going to argue that a threesome had the easier day: its fourth score arrives from a stranger it did not pick.</p>
+<h3>Ties split, and that is the rule</h3>
+<p>No countback, no arbitrary tiebreaker. Plenty of bets run on a given day, so <b>a tie can be no action</b> &mdash; tied foursomes split the place and the board says so. What the live build cannot do is split <i>silently</i>, under a chip that reads Winner takes all.</p>
+<h3>Field pool, foursome payout</h3>
+<p>The trap in these two games sitting next to each other: <b>identical cards, different scopes</b>. Irish Rumble is <b>$10 &times; 7 in the field = $70</b> paid to <b>a whole group</b>, which splits among its real golfers &mdash; Match Play is $10 &times; 4 in one foursome paid to <b>a golfer</b>. Both facts are on the row that carries the money. Findings 9 and 10.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether Irish Rumble ever pays two places. Drawn at one, with the stepper live &mdash; a 12-golfer field might want 1st and 2nd.</li>
+<li>Whether a tie that returns every entry should warn at settlement, since it is the one split that pays nobody anything.</li>
+
+<li>Whether the segment preview should warn when a hole counts 4 balls and a group is levelled &mdash; that hole leans on the borrowed ball entirely.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>7:48</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Irish Rumble</span><span class="grp">Field</span></div>
+<div class="body">
+<h2 class="hd">How many balls count?</h2>
+<p class="sub">Every group&rsquo;s best nets are added up and ranked against the whole field. Seven golfers &mdash; a four and a three.</p>
+
+<div class="opts" id="modes">
+<div class="o on" data-m="fixed"><span class="rd"></span><span class="d"><b>Fixed</b><small>The same number of nets counts on all 18 holes.</small></span></div>
+<div class="o" data-m="shuffle"><span class="rd"></span><span class="d"><b>Shuffle (par-based)</b><small>Par 3 = 3 balls, Par 4 = 2 balls, Par 5 = 1 ball.</small></span></div>
+<div class="o" data-m="custom"><span class="rd"></span><span class="d"><b>Custom (per-hole)</b><small>You pick how many balls count on each of the 18 holes.</small></span></div>
+</div>
+
+<div class="card" id="fixedCard">
+<h4>Balls per hole</h4>
+<div class="row"><span class="k">Best nets counted<small>Out of four in a group</small></span><span class="step"><button id="bm">&minus;</button><span id="bn">2</span><button id="bp">+</button></span></div>
+</div>
+
+<div class="card">
+<h4>Segment preview</h4>
+<div id="prev"></div>
+</div>
+
+<div class="card" id="gridCard" style="display:none">
+<h4>Per-hole balls<em>tap to cycle 1&rarr;2&rarr;3&rarr;4</em></h4>
+<div class="grid">
+<div class="gl">Front 9</div><div class="hs" id="f9"></div>
+<div class="gl">Back 9</div><div class="hs" id="b9"></div>
+</div>
+</div>
+
+<div class="card" id="lvl">
+<h4>Borrowed 4th<em>Group 2 &middot; three golfers</em></h4>
+<p style="margin:0 0 10px;font-size:12.5px;line-height:1.5;color:var(--muted)">Group 2 has three golfers and another group has four, so it plays a <b style="color:var(--deepPine)">borrowed 4th</b>. Nothing to set &mdash; it is built when the round is created.</p>
+<div class="row"><span class="k">Where the ball comes from<small>Every real golfer in the other groups, in one fixed rotation</small></span><span class="v mut">The field</span></div>
+<div class="row"><span class="k">Whose handicap<small>The donor&rsquo;s own net, on the donor&rsquo;s tee</small></span><span class="v mut">Donor</span></div>
+<div class="row"><span class="k">If a donor has not posted<small>The group shows a provisional total on its three real balls</small></span><span class="v mut">Firms up</span></div>
+<div class="row"><span class="k">If Group 2 wins<small>The borrowed ball is not a person &mdash; the place splits three ways</small></span><span class="v mut">3 ways</span></div>
+<div class="note" style="display:flex;gap:8px;background:#FDF3E7;border:1px solid #E8D6BC;border-radius:12px;padding:9px 11px;font-size:11.5px;line-height:1.45;color:#5C4326;margin-top:10px"><span>&#9888;</span><span>Send the threesome out <b>last</b> so most donors have already posted.</span></div>
+</div>
+
+<div class="card">
+<h4>Handicap</h4>
+<div class="row"><span class="k">From the tournament<small>Net, 100% allowance</small></span><span class="v mut">Inherited</span></div>
+<div class="row"><span class="k">Net double bogey max<small>Applied to each score before the best nets are picked</small></span><span class="v">Always on</span></div>
+</div>
+
+<div class="lb">Money</div>
+<div class="card">
+<h4>Entry<em>$10 &times; 7 in the field</em></h4>
+<div class="row"><span class="k">Per golfer</span><span class="amt"><i>$</i>10</span></div>
+<div class="row"><span class="k">Pool<small>Seven golfers &mdash; Group 1 has four, Group 2 has three</small></span><span class="v">$70</span></div>
+<div class="row"><span class="k">Ties<small>Tied groups split the place &mdash; no countback</small></span><span class="v">Split</span></div>
+<div class="row"><span class="k">Paid places<small>Each place pays a group</small></span><span class="step"><button id="mn">&minus;</button><span id="pl">1</span><button id="pls">+</button></span></div>
+<div id="places"></div>
+<div class="bal" id="bal">Places add to $70 &mdash; balanced</div>
+</div>
+
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next" id="save">Save game</button></div>
+</div>
+<script>
+var PAR=[4,4,4,3,4,4,3,5,4,4,3,4,5,4,4,3,4,4],mode='fixed',fixed=2,
+    per=PAR.map(function(){return 2}),n=1,amts=[70];
+function cells(id,off){
+  document.getElementById(id).innerHTML=per.slice(off,off+9).map(function(v,i){
+    var h=off+i;
+    return '<div class="h" data-h="'+h+'"><u>'+(h+1)+'</u><i>Par '+PAR[h]+'</i><b>'+v+'</b></div>';
+  }).join('');
+}
+function segs(){
+  var out=[];
+  if(mode==='fixed')out=[['Holes 1&ndash;18','Best '+fixed+' net'+(fixed>1?'s':'')+' per group']];
+  else if(mode==='shuffle'){
+    var band=function(p){var hs=[];PAR.forEach(function(v,i){if(v===p)hs.push(i+1)});return hs};
+    var b3=band(3),b4=band(4),b5=band(5);
+    out=[['Par 3s','Best 3 nets &mdash; holes '+b3.join(', ')],
+         ['Par 4s','Best 2 nets &mdash; '+b4.length+' holes'],
+         ['Par 5s','Best 1 net &mdash; holes '+b5.join(', ')]];
+  }
+  else{
+    var s=0;
+    for(var i=1;i<=18;i++){
+      if(i===18||per[i]!==per[s]){
+        out.push([s+1===i?'Hole '+i:'Holes '+(s+1)+'&ndash;'+i,'Best '+per[s]+' net'+(per[s]>1?'s':'')+' per group']);s=i;
+      }
+    }
+  }
+  document.getElementById('prev').innerHTML=out.map(function(r){return '<div class="seg"><b>'+r[0]+'</b><span>'+r[1]+'</span></div>'}).join('');
+}
+function money(){
+  var names=['1st','2nd','3rd'];
+  document.getElementById('places').innerHTML=amts.slice(0,n).map(function(a,i){
+    return '<div class="row"><span class="k">'+names[i]+' &mdash; the group<small>splits among its real golfers &mdash; $'+(a/4).toFixed(2)+' in a four, $'+(a/3).toFixed(2)+' in a three</small></span><span class="amt"><i>$</i>'+a+'</span></div>';
+  }).join('');
+  var sum=amts.slice(0,n).reduce(function(x,y){return x+y},0),b=document.getElementById('bal');
+  if(sum===70){b.className='bal';b.textContent='Places add to $70 \u2014 balanced'}
+  else{b.className='bal off';b.textContent='$'+(70-sum)+' of the pool is unassigned'}
+  document.getElementById('pl').textContent=n;
+}
+document.querySelectorAll('#modes .o').forEach(function(o){
+  o.onclick=function(){
+    document.querySelectorAll('#modes .o').forEach(function(x){x.classList.remove('on')});o.classList.add('on');mode=o.dataset.m;
+    document.getElementById('gridCard').style.display=mode==='custom'?'':'none';
+    document.getElementById('fixedCard').style.display=mode==='fixed'?'':'none';
+    if(mode==='custom'){cells('f9',0);cells('b9',9)}
+    segs();
+  };
+});
+document.getElementById('bp').onclick=function(){if(fixed<4){fixed++;document.getElementById('bn').textContent=fixed;per=per.map(function(){return fixed});segs()}};
+document.getElementById('bm').onclick=function(){if(fixed>1){fixed--;document.getElementById('bn').textContent=fixed;per=per.map(function(){return fixed});segs()}};
+document.addEventListener('click',function(e){
+  var c=e.target.closest('.h');if(!c)return;
+  var h=+c.dataset.h;per[h]=per[h]%4+1;cells('f9',0);cells('b9',9);segs();
+});
+document.getElementById('pls').onclick=function(){if(n<2){n=2;amts=[45,25];money()}};
+document.getElementById('mn').onclick=function(){if(n>1){n=1;amts=[70];money()}};
+segs();money();
+</script>
+</body>
+</html>

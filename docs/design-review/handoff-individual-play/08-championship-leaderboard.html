@@ -1,0 +1,266 @@
+<!-- @dsCard group="Individual play" name="Championship leaderboard" subtitle="IndividualChampionshipLeaderboard — expanded row opens the full 18 with stroke dots, caps marked, stroke or Stableford" viewport="980x1180" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Championship leaderboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216;--capBg:#FDF3E7}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:96px;color:var(--deepPine);font-weight:600}
+.tog{display:flex;gap:7px;margin:0 0 13px}
+.tog button{flex:1;height:34px;border-radius:10px;border:1.5px solid var(--cardBorder);background:#fff;color:var(--muted);font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.tog button.on{border-color:var(--pine);background:#E4F2EA;color:var(--pine)}
+.phone{width:390px;height:844px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px;flex:1;text-align:center}
+.appbar .ic{font-size:15px;color:var(--deepPine)}
+.tabs{display:flex;gap:0;padding:0 10px;border-bottom:1px solid #D3DED6;overflow-x:auto;scrollbar-width:none;position:relative}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;border:none;background:none;padding:9px 11px 10px;font:600 13.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap;cursor:pointer}
+.tabs button.on{color:var(--pine);border-bottom-color:var(--pine)}
+.fade{position:absolute;right:0;top:0;bottom:0;width:26px;background:linear-gradient(to right,rgba(234,240,234,0),var(--surface));pointer-events:none}
+.body{padding:12px 12px 24px;overflow-y:auto;height:724px}
+.chips{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--cardBorder);border-radius:999px;padding:8px 14px;font-size:12.5px;margin-bottom:12px}
+.chips b{font-weight:700}
+.chips span{color:var(--muted)}
+.chips .r{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+.hd{display:flex;align-items:center;gap:5px;padding:0 9px 6px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.hd .p{flex:1}
+.hd i{font-style:normal;flex:none;width:25px;text-align:right}
+.rs{flex:none;width:100px;display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+.rs::-webkit-scrollbar{display:none}
+.hd i.t{width:34px}
+.hd i.w{width:38px}
+.rows{display:flex;flex-direction:column;gap:7px}
+.rw{background:#fff;border:1px solid var(--cardBorder);border-radius:13px;overflow:hidden}
+.rw.lead{border-color:#A9CBB8}
+.rwh{display:flex;align-items:center;gap:5px;padding:10px 9px;cursor:pointer}
+.rw.lead .rwh{background:#CFE2D6}
+.rwh .pos{flex:none;width:20px;font-size:12px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.rwh .p{flex:1;min-width:0;font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rwh .p em{font-style:normal;color:var(--muted);font-size:11.5px;font-weight:500}
+.rwh .p small{display:block;font-size:10.5px;font-weight:500;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rw.prov .rwh .p small{color:var(--warn)}
+.rwh i{font-style:normal;flex:none;width:25px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.rwh i.t{width:34px}
+.rwh i.drop{color:var(--muted);font-weight:500;text-decoration:line-through}
+.rwh i.live{color:var(--warn)}
+.rwh i.thru{color:var(--pine);font-weight:500}
+.rw.prov .rwh i.thru{color:var(--warn);font-weight:600}
+.rw.prov{border-left:3px solid #E8D6BC}
+.rwh i.mut{color:var(--muted);font-weight:500}
+.rwh i.w{width:38px;color:var(--muted);font-weight:500;font-style:italic}
+.rwh .cv{flex:none;width:12px;text-align:center;color:var(--muted);font-size:11px}
+.det{border-top:1px solid var(--cardBorder);padding:11px 10px 12px}
+.det h5{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:0 0 7px;display:flex;align-items:baseline;gap:7px}
+.det h5 em{font-style:normal;margin-left:auto;font-weight:600;color:var(--deepPine);text-transform:none;letter-spacing:0;font-size:11.5px}
+.sc{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums;table-layout:fixed}
+.sc th{font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);text-align:center;padding:3px 0;font-family:"Spline Sans",system-ui,sans-serif}
+.sc th.lb{text-align:left;width:30px}
+.sc td{text-align:center;padding:3px 0;position:relative}
+.sc td.lb{text-align:left;font-size:9.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+.sc tr.par td,.sc tr.si td{color:var(--muted);font-size:10px}
+.sc tr.gr td{font-weight:600;padding-top:6px}
+.sc tr.nt td{font-weight:700;color:var(--pine)}
+.sc td.tot{border-left:1px solid var(--cardBorder);font-weight:700}
+.sc .dot{position:absolute;top:-1px;left:50%;transform:translateX(-50%);display:flex;gap:1.5px}
+.sc .dot span{width:3px;height:3px;border-radius:50%;background:var(--pine);display:block}
+.sc td.cap{background:var(--capBg);border-radius:4px}
+.lg{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:10.5px;color:var(--muted)}
+.lg span{display:flex;align-items:center;gap:4px}
+.lg u{text-decoration:none;width:8px;height:8px;border-radius:2px;background:var(--capBg);border:1px solid #E8D6BC;display:block}
+.lg b{width:3px;height:3px;border-radius:50%;background:var(--pine);display:block}
+.foot{margin-top:12px;padding:0 4px;font-size:11.5px;line-height:1.55;color:var(--muted)}
+.foot b{color:var(--deepPine);font-weight:600}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Championship leaderboard</h1>
+<p>The tab that pays the 36-hole money. Live shows a headline and, when a row is opened, <b>a two-column fragment</b> &mdash; hole 1 and an empty Out. Opened here it is <b>all eighteen</b>: par, stroke index, gross with a dot per stroke received, and the net the board is actually ranking.</p>
+<div class="tog"><button class="on" data-m="stroke">Stroke play</button><button data-m="points">Stableford</button></div>
+<p><b>Every round gets a column.</b> The counting rule sits in the chip strip &mdash; here <b>best 4 of 6</b>. The dropped rounds are struck through on the row rather than hidden, so a golfer can see what he is throwing away, and they move as scores land.</p>
+<p><b>Four columns, then the strip scrolls.</b> Six rounds will not fit beside a name and a total at 390px, so the round columns are their own horizontal strip: every row scrolls together with the header, and it <b>opens scrolled to the most recent round</b> &mdash; which is the one anybody opening the board mid-tournament came to see. The earlier rounds are a swipe to the right.</p>
+<p>Why it matters: on a multi-day 36-hole outing a golfer may sit a round out, and best 3 of 4 or best 4 of 6 keeps him in the championship.</p>
+<p><b>A round in progress does not compete for a place in the count.</b> A partial round nearly always looks like a good one &mdash; four holes at level par would knock out a finished 73 &mdash; so the live round joins the selection only when it is complete. It is still shown, in amber, and its holes are still on the card.</p>
+<p>Both scoring methods use the same card. <b>Stableford shows gross and points, and no per-hole net</b> &mdash; a golfer who wants his 18-hole net has the gross and the stroke allocation right there and can take it off himself. One method, one board: a Stableford tournament does not also draw a net stroke-play board.</p>
+<h3>What the dots mean</h3>
+<div class="own"><table>
+<tr><td>One dot</td><td>One stroke on that hole, by stroke index against course handicap.</td></tr>
+<tr><td>Two dots</td><td>A second stroke &mdash; a 38 index gets one on all 18 and a second on SI 1&ndash;20.</td></tr>
+<tr><td>Tinted cell</td><td>The cap bit. Gross was higher; the hole counts at net double bogey.</td></tr>
+</table></div>
+<h3>The cap is visible, not silent</h3>
+<p>An 10 on the par 5 counts as an 8 &mdash; par + 2 plus the stroke. Live applies this and shows nothing, so a golfer adding his own card gets a different number than the board. The tinted cell and the footnote are the whole fix.</p>
+<h3>Money is a projection</h3>
+<p>Prize sits in the muted italic weight all round, with one line under the table. It goes to full weight when the round closes. A golfer thru 1 showing <b>$48</b> in green is the single most misleading thing on the live board.</p>
+<h3>Ranking</h3>
+<p>Ties share a position and carry <b>T</b>, and split the money for the places they occupy. Thru sits under the name, because a net score without its holes is not comparable &mdash; see finding 5 on <a href="individual-play-flow-map.html">the play diagnosis</a>.</p>
+<h3>The tabs read the tournament</h3>
+<p>Every tab is the name the TD set, not a hardcoded one: <b>Mini Singles Bracket</b>, and the ball game as typed &mdash; here <b>Beer Ball</b>, because that is what this group called it. The last tab is the day bet for the round being played.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether Stableford uses the standard scale (drawn) or a modified one &mdash; set on <a href="individual-stableford-setup.html">Stableford setup</a>, TD&rsquo;s call.</li>
+<li>Nothing outstanding on this screen.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>8:33</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Leaderboard</span><span class="ic">&#9679;&#9679;&#9679;</span></div>
+<div class="tabs"><button class="on">Championship</button><button>Irish Rumble</button><button>Beer Ball</button><button>Mini Singles Bracket</button><button>Day bet &middot; R6</button><span class="fade"></span></div>
+<div class="body">
+<div class="chips"><span>Mode</span><b id="chMode">Net</b><span>Entry</span><b>$10</b><span class="r">Best 4 of 6</span></div>
+<div class="hd"><span style="width:20px"></span><span class="p">Player</span><span class="rs" id="hdRs"></span><i class="t" id="hTot">Net</i><i class="w">Prize</i><span style="width:12px"></span></div>
+<div class="rows" id="rows"></div>
+<p class="foot" id="foot"></p>
+</div>
+</div>
+<script>
+var PAR=[4,4,4,3,4,4,3,5,4,4,3,4,5,4,4,3,4,4],
+    SI=[1,7,3,11,9,17,5,13,15,10,2,12,4,18,8,16,6,14],
+    mode='stroke',COUNT=4,ROUNDS=6,
+    F=[
+      {n:'Alex Brown',ch:12,prev:[[2,34],[-1,39],[5,31],[3,33],[0,36]],g:[5,4,5,4,5,5,3,6,4,4,4,5,10,5,4,4,5,5]},
+      {n:'Anna Maiolini',ch:33,prev:[[6,30],[3,33],[8,28],[5,31],[7,29]],g:[7,6,6,5,7,6,5,8,6,6,5,6,8,6,6,5,7,6]},
+      {n:'Ambrose Yau',ch:24,prev:[[4,32],[0,36],[2,34],[6,30],[1,35]],g:[6,5,6,4,6,6,4,7,5,6,4,6,7,6,5,5,6,6]},
+      {n:'Anthony Barrueta',ch:18,prev:[[1,35],[2,34],[-2,40],[4,32],[3,33]],g:[5,5,5,4,6,5,4,6,5,5,4,5,7,5,5,4,6,5]},
+      {n:'Barry Labass',ch:8,prev:[[-1,38],[4,32],[1,35],[0,36],[2,34]],g:[4,5,4,3,5,4,4,6,5,4,3,5,6,5,4,4,5,5]},
+      {n:'Alex Gunst',ch:38,prev:[[5,31],[7,29],[3,33],[8,28],[6,30]],g:[7,7,6,5,8,5,5,7,6,6,5,0,0,0,0,0,0,0]},
+      {n:'Alan Petersen',ch:19,prev:[[0,36],[1,35],[4,32],[2,34],[5,31]],g:[6,6,5,4,5,5,4,6,5,5,5,0,0,0,0,0,0,0]},
+      {n:'Aldo Detomasi',ch:11,prev:[[3,33],[-2,40],[6,30],[1,35],[4,32]],g:[6,6,4,5,5,4,4,5,4,5,4,0,0,0,0,0,0,0]}
+    ];
+function strokes(ch,h){var s=0;if(ch>=SI[h])s++;if(ch>=SI[h]+18)s++;if(ch>=SI[h]+36)s++;return s}
+function hole(p,h){
+  var st=strokes(p.ch,h),gr=p.g[h];
+  if(!gr)return null;
+  var lim=PAR[h]+2+st,capped=gr>lim,use=capped?lim:gr,net=use-st,
+      pts=Math.max(0,2+(PAR[h]-net));
+  return {st:st,gr:gr,capped:capped,use:use,net:net,pts:pts,rel:net-PAR[h]};
+}
+function live(p){
+  var net=0,par=0,pts=0,played=0;
+  for(var h=0;h<18;h++){var x=hole(p,h);if(!x)continue;net+=x.net;par+=PAR[h];pts+=x.pts;played++}
+  return {rel:net-par,pts:pts,played:played};
+}
+function totals(p){
+  var l=live(p),rs=p.prev.map(function(r){return{rel:r[0],pts:r[1],done:true}});
+  rs.push({rel:l.rel,pts:l.pts,done:l.played===18,played:l.played});
+  var done=rs.map(function(r,i){return i}).filter(function(i){return rs[i].done});
+  var pool=done.length>=COUNT?done:rs.map(function(r,i){return i});
+  pool.sort(function(a,b){return mode==='points'?rs[b].pts-rs[a].pts:rs[a].rel-rs[b].rel});
+  var take=pool.slice(0,COUNT),keep={};take.forEach(function(i){keep[i]=1});
+  var rel=0,pts=0;
+  take.forEach(function(i){rel+=rs[i].rel;pts+=rs[i].pts});
+  return {rounds:rs,keep:keep,rel:rel,pts:pts,played:l.played};
+}
+function fmt(r){return r===0?'E':(r>0?'+':'')+r}
+function card(p){
+  var half=function(off,label){
+    var th='<th class="lb">'+label+'</th>',pr='<td class="lb">Par</td>',si='<td class="lb">SI</td>',gr='<td class="lb">Sc</td>',nt='<td class="lb">'+(mode==='points'?'Pts':'Net')+'</td>',
+        tn=0,tp=0,tg=0,tt=0;
+    for(var i=0;i<9;i++){
+      var h=off+i,x=hole(p,h);
+      th+='<th>'+(h+1)+'</th>';
+      pr+='<td>'+PAR[h]+'</td>';
+      si+='<td>'+SI[h]+'</td>';
+      if(!x){gr+='<td>&mdash;</td>';nt+='<td>&mdash;</td>';continue}
+      var d='';for(var k=0;k<x.st;k++)d+='<span></span>';
+      gr+='<td class="'+(x.capped?'cap':'')+'">'+(d?'<span class="dot">'+d+'</span>':'')+x.gr+'</td>';
+      nt+='<td>'+(mode==='points'?x.pts:x.net)+'</td>';
+      tg+=x.use;tn+=x.net;tp+=PAR[h];tt+=x.pts;
+    }
+    var lbl=off?'In':'Out';
+    return '<tr class="hd2">'+th+'<th class="tot">'+lbl+'</th></tr>'+
+      '<tr class="par">'+pr+'<td class="tot">'+tp+'</td></tr>'+
+      '<tr class="si">'+si+'<td class="tot"></td></tr>'+
+      '<tr class="gr">'+gr+'<td class="tot">'+(tg||'&mdash;')+'</td></tr>'+
+      '<tr class="nt">'+nt+'<td class="tot">'+(mode==='points'?tt:(tn||'&mdash;'))+'</td></tr>';
+  };
+  var t=totals(p),l=live(p);
+  return '<div class="det"><h5>Round '+ROUNDS+' &middot; CH '+p.ch+'<em>'+(mode==='points'?l.pts+' pts':fmt(l.rel)+' net')+(t.played<18?' &middot; thru '+t.played:'')+'</em></h5>'+
+    '<table class="sc">'+half(0,'Hole')+'</table><table class="sc" style="margin-top:7px">'+half(9,'Hole')+'</table>'+
+    '<div class="lg"><span><b></b> stroke received</span><span><u></u> capped at net double bogey</span></div></div>';
+}
+function hdrCells(){
+  document.getElementById('hdRs').innerHTML=Array.from({length:ROUNDS},function(_,i){return '<i>R'+(i+1)+'</i>'}).join('');
+}
+var SX=null,lock=false;
+function allStrips(){return [].slice.call(document.querySelectorAll('.rs'))}
+document.addEventListener('scroll',function(e){
+  var s=e.target;if(!s.classList||!s.classList.contains('rs'))return;
+  if(lock)return;lock=true;SX=s.scrollLeft;
+  allStrips().forEach(function(o){if(o!==s)o.scrollLeft=SX});
+  requestAnimationFrame(function(){lock=false});
+},true);
+function restoreScroll(){
+  allStrips().forEach(function(s){s.scrollLeft=SX===null?s.scrollWidth:SX});
+}
+function draw(){
+  var list=F.map(function(p){var t=totals(p);return{p:p,t:t}});
+  list.sort(function(a,b){return mode==='points'?b.t.pts-a.t.pts:a.t.rel-b.t.rel});
+  var prize=[48,20,12],key=function(x){return mode==='points'?x.t.pts:x.t.rel},pos=[],last=null,rank=0;
+  list.forEach(function(x,i){if(key(x)!==last){rank=i+1;last=key(x)}pos.push(rank)});
+  var share={};
+  pos.forEach(function(p){share[p]=(share[p]||0)+1});
+  var payout=function(p){
+    var sum=0;
+    for(var k=p;k<p+share[p];k++)if(k<=3)sum+=prize[k-1];
+    if(!sum)return '';
+    var each=sum/share[p];
+    return '$'+(each%1?each.toFixed(2):each);
+  };
+  document.getElementById('rows').innerHTML=list.map(function(x,i){
+    var p=x.p,t=x.t,tie=share[pos[i]]>1,pz=payout(pos[i]),
+        val=mode==='points'?t.pts:fmt(t.rel),
+        cells='<span class="rs">'+t.rounds.map(function(r,ri){
+          var v=r.done?(mode==='points'?r.pts:fmt(r.rel)):(mode==='points'?r.pts:fmt(r.rel)),
+              cls=!r.done?'live':(!t.keep[ri]?'drop':'');
+          return '<i class="'+cls+'">'+v+'</i>';
+        }).join('')+'</span>';
+    return '<div class="rw'+(i===0?' lead':'')+(t.played<18?' prov':'')+'" data-i="'+F.indexOf(p)+'">'+
+      '<div class="rwh"><span class="pos">'+(tie?'T':'')+pos[i]+'</span>'+
+      '<span class="p">'+p.n.split(' ').slice(1).join(' ')+'<small>CH '+p.ch+(t.played<18?' &middot; R'+ROUNDS+' thru '+t.played:'')+'</small></span>'+
+      cells+'<i class="t">'+val+'</i>'+
+      '<i class="w">'+pz+'</i><span class="cv">'+(i===0?'&#9652;':'&#9662;')+'</span></div>'+
+      (i===0?card(p):'')+'</div>';
+  }).join('');
+  document.getElementById('chMode').textContent=mode==='points'?'Stableford':'Net';
+  document.getElementById('hTot').textContent=mode==='points'?'Pts':'Net';
+  restoreScroll();
+  document.getElementById('foot').innerHTML=(mode==='points'
+    ? 'Standard Stableford &mdash; a hole worth <b>0 points</b> is still played out. '
+    : 'No hole counts for more than <b>net double bogey</b> &mdash; par + 2, plus any strokes you get on that hole. ')+
+    '<b>Best 4 of 6 rounds count</b> &mdash; struck columns are dropped. A round in progress (amber) joins the count only when it finishes, so the drop does not jump around mid-play. Prize is <b>projected</b>, splits evenly across tied places, and pays on the final standing.';
+}
+document.addEventListener('click',function(e){
+  var t=e.target.closest('.tog button');
+  if(t){document.querySelectorAll('.tog button').forEach(function(b){b.classList.remove('on')});t.classList.add('on');mode=t.dataset.m;hdrCells();draw();return}
+  var r=e.target.closest('.rwh');
+  if(!r)return;
+  var rw=r.parentElement,open=rw.querySelector('.det');
+  document.querySelectorAll('.rw').forEach(function(x){var d=x.querySelector('.det');if(d)d.remove();x.classList.remove('lead');var c=x.querySelector('.cv');if(c)c.innerHTML='&#9662;'});
+  if(!open){rw.classList.add('lead');rw.insertAdjacentHTML('beforeend',card(F[+rw.dataset.i]||F[0]));rw.querySelector('.cv').innerHTML='&#9652;'}
+});
+hdrCells();draw();
+</script>
+</body>
+</html>

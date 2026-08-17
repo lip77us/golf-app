@@ -1,0 +1,198 @@
+<!-- @dsCard group="Individual play" name="Score entry — tournament" subtitle="IndividualScoreEntry — one card per hole, the group's spots captured inline, one lost-ball switch, bracket summary" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Score entry — tournament</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216;--red:#C62828}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:104px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:844px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:14px;padding:4px 16px 8px}
+.appbar .x{font-size:19px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16.5px;flex:1;text-align:center}
+.appbar .ic{font-size:14px;color:var(--deepPine)}
+.body{padding:4px 12px 92px;overflow-y:auto;height:752px}
+.hh{background:#CFE7D8;border-radius:14px;padding:11px 13px 12px;margin-bottom:10px}
+.hh .c{text-align:center;font-size:12px;color:#3C6B55}
+.hh h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:26px;margin:1px 0 2px;text-align:center}
+.hh .m{text-align:center;font-size:12.5px;color:#2F5E48;margin-bottom:9px}
+.hh .f{display:flex;align-items:center;gap:7px;font-size:12.5px;padding:2px 0}
+.hh .f b{font-weight:700}
+.hh .f s{flex:none;width:15px;text-decoration:none;text-align:center;color:var(--pine)}
+.sw{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid var(--cardBorder);border-radius:14px;padding:11px 13px;margin-bottom:10px}
+.sw .t{flex:1;min-width:0;font-size:13.5px;font-weight:600}
+.sw .t small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:2px;line-height:1.4}
+.tg{flex:none;width:48px;height:29px;border-radius:999px;background:#D3DED6;position:relative;cursor:pointer;transition:background .15s}
+.tg:after{content:"";position:absolute;top:3px;left:3px;width:23px;height:23px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .15s}
+.tg.on{background:var(--red)}
+.tg.on:after{transform:translateX(19px)}
+.pl{background:#fff;border:1px solid var(--cardBorder);border-radius:14px;overflow:hidden;margin-bottom:10px}
+.g{padding:11px 12px;border-bottom:1px solid #EDF2EE;cursor:pointer}
+.g:last-child{border-bottom:none}
+.g.on{background:#EAF4EE;box-shadow:inset 0 0 0 2px var(--pine)}
+.g .top{display:flex;align-items:center;gap:8px}
+.g .nm{font-size:15px;font-weight:600}
+.g.on .nm{color:var(--pine)}
+.g .ch{flex:none;font-size:10.5px;font-weight:700;color:var(--pine);background:#E4F2EA;border-radius:6px;padding:3px 7px}
+.g .bb{flex:none;font-size:10.5px;font-weight:700;color:#fff;background:var(--red);border-radius:999px;padding:3px 8px}
+.g .sc{margin-left:auto;flex:none;width:46px;height:46px;border:1.5px solid var(--cardBorder);border-radius:11px;background:#fff;display:flex;align-items:center;justify-content:center;font:700 19px/1 "Spline Sans",system-ui,sans-serif;position:relative}
+.g .sc em{position:absolute;top:-6px;left:0;right:0;display:flex;justify-content:center;gap:2px}
+.g .sc em i{width:4px;height:4px;border-radius:50%;background:var(--pine);display:block}
+.g .sc.set{border-color:var(--pine)}
+.g .sc.empty{color:#C3CFC6}
+.spots{display:flex;align-items:center;gap:9px;margin-top:8px}
+.spots .out{font-size:12px;color:var(--muted);font-style:italic}
+.spots .lbl{font-size:12.5px;color:var(--muted);min-width:74px}
+.spots .lbl b{color:var(--deepPine);font-weight:700}
+.spots button{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--cardBorder);background:#fff;color:var(--pine);font:700 15px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.spots button:disabled{color:#C3CFC6;cursor:default}
+.strip{display:flex;gap:6px;margin-top:9px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.strip::-webkit-scrollbar{display:none}
+.strip button{flex:none;width:46px;height:46px;border-radius:11px;border:1.5px solid var(--cardBorder);background:#fff;font:700 17px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);cursor:pointer}
+.strip button.par{border-color:#9FD3B4}
+.strip button.on{background:var(--pine);border-color:var(--pine);color:#fff}
+.brk{background:#fff;border:1px solid var(--cardBorder);border-radius:14px;padding:12px 13px}
+.brk h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13.5px;font-weight:700;margin:0 0 9px;display:flex;align-items:center;gap:8px}
+.brk h4 span{margin-left:auto;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#1D4E89;background:#E4EEF8;border-radius:5px;padding:3px 7px}
+.br{display:flex;align-items:baseline;gap:9px;padding:6px 0;font-size:12.5px}
+.br+.br{border-top:1px solid #F2F6F3}
+.br u{text-decoration:none;flex:none;width:62px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:5px;padding:3px 0;text-align:center}
+.br .p{flex:1;min-width:0;color:var(--muted)}
+.br .r{flex:none;font-weight:700;font-size:12.5px}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:10px 14px 20px;background:linear-gradient(transparent,var(--surface) 24%)}
+.pager{display:flex;gap:11px}
+.pager button{flex:1;height:50px;border-radius:999px;font:700 15px/1 "Spline Sans",system-ui,sans-serif;display:flex;align-items:center;justify-content:center;gap:6px}
+.pager .pv{background:none;border:1.5px solid var(--pine);color:var(--pine)}
+.pager .pv:disabled{border-color:#C3CFC6;color:#A9B7AE}
+.pager .nx{background:var(--pine);border:none;color:#fff}
+.why{text-align:center;font-size:11.5px;color:var(--warn);font-weight:600;margin-top:7px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Score entry, tournament</h1>
+<p>The hole card a tournament foursome actually uses. Everything the live build gets right is kept &mdash; hole header, CH chip, stroke dots, the ball badge on the carrier, the bracket summary that updates hole to hole. Three things change.</p>
+<h3>Spots ride along</h3>
+<p>The casual <b>Stroke Play + Spots</b> screen already has the answer: a <b>&minus; / +</b> stepper per golfer, per hole. Nothing to invent &mdash; the same control appears here, because a spot is a fact about a hole that no score implies and nothing downstream can reconstruct.</p>
+<p><b>A spot is a count, not a type.</b> No greenie, sandie or poley picker &mdash; especially not in a tournament, where the hole card is already carrying four golfers, a ball game and a bracket. If the group wants to know what the spot was for, they know; the app does not need to.</p>
+<p><b>The stepper only exists if this group chose spots.</b> No spots game, no control &mdash; not a disabled one, not a placeholder. A group that did choose it and has a golfer sitting out shows <i>Not in spots</i> on that row, so the card never offers a control that records something a man cannot win.</p>
+<p>In practice this is the rare case. A foursome already carrying the ball game, Irish Rumble and a bracket is unlikely to add a side game on top &mdash; so the default state of this card is the one with no steppers at all, and spots is the exception it has to accommodate rather than the shape it is built around.</p>
+<div class="own"><table>
+<tr><td>Who sets it</td><td>The <b>foursome</b>, in its own game setup, exactly as casual. The TD never sees it.</td></tr>
+<tr><td>Where it lands</td><td>This card, on the hole it happened. The only foursome side bet that needs entry.</td></tr>
+<tr><td>Who sees it</td><td>Only this group. Other foursomes carry their own games, or none.</td></tr>
+<tr><td>Everything else</td><td>Rabbit, survivor, skins, Nassau read the tournament&rsquo;s scores and are followed on the <b>leaderboard</b> &mdash; no second card.</td></tr>
+</table></div>
+<h3>One control for the lost ball</h3>
+<p>Live draws a radio circle <i>and</i> a switch for one act. One switch, and it says what it does: this ends the game for the group, so the label carries the consequence rather than describing a checkbox.</p>
+<h3>The pager says why</h3>
+<p>Live greys <b>Hole 2</b> with no reason. Here the button stays live and the line underneath names what is missing &mdash; and it disappears the moment the fourth score lands.</p>
+<h3>What is inherited</h3>
+<p>Stroke dots and the <b>gets N</b> chip are the casual convention, carried through. The bracket summary uses <b>short names</b> and the <b>vs. TBD</b> label decided this week.</p>
+<h3>Still open</h3>
+<ul>
+<li>Nothing outstanding on this screen.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>10:23</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="x">&#10005;</span><span class="ttl">Group 1 &middot; Duddy Cup</span><span class="ic">&#9776;</span></div>
+<div class="body">
+
+<div class="hh">
+<div class="c">Tilden Park GC</div>
+<h2>Hole 12</h2>
+<div class="m">Par 4 &nbsp;|&nbsp; 402 yds. &nbsp;|&nbsp; SI 12</div>
+<div class="f"><s>&#9971;</s><span><b>Anna Maiolini</b> carries the Beer Ball</span></div>
+<div class="f"><s>&#9635;</s><span><b>2 balls</b> count for Irish Rumble</span></div>
+</div>
+
+<div class="sw" style="background:#F4FAF6;border-color:#C9E3D4"><span class="t" style="font-weight:400;color:#38564A;font-size:12.5px">This group plays <b style="color:var(--deepPine)">spots</b>, so each row carries a stepper. Groups that did not choose it show no spots control at all.</span><span class="tg on" id="spTg" style="background:var(--pine)"></span></div>
+<div class="sw">
+<span class="t">Lost the Beer Ball on this hole<small>Ends the game for Group 1 &mdash; the last group still holding it wins</small></span>
+<span class="tg" id="tg"></span>
+</div>
+
+<div class="pl" id="pl"></div>
+
+<div class="brk">
+<h4>Mini Singles Bracket<span>In progress</span></h4>
+<div class="br"><u>Semi 1</u><span class="p">Detomasi vs Gunst</span><span class="r">Gunst 4&amp;2</span></div>
+<div class="br"><u>Semi 2</u><span class="p">Petersen vs Maiolini</span><span class="r">All square thru 11</span></div>
+<div class="br"><u>Final</u><span class="p">Gunst vs TBD</span><span class="r">1 UP thru 11</span></div>
+<div class="br"><u>3rd</u><span class="p">Detomasi vs TBD</span><span class="r">1 DN thru 11</span></div>
+</div>
+
+</div>
+<div class="bottom">
+<div class="pager"><button class="pv">&#8249; Hole 11</button><button class="nx">Hole 13 &#8250;</button></div>
+<div class="why" id="why"></div>
+</div>
+</div>
+<script>
+var G=[{n:'Alan Petersen',ch:19,st:1,sc:5,sp:0,in:1},
+       {n:'Aldo Detomasi',ch:11,st:0,sc:4,sp:1,in:1},
+       {n:'Alex Gunst',ch:38,st:2,sc:0,sp:0,in:0},
+       {n:'Anna Maiolini',ch:33,st:2,sc:0,sp:0,ball:1,in:1}],
+    sel=2,PAR=4;
+function draw(){
+  document.getElementById('pl').innerHTML=G.map(function(g,i){
+    var dots='';for(var k=0;k<g.st;k++)dots+='<i></i>';
+    var strip='';
+    if(i===sel){
+      strip='<div class="strip">';
+      for(var s=2;s<=9;s++)strip+='<button data-s="'+s+'" class="'+(s===PAR?'par':'')+(g.sc===s?' on':'')+'">'+s+'</button>';
+      strip+='</div>';
+    }
+    return '<div class="g'+(i===sel?' on':'')+'" data-i="'+i+'">'+
+      '<div class="top"><span class="nm">'+g.n+'</span><span class="ch">CH '+g.ch+'</span>'+
+      (g.ball?'<span class="bb">Beer Ball</span>':'')+
+      '<span class="sc '+(g.sc?'set':'empty')+'"><em>'+dots+'</em>'+(g.sc||'&ndash;')+'</span></div>'+
+      (g.spots?'<div class="spots"><button class="mn" data-i="'+i+'"'+(g.sp?'':' disabled')+'>&minus;</button>'+
+      '<span class="lbl"><b>'+g.sp+'</b> spot'+(g.sp===1?'':'s')+'</span>'+
+      '<button class="ps" data-i="'+i+'">+</button></div>':(g.in===0&&G.some(function(o){return o.spots})?'<div class="spots"><span class="out">Not in spots</span></div>':''))+strip+'</div>';
+  }).join('');
+  var left=G.filter(function(g){return !g.sc}).length;
+  document.getElementById('why').textContent=left?left+' score'+(left>1?'s':'')+' still to enter on this hole':'';
+}
+document.getElementById('pl').addEventListener('click',function(e){
+  var b=e.target.closest('button');
+  if(b){
+    var i=+b.dataset.i;
+    if(b.classList.contains('ps'))G[i].sp++;
+    else if(b.classList.contains('mn')){if(G[i].sp)G[i].sp--}
+    else if(b.dataset.s){G[sel].sc=+b.dataset.s}
+    draw();return;
+  }
+  var g=e.target.closest('.g');if(!g)return;sel=+g.dataset.i;draw();
+});
+document.getElementById('tg').onclick=function(){this.classList.toggle('on')};
+document.getElementById('spTg').onclick=function(){
+  var on=!this.classList.contains('on');
+  this.classList.toggle('on',on);this.style.background=on?'var(--pine)':'';
+  G.forEach(function(g,i){g.spots=on&&i!==2});draw();
+};
+G.forEach(function(g,i){g.spots=g.in});
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,412 @@
+<!-- @dsCard group="Individual play" name="Mini Singles Bracket — setup" subtitle="IndividualMiniSinglesSetup — a bracket in every group on day 1, the group winners in one foursome on day 2" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Mini Singles Bracket — setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:88px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:844px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 10px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .grp{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:6px;padding:4px 7px}
+.body{padding:2px 16px 96px;overflow-y:auto;height:750px}
+h2.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:23px;margin:0 0 5px}
+p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 15px}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.stg{display:flex;align-items:baseline;gap:8px;margin:0 0 8px}
+.stg b{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700}
+.stg span{font-size:11.5px;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:13px 13px 14px;margin-bottom:13px}
+.card h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13.5px;font-weight:700;margin:0 0 10px;display:flex;align-items:baseline;gap:8px}
+.card h4 em{margin-left:auto;font-style:normal;font-size:11px;font-weight:600;color:var(--muted)}
+.gtabs{display:flex;gap:6px;margin-bottom:11px;overflow-x:auto;scrollbar-width:none}
+.gtabs::-webkit-scrollbar{display:none}
+.gtabs button{flex:none;border:1.5px solid var(--cardBorder);background:#fff;border-radius:999px;padding:7px 13px;font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);cursor:pointer}
+.gtabs button.on{border-color:var(--pine);background:#E4F2EA;color:var(--pine)}
+.sd{display:flex;align-items:center;gap:11px;padding:8px 2px;cursor:grab;background:#fff}
+.sd+.sd{border-top:1px solid #EDF2EE}
+.sd.drag{opacity:.4}
+.sd .sn{flex:none;width:24px;height:24px;border-radius:8px;background:#E4F2EA;color:var(--pine);font:700 12px/24px "Spline Sans",system-ui,sans-serif;text-align:center}
+.sd .nm{flex:1;min-width:0;font-size:14px;font-weight:600}
+.sd .nm small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:1px}
+.sd .gr{flex:none;width:20px;color:#B6C4BB;font-size:15px;line-height:1}
+.reset{margin-top:6px;border:none;background:none;padding:4px 0 0;color:var(--pine);font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.mt{display:flex;align-items:center;gap:10px;padding:8px 0}
+.mt+.mt{border-top:1px solid #EDF2EE}
+.mt .rnd{flex:none;width:66px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine)}
+.mt .pair{flex:1;min-width:0;font-size:13.5px;font-weight:600;line-height:1.35}
+.mt .pair small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:1px}
+.mt .hol{flex:none;font-size:11.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.tbd .pair{color:var(--muted);font-weight:500}
+.rule{background:#F4FAF6;border:1px solid #C9E3D4;border-radius:12px;padding:11px 12px;margin-bottom:13px}
+.rule b{display:block;font-size:12.5px;font-weight:700;margin-bottom:3px}
+.rule p{margin:0;font-size:12px;line-height:1.55;color:#38564A}
+.rule p+p{margin-top:6px}
+.opts{display:flex;flex-direction:column;gap:8px;margin-bottom:13px}
+.o{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 12px;cursor:pointer}
+.o.on{border-color:var(--pine);background:#F4FAF6}
+.o .rd{min-width:18px;height:18px;border-radius:50%;border:2px solid #C3CFC6;flex:none;margin-top:1px;position:relative}
+.o.on .rd{border-color:var(--pine)}
+.o.on .rd:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--pine)}
+.o .d{flex:1;min-width:0}
+.o .d b{display:block;font-size:14.5px;font-weight:600;line-height:1.25}
+.o .d small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.4}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:13.5px}
+.row+.row{border-top:1px solid #EDF2EE}
+.row .k{flex:1;min-width:0;font-weight:600}
+.row .k small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:1px;line-height:1.4}
+.row .v{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
+.row .v.mut{color:var(--muted);font-weight:500}
+.amt{flex:none;display:flex;align-items:center;gap:4px;border:1.5px solid var(--cardBorder);border-radius:10px;background:#fff;padding:0 9px;height:32px;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px}
+.amt i{font-style:normal;color:var(--muted);font-weight:500}
+.step{display:flex;align-items:center;flex:none;border:1.5px solid var(--cardBorder);border-radius:10px;overflow:hidden;background:#fff}
+.step button{width:34px;height:32px;border:none;background:#fff;color:var(--pine);font:700 16px/1 "Spline Sans",system-ui,sans-serif}
+.step span{width:30px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;border-left:1px solid var(--cardBorder);border-right:1px solid var(--cardBorder);line-height:32px}
+.bal{border-radius:10px;padding:9px 11px;font-size:12.5px;font-weight:600;margin-top:10px;background:#E4F2EA;color:#0B5B44}
+.bal.off{background:#FDF3E7;color:var(--warn)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.card.cl{padding:0}
+.card.cl>.clh{margin:0;padding:12px 13px;cursor:pointer;align-items:center}
+.card.cl>.clh .cv{color:#B6C4BB;font-size:10px;margin-left:8px;transition:transform .15s}
+.card.cl>.clb{display:none;padding:0 13px 13px}
+.card.cl.on>.clb{display:block}
+.card.cl.on>.clh .cv{transform:rotate(180deg)}
+.card.cl.on>.clh{border-bottom:1px solid #EDF2EE;margin-bottom:11px}
+.pcv{flex:none;width:36px;text-align:right;font-size:12px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.amt input{width:52px;border:none;outline:none;background:none;font:700 14px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);font-variant-numeric:tabular-nums}
+.balrow{display:flex;align-items:center;gap:10px;margin-top:11px;padding-top:10px;border-top:1px solid #EDF2EE}
+.balrow .bal{flex:1;margin:0;background:none;padding:0;font-size:12.5px;font-weight:600;color:var(--pine)}
+.balrow .bal.off{background:none;color:var(--warn)}
+.balrow .auto{flex:none;border:none;background:none;padding:0;color:var(--pine);font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Mini Singles Bracket, setup</h1>
+<p><b>Optional, at the TD&rsquo;s discretion.</b> Plenty of stroke play tournaments run without it &mdash; the game is switched on at the side-game step, and this screen is only reached when it is. Nothing else assumes it exists: no carve-out is taken from the championship pool, and no foursome is reserved on day 2, unless the TD turned it on.</p>
+<p><b>This is a two-stage game, and the previous draft had it wrong.</b> It is not one bracket inside one foursome &mdash; it is a bracket in <b>every</b> group on day 1, and on day 2 the group winners are pulled into <b>one foursome</b> that plays its own bracket for the title.</p>
+<div class="own"><table>
+<tr><td>Day 1</td><td>Four groups, four brackets. Semis on the front, final and 3rd place on the back. Each group produces a winner.</td></tr>
+<tr><td>Day 2</td><td>The four winners play as one foursome &mdash; semis, then the final and a 3rd-place match. One champion.</td></tr>
+<tr><td>Everyone else</td><td>Plays day 2 as a normal stroke-play round. Their match play is over.</td></tr>
+</table></div>
+<p>Which is exactly why it is a <b>side game</b> and not the championship: run it as the main event and three quarters of the field is out of contention on Saturday afternoon.</p>
+<h3>Halved matches: the same rule both days</h3>
+<p>The distinction is not Saturday against Sunday &mdash; it is <b>what the match still has to produce</b>. Money can always be split; a name cannot.</p>
+<div class="own"><table>
+<tr><td>Semi</td><td><b>Plays on</b>, back-calculated from hole 10. Both days, because a semi always has nine holes left and the golf can settle it.</td></tr>
+<tr><td>Final</td><td><b>Money splits</b> between 1st and 2nd. The trophy &mdash; and the Sunday seat, on day 1 &mdash; goes to the <b>last hole won</b>.</td></tr>
+<tr><td>3rd place</td><td><b>Split.</b> Nothing depends on the order, so nothing needs breaking.</td></tr>
+</table></div>
+<p>Which makes last-hole-won a tiebreak of last resort rather than a general rule: it is used only where a trophy or a bracket seat requires exactly one name.</p>
+<h3>Money first</h3>
+<p>The order is now <b>money, then format, then the rules to read</b>. Two pots and a carve-out are what a TD came to this screen to set; the brackets below are mostly confirmation, and the halved-match rule is reference. Seeds sit under the money because they are pre-filled and rarely touched.</p>
+<h3>The casual payout pattern, unchanged</h3>
+<p>Casual Match Play already solved this and the tournament screen now uses it verbatim: a <b>paid places</b> stepper, an <b>editable amount</b> per place, <b>Payouts balance &#10003;</b> on the left and <b>Auto-suggest</b> on the right. No preset chips &mdash; an earlier draft had three, which was a second vocabulary for a problem that already had one.</p>
+<p>Auto-suggest proposes the same <b>60 / 25 / 15</b> casual uses &mdash; $24 / $10 / $6 on a $40 pot. Third does not get his entry back, and that is the call: the day 1 pot exists so the 3rd-place match is <b>worth playing</b>, not so it is free. One vocabulary, one set of percentages, across casual and tournament.</p>
+<p>Each place shows its <b>share of the pot</b> beside the amount, recalculated as he types &mdash; so a TD thinking in percentages and one thinking in dollars are looking at the same row. The TD can type over any of it. Two guards, both stated in the balance line rather than blocked: the places must add to the pot, and each must pay less than the one above.</p>
+<p><b>Worth checking against net play.</b> If the existing net-play setup already ships a suggestion list, these should match it rather than introduce a fourth set of percentages &mdash; tell me what it uses and I will align them.</p>
+<h3>Four sections are closed by default</h3>
+<p>This is the longest game to set up, and most of it is right the first time. So the parts a TD rarely touches &mdash; <b>seeds</b>, the <b>empty-seat rule</b>, <b>handicap</b>, and the Sunday eligibility notes &mdash; sit closed, each showing its current value on the header line: <i>By index</i>, <i>Promote best runner-up</i>, <i>Strokes off low</i>.</p>
+<p>Still <b>one screen and one Save</b>, which keeps it consistent with the other three games. Splitting it into a wizard would have made Mini Singles the only game that asks twice.</p>
+<h3>Two pots, and only one is set here</h3>
+<p>The two days are funded differently, which the previous draft had wrong &mdash; it treated the whole game as one carve-out and paid nothing on Saturday.</p>
+<div class="own"><table>
+<tr><td>Day 1</td><td>A <b>side bet</b>, entered per golfer and paid inside each group. It exists because the 3rd-place match has to be worth playing.</td></tr>
+<tr><td>Day 2</td><td>The <b>carve-out</b>, a percentage of the championship pool taken at tournament setup. Read-only here: this screen reports it, it does not set it.</td></tr>
+</table></div>
+<p>So Saturday&rsquo;s 3rd-place match is played for money after all, and Sunday&rsquo;s three places split $160 between them.</p>
+<h3>4th takes nothing, and that is fine</h3>
+<p>He is <b>still in the main tournament</b> &mdash; losing a semi on Sunday costs him nothing he was otherwise going to win. The earlier draft refunded his entry; there is no entry on Sunday to refund.</p>
+<p>The guards are stated in the balance line rather than enforced silently: the places must add to the pot, and each must pay less than the one above.</p>
+<h3>The field has to fit 16</h3>
+<p>Group count is what the game actually runs on, and golfers per group is what determines it. Four is the ceiling:</p>
+<div class="own"><table>
+<tr><td>Up to 8</td><td>Two groups, two winners &mdash; a final with no semis. Not a bracket; not offered.</td></tr>
+<tr><td>9 to 12</td><td><b>Three groups.</b> Three winners, so Sunday takes one of the two shapes below.</td></tr>
+<tr><td>13 to 16</td><td><b>Four groups.</b> The full bracket, both days identical in shape.</td></tr>
+<tr><td>Over 16</td><td>Five winners cannot play a knockout in one round &mdash; it needs a <b>third day</b>. Not an option on a two-day tournament, so the card says so rather than inventing a play-in.</td></tr>
+</table></div>
+<p><b>Worth confirming:</b> you said at least 13, which is the point where the field forces a fourth group and Sunday needs no special case. Drawn as 9 upward, since the three-group shapes below are yours &mdash; say the word and 13 becomes a hard floor with the three-group card removed.</p>
+<h3>A tie on points plays on</h3>
+<p>Same instinct as the halved match, and the same mechanism: <b>nothing is decided by a card</b>. If two or three are level after nine, points <b>keep being played</b> until 1st and 2nd are clear, and the finals match is then <b>back-calculated from the 10th</b> &mdash; the same reading-back the halved match uses, so the holes that separated them count twice: once to settle the points, once as the opening of the match.</p>
+<p>Nobody stands around while it happens: the three are already playing the back nine, and the match they are in resolves itself behind them.</p>
+<h3>Seeding Sunday</h3>
+<p>Not index again &mdash; <b>day 1 margin</b>, so the man who won 5&amp;4 gets seed 1 and meets the narrowest winner. <b>Lowest index breaks a tie</b>, which it will: two 2&amp;1 winners is an ordinary Saturday.</p>
+<h3>Three groups, or a withdrawal &mdash; one rule</h3>
+<p>Two ways to end up short a man &mdash; three groups, or a winner who withdraws &mdash; and the TD answers both once, at setup, rather than being asked on Sunday morning. Drawn as a choice, defaulting to promotion because it keeps Sunday identical to every other year:</p>
+<div class="own"><table>
+<tr><td>Promote</td><td>The <b>lowest net beaten finalist</b> takes the empty seat, and Sunday is a normal bracket. He is not being handed anything &mdash; he still has to <b>win two matches</b>, same as the group winners.</td></tr>
+<tr><td>Short-handed</td><td>Nobody is refilled. Three left play points then a match; two left play a straight nine-hole match. <b>No byes</b> &mdash; a seat nobody earned is not handed out as a free pass to the final.</td></tr>
+<tr><td>Points</td><td>All three play points over the front, the <b>two leaders play a match</b> on the back. Truer to &ldquo;you get there by winning your group&rdquo;, but the third man&rsquo;s day ends at the turn.</td></tr>
+</table></div>
+<p>Promotion needs a stated tiebreak of its own &mdash; lowest net over the day-1 round is the obvious one, and it is what the card says. The earlier worry about it weakening &ldquo;you get here by winning your group&rdquo; is answered by the format itself: <b>two matches is two matches</b>, whichever seat you came in on.</p>
+<h3>Two prizes, and they can be the same man</h3>
+<p>The match play champion takes the top of the carve-out; the stroke play winner takes what is left of the championship. <b>Nothing disqualifies either from the other.</b></p>
+<p>The finalists keep their other side games on Sunday &mdash; the ball game and Irish Rumble run as normal &mdash; but they are <b>out of the day-2 stroke bet</b>, since they are playing a match rather than a card against the field.</p>
+<h3>What the TD sets, and what is derived</h3>
+<p>Seeds are seeded by index and <b>draggable</b> per group. The day 2 foursome is not set at all &mdash; it is <b>derived</b> from day 1, so the card shows four TBD slots that fill themselves.</p>
+<p>That has a consequence for the group builder: on day 2 those four golfers <b>must be grouped together</b>, and the TD cannot know who they are when he sets tee times. The groups step needs to reserve that foursome rather than have the TD rebuild it on the morning.</p>
+<h3>Handicap</h3>
+<p><b>Strokes off low is the default here</b>, and this is the one game where that is right: a match has two players and a low man to anchor to, so the higher index plays the difference and the lower plays scratch. Full net is offered but is not what a singles match wants. Set once, and it governs both days.</p>
+<p>It is the reverse of the field games &mdash; Irish Rumble and the ball game inherit full net from the tournament, because there is no single opponent to take strokes off against.</p>
+<h3>Still open</h3>
+<ul>
+<li>Nothing outstanding on this screen.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>7:48</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Mini Singles Bracket</span><span class="grp">Field</span></div>
+<div class="body">
+<h2 class="hd">Two days, two stages</h2>
+<p class="sub">A bracket in every group on day 1. The winners meet on day 2. Optional &mdash; switch it off at Side games and nothing here applies.</p>
+
+<div class="fitc" style="display:flex;gap:9px;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:12px;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.5;color:#38564A"><span>&#10003;</span><span><b style="color:var(--deepPine)">16 golfers, four groups</b> &mdash; fits. Mini Singles tops out at <b style="color:var(--deepPine)">four groups</b>: two winners make a final with no semis, and five need a third day to play out.</span></div>
+<div class="lb">Money</div>
+<div class="card">
+<h4>Day 1 &mdash; side bet<em>set here</em></h4>
+<div class="row"><span class="k">Per golfer<small>Everybody in the field is in a day 1 bracket</small></span><span class="step"><button id="e1m">&minus;</button><span id="e1">10</span><button id="e1p">+</button></span></div>
+<div class="row"><span class="k">Pot per group<small>Four golfers, paid inside the group</small></span><span class="v" id="pot1">$40</span></div>
+<div class="row"><span class="k">Paid places</span><span class="step"><button id="npm">&minus;</button><span id="np">3</span><button id="npp">+</button></span></div>
+<div id="d1places"></div>
+<div class="balrow"><span class="bal" id="bal1"></span><button class="auto" id="auto">Auto-suggest</button></div>
+</div>
+<div class="card">
+<h4>Day 2 &mdash; the championship carve-out<em>read-only</em></h4>
+<div class="row"><span class="k">Set at tournament setup<small>A percentage of the championship pool, not configured here</small></span><span class="v mut">25%</span></div>
+<div class="row"><span class="k">To the champions&rsquo; foursome<small>25% of the $640 championship pool</small></span><span class="v">$160</span></div>
+<div class="row"><span class="k">Left for the championship places<small>What the 36-hole board pays out</small></span><span class="v mut">$480</span></div>
+<div id="places"></div>
+<div class="bal" id="bal"></div>
+</div>
+
+<div class="stg"><b>Day 1 &middot; Saturday</b><span>a bracket in each of 4 groups</span></div>
+<div class="card cl" data-cl="seeds">
+<h4 class="clh">Day 1 seeds<em id="seedNote">By index</em><span class="cv">&#9662;</span></h4>
+<div class="clb">
+<div class="gtabs" id="gtabs"></div>
+<div id="seeds"></div>
+<button class="reset" id="reset">Reset to handicap order</button>
+</div>
+</div>
+<div class="card">
+<h4>Each group plays<em>1 v 4 &middot; 2 v 3</em></h4>
+<div class="mt"><span class="rnd">Semis</span><span class="pair" id="p1"></span><span class="hol">1&ndash;9</span></div>
+<div class="mt"><span class="rnd">Final</span><span class="pair">Semi winners <small>the group&rsquo;s champion</small></span><span class="hol">10&ndash;18</span></div>
+<div class="mt"><span class="rnd">3rd place</span><span class="pair">Semi losers <small>plays for 15% of the group pot</small></span><span class="hol">10&ndash;18</span></div>
+</div>
+
+<div class="stg"><b>Day 2 &middot; Sunday</b><span>the group winners, one foursome</span></div>
+<div class="card">
+<h4>Champions&rsquo; foursome<em>derived from day 1</em></h4>
+<div class="mt tbd"><span class="rnd">Semi 1</span><span class="pair">Seed 1 vs Seed 4 <small>seeded by day 1 margin</small></span><span class="hol">1&ndash;9</span></div>
+<div class="mt tbd"><span class="rnd">Semi 2</span><span class="pair">Seed 2 vs Seed 3</span><span class="hol">1&ndash;9</span></div>
+<div class="mt tbd"><span class="rnd">Final</span><span class="pair">Semi winners <small>the champion</small></span><span class="hol">10&ndash;18</span></div>
+<div class="mt tbd"><span class="rnd">3rd place</span><span class="pair">Semi losers <small>paid from the carve-out</small></span><span class="hol">10&ndash;18</span></div>
+<div class="row"><span class="k">Seeded by<small>Widest day 1 margin, then lowest index</small></span><span class="v mut">Margin</span></div>
+<div class="row"><span class="k">Everyone else on Sunday<small>Plays the stroke play round as normal</small></span><span class="v mut">Field</span></div>
+</div>
+<div class="card cl" data-cl="seat">
+<h4 class="clh">If a seat cannot be filled<em id="seatNote">Promote best runner-up</em><span class="cv">&#9662;</span></h4>
+<div class="clb">
+<div class="opts" id="three" style="margin-bottom:0">
+<div class="o on" data-t="promote"><span class="rd"></span><span class="d"><b>Promote the best runner-up</b><small>The lowest net of the three beaten finalists fills the fourth seat &mdash; and still has to win two matches to take it.</small></span></div>
+<div class="o" data-t="points"><span class="rd"></span><span class="d"><b>Points, then a match</b><small>All three play points over the front; the two leaders play the back nine as a match.</small></span></div>
+<div class="o" data-t="short"><span class="rd"></span><span class="d"><b>Play it short-handed</b><small>Nobody is promoted. Three play points then a match, two play a straight match.</small></span></div>
+</div>
+<div id="threeShape" style="margin-top:11px"></div>
+</div>
+</div>
+
+
+
+<div class="card cl" data-cl="hcp">
+<h4 class="clh">Handicap<em id="hcpNote">Strokes off low</em><span class="cv">&#9662;</span></h4>
+<div class="clb">
+<div class="opts" id="hcp" style="margin-bottom:0">
+<div class="o" data-h="net"><span class="rd"></span><span class="d"><b>Full net</b><small>Each golfer plays his own course handicap, as the tournament is set.</small></span></div>
+<div class="o on" data-h="so"><span class="rd"></span><span class="d"><b>Strokes off low</b><small>The low man in each match plays scratch; his opponent gets the difference.</small></span></div>
+</div>
+</div>
+</div>
+
+
+
+<div class="rule">
+<b>A halved semi &mdash; both days</b>
+<p>Play continues into the back nine and the match is <b>back-calculated from hole 10</b>. Identical on Saturday and Sunday: a semi always has holes left, so the golf settles it.</p>
+<p><b>Nobody waits.</b> The other pair play hole 10 on time and score under <b>vs. TBD</b> &mdash; the two still level can only halve, since the first hole they do not halve names the opponent.</p>
+</div>
+<div class="rule">
+<b>A halved final &mdash; both days</b>
+<p><b>The money splits.</b> 1st and 2nd are added together and shared; nobody is played off for cash.</p>
+<p>Where a single name is needed &mdash; the trophy, and who advances to Sunday &mdash; it is the <b>last hole won</b>. Read the card backwards to the most recent hole either golfer took outright: Paul won 11, Jim won 13, everything else halved, <b>Jim</b>.</p>
+</div>
+<div class="rule">
+<b>A halved 3rd-place match &mdash; both days</b>
+<p><b>Split, and nothing else.</b> 3rd and 4th share what those two places pay. No tiebreak is needed because nothing depends on the order.</p>
+</div>
+<div class="card cl" data-cl="also">
+<h4 class="clh">Also on Sunday<em>3 rules</em><span class="cv">&#9662;</span></h4>
+<div class="clb">
+<div class="row"><span class="k">Still in the ball game and Irish Rumble<small>The finalists carry their side games as normal</small></span><span class="v mut">In</span></div>
+<div class="row"><span class="k">Out of the day-2 stroke bet<small>They are playing a match, so they sit out the day&rsquo;s stroke play bet</small></span><span class="v mut">Out</span></div>
+<div class="row"><span class="k">36-hole championship<small>Winning here disqualifies nobody &mdash; both prizes can go to one man</small></span><span class="v mut">Eligible</span></div>
+</div>
+</div>
+
+
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next" id="save">Save game</button></div>
+</div>
+<script>
+var GROUPS=[
+  [{f:'Aldo',l:'Detomasi',ch:11},{f:'Alan',l:'Petersen',ch:19},{f:'Anna',l:'Maiolini',ch:33},{f:'Alex',l:'Gunst',ch:38}],
+  [{f:'Barry',l:'Labass',ch:8},{f:'Alex',l:'Brown',ch:12},{f:'Anthony',l:'Barrueta',ch:18},{f:'Ambrose',l:'Yau',ch:24}],
+  [{f:'Tom',l:'Mercer',ch:6},{f:'Dan',l:'Reilly',ch:14},{f:'Chris',l:'Vaughn',ch:21},{f:'Paul',l:'Lipkin',ch:27}],
+  [{f:'Ryan',l:'Ellis',ch:9},{f:'Don',l:'Morgan',ch:16},{f:'Rich',l:'Mayers',ch:22},{f:'Joe',l:'Salas',ch:30}]
+],
+BASE=GROUPS.map(function(g){return g.slice()}),gi=0,drag=null,
+CHAMP=640,ENTRY=40,pc=25;
+function tabs(){
+  document.getElementById('gtabs').innerHTML=GROUPS.map(function(g,i){
+    return '<button class="'+(i===gi?'on':'')+'" data-g="'+i+'">Group '+(i+1)+'</button>';
+  }).join('');
+}
+function seedDraw(){
+  var s=GROUPS[gi];
+  document.getElementById('seeds').innerHTML=s.map(function(g,i){
+    return '<div class="sd" draggable="true" data-i="'+i+'"><span class="sn">'+(i+1)+'</span>'+
+      '<span class="nm">'+g.f+' '+g.l+'<small>CH '+g.ch+'</small></span><span class="gr">&#8801;</span></div>';
+  }).join('');
+  document.getElementById('p1').innerHTML=s[0].l+' vs '+s[3].l+' &middot; '+s[1].l+' vs '+s[2].l+' <small>seed 1 v 4, seed 2 v 3</small>';
+  var byHcp=s.every(function(g,i){return g.ch===BASE[gi][i].ch});
+  document.getElementById('seedNote').textContent=byHcp?'By index':'Set by you';
+  document.getElementById('reset').style.display=byHcp?'none':'';
+}
+var e1=10,NP=3,AMT=[24,10,6];
+function suggest(){
+  var pot=e1*4;
+  if(NP===3){var b=Math.round(pot*.25),c=Math.round(pot*.15);AMT=[pot-b-c,b,c]}
+  else if(NP===2){var s=Math.round(pot*.3);AMT=[pot-s,s,0]}
+  else AMT=[pot,0,0];
+}
+function money(){
+  var carve=Math.round(CHAMP*pc/100),
+      split=[Math.round(carve*.5),Math.round(carve*.3),0];
+  split[2]=carve-split[0]-split[1];
+  var rows=[['1st','match play champion',split[0]],
+            ['2nd','beaten finalist',split[1]],
+            ['3rd','winner of the 3rd-place match',split[2]]];
+  document.getElementById('places').innerHTML=rows.map(function(r){
+    return '<div class="row"><span class="k">'+r[0]+' &mdash; golfer<small>'+r[1]+'</small></span><span class="v">$'+r[2]+'</span></div>';
+  }).join('');
+  document.getElementById('bal').textContent='The three split $'+carve+' \u2014 4th takes nothing and is still in the championship';
+  var pot=e1*4,d1=AMT;
+  var lab=[['1st','group champion'],['2nd','beaten finalist'],['3rd','winner of the 3rd-place match']];
+  document.getElementById('d1places').innerHTML=lab.slice(0,NP).map(function(l,i){
+    return '<div class="row"><span class="k">'+l[0]+'<small>'+l[1]+'</small></span><span class="pcv">'+Math.round(d1[i]/pot*100)+'%</span><span class="amt"><i>$</i><input data-i="'+i+'" value="'+d1[i]+'" inputmode="numeric"></span></div>';
+  }).join('');
+  document.getElementById('pot1').textContent='$'+pot;
+  document.getElementById('np').textContent=NP;
+  document.getElementById('e1').textContent=e1;
+  var sum=d1.slice(0,NP).reduce(function(s,v){return s+v},0),
+      order=d1.slice(0,NP).every(function(v,i){return i===0||v<d1[i-1]}),
+      b=document.getElementById('bal1');
+  if(sum!==pot){b.className='bal off';b.textContent=sum<pot?'$'+(pot-sum)+' of the pot is unassigned':'Places are $'+(sum-pot)+' over the pot'}
+  else if(!order){b.className='bal off';b.textContent='Each place must pay less than the one above'}
+  else{b.className='bal';b.textContent='Payouts balance \u2713'}
+}
+document.getElementById('e1p').onclick=function(){if(e1<25){e1+=5;suggest();money()}};
+document.getElementById('e1m').onclick=function(){if(e1>5){e1-=5;suggest();money()}};
+document.getElementById('npp').onclick=function(){if(NP<3){NP++;suggest();money()}};
+document.getElementById('npm').onclick=function(){if(NP>1){NP--;suggest();money()}};
+document.getElementById('auto').onclick=function(){suggest();money()};
+document.getElementById('d1places').addEventListener('input',function(e){
+  var f=e.target.closest('input');if(!f)return;
+  AMT[+f.dataset.i]=parseInt(f.value.replace(/\D/g,''),10)||0;
+  var pot=e1*4,d1=AMT;
+  [].forEach.call(document.querySelectorAll('#d1places .row'),function(r,i){
+    r.querySelector('.pcv').textContent=Math.round(d1[i]/pot*100)+'%';
+  });
+  var sum=d1.slice(0,NP).reduce(function(s,v){return s+v},0),
+      order=d1.slice(0,NP).every(function(v,i){return i===0||v<d1[i-1]}),
+      b=document.getElementById('bal1');
+  if(sum!==pot){b.className='bal off';b.textContent=sum<pot?'$'+(pot-sum)+' of the pot is unassigned':'Places are $'+(sum-pot)+' over the pot'}
+  else if(!order){b.className='bal off';b.textContent='Each place must pay less than the one above'}
+  else{b.className='bal';b.textContent='Payouts balance \u2713'}
+  document.getElementById('np').textContent=NP;
+});
+document.querySelectorAll('.card.cl > .clh').forEach(function(hd){
+  hd.addEventListener('click',function(){hd.parentNode.classList.toggle('on')});
+});
+document.getElementById('three').addEventListener('click',function(e){
+  var o=e.target.closest('.o');if(!o)return;
+  document.getElementById('seatNote').textContent={promote:'Promote best runner-up',points:'Points, then a match',short:'Short-handed'}[o.dataset.t];
+});
+document.getElementById('hcp').addEventListener('click',function(e){
+  var o=e.target.closest('.o');if(!o)return;
+  document.getElementById('hcpNote').textContent=o.dataset.h==='so'?'Strokes off low':'Full net';
+});
+document.getElementById('gtabs').addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b)return;gi=+b.dataset.g;tabs();seedDraw();
+});
+document.getElementById('seeds').addEventListener('dragstart',function(e){
+  var s=e.target.closest('.sd');if(!s)return;drag=+s.dataset.i;s.classList.add('drag');
+});
+document.getElementById('seeds').addEventListener('dragover',function(e){e.preventDefault()});
+document.getElementById('seeds').addEventListener('drop',function(e){
+  e.preventDefault();var s=e.target.closest('.sd');if(!s||drag===null)return;
+  var to=+s.dataset.i,g=GROUPS[gi].splice(drag,1)[0];GROUPS[gi].splice(to,0,g);drag=null;seedDraw();
+});
+document.getElementById('seeds').addEventListener('dragend',function(){drag=null;seedDraw()});
+document.getElementById('reset').onclick=function(){GROUPS[gi]=BASE[gi].slice();seedDraw()};
+
+function threeShape(kind){
+  var S={
+    promote:'<div class="mt tbd"><span class="rnd">Semis</span><span class="pair">3 winners + best runner-up <small>seeded 1 v 4, 2 v 3 as usual</small></span><span class="hol">1&ndash;9</span></div>'+
+      '<div class="mt tbd"><span class="rnd">Final &amp; 3rd</span><span class="pair">Same as a four-group Sunday</span><span class="hol">10&ndash;18</span></div>',
+    points:'<div class="mt tbd"><span class="rnd">Front 9</span><span class="pair">All three play points <small>a three-man points game, not a match</small></span><span class="hol">1&ndash;9</span></div>'+
+      '<div class="mt tbd"><span class="rnd">Back 9</span><span class="pair">The two leaders play a match <small>third man is out after nine</small></span><span class="hol">10&ndash;18</span></div>'+
+      '<div class="mt tbd"><span class="rnd">If tied</span><span class="pair">Points continue until 1st and 2nd are clear <small>the match is back-calculated from the 10th</small></span><span class="hol">10+</span></div>',
+    short:'<div class="mt tbd"><span class="rnd">Three left</span><span class="pair">Points over the front, top two play the back <small>no bye &mdash; everyone plays for the final</small></span><span class="hol">1&ndash;18</span></div>'+
+      '<div class="mt tbd"><span class="rnd">Two left</span><span class="pair">A straight match <small>nine holes, no points round</small></span><span class="hol">10&ndash;18</span></div>'
+  };
+  document.getElementById('threeShape').innerHTML=S[kind]||S.promote;
+}
+document.getElementById('three').addEventListener('click',function(e){
+  var o=e.target.closest('.o');if(!o)return;
+  document.querySelectorAll('#three .o').forEach(function(x){x.classList.remove('on')});o.classList.add('on');
+  threeShape(o.dataset.t);
+});
+threeShape('promote');
+document.querySelectorAll('#hcp .o').forEach(function(o){o.onclick=function(){document.querySelectorAll('#hcp .o').forEach(function(x){x.classList.remove('on')});o.classList.add('on')}});
+tabs();seedDraw();money();
+</script>
+</body>
+</html>

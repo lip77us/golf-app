@@ -1,0 +1,144 @@
+<!-- @dsCard group="Individual play" name="Stableford setup — tournament" subtitle="IndividualStablefordSetup — the casual points-table screen reused for tournaments, with the money block deferred to Payout" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Stableford setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:108px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:844px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px;flex:1;text-align:center;margin-right:24px}
+.body{padding:2px 16px 96px;overflow-y:auto;height:750px}
+.scope{display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--cardBorder);border-radius:999px;padding:7px 13px;font-size:12px;margin-bottom:11px}
+.scope b{font-weight:700}
+.scope span{color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:13px 14px 14px;margin-bottom:12px}
+.card h4{font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:700;color:var(--pine);margin:0 0 5px}
+.card p.d{margin:0 0 11px;font-size:12.5px;line-height:1.45;color:var(--muted)}
+.pre{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.pre button{border:1.5px solid var(--cardBorder);background:#fff;border-radius:999px;padding:8px 13px;font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);cursor:pointer}
+.pre button.on{border-color:var(--pine);background:#E4F2EA;color:var(--pine)}
+.pr{display:flex;align-items:center;gap:12px;padding:3px 0}
+.pr+.pr{border-top:1px solid #F0F4F1}
+.pr .k{flex:1;min-width:0;font-size:14px}
+.pr input{flex:none;width:64px;height:44px;border:1.5px solid var(--cardBorder);border-radius:11px;background:#fff;text-align:center;font:700 16px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);font-variant-numeric:tabular-nums}
+.pr input:focus{outline:none;border-color:var(--pine)}
+.pr.bad input{border-color:var(--warn);background:#FDF3E7}
+.note{display:flex;gap:8px;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:12px;padding:9px 11px;font-size:11.5px;line-height:1.45;color:#38564A;margin-top:10px}
+.note b{color:var(--deepPine)}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:13.5px}
+.row+.row{border-top:1px solid #EDF2EE}
+.row .k{flex:1;min-width:0;font-weight:600}
+.row .k small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:1px;line-height:1.4}
+.row .v{flex:none;font-weight:600;color:var(--muted)}
+.lnk{color:var(--pine);font-weight:600;font-size:12.5px;text-decoration:none}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{width:100%;height:54px;border-radius:16px;border:none;background:var(--pine);color:#fff;font:700 16px/1 "Spline Sans",system-ui,sans-serif}
+.bottom .why{display:block;text-align:center;font-size:11.5px;color:var(--warn);margin-top:7px;font-weight:600}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Stableford setup, reused</h1>
+<p><b>The casual screen does the job already.</b> Points table, three presets, six editable values, negatives allowed. A tournament asks exactly the same question, so it opens exactly this screen &mdash; step <b>3a</b>, only when the method is Stableford.</p>
+<h3>Three things change in tournament context</h3>
+<div class="own"><table>
+<tr><td>Scope</td><td>A chip says what the table governs: <b>this tournament, both rounds</b>. Casual sets one round; a two-round event cannot have two scales.</td></tr>
+<tr><td>Money</td><td><b>How the money settles is not asked here.</b> The tournament pays through paid places on the Payout step. Per-point settlement makes the pot unknowable until the last card lands.</td></tr>
+<tr><td>Preset state</td><td>The active preset is selected, and editing any value flips it to <b>Custom</b> &mdash; live shows three chips with none marked.</td></tr>
+</table></div>
+<h3>Why per-point does not survive here</h3>
+<p>The same argument the Cup work settled for points per stroke: a per-point price means nobody can state the prize until the field finishes. A tournament advertises <b>1st / 2nd / 3rd</b> at signup. Per point stays a casual and group-bet mechanism, where the table is four people who can do the arithmetic in the cart.</p>
+<h3>No floor, no validation of the table</h3>
+<p>Settled: <b>the TD sets the points as he sees fit.</b> Negatives, a 10 for an albatross, zero for par &mdash; all valid. The screen does not impose a floor or argue with an unusual table; it reports what the table implies and gets out of the way.</p>
+<h3>The cap and the zero</h3>
+<p>Standard scores <b>double bogey or worse = 0</b>, which already puts a floor under a blow-up hole &mdash; so the net double-bogey max changes nothing on a standard table and is not mentioned. On a table with <b>negatives</b>, it does bite, and the note on screen says so.</p>
+<h3>Save is not grey and silent</h3>
+<p>Live disables <b>Save Configuration</b> with no reason. Here it stays live, and if a field is empty the button names the row that is missing.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether presets should be club-savable. Three built-ins cover the common cases; a club running its own scale re-enters it per tournament today.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>8:56</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Stableford Setup</span></div>
+<div class="body">
+<div class="scope"><span>Applies to</span><b>Duddy Cup &mdash; both rounds</b></div>
+
+<div class="card">
+<h4>Points table</h4>
+<p class="d">Points awarded per hole by score vs par. Negatives allowed.</p>
+<div class="pre" id="pre">
+<button class="on" data-p="std">Standard</button>
+<button data-p="pro">Modified (pro)</button>
+<button data-p="bird">Reward birdies</button>
+<button data-p="custom" id="cust" style="display:none">Custom</button>
+</div>
+<div id="rows"></div>
+<div class="note" id="capNote" style="display:none"><span>&#9888;</span><span>This table can score <b>below zero</b>, so the <b>net double-bogey max</b> now matters &mdash; a hole is capped at par + 2 plus strokes before its points are read.</span></div>
+</div>
+
+<div class="card">
+<h4>How the money settles</h4>
+<p class="d" style="margin:0">Paid places, set on <b style="color:var(--deepPine)">Payout</b>. Per point is a casual game &mdash; a tournament prize has to be knowable at signup.</p>
+</div>
+
+</div>
+<div class="bottom"><button id="save">Save configuration</button><span class="why" id="why"></span></div>
+</div>
+<script>
+var LBL=['Albatross or better','Eagle','Birdie','Par','Bogey','Double bogey or worse'],
+    P={std:[5,4,3,2,1,0],pro:[8,5,2,0,-1,-3],bird:[6,5,4,2,1,0]},
+    vals=P.std.slice();
+function draw(){
+  document.getElementById('rows').innerHTML=LBL.map(function(l,i){
+    return '<div class="pr"><span class="k">'+l+'</span><input inputmode="numeric" data-i="'+i+'" value="'+vals[i]+'"></div>';
+  }).join('');
+  document.getElementById('capNote').style.display=vals.some(function(v){return v<0})?'':'none';
+  check();
+}
+function check(){
+  var bad=vals.map(function(v,i){return v===''||isNaN(v)?LBL[i]:null}).filter(Boolean);
+  document.getElementById('why').textContent=bad.length?'Needs a value for '+bad[0]:'';
+  document.getElementById('save').textContent=bad.length?'Finish the table':'Save configuration';
+}
+document.getElementById('pre').addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b||b.dataset.p==='custom')return;
+  document.querySelectorAll('#pre button').forEach(function(x){x.classList.remove('on')});
+  b.classList.add('on');document.getElementById('cust').style.display='none';
+  vals=P[b.dataset.p].slice();draw();
+});
+document.addEventListener('input',function(e){
+  var f=e.target.closest('#rows input');if(!f)return;
+  var v=f.value.trim();vals[+f.dataset.i]=v===''||v==='-'?'':parseInt(v,10);
+  document.querySelectorAll('#pre button').forEach(function(x){x.classList.remove('on')});
+  var c=document.getElementById('cust');c.style.display='';c.classList.add('on');
+  document.getElementById('capNote').style.display=vals.some(function(x){return x<0})?'':'none';
+  check();
+});
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!-- @dsCard group="Individual play" name="Play surfaces — diagnosis" subtitle="Leaderboard tabs and score entry read against ten live captures — naming, ranking, money, and the halved-match conflict" viewport="1180x2400" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Individual play surfaces</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216;--bad:#C62828}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:34px 26px 60px;display:flex;justify-content:center}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.doc{width:1100px;max-width:100%}
+h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:30px;margin:0 0 6px}
+.lede{color:var(--muted);font-size:14.5px;line-height:1.6;max-width:780px;margin:0 0 26px}
+.lede b{color:var(--deepPine)}
+h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px;margin:30px 0 12px}
+.tbl{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;overflow:hidden}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);background:#F1F5F2;padding:9px 13px;border-bottom:1px solid var(--cardBorder)}
+td{padding:10px 13px;vertical-align:top;border-bottom:1px solid var(--cardBorder);line-height:1.5;color:var(--muted)}
+tr:last-child td{border-bottom:none}
+td.n{width:186px;font-weight:600;color:var(--deepPine)}
+td b{color:var(--deepPine);font-weight:600}
+.k{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border-radius:5px;padding:2px 6px;white-space:nowrap}
+.k.keep{color:var(--pine);background:#E4F2EA}
+.k.edit{color:var(--warn);background:#FDF3E7}
+.k.new{color:#08301F;background:var(--brightMint)}
+.f{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.fc{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:13px 15px}
+.fc.wide{grid-column:1/-1}
+.fc h3{font-size:13.5px;margin:0 0 5px;font-family:"Schibsted Grotesk",sans-serif;font-weight:700}
+.fc p{margin:0 0 7px;font-size:12.5px;line-height:1.55;color:var(--muted)}
+.fc p:last-child{margin-bottom:0}
+.fc p b{color:var(--deepPine)}
+.fc .tag{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--bad);background:rgba(198,40,40,.09);border-radius:5px;padding:2px 6px;margin-left:6px;white-space:nowrap}
+.now{color:var(--muted);font-size:12px;border-left:2px solid var(--cardBorder);padding-left:9px;margin:0 0 7px;line-height:1.5}
+.now b{color:var(--deepPine)}
+ul{margin:0 0 12px;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.6}
+li{margin-bottom:5px}
+li b{color:var(--deepPine)}
+.foot{color:var(--muted);font-size:12.5px;line-height:1.6;margin-top:22px;padding-top:14px;border-top:1px solid var(--cardBorder)}
+.quote{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;color:var(--deepPine)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="doc">
+<h1>Individual play surfaces &mdash; leaderboards and score entry</h1>
+<p class="lede">Read against ten captures of the live build: four leaderboard tabs, three score-entry states, the ball-rotation sheet, and the bracket at two points in a round. <b>Score entry is in better shape than the leaderboards.</b> It carries course handicap per golfer, stroke dots, the ball badge on whoever holds it, and an inline bracket summary that updates hole to hole &mdash; all of it earned in the Cup and casual work. The leaderboards are where the same round is described four times, in four vocabularies, with money that looks settled on hole&nbsp;1. And one board contradicts a rule we decided this week.</p>
+
+<h2>What each capture shows</h2>
+<div class="tbl">
+<table>
+<tr><th>Surface</th><th>What ships today</th><th>What it becomes</th></tr>
+<tr><td class="n">Tournament board <span class="k edit">Edit</span></td><td>Tabs <b>Duddy Cup &middot; Irish Rumble &middot; Red Ball &middot; Mini Singles Bracket &middot; Stroke&hellip;</b>. Chip strip <b>Mode: Net &middot; Entry: $10 &middot; 1/2 rounds</b>. Columns Player / Thru / R1 Net / R2 Net / Net / Prize, expandable to a card fragment. Cap explained in the footer.</td><td>Chip strip and columns kept. Tabs renamed to the games as configured, the fifth tab named <b>Day bet &middot; Round 1</b>, prize money marked projected.</td></tr>
+<tr><td class="n">Irish Rumble <span class="k edit">Edit</span></td><td>Chips <b>Full Net &middot; Classic &middot; Entry $10 &middot; Winner takes all</b>. Two group cards, both ranked <b>1</b>, both <b>E</b>, both paying <b>$10 each</b> &mdash; one thru 11, one thru 1.</td><td>Carry the segment line the setup screen sets. One rank, or a stated tie rule. Payout reads <b>1st &mdash; foursome, $80 splits to $20.00 each</b>.</td></tr>
+<tr><td class="n">Red Ball <span class="k edit">Edit</span></td><td>Chips <b>Red Ball &middot; Entry $15 &middot; Winner takes all</b>. Groups ranked by score, <b>+1</b> above <b>+2</b>, each showing <b>Alive Thru</b>.</td><td>Rank by the ball, not the score. Name the carrier. Score is the tiebreak among groups still alive at 18.</td></tr>
+<tr><td class="n">Bracket board <span class="k edit">Edit</span></td><td>Group card headed <b>Strokes-Off-Low</b>, Front 9 semis with tinted winning cells and stroke dots, <b>Complete / Live / Pending</b> pills, Back 9 <b>Final &amp; 3rd Place</b>, empty hole boxes 10&ndash;18.</td><td>Structure kept wholesale &mdash; it is the best board of the four. Strokes-Off-Low struck, sudden death replaced.</td></tr>
+<tr><td class="n">Score entry <span class="k keep">Keep</span></td><td>Hole header with par / yardage / SI, who plays the ball, <b>1 ball counts for Irish Rumble</b>, the lost-ball control, four golfer rows with <b>CH</b> chips and stroke dots, inline bracket summary, hole pager.</td><td>Two fixes only: one control for the lost ball, and the next-hole button says why it is disabled.</td></tr>
+<tr><td class="n">Ball rotation <span class="k keep">Keep</span></td><td>Bottom sheet, drag to order, <b>the rotation repeats across all 18 holes</b>, Confirm Rotation.</td><td>Kept as is. Label reads <b>HCP</b> here and <b>CH</b> two rows up &mdash; pick one.</td></tr>
+</table>
+</div>
+
+<h2>Findings</h2>
+<div class="f">
+
+<div class="fc wide">
+<h3>1. Sudden death contradicts the halved-match rule<span class="tag">Conflict</span></h3>
+<p class="now"><b>Today:</b> Semi 2 reads <span class="quote">All Square &mdash; sudden death thru 10</span> with an <b>SD</b> badge on hole 10, while the Final below it says <b>Pending &mdash; players set once both semis finish</b> and draws its empty boxes starting at <b>hole 10</b>.</p>
+<p>Two matches are being played on the same hole. Sudden death borrows hole 10 from the final, so the longer a semi stays level the further the final falls behind &mdash; and a semi that runs to 12 leaves the final six holes to settle a nine-hole match.</p>
+<p><b>Decided instead:</b> a halved match <b>plays on</b>, and is back-calculated against the finals pairing reading back from hole 10. The semi and the final occupy the same holes by design rather than by collision. The board needs new language for it &mdash; <b>All square &mdash; playing on, settled against the final from hole 10</b> &mdash; and the SD badge goes.</p>
+<p><b>And nobody waits.</b> The pair whose semi resolved tee off on 10 on schedule, against an opponent the bracket cannot name yet. A golfer who beats both of the two still level is <b>1 up on whoever emerges</b> &mdash; so the board has to hold a real, scored match against an unnamed opponent.</p>
+<p><b>The label is <i>1 UP vs. TBD</i></b>, not <i>Pending &mdash; waiting for scores</i>, and there is no in-between state to design: the pair still level <b>can only halve</b> the hole, because the first hole they do not halve ends the semi and names the opponent. Their score is one number, so the waiter&rsquo;s result is settled as it is entered. The empty-boxes state the live build draws for the final is wrong from the first tee shot on 10.</p>
+</div>
+
+<div class="fc">
+<h3>2. One game, three names<span class="tag">Naming</span></h3>
+<p class="now"><b>Today:</b> setup says <b>Match Play Foursome</b>, the leaderboard tab says <b>Mini Singles Bracket</b>, and the score-entry card says <b>Mini Singles Bracket</b>.</p>
+<p>A captain who configured one game cannot find it on the board. Pick the name at setup and let every surface read it back &mdash; the tab, the card, the payout row, the chat notification.</p>
+<p class="now"><b>Decided:</b> <b>Mini Singles Bracket</b> everywhere. Play already says it on two surfaces; setup is the one that changes. <a href="individual-matchplay-setup.html">The setup screen</a> is redrawn.</p>
+</div>
+
+<div class="fc">
+<h3>3. Pink Ball or Red Ball<span class="tag">Naming</span></h3>
+<p class="now"><b>Today:</b> setup calls it Pink Ball; play calls it Red Ball in the tab, the chip, the badge, the lost-ball toggle and the hole header. Five to one.</p>
+<p class="now"><b>Decided:</b> <b>the app never asks the colour.</b> It asks what the group calls the game &mdash; commonly Pink Ball, but Red Ball, Devil Ball, Rainbow Ball and Beer Ball are all real answers from real groups. Free text, <b>16 characters</b> (the iPhone 13 mini cap the Cup work derived), and that string is the game&rsquo;s name on the tab, the carrier badge, the lost-ball control and the chat line. Drawn at <a href="individual-ball-game-setup.html">the ball game setup</a>.</p>
+</div>
+
+<div class="fc">
+<h3>4. Strokes-Off-Low is legitimate here<span class="tag" style="color:var(--pine);background:#E4F2EA">Corrected</span></h3>
+<p class="now"><b>Today:</b> the bracket board heads Group 1 with a flag icon and <b>Strokes-Off-Low</b>.</p>
+<p class="now"><b>Corrected:</b> this is not the wizard defect repeating. <b>SO Low makes sense in match play</b> &mdash; a match between two golfers has a low man to take strokes off &mdash; so it is a <b>valid option on the bracket, though not required</b>. What was wrong is offering it on the tournament&rsquo;s field-wide handicap step, where there is no low man to anchor to.</p>
+<p>So the bracket setup asks it, defaulting to the tournament&rsquo;s own setting, and the board keeps this line &mdash; it is telling a golfer how his match is being scored.</p>
+</div>
+
+<div class="fc">
+<h3>5. Thru is not comparable, but rows are ranked as if it were<span class="tag">Ranking</span></h3>
+<p class="now"><b>Today:</b> on the tournament board Alex Brown sits first at <b>E thru 1</b>, above Anna Maiolini at <b>+1 thru 11</b>. Irish Rumble ranks both groups <b>1</b> at <b>E</b>, thru 11 and thru 1. Red Ball puts <b>+1 alive thru 1</b> above <b>+2 alive thru 11</b>.</p>
+<p>Every board has it, because every board sorts on a number that means different things in each row. A golfer level after one hole has not beaten a golfer one over after eleven. The fix is not a new sort: it is to <b>say what the number is</b>. Score to par with the holes it covers, and a quiet marker on rows well behind the field &mdash; the same honesty the day bet needs for its provisional rows.</p>
+</div>
+
+<div class="fc">
+<h3>6. Money looks settled on hole 1<span class="tag">Money</span></h3>
+<p class="now"><b>Today:</b> <b>$48</b> against a golfer thru 1, <b>$8</b> against four tied golfers, <b>$30 each</b> to a group whose ball is alive through one hole, <b>$10 each</b> in a game whose chip says Winner takes all.</p>
+<p>These are projections drawn as receipts. One treatment across all four boards: projected money in the muted weight with a single line under the table &mdash; <b>projected &mdash; pays on the final standing</b> &mdash; and full weight only once the round is closed.</p>
+</div>
+
+<div class="fc">
+<h3>7. Irish Rumble pays everyone their entry back<span class="tag">Money</span></h3>
+<p class="now"><b>Today:</b> both groups tied at E, both marked 1st, both paying <b>$10 each</b> &mdash; which is the $80 pool handed back to the eight golfers who put it in, under a chip reading <b>Winner takes all</b>.</p>
+<p class="now"><b>Decided:</b> <b>a tie splits the place</b>, and no countback. There are plenty of bets running on a given day, so a tie can be no action &mdash; arbitrary tiebreakers decide real money on a rule nobody agreed to. Two foursomes tied for 1st split 1st; the board says <b>T1 &mdash; splits two ways</b> and shows each golfer&rsquo;s share.</p>
+<p>What was wrong in the capture is not the split itself but that it was <b>silent and unlabelled</b>: two rows both reading 1, both paying $10 each, under a chip saying Winner takes all. The chip has to read the real rule, and a split that returns every entry should say so in words.</p>
+</div>
+
+<div class="fc">
+<h3>8. Irish Rumble never says how many balls count<span class="tag">Incomplete</span></h3>
+<p class="now"><b>Today:</b> the chip strip reads <b>Full Net &middot; Classic</b>. Setup offers Fixed, Shuffle and Custom; <i>Classic</i> is none of them.</p>
+<p>The one thing a golfer needs on this board is how many of his group&rsquo;s nets count on the hole he is standing on. Carry the setup screen&rsquo;s segment line: <b>Holes 1&ndash;18 &middot; best 2 nets per group</b>, or the three-band version under Shuffle.</p>
+</div>
+
+<div class="fc">
+<h3>8a. Levelled groups need their donor strip<span class="tag" style="color:var(--pine);background:#E4F2EA">Built</span></h3>
+<p class="now"><b>Already implemented:</b> a group of three borrows a <b>4th</b> from the field &mdash; automatic, only when another group has four, with one fixed rotation so the borrowed card is spread across every other golfer rather than shadowing one.</p>
+<p>It carries into the boards: the Rumble leaderboard opens a <b>collapsible donor-by-hole strip</b> for a levelled group, and score entry shows a borrowed-ball banner. Two things that matter in the copy &mdash; it is <b>Borrowed 4th</b> everywhere, never <i>phantom</i>, and a group whose donor has not posted yet shows a <b>provisional</b> total on three balls rather than a wrong one on four.</p>
+</div>
+
+<div class="fc">
+<h3>9. Red Ball is ranked by the wrong thing<span class="tag">Ranking</span></h3>
+<p class="now"><b>Today:</b> groups are ordered by score to par, with <b>Alive Thru</b> as a subtitle.</p>
+<p>The game is <b>last to lose the ball wins</b> &mdash; so ball status is the ranking, not a caption. A group alive through 11 beats a group alive through 1 on nothing yet, but a group that lost it on 3 is beaten by everyone. Order: still alive, then lost latest, and low net only among groups that finish 18 with the ball.</p>
+</div>
+
+<div class="fc">
+<h3>10. The board never says who has the ball<span class="tag">Incomplete</span></h3>
+<p class="now"><b>Today:</b> score entry shows the Red Ball badge on the carrier and the rotation sheet sets the order; the leaderboard shows neither.</p>
+<p>Anyone not in that group is watching a number with no story. The group row carries the carrier and the hole: <b>Anna Maiolini &middot; hole 12</b>.</p>
+</div>
+
+<div class="fc">
+<h3>11. The cap footnote argues with itself<span class="tag">Copy</span></h3>
+<p class="now"><b>Today:</b> <span class="quote">each hole&rsquo;s net is limited to par + 2 &mdash; so it counts for at most par + 2 plus any handicap strokes you get on that hole.</span></p>
+<p>The sentence caps at one number and then adds to it. One line, once: <b>No hole counts for more than net double bogey &mdash; par + 2, plus any strokes you get on that hole.</b> And it belongs on every net board, not only the first tab.</p>
+</div>
+
+<div class="fc">
+<h3>12. Two controls for one act<span class="tag">Duplication</span></h3>
+<p class="now"><b>Today:</b> <b>Lost the Red Ball on this hole</b> carries a radio circle on the left and a switch on the right. Either could be the control; neither is labelled as the one that counts.</p>
+<p>One switch. And because it ends the group&rsquo;s game, it names what it does: <b>Ends Red Ball for this group &mdash; last group holding it wins.</b></p>
+</div>
+
+<div class="fc">
+<h3>13. The next hole is grey and silent<span class="tag">Blocker</span></h3>
+<p class="now"><b>Today:</b> <b>Hole 13 &rsaquo;</b> is dimmed with no reason given, on a screen where three of four scores are in.</p>
+<p>The Cup rule applies here too: nothing is disabled without saying why. <b>Two scores to go</b> under the button, or let it advance and mark the hole incomplete.</p>
+</div>
+
+<div class="fc">
+<h3>14. The expanded row shows one hole and an empty Out<span class="tag">Incomplete</span></h3>
+<p class="now"><b>Today:</b> tapping the leader opens <b>R1</b> with a two-column grid &mdash; hole 1 and an Out column with a 4, a 1, and a 5 in it.</p>
+<p>A scorecard with one hole in it should say so rather than drawing the frame of a card that does not exist yet. Show the holes played and let the card grow, or collapse to a line: <b>thru 1 &middot; 5 (net 4)</b>.</p>
+</div>
+
+<div class="fc">
+<h3>15a. Match summaries truncate names mid-word<span class="tag">Copy</span></h3>
+<p class="now"><b>Today:</b> the bracket summary at score entry reads <b>Alan Petersen vs Ann&hellip;</b>, <b>Aldo Detomasi vs Alex Gun&hellip;</b>, <b>Semi 1 Winner vs Semi 2 &hellip;</b> &mdash; every row clipped, in a field where six of eight first names start with A.</p>
+<p><b>Use the short name in the match summary:</b> surname alone &mdash; <b>Detomasi vs Gunst</b>, <b>Petersen vs Maiolini</b> &mdash; which fits, disambiguates better than a truncated first name, and reads the way golfers say it. Full names stay on the bracket board, where there is room. Collisions on surname fall back to first initial.</p>
+</div>
+
+<div class="fc">
+<h3>15. Handicap has two labels<span class="tag">Naming</span></h3>
+<p class="now"><b>Today:</b> golfer rows show <b>CH 19</b>; the rotation sheet two taps away shows <b>HCP 19</b>; the tournament board shows a bare <b>(12)</b> after the name.</p>
+<p>Three labels for one number in one round. Course handicap is what all three are showing, so <b>CH</b> everywhere, and the bare parenthesis on the board gets the same prefix.</p>
+</div>
+
+<div class="fc">
+<h3>16. The tab bar mixes a tournament, its games, and a cut-off word<span class="tag">Naming</span></h3>
+<p class="now"><b>Today:</b> <b>Duddy Cup &middot; Irish Rumble &middot; Red Ball &middot; Mini Singles Bracket &middot; Stroke&hellip;</b>, scrolling off the right edge with no affordance.</p>
+<p>The first tab is the championship, the last is the day bet, and neither says so. Name them for what they pay: <b>Championship</b>, then each side game, then <b>Day bet &middot; Round 1</b>. Five tabs will not fit; the strip needs an edge fade or the overflow moves into the <b>&#8942;</b> menu.</p>
+</div>
+
+<div class="fc wide">
+<h3>16a. Foursome side bets are the foursome&rsquo;s business, not the TD&rsquo;s<span class="tag">Scope</span></h3>
+<p class="now"><b>The rule:</b> the TD sets the <b>tournament-scope</b> games &mdash; Irish Rumble, the ball game, Mini Singles Bracket, the day bet. <b>In-foursome side games are set by the foursome</b>, exactly as they are in a casual round: skins, Nassau, rabbit, survivor, sixes. The TD never sees them and never configures them.</p>
+<p>What changes in a tournament is only where the scores come from: a foursome side bet <b>leverages the tournament&rsquo;s score entry</b> rather than opening its own. So the specialised entry surfaces those games have casually &mdash; the rabbit card, the survivor board &mdash; <b>do not appear</b>. The foursome reads its game from the <b>leaderboard</b> instead.</p>
+<p><b>The exception is spots and junk.</b> Greenies, sandies, poleys and the rest are facts about a hole that no gross score implies, so nothing downstream can derive them. They have to be captured <b>on the tournament score-entry screen</b>, on the hole they happen &mdash; which means score entry gains a junk control whenever a group in the field has a junk game running.</p>
+</div>
+
+<div class="fc wide">
+<h3>17. Keep: everything the Cup and casual work already fixed<span class="tag" style="color:var(--pine);background:#E4F2EA">Working</span></h3>
+<p><b>Stroke dots on the scorecard</b> and <b>tinted winning cells in the match scorecards</b> are the conventions the Cup leaderboard landed on, arriving here intact &mdash; the tint reads net, so it cannot disagree with the running result.</p>
+<p><b>The inline bracket summary at score entry</b> is the strongest pattern in the set: four matches, their status, and their current result, on the screen where the golfer already is. It updates hole to hole without a tap. Reuse it for Red Ball and Irish Rumble &mdash; a group standing on 12 should see where its foursome sits without leaving the card.</p>
+<p><b>The chip strip</b> (Mode / Entry / rounds), the <b>Complete / Live / Pending</b> pills, the <b>hole header</b> with par, yardage, SI and who carries the ball, and the <b>ball rotation sheet</b> all ship as they are.</p>
+</div>
+
+</div>
+
+<p class="foot">Sixteen fixes, and only two of them are structural &mdash; the halved-match rule and the Red Ball ranking. The rest is naming and honesty: one name per game, one label per number, and money that admits it is a projection until the last card is in. Setup screens for these games are drawn at <a href="individual-matchplay-setup.html">Match Play Foursome</a> and <a href="individual-irish-rumble-setup.html">Irish Rumble</a>; the create flow is at <a href="individual-create-flow-map.html">the wizard diagnosis</a>.</p>
+</div>
+</body>
+</html>

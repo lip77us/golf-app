@@ -1,0 +1,272 @@
+<!-- @dsCard group="Individual play" name="Settlement" subtitle="IndividualSettlement — one net number per golfer, every game itemised, pools that must balance before anything is marked paid" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Settlement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216;--count:#DCF2E4}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:92px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:844px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:23px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .ic{margin-left:auto;font-size:13px;color:var(--muted)}
+.tabs{display:flex;gap:7px;padding:0 14px 9px;overflow-x:auto;scrollbar-width:none;position:relative}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;border:1.5px solid var(--cardBorder);background:#fff;border-radius:999px;padding:7px 13px;font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.tabs button.on{border-color:var(--pine);background:#E4F2EA;color:var(--pine)}
+.body{padding:0 12px 26px;overflow-y:auto;height:735px}
+.chips{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);padding:2px 2px 10px}
+.chips b{color:var(--deepPine);font-weight:700}
+.chips .r{margin-left:auto;font-weight:600}
+.hd{display:flex;align-items:center;gap:6px;padding:0 9px 6px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.hd .g{flex:1}
+.hd i{font-style:normal;flex:none;text-align:right}
+.hd .thru{width:34px}
+.hd .tot{width:38px}
+.hd .pz{width:40px}
+.rows{display:flex;flex-direction:column;gap:7px}
+.rw{background:#fff;border:1px solid var(--cardBorder);border-radius:13px;overflow:hidden}
+.rw.lead{border-color:var(--pine);box-shadow:0 2px 10px rgba(15,110,86,.1)}
+.rwh{display:flex;align-items:center;gap:6px;padding:11px 9px;cursor:pointer}
+.rwh .pos{flex:none;width:20px;font-size:12.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.rw.lead .rwh .pos{color:var(--pine)}
+.rwh .g{flex:1;min-width:0}
+.rwh .g b{display:flex;align-items:baseline;gap:6px;font-size:14.5px;font-weight:600;line-height:1.2}
+.rwh .g b u{text-decoration:none;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+.rwh .g b u.pv{color:var(--warn)}
+.rwh .g small{display:block;font-size:10.5px;color:var(--muted);margin-top:2px;line-height:1.35}
+.rwh i{font-style:normal;flex:none;text-align:right;font-variant-numeric:tabular-nums;font-size:13.5px;font-weight:600}
+.rwh .thru{width:34px;font-size:12px;font-weight:600;color:var(--muted)}
+.rwh .thru.pv{color:var(--warn);font-weight:700}
+.rw.prov{border-color:#E8D6BC}
+.rw.prov.lead{border-color:#D8B98A}
+.rw.prov .rwh .tot{color:var(--warn)}
+.rwh .tot{width:38px}
+.rwh .pz{width:40px;font-size:12.5px;font-style:italic;font-weight:600;color:var(--muted)}
+.rwh .cv{flex:none;width:12px;color:#B6C4BB;font-size:9px}
+.det{border-top:1px solid #EDF2EE;padding:10px 9px 12px;background:#FBFDFC}
+.det h5{font-family:"Schibsted Grotesk",sans-serif;font-size:11.5px;font-weight:700;margin:0 0 8px;display:flex;align-items:baseline;gap:7px}
+.det h5 em{margin-left:auto;font-style:normal;font-size:10.5px;font-weight:600;color:var(--muted)}
+.sc{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:9px}
+.sc td,.sc th{padding:0;text-align:center;font-size:10.5px;font-variant-numeric:tabular-nums;height:23px;font-weight:600}
+.sc th{font-weight:700;color:#3C6B55;font-size:10px;letter-spacing:.2px;background:#D7E7DC}
+.sc th:first-child{border-radius:5px 0 0 5px;background:#D7E7DC}
+.sc th:last-child{border-radius:0 5px 5px 0}
+.sc tr.si td{font-size:9.5px;color:var(--muted);font-weight:600;background:#F1F6F2}
+.sc tr.si .lb{color:var(--muted);background:#F1F6F2}
+.sc .lb{width:44px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:3px}
+.sc .ot{width:26px;font-weight:700;border-left:1px solid #E2EAE4}
+.sc tr.par td{color:var(--muted);font-weight:600}
+.sc tr.par .lb{color:var(--muted)}
+.sc td.c{background:var(--count);border-radius:5px;font-weight:700;color:#0B5B44}
+.sc td.cap{box-shadow:inset 0 0 0 1.5px #E8C89B;border-radius:5px}
+.sc td.bor{font-style:italic;color:#4E6BA8}
+.sc td.e{color:#C3CFC6}
+.sc td span{position:relative;display:inline-block;padding-top:4px}
+.sc td span em{position:absolute;top:-1px;left:0;right:0;display:flex;justify-content:center;gap:1.5px}
+.sc td span em i{width:2.5px;height:2.5px;border-radius:50%;background:var(--pine);display:block}
+.sc tr.tot td{font-weight:700;border-top:1px solid #E2EAE4;color:var(--deepPine)}
+.sc tr.tot td.un{color:var(--pine)}
+.sc tr.tot td.ov{color:#8A5216}
+.warn{background:#FDF3E7;border:1px solid #E8D6BC;border-radius:11px;padding:9px 11px;font-size:11.5px;line-height:1.5;color:#5C4326;margin:0 0 10px}
+.warn b{color:#5C4326}
+.rwh i.pos{color:var(--pine);font-weight:700}
+.rwh i.tot{width:62px;line-height:1.2}
+.rwh i.tot u{display:block;text-decoration:none;font-size:9px;font-weight:600;color:var(--muted);margin-top:1px}
+.hd i.tot{width:62px}
+.hd i.pz{width:56px}
+.rwh i.pz{width:56px;font-style:normal;font-weight:700}
+.rwh i.pz.ok{color:var(--pine)}
+.rwh i.pz.off{color:#9B2C2C}
+.ln{display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:12px}
+.ln+.ln{border-top:1px solid #F2F6F3}
+.ln .d{flex:1;min-width:0;color:var(--muted)}
+.ln .v{flex:none;font-weight:600;font-variant-numeric:tabular-nums;color:var(--muted)}
+.ln .v.pos{color:var(--pine);font-weight:700}
+.ln.sum{border-top:1.5px solid #DCE5DD;margin-top:4px;padding-top:8px}
+.ln.sum .d{color:var(--deepPine);font-weight:700}
+.ln.sum .v{font-size:14px;font-weight:700;color:var(--deepPine)}
+.cta{position:absolute;left:0;right:0;bottom:0;padding:11px 14px 20px;background:linear-gradient(transparent,var(--surface) 26%)}
+.cta button{width:100%;height:52px;border:none;border-radius:15px;background:var(--pine);color:#fff;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif}
+.cta button.off{background:#D6C3A6;color:#5C4326}
+.body{height:690px}
+.sc td.dead{color:var(--muted)}
+.rwh .thru{width:40px}
+
+.rwh .thru.al{color:var(--pine);font-weight:700}
+.rwh .thru.gone{color:var(--muted)}
+.rwh .tot.mut{color:var(--muted);font-weight:500}
+.rw.out{background:#FCFDFC}
+.hd .thru{width:40px}
+.sc tr.tot td.un{color:var(--pine)}
+.sc tr.tot td.ov{color:#8A5216}
+.sc tr.cnt td{font-size:9px;color:var(--pine);font-weight:700}
+.key{display:flex;flex-wrap:wrap;gap:9px;font-size:10px;color:var(--muted);margin-bottom:9px}
+.key span{display:inline-flex;align-items:center;gap:4px}
+.key s{text-decoration:none;width:11px;height:11px;border-radius:3px;display:block}
+.don{border-top:1px solid #EDF2EE;padding-top:9px}
+.don b{display:block;font-size:10.5px;font-weight:700;margin-bottom:5px;color:#4E6BA8}
+.don p{margin:0;font-size:10.5px;line-height:1.5;color:var(--muted)}
+.foot{font-size:11px;color:var(--muted);line-height:1.5;margin:11px 2px 0}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Settlement</h1>
+<p>Every money decision in this spec lands here. Seven pots over two days, entries taken at signup and prizes that only resolved when the last card came in &mdash; and what a golfer wants is <b>one number</b>: does he pay or does he collect.</p>
+<h3>One net number, itemised underneath</h3>
+<p>The row is the answer; the card is the proof. Open it and every line that produced the number is there &mdash; each entry as a debit, each prize as a credit, each with the game that caused it.</p>
+<div class="own"><table>
+<tr><td>Collects</td><td>Green, listed first. Sorted by amount, because the man owed the most wants to see it first.</td></tr>
+<tr><td>Pays</td><td>Muted. Everybody who entered everything and won none is here, and the total is always exactly what he staked.</td></tr>
+<tr><td>Two places</td><td>The championship pays <b>1st and 2nd</b> here, which is the TD&rsquo;s call rather than a limit. The only rule is that the <b>last paying place clears the day bet&rsquo;s 1st</b> &mdash; $100 in this tournament &mdash; so the 36-hole DQ never costs a man money. A third place at $100 would also pass.</td></tr>
+<tr><td>Group prizes</td><td>Shown as the golfer&rsquo;s share, with the group named &mdash; <i>Irish Rumble, Group 2 (3 ways)</i> &mdash; because a share is the only part he can check.</td></tr>
+</table></div>
+<h3>Two games run twice</h3>
+<p>Irish Rumble and the ball game are <b>re-run every round</b>, so each appears here as <b>two pots</b> &mdash; R1 and R2, entered separately, won separately. A group that wins the ball on both days collects twice, and Group 1 does exactly that.</p>
+<h3>Not everybody staked the same</h3>
+<p>Six of the sixteen are out of the day bet, for two different reasons, and <b>neither pays into it</b>. The four Mini Singles finalists are playing a match rather than posting a stroke card; the two championship money winners are disqualified from it by winning. All six stake <b>$100</b> and list six entries; the ten who can win it stake <b>$120</b>.</p>
+<h3>Foursome side bets are not here, and that is deliberate</h3>
+<p>What settles on this screen is the <b>tournament-scope</b> games only &mdash; the five the TD set. <b>Foursome side bets</b> &mdash; skins, Nassau, spots, rabbit &mdash; are <b>settled inside the foursome</b> and never appear in these totals.</p>
+<p>The reason is ownership: the TD did not set them, does not know the stakes, and is not collecting for them. Folding them in would make him responsible for money he never handled, and would make a golfer&rsquo;s net number depend on a bet three of his playing partners agreed to on the first tee.</p>
+<h3>Nothing is paid until the pools balance</h3>
+<p>The <b>By game</b> view is the TD&rsquo;s check, not the golfer&rsquo;s: entries in, prizes out, and the difference. A game that does not balance blocks the whole settlement and says which one &mdash; the mistake is always in a payout table, and it is always found faster by naming the game than by naming a dollar figure.</p>
+<p>The two carve-outs make this less obvious than it sounds: <b>Mini Singles day 2</b> takes $160 out of the championship pool rather than charging an entry, so the championship shows $640 in and $640 out with $160 of that leaving for another game&rsquo;s table.</p>
+<h3>The day bet resolves last</h3>
+<p>It cannot settle until the championship does &mdash; the golfers in the 36-hole money are out of it, and that is only known at the end. So the day bet line stays <b>provisional</b> and the Settle button stays off until every round is closed.</p>
+<h3>Sum zero, or it is wrong</h3>
+<p>The footer is the one number that proves the whole screen: <b>collected minus paid must be zero</b>. It is a closed system &mdash; the golfers fund it entirely &mdash; so any other answer is an arithmetic bug, not a rounding preference.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether the TD can mark individual golfers settled as they hand over cash, or only the whole tournament at once. Drawn as all-at-once.</li>
+<li>Whether this exports &mdash; a text summary to paste into the group chat is the obvious ask.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>6:07</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Settle up</span><span class="ic">&#9679;&#9679;&#9679;</span></div>
+<div class="tabs" id="views"><button class="on" data-v="golfer">By golfer</button><button data-v="game">By game</button></div>
+<div class="body">
+<div class="chips"><span>16 golfers</span><b>7 pots</b><span class="r" id="hint"></span></div>
+<div id="warn"></div>
+<p class="note" style="display:flex;gap:8px;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:11px;padding:9px 11px;font-size:11.5px;line-height:1.5;color:#38564A;margin:0 0 10px"><span>&#9432;</span><span><b style="color:var(--deepPine)">Foursome side bets settle in the group.</b> Skins, Nassau and spots are not included in these totals &mdash; the foursome sorts those out itself.</span></p>
+<div class="hd" id="hd"></div>
+<div class="rows" id="rows"></div>
+<p class="foot" id="foot"></p>
+</div>
+<div class="cta"><button id="settle">Settle</button></div>
+</div>
+<script>
+var GAMES=[
+  {k:'champ',n:'Championship',sub:'36 holes, net',entry:40,n_in:16},
+  {k:'rumble1',n:'Irish Rumble &middot; R1',sub:'run fresh each round',entry:10,n_in:16},
+  {k:'rumble2',n:'Irish Rumble &middot; R2',sub:'run fresh each round',entry:10,n_in:16},
+  {k:'ball1',n:'Beer Ball &middot; R1',sub:'a new ball each round',entry:15,n_in:16},
+  {k:'ball2',n:'Beer Ball &middot; R2',sub:'a new ball each round',entry:15,n_in:16},
+  {k:'mini',n:'Mini Singles &middot; day 1',sub:'side bet, paid in group',entry:10,n_in:16},
+  {k:'day',n:'Day bet &middot; R2',sub:'10 fund it, 3 places',entry:20,n_in:10,prov:1},
+  {k:'mini2',n:'Mini Singles &middot; day 2',sub:'carve-out, no entry',entry:0,n_in:0,carveIn:160}
+];
+var P=[
+  {n:'Ambrose Yau',nd:1,w:[['champ','Championship, 1st',280],['rumble2','Irish Rumble R2, Group 2 (4 ways)',40]]},
+  {n:'Anna Maiolini',nd:1,w:[['champ','Championship, 2nd &mdash; last paying place',200],['ball1','Beer Ball R1, Group 1 (4 ways)',60],['ball2','Beer Ball R2, Group 1 (4 ways)',60],['rumble1','Irish Rumble R1, Group 1 (4 ways)',40],['mini','Mini Singles day 1, Group 1 3rd',6]]},
+  {n:'Aldo Detomasi',nd:1,w:[['ball1','Beer Ball R1, Group 1 (4 ways)',60],['ball2','Beer Ball R2, Group 1 (4 ways)',60],['rumble1','Irish Rumble R1, Group 1 (4 ways)',40],['mini','Mini Singles day 1, Group 1 1st',24]]},
+  {n:'Alan Petersen',w:[['ball1','Beer Ball R1, Group 1 (4 ways)',60],['ball2','Beer Ball R2, Group 1 (4 ways)',60],['rumble1','Irish Rumble R1, Group 1 (4 ways)',40],['mini','Mini Singles day 1, Group 1 2nd',10]]},
+  {n:'Alex Gunst',w:[['ball1','Beer Ball R1, Group 1 (4 ways)',60],['ball2','Beer Ball R2, Group 1 (4 ways)',60],['rumble1','Irish Rumble R1, Group 1 (4 ways)',40]]},
+  {n:'Barry Labass',nd:1,w:[['mini2','Mini Singles day 2, champion',80],['rumble2','Irish Rumble R2, Group 2 (4 ways)',40],['mini','Mini Singles day 1, Group 2 1st',24]]},
+  {n:'Alex Brown',w:[['day','Day bet, 2nd',60],['rumble2','Irish Rumble R2, Group 2 (4 ways)',40],['mini','Mini Singles day 1, Group 2 2nd',10]]},
+  {n:'Anthony Barrueta',w:[['rumble2','Irish Rumble R2, Group 2 (4 ways)',40],['mini','Mini Singles day 1, Group 2 3rd',6]]},
+  {n:'Tom Mercer',nd:1,w:[['mini2','Mini Singles day 2, beaten finalist',48],['mini','Mini Singles day 1, Group 3 1st',24]]},
+  {n:'Dan Reilly',w:[['day','Day bet, 1st',100],['mini','Mini Singles day 1, Group 3 2nd',10]]},
+  {n:'Chris Vaughn',w:[['day','Day bet, 3rd',40],['mini','Mini Singles day 1, Group 3 3rd',6]]},
+  {n:'Paul Lipkin',w:[]},
+  {n:'Ryan Ellis',nd:1,w:[['mini2','Mini Singles day 2, 3rd-place match',32],['mini','Mini Singles day 1, Group 4 1st',24]]},
+  {n:'Don Morgan',w:[['mini','Mini Singles day 1, Group 4 2nd',10]]},
+  {n:'Rich Mayers',w:[['mini','Mini Singles day 1, Group 4 3rd',6]]},
+  {n:'Joe Salas',w:[]}
+];
+function stake(p){return GAMES.reduce(function(s,g){return s+((g.k==='day'&&p.nd)?0:g.entry)},0)}
+var view='golfer',open=null;
+function money(v){return (v<0?'-$':'$')+Math.abs(v).toFixed(2).replace(/\.00$/,'')}
+function net(p){return p.w.reduce(function(s,w){return s+w[2]},0)-stake(p)}
+function card(p){
+  var lines=GAMES.filter(function(g){return g.entry&&!(g.k==='day'&&p.nd)}).map(function(g){
+    return '<div class="ln"><span class="d">'+g.n+' entry</span><span class="v neg">&minus;$'+g.entry+'</span></div>';
+  }).join('')+p.w.map(function(w){
+    return '<div class="ln"><span class="d">'+w[1]+'</span><span class="v pos">+'+money(w[2])+'</span></div>';
+  }).join('');
+  return '<div class="det"><h5>Every line &#9652;<em>'+GAMES.filter(function(g){return g.entry&&!(g.k==='day'&&p.nd)}).length+' entries &middot; '+p.w.length+' prize'+(p.w.length===1?'':'s')+'</em></h5>'+lines+
+    '<div class="ln sum"><span class="d">Net</span><span class="v '+(net(p)>=0?'pos':'')+'">'+money(net(p))+'</span></div></div>';
+}
+function drawGolfer(){
+  document.getElementById('hd').innerHTML='<span style="width:20px"></span><span class="g">Player</span><i class="tot">Net</i><span style="width:12px"></span>';
+  var list=P.slice().sort(function(a,b){return net(b)-net(a)});
+  document.getElementById('rows').innerHTML=list.map(function(p,i){
+    var v=net(p),pos=v>=0;
+    return '<div class="rw'+(open===p.n?' lead':'')+'" data-n="'+p.n+'">'+
+      '<div class="rwh"><span class="pos">'+(i+1)+'</span>'+
+      '<span class="g"><b>'+p.n+'</b><small>'+(p.w.length?p.w.map(function(w){return w[1].split(',')[0]}).join(' &middot; '):'no prizes')+'</small></span>'+
+      '<i class="tot '+(pos?'pos':'mut')+'">'+money(v)+'</i>'+
+      '<span class="cv">'+(open===p.n?'&#9652;':'&#9662;')+'</span></div>'+
+      (open===p.n?card(p):'')+'</div>';
+  }).join('');
+  var col=P.reduce(function(s,p){return s+Math.max(0,net(p))},0),pay=P.reduce(function(s,p){return s+Math.max(0,-net(p))},0);
+  document.getElementById('foot').innerHTML='Collected <b>'+money(col)+'</b> &middot; paid <b>'+money(pay)+'</b> &middot; difference <b>'+money(col-pay)+'</b>. A closed system: the golfers fund all of it, so the difference must be zero.';
+  document.getElementById('hint').textContent='Stake $120, or $100 if out of the day bet';
+}
+function drawGame(){
+  document.getElementById('hd').innerHTML='<span class="g">Game</span><i class="tot">In</i><i class="tot">Out</i><i class="pz">Balance</i>';
+  document.getElementById('rows').innerHTML=GAMES.map(function(g){
+    var inn=g.carveIn||g.entry*g.n_in,
+        out=P.reduce(function(s,p){return s+p.w.filter(function(w){return w[0]===g.k}).reduce(function(t,w){return t+w[2]},0)},0),
+        carve=g.k==='champ'?160:0,bal=inn-out-carve;
+    if(g.k==='mini2'){}
+    return '<div class="rw"><div class="rwh"><span class="g"><b>'+g.n+'</b><small>'+g.sub+(carve?' &middot; $'+carve+' carved out for Mini Singles day 2':'')+'</small></span>'+
+      '<i class="tot">'+money(inn)+(g.carveIn?'<u>from championship</u>':'')+'</i><i class="tot mut">'+money(out+carve)+'</i>'+
+      '<i class="pz '+(bal?'off':'ok')+'">'+(bal?money(bal):'&#10003;')+'</i></div></div>';
+  }).join('');
+  document.getElementById('foot').innerHTML='Every game must balance to zero before anything is marked paid. The championship carries the <b>Mini Singles day 2 carve-out</b> as an outgoing, which is why its own places pay $480 of a $640 pool and the carve-out appears again as its own line with no entry against it.';
+  document.getElementById('hint').textContent='Pools in and out';
+}
+function draw(){
+  document.getElementById('warn').innerHTML='<p class="warn">The <b>day bet</b> is provisional until the championship closes &mdash; golfers in the 36-hole money are not eligible, so its three prizes can still move.</p>';
+  view==='golfer'?drawGolfer():drawGame();
+}
+document.getElementById('views').addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('#views button').forEach(function(x){x.classList.remove('on')});
+  b.classList.add('on');view=b.dataset.v;open=null;draw();
+});
+document.getElementById('rows').addEventListener('click',function(e){
+  var r=e.target.closest('.rwh');if(!r||view!=='golfer')return;
+  var n=r.parentNode.dataset.n;open=open===n?null:n;draw();
+});
+document.getElementById('settle').onclick=function(){
+  this.textContent='Rounds still open — cannot settle';
+  this.classList.add('off');
+  var s=this;setTimeout(function(){s.textContent='Settle';s.classList.remove('off')},1800);
+};
+draw();
+</script>
+</body>
+</html>

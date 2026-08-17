@@ -1,0 +1,192 @@
+<!-- @dsCard group="Individual play" name="Individual flow — diagnosis" subtitle="What the live Individual wizard and the four side-game setup screens do today, what changes, and the proposed step list" viewport="1180x2200" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Individual flow map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216;--bad:#C62828}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:34px 26px 60px;display:flex;justify-content:center}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.doc{width:1100px;max-width:100%}
+h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:30px;margin:0 0 6px}
+.lede{color:var(--muted);font-size:14.5px;line-height:1.6;max-width:760px;margin:0 0 26px}
+.lede b{color:var(--deepPine)}
+h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px;margin:30px 0 12px}
+.tbl{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;overflow:hidden}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);background:#F1F5F2;padding:9px 13px;border-bottom:1px solid var(--cardBorder)}
+td{padding:10px 13px;vertical-align:top;border-bottom:1px solid var(--cardBorder);line-height:1.5;color:var(--muted)}
+tr:last-child td{border-bottom:none}
+td.s{width:64px;font-weight:700;color:var(--deepPine);font-variant-numeric:tabular-nums}
+td.n{width:200px;font-weight:600;color:var(--deepPine)}
+td b{color:var(--deepPine);font-weight:600}
+.k{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border-radius:5px;padding:2px 6px;white-space:nowrap}
+.k.keep{color:var(--pine);background:#E4F2EA}
+.k.edit{color:var(--warn);background:#FDF3E7}
+.k.new{color:#08301F;background:var(--brightMint)}
+.f{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.fc{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;padding:13px 15px}
+.fc h3{font-size:13.5px;margin:0 0 5px;font-family:"Schibsted Grotesk",sans-serif;font-weight:700}
+.fc p{margin:0 0 7px;font-size:12.5px;line-height:1.55;color:var(--muted)}
+.fc p:last-child{margin-bottom:0}
+.fc p b{color:var(--deepPine)}
+.fc .tag{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--bad);background:rgba(198,40,40,.09);border-radius:5px;padding:2px 6px;margin-left:6px;white-space:nowrap}
+.now{color:var(--muted);font-size:12px;border-left:2px solid var(--cardBorder);padding-left:9px;margin:0 0 7px;line-height:1.5}
+.now b{color:var(--deepPine)}
+ul{margin:0 0 12px;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.6}
+li{margin-bottom:5px}
+li b{color:var(--deepPine)}
+.foot{color:var(--muted);font-size:12.5px;line-height:1.6;margin-top:22px;padding-top:14px;border-top:1px solid var(--cardBorder)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="doc">
+<h1>Individual play &mdash; the live flow, and what changes</h1>
+<p class="lede">Read against the eight captures of the shipped build (Duddy Cup, 8 players, 2 rounds, Tilden Park). The good news first: <b>step 1 already asks type before anything else</b> and the derived group count, the named blocker on Select Players and the honest &ldquo;<i>x</i> of 7&rdquo; counter are all working the way the Cup redesign argued for. The problems left are about <b>naming and ownership</b>, not sequence &mdash; four of them are one issue wearing four hats: <b>a game is chosen in one place, named in another, and configured in a third</b>.</p>
+
+<h2>The eight screens</h2>
+<div class="tbl">
+<table>
+<tr><th>Step</th><th>Screen</th><th>What ships today</th><th>What it becomes</th></tr>
+<tr><td class="s">1 of 7</td><td class="n">What kind of event? <span class="k keep">Keep</span></td><td>Type first &mdash; Cup, Individual, Two-man <b>SOON</b>, Four-man <b>SOON</b> &mdash; then Scoring: Stroke play / Stableford.</td><td>Add the consequence strip and the derived step list. Drawn at <a href="individual-wizard-step1.html">New tournament &mdash; Individual</a>.</td></tr>
+<tr><td class="s">2 of 7</td><td class="n">Event details <span class="k keep">Keep</span></td><td>Name (9/40), course &ldquo;playing today&rdquo; with recents to switch to, inherited per round, rounds list with dates.</td><td>Only the header changes: this is a <b>tournament</b>, not a round.</td></tr>
+<tr><td class="s">3 of 7</td><td class="n">Handicap <span class="k edit">Edit</span></td><td>Net / Gross / <b>SO Low</b>, Net % slider at 100%, and a <b>Net Double-Bogey Cap</b> toggle, on.</td><td>Drop SO Low on this type; the cap stops being a toggle. Drawn at <a href="individual-scoring.html">Scoring &mdash; Individual</a>.</td></tr>
+<tr><td class="s">3a</td><td class="n">Stableford points <span class="k keep">Reuse</span></td><td>Nothing in the <b>tournament</b> wizard asks which scale a Stableford event uses &mdash; but <b>casual rounds already have a Stableford setup screen</b> that does.</td><td>Reuse the casual screen as is. Same question, same scale, same storage &mdash; the tournament just points at it. Shown only when Stableford is the method.</td></tr>
+<tr><td class="s">4 of 7</td><td class="n">Select Players <span class="k keep">Keep</span></td><td>Search, All / None, Add Golfer, Halved Golfer search, index per name, &ldquo;0 selected &middot; 0 group(s)&rdquo;, and a stated blocker: select at least 2.</td><td>Nothing. Group count already derives from the selection, and the blocker names itself.</td></tr>
+<tr><td class="s">5 of 7</td><td class="n">Groups &amp; Tees <span class="k edit">Edit</span></td><td>Group chips with sizes, Edit sizes, drag to reorder, a tee dropdown per golfer, G1 / G2 badge per row.</td><td>Normalise the tee labels &mdash; one row reads <b>RED</b> in caps beside <b>White</b>. Tee time is not asked here; confirm whether it belongs.</td></tr>
+<tr><td class="s">6 of 7</td><td class="n">Payouts + Side Games <span class="k edit">Split</span></td><td>Championship entry fee, total pool, paid places stepper, per-place amounts, <b>Payouts balance &check;</b>, Auto-suggest &mdash; then a Side Games section with four chips.</td><td>Two steps. Payouts keeps the balance check; <b>side games move to their own step and carry their own entry fees</b>.</td></tr>
+<tr><td class="s">7 of 7</td><td class="n">Review <span class="k edit">Edit</span></td><td>Summary card, <b>Tournament Games</b>: Stroke Play Championship, <b>Active Games</b>: Irish Rumble &middot; Pink Ball &middot; Mini Singles Bracket &middot; Stroke Play, Foursomes, Create Round.</td><td>Same shape, one name per game, and each side game shows its fee. Create Round becomes Create Tournament.</td></tr>
+<tr><td class="s">after</td><td class="n">Game Setup <span class="k edit">Edit</span></td><td>&ldquo;Round created!&rdquo; then a checklist &mdash; Configure Irish Rumble / Stroke Play / Pink Ball, and Set Up Group 1 / Group 2 for Mini Singles Brackets. A configured game swaps its circle for a green flag. Done.</td><td>A confirmation, not a to-do list: every game already has its fee. Rows show state in words, and Done says what is missing when something is unset.</td></tr>
+</table>
+</div>
+
+<h2>Findings</h2>
+<div class="f">
+<div class="fc">
+<h3>1. The header says round, the screen means tournament<span class="tag">Naming</span></h3>
+<p class="now"><b>Today:</b> every step is titled <b>New Round (<i>x</i> of 7)</b>, while step 2 names an event with two rounds and step 7 ends in <b>Create Round</b> &mdash; which then creates both.</p>
+<p>Call it <b>New Tournament</b>. A round is a thing inside the tournament, created for each date. This is the same fix the Cup flow needed and it costs one string per screen.</p>
+</div>
+<div class="fc">
+<h3>2. SO Low is offered where it has no meaning<span class="tag">Wrong option</span></h3>
+<p class="now"><b>Today:</b> Handicap shows Net / Gross / <b>SO Low</b> for an Individual event.</p>
+<p>Strokes off the low index is a <b>Cup</b> mechanism &mdash; it exists so a match plays off the low golfer. Against a field there is no low golfer to play off. The third option must not render for this type.</p>
+</div>
+<div class="fc">
+<h3>3. The cap is a rule, not a preference<span class="tag">Setting</span></h3>
+<p class="now"><b>Today:</b> a <b>Net Double-Bogey Cap</b> toggle, default on, buried under the allowance slider.</p>
+<p>Always on. State it as a rule with the worked ceiling &mdash; <b>par + 2 + strokes on the hole</b> &mdash; so a golfer who picks up knows what lands on his card. Gross boards ignore it; net boards apply it; Stableford never needs it.</p>
+</div>
+<div class="fc">
+<h3>4. One game, three names<span class="tag">Naming</span></h3>
+<p class="now"><b>Today:</b> the bracket is <b>Mini Singles Bracket</b> on the chips and at review, and <b>Set Up Group 1 / 2</b> on Game Setup. In conversation it is the Match Play Foursome.</p>
+<p>Pick one name and use it on the chip, at review, on Game Setup and on the leaderboard tab. The rules belong on the game once &mdash; <b>a one-day bracket inside each foursome, 9 holes a match, winner takes all</b> &mdash; with the per-group rows carrying only fee and payout.</p>
+</div>
+<div class="fc">
+<h3>5. &ldquo;Stroke Play&rdquo; means two different things on one screen<span class="tag">Ambiguous</span></h3>
+<p class="now"><b>Today:</b> review lists <b>Stroke Play Championship</b> under Tournament Games and <b>Stroke Play</b> under Active Games. Both are true, and nothing distinguishes them.</p>
+<p>The second is the <b>day bet</b>: it inherits the main game and pays each day separately, so a two-round event has two of them. Label it by what it pays &mdash; <b>Day bet &middot; Round 1</b>, <b>Day bet &middot; Round 2</b> &mdash; and state the eligibility rule where the bet is created: <b>anyone who wins 36-hole money is disqualified from it</b>.</p>
+<p class="now"><b>Decided:</b> gross or net follows <b>whatever the tournament&rsquo;s handicap setting is</b> &mdash; a net event disqualifies the net money winners, a gross event the gross ones. The day bet exists to pay a great single round from someone out of contention for the 36-hole win, so the wording on the setup screen reads from the setting rather than naming a scoring type: <b>&ldquo;Winners of 36-hole net money are not eligible.&rdquo;</b></p>
+<p>Eligibility is not knowable until the last round ends, so the Round 2 day-bet board is <b>provisional while it plays</b>: show the 36-hole money leaders in place, in italics, and say once at the top that italic rows drop out if they finish in the 36-hole money. Hiding them mid-round would make the board jump at the end with no explanation.</p>
+</div>
+<div class="fc">
+<h3>6. Money is collected in two places, one round late<span class="tag">Ownership</span></h3>
+<p class="now"><b>Today:</b> step 6 takes the championship fee and payouts. Side games are ticked there but priced afterwards, on a Game Setup checklist that appears once the round exists.</p>
+<p>Entry is a <b>flat fee per side game, taken at signup</b> &mdash; so the fee belongs beside the chip that turns the game on. Then Game Setup has nothing left to collect, the field's entries are known before round one, and no golfer is asked for money after he has teed off.</p>
+</div>
+<div class="fc">
+<h3>7. Game Setup's radios look like choices<span class="tag">Control</span></h3>
+<p class="now"><b>Today:</b> each row carries an empty radio circle and a chevron. The circles are progress, not selection &mdash; but they read as a pick list, and Done is enabled either way.</p>
+<p>Rows show <b>state</b>: a tick and the fee when set, <b>Not set</b> when not. Done states its blocker rather than letting a round start with a picked game that has no money attached.</p>
+</div>
+<div class="fc">
+<h3>8. Step 6's own heading scrolls under the progress bar<span class="tag">Layout</span></h3>
+<p class="now"><b>Today:</b> the capture shows <b>Stroke Play Championship</b> half-clipped behind the progress bar &mdash; the section header scrolls under it, so the fee fields lose their subject.</p>
+<p>Splitting payouts from side games mostly fixes this. Whatever remains long enough to scroll needs its section header pinned, so a money field is never on screen without the pot it belongs to.</p>
+</div>
+</div>
+
+<h2>Side-game setup &mdash; the money model</h2>
+<p class="lede" style="margin-bottom:14px">Seven more captures, one per configure screen. <b>The money block is already a single component</b> &mdash; entry fee, <i>Play for fun &mdash; no stakes</i>, a pool line, paid places, per-place amounts, <b>Payouts balance &check;</b> and Auto-suggest &mdash; and all four games balanced exactly. What it does not yet say is <b>whose money it is</b>: the same table pays a foursome in one game and a golfer in another, at a field pool in one and a group pool in the next.</p>
+<div class="tbl">
+<table>
+<tr><th>Game</th><th>Scope of the pool</th><th>Who gets paid</th><th>As captured</th></tr>
+<tr><td class="n">Stroke Play <span class="k edit">Edit</span></td><td><b>Field</b> &mdash; 8 players</td><td>Golfers, 2 places</td><td>$5 each &rarr; $40; 1st $26, 2nd $14. Handicap locked to <b>Net (100%)</b> with a lock and &ldquo;set at the tournament round level&rdquo;. <b>Net Double-Bogey Cap toggle appears again here.</b></td></tr>
+<tr><td class="n">Irish Rumble <span class="k keep">Keep</span></td><td><b>Field</b> &mdash; 8 players</td><td>A <b>foursome</b>, 1 place</td><td>$10 each &rarr; $80; 1st $80, &ldquo;splits to $20.00/player (foursome)&rdquo;. Variant list &mdash; Classic, Arizona Shuffle, Shuffle (par-based), Custom &mdash; with a segment preview: 1&ndash;6 best 1 net, 7&ndash;12 best 2, 13&ndash;17 best 3, 18 best 4.</td></tr>
+<tr><td class="n">Pink Ball <span class="k edit">Edit</span></td><td><b>Field</b> &mdash; 8 players</td><td>A <b>foursome</b>, 1 place</td><td>$15 each &rarr; $120; 1st $120, splits to $30.00/player. Ball Color reads <b>Red</b>. Rotation is deferred: each group sets its own when it first opens scoring.</td></tr>
+<tr><td class="n">Match Play <span class="k edit">Edit</span></td><td><b>One foursome</b> &mdash; 4 players</td><td>Golfers, 3 places</td><td>$10 each &rarr; $40; 24 / 10 / 6. Seeds 1&ndash;4 by HCP, drag or Auto-seed, semis named on the front 9. Handicap set to <b>SO Low</b>. <b>Copy to all match plays (1 other group)</b>. Save is greyed with no reason.</td></tr>
+</table>
+</div>
+
+<div class="f" style="margin-top:14px">
+<div class="fc">
+<h3>9. Paid places never say who is paid<span class="tag">Money</span></h3>
+<p class="now"><b>Today:</b> the same <b>1st / 2nd / 3rd</b> table means three different things &mdash; a golfer against the field, a golfer inside one foursome, and a whole foursome whose prize is then divided.</p>
+<p>Label the recipient on the row: <b>1st &mdash; foursome</b> or <b>1st &mdash; golfer</b>. The split line Pink Ball and Irish Rumble already carry (&ldquo;splits to $30.00/player&rdquo;) is the right instinct; it just needs to appear as the rule rather than as a footnote.</p>
+</div>
+<div class="fc">
+<h3>10. Pool scope is invisible<span class="tag">Money</span></h3>
+<p class="now"><b>Today:</b> Match Play&rsquo;s pool is <b>$40 (4 players)</b> and Irish Rumble&rsquo;s is <b>$80 (8 players)</b>, in identical cards, with three different phrasings of the pool line.</p>
+<p>One sentence, one place: <b>&ldquo;$10 &times; 4 in this foursome = $40&rdquo;</b> versus <b>&ldquo;$10 &times; 8 in the field = $80&rdquo;</b>. A captain reading two of these in a row should not have to count players to know which pot he is filling.</p>
+</div>
+<div class="fc">
+<h3>11. The cap is now set in three places<span class="tag">Duplication</span></h3>
+<p class="now"><b>Today:</b> a Net Double-Bogey Cap toggle on wizard step 3, another on Stroke Play setup, and a note under Irish Rumble&rsquo;s preview pointing at &ldquo;the toggle below&rdquo;.</p>
+<p>Three switches for one rule can disagree with each other, and the leaderboard cannot show which one won. With the cap <b>always on</b> all three disappear and it is stated once, where scores are explained.</p>
+</div>
+<div class="fc">
+<h3>12. SO Low is right here and wrong on step 3<span class="tag">Scope</span></h3>
+<p class="now"><b>Today:</b> SO Low is offered both on the Individual handicap step and on Match Play setup, where it is selected and explained: the low golfer in the foursome plays to 0.</p>
+<p>That is the distinction to build on. <b>SO Low is a match mechanism</b> &mdash; it needs an opponent group to be low <i>within</i>. Keep it on Match Play, delete it from the field-wide handicap step.</p>
+</div>
+<div class="fc">
+<h3>13. Pink Ball&rsquo;s ball is red, and its rules are missing<span class="tag">Naming</span></h3>
+<p class="now"><b>Today:</b> <b>Pink Ball Setup</b> &rarr; Ball Color: <b>Red</b>. The only rule on the screen is that each group picks its rotation later.</p>
+<p>Either the ball is pink or the game is not. If the colour is genuinely a choice, name the game for the mechanism and offer swatches, not free text. And state the rule where the money is: <b>one ball, no replacements, last group to lose it wins, low net breaks a tie between groups that finish 18 with it alive.</b></p>
+</div>
+<div class="fc">
+<h3>14. The bracket preview stops half way<span class="tag">Incomplete</span></h3>
+<p class="now"><b>Today:</b> Auto-seed by handicap gives 1 v 4 and 2 v 3, and both semis are labelled <b>front 9</b>. Nothing names the final.</p>
+<p>Nine holes a match, winner takes all &mdash; so four golfers need <b>semis on the front, final on the back</b>. Show all three matches, and say what a halved match does before it happens rather than after.</p>
+<p class="now"><b>Decided:</b> a halved match <b>plays on</b>. The match continues past its ninth hole and the result is back-calculated against the finals pairing, reading back from hole 10. The bracket card has to carry that sentence, because it changes which holes a golfer is still playing for.</p>
+</div>
+<div class="fc">
+<h3>15. Save is disabled without a reason<span class="tag">Blocker</span></h3>
+<p class="now"><b>Today:</b> on the first Match Play screen <b>Save Configuration</b> is grey and silent.</p>
+<p>Same rule as the Cup flow: <b>nothing is disabled without saying why</b>. Name the missing input in place &mdash; and if the only thing missing is money, the button should say so.</p>
+</div>
+<div class="fc">
+<h3>16. Two games take two screens, two take one<span class="tag">Pattern</span></h3>
+<p class="now"><b>Today:</b> Irish Rumble and Match Play split into <b>&middot; Game</b> then <b>&middot; Money</b> with Next / Back; Pink Ball and Stroke Play are a single screen ending in Save.</p>
+<p>Pick one shape for all four: <b>rules first, money last, one Save</b>.</p>
+<p class="now"><b>Decided:</b> no game gets a second rules screen. Custom (per-hole) already reveals its 18-cell editor <b>inline</b>, under the mode radio on <b>&middot; Game</b> &mdash; Segment Preview, Front 9 / Back 9 grid, tap to cycle 1&rarr;2&rarr;3&rarr;4. That is the pattern: the mode picker expands in place, and the only screen after it is money.</p>
+</div>
+<div class="fc">
+<h3>17. Keep: copy across groups, and the balance check<span class="tag" style="color:var(--pine);background:#E4F2EA">Working</span></h3>
+<p><b>Copy to all match plays (1 other group)</b> names its own count and saves the repetition a per-group game creates &mdash; the same move the Cup allowance copy needs.</p>
+<p><b>Payouts balance &check;</b> with <b>Auto-suggest</b> is the strongest control in the whole flow: it turns a division problem into a confirmation. Use the identical pair on every pot, including the championship.</p>
+</div>
+</div>
+
+<h2>Proposed step list</h2>
+<ul>
+<li><b>1 &middot; Type &amp; format</b> &mdash; as shipped, plus the consequence strip.</li>
+<li><b>2 &middot; Event details</b> &mdash; as shipped.</li>
+<li><b>3 &middot; Handicap</b> &mdash; net or gross, allowance; cap stated as a rule; no SO Low.</li>
+<li><b>3a &middot; Stableford points</b> &mdash; <b>the casual Stableford setup screen, reused</b>. Only when the method is Stableford.</li>
+<li><b>4 &middot; Select players</b> &mdash; as shipped.</li>
+<li><b>5 &middot; Groups &amp; tees</b> &mdash; as shipped, tee labels normalised.</li>
+<li><b>6 &middot; Payouts</b> &mdash; championship pot only, balance check kept.</li>
+<li><b>7 &middot; Side games</b> &mdash; Pink Ball, Irish Rumble, Match Play Foursome, and the day bet on multi-day events. <b>Fee per game, here.</b></li>
+<li><b>8 &middot; Review &rarr; Create tournament</b> &mdash; one name per game, each with its fee.</li>
+</ul>
+<p class="foot">Eight steps counted, seven shown for a one-round stroke-play event &mdash; the same arithmetic the Cup step does. Nothing above changes the order a captain already walks; it renames three things, moves the side-game fees one step earlier, and deletes one option that should never have been on this type.<br><br><b>Still open:</b> whether tee times belong on Groups &amp; Tees or stay on the round; whether the 36-hole DQ counts gross winners, net winners, or both; whether a halved Match Play match splits or plays on; and whether Pink Ball&rsquo;s rotation should stay deferred to the group or be set with the fee.</p>
+</div>
+</body>
+</html>
