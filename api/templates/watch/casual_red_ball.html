@@ -1,12 +1,12 @@
 {% extends "watch/base.html" %}
 
 {% block title %}
-{{ tournament.name|default:"Red Ball" }} · Round {{ round.round_number }}
+{{ tournament.name|default:"Pink Ball" }} · Round {{ round.round_number }}
 {% endblock %}
 
 {% block body %}
   <h1>
-    {% if tournament %}{{ tournament.name }}{% else %}{{ summary.ball_color|default:"Pink" }} Ball{% endif %}
+    {% if tournament %}{{ tournament.name }}{% else %}{{ summary.game_name|default:"Pink Ball" }}{% endif %}
   </h1>
   <p class="sub">
     {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
@@ -15,7 +15,7 @@
   {% if summary and summary.results %}
     <div class="card">
       <div class="match-meta">
-        <span class="game-pill">{{ summary.ball_color|default:"Pink" }} Ball</span>
+        <span class="game-pill">{{ summary.game_name|default:"Pink Ball" }}</span>
         <span class="meta-text">
           {% if summary.entry_fee %}${{ summary.entry_fee|floatformat:"-2" }} entry · {% endif %}
           ${{ summary.pool|floatformat:"-2" }} pool
