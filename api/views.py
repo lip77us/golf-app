@@ -7062,6 +7062,12 @@ class PinkBallSetupView(APIView):
         return Response({
             'configured' : configured,
             'game_name'  : game_name,
+            # Back-compat for builds shipped before the colour became a name
+            # (migration games/0067). They read 'ball_color' and fall back to
+            # 'Pink' when it is absent, which would silently rename every
+            # group's game. Echoing it keeps installed builds honest; drop
+            # this once no build in the wild reads it.
+            'ball_color' : game_name,
             'entry_fee'  : entry_fee,
             'payouts'    : payouts,
             'num_players': num_players,
@@ -7086,6 +7092,8 @@ class PinkBallSetupView(APIView):
         return Response({
             'configured': True,
             'game_name' : config.game_name,
+            # Legacy echo, same as the GET above — see migration games/0067.
+            'ball_color': config.game_name,
             'entry_fee' : float(config.entry_fee),
             'payouts'   : config.payouts or [],
         }, status=status.HTTP_201_CREATED)

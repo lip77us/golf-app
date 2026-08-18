@@ -1488,9 +1488,16 @@ class PinkBallSetupSerializer(serializers.Serializer):
     """POST /api/rounds/{id}/pink-ball/setup/"""
     # The app never asks the colour — it asks what the group CALLS the
     # game. 16 characters (the iPhone 13 mini cap), no default, and
-    # required: Save does not fire until the ball has a name.
+    # required (enforced in validate below, since the legacy alias means
+    # neither field can be required on its own).
     game_name  = serializers.CharField(max_length=16, allow_blank=False,
-                                       trim_whitespace=True)
+                                       trim_whitespace=True, required=False)
+    # Back-compat: builds shipped before migration games/0067 post the old
+    # 'ball_color' key. Without this they hit a required-field 400 and cannot
+    # save a Pink Ball setup at all until their owner installs a new build.
+    ball_color = serializers.CharField(max_length=16, allow_blank=False,
+                                       trim_whitespace=True, required=False,
+                                       write_only=True)
     entry_fee  = serializers.DecimalField(
                      max_digits=8, decimal_places=2, default='0.00',
                  )
@@ -1502,6 +1509,20 @@ class PinkBallSetupSerializer(serializers.Serializer):
                          "{'place': 2, 'amount': '30.00'}]"
                      ),
                  )
+
+    def validate(self, attrs):
+        # The name is required — Save does not fire until the ball has one.
+        # Neither field can carry required=True on its own, though, because
+        # either one alone is a valid request: new builds send game_name, old
+        # ones send ball_color. So the rule lives here, and the legacy key is
+        # folded into the real one so nothing downstream knows the difference.
+        legacy = attrs.pop('ball_color', None)
+        name   = attrs.get('game_name') or legacy
+        if not name:
+            raise serializers.ValidationError(
+                {'game_name': 'This field is required.'})
+        attrs['game_name'] = name
+        return attrs
 
 
 class PinkBallOrderSerializer(serializers.Serializer):
