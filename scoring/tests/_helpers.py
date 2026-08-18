@@ -17,7 +17,7 @@ from decimal import Decimal
 from accounts.models import Account
 from core.models import Course, Player, PlayerSex, Tee
 from scoring.models import HoleScore
-from tournament.models import Foursome, FoursomeMembership, Round
+from tournament.models import Foursome, FoursomeMembership, Round, Tournament
 
 
 def _test_account() -> Account:
@@ -109,6 +109,34 @@ def make_player(
 # Round / Foursome / Membership
 # ---------------------------------------------------------------------------
 
+def make_tournament(
+    *,
+    name: str = 'Test Cup',
+    total_rounds: int = 2,
+    rounds_to_count: int | None = None,
+    active_games: list | None = None,
+    scoring_method: str = 'stroke',
+    handicap_mode: str = 'net',
+    net_percent: int = 100,
+    mini_singles_carve_pct: int = 0,
+) -> Tournament:
+    """An individual-play tournament by default (no `team_cup` in
+    active_games), which is the type the individual-play spec governs."""
+    from datetime import date
+    return Tournament.objects.create(
+        account         = _test_account(),
+        name            = name,
+        start_date      = date(2026, 6, 1),
+        total_rounds    = total_rounds,
+        rounds_to_count = rounds_to_count,
+        active_games    = active_games if active_games is not None else ['low_net'],
+        scoring_method  = scoring_method,
+        handicap_mode   = handicap_mode,
+        net_percent     = net_percent,
+        mini_singles_carve_pct = mini_singles_carve_pct,
+    )
+
+
 def make_round(
     course: Course | None = None,
     *,
@@ -117,6 +145,9 @@ def make_round(
     net_max_double_bogey: bool = True,
     status: str = 'in_progress',
     active_games: list | None = None,
+    tournament: Tournament | None = None,
+    round_number: int = 1,
+    num_holes: int = 18,
 ) -> Round:
     course = course or make_course()
     return Round.objects.create(
@@ -127,6 +158,9 @@ def make_round(
         handicap_mode        = handicap_mode,
         net_percent          = net_percent,
         net_max_double_bogey = net_max_double_bogey,
+        tournament           = tournament,
+        round_number         = round_number,
+        num_holes            = num_holes,
     )
 
 

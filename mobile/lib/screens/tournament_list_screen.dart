@@ -702,12 +702,26 @@ class _TournamentCard extends StatelessWidget {
           if (isCup)
             ..._cupHub(context)
           else ...[
-            // ── Non-cup tournaments (unchanged) ──────────────────────────────
+            // ── Non-cup tournaments ──────────────────────────────────────────
             if (tournament.rounds.isNotEmpty) ...[
               const Divider(height: 20),
               ...tournament.rounds.map((r) => r.status == 'pending' && isStaff
                   ? _PendingRoundTile(round: r, onSetup: () => onSetupRound(r.id))
                   : _RoundTile(round: r, onTap: () => onRoundTap(r.id))),
+              // Tee times are not a cup thing — an individual tournament sends
+              // groups off in an order too. The screen was always generic (it
+              // just PATCHes foursome.tee_time); it was only ever REACHABLE
+              // from the cup hub.
+              if (isStaff && !isComplete)
+                ...tournament.rounds
+                    .where((r) => r.status != 'pending')
+                    .map((r) => _ActionButton(
+                          icon : Icons.schedule_outlined,
+                          label: tournament.rounds.length > 1
+                              ? 'R${r.roundNumber} · Edit tee times'
+                              : 'Edit tee times',
+                          onTap: () => onEditTeeTimes(r),
+                        )),
             ],
             if (tournament.activeGames.isNotEmpty) ...[
               const Divider(height: 16),

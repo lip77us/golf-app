@@ -895,7 +895,7 @@ def _red_ball_label(round_obj) -> str:
     ball colour (e.g. "Red Ball" for a red-ball game, "Pink Ball"
     when the colour is left at the default)."""
     try:
-        colour = round_obj.pink_ball_config.ball_color
+        colour = round_obj.pink_ball_config.display_name
         if colour:
             return f'{colour} Ball'
     except Exception:

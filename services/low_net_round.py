@@ -39,7 +39,7 @@ from tournament.models import Foursome
 # ---------------------------------------------------------------------------
 
 def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
-                            participant_ids=None):
+                            participant_ids=None, force_cap=False):
     """
     Return {player_id: {'name': str, 'total': int, 'holes_played': int}}
     for all real players in the round, with handicap adjustment and the
@@ -49,14 +49,23 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
     side game (docs/parallel-games.md). None = all real players. ONLY the casual
     `low_net_round_standings` passes this from the round config; the Championship
     never does, so its scoring is unaffected.
+
+    `force_cap` is the individual-play tournament rule: the cap is ALWAYS on and
+    applies at any allowance, because the ceiling is stated in terms of the
+    strokes actually received (par + 2 + strokes on the hole) and those already
+    reflect the allowance. Casual callers leave it False and keep the historic
+    Net-100%-only behaviour.
     """
     _subset = set(participant_ids) if participant_ids else None
-    # The net-double-bogey cap only applies at full Net (100%). It's meaningless
-    # for Gross and gets weird with a reduced allowance or Strokes-Off, so it's
-    # ignored outside Net-100% regardless of the stored round flag.
-    cap_enabled = (bool(round_obj.net_max_double_bogey)
-                   and handicap_mode == HandicapMode.NET
-                   and net_percent == 100)
+    # Casually the cap only applies at full Net (100%): it's meaningless for
+    # Gross and was judged too surprising under a reduced allowance, so it's
+    # ignored outside Net-100% regardless of the stored round flag. An
+    # individual-play tournament passes force_cap and gets it at every
+    # allowance — never in Gross, where the board is meant to show the real card.
+    cap_enabled = (handicap_mode == HandicapMode.NET
+                   and (force_cap
+                        or (bool(round_obj.net_max_double_bogey)
+                            and net_percent == 100)))
 
     foursomes = list(
         Foursome.objects
@@ -251,8 +260,6 @@ def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
     Pass an empty ``payouts_cfg`` for a display-only mode (no prize money):
     only the round's actually-configured mode carries payouts.
     """
-    from collections import defaultdict
-
     # Sort by net-to-par (total − par_played) so rankings are always in
     # par-relative order regardless of tee/course-par differences between
     # foursomes.  Players with no holes played sort last.
@@ -300,17 +307,15 @@ def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
 
     prize_rank_map: dict = {pid: r for pid, r in eligible_ranked}
 
-    # Tied-payout splitting among eligible players.
-    pids_by_prize_rank: dict = defaultdict(list)
-    for pid, r in eligible_ranked:
-        pids_by_prize_rank[r].append(pid)
-
-    prize_rank_payout: dict = {}
-    for r, pids in pids_by_prize_rank.items():
-        n = len(pids)
-        total_prize = sum(payouts_cfg.get(r + j, 0.0) for j in range(n))
-        per_player  = round(total_prize / n, 2) if total_prize > 0 else None
-        prize_rank_payout[r] = per_player
+    # Tied players split the money for the PLACES THEY OCCUPY (services/payout.py)
+    # — a T2 pair shares 2nd and 3rd rather than taking 2nd each. None, not 0,
+    # for a rank that pays nothing: the row shows no prize at all.
+    from services.payout import split_tied_places
+    prize_rank_payout: dict = {
+        r: (amt or None)
+        for r, amt in split_tied_places(
+            payouts_cfg, [r for _pid, r in eligible_ranked]).items()
+    }
 
     # ── Build standings list ──────────────────────────────────────────────────
     standings = []

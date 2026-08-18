@@ -1,0 +1,211 @@
+<!-- @dsCard group="Individual play" name="Scoring — Individual" subtitle="IndividualScoringScreen — net double bogey max stated as a rule, Stableford scale per tournament, allowance, optional flights" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Scoring — Individual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--under:#D32F2F;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:120px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .stp{margin-left:auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.prog{height:3px;background:#DDE6DE}
+.prog i{display:block;height:100%;background:var(--pine);width:42.8%}
+.body{padding:16px 16px 92px;overflow-y:auto;height:685px}
+h2.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:24px;margin:0 0 5px}
+p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.seg{display:flex;border:1.5px solid var(--pine);border-radius:999px;overflow:hidden;margin-bottom:18px}
+.seg div{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;color:var(--pine);cursor:pointer}
+.seg div.on{background:var(--pine);color:#fff}
+.sc{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:14px;padding:12px 13px;margin-bottom:14px}
+.sch{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sch b{flex:1;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14.5px}
+.pill{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:5px;padding:3px 7px;white-space:nowrap;flex:none}
+.pill.rule{color:#08301F;background:var(--brightMint)}
+.blurb{color:var(--muted);font-size:12.5px;line-height:1.5}
+.blurb b{color:var(--deepPine)}
+.ex{margin-top:10px;border-top:1px solid var(--cardBorder);padding-top:9px}
+.exr{display:flex;align-items:baseline;gap:8px;font-size:12.5px;padding:3px 0;font-variant-numeric:tabular-nums}
+.exr .w{flex:1;color:var(--muted)}
+.exr b{font-weight:700}
+.exr .cap{color:var(--under);font-weight:700}
+.o{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 12px;margin-bottom:8px;cursor:pointer}
+.o.on{border-color:var(--pine);background:#F4FAF6}
+.o .rd{min-width:18px;height:18px;border-radius:50%;border:2px solid #C3CFC6;flex:none;margin-top:1px;position:relative}
+.o.on .rd{border-color:var(--pine)}
+.o.on .rd:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--pine)}
+.o .d{flex:1;min-width:0}
+.o .d b{display:block;font-size:14px;font-weight:600}
+.o .d small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.tbl{display:flex;gap:0;margin-top:9px;border:1px solid var(--cardBorder);border-radius:8px;overflow:hidden}
+.tc{flex:1;text-align:center;border-left:1px solid var(--cardBorder)}
+.tc:first-child{border-left:none}
+.tc .k{font-size:9.5px;font-weight:700;color:var(--muted);background:#F1F5F2;padding:4px 0;letter-spacing:.2px}
+.tc .v{font-size:14px;font-weight:700;padding:6px 0;font-variant-numeric:tabular-nums}
+.tc .v.neg{color:var(--under)}
+.field{display:flex;align-items:center;border:1.5px solid var(--cardBorder);border-radius:12px;padding:11px 13px;font-size:16px;font-weight:600;background:var(--card)}
+.field .sfx{margin-left:auto;color:var(--muted);font-size:13px;font-weight:500}
+.tog{display:flex;align-items:center;gap:10px;margin-top:2px}
+.tog .lb2{flex:1;font-size:14px;font-weight:600}
+.sw{width:44px;height:26px;border-radius:999px;background:#C3CFC7;position:relative;flex:none}
+.sw i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+.hide{display:none}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Scoring, Individual</h1>
+<p>One step for both methods. Tap the segment to switch &mdash; it is the same answer given on <a href="individual-wizard-step1.html">step 1</a>, editable here rather than by walking back.</p>
+<h3>The max is a rule, not a setting</h3>
+<p>Live, stroke play ships as two formats: with and without a net double bogey max. That is one setting wearing a format's clothes, and the field cannot tell from the leaderboard which one it entered. Here the max is <b>always on</b> and stated as a rule with a worked example, so a golfer who picks up on a hole knows exactly what lands on his card.</p>
+<div class="own"><table>
+<tr><td>The cap</td><td><b>par + 2 + strokes received on that hole.</b> Par 4, one stroke &rarr; 7. Par 3, no stroke &rarr; 5.</td></tr>
+<tr><td>What it protects</td><td>A net total, not a hole result. Group bets and skins still read the real gross.</td></tr>
+<tr><td>Versus Stableford</td><td>The max <b>keeps</b> a blow-up hole at a ceiling; Stableford stops scoring it at all. Different mechanisms, and both are drawn here so the difference is visible before the field tees off.</td></tr>
+</table></div>
+<h3>Stableford scale &mdash; the casual screen, reused</h3>
+<p><b>Casual rounds already ask this question on their own setup screen, so the tournament uses that screen rather than a second one.</b> The block drawn below is the read-back on this step; the scale itself is set where casual sets it. One screen, one scale, two entry points.</p>
+<p>Standard and modified are both offered and stored on the tournament &mdash; never a global preference, because a club's Sunday game and its member-guest use different scales. The table renders under the choice rather than in help text, since the scale is the whole answer.</p>
+<h3>No strokes off</h3>
+<p><b>Strokes off the low index does not appear on this type.</b> It is a Cup mechanism. Individual play is net or gross with an allowance percentage, and the allowance applies to the whole field.</p>
+<h3>Rounds that count</h3>
+<p><b>Only asked when the tournament has more than two rounds.</b> A one or two-round event counts everything and the block does not render &mdash; there is no interesting answer to give.</p>
+<p>Above that, the TD sets it: <b>all four</b>, <b>best 3 of 4</b>, <b>best 4 of 6</b>. A multi-day 36-hole outing is the case that needs it &mdash; a golfer sits a round out and stays in the championship instead of conceding it on Friday.</p>
+<p>The board reads this directly: a column per round, the dropped one struck through so a golfer can see what he is throwing away, recalculated as scores land. A round <b>in progress does not compete</b> for a counted place, or four holes at level par would knock out a finished 73. Drawn on <a href="individual-championship-leaderboard.html">the championship board</a>.</p>
+<h3>Flights</h3>
+<p>Off by default. When on, the field splits by index range and every board &mdash; gross, net, Stableford &mdash; is drawn per flight. Left as a toggle on this step because it changes what the leaderboard <b>is</b>, and asking it later means redrawing results a golfer has already seen.</p>
+<h3>Still open</h3>
+<ul>
+
+<li><b>Flights are deferred</b> &mdash; not implemented. Intent when they land is an even split of the field rather than index ranges. Nothing else on this step depends on them.</li>
+<li>Whether a modified-Stableford tournament should still show a net stroke-play board alongside the points board. Currently not drawn &mdash; one method, one board.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Scoring</span><span class="stp">3 of 7</span></div>
+<div class="prog"><i></i></div>
+<div class="body">
+<h2 class="hd">How is it scored?</h2>
+<p class="sub">Set once for the tournament. Every round and every board reads from this.</p>
+
+<div class="seg" id="method"><div class="on" data-m="stroke">Stroke play</div><div data-m="stableford">Stableford</div></div>
+
+<div id="strokeBlock">
+  <div class="sc">
+    <div class="sch"><b>Net double bogey max</b><span class="pill rule">Always on</span></div>
+    <div class="blurb">Every hole is capped at <b>par + 2 + the strokes you get there</b>. Nobody wrecks a net total on one hole, and nobody has to remember to pick up.</div>
+    <div class="ex">
+      <div class="exr"><span class="w">Par 4 &middot; gets 1 stroke</span><span>net double is</span><span class="cap">7</span></div>
+      <div class="exr"><span class="w">Par 3 &middot; no stroke</span><span>net double is</span><span class="cap">5</span></div>
+      <div class="exr"><span class="w">Par 5 &middot; gets 2 strokes</span><span>net double is</span><span class="cap">9</span></div>
+    </div>
+  </div>
+  <div class="sc">
+    <div class="sch"><b>Boards</b><span class="pill">Gross &amp; net</span></div>
+    <div class="blurb">Both come off the same card, so there is nothing else to set. The <b>gross</b> board ignores the cap; the <b>net</b> board applies it.</div>
+  </div>
+</div>
+
+<div id="stabBlock" class="hide">
+  <div class="lb">Points scale</div>
+  <div class="o on" data-s="std"><span class="rd"></span><span class="d"><b>Standard</b><small>Nothing for a double or worse; five for an albatross.</small>
+    <div class="tbl">
+      <div class="tc"><div class="k">DBL+</div><div class="v">0</div></div>
+      <div class="tc"><div class="k">BOG</div><div class="v">1</div></div>
+      <div class="tc"><div class="k">PAR</div><div class="v">2</div></div>
+      <div class="tc"><div class="k">BIR</div><div class="v">3</div></div>
+      <div class="tc"><div class="k">EAG</div><div class="v">4</div></div>
+      <div class="tc"><div class="k">ALB</div><div class="v">5</div></div>
+    </div></span></div>
+  <div class="o" data-s="mod"><span class="rd"></span><span class="d"><b>Modified</b><small>Par is zero and a bad hole costs you. Rewards going at it.</small>
+    <div class="tbl">
+      <div class="tc"><div class="k">DBL+</div><div class="v neg">&minus;3</div></div>
+      <div class="tc"><div class="k">BOG</div><div class="v neg">&minus;1</div></div>
+      <div class="tc"><div class="k">PAR</div><div class="v">0</div></div>
+      <div class="tc"><div class="k">BIR</div><div class="v">2</div></div>
+      <div class="tc"><div class="k">EAG</div><div class="v">5</div></div>
+    </div></span></div>
+  <div class="sc" style="margin-top:14px">
+    <div class="sch"><b>Board</b><span class="pill">Points, high to low</span></div>
+    <div class="blurb">Points are figured off <b>net</b> score per hole, so the handicap answer below still applies. A hole that scores nothing needs no cap &mdash; the net double bogey max is not used under Stableford.</div>
+  </div>
+</div>
+
+<div class="lb">Handicap</div>
+<div class="seg" style="margin-bottom:10px"><div class="on">Net</div><div>Gross</div></div>
+<div class="field" style="margin-bottom:8px">100<span class="sfx">% allowance</span></div>
+<div class="blurb" style="margin-bottom:18px">Applies to the whole field. <b>Strokes off the low index is Cup-only</b> and is not offered here.</div>
+
+<div class="lb">Rounds that count</div>
+<div class="sc" style="margin-bottom:18px">
+  <div class="sch"><b>This tournament has 4 rounds</b><span class="pill" id="cntPill">Best 3 of 4</span></div>
+  <div class="seg" id="cnt" style="margin:10px 0 0"><div data-c="all">All 4</div><div class="on" data-c="3">Best 3</div><div data-c="2">Best 2</div></div>
+  <div class="blurb" style="margin-top:9px" id="cntBlurb">A golfer&rsquo;s worst round is dropped, so somebody who sits one out on a 36-hole day stays in the championship. The dropped round is struck through on the board, not hidden.</div>
+</div>
+
+<div class="lb">Flights</div>
+<div class="sc">
+  <div class="tog"><span class="lb2">Split the field by index</span><span class="sw"><i></i></span></div>
+  <div class="blurb" style="margin-top:7px">Off &mdash; one board for everyone. On, each flight gets its own board and its own payout.</div>
+</div>
+
+</div>
+<div class="bottom"><button class="back">Back</button><button class="next">Next</button></div>
+</div>
+<script>
+document.querySelectorAll('#method div').forEach(function(d){
+  d.addEventListener('click',function(){
+    document.querySelectorAll('#method div').forEach(function(x){x.classList.remove('on')});
+    d.classList.add('on');
+    var stab=d.dataset.m==='stableford';
+    document.getElementById('stabBlock').classList.toggle('hide',!stab);
+    document.getElementById('strokeBlock').classList.toggle('hide',stab);
+  });
+});
+document.querySelectorAll('#cnt div').forEach(function(d){
+  d.addEventListener('click',function(){
+    document.querySelectorAll('#cnt div').forEach(function(x){x.classList.remove('on')});
+    d.classList.add('on');
+    var c=d.dataset.c;
+    document.getElementById('cntPill').textContent=c==='all'?'All 4 count':'Best '+c+' of 4';
+    document.getElementById('cntBlurb').innerHTML=c==='all'
+      ? 'Every round counts toward the total. Miss one and you are giving away the strokes.'
+      : 'A golfer&rsquo;s '+(c==='3'?'worst round is':'two worst rounds are')+' dropped, so somebody who sits one out on a 36-hole day stays in the championship. Dropped rounds are struck through on the board, not hidden.';
+  });
+});
+document.querySelectorAll('#stabBlock .o').forEach(function(o){
+  o.addEventListener('click',function(){
+    document.querySelectorAll('#stabBlock .o').forEach(function(x){x.classList.remove('on')});
+    o.classList.add('on');
+  });
+});
+</script>
+</body>
+</html>

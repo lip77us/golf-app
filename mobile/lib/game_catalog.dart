@@ -594,6 +594,12 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id                   : GameIds.pinkBall,
+    // Pink Ball is what the game is CALLED when you are picking it — the
+    // recognisable name, and the one the TD's own name defaults to. What the
+    // app never asks is the COLOUR: the name typed on the setup screen is
+    // what every later surface reads (tab, carrier badge, lost-ball switch,
+    // chat line, settlement row), so a group running Beer Ball sees Beer Ball
+    // everywhere from that point on.
     displayName          : 'Pink Ball',
     tournament           : true,
     requiresMultiFoursome: true,

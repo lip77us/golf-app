@@ -1,0 +1,179 @@
+<!-- @dsCard group="Individual play" name="New tournament — Individual" subtitle="IndividualWizardStep1 — stroke play or Stableford, derived step list, the four field-wide side games" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · New tournament — Individual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:118px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:24px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .stp{margin-left:auto;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.prog{height:3px;background:#DDE6DE}
+.prog i{display:block;height:100%;background:var(--pine)}
+.body{padding:16px 16px 92px;overflow-y:auto;height:685px}
+h2.hd{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:24px;margin:0 0 5px}
+p.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
+.lb{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.opts{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.o{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1.5px solid var(--cardBorder);border-radius:13px;padding:11px 12px;cursor:pointer}
+.o.on{border-color:var(--pine);background:#F4FAF6}
+.o .rd{min-width:18px;height:18px;border-radius:50%;border:2px solid #C3CFC6;flex:none;margin-top:1px;position:relative}
+.o.on .rd{border-color:var(--pine)}
+.o.on .rd:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--pine)}
+.o .d{flex:1;min-width:0}
+.o .d b{display:block;font-size:14.5px;font-weight:600;line-height:1.25}
+.o .d small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.4}
+.o .unit{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine);background:#E4F2EA;border-radius:5px;padding:3px 6px;flex:none;margin-top:2px;white-space:nowrap}
+.o.off{opacity:.5;cursor:default}
+.o.link .go{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--warn);background:#FDF3E7;border-radius:5px;padding:3px 6px;flex:none;margin-top:2px;white-space:nowrap}
+.cap{background:var(--card);border:1px solid var(--cardBorder);border-radius:13px;padding:11px 12px;margin:-8px 0 18px}
+.cap .r{display:flex;align-items:baseline;gap:8px;font-size:12.5px;padding:3px 0}
+.cap .r span{color:var(--muted);flex:none;width:96px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.cap .r b{font-weight:600}
+.cap .r.yes b{color:var(--pine)}
+.plan{background:var(--deepPine);border-radius:15px;padding:14px 15px 15px;color:#DDEBE2}
+.plan .ph{display:flex;align-items:baseline;gap:8px;margin-bottom:11px}
+.plan h3{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7FA694;margin:0}
+.plan .n{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:13px;color:var(--brightMint)}
+.st{display:flex;align-items:flex-start;gap:9px;padding:7px 0;font-size:13px}
+.st+.st{border-top:1px solid rgba(255,255,255,.09)}
+.st .i{min-width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,.12);color:#DDEBE2;font:700 10.5px/20px "Spline Sans",system-ui,sans-serif;text-align:center;flex:none}
+.st .d{flex:1;min-width:0}
+.st .d b{display:block;font-weight:600;color:#fff;font-size:13px}
+.st .d small{display:block;color:#9EBCAD;font-size:11.5px;margin-top:1px;line-height:1.4}
+.st .rep{flex:none;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#08301F;background:var(--brightMint);border-radius:4px;padding:2px 5px;margin-top:3px;white-space:nowrap}
+.pfoot{margin:11px 0 0;padding-top:10px;border-top:1px solid rgba(255,255,255,.09);font-size:11px;line-height:1.5;color:#9EBCAD}
+.pfoot b{color:#fff;font-weight:600}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;display:flex;gap:11px;background:linear-gradient(transparent,var(--surface) 26%)}
+.bottom button{height:52px;border-radius:15px;font:700 15.5px/1 "Spline Sans",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+.bottom .back{width:100px;background:#D6E6DB;border:1.5px solid #B9D3C3;color:var(--pine);flex:none}
+.bottom .next{flex:1;background:var(--pine);border:none;color:#fff}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Individual play, step 1</h1>
+<p><b>This step already ships close to right.</b> Live (<i>1 of 7</i>) asks type first, marks the two team types <b>SOON</b>, and offers Stroke play / Stableford underneath. So the changes here are small &mdash; a consequence strip, and a step list that counts honestly. The work is downstream: see <a href="individual-create-flow-map.html">the flow map</a>.</p>
+<h3>Two methods, not three</h3>
+<p>Live ships stroke play as one format plus a <b>Net Double-Bogey Cap</b> toggle on the Handicap step, default on. That is a rule wearing a setting's clothes &mdash; the field cannot tell from a leaderboard which way it was set. With the cap <b>always on</b>, the toggle goes and the list stays two:</p>
+<div class="own"><table>
+<tr><td>Stroke play</td><td>Net double bogey max on every hole, always. Gross and net boards from the same card.</td></tr>
+<tr><td>Stableford</td><td>Points against par, standard or modified scale &mdash; chosen per tournament on <a href="individual-scoring.html">Scoring</a>.</td></tr>
+</table></div>
+<p>A capped hole is <b>not</b> a Stableford hole: the max keeps a blow-up from wrecking a net total, while Stableford stops counting the hole entirely. Both are drawn on the Scoring step so the difference is visible before the field tees off.</p>
+<h3>No strokes off</h3>
+<p><b>Live shows Net / Gross / SO Low on step 3 for Individual play.</b> SO Low is a Cup mechanism and means nothing against a field &mdash; it must not render on this type. Individual play is net or gross with an allowance percentage.</p>
+<h3>Side games are field-wide</h3>
+<p>These are the tournament-scope games, and the <b>only</b> ones the TD sets. <b>Foursome side bets</b> &mdash; skins, Nassau, rabbit, survivor, sixes &mdash; belong to the foursome, are set up exactly as in a casual round, and read the tournament&rsquo;s score entry rather than opening their own. A tournament foursome reads its rabbit off the leaderboard; the one thing that needs capturing on the hole is <b>spots and junk</b>.</p>
+<div class="own"><table>
+<tr><td>Pink Ball</td><td>One ball per group, no replacement. <b>Last to lose it wins</b>; if several groups finish 18 with the ball alive, low net breaks it.</td></tr>
+<tr><td>Irish Rumble</td><td>Field-wide ranking of foursome nets &mdash; the Cup version scores your four only, this one ranks every group against every other.</td></tr>
+<tr><td>Match Play Foursome</td><td>One-day bracket among the foursomes, <b>9 holes per match, winner takes all</b>. The casual game already implements it; reuse that engine.</td></tr>
+<tr><td>Day bet</td><td>Multi-day only. Inherits the main game and pays each day separately. <b>Anyone who wins 36-hole money is auto-DQ'd</b> from it.</td></tr>
+</table></div>
+<p>Entry is a <b>flat fee per side game, taken at signup</b>, so a golfer's entries are known before round one and the side-game step never has to reopen.</p>
+<p>On this file the type list is drawn for context: <b>Cup play links across to <a href="cup-wizard-step1.html">the Cup step</a></b>, and the two team types are dimmed &mdash; their formats are drawn there, not here.</p>
+<h3>What the step list does</h3>
+<ul>
+<li><b>Stableford adds a step</b> (the points scale). Stroke play does not &mdash; the max is not a question.</li>
+<li><b>Day bet appears only when the event has more than one round.</b> On this one-round count it is absent; the footnote says so rather than showing a struck row.</li>
+<li><b>Flights are optional and off by default</b>, so they ride on the Payout step rather than earning one.</li>
+<li>Header count and panel count agree, as on the Cup step.</li>
+</ul>
+<h3>Still open</h3>
+<ul>
+<li>Whether Match Play Foursome brackets seed by handicap or by draw. The casual game draws at random; a tournament field may want seeding. Drawn both ways on <a href="individual-matchplay-setup.html">the setup screen</a>.</li>
+<li>Screenshots of the live Individual screens would let me mark this file diff-shaped &mdash; what ships today versus what it becomes &mdash; the way the Cup packet reads.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:40</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New Tournament</span><span class="stp" id="stp">1 of 7</span></div>
+<div class="prog"><i id="pr" style="width:14.2%"></i></div>
+<div class="body">
+<h2 class="hd">What kind of event?</h2>
+<p class="sub">This decides the rest of the setup, so it is the first thing we ask.</p>
+
+<div class="lb">Who is competing</div>
+<div class="opts" id="types">
+<div class="o link" data-t="cup"><span class="rd"></span><span class="d"><b>Team &mdash; cup play</b><small>Two to four drafted sides playing match segments for points.</small></span><span class="go">Cup step &rsaquo;</span></div>
+<div class="o on" data-t="solo"><span class="rd"></span><span class="d"><b>Individual</b><small>Every golfer for himself, against the field.</small></span><span class="unit">Golfer</span></div>
+<div class="o off" data-t="pair"><span class="rd"></span><span class="d"><b>Two-man team</b><small>Pairs against the field. Chapman, alternate shot, best ball.</small></span><span class="unit">Pair</span></div>
+<div class="o off" data-t="quad"><span class="rd"></span><span class="d"><b>Four-man team</b><small>The whole group against the field. Scramble, shamble, bramble.</small></span><span class="unit">Group</span></div>
+</div>
+
+<div class="lb">Scoring</div>
+<div class="opts" id="fmts">
+<div class="o on" data-f="stroke"><span class="rd"></span><span class="d"><b>Stroke play</b><small>Gross and net against the field. Every hole is capped at net double bogey.</small></span></div>
+<div class="o" data-f="stableford"><span class="rd"></span><span class="d"><b>Stableford</b><small>Points per hole against par. Standard or modified scale, set on Scoring.</small></span></div>
+</div>
+
+<div class="cap">
+<div class="r"><span>Scores in</span><b>Per golfer, hole by hole</b></div>
+<div class="r"><span>Leaderboard</span><b id="cLb">Field &mdash; gross and net</b></div>
+<div class="r yes"><span>Side games</span><b>Pink Ball &middot; Irish Rumble &middot; Match Play Foursome</b></div>
+<div class="r yes"><span>Foursome side bets</span><b>Available &mdash; individual gross is on the card</b></div>
+</div>
+
+<div class="plan">
+<div class="ph"><h3>What&rsquo;s left after this step</h3><span class="n" id="pn">6 steps</span></div>
+<div id="steps"></div>
+<p class="pfoot">Counted for a <b>one-round</b> event. Rounds are set on the next screen; the step marked <b>per round</b> repeats with them, and a multi-day event adds the <b>day bet</b> to the side-game step. Step names match the live build &mdash; <a href="individual-create-flow-map.html" style="color:var(--brightMint)">the flow map</a> covers what changes inside each.</p>
+</div>
+
+</div>
+<div class="bottom"><button class="back">Cancel</button><button class="next">Next</button></div>
+</div>
+<script>
+var fmt='stroke';
+function plan(){
+  var s=[{b:'Event details',d:'Name, course, and one round per date'},
+         {b:'Handicap',d:'Net or gross with an allowance percentage \u2014 no SO Low on this type'}];
+  if(fmt==='stableford')s.push({b:'Stableford points',d:'Standard or modified scale'});
+  s.push({b:'Select players',d:'Search the roster, add a golfer, or find one on Halved'});
+  s.push({b:'Groups &amp; tees',d:'Group sizes, order, and a tee per golfer',rep:1});
+  s.push({b:'Payouts',d:'Entry fee, paid places, amounts \u2014 optional flights'});
+  s.push({b:'Side games',d:'Pink Ball, Irish Rumble, Match Play Foursome, day bet'});
+  s.push({b:'Review',d:'Everything named, then create the rounds'});
+  var i=0;
+  document.getElementById('steps').innerHTML=s.map(function(x){
+    return '<div class="st"><span class="i">'+(++i)+'</span><span class="d"><b>'+x.b+'</b><small>'+x.d+'</small></span>'+(x.rep?'<span class="rep">Per round</span>':'')+'</div>';
+  }).join('');
+  document.getElementById('pn').textContent=s.length+' steps';
+  document.getElementById('stp').textContent='1 of '+(s.length+1);
+  document.getElementById('pr').style.width=(100/(s.length+1))+'%';
+  document.getElementById('cLb').textContent=fmt==='stableford'?'Field \u2014 points, high to low':'Field \u2014 gross and net';
+}
+document.querySelectorAll('#fmts .o').forEach(function(o){
+  o.addEventListener('click',function(){
+    document.querySelectorAll('#fmts .o').forEach(function(x){x.classList.remove('on')});
+    o.classList.add('on');fmt=o.dataset.f;plan();
+  });
+});
+plan();
+document.querySelector('#types .o.link').addEventListener('click',function(){location.href='cup-wizard-step1.html'});
+</script>
+</body>
+</html>

@@ -12,13 +12,25 @@ Rules
   (OB, water, unplayable and not recovered), that foursome is eliminated.
 * The last foursome with the ball survives and wins.
 
-Ranking
-~~~~~~~
-1. Survivors (ball intact after hole 18) — ranked by lowest cumulative
-   net score across all 18 holes.
-2. Eliminated foursomes — ranked by which hole they were eliminated on
-   (later hole = better finish). Ties on elimination hole broken by
-   lower cumulative net score up to and including that hole.
+Ranking — by SURVIVAL, not by score
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The last group still holding the ball wins, so ball status IS the ranking:
+
+1. Still alive at 18 — top of the board. If more than one survives, the
+   **ball's own net** separates them: the carrier's net against par, not a
+   four-man aggregate, because the ball is what the group was protecting.
+2. Lost — ranked by the hole the ball died on, **latest first**. Lost on 14
+   beats lost on 6 no matter how either group scored.
+
+Ball net is therefore shown only for groups still alive. A ball lost on 5
+covers four holes and a ball that survives covers eighteen, so printing both
+in one column would rank the worst group best; an eliminated group reads a
+dash on the board and its real total stays on its card.
+
+Tied groups SHARE a rank and split the money for the places they occupy —
+there is no countback anywhere in this spec.
+
+See docs/design-review/handoff-individual-play/SPEC.md §6.
 
 Public API
 ~~~~~~~~~~
@@ -167,16 +179,31 @@ def calculate_red_ball(round_obj) -> list:
             'holes_played'     : holes_played,
         })
 
-    # Sort: survivors first, then by latest elimination hole.
-    # Use net-to-par (not raw total) so groups on different holes compare fairly.
-    # Ties broken by more holes played (further into the round = better position).
+    # Survival first, and only then score. Net-to-par (not the raw total) so
+    # groups on different holes compare fairly; among the eliminated, the
+    # LATEST death wins, and net is the tiebreak within a single hole.
     def sort_key(s):
         if s['eliminated_on'] is None:
             return (0, s['net_to_par'], -s['holes_played'])
-        else:
-            return (1, -s['eliminated_on'], s['net_to_par'])
+        return (1, -s['eliminated_on'], s['net_to_par'])
 
     statuses.sort(key=sort_key)
+
+    # Groups that cannot be separated share a rank and split the places they
+    # occupy — no countback. Two survivors on the same ball net are level; two
+    # groups that lost it on the same hole are level unless their ball nets
+    # differ.
+    def tie_key(s):
+        if s['eliminated_on'] is None:
+            return (0, s['net_to_par'])
+        return (1, -s['eliminated_on'], s['net_to_par'])
+
+    shared_rank = []
+    rank = 1
+    for i, s in enumerate(statuses):
+        if i > 0 and tie_key(s) != tie_key(statuses[i - 1]):
+            rank = i + 1
+        shared_rank.append(rank)
 
     # Mark the winner's last hole result
     PinkBallHoleResult.objects.filter(round=round_obj, is_winner=True).update(is_winner=False)
@@ -190,7 +217,7 @@ def calculate_red_ball(round_obj) -> list:
     # Persist PinkBallResult rows
     PinkBallResult.objects.filter(round=round_obj).delete()
     saved = []
-    for rank, status in enumerate(statuses, start=1):
+    for rank, status in zip(shared_rank, statuses):
         pbr = PinkBallResult.objects.create(
             round              = round_obj,
             foursome           = status['foursome'],
@@ -211,7 +238,7 @@ def red_ball_summary(round_obj) -> dict:
     """
     Return a serialisable dict:
         {
-          'ball_color' : str,
+          'game_name'  : str,     # what the TD called it — every surface reads this
           'entry_fee'  : float,
           'payouts'    : [{'place': int, 'amount': float}, ...],
           'pool'       : float,
@@ -221,20 +248,23 @@ def red_ball_summary(round_obj) -> dict:
                 'group_number'   : int,
                 'players'        : str,
                 'status'         : str,   # 'Survived' | 'Lost on hole N'
-                'total_net_score': int | None,
+                'alive'          : bool,
+                'carrier'        : str | None,   # who has it, and on which hole
+                'carrier_hole'   : int | None,
+                'ball_net_to_par': int | None,   # None once the ball is gone
                 'payout'         : float,
               }, ...
           ]
         }
     """
-    # Round-level config (ball colour + entry_fee + payouts)
+    # Round-level config (the TD's name for the game + entry_fee + payouts)
     try:
         config       = round_obj.pink_ball_config
-        ball_color   = config.ball_color
+        game_name    = config.display_name
         entry_fee    = float(config.entry_fee)
         payouts_list = config.payouts or []
     except PinkBallConfig.DoesNotExist:
-        ball_color   = 'Pink'
+        game_name    = 'Pink Ball'
         entry_fee    = 0.0
         payouts_list = []
 
@@ -251,21 +281,15 @@ def red_ball_summary(round_obj) -> dict:
                        foursome__round=round_obj, player__is_phantom=False
                    ).count()
     pool         = round(entry_fee * num_players, 2)
-    payouts_dict = {int(p['place']): float(p['amount']) for p in payouts_list}
 
     result_list = list(results)
 
-    # Count groups at each paid rank so we can split tied payouts.
-    count_at_rank = {}
-    for r in result_list:
-        if r.rank is not None and r.rank in payouts_dict:
-            count_at_rank[r.rank] = count_at_rank.get(r.rank, 0) + 1
-
-    def _payout_for(rank):
-        if rank is None or rank not in payouts_dict:
-            return 0.0
-        n = count_at_rank.get(rank, 1)
-        return round(payouts_dict[rank] / n, 2)
+    # Tied groups split the money for the PLACES THEY OCCUPY, not a halved
+    # single place — see services/payout.py. No countback.
+    from services.payout import (payouts_by_place, per_person_share,
+                                 split_tied_places)
+    rank_payout = split_tied_places(
+        payouts_by_place(payouts_list), [r.rank for r in result_list])
 
     # Build hole-par lookup from the first available member's tee.
     # All foursomes play the same course so one tee is sufficient for par.
@@ -369,7 +393,18 @@ def red_ball_summary(round_obj) -> dict:
                 net_to_par  = net_sum - par_sum
                 carrier_net = net_sum
 
-        group_payout = _payout_for(r.rank)
+        # Who has the ball right now, and on which hole. Anyone not in that
+        # group is otherwise watching a number with no story.
+        alive        = r.eliminated_on_hole is None
+        carrier      = None
+        carrier_hole = None
+        if alive and order_list:
+            carrier_hole = min((current_hole or 0) + 1, 18)
+            carrier_pk   = order_list[(carrier_hole - 1) % len(order_list)]
+            carrier = next((m.player.name for m in members
+                            if m.player_id == carrier_pk), None)
+
+        group_payout = rank_payout.get(r.rank, 0.0)
         # `display_thru` is what spectator pages render in the Thru
         # column.  After the ball is lost, freeze at the elimination
         # hole so the row reads e.g. "Thru 8 · Lost by RyanL" instead
@@ -386,6 +421,9 @@ def red_ball_summary(round_obj) -> dict:
             'short_names'       : short_names,
             'n_players'         : n_players,
             'status'            : status,
+            'alive'             : alive,
+            'carrier'           : carrier,
+            'carrier_hole'      : carrier_hole,
             'lost_by'           : lost_by_short_name,
             'eliminated_on_hole': r.eliminated_on_hole,
             'current_hole'      : current_hole,
@@ -394,12 +432,21 @@ def red_ball_summary(round_obj) -> dict:
             # total_net_score which can lag when net_score isn't persisted.
             'total_net_score'   : carrier_net if carrier_net is not None else r.total_net_score,
             'net_to_par'        : net_to_par,
+            # The RANKING column. Shown only while the ball is alive: a ball
+            # lost on 5 covers four holes and a ball that survives covers
+            # eighteen, so putting both in one column would rank the worst
+            # group best. An eliminated group reads a dash; its real total is
+            # still on the card above.
+            'ball_net_to_par'   : net_to_par if alive else None,
             'payout'            : group_payout,
-            'per_person_payout' : round(group_payout / n_players, 2) if n_players else 0.0,
+            # The place pays the GROUP and splits among its real golfers — the
+            # borrowed 4th is not a person and cannot be paid.
+            'per_person_payout' : per_person_share(group_payout, n_players),
+            'split_ways'        : n_players,
         })
 
     return {
-        'ball_color' : ball_color,
+        'game_name'  : game_name,
         'entry_fee'  : entry_fee,
         'payouts'    : payouts_list,
         'pool'       : pool,

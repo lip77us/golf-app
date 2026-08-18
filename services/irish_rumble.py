@@ -783,7 +783,6 @@ def irish_rumble_summary(round_obj) -> dict:
                    ).count()
     pool         = round(float(config.entry_fee) * num_players, 2)
     payouts_list = config.payouts or []
-    payouts_dict = {int(p['place']): float(p['amount']) for p in payouts_list}
 
     # Sort: teams with scores first (lowest net-to-par wins), then unstarted
     def _ntp(fid):
@@ -807,18 +806,14 @@ def irish_rumble_summary(round_obj) -> dict:
     for fid in unscored:
         ranked_rows.append({'foursome_id': fid, 'rank': None})
 
-    # Count groups at each paid rank so we can split tied payouts.
-    count_at_rank = {}
-    for row in ranked_rows:
-        r = row['rank']
-        if r is not None and r in payouts_dict:
-            count_at_rank[r] = count_at_rank.get(r, 0) + 1
-
-    def _payout_for(rank):
-        if rank is None or rank not in payouts_dict:
-            return 0.0
-        n = count_at_rank.get(rank, 1)
-        return round(payouts_dict[rank] / n, 2)
+    # Tied groups split the money for the PLACES THEY OCCUPY — two groups tied
+    # for 1st share 1st and 2nd, rather than halving 1st and leaving 2nd
+    # unclaimed. No countback: a tie can be no action, and an arbitrary
+    # tiebreak decides real money on a rule nobody agreed to.
+    from services.payout import (payouts_by_place, per_person_share,
+                                 split_tied_places)
+    rank_payout = split_tied_places(
+        payouts_by_place(payouts_list), [row['rank'] for row in ranked_rows])
 
     overall_out = []
     for row in ranked_rows:
@@ -835,7 +830,7 @@ def irish_rumble_summary(round_obj) -> dict:
         players      = ', '.join(m.player.name for m in real_members)
         short_names  = ' / '.join(m.player.short_name or m.player.name
                                   for m in real_members)
-        group_payout = _payout_for(row['rank'])
+        group_payout = rank_payout.get(row['rank'], 0.0)
         # Borrowed-4th donor status (which donor feeds each hole + whether they
         # have posted yet → the "provisional total" lag).  None for full groups
         # and legacy intra-foursome phantoms.
@@ -869,14 +864,22 @@ def irish_rumble_summary(round_obj) -> dict:
             'group'            : fs.display_name,
             'players'          : players,
             'short_names'      : short_names,
+            # n_players counts the borrowed 4th, because the group really does
+            # put four balls on the hole. n_real_players does not, because the
+            # borrowed 4th cannot be PAID — so a levelled group's place splits
+            # three ways at $23.33 rather than four ways at $17.50.
             'n_players'        : n_players,
+            'n_real_players'   : len(real_members),
             'has_phantom'      : fs.has_phantom,
             'phantom'          : phantom_info,
             'total_score'      : r['score'] if r else None,
             'net_to_par'       : ntp,
             'current_hole'     : current_hole,
             'payout'           : group_payout,
-            'per_person_payout': round(group_payout / n_players, 2) if n_players else 0.0,
+            'per_person_payout': per_person_share(group_payout, len(real_members)),
+            # How the group's share reads on the payout row and in settlement:
+            # "1st — foursome, splits to $23.33 each (3 ways)".
+            'split_ways'       : len(real_members),
         })
 
     # Extract balls_to_count from first segment (all segments may differ, but

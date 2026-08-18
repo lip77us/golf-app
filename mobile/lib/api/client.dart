@@ -451,15 +451,98 @@ class ApiClient {
     required String startDate,   // 'YYYY-MM-DD'
     List<String> activeGames = const [],
     int totalRounds = 1,
+    // Individual-play scoring, set ONCE for the tournament — every round and
+    // every board reads from here. A cup posts the defaults and ignores them.
+    String scoringMethod = 'stroke',   // stroke | stableford
+    String handicapMode  = 'net',      // net | gross (no strokes-off field-wide)
+    int    netPercent    = 100,
+    int?   roundsToCount,              // null = every round counts
+    int    miniSinglesCarvePct = 0,
   }) async {
     final data = await _post('/tournaments/', {
       'name'         : name,
       'start_date'   : startDate,
       'active_games' : activeGames,
       'total_rounds' : totalRounds,
+      'scoring_method': scoringMethod,
+      'handicap_mode' : handicapMode,
+      'net_percent'   : netPercent,
+      'rounds_to_count': roundsToCount,
+      'mini_singles_carve_pct': miniSinglesCarvePct,
     });
     return Tournament.fromJson(data as Map<String, dynamic>);
   }
+
+  // ---- Mini Singles Bracket (two-stage) --------------------------------
+
+  Future<Map<String, dynamic>> getMiniSinglesSetup(int tournamentId) async =>
+      Map<String, dynamic>.from(
+          await _get('/tournaments/$tournamentId/mini-singles/setup/') as Map);
+
+  Future<Map<String, dynamic>> postMiniSinglesSetup(
+    int tournamentId, {
+    String handicapMode = 'strokes_off',
+    int    netPercent   = 100,
+    required double day1EntryFee,
+    required List<Map<String, dynamic>> day1Payouts,
+    required List<Map<String, dynamic>> day2Payouts,
+    String emptySeatRule = 'promote',
+    required int carvePct,
+  }) async {
+    final data = await _post('/tournaments/$tournamentId/mini-singles/setup/', {
+      'handicap_mode'  : handicapMode,
+      'net_percent'    : netPercent,
+      'day1_entry_fee' : day1EntryFee.toStringAsFixed(2),
+      'day1_payouts'   : day1Payouts,
+      'day2_payouts'   : day2Payouts,
+      'empty_seat_rule': emptySeatRule,
+      'carve_pct'      : carvePct,
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Switch the bracket off. A real delete rather than a flag — nothing
+  /// downstream may assume a bracket that is off, and the carve-out goes with
+  /// it.
+  Future<void> deleteMiniSingles(int tournamentId) async {
+    await _delete('/tournaments/$tournamentId/mini-singles/setup/');
+  }
+
+  Future<Map<String, dynamic>> getMiniSingles(int tournamentId) async =>
+      Map<String, dynamic>.from(
+          await _get('/tournaments/$tournamentId/mini-singles/') as Map);
+
+  /// Fill the reserved champions' foursome from day 1. Idempotent.
+  Future<Map<String, dynamic>> syncMiniSinglesDay2(int tournamentId) async =>
+      Map<String, dynamic>.from(await _post(
+          '/tournaments/$tournamentId/mini-singles/sync-day2/', {}) as Map);
+
+  // ---- Day bet ----------------------------------------------------------
+
+  Future<Map<String, dynamic>> getDayBetSetup(int roundId) async =>
+      Map<String, dynamic>.from(
+          await _get('/rounds/$roundId/day-bet/setup/') as Map);
+
+  Future<Map<String, dynamic>> postDayBetSetup(
+    int roundId, {
+    required double entryFee,
+    required List<Map<String, dynamic>> payouts,
+  }) async {
+    final data = await _post('/rounds/$roundId/day-bet/setup/', {
+      'entry_fee': entryFee.toStringAsFixed(2),
+      'payouts'  : payouts,
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> getDayBet(int roundId) async =>
+      Map<String, dynamic>.from(await _get('/rounds/$roundId/day-bet/') as Map);
+
+  // ---- Tournament settlement -------------------------------------------
+
+  Future<Map<String, dynamic>> getTournamentSettlement(int tournamentId) async =>
+      Map<String, dynamic>.from(
+          await _get('/tournaments/$tournamentId/settlement/') as Map);
 
   Future<void> deleteTournament(int id) async {
     await _delete('/tournaments/$id/');
@@ -2021,12 +2104,14 @@ class ApiClient {
 
   Future<Map<String, dynamic>> postPinkBallSetup(
     int roundId, {
-    required String                      ballColor,
+    // What the group CALLS the game — the app never asks the colour. 16
+    // characters, required: Save does not fire until the ball has a name.
+    required String                      gameName,
     required double                      entryFee,
     required List<Map<String, dynamic>>  payouts,
   }) async {
     final data = await _post('/rounds/$roundId/pink-ball/setup/', {
-      'ball_color': ballColor,
+      'game_name' : gameName,
       'entry_fee' : entryFee.toStringAsFixed(2),
       'payouts'   : payouts,
     });

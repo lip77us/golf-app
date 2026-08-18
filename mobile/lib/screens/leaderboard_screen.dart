@@ -645,11 +645,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       if (tn != null && tn.isNotEmpty && tn != cn) return tn;
       return 'Stroke Play';
     }
-    // Pink Ball tab tracks the configured ball colour (e.g. "Red Ball").
+    // Tabs are named for what they pay, and the ball game's name is the
+    // TD's own — "Beer Ball" if that is what he typed. The app never asks
+    // the colour, so there is no colour to append a word to.
     if (g == 'pink_ball') {
-      final color =
-          ((lb?.games['pink_ball']?.data as Map?)?['ball_color'])?.toString();
-      return (color != null && color.isNotEmpty) ? '$color Ball' : 'Pink Ball';
+      final name =
+          ((lb?.games['pink_ball']?.data as Map?)?['game_name'])?.toString();
+      return (name != null && name.trim().isNotEmpty) ? name.trim() : 'Pink Ball';
     }
     return gameDisplayName(g);
   }
@@ -1287,7 +1289,9 @@ class _RedBallView extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme     = Theme.of(context);
     final results   = (data['results'] as List? ?? []);
-    final ballColor = data['ball_color']?.toString() ?? 'Pink';
+    // The TD's own name for the game, on every surface.
+    final rawName  = data['game_name']?.toString().trim() ?? '';
+    final gameName = rawName.isNotEmpty ? rawName : 'Pink Ball';
     final entryFee  = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
     final payouts   = (data['payouts'] as List? ?? []);
 
@@ -1310,7 +1314,7 @@ class _RedBallView extends StatelessWidget {
         // Info chips — wrap so they never overflow the row.
         Wrap(spacing: 8, runSpacing: 4, children: [
           Chip(
-            label: Text('$ballColor Ball',
+            label: Text(gameName,
                 style: const TextStyle(fontSize: 11)),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
@@ -1325,12 +1329,26 @@ class _RedBallView extends StatelessWidget {
           if (payouts.isNotEmpty)
             Chip(
               label: Text(
-                  payouts.length == 1 ? 'Winner takes all' : '${payouts.length} places paid',
+                  payouts.length == 1
+                      // The chip has to read the real rule. Two groups level
+                      // SPLIT the place — a chip saying "Winner takes all"
+                      // over a silent split is the thing this replaces.
+                      ? '1 place · ties split'
+                      : '${payouts.length} places · ties split',
                   style: const TextStyle(fontSize: 11)),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
             ),
         ]),
+        const SizedBox(height: 8),
+        // The ranking is SURVIVAL, not score — so say so above the rows.
+        Text(
+          'One ball per group, no replacements. The last group still holding '
+          'it wins; if more than one finishes 18 with it alive, the lowest '
+          'ball net takes the money.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
         const SizedBox(height: 8),
 
         ...results.map((r) {
@@ -1345,6 +1363,15 @@ class _RedBallView extends StatelessWidget {
           final eliminatedOn    = row['eliminated_on_hole'] as int?;
           final currentHole     = row['current_hole'] as int?;
           final lostBy          = row['lost_by'] as String?;
+          // Who has the ball right now, and on which hole. Anyone outside the
+          // group is otherwise watching a number with no story.
+          final carrier         = row['carrier'] as String?;
+          final carrierHole     = row['carrier_hole'] as int?;
+          // The ranking column. Null once the ball is gone: a ball lost on 5
+          // covers four holes and one that survives covers eighteen, so a
+          // single column carrying both would rank the worst group best.
+          final ballNet         = row['ball_net_to_par'] as int?;
+          final splitWays       = row['split_ways'] as int? ?? 0;
 
           // Subtitle:
           //   "Not started"          — no holes played yet
@@ -1370,7 +1397,9 @@ class _RedBallView extends StatelessWidget {
             subtitle      = 'Not started';
             subtitleColor = theme.colorScheme.onSurfaceVariant;
           } else if (survived && currentHole != null && currentHole < 18) {
-            subtitle      = 'Alive Thru $currentHole';
+            subtitle      = carrier != null && carrierHole != null
+                ? 'Alive · $carrier has it on $carrierHole'
+                : 'Alive thru $currentHole';
             subtitleColor = Colors.green.shade700;
           } else {
             // Completed all 18 holes with ball intact
@@ -1378,8 +1407,9 @@ class _RedBallView extends StatelessWidget {
             subtitleColor = Colors.green.shade700;
           }
 
-          // Trailing: score on top, per-person payout below (right-justified)
-          final ntpStr = _ntpLabel(netToPar);
+          // Trailing: the BALL's net on top (a dash once it is gone — the
+          // group's real total stays on its card), per-person payout below.
+          final ntpStr = ballNet != null ? _ntpLabel(ballNet) : '–';
 
           return Card(
             margin: const EdgeInsets.only(bottom: 6),
@@ -1419,16 +1449,19 @@ class _RedBallView extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  if (activelyAlive || netToPar != null)
-                    Text(
-                      ntpStr,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        // Golf convention: under par red, even/over black.
-                        color: toParColor(netToPar) ?? theme.colorScheme.onSurface,
-                      ),
+                  Text(
+                    ntpStr,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      // Golf convention: under par red, even/over black. A
+                      // dead ball's dash stays muted.
+                      color: ballNet == null
+                          ? theme.colorScheme.onSurfaceVariant
+                          : (toParColor(ballNet) ??
+                              theme.colorScheme.onSurface),
                     ),
+                  ),
                   if (perPersonPayout > 0) ...[
                     Text(
                       '\$${perPersonPayout.formatBet()}',
@@ -1437,7 +1470,9 @@ class _RedBallView extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: Colors.green.shade700),
                     ),
-                    Text('each',
+                    // The place pays the GROUP and splits among its REAL
+                    // golfers — a levelled group three ways, not four.
+                    Text(splitWays > 0 ? 'each · $splitWays ways' : 'each',
                         style: TextStyle(
                             fontSize: 10,
                             color: Colors.green.shade600)),
@@ -1920,12 +1955,26 @@ class _IrishRumbleView extends StatelessWidget {
           if (payouts.isNotEmpty)
             Chip(
               label: Text(
-                  payouts.length == 1 ? 'Winner takes all' : '${payouts.length} places paid',
+                  payouts.length == 1
+                      // The chip has to read the real rule. Two groups level
+                      // SPLIT the place — a chip saying "Winner takes all"
+                      // over a silent split is the thing this replaces.
+                      ? '1 place · ties split'
+                      : '${payouts.length} places · ties split',
                   style: const TextStyle(fontSize: 11)),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
             ),
         ]),
+        const SizedBox(height: 8),
+        // The ranking is SURVIVAL, not score — so say so above the rows.
+        Text(
+          'One ball per group, no replacements. The last group still holding '
+          'it wins; if more than one finishes 18 with it alive, the lowest '
+          'ball net takes the money.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
         const SizedBox(height: 8),
 
         // Borrowed-4th explainer — shown once when any group is a leveled

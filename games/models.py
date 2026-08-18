@@ -1824,22 +1824,42 @@ class StablefordChampionshipConfig(models.Model):
 
 class PinkBallConfig(models.Model):
     """
-    Round-level configuration for the Pink Ball survivor pool.
+    Round-level configuration for the ball game — the survivor pool where one
+    ball per group rotates and the last group still holding it wins.
 
-    ball_color  : the colour name shown in the UI ("Pink", "Red", "Yellow", …)
-    bet_unit    : entry fee per foursome; total pool = bet_unit × num_groups.
-    places_paid : number of finishing places that receive a payout (default 1 = winner takes all).
-                  Pool is split equally among paid places, then further split among tied groups
-                  within each place.
+    **The app never asks the colour.** It is commonly Pink Ball; one group buys
+    red balls and calls it Red Ball, another runs Devil Ball, or Beer Ball
+    because the ball had a stein printed on it. What the app needs to know is
+    what the group CALLS the game, so ``game_name`` is free text and that
+    string is the game's name on every surface: the leaderboard tab, the
+    carrier badge, the lost-ball control, the chat line and the settlement row.
+
+    Sixteen characters — the iPhone 13 mini cap the Cup work derived, the
+    narrowest screen supported. It fits a leaderboard tab without truncating
+    and a carrier badge on a score-entry row that already holds a name and a
+    CH chip.
+
+    **No default and no memory of last week.** The field starts empty every
+    tournament: the ball in the bag this week is the one being named, and Save
+    does not fire until it has a name (enforced at the API, not in the column,
+    so existing rows migrate cleanly). The game is re-drawn each round — the
+    name carries across, the pot does not.
+
+    See docs/design-review/handoff-individual-play/SPEC.md §6.
     """
     round       = models.OneToOneField(
                       Round, on_delete=models.CASCADE,
                       related_name='pink_ball_config'
                   )
-    ball_color  = models.CharField(max_length=50, default='Pink')
+    game_name   = models.CharField(
+                      max_length=16, blank=True, default='',
+                      help_text='What this group calls the game — "Pink Ball", '
+                                '"Devil Ball", "Beer Ball". 16 characters. No '
+                                'default; required to save.',
+                  )
     entry_fee   = models.DecimalField(
                       max_digits=8, decimal_places=2, default=0.00,
-                      help_text="Entry fee per foursome; total pool = entry_fee × num_foursomes.",
+                      help_text="Entry fee per golfer; total pool = entry_fee × field size.",
                   )
     payouts     = models.JSONField(
                       default=list,
@@ -1851,10 +1871,15 @@ class PinkBallConfig(models.Model):
                   )
 
     class Meta:
-        verbose_name = 'Pink Ball Config'
+        verbose_name = 'Ball Game Config'
+
+    @property
+    def display_name(self) -> str:
+        """The name every surface reads. Falls back only for legacy rows."""
+        return self.game_name.strip() or 'Pink Ball'
 
     def __str__(self):
-        return f"Pink Ball config ({self.ball_color}, ${self.bet_unit}, {self.places_paid}P) — {self.round}"
+        return f"{self.display_name} config — {self.round}"
 
 
 # ---------------------------------------------------------------------------
@@ -2021,6 +2046,126 @@ class ScrambleResult(models.Model):
 # MATCH PLAY (within foursome, 2 × 9 holes, single elimination or points)
 # ---------------------------------------------------------------------------
 
+class DayBetConfig(models.Model):
+    """
+    The **day bet** — the final round's 18-hole stroke play side bet, and the
+    only board in the set whose result is not knowable while it is being
+    played (docs/design-review/handoff-individual-play/SPEC.md §7).
+
+    It exists to pay a great single round from somebody with nothing left to
+    play for: Brown shooting 68 on Sunday from twelfth place is the man it is
+    for. So the last round strips it down twice over, and the two exclusions
+    are not the same thing:
+
+    * **Not here at all** — the Mini Singles day-2 finalists. They are playing
+      a match, not posting a stroke card, so they are neither charged nor
+      ranked. An absence, not an exclusion; no row.
+    * **Here but italic** — the championship money winners. They play the
+      round and appear on the board but cannot collect, and do not contribute:
+      their entry is returned at settlement. Only known when the championship
+      closes, which is why they stay visible until then.
+
+    Sixteen − four − two = ten who both fund the pot and can win it. The
+    **places scale with the round, not the entry list**: ten pays three
+    places, a smaller field drops to two, then one.
+
+    The DQ reads the TOURNAMENT's own handicap setting rather than naming a
+    scoring type — a net event disqualifies the net money winners, a gross
+    event the gross ones.
+
+    Round-scoped rather than tournament-scoped so a future "a bet every day"
+    variant is a configuration change and not a rewrite; today only the final
+    round carries one.
+    """
+    round       = models.OneToOneField(
+                    Round, on_delete=models.CASCADE,
+                    related_name='day_bet_config')
+    entry_fee   = models.DecimalField(
+                    max_digits=8, decimal_places=2, default=0.00,
+                    help_text='Per eligible golfer. The ineligible do not pay '
+                              'in, so the pool is provisional until the '
+                              'championship closes.')
+    payouts     = models.JSONField(
+                    default=list,
+                    help_text="[{'place': 1, 'amount': 100.00}, …]. Trimmed to "
+                              "the number of places the eligible field supports.")
+
+    def __str__(self):
+        return f"Day bet — {self.round}"
+
+
+class MiniSinglesConfig(models.Model):
+    """
+    Tournament-level configuration for the **Mini Singles Bracket** — the
+    two-stage game the individual-play spec describes
+    (docs/design-review/handoff-individual-play/SPEC.md §4).
+
+    It is not one bracket inside one foursome. It is a bracket in EVERY group
+    on day 1, and on day 2 the group winners are pulled into one foursome that
+    plays its own bracket for the title. Everyone else plays a normal
+    stroke-play round — which is exactly why it is a side game and not the
+    championship: run it as the main event and three quarters of the field is
+    out of contention on Saturday afternoon.
+
+    Optional, at the TD's discretion. Nothing downstream may assume it exists:
+    no carve-out is taken from the championship pool and no foursome is
+    reserved on day 2 unless this row is present.
+
+    Two pots, funded differently:
+
+    * **Day 1** — a side bet entered per golfer and paid inside each group
+      (``day1_entry_fee`` / ``day1_payouts``). It exists so the 3rd-place
+      match is worth playing; 3rd does not get his entry back.
+    * **Day 2** — the championship CARVE-OUT, a percentage off the top of the
+      championship pool set at tournament setup
+      (``Tournament.mini_singles_carve_pct``). There is no day-2 entry, so 4th
+      has nothing to refund.
+    """
+
+    # A short field and a withdrawal are the same problem — a seat nobody can
+    # fill — so the TD answers once at setup rather than being asked on Sunday
+    # morning.
+    EMPTY_SEAT_RULES = [
+        ('promote', 'Promote the best runner-up'),
+        ('points',  'Points, then a match'),
+        ('short',   'Play it short-handed'),
+    ]
+
+    tournament      = models.OneToOneField(
+                        'tournament.Tournament', on_delete=models.CASCADE,
+                        related_name='mini_singles_config')
+    # Strokes off low is the DEFAULT here and this is the one game where that
+    # is right: a match has two players and a low man to anchor to. It is the
+    # reverse of the field games, which inherit full net because there is no
+    # single opponent to take strokes off against. Set once, governs both days.
+    handicap_mode   = models.CharField(
+                        max_length=20, choices=HandicapMode.choices,
+                        default=HandicapMode.STROKES_OFF)
+    net_percent     = models.PositiveSmallIntegerField(default=100)
+
+    day1_entry_fee  = models.DecimalField(
+                        max_digits=8, decimal_places=2, default=0.00,
+                        help_text='Per golfer. Everybody in the field is in a '
+                                  'day-1 bracket; the pot is paid inside each group.')
+    day1_payouts    = models.JSONField(
+                        default=list,
+                        help_text="[{'place': 1, 'amount': 24.00}, …] per group.")
+    day2_payouts    = models.JSONField(
+                        default=list,
+                        help_text='Day-2 places, paid out of the championship '
+                                  'carve-out. 4th takes nothing — there is no '
+                                  'day-2 entry to refund.')
+
+    empty_seat_rule = models.CharField(
+                        max_length=10, choices=EMPTY_SEAT_RULES,
+                        default='promote',
+                        help_text='Three groups, or a winner who withdraws — '
+                                  'one rule, set once, never asked on Sunday.')
+
+    def __str__(self):
+        return f"Mini Singles config — {self.tournament}"
+
+
 class MatchPlayBracket(models.Model):
     """
     The overall match play structure for one Foursome in one Round.
@@ -2101,6 +2246,20 @@ class MatchPlayMatch(models.Model):
     finished_on_hole    = models.PositiveSmallIntegerField(
                             null=True, blank=True,
                             help_text="Hole number the match was conceded/won (for early finish tracking)."
+                        )
+    # A halved match SPLITS THE MONEY — 1st and 2nd are added together and
+    # shared, and nobody is played off for cash. But some things need exactly
+    # one name: the trophy, and the seat in the next stage. Those go to the
+    # LAST HOLE WON — read the card backwards to the most recent hole either
+    # golfer took outright. Null unless result == 'halved'; null even then if
+    # every hole was halved, which is a true dead heat with no last hole to
+    # read. See docs/design-review/handoff-individual-play/SPEC.md §4.
+    trophy_player       = models.ForeignKey(
+                            Player, on_delete=models.SET_NULL,
+                            null=True, blank=True,
+                            related_name='mp_trophies_on_last_hole',
+                            help_text='Halved match only: who takes the trophy '
+                                      'and the next-stage seat, by last hole won.',
                         )
 
     def __str__(self):
