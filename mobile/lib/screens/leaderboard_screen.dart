@@ -3038,14 +3038,20 @@ class _MsScorecardState extends State<_MsScorecard> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Row(children: [
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('Scorecard',
                 style: theme.textTheme.titleSmall),
-            const Spacer(),
+            const SizedBox(width: 8),
+            // Expanded, not Spacer: an unbounded Text has no width to wrap
+            // into, so a long legend runs off the right edge on a narrow
+            // phone. Bounding it lets it wrap to a second line instead.
             if (widget.legend != null)
-              Text(widget.legend!,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
+              Expanded(
+                child: Text(widget.legend!,
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
           ]),
         ),
         SingleChildScrollView(
