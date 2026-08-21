@@ -4405,10 +4405,18 @@ class _SixesGroupCard extends StatelessWidget {
   /// style each piece independently.
   static ({String? leader, String joiner, String trailer, String tone})
       _segmentParts(Map<String, dynamic> seg) {
-    final t1  = (seg['team1'] as Map<String, dynamic>? ?? const {})['players']
-        as List? ?? const [];
-    final t2  = (seg['team2'] as Map<String, dynamic>? ?? const {})['players']
-        as List? ?? const [];
+    // Short names here: these lines are read at arm's length, walking, in
+    // the sun. The money table below still carries full names, so nobody
+    // is left guessing who "ES" is. Falls back to 'players' for a payload
+    // from a server that predates 'players_short'.
+    List _names(String team) {
+      final t = seg[team] as Map<String, dynamic>? ?? const {};
+      final short = t['players_short'] as List?;
+      if (short != null && short.isNotEmpty) return short;
+      return t['players'] as List? ?? const [];
+    }
+    final t1  = _names('team1');
+    final t2  = _names('team2');
     final t1s = _teamString(t1);
     final t2s = _teamString(t2);
     final winner = seg['winner']?.toString() ?? '—';
@@ -4421,7 +4429,10 @@ class _SixesGroupCard extends StatelessWidget {
       return (leader: t2s, joiner: ' beat ', trailer: t1s, tone: 'won');
     }
     if (winner == 'Halved') {
-      return (leader: null, joiner: 'Halved — ',
+      // No 'Halved — ' prefix: the score column on the same line already
+      // says Halved, and saying it twice is exactly the surplus text that
+      // makes this card hard to scan outdoors.
+      return (leader: null, joiner: '',
               trailer: '$t1s vs $t2s', tone: 'halved');
     }
 
@@ -4518,37 +4529,43 @@ class _SixesGroupCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
+                  // Result first, at the weight the hole range used to
+                  // carry. Walking down a fairway you are reading for who
+                  // won, not for which six holes this was — you already
+                  // know that. So the two swap places and swap fonts.
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
-                      child: Text(
-                        seg['label']?.toString() ?? '',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
+                      child: Builder(builder: (_) {
+                        final parts  = _segmentParts(seg);
+                        final base   = theme.textTheme.bodyLarge?.copyWith(
+                            // onSurface, not onSurfaceVariant: low-contrast
+                            // grey is the first thing to vanish in daylight,
+                            // and the losing side still has to be readable.
+                            color: theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w500);
+                        final leader = base?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w700);
+                        return RichText(
+                          text: TextSpan(style: base, children: [
+                            if (parts.leader != null) ...[
+                              TextSpan(text: parts.leader, style: leader),
+                              TextSpan(text: parts.joiner),
+                            ],
+                            TextSpan(text: parts.trailer),
+                          ]),
+                        );
+                      }),
                     ),
+                    const SizedBox(width: 8),
                     Text(_segmentScore(seg),
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w700)),
                   ]),
-                  const SizedBox(height: 2),
-                  Builder(builder: (_) {
-                    final parts   = _segmentParts(seg);
-                    final muted   = theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant);
-                    final leader  = theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w700);
-                    return RichText(
-                      text: TextSpan(style: muted, children: [
-                        if (parts.joiner == 'Halved — ')
-                          TextSpan(text: parts.joiner),
-                        if (parts.leader != null) ...[
-                          TextSpan(text: parts.leader, style: leader),
-                          TextSpan(text: parts.joiner),
-                          TextSpan(text: parts.trailer),
-                        ] else
-                          TextSpan(text: parts.trailer),
-                      ]),
-                    );
-                  }),
+                  const SizedBox(height: 1),
+                  Text(seg['label']?.toString() ?? '',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
                 ],
               ),
             );

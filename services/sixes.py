@@ -84,6 +84,16 @@ from scoring.handicap import (
 from tournament.models import Foursome
 
 
+def _short(player) -> str:
+    """
+    The label to use where space is tight — Player.short_name, which the
+    account owns and can edit.  It is auto-filled from initials on save,
+    so it is normally set; fall back to the full name rather than an empty
+    cell for anything drafted offline or built in a test without saving.
+    """
+    return (getattr(player, 'short_name', '') or '').strip() or player.name
+
+
 # ---------------------------------------------------------------------------
 # Setup
 # ---------------------------------------------------------------------------
@@ -952,8 +962,12 @@ def sixes_summary(foursome) -> dict:
                 'is_extra'   : False,
                 'status'     : 'complete',
                 'winner'     : 'Team 1' | 'Team 2' | 'Halved',
-                'team1'      : { 'players': [...names...], 'method': str },
-                'team2'      : { 'players': [...names...], 'method': str },
+                'team1'      : { 'players': [...names...],
+                                 'players_short': [...short names...],
+                                 'method': str },
+                'team2'      : { 'players': [...names...],
+                                 'players_short': [...short names...],
+                                 'method': str },
                 'holes'      : [{'hole': n, 't1_net': x, 't2_net': y,
                                  'winner': 'T1'|'T2'|'Halved', 'margin': n}],
             },
@@ -1127,15 +1141,22 @@ def sixes_summary(foursome) -> dict:
             # split (and exclude closed-out holes via counts_for_segment).
             't1_points'  : seg_t1_pts,
             't2_points'  : seg_t2_pts,
+            # 'players' stays full names — the money table reads it, and
+            # older builds read nothing else. 'players_short' is the label
+            # for the match lines, which are read at arm's length on a
+            # sunlit fairway: short_name is account-owned and editable, so
+            # a group can make its own names as terse as it likes.
             'team1'    : {
-                'players'    : [p.name for p in t1.players.all()] if t1 else [],
-                'player_ids' : [p.id for p in t1.players.all()] if t1 else [],
-                'method'     : t1.team_select_method if t1 else '',
+                'players'       : [p.name for p in t1.players.all()] if t1 else [],
+                'players_short' : [_short(p) for p in t1.players.all()] if t1 else [],
+                'player_ids'    : [p.id for p in t1.players.all()] if t1 else [],
+                'method'        : t1.team_select_method if t1 else '',
             },
             'team2'    : {
-                'players'    : [p.name for p in t2.players.all()] if t2 else [],
-                'player_ids' : [p.id for p in t2.players.all()] if t2 else [],
-                'method'     : t2.team_select_method if t2 else '',
+                'players'       : [p.name for p in t2.players.all()] if t2 else [],
+                'players_short' : [_short(p) for p in t2.players.all()] if t2 else [],
+                'player_ids'    : [p.id for p in t2.players.all()] if t2 else [],
+                'method'        : t2.team_select_method if t2 else '',
             },
             'holes'    : holes_out,
         })
