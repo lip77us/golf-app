@@ -3068,46 +3068,61 @@ class _MsScorecardState extends State<_MsScorecard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Hole-number row
-              Row(children: [
-                SizedBox(
-                  width: _labelColW, height: _rowH,
-                  child: const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('Hole',
-                        style: TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.bold)),
+              // Banded header rows, matching the full ScorecardGrid: the
+              // hole numbers on surfaceContainerHighest, par and index a
+              // step lighter on surfaceContainerLow. Every scorecard in
+              // the app should read as the same object, and the bands do
+              // the real work outdoors -- they separate the fixed course
+              // information from the scores underneath without adding a
+              // single word of text.
+              Container(
+                color: theme.colorScheme.surfaceContainerHighest,
+                child: Row(children: [
+                  SizedBox(
+                    width: _labelColW, height: _rowH,
+                    child: const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Hole',
+                          style: TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
                   ),
-                ),
-                for (final h in visibleHoles) headerCell(h),
-              ]),
+                  for (final h in visibleHoles) headerCell(h),
+                ]),
+              ),
               // Par row
-              Row(children: [
-                SizedBox(
-                  width: _labelColW, height: _rowH,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('Par',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(fontStyle: FontStyle.italic)),
-                  ),
-                ),
-                for (final h in visibleHoles) parCell(h),
-              ]),
-              // Stroke-index (hole handicap) row
-              if (hasStrokeIndex)
-                Row(children: [
+              Container(
+                color: theme.colorScheme.surfaceContainerLow,
+                child: Row(children: [
                   SizedBox(
                     width: _labelColW, height: _rowH,
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('Index',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant)),
+                      child: Text('Par',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(fontStyle: FontStyle.italic)),
                     ),
                   ),
-                  for (final h in visibleHoles) siCell(h),
+                  for (final h in visibleHoles) parCell(h),
                 ]),
+              ),
+              // Stroke-index (hole handicap) row
+              if (hasStrokeIndex)
+                Container(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  child: Row(children: [
+                    SizedBox(
+                      width: _labelColW, height: _rowH,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Index',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant)),
+                      ),
+                    ),
+                    for (final h in visibleHoles) siCell(h),
+                  ]),
+                ),
               Container(
                 height: 1,
                 width: _labelColW + _cellW * visibleHoles.length,
