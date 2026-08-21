@@ -3111,12 +3111,12 @@ def _add_watcher(request, *, round_obj=None, tournament=None):
             games = watch_round.active_games or []
             slug = games[0] if games else ''
         if slug:
-            try:
-                game_label = GameType(slug).label
-            except ValueError:
-                # A slug the enum doesn't know (older round, renamed game).
-                # Better to say nothing than to print a raw slug at someone.
-                game_label = ''
+            # public_game_name, not GameType.label: the label is an internal
+            # disambiguator and one of them ("Low Net (Round)") reached a real
+            # share message. It returns '' for a slug the enum doesn't know --
+            # better to say nothing than print a raw slug at someone.
+            from services.game_names import public_game_name
+            game_label = public_game_name(slug)
 
     return Response(
         {'watcher_id': watcher.id, 'created': created, 'is_on_app': is_on_app,

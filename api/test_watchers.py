@@ -285,3 +285,29 @@ class WatcherTests(TestCase):
             {'phone': '(415) 555-7777', 'name': 'Wanda'}, format='json')
         self.assertEqual(resp.data['game_label'], '')
         self.assertEqual(resp.data['course_name'], 'Pebble')
+
+
+class WatcherInviteGameNameTests(TestCase):
+    """
+    The invite body names the game. It must use the game's PUBLIC name, not
+    GameType.label -- a real send read "I'm playing Low Net (Round) at Tilden
+    Park", leaking an internal scope qualifier into a message to a stranger.
+    """
+
+    def test_public_name_strips_the_internal_qualifier(self):
+        from services.game_names import public_game_name
+        from core.models import GameType
+        self.assertEqual(GameType.LOW_NET_ROUND.label, 'Low Net (Round)')
+        self.assertEqual(public_game_name('low_net_round'), 'Stroke Play')
+
+    def test_no_public_name_carries_a_parenthetical(self):
+        """A parenthetical in a public name is an internal qualifier escaping."""
+        from services.game_names import public_game_name
+        from core.models import GameType
+        leaking = [g.value for g in GameType if '(' in public_game_name(g.value)]
+        self.assertEqual(leaking, [], f'internal qualifier in public name: {leaking}')
+
+    def test_unknown_slug_says_nothing(self):
+        from services.game_names import public_game_name
+        self.assertEqual(public_game_name('no_such_game'), '')
+        self.assertEqual(public_game_name(''), '')
