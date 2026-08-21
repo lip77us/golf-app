@@ -1896,3 +1896,66 @@ def watch_cup_round(request, token: str):
             })
 
     return _VIEW_DISPATCH[requested](request, round_obj, token, tabs)
+
+
+# ---------------------------------------------------------------------------
+# Open Graph share card
+# ---------------------------------------------------------------------------
+
+def watch_card_png(request, token: str):
+    """
+    GET /watch/<token>/card.png
+
+    The og:image for a share link — a 1200x630 PNG rendered per request.
+
+    Unauthenticated on purpose: the crawler that fetches this (iMessage,
+    WhatsApp, Signal, the social clients) carries no credential, and the
+    token is already the credential for the page itself.
+
+    Cached for 60 seconds and keyed on the hole count, per the handoff. The
+    card must look alive when it is first shared, but clients cache link
+    previews hard and re-fetch rarely -- the card is a snapshot, the page is
+    live. Already-sent links are not retrofitted.
+    """
+    from django.core.cache import cache
+    from django.http       import HttpResponse
+    from services.share_card import build_context, render_card
+
+    try:
+        round_obj = (Round.objects
+                     .select_related('course', 'created_by')
+                     .get(watch_token=token))
+    except Round.DoesNotExist:
+        raise Http404('Unknown watch link.')
+
+    ctx = build_context(round_obj)
+    key = f'sharecard:{token}:{ctx["thru"]}:{ctx["state_label"]}'
+    png = cache.get(key)
+    if png is None:
+        png = render_card(ctx)
+        cache.set(key, png, 60)
+
+    resp = HttpResponse(png, content_type='image/png')
+    resp['Cache-Control'] = 'public, max-age=60'
+    return resp
+
+
+def share_meta(round_obj, request=None) -> dict:
+    """
+    The Open Graph values for a round's watch page, for the base template.
+
+    Kept next to the card so the card and the tags cannot describe the round
+    differently -- both read the same context.
+    """
+    from django.conf import settings
+    from services.share_card import build_context
+
+    ctx   = build_context(round_obj)
+    base  = getattr(settings, 'PUBLIC_BASE_URL', '').rstrip('/')
+    url   = f'{base}/watch/{round_obj.watch_token}/'
+    return {
+        'og_title'      : ctx['title'],
+        'og_description': ctx['meta'],
+        'og_image'      : f'{url}card.png',
+        'og_url'        : url,
+    }

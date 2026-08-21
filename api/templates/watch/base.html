@@ -1,4 +1,4 @@
-{% load static %}<!DOCTYPE html>
+{% load static share_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -9,6 +9,28 @@
     browser doesn't surprise users with an aggressive reload.
   {% endcomment %}
   <title>{% block title %}Live Leaderboard{% endblock %}</title>
+
+  {% comment %}
+    Open Graph / Twitter tags. Without these the receiving client falls back
+    to <title> and renders a gray row with its own generic glyph -- which is
+    what every share link looked like until now. og:image is rendered per
+    request by watch_views.watch_card_png.
+  {% endcomment %}
+  {% share_meta round as share %}
+  {% if share.og_title %}
+    <meta property="og:title"       content="{{ share.og_title }}">
+    <meta property="og:description" content="{{ share.og_description }}">
+    <meta property="og:image"       content="{{ share.og_image }}">
+    <meta property="og:image:width"  content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:url"         content="{{ share.og_url }}">
+    <meta property="og:type"        content="website">
+    <meta property="og:site_name"   content="Halved">
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="{{ share.og_title }}">
+    <meta name="twitter:description" content="{{ share.og_description }}">
+    <meta name="twitter:image"       content="{{ share.og_image }}">
+  {% endif %}
   <style>
     :root {
       --bg:       #f8faf6;
