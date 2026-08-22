@@ -1959,3 +1959,58 @@ def share_meta(round_obj, request=None) -> dict:
         'og_image'      : f'{url}card.png',
         'og_url'        : url,
     }
+
+
+def watch_shared_scorecard(request, token: str):
+    """
+    GET /watch/<token>/scorecard/[?g=<group>&mode=gross|net]
+
+    The shared scorecard page (handoff-shared-scorecard) — what a
+    link.halved.golf tap opens, replacing the PNG the app used to text.
+
+    A mirror: every number comes from _build_scorecard, the same source the
+    app renders. No auth — the token is the credential, and it is already
+    opaque and non-sequential.
+    """
+    from django.conf import settings
+    from django.shortcuts import render as _render
+    from services.game_names import public_game_name
+    from services.shared_scorecard import build_page
+
+    try:
+        round_obj = (Round.objects
+                     .select_related('course', 'created_by')
+                     .get(watch_token=token))
+    except Round.DoesNotExist:
+        raise Http404('Unknown watch link.')
+
+    groups = list(round_obj.foursomes.order_by('group_number'))
+    if not groups:
+        raise Http404('This round has no groups yet.')
+
+    want = request.GET.get('g')
+    foursome = groups[0]
+    if want:
+        for fs in groups:
+            if str(fs.group_number) == str(want):
+                foursome = fs
+                break
+
+    mode = (request.GET.get('mode') or 'gross').lower()
+    if mode not in ('gross', 'net'):
+        mode = 'gross'
+
+    page = build_page(foursome, mode=mode)
+
+    slug = round_obj.primary_game or ''
+    if not slug:
+        games = round_obj.active_games or []
+        slug = games[0] if games else ''
+
+    return _render(request, 'watch/shared_scorecard.html', {
+        'round'       : round_obj,
+        'page'        : page,
+        'game_label'  : public_game_name(slug),
+        'download_url': settings.APP_DOWNLOAD_URL,
+        'groups'      : groups,
+    })

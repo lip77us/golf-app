@@ -56,6 +56,8 @@ urlpatterns = [
     # the page pattern would otherwise swallow the filename.
     path('watch/<str:token>/card.png', watch_views.watch_card_png,
          name='watch-card-png'),
+    path('watch/<str:token>/scorecard/', watch_views.watch_shared_scorecard,
+         name='watch-shared-scorecard'),
     path('watch/<str:token>/', watch_views.watch_cup_round,
          name='watch-cup-round'),
 

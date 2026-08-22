@@ -1,0 +1,230 @@
+{% load static share_tags %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{ page.title }} · Halved</title>
+  {% share_meta round as share %}
+  {% if share.og_title %}
+    <meta property="og:title"       content="{{ share.og_title }}">
+    <meta property="og:description" content="{{ share.og_description }}">
+    <meta property="og:image"       content="{{ share.og_image }}">
+    <meta property="og:image:width"  content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:url"         content="{{ share.og_url }}">
+    <meta property="og:type"        content="website">
+    <meta property="og:site_name"   content="Halved">
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:image"       content="{{ share.og_image }}">
+  {% endif %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400..900&family=Spline+Sans:wght@300..700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --pine:#0F6E56; --ink:#0B1F1A; --mint:#3BD89A; --bone:#F3F1EA;
+      --hero2:#9BC7B7; --field:#EEF3EE;
+      --par-bg:#F1F5F2; --par-fg:#5C6B62;
+      --rule-in:#E1E8E3; --rule-sec:#D3DED6; --rule-out:#B9C9BF;
+      --under:#C2432D;
+      --display:'Schibsted Grotesk',system-ui,sans-serif;
+      --body:'Spline Sans',system-ui,sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--field);font-family:var(--body);color:var(--ink);
+         -webkit-text-size-adjust:100%}
+    .wrap{max-width:720px;margin:0 auto;padding-bottom:150px}
+
+    /* ── Hero ─────────────────────────────────────────────────────────── */
+    .hero{background:linear-gradient(165deg,#0F6E56 0%,#0B1F1A 82%);color:var(--bone);
+          padding:20px 20px 24px}
+    .brandrow{display:flex;align-items:center;justify-content:space-between}
+    .brand{display:inline-flex;align-items:center;gap:8px}
+    .wordmark{font-family:var(--display);font-size:14px;font-weight:600;
+              letter-spacing:.14em;color:var(--bone)}
+    .pill{display:inline-flex;align-items:center;gap:6px;background:rgba(59,216,154,.16);
+          border:1px solid rgba(59,216,154,.5);color:var(--mint);font-size:11px;
+          font-weight:700;letter-spacing:.06em;padding:4px 10px;border-radius:999px}
+    .dot{width:7px;height:7px;border-radius:999px;background:var(--mint);
+         box-shadow:0 0 0 3px rgba(59,216,154,.25)}
+    .pill.live .dot{animation:pulse 1.8s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+    @media (prefers-reduced-motion:reduce){.pill.live .dot{animation:none}}
+    h1{font-family:var(--display);font-size:24px;font-weight:700;letter-spacing:-.01em;
+       margin:18px 0 4px}
+    .sub{font-size:13px;color:var(--hero2);font-variant-numeric:tabular-nums;margin:0}
+    .result{margin-top:16px;border:1px solid rgba(243,241,234,.18);border-radius:12px;
+            background:rgba(243,241,234,.06);padding:12px 14px}
+    .result .big{font-family:var(--display);font-size:20px;font-weight:700;color:var(--mint)}
+    .result .small{font-size:12px;color:var(--hero2);margin-top:2px;
+                   font-variant-numeric:tabular-nums}
+
+    /* ── Mode selector ────────────────────────────────────────────────── */
+    .modes{display:flex;gap:6px;padding:14px 20px 0}
+    .modes a{flex:1;text-align:center;padding:9px 0;border-radius:10px;
+             border:1px solid var(--rule-out);background:#fff;color:var(--par-fg);
+             font-size:13px;font-weight:600;text-decoration:none}
+    .modes a.on{background:var(--pine);border-color:var(--pine);color:var(--bone)}
+
+    /* ── Paper grid ───────────────────────────────────────────────────── */
+    .card{margin:14px 20px 0;background:#fff;border:1px solid var(--rule-out);
+          border-radius:12px;overflow:hidden}
+    /* Safety net: a shotgun round or a very long name can still outrun a
+       narrow phone. The GRID scrolls; the page body never does. */
+    .gridscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .grid{display:grid;grid-template-columns:64px repeat(9,1fr) 36px;
+          font-variant-numeric:tabular-nums}
+    .grid.with-tot{grid-template-columns:64px repeat(9,1fr) 36px 36px}
+    .grid > div{border-right:1px solid var(--rule-in);border-bottom:1px solid var(--rule-in);
+                padding:6px 0;text-align:center;font-size:13px;min-height:34px;
+                /* min-width:0 lets a column shrink below its content; without
+                   it the score marks set a min-content floor and pushed the
+                   last column off the screen. */
+                min-width:0}
+    .grid > div:last-child{border-right:0}
+    .grid .lab{text-align:left;padding-left:10px;font-size:12px;font-weight:600;
+               /* A golfer can name himself anything. Clip rather than let the
+                  label shove the grid sideways. */
+               overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .grid .hd{background:var(--pine);color:var(--bone);font-family:var(--display);
+              font-size:11px;font-weight:700;letter-spacing:.04em}
+    .grid .hd.tot{background:#0c5a46}
+    .grid .par{background:var(--par-bg);color:var(--par-fg);font-size:12px}
+    .grid .par-last{border-bottom:2px solid var(--rule-sec)}
+    .grid .under{color:var(--under)}
+    .grid .sum{font-weight:700;background:#F7FAF8}
+    /* Score notation — drawn, not shadowed. */
+    /* Marks sized to sit INSIDE the cell. The concentric ring is an outline
+       (which takes no layout space) rather than a second border, and the
+       whole mark is small enough that the ring still lands inside the
+       gridline -- the first pass drew 22px boxes with a 4.5px shadow, which
+       bled over the neighbouring holes. */
+    .mk{display:inline-flex;align-items:center;justify-content:center;
+        width:19px;height:19px;line-height:1;font-size:12px}
+    .mk.birdie{border:1.4px solid currentColor;border-radius:999px}
+    .mk.eagle,.mk.albatross{border:1.4px solid currentColor;border-radius:999px;
+              outline:1.4px solid currentColor;outline-offset:1.5px}
+    .mk.bogey{border:1.4px solid currentColor}
+    .mk.double{border:1.4px solid currentColor;
+               outline:1.4px solid currentColor;outline-offset:1.5px}
+    .nine-label{padding:10px 12px 2px;font-family:var(--display);font-size:12px;
+                font-weight:700;color:var(--par-fg);letter-spacing:.04em}
+    .collapsed{opacity:.5}
+    .collapsed-note{padding:10px 12px 14px;font-size:12px;color:var(--par-fg)}
+
+    /* ── Sticky hook ──────────────────────────────────────────────────── */
+    .hook{position:fixed;left:0;right:0;bottom:0;background:var(--ink);color:var(--bone);
+          border-radius:24px 24px 0 0;padding:18px 20px calc(18px + env(safe-area-inset-bottom));
+          box-shadow:0 -12px 30px -12px rgba(0,0,0,.5)}
+    .hook h2{font-family:var(--display);font-size:16px;font-weight:700;margin:0 0 4px}
+    .hook p{margin:0 0 12px;font-size:13px;color:var(--hero2)}
+    .hook a.cta{display:block;text-align:center;background:var(--mint);color:var(--ink);
+                font-weight:700;font-size:15px;padding:13px;border-radius:16px;
+                text-decoration:none}
+    .hook a.stay{display:block;text-align:center;margin-top:10px;color:var(--hero2);
+                 font-size:13px;text-decoration:none}
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <div class="brandrow">
+      <span class="brand">
+        <svg width="20" height="20" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+          <ellipse cx="32" cy="52" rx="15" ry="3.5" fill="#3BD89A"/>
+          <rect x="17" y="15" width="5" height="37" rx="1.5" fill="#F3F1EA"/>
+          <rect x="17" y="30" width="22" height="5" rx="1.5" fill="#F3F1EA"/>
+          <rect x="40" y="11" width="2.6" height="41" rx="1.3" fill="#F3F1EA"/>
+          <path d="M42.6 13 L53 16.5 L42.6 20 Z" fill="#F3F1EA"/>
+        </svg>
+        <span class="wordmark">HALVED</span>
+      </span>
+      {% if page.is_live %}
+        <span class="pill live"><span class="dot"></span>LIVE</span>
+      {% else %}
+        <span class="pill">FINAL</span>
+      {% endif %}
+    </div>
+
+    <h1>{{ page.title }}</h1>
+    <p class="sub">{{ game_label }}{% if game_label and page.course %} · {% endif %}{{ page.course }}{% if page.date %} · {{ page.date|date:"M j, Y" }}{% endif %}</p>
+
+    {% if result_line %}
+      <div class="result">
+        <div class="big">{{ result_line }}</div>
+        {% if result_detail %}<div class="small">{{ result_detail }}</div>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="modes">
+    <a href="?g={{ page.group_number }}&amp;mode=gross" class="{% if page.mode == 'gross' %}on{% endif %}">Gross</a>
+    <a href="?g={{ page.group_number }}&amp;mode=net"   class="{% if page.mode == 'net' %}on{% endif %}">{{ page.net_label }}</a>
+  </div>
+
+  <div class="card">
+    <div class="nine-label">FRONT</div>
+    <div class="gridscroll"><div class="grid">
+      <div class="hd lab">Hole</div>
+      {% for c in page.front_cols %}<div class="hd">{{ c.hole }}</div>{% endfor %}
+      <div class="hd tot">Out</div>
+
+      <div class="par lab par-last">Par</div>
+      {% for c in page.front_cols %}<div class="par par-last">{{ c.par|default:"" }}</div>{% endfor %}
+      <div class="par par-last">{{ page.par_out|default:"" }}</div>
+
+      {% for r in page.rows %}
+        <div class="lab">{{ r.name }}</div>
+        {% for c in r.front_cells %}
+          <div class="{% if c.under %}under{% endif %}">{% if c.value %}<span class="mk {{ c.cls }}">{{ c.value }}</span>{% endif %}</div>
+        {% endfor %}
+        <div class="sum">{{ r.out_total|default:"" }}</div>
+      {% endfor %}
+    </div></div>
+
+    {% if page.back_started %}
+      <div class="nine-label">BACK</div>
+      <div class="gridscroll"><div class="grid with-tot">
+        <div class="hd lab">Hole</div>
+        {% for c in page.back_cols %}<div class="hd">{{ c.hole }}</div>{% endfor %}
+        <div class="hd tot">In</div><div class="hd tot">Tot</div>
+
+        <div class="par lab par-last">Par</div>
+        {% for c in page.back_cols %}<div class="par par-last">{{ c.par|default:"" }}</div>{% endfor %}
+        <div class="par par-last">{{ page.par_in|default:"" }}</div>
+        <div class="par par-last">{{ page.par_tot|default:"" }}</div>
+
+        {% for r in page.rows %}
+          <div class="lab">{{ r.name }}</div>
+          {% for c in r.back_cells %}
+            <div class="{% if c.under %}under{% endif %}">{% if c.value %}<span class="mk {{ c.cls }}">{{ c.value }}</span>{% endif %}</div>
+          {% endfor %}
+          <div class="sum">{{ r.in_total|default:"" }}</div>
+          <div class="sum">{{ r.tot_total|default:"" }}</div>
+        {% endfor %}
+      </div></div>
+    {% else %}
+      <div class="nine-label collapsed">BACK</div>
+      <div class="collapsed-note">Opens when a score lands on hole 10.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<div class="hook">
+  <h2>Play your own money matches</h2>
+  <p>Halved tracks every game and settles up automatically. Free to start.</p>
+  <a class="cta" href="{{ download_url }}">Get Halved free</a>
+  <a class="stay" href="#" onclick="document.querySelector('.hook').style.display='none';return false;">Just watching? Keep following live →</a>
+</div>
+
+{% if page.is_live %}
+<script>
+  // Poll while live; a finished round stops asking. The page is the live
+  // surface -- the card that got you here is a snapshot.
+  setTimeout(function(){ location.reload(); }, 30000);
+</script>
+{% endif %}
+</body>
+</html>

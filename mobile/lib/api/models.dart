@@ -1279,16 +1279,23 @@ class Scorecard {
   final List<ScorecardHole> holes;
   final List<PlayerTotals> totals;
 
+  /// Public page for this group's scorecard — what Share sends. Built by the
+  /// server (it owns share-URL shape); empty when the round has no watch
+  /// token, in which case there is nothing shareable.
+  final String shareUrl;
+
   const Scorecard({
     required this.foursomeId,
     required this.groupNumber,
     required this.holes,
     required this.totals,
+    this.shareUrl = '',
   });
 
   factory Scorecard.fromJson(Map<String, dynamic> j) => Scorecard(
         foursomeId: j['foursome_id'] as int,
         groupNumber: j['group_number'] as int,
+        shareUrl: (j['share_url'] as String?) ?? '',
         holes: (j['holes'] as List? ?? [])
             .map((h) => ScorecardHole.fromJson(h as Map<String, dynamic>))
             .toList(),

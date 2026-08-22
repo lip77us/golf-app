@@ -411,7 +411,19 @@ def _build_scorecard(foursome: Foursome) -> dict:
         'group_number': foursome.group_number,
         'holes'       : holes_out,
         'totals'      : totals,
+        # The public page for this group's scorecard. Built here rather than
+        # in the client because the server already owns share-URL shape (see
+        # the watcher invite's watch_url) and the client has no base for it.
+        'share_url'   : _scorecard_share_url(foursome),
     }
+
+
+def _scorecard_share_url(foursome) -> str:
+    token = getattr(foursome.round, 'watch_token', '') or ''
+    if not token:
+        return ''
+    base = getattr(settings, 'PUBLIC_BASE_URL', '').rstrip('/')
+    return f'{base}/watch/{token}/scorecard/?g={foursome.group_number}'
 
 
 def _build_leaderboard(round_obj: Round) -> dict:

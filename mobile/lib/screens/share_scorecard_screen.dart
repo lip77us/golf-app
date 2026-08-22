@@ -1,15 +1,19 @@
 /// screens/share_scorecard_screen.dart
 /// ------------------------------------
-/// Preview + share a portrait scorecard as an image. Loads the foursome's
-/// scorecard, renders the two-nines [ShareableScorecard] inside a
-/// RepaintBoundary, and the app-bar Share action captures it to a PNG and opens
-/// the native share sheet (Messages, etc.) so the user can text a copy.
+/// Preview the group's scorecard, then share it.
+///
+/// Share sends a LINK to the public scorecard page, not a PNG. The image it
+/// used to send froze at the moment it was sent, titled itself with the
+/// course, called one golfer two different names, and carried no Halved
+/// anywhere — so a stranger who received it had nothing to tap and no idea
+/// what the product was. The link opens a live page, arrives in the thread
+/// with a proper preview card, and ends in "Get Halved free".
+///
+/// The on-screen preview stays: it is what the sender is choosing to share,
+/// and seeing it is how they decide the round is worth sending.
 
-import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -58,10 +62,19 @@ class _ShareScorecardScreenState extends State<ShareScorecardScreen> {
     return names.isEmpty ? 'Scorecard' : names.join(' + ');
   }
 
+  /// Share the LINK, not a picture of the scorecard.
+  ///
+  /// The PNG titled itself with the course, called one golfer two different
+  /// names, printed the same result three times and carried no Halved
+  /// anywhere -- and being an image, it froze the moment it was sent. The
+  /// link opens a live page, gets a proper preview card in the thread, and
+  /// gives someone who has never heard of Halved somewhere to go.
   Future<void> _share() async {
     if (_sharing) return;
     // Capture what we need from context BEFORE any await.
-    final course = context.read<RoundProvider>().round?.course.name ?? 'Golf';
+    final rp     = context.read<RoundProvider>();
+    final course = rp.round?.course.name ?? 'Golf';
+    final url    = rp.scorecard?.shareUrl ?? '';
     // iOS requires a non-zero source rect for the share sheet (and the iPad
     // popover anchor); without it shareXFiles throws sharePositionOrigin errors.
     final box = context.findRenderObject() as RenderBox?;
@@ -70,22 +83,17 @@ class _ShareScorecardScreenState extends State<ShareScorecardScreen> {
         : null;
     setState(() => _sharing = true);
     try {
-      final boundary = _boundaryKey.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
-      if (boundary == null) return;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final bytes = byteData.buffer.asUint8List();
-
-      // Dart's built-in temp dir (NSTemporaryDirectory on iOS) — no plugin.
-      final file = File('${Directory.systemTemp.path}'
-          '/scorecard_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(bytes);
-
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'image/png')],
-        text: '$course scorecard',
+      if (url.isEmpty) {
+        // No watch token means no public page. Say so rather than silently
+        // sending a bare sentence with nothing to tap.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('This round has no share link yet.')));
+        }
+        return;
+      }
+      await Share.share(
+        'Scorecard from $course $url',
         sharePositionOrigin: origin,
       );
     } catch (e) {
