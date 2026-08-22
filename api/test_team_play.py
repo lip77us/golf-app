@@ -89,8 +89,12 @@ class TeamPlayEndpointTests(TestCase):
         body.update(overrides)
         return self.client.post(self._setup_url(), body, format='json')
 
-    def _team(self, body, name):
-        return next(t for t in body['teams'] if t['name'] == name)
+    def _team(self, body, colour):
+        """Look teams up by COLOUR, not name.
+
+        A team the TD never named is `Group N` — the colour identifies the row
+        on the board but is deliberately not written into the name."""
+        return next(t for t in body['teams'] if t['colour'] == colour)
 
     # -- setup -----------------------------------------------------------
 
@@ -188,6 +192,15 @@ class TeamPlayEndpointTests(TestCase):
             [('Maiolini', 25, '1.00'), ('Gunst', 20, '1.60'),
              ('Detomasi', 15, '1.65'), ('Yau', 10, '1.90')],
         )
+
+    def test_an_unnamed_team_is_group_n_not_its_colour(self):
+        """The colour does real work on the board, but calling the team Pine
+        when nobody chose that is the app inventing a name."""
+        self._configure()
+        body = self.client.get(self._board_url()).json()
+        first = body['teams'][0]
+        self.assertEqual(first['colour'], 'Pine')
+        self.assertEqual(first['name'], 'Group 1')
 
     def test_every_team_gets_a_colour(self):
         self._configure()

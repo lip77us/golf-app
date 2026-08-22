@@ -133,9 +133,10 @@ def ensure_team_state(foursome, *, index=None):
     if not state.colour:
         state.colour = team_colour_for(index or foursome.group_number)
         state.save(update_fields=['colour'])
-    if created and not foursome.name:
-        foursome.name = state.colour
-        foursome.save(update_fields=['name'])
+    # The colour is NOT written into Foursome.name. A team the TD never named
+    # is `Group N` — that is what he was shown in the wizard, and calling it
+    # Pine on the hub is the app inventing a name nobody chose. The colour
+    # still identifies the row on the board; it just is not the team's name.
     return state
 
 
@@ -396,7 +397,9 @@ def team_dict(foursome, config) -> dict:
     return {
         'foursome_id'       : foursome.id,
         'group_number'      : foursome.group_number,
-        'name'              : foursome.name or (state.colour if state else ''),
+        # Never the colour: an unnamed team is `Group N`, the same thing the
+        # wizard showed. The colour identifies the row; it is not a name.
+        'name'              : foursome.name or f'Group {foursome.group_number}',
         'colour'            : state.colour if state else '',
         'real_player_count' : len(real),
         'has_phantom'       : phantom is not None,
