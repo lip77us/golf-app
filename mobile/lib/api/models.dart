@@ -5503,13 +5503,19 @@ class TeamPlayShambleRow {
   final String name;
   final bool   isPhantom;
   final int?   gross;
+  /// His figure for the ROUND — course handicap at the format's allowance.
+  /// This is what "gets N" means on every card in the app.
+  final int    handicap;
+  /// Strokes on THIS hole, allocated off [handicap] by stroke index. The dots
+  /// say where they fall; the chip says how many there are all day.
   final int    strokes;
   final int?   net;
   final bool   counts;
 
   const TeamPlayShambleRow({
     required this.playerId, required this.name, required this.isPhantom,
-    this.gross, required this.strokes, this.net, required this.counts,
+    this.gross, this.handicap = 0, required this.strokes, this.net,
+    required this.counts,
   });
 
   factory TeamPlayShambleRow.fromJson(Map<String, dynamic> j) =>
@@ -5518,6 +5524,7 @@ class TeamPlayShambleRow {
         name     : (j['name'] ?? '') as String,
         isPhantom: j['is_phantom'] == true,
         gross    : j['gross'] as int?,
+        handicap : (j['handicap'] ?? 0) as int,
         strokes  : (j['strokes'] ?? 0) as int,
         net      : j['net'] as int?,
         counts   : j['counts'] == true,

@@ -749,7 +749,10 @@ class _GolferLine extends StatelessWidget {
                   ),
                 ),
               ),
-              if (row.strokes > 0) ...[
+              // "gets N" is his figure for the ROUND — course handicap at the
+              // shamble's allowance — matching every other card. Which holes
+              // carry a stroke is the dots' job, on the box and on the grid.
+              if (row.handicap > 0) ...[
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -758,7 +761,7 @@ class _GolferLine extends StatelessWidget {
                     color: theme.colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: Text('gets ${row.strokes}',
+                  child: Text('gets ${row.handicap}',
                       style: theme.textTheme.labelSmall),
                 ),
               ],

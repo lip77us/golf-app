@@ -9518,7 +9518,7 @@ class TeamPlayCardView(APIView):
             body['team_score'] = team_hole_scores(foursome).get(hole)
         else:
             body['shamble'] = shamble_hole(
-                foursome, hole, resolved_counts(foursome, config))
+                foursome, hole, resolved_counts(foursome, config), config)
         return Response(body)
 
 
@@ -9545,12 +9545,20 @@ def _golfer_strokes_by_hole(foursome, config):
 
     if config.is_scramble:
         return {}
+    from services.team_handicap import player_shamble_handicap
+    from services.team_play_state import allowance_label
+
     holes = hole_data(foursome)
+    gross_only = config.handicap_mode == 'gross'
+    pct = allowance_label(foursome, config).get('pct') or 100
+
     out = {}
     for m in foursome.memberships.select_related('player'):
+        hcp = 0 if gross_only else player_shamble_handicap(
+            m.course_handicap, pct)
         out[str(m.player_id)] = {
             str(h['number']): _strokes_on_hole(
-                m.playing_handicap, h.get('stroke_index', h['number']))
+                hcp, h.get('stroke_index', h['number']))
             for h in holes
         }
     return out
@@ -9574,7 +9582,7 @@ def _first_unplayed_team_hole(foursome, config, order):
     else:
         counts = resolved_counts(foursome, config)
         for h in order:
-            if not shamble_hole(foursome, h, counts)['complete']:
+            if not shamble_hole(foursome, h, counts, config)['complete']:
                 return h
     return order[0] if order else 1
 

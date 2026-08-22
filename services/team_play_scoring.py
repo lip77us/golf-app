@@ -76,7 +76,8 @@ def team_hole_scores(foursome) -> dict:
     }
 
 
-def shamble_hole(foursome, hole_number: int, counts: dict) -> dict:
+def shamble_hole(foursome, hole_number: int, counts: dict,
+                 config) -> dict:
     """
     One shamble hole: four scores, and which of them counted.
 
@@ -106,12 +107,28 @@ def shamble_hole(foursome, hole_number: int, counts: dict) -> dict:
         if s.gross_score is not None
     }
 
+    # Each golfer plays off HIS OWN course handicap at the format's allowance —
+    # 85% at two balls, 75% at one, 95% at three — not off the membership's
+    # playing_handicap, which for a Foursome Play round is the untouched course
+    # handicap because the round itself never carries an allowance. Using it
+    # handed everybody 100% and quietly inflated every net score on the board.
+    from services.team_handicap import player_shamble_handicap
+    from services.team_play_state import allowance_label
+
+    gross_only = config.handicap_mode == 'gross'
+    pct = allowance_label(foursome, config).get('pct') or 100
+
     rows = []
     for m in members:
         gross = scores.get(m.player_id)
-        strokes = _strokes_on_hole(m.playing_handicap, si)
+        handicap = 0 if gross_only else player_shamble_handicap(
+            m.course_handicap, pct)
+        strokes = _strokes_on_hole(handicap, si)
         rows.append({
             'player_id'  : m.player_id,
+            # The golfer's figure for the ROUND — what "gets N" means on every
+            # other card. Which holes carry one is the dots' job.
+            'handicap'   : handicap,
             'name'       : 'Phantom 4th' if m.player.is_phantom else m.player.name,
             'is_phantom' : m.player.is_phantom,
             'gross'      : gross,
@@ -168,7 +185,7 @@ def team_round(foursome, config) -> dict:
         gross_total = net_total = 0
         thru = 0
         for n in sorted(counts):
-            hole = shamble_hole(foursome, n, counts)
+            hole = shamble_hole(foursome, n, counts, config)
             if hole['team_net'] is None:
                 continue
             thru += 1

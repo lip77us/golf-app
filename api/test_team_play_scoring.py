@@ -316,11 +316,29 @@ class ShambleCardTests(TestCase):
         hole = card['shamble']
 
         self.assertEqual(hole['count'], 2)
-        self.assertEqual(hole['team_net'], 9)     # 4 + 5
+        # Each man plays off 85% of his OWN course handicap (6/9/14/21 → 5/8/12/18),
+        # allocated by stroke index. On SI 7 that is a stroke for everyone but
+        # Petersen, so 4/5/5/7 gross becomes 4/4/4/6 net and the best two are 8.
+        self.assertEqual(hole['team_net'], 8)
         counting = {r['name'] for r in hole['rows'] if r['counts']}
         self.assertEqual(counting, {'Petersen', 'Brown'})
         reilly = next(r for r in hole['rows'] if r['name'] == 'Reilly')
         self.assertFalse(reilly['counts'])
+
+    def test_each_golfer_plays_off_the_shamble_allowance(self):
+        """The regression this pins: the card allocated off the membership's
+        playing_handicap, which on a Foursome Play round is the untouched
+        course handicap — so everybody got 100% instead of 85% and every net
+        score on the board was inflated."""
+        card = self.client.get(
+            reverse('api-team-play-card', args=[self.fs.id]), {'hole': 1}).json()
+        got = {r['name']: r['handicap'] for r in card['shamble']['rows']}
+        self.assertEqual(got, {
+            'Petersen': 5,    # 85% of 6  = 5.10 → 5
+            'Brown'   : 8,    # 85% of 9  = 7.65 → 8
+            'Labass'  : 12,   # 85% of 14 = 11.90 → 12
+            'Reilly'  : 18,   # 85% of 21 = 17.85 → 18
+        })
 
     def test_the_count_is_stated_on_every_hole(self):
         """It does not change across the eighteen, and saying so costs one line
