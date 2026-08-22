@@ -5616,6 +5616,15 @@ class TeamPlayCard {
   final int  teamStrokes;
   /// Par by hole, for the scorecard under the entry.
   final Map<int, int> pars;
+  /// Where the strokes fall across the WHOLE round — half the reason the card
+  /// sits under the entry, since a dot on the hole you are standing on says
+  /// nothing about the two coming up.
+  ///
+  /// Scramble: the team's, one figure for the side.
+  /// Shamble: [golferStrokes], keyed by player, because handicaps stay per
+  /// golfer.
+  final Map<int, int> strokesByHole;
+  final Map<int, Map<int, int>> golferStrokes;
   final TeamPlayRound round;
   final TeamPlayDrive drive;
   final int?   teamScore;                 // scramble
@@ -5625,7 +5634,8 @@ class TeamPlayCard {
     required this.format, required this.hole, required this.playOrder,
     required this.round, required this.drive,
     this.par, this.strokeIndex, this.yards, this.teamStrokes = 0,
-    this.pars = const {}, this.teamScore, this.shamble,
+    this.pars = const {}, this.strokesByHole = const {},
+    this.golferStrokes = const {}, this.teamScore, this.shamble,
   });
 
   factory TeamPlayCard.fromJson(Map<String, dynamic> j) => TeamPlayCard(
@@ -5641,6 +5651,19 @@ class TeamPlayCard {
           for (final e in Map<String, dynamic>.from(
                   (j['pars'] ?? const {}) as Map).entries)
             if (e.value != null) int.parse(e.key): e.value as int,
+        },
+        strokesByHole: {
+          for (final e in Map<String, dynamic>.from(
+                  (j['strokes_by_hole'] ?? const {}) as Map).entries)
+            int.parse(e.key): e.value as int,
+        },
+        golferStrokes: {
+          for (final e in Map<String, dynamic>.from(
+                  (j['golfer_strokes'] ?? const {}) as Map).entries)
+            int.parse(e.key): {
+              for (final h in Map<String, dynamic>.from(e.value as Map).entries)
+                int.parse(h.key): h.value as int,
+            },
         },
         round    : TeamPlayRound.fromJson(
             Map<String, dynamic>.from((j['round'] ?? {}) as Map)),
@@ -5672,6 +5695,12 @@ class TeamPlayCard {
   /// `3 of 18` — where this hole sits in the group's round, which is not the
   /// hole number once a shotgun start is involved.
   int positionOf(int h) => _indexOf(h) + 1;
+
+  /// Strokes on each hole for whoever the card is scoring: the team on a
+  /// scramble, the selected golfer on a shamble.
+  Map<int, int> strokesFor(int? playerId) => isScramble
+      ? strokesByHole
+      : (golferStrokes[playerId] ?? const {});
 }
 
 /// The board: six rows, one column, sorted on net ascending.

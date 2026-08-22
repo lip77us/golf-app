@@ -136,6 +136,35 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     return rows.first.playerId;
   }
 
+  /// What this hole is still waiting on, or null when it is complete.
+  ///
+  /// **The hole is not complete until the drive is picked.** Advancing without
+  /// one loses the record silently — the tracker then reports a shortfall
+  /// nobody caused, and by the 18th nobody can reconstruct which hole it was.
+  /// So the forward button names what is outstanding rather than going quiet.
+  ///
+  /// This is not the same as blocking the drive TAP, which never happens: the
+  /// team may knowingly take a shortfall, it just has to say so by picking
+  /// somebody.
+  String? _outstanding(TeamPlayCard card) {
+    final needsScore = card.isScramble
+        ? card.teamScore == null
+        : !(card.shamble?.complete ?? false);
+
+    // Only a quota needs a pick. An alternating rota already names the pair,
+    // and "no requirement" has nothing to record.
+    final needsDrive = card.drive.isQuota &&
+        !card.drive.windows.any(
+            (w) => w.golfers.any((g) => g.holes.contains(_hole)));
+
+    if (needsScore && needsDrive) return 'Score and drive needed';
+    if (needsScore) {
+      return card.isScramble ? 'Enter the score' : 'Enter all four scores';
+    }
+    if (needsDrive) return 'Pick whose drive';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final card = _card;
@@ -172,9 +201,10 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
               ? const Center(child: CircularProgressIndicator())
               : _body(card),
       bottomNavigationBar: card == null ? null : _HoleNav(
-        card : card,
-        hole : _hole!,
-        onGo : _goto,
+        card     : card,
+        hole     : _hole!,
+        onGo     : _goto,
+        outstanding: _outstanding(card),
       ),
     );
   }
@@ -238,7 +268,12 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
         // screen keeps its by-hole grid. It is the team's row either way: on a
         // shamble the counted balls are already summed into it, because that
         // is the number the board ranks.
-        _Scorecard(card: card, hole: _hole!, onGo: _goto),
+        _Scorecard(
+          card    : card,
+          hole    : _hole!,
+          onGo    : _goto,
+          golferId: card.isScramble ? null : _activeGolfer(card),
+        ),
 
       ],
     );
@@ -807,15 +842,28 @@ class _Scorecard extends StatelessWidget {
   final TeamPlayCard card;
   final int hole;
   final ValueChanged<int?> onGo;
+  /// Shamble: whose strokes the dots mark. Null on a scramble, where the
+  /// figure belongs to the side.
+  final int? golferId;
 
   const _Scorecard({
     required this.card, required this.hole, required this.onGo,
+    required this.golferId,
   });
+
+  /// `3 under` / `2 over` / `even` — what a golfer actually says. Raw totals
+  /// are on the OUT / IN / TOT cells where a scorecard puts them; the line
+  /// above the card is for the number you quote on the next tee.
+  static String _toPar(int diff) {
+    if (diff == 0) return 'even';
+    return diff > 0 ? '$diff over' : '${-diff} under';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final scores = card.round.byHole;
+    final theme   = Theme.of(context);
+    final scores  = card.round.byHole;
+    final strokes = card.strokesFor(golferId);
     if (card.pars.isEmpty) return const SizedBox.shrink();
 
     final holes = card.pars.keys.toList()..sort();
@@ -829,7 +877,14 @@ class _Scorecard extends StatelessWidget {
       if (hs.isEmpty) return const SizedBox.shrink();
       final anyScored = hs.any((h) => scores[h] != null);
       Widget cell(String text, {bool head = false, bool strong = false,
-                                int? goTo, bool current = false}) {
+                                int? goTo, bool current = false,
+                                int dots = 0}) {
+        final label = Text(text,
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: (head || strong)
+                  ? FontWeight.bold : FontWeight.normal,
+              color: head ? theme.colorScheme.onSurfaceVariant : null,
+            ));
         final child = Container(
           height: 26,
           alignment: Alignment.center,
@@ -840,12 +895,28 @@ class _Scorecard extends StatelessWidget {
             border: Border.all(color: theme.colorScheme.outlineVariant,
                                width: 0.5),
           ),
-          child: Text(text,
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: (head || strong)
-                    ? FontWeight.bold : FontWeight.normal,
-                color: head ? theme.colorScheme.onSurfaceVariant : null,
-              )),
+          // One dot per stroke received, in the corner — the app's notation
+          // for it, and the reason the whole card is worth showing: you can
+          // see the two coming up, not just the one you are on.
+          child: dots == 0
+              ? label
+              : Stack(alignment: Alignment.center, children: [
+                  label,
+                  Positioned(
+                    top: 2,
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      for (var i = 0; i < dots; i++)
+                        Container(
+                          width: 3, height: 3,
+                          margin: const EdgeInsets.symmetric(horizontal: 0.5),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                    ]),
+                  ),
+                ]),
         );
         return Expanded(
           child: goTo == null
@@ -867,15 +938,39 @@ class _Scorecard extends StatelessWidget {
           cell('${sum(hs, card.pars)}', strong: true),
         ]),
         Row(children: [
-          cell('Team', head: true),
+          cell(golferId == null
+                  ? 'Team'
+                  : (card.shamble?.rows
+                          .where((r) => r.playerId == golferId)
+                          .firstOrNull
+                          ?.name
+                          .split(' ')
+                          .last ??
+                      'Team'),
+               head: true),
           for (final h in hs)
-            cell(scores[h]?.toString() ?? '–', current: h == hole),
+            cell(scores[h]?.toString() ?? '–',
+                 current: h == hole, dots: strokes[h] ?? 0),
           cell(anyScored ? '${sum(hs, scores)}' : '–', strong: true),
         ]),
       ]);
     }
 
     final total = sum(holes, scores);
+    // Par over the holes actually PLAYED — comparing a part-round gross to the
+    // full 72 would read as twenty under through six.
+    final parSoFar = holes
+        .where((h) => scores[h] != null)
+        .map((h) => card.pars[h] ?? 0)
+        .fold<int>(0, (a, b) => a + b);
+
+    String summary(int gross) {
+      final net = card.round.net;
+      final g = 'gross ${_toPar(gross - parSoFar)}';
+      final n = net == null ? '' : ' · net ${_toPar(net - parSoFar)}';
+      return 'thru ${card.round.thru} · $g$n';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -884,12 +979,8 @@ class _Scorecard extends StatelessWidget {
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold))),
           if (card.round.thru > 0)
-            Text(
-              'thru ${card.round.thru} · $total gross'
-              '${card.round.net == null ? '' : ' · ${card.round.net} net'}',
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
+            Text(summary(total), style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         ]),
         const SizedBox(height: 6),
         nine(front, 'OUT'),
@@ -910,13 +1001,22 @@ class _HoleNav extends StatelessWidget {
   final TeamPlayCard card;
   final int hole;
   final ValueChanged<int?> onGo;
+  /// What the hole is still waiting on; null when it is done.
+  final String? outstanding;
 
-  const _HoleNav({required this.card, required this.hole, required this.onGo});
+  const _HoleNav({
+    required this.card, required this.hole, required this.onGo,
+    required this.outstanding,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final prev = card.prevBefore(hole);
-    final next = card.nextAfter(hole);
+    final prev  = card.prevBefore(hole);
+    final next  = card.nextAfter(hole);
+    final ready = outstanding == null;
+
+    // Going BACK is never gated — a half-finished hole you are walking away
+    // from is a correction, not a mistake to trap someone in.
     return SafeArea(
       minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: Row(children: [
@@ -929,11 +1029,18 @@ class _HoleNav extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Expanded(
+          flex: ready ? 1 : 2,
           child: FilledButton.icon(
-            onPressed: next == null ? null : () => onGo(next),
+            onPressed: (ready && next != null) ? () => onGo(next) : null,
             iconAlignment: IconAlignment.end,
-            icon: const Icon(Icons.chevron_right, size: 20),
-            label: Text(next == null ? 'Last hole' : 'Hole $next'),
+            icon: Icon(ready ? Icons.chevron_right : Icons.edit_outlined,
+                       size: 20),
+            label: Text(
+              !ready
+                  ? outstanding!
+                  : (next == null ? 'Last hole' : 'Hole $next'),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
       ]),

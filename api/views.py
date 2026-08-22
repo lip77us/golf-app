@@ -9501,6 +9501,16 @@ class TeamPlayCardView(APIView):
             # row without a second call.
             'pars'      : {str(h['number']): h.get('par')
                            for h in hole_data(foursome)},
+            # Where the strokes fall, across the WHOLE round. Seeing which
+            # holes carry one is half the reason the card sits under the
+            # entry — a dot on the hole you happen to be standing on tells you
+            # nothing about the two coming up.
+            #
+            # A scramble has one team figure, so this is the team's. A shamble
+            # keeps handicaps per golfer, so it is keyed by player and the card
+            # shows whichever man is selected.
+            'strokes_by_hole': _team_strokes_by_hole(foursome, config, rnd),
+            'golfer_strokes' : _golfer_strokes_by_hole(foursome, config),
             'round'     : rnd,
             'drive'     : drive_state(foursome, config),
         }
@@ -9510,6 +9520,40 @@ class TeamPlayCardView(APIView):
             body['shamble'] = shamble_hole(
                 foursome, hole, resolved_counts(foursome, config))
         return Response(body)
+
+
+def _team_strokes_by_hole(foursome, config, rnd):
+    """`{hole: strokes}` for the TEAM — scramble only, where one figure covers
+    the side. Empty on a shamble, whose strokes belong to golfers."""
+    from scoring.handicap import _strokes_on_hole
+    from services.team_play_state import hole_data
+
+    if not config.is_scramble or not rnd.get('allowance'):
+        return {}
+    return {
+        str(h['number']): _strokes_on_hole(
+            rnd['allowance'], h.get('stroke_index', h['number']))
+        for h in hole_data(foursome)
+    }
+
+
+def _golfer_strokes_by_hole(foursome, config):
+    """`{player_id: {hole: strokes}}` for a shamble, off each golfer's own
+    playing handicap. Empty on a scramble, which has no per-golfer ball."""
+    from scoring.handicap import _strokes_on_hole
+    from services.team_play_state import hole_data
+
+    if config.is_scramble:
+        return {}
+    holes = hole_data(foursome)
+    out = {}
+    for m in foursome.memberships.select_related('player'):
+        out[str(m.player_id)] = {
+            str(h['number']): _strokes_on_hole(
+                m.playing_handicap, h.get('stroke_index', h['number']))
+            for h in holes
+        }
+    return out
 
 
 def _first_unplayed_team_hole(foursome, config, order):
