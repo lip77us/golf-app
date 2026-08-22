@@ -1061,6 +1061,16 @@ class Round {
   /// (i.e. a RyderCupRoundConfig exists on the backend).
   /// When true, score entry skips all game setup screens.
   final bool isCupRound;
+  /// True when this round belongs to a Team Play tournament with its config
+  /// saved. The card is a different shape — one number a hole for a scramble,
+  /// four with a live count for a shamble — so the hub dispatches on this
+  /// rather than on the universal score-entry screen.
+  final bool isTeamPlayRound;
+  /// Foursome Play only: `scramble` or `shamble`, and — for a shamble — how
+  /// many of the four scores count on each hole. The standard score-entry
+  /// screen reads the counts to tint the ones that count.
+  final String? teamPlayFormat;
+  final Map<int, int> teamPlayBallCounts;
   /// Parent tournament id, or null for a standalone casual round.  Used by the
   /// round hub to fetch the cup standings (live tally).
   final int? tournamentId;
@@ -1101,6 +1111,9 @@ class Round {
     this.netMaxDoubleBogey = true,
     required this.foursomes,
     this.isCupRound    = false,
+    this.isTeamPlayRound = false,
+    this.teamPlayFormat,
+    this.teamPlayBallCounts = const {},
     this.tournamentId,
     this.irBallsConfig = const [],
     this.watchToken,
@@ -1125,6 +1138,14 @@ class Round {
         netPercent:   j['net_percent']   as int?    ?? 100,
         netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? true,
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
+        isTeamPlayRound: j['is_team_play_round'] as bool? ?? false,
+        teamPlayFormat: (j['team_play'] as Map?)?['format'] as String?,
+        teamPlayBallCounts: {
+          for (final e in Map<String, dynamic>.from(
+                  ((j['team_play'] as Map?)?['ball_counts'] ?? {}) as Map)
+              .entries)
+            int.parse(e.key): e.value as int,
+        },
         tournamentId: j['tournament_id'] as int?,
         watchToken:   j['watch_token']   as String?,
         canManage:    j['can_manage']    as bool?   ?? false,
@@ -5038,4 +5059,761 @@ class PhantomInitResult {
       sourceByHole:    sourceByHole,
     );
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TEAM PLAY  (docs/design-review/handoff-team-play/SPEC.md)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The third tournament shape: many four-man teams, ONE round, one leaderboard.
+// Cup is two big sides and the unit is a match; Individual is a field of
+// singles and the unit is a card; this is small teams against each other, one
+// score per team per hole.
+
+/// One member's line on the worked allowance card — `Maiolini 4 → 1.00`.
+///
+/// The percentage is POSITIONAL (25% attaches to the lowest handicap, not to
+/// the captain), which is why every screen sorts members low to high and shows
+/// the badge next to the name.
+class TeamPlayMember {
+  final int?    playerId;
+  final String  name;
+  final int     courseHandicap;
+  final int     pct;
+  /// Full precision, as a string — `1.00`, never `1`. The team figure is the
+  /// rounded one; these stay fractional so the sum explains it.
+  final String  strokes;
+  final bool    isPhantom;
+  /// Shamble only: this golfer's own whole-stroke playing handicap.
+  final int?    shambleHandicap;
+
+  const TeamPlayMember({
+    required this.playerId,
+    required this.name,
+    required this.courseHandicap,
+    required this.pct,
+    required this.strokes,
+    required this.isPhantom,
+    this.shambleHandicap,
+  });
+
+  factory TeamPlayMember.fromJson(Map<String, dynamic> j) => TeamPlayMember(
+        playerId       : j['player_id'] as int?,
+        name           : (j['name'] ?? '') as String,
+        courseHandicap : (j['course_handicap'] ?? 0) as int,
+        pct            : (j['pct'] ?? 0) as int,
+        strokes        : (j['strokes'] ?? '0').toString(),
+        isPhantom      : j['is_phantom'] == true,
+        shambleHandicap: j['shamble_handicap'] as int?,
+      );
+}
+
+/// What the allowance screen STATES rather than asks. The allowance is a
+/// table, not a preference — presenting it as an open question invites a guess.
+class TeamPlayAllowance {
+  final String    kind;      // scramble_table | shamble_pct | override
+  final int?      pct;
+  final String    label;
+  final List<int> table;
+
+  const TeamPlayAllowance({
+    required this.kind, this.pct, required this.label, this.table = const [],
+  });
+
+  factory TeamPlayAllowance.fromJson(Map<String, dynamic> j) => TeamPlayAllowance(
+        kind : (j['kind'] ?? '') as String,
+        pct  : j['pct'] as int?,
+        label: (j['label'] ?? '') as String,
+        table: ((j['table'] as List?) ?? const []).map((e) => e as int).toList(),
+      );
+}
+
+/// One golfer's drive pips inside one window.
+class TeamPlayDriveGolfer {
+  final int       playerId;
+  /// The card names the man — *Maiolini owes 1* — never a player id.
+  final String    name;
+  final int       used;
+  final List<int> holes;
+  final int       owes;
+
+  const TeamPlayDriveGolfer({
+    required this.playerId, required this.name, required this.used,
+    required this.holes, required this.owes,
+  });
+
+  factory TeamPlayDriveGolfer.fromJson(Map<String, dynamic> j) =>
+      TeamPlayDriveGolfer(
+        playerId: (j['player_id'] ?? 0) as int,
+        name    : (j['name'] ?? '') as String,
+        used    : (j['used'] ?? 0) as int,
+        holes   : ((j['holes'] as List?) ?? const []).map((e) => e as int).toList(),
+        owes    : (j['owes'] ?? 0) as int,
+      );
+
+  /// `✓ h2` once he has driven, `owes 1` until he has.
+  String get pipLabel => holes.isEmpty
+      ? 'owes $owes'
+      : holes.map((h) => 'h$h').join(' · ');
+}
+
+/// One quota window. **Per nine is two of these, and the front does not carry
+/// to the back** — a man short on the front is already short, and a tracker
+/// that only totals eighteen says he is fine until the 18th green.
+class TeamPlayDriveWindow {
+  final int  start;
+  final int  end;
+  final bool started;
+  final int  required;
+  final int  perGolfer;
+  final int  owed;
+  final int  holesLeft;
+  /// Owed equals the holes remaining: it still works, but only if every one of
+  /// them goes to a man who owes.
+  final bool tight;
+  /// Owed exceeds them: the window cannot be satisfied. It never blocks the
+  /// tap — the team may knowingly take the shortfall.
+  final bool impossible;
+  final List<TeamPlayDriveGolfer> golfers;
+
+  const TeamPlayDriveWindow({
+    required this.start, required this.end, required this.started,
+    required this.required, required this.perGolfer, required this.owed,
+    required this.holesLeft, required this.tight, required this.impossible,
+    required this.golfers,
+  });
+
+  factory TeamPlayDriveWindow.fromJson(Map<String, dynamic> j) {
+    final w = (j['window'] as List?) ?? const [1, 18];
+    return TeamPlayDriveWindow(
+      start     : w.first as int,
+      end       : w.last as int,
+      started   : j['started'] == true,
+      required  : (j['required'] ?? 0) as int,
+      perGolfer : (j['per_golfer'] ?? 0) as int,
+      owed      : (j['owed'] ?? 0) as int,
+      holesLeft : (j['holes_left'] ?? 0) as int,
+      tight     : j['tight'] == true,
+      impossible: j['impossible'] == true,
+      golfers   : ((j['golfers'] as List?) ?? const [])
+          .map((e) => TeamPlayDriveGolfer.fromJson(
+              Map<String, dynamic>.from(e as Map)))
+          .toList(),
+    );
+  }
+
+  String get label => end <= 9 ? 'Front nine'
+      : (start >= 10 ? 'Back nine' : 'The round');
+}
+
+/// One hole of the alternating-pairs rota — the schedule, not a quota. What it
+/// needs on the tee is one line: *Gunst and Yau are up.*
+class TeamPlayRotaHole {
+  final int       hole;
+  final List<int> pair;
+  final List<String> pairNames;
+  /// Three-man team only: the man not driving, who plays the phantom's ball —
+  /// its 1st and 4th shots.
+  final int?      phantomCover;
+  final String    phantomCoverName;
+
+  const TeamPlayRotaHole({
+    required this.hole, required this.pair, required this.pairNames,
+    this.phantomCover, this.phantomCoverName = '',
+  });
+
+  factory TeamPlayRotaHole.fromJson(Map<String, dynamic> j) => TeamPlayRotaHole(
+        hole        : (j['hole'] ?? 0) as int,
+        pair        : ((j['pair'] as List?) ?? const []).map((e) => e as int).toList(),
+        pairNames   : ((j['pair_names'] as List?) ?? const [])
+            .map((e) => '$e').toList(),
+        phantomCover: j['phantom_cover'] as int?,
+        phantomCoverName: (j['phantom_cover_name'] ?? '') as String,
+      );
+
+  /// *Gunst and Yau are up* — the one line a schedule needs on the tee.
+  String get upLabel {
+    final names = pairNames.where((n) => n.isNotEmpty).toList();
+    if (names.length < 2) return '';
+    return '${names.first} and ${names.last} are up';
+  }
+}
+
+/// The drive requirement as one team sees it.
+class TeamPlayDrive {
+  final String rule;                    // none | per_nine | per_eighteen | alternating
+  final int    required;
+  final int    perGolfer;
+  final int    holes;
+  /// Twelve required of eighteen means six free — the figure that tells a
+  /// captain whether he can let his long hitter drive the par 5.
+  final int    free;
+  final int    shortfall;
+  /// Two strokes per missing drive, and ONLY when the TD opted in. Falling
+  /// short costs nothing by default.
+  final int    penaltyStrokes;
+  final bool   pairsSet;
+  final List<TeamPlayDriveWindow> windows;
+  final List<TeamPlayRotaHole>    rota;
+
+  const TeamPlayDrive({
+    required this.rule, required this.required, required this.perGolfer,
+    required this.holes, required this.free, required this.shortfall,
+    required this.penaltyStrokes, required this.pairsSet,
+    required this.windows, required this.rota,
+  });
+
+  factory TeamPlayDrive.fromJson(Map<String, dynamic> j) => TeamPlayDrive(
+        rule          : (j['rule'] ?? 'none') as String,
+        required      : (j['required'] ?? 0) as int,
+        perGolfer     : (j['per_golfer'] ?? 0) as int,
+        holes         : (j['holes'] ?? 18) as int,
+        free          : (j['free'] ?? 0) as int,
+        shortfall     : (j['shortfall'] ?? 0) as int,
+        penaltyStrokes: (j['penalty_strokes'] ?? 0) as int,
+        pairsSet      : j['pairs_set'] == true,
+        windows       : ((j['windows'] as List?) ?? const [])
+            .map((e) => TeamPlayDriveWindow.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        rota          : ((j['rota'] as List?) ?? const [])
+            .map((e) => TeamPlayRotaHole.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+      );
+
+  bool get isOff         => rule == 'none';
+  bool get isQuota       => rule == 'per_nine' || rule == 'per_eighteen';
+  bool get isAlternating => rule == 'alternating';
+
+  /// The card's amber state, on every hole rather than on 18. The moment a
+  /// quota becomes unsatisfiable is invisible to four men who have had a few.
+  bool get warns => windows.any((w) => w.tight || w.impossible);
+
+  TeamPlayRotaHole? rotaFor(int hole) {
+    for (final r in rota) {
+      if (r.hole == hole) return r;
+    }
+    return null;
+  }
+}
+
+/// One team — which is one foursome, because in Team Play the team IS the
+/// group.
+class TeamPlayTeam {
+  final int    foursomeId;
+  final int    groupNumber;
+  final String name;
+  /// Assigned whether or not the TD renames the team: six unfamiliar
+  /// one-syllable names, and the colour block is how a man finds his row
+  /// without reading.
+  final String colour;
+  final int    realPlayerCount;
+  final bool   hasPhantom;
+  final int    seatsOpen;
+  final List<TeamPlayMember> members;
+  /// Null until the team is full — allowance shows once there are four.
+  final int?    teamHandicap;
+  final String  teamHandicapRaw;
+  final TeamPlayAllowance allowance;
+  final TeamPlayDrive     drive;
+  final int     thru;
+
+  // Present on the leaderboard; null on the setup board.
+  final int?    gross;
+  final int?    net;
+  final int?    rank;
+  final bool    tied;
+  final bool    complete;
+
+  const TeamPlayTeam({
+    required this.foursomeId, required this.groupNumber, required this.name,
+    required this.colour, required this.realPlayerCount,
+    required this.hasPhantom, required this.seatsOpen, required this.members,
+    required this.teamHandicap, required this.teamHandicapRaw,
+    required this.allowance, required this.drive, required this.thru,
+    this.gross, this.net, this.rank, this.tied = false, this.complete = false,
+  });
+
+  factory TeamPlayTeam.fromJson(Map<String, dynamic> j) => TeamPlayTeam(
+        foursomeId     : (j['foursome_id'] ?? 0) as int,
+        groupNumber    : (j['group_number'] ?? 0) as int,
+        name           : (j['name'] ?? '') as String,
+        colour         : (j['colour'] ?? '') as String,
+        realPlayerCount: (j['real_player_count'] ?? 0) as int,
+        hasPhantom     : j['has_phantom'] == true,
+        seatsOpen      : (j['seats_open'] ?? 0) as int,
+        members        : ((j['members'] as List?) ?? const [])
+            .map((e) => TeamPlayMember.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        teamHandicap   : j['team_handicap'] as int?,
+        teamHandicapRaw: (j['team_handicap_raw'] ?? '0').toString(),
+        allowance      : TeamPlayAllowance.fromJson(
+            Map<String, dynamic>.from((j['allowance'] ?? {}) as Map)),
+        drive          : TeamPlayDrive.fromJson(
+            Map<String, dynamic>.from((j['drive'] ?? {}) as Map)),
+        thru           : (j['thru'] ?? 0) as int,
+        gross          : j['gross'] as int?,
+        net            : j['net'] as int?,
+        rank           : j['rank'] as int?,
+        tied           : j['tied'] == true,
+        complete       : j['complete'] == true,
+      );
+
+  /// `T2` for a tie, `2` otherwise — ties are marked and drawn adjacent, never
+  /// silently ordered.
+  String get rankLabel =>
+      rank == null ? '—' : (tied ? 'T$rank' : '$rank');
+
+  /// `Bellini · Kwan · Ortega · phantom 4th`. Three names against four would
+  /// look like a mistake; naming the phantom explains the figure in the space
+  /// already there.
+  String get memberLine => members
+      .map((m) => m.isPhantom ? 'phantom 4th' : m.name.split(' ').last)
+      .join(' · ');
+}
+
+/// The whole Team Play read model — one call, because the build-teams screen
+/// shows all six teams' figures against each other.
+class TeamPlaySummary {
+  final bool   configured;
+  final String format;               // scramble | shamble
+  final bool   locked;
+  final String handicapMode;
+  final Map<int, int> ballCounts;
+  final TeamPlayBallCount? ballCount;
+  final String driveRule;
+  final String drivePenalty;
+  final double entryFee;
+  final int    placesPaid;
+  final List<int> splitPcts;
+  final int    golfers;
+  final int    teamCount;
+  final double pool;
+  final List<TeamPlayTeam> teams;
+
+  const TeamPlaySummary({
+    required this.configured, required this.format, required this.locked,
+    required this.handicapMode, required this.ballCounts, this.ballCount,
+    required this.driveRule, required this.drivePenalty,
+    required this.entryFee, required this.placesPaid, required this.splitPcts,
+    required this.golfers, required this.teamCount, required this.pool,
+    required this.teams,
+  });
+
+  factory TeamPlaySummary.fromJson(Map<String, dynamic> j) {
+    final field = Map<String, dynamic>.from((j['field'] ?? {}) as Map);
+    final raw   = Map<String, dynamic>.from((j['ball_counts'] ?? {}) as Map);
+    return TeamPlaySummary(
+      configured  : j['configured'] == true,
+      format      : (j['format'] ?? 'scramble') as String,
+      locked      : j['locked'] == true,
+      handicapMode: (j['handicap_mode'] ?? 'net') as String,
+      ballCounts  : {
+        for (final e in raw.entries) int.parse(e.key): e.value as int,
+      },
+      ballCount   : j['ball_count'] == null
+          ? null
+          : TeamPlayBallCount.fromJson(
+              Map<String, dynamic>.from(j['ball_count'] as Map)),
+      driveRule   : (j['drive_rule'] ?? 'none') as String,
+      drivePenalty: (j['drive_penalty'] ?? 'warn') as String,
+      entryFee    : ((j['entry_fee'] ?? 0) as num).toDouble(),
+      placesPaid  : (j['places_paid'] ?? 0) as int,
+      splitPcts   : ((j['split_pcts'] as List?) ?? const [])
+          .map((e) => e as int).toList(),
+      golfers     : (field['golfers'] ?? 0) as int,
+      teamCount   : (field['teams'] ?? 0) as int,
+      pool        : ((field['pool'] ?? 0) as num).toDouble(),
+      teams       : ((j['teams'] as List?) ?? const [])
+          .map((e) => TeamPlayTeam.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+    );
+  }
+
+  bool get isScramble => format == 'scramble';
+  bool get isShamble  => format == 'shamble';
+
+  /// The build-teams strip: the spread of allowance figures across the field.
+  /// A wide spread means the pot was decided at that screen.
+  String get balanceLabel {
+    final figures = teams
+        .map((t) => t.teamHandicap)
+        .whereType<int>()
+        .toList()
+      ..sort();
+    if (figures.isEmpty) return '—';
+    return figures.first == figures.last
+        ? '${figures.first}'
+        : '${figures.first} – ${figures.last}';
+  }
+}
+
+/// `36 counted of 72 played` — the number that describes the round.
+///
+/// Fixed-at-2 and escalating both total 36, distributed differently, and
+/// seeing that is what makes the choice read as character rather than
+/// difficulty.
+class TeamPlayBallCount {
+  final int    counted;
+  final int    played;
+  final double avgPerHole;
+  /// `(from, to, balls)` — the preview, collapsed into runs and read back in
+  /// sentences: *Holes 1–6, best 1 net.*
+  final List<(int, int, int)> runs;
+  /// Holes counting all four: legal, and flagged. No drop score, so one
+  /// blow-up is the team's.
+  final List<int> fullCountHoles;
+
+  const TeamPlayBallCount({
+    required this.counted, required this.played, required this.avgPerHole,
+    required this.runs, required this.fullCountHoles,
+  });
+
+  factory TeamPlayBallCount.fromJson(Map<String, dynamic> j) =>
+      TeamPlayBallCount(
+        counted   : (j['counted'] ?? 0) as int,
+        played    : (j['played'] ?? 0) as int,
+        avgPerHole: double.tryParse('${j['avg_per_hole'] ?? 0}') ?? 0,
+        runs      : ((j['runs'] as List?) ?? const []).map((e) {
+          final r = e as List;
+          return (r[0] as int, r[1] as int, r[2] as int);
+        }).toList(),
+        fullCountHoles: ((j['full_count_holes'] as List?) ?? const [])
+            .map((e) => e as int).toList(),
+      );
+
+  /// *Holes 1–6, best 1 net* / *Hole 9, best 3 nets*.
+  static String runSentence((int, int, int) run) {
+    final (from, to, balls) = run;
+    final where = from == to ? 'Hole $from' : 'Holes $from–$to';
+    final what  = balls == 1
+        ? 'best 1 net — one ball carries the hole'
+        : 'best $balls nets';
+    return '$where, $what';
+  }
+}
+
+/// One golfer's row on a shamble hole. The counting scores are tinted and the
+/// rest greyed, live — a man who shot 5 must see instantly that his 5 was not
+/// used, or the total looks wrong and someone re-enters it.
+class TeamPlayShambleRow {
+  final int    playerId;
+  final String name;
+  final bool   isPhantom;
+  final int?   gross;
+  final int    strokes;
+  final int?   net;
+  final bool   counts;
+
+  const TeamPlayShambleRow({
+    required this.playerId, required this.name, required this.isPhantom,
+    this.gross, required this.strokes, this.net, required this.counts,
+  });
+
+  factory TeamPlayShambleRow.fromJson(Map<String, dynamic> j) =>
+      TeamPlayShambleRow(
+        playerId : (j['player_id'] ?? 0) as int,
+        name     : (j['name'] ?? '') as String,
+        isPhantom: j['is_phantom'] == true,
+        gross    : j['gross'] as int?,
+        strokes  : (j['strokes'] ?? 0) as int,
+        net      : j['net'] as int?,
+        counts   : j['counts'] == true,
+      );
+}
+
+/// One shamble hole as the card draws it.
+class TeamPlayShambleHole {
+  final int  holeNumber;
+  final int? par;
+  final int  strokeIndex;
+  /// Stated in the header on EVERY hole even though it usually does not
+  /// change — one line, and it settles the recurring question at the green.
+  final int  count;
+  final List<TeamPlayShambleRow> rows;
+  final bool complete;
+  final int? teamNet;
+
+  const TeamPlayShambleHole({
+    required this.holeNumber, this.par, required this.strokeIndex,
+    required this.count, required this.rows, required this.complete,
+    this.teamNet,
+  });
+
+  factory TeamPlayShambleHole.fromJson(Map<String, dynamic> j) =>
+      TeamPlayShambleHole(
+        holeNumber : (j['hole_number'] ?? 0) as int,
+        par        : j['par'] as int?,
+        strokeIndex: (j['stroke_index'] ?? 0) as int,
+        count      : (j['count'] ?? 2) as int,
+        rows       : ((j['rows'] as List?) ?? const [])
+            .map((e) => TeamPlayShambleRow.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        complete   : j['complete'] == true,
+        teamNet    : j['team_net'] as int?,
+      );
+
+  String get countLabel =>
+      count == 1 ? '1 of 4 counts' : '$count of 4 count';
+}
+
+/// A team's round total, as the card's footer and the board's row read it.
+class TeamPlayRound {
+  final int? gross;
+  final int? net;
+  final int? allowance;
+  final int  thru;
+  final bool complete;
+  final int  par;
+  /// Two strokes per missing drive, added to the gross at the END of the round.
+  final int  penalty;
+
+  const TeamPlayRound({
+    this.gross, this.net, this.allowance, required this.thru,
+    required this.complete, required this.par, required this.penalty,
+  });
+
+  factory TeamPlayRound.fromJson(Map<String, dynamic> j) => TeamPlayRound(
+        gross    : j['gross'] as int?,
+        net      : j['net'] as int?,
+        allowance: j['allowance'] as int?,
+        thru     : (j['thru'] ?? 0) as int,
+        complete : j['complete'] == true,
+        par      : (j['par'] ?? 72) as int,
+        penalty  : (j['penalty'] ?? 0) as int,
+      );
+}
+
+/// One hole of the card — a scramble's single number, or a shamble's four.
+class TeamPlayCard {
+  final String format;
+  final int    hole;
+  final TeamPlayRound round;
+  final TeamPlayDrive drive;
+  final int?   teamScore;                 // scramble
+  final TeamPlayShambleHole? shamble;     // shamble
+
+  const TeamPlayCard({
+    required this.format, required this.hole, required this.round,
+    required this.drive, this.teamScore, this.shamble,
+  });
+
+  factory TeamPlayCard.fromJson(Map<String, dynamic> j) => TeamPlayCard(
+        format   : (j['format'] ?? 'scramble') as String,
+        hole     : (j['hole'] ?? 1) as int,
+        round    : TeamPlayRound.fromJson(
+            Map<String, dynamic>.from((j['round'] ?? {}) as Map)),
+        drive    : TeamPlayDrive.fromJson(
+            Map<String, dynamic>.from((j['drive'] ?? {}) as Map)),
+        teamScore: j['team_score'] as int?,
+        shamble  : j['shamble'] == null
+            ? null
+            : TeamPlayShambleHole.fromJson(
+                Map<String, dynamic>.from(j['shamble'] as Map)),
+      );
+
+  bool get isScramble => format == 'scramble';
+}
+
+/// The board: six rows, one column, sorted on net ascending.
+class TeamPlayLeaderboard {
+  final String format;
+  final List<TeamPlayTeam> teams;
+  final bool   allIn;
+  /// Money is a projection until every team has signed for 18 — muted italic
+  /// until then, because a dollar figure next to a team with four holes left
+  /// is not a result.
+  final bool   projected;
+  final double pool;
+  final double entryFee;
+  final int    golfers;
+  final List<({int place, int pct, double amount})> places;
+
+  const TeamPlayLeaderboard({
+    required this.format, required this.teams, required this.allIn,
+    required this.projected, required this.pool, required this.entryFee,
+    required this.golfers, required this.places,
+  });
+
+  factory TeamPlayLeaderboard.fromJson(Map<String, dynamic> j) {
+    final pool = Map<String, dynamic>.from((j['pool'] ?? {}) as Map);
+    return TeamPlayLeaderboard(
+      format   : (j['format'] ?? 'scramble') as String,
+      teams    : ((j['teams'] as List?) ?? const [])
+          .map((e) => TeamPlayTeam.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      allIn    : j['all_in'] == true,
+      projected: j['projected'] == true,
+      pool     : ((pool['pool'] ?? 0) as num).toDouble(),
+      entryFee : ((pool['entry_fee'] ?? 0) as num).toDouble(),
+      golfers  : (pool['golfers'] ?? 0) as int,
+      places   : ((pool['places'] as List?) ?? const []).map((e) {
+        final p = Map<String, dynamic>.from(e as Map);
+        return (
+          place : (p['place'] ?? 0) as int,
+          pct   : (p['pct'] ?? 0) as int,
+          amount: ((p['amount'] ?? 0) as num).toDouble(),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// One golfer's line in settlement.
+class TeamPlayPayee {
+  final int?   playerId;
+  final String name;
+  final double amount;
+  /// The odd cents landed here — on the team's highest course handicap.
+  /// Stated rather than left as an unexplained figure beside three equal ones.
+  final bool   oddCents;
+
+  const TeamPlayPayee({
+    required this.playerId, required this.name, required this.amount,
+    required this.oddCents,
+  });
+
+  factory TeamPlayPayee.fromJson(Map<String, dynamic> j) => TeamPlayPayee(
+        playerId: j['player_id'] as int?,
+        name    : (j['name'] ?? '') as String,
+        amount  : ((j['amount'] ?? 0) as num).toDouble(),
+        oddCents: j['odd_cents'] == true,
+      );
+}
+
+/// A paid team inside a prize block.
+class TeamPlayPaidTeam {
+  final int    foursomeId;
+  final String name;
+  final String colour;
+  final int?   net;
+  final int?   gross;
+  /// A three-man team divides its share three ways and takes more each — the
+  /// phantom 4th earned the strokes and cannot be paid. Said on the row so
+  /// nobody has to work out why the figure is larger.
+  final int    ways;
+  final double amount;
+  final bool   phantom;
+  final List<TeamPlayPayee> golfers;
+
+  const TeamPlayPaidTeam({
+    required this.foursomeId, required this.name, required this.colour,
+    this.net, this.gross, required this.ways, required this.amount,
+    required this.phantom, required this.golfers,
+  });
+
+  factory TeamPlayPaidTeam.fromJson(Map<String, dynamic> j) => TeamPlayPaidTeam(
+        foursomeId: (j['foursome_id'] ?? 0) as int,
+        name      : (j['name'] ?? '') as String,
+        colour    : (j['colour'] ?? '') as String,
+        net       : j['net'] as int?,
+        gross     : j['gross'] as int?,
+        ways      : (j['ways'] ?? 0) as int,
+        amount    : ((j['amount'] ?? 0) as num).toDouble(),
+        phantom   : j['phantom'] == true,
+        golfers   : ((j['golfers'] as List?) ?? const [])
+            .map((e) => TeamPlayPayee.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+      );
+}
+
+/// One prize. **A tie is ONE block with both teams inside it** — two rows each
+/// reading $143.75 would hide that it was one prize.
+class TeamPlayPrizeBlock {
+  final int       rank;
+  final bool      tied;
+  final List<int> places;
+  final List<int> paying;
+  final double    total;
+  final List<TeamPlayPaidTeam> teams;
+
+  const TeamPlayPrizeBlock({
+    required this.rank, required this.tied, required this.places,
+    required this.paying, required this.total, required this.teams,
+  });
+
+  factory TeamPlayPrizeBlock.fromJson(Map<String, dynamic> j) =>
+      TeamPlayPrizeBlock(
+        rank  : (j['rank'] ?? 0) as int,
+        tied  : j['tied'] == true,
+        places: ((j['places'] as List?) ?? const []).map((e) => e as int).toList(),
+        paying: ((j['paying'] as List?) ?? const []).map((e) => e as int).toList(),
+        total : ((j['total'] ?? 0) as num).toDouble(),
+        teams : ((j['teams'] as List?) ?? const [])
+            .map((e) => TeamPlayPaidTeam.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+      );
+
+  String get label => tied ? 'T$rank' : '$rank';
+
+  /// *2nd and 3rd combined, split* — the sentence that explains why two teams
+  /// share one figure.
+  String get shareNote {
+    if (!tied) return '';
+    const ord = ['', '1st', '2nd', '3rd', '4th', '5th', '6th'];
+    final names = places.where((p) => p < ord.length).map((p) => ord[p]).toList();
+    if (names.length < 2) return 'split';
+    return '${names.sublist(0, names.length - 1).join(', ')} and '
+           '${names.last} combined, split';
+  }
+}
+
+/// One pool, three places, and the penny that has to go somewhere.
+class TeamPlaySettlement {
+  final double pool;
+  final double entryFee;
+  final int    golfers;
+  final int    placesPaid;
+  final List<int> splitPcts;
+  final List<TeamPlayPrizeBlock> blocks;
+  final List<({int foursomeId, String name, int? net, String rank,
+               double perMan, int driveShortfall})> outOfMoney;
+  final double balance;
+  /// Money does not move while a score can.
+  final bool   canSettle;
+  final List<String> waitingOn;
+
+  const TeamPlaySettlement({
+    required this.pool, required this.entryFee, required this.golfers,
+    required this.placesPaid, required this.splitPcts, required this.blocks,
+    required this.outOfMoney, required this.balance, required this.canSettle,
+    required this.waitingOn,
+  });
+
+  factory TeamPlaySettlement.fromJson(Map<String, dynamic> j) =>
+      TeamPlaySettlement(
+        pool      : ((j['pool'] ?? 0) as num).toDouble(),
+        entryFee  : ((j['entry_fee'] ?? 0) as num).toDouble(),
+        golfers   : (j['golfers'] ?? 0) as int,
+        placesPaid: (j['places_paid'] ?? 0) as int,
+        splitPcts : ((j['split_pcts'] as List?) ?? const [])
+            .map((e) => e as int).toList(),
+        blocks    : ((j['blocks'] as List?) ?? const [])
+            .map((e) => TeamPlayPrizeBlock.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        outOfMoney: ((j['out_of_money'] as List?) ?? const []).map((e) {
+          final m = Map<String, dynamic>.from(e as Map);
+          final rank = m['rank'];
+          return (
+            foursomeId    : (m['foursome_id'] ?? 0) as int,
+            name          : (m['name'] ?? '') as String,
+            net           : m['net'] as int?,
+            rank          : rank == null
+                ? '—'
+                : (m['tied'] == true ? 'T$rank' : '$rank'),
+            perMan        : ((m['per_man'] ?? 0) as num).toDouble(),
+            driveShortfall: (m['drive_shortfall'] ?? 0) as int,
+          );
+        }).toList(),
+        balance   : ((j['balance'] ?? 0) as num).toDouble(),
+        canSettle : j['can_settle'] == true,
+        waitingOn : ((j['waiting_on'] as List?) ?? const [])
+            .map((e) => e as String).toList(),
+      );
 }

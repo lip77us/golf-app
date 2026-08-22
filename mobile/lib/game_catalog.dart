@@ -92,6 +92,15 @@ class GameIds {
   // tournament list screen can detect it and show cup-specific buttons.
   // Not a per-round game — the cup layer sits on top of regular games.
   static const String teamCup = 'team_cup';
+
+  // Team Play — the third tournament shape: many four-man teams, ONE round,
+  // one leaderboard (docs/design-review/handoff-team-play/SPEC.md).  Stored in
+  // tournament.active_games the same way teamCup is: a marker for the shape,
+  // not a per-round game.  The backend reads it in Tournament.is_team_play and
+  // — importantly — excludes it from is_individual_play, so a team event does
+  // not pick up the individual-play rules (always-on cap, field-wide
+  // allowance, best-N counting).
+  static const String teamPlay = 'team_play';
 }
 
 // ── Per-game metadata ─────────────────────────────────────────────────────────

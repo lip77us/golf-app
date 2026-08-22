@@ -18,7 +18,7 @@ import 'tournament_leaderboard_screen.dart';
 import 'ryder_cup_draft_screen.dart';
 import 'ryder_cup_scoreboard_screen.dart';
 import 'cup_round_setup_screen.dart';
-import 'cup_tee_times_screen.dart';
+import 'tee_times_screen.dart';
 
 class TournamentListScreen extends StatefulWidget {
   const TournamentListScreen({super.key});
@@ -521,6 +521,12 @@ class _TournamentListScreenState extends State<TournamentListScreen>
             onViewLeaderboard: () {
               if (t.activeGames.contains('team_cup')) {
                 _openCupTab(context, t);
+              } else if (t.activeGames.contains('team_play')) {
+                // Team Play has its own board: six rows, one column, no tabs.
+                // The standard tournament board carries a round dimension this
+                // shape does not have.
+                Navigator.of(context).pushNamed('/team-play-leaderboard',
+                    arguments: {'tournamentId': t.id, 'tournamentName': t.name});
               } else {
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => TournamentLeaderboardScreen(
@@ -557,7 +563,7 @@ class _TournamentListScreenState extends State<TournamentListScreen>
             onEditTeeTimes: (round) => Navigator.of(context)
                 .push(MaterialPageRoute(
                     builder: (_) =>
-                        CupTeeTimesScreen(roundId: round.id)))
+                        TeeTimesScreen(roundId: round.id)))
                 .then((_) { if (mounted) _load(); }),
             onChangeCupGame: (round) => _showChangeCupGameSheet(round, t),
             onRecalculateCupPoints: (round) async {

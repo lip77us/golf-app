@@ -292,6 +292,7 @@ class _RoundScreenState extends State<RoundScreen> {
                   canManage:       canManage,
                   isComplete:      isComplete,
                   isCupRound:      round.isCupRound,
+                  isTeamPlayRound: round.isTeamPlayRound,
                   sixesActive:     fsGames.contains('sixes'),
                   sixesStarted:    rp.sixesIsStarted(fs.id),
                   roundActiveGames: round.activeGames,
@@ -305,6 +306,20 @@ class _RoundScreenState extends State<RoundScreen> {
                     // Cup rounds are fully configured via CupRoundSetupScreen —
                     // skip all setup routing and go directly to score entry.
                     final String route;
+                    if (round.isTeamPlayRound) {
+                      // Team Play owns its own card: a stepper and one huge
+                      // number for a scramble, the four-man grid with the
+                      // counting scores tinted for a shamble. The drive row
+                      // sits on both.
+                      Navigator.of(context).pushNamed('/team-play-score',
+                          arguments: {
+                            'foursomeId': fs.id,
+                            'teamName'  : fs.name.isEmpty
+                                ? 'Group ${fs.groupNumber}' : fs.name,
+                            'colour'    : '',
+                          });
+                      return;
+                    }
                     if (round.isCupRound &&
                         fs.configuredGames.contains('quota_nassau')) {
                       // Quota Nassau cup foursomes use the dedicated gross-only
@@ -1013,6 +1028,10 @@ class _FoursomeCard extends StatelessWidget {
   final bool         canManage;
   final bool         isComplete;
   final bool         isCupRound;
+  /// Foursome Play: the group IS the team, so it can carry a team name. The
+  /// wizard deliberately does not ask for one — teams name themselves here,
+  /// once the men who are actually playing have turned up.
+  final bool         isTeamPlayRound;
   final bool         sixesActive;
   final bool         sixesStarted;
   final List<String> roundActiveGames;
@@ -1037,6 +1056,7 @@ class _FoursomeCard extends StatelessWidget {
     required this.canManage,
     required this.isComplete,
     required this.isCupRound,
+    required this.isTeamPlayRound,
     required this.sixesActive,
     required this.sixesStarted,
     required this.roundActiveGames,
@@ -1374,6 +1394,62 @@ class _FoursomeCard extends StatelessWidget {
   /// TD-only "shift the schedule" tool — swap this foursome's tee
   /// position (group_number + tee_time) with another's.  Useful when
   /// a group is late or a 3-some wants more donor variety.
+  /// Rename this team.
+  ///
+  /// Foursome Play teams arrive as `Group 1`…`Group N` and name themselves
+  /// here. The wizard does not ask: a TD inventing six names for men who have
+  /// not turned up yet is work nobody wanted, and the men themselves will have
+  /// a better one by the second tee.
+  ///
+  /// Sixteen characters, the same cap as the ball game. Clearing it puts the
+  /// group number back rather than leaving a blank row on the board.
+  Future<void> _showRenameTeamSheet(BuildContext context) async {
+    final controller = TextEditingController(
+      text: foursome.name.isEmpty ? '' : foursome.name,
+    );
+    final fallback = 'Group ${foursome.groupNumber}';
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Team name'),
+        content: TextField(
+          controller: controller,
+          autofocus : true,
+          maxLength : 16,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            hintText  : fallback,
+            helperText: 'Leave it empty to go back to $fallback.',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (name == null || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<AuthProvider>().client
+          .postTeamPlayTeamName(foursome.id, name);
+      onGamesChanged();
+      messenger.showSnackBar(SnackBar(
+        content: Text(name.isEmpty ? 'Back to $fallback' : 'Now $name'),
+        duration: const Duration(seconds: 1),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(
+          SnackBar(content: Text('Could not rename: $e')));
+    }
+  }
+
   Future<void> _showSwapPositionSheet(BuildContext context) async {
     final others = allFoursomes
         .where((f) => f.id != foursome.id)
@@ -1815,9 +1891,22 @@ class _FoursomeCard extends StatelessWidget {
                     case 'swap_position':
                       _showSwapPositionSheet(context);
                       break;
+                    case 'rename_team':
+                      _showRenameTeamSheet(context);
+                      break;
                   }
                 },
                 itemBuilder: (_) => [
+                  if (isTeamPlayRound)
+                    PopupMenuItem(
+                      value: 'rename_team',
+                      child: Row(children: [
+                        Icon(Icons.drive_file_rename_outline, size: 18,
+                            color: theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 12),
+                        const Flexible(child: Text('Rename team')),
+                      ]),
+                    ),
                   PopupMenuItem(
                     value: 'remove_noshow',
                     child: Row(children: [

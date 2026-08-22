@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'ball_count_grid.dart';
 import 'section_card.dart';
 
 /// Irish Rumble variant picker + segment preview + per-hole custom editor.
@@ -46,21 +47,12 @@ List<int> irishRumbleBallsPerHole({
 
 /// Group an 18-element per-hole list into contiguous-same-value runs for
 /// compact display ("Holes 7-9 · best 3").
+///
+/// Delegates to [collapseBallRuns] — the Foursome Play shamble asks the same
+/// question and gets the same answer from the same code.
 List<({int start, int end, int balls})> irishRumbleCollapseRuns(
-    List<int> perHole) {
-  final out = <({int start, int end, int balls})>[];
-  var segStart = 1;
-  var curBalls = perHole[0];
-  for (var i = 1; i < 18; i++) {
-    if (perHole[i] != curBalls) {
-      out.add((start: segStart, end: i, balls: curBalls));
-      segStart = i + 1;
-      curBalls = perHole[i];
-    }
-  }
-  out.add((start: segStart, end: 18, balls: curBalls));
-  return out;
-}
+        List<int> perHole) =>
+    collapseBallRuns(perHole);
 
 class IrishRumbleVariantPicker extends StatelessWidget {
   final String variant;
@@ -141,27 +133,11 @@ class IrishRumbleSegmentPreview extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final perHole = irishRumbleBallsPerHole(
-      variant: variant, holePars: holePars, customBalls: customBalls,
-    );
-    final runs = irishRumbleCollapseRuns(perHole);
-    return SectionCard(
-      title: 'Segment Preview',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final r in runs)
-            _SegmentRow(
-              r.start == r.end ? 'Hole ${r.start}'
-                                : 'Holes ${r.start}–${r.end}',
-              r.balls == 1 ? 'Best 1 net per group'
-                           : 'Best ${r.balls} nets per group',
-            ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => BallCountPreview(
+        perHole: irishRumbleBallsPerHole(
+          variant: variant, holePars: holePars, customBalls: customBalls,
+        ),
+      );
 }
 
 class IrishRumbleCustomBallsEditor extends StatelessWidget {
@@ -176,103 +152,9 @@ class IrishRumbleCustomBallsEditor extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    Widget holeCell(int idx) {
-      final hole = idx + 1;
-      final par  = idx < holePars.length ? holePars[idx] : 4;
-      final val  = customBalls[idx];
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          border: Border.all(color: theme.colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('$hole',
-                style: theme.textTheme.labelMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            Text('Par $par',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontSize: 10)),
-            const SizedBox(height: 4),
-            // Step the balls value 1→2→3→4→1 on tap.  Tight cycling
-            // beats a full picker when there are 18 cells on screen.
-            InkWell(
-              onTap: () => onChanged(idx, val >= 4 ? 1 : val + 1),
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                width: 28, height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text('$val',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => BallCountGrid(
+        holePars : holePars,
+        perHole  : customBalls,
+        onChanged: onChanged,
       );
-    }
-
-    return SectionCard(
-      title: 'Per-hole balls (tap to cycle 1→2→3→4)',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Front 9',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 4),
-          Row(children: [
-            for (var i = 0; i < 9; i++) Expanded(child: holeCell(i)),
-          ]),
-          const SizedBox(height: 10),
-          Text('Back 9',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 4),
-          Row(children: [
-            for (var i = 9; i < 18; i++) Expanded(child: holeCell(i)),
-          ]),
-        ],
-      ),
-    );
-  }
-}
-
-class _SegmentRow extends StatelessWidget {
-  final String holes;
-  final String rule;
-  const _SegmentRow(this.holes, this.rule);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 100,
-          child: Text(holes,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-        ),
-        Expanded(
-          child: Text(rule,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant)),
-        ),
-      ]),
-    );
-  }
 }

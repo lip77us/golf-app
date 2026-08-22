@@ -63,6 +63,9 @@ import 'screens/pink_ball_screen.dart';
 import 'screens/tournament_low_net_setup_screen.dart';
 import 'screens/setup_round_players_screen.dart';
 import 'screens/tournament_leaderboard_screen.dart';
+import 'screens/team_play_leaderboard_screen.dart';
+import 'screens/team_play_score_entry_screen.dart';
+import 'screens/team_play_settlement_screen.dart';
 import 'screens/match_play_setup_screen.dart';
 import 'screens/match_play_screen.dart';
 import 'screens/course_search_screen.dart';
@@ -704,6 +707,25 @@ class _GolfAppState extends State<GolfApp> {
         final tournamentName = args['tournamentName'] as String? ?? '';
         return page((_) => TournamentLeaderboardScreen(
               tournamentId: tournamentId, tournamentName: tournamentName));
+      // ---- Team Play (docs/design-review/handoff-team-play) ----
+      case '/team-play-leaderboard':
+        final args           = settings.arguments as Map<String, dynamic>;
+        final tournamentId   = args['tournamentId'] as int;
+        final tournamentName = args['tournamentName'] as String? ?? '';
+        return page((_) => TeamPlayLeaderboardScreen(
+              tournamentId: tournamentId, tournamentName: tournamentName));
+      case '/team-play-settlement':
+        final args           = settings.arguments as Map<String, dynamic>;
+        final tournamentId   = args['tournamentId'] as int;
+        final tournamentName = args['tournamentName'] as String? ?? '';
+        return page((_) => TeamPlaySettlementScreen(
+              tournamentId: tournamentId, tournamentName: tournamentName));
+      case '/team-play-score':
+        final args = settings.arguments as Map<String, dynamic>;
+        return page((_) => TeamPlayScoreEntryScreen(
+              foursomeId: args['foursomeId'] as int,
+              teamName  : args['teamName'] as String? ?? 'Team',
+              colour    : args['colour'] as String? ?? ''));
       case '/tournament-low-net-setup':
         final tournamentId = settings.arguments as int;
         return page((_) =>

@@ -2321,4 +2321,122 @@ class ApiClient {
     });
     return QuotaNassauSummary.fromJson(data as Map<String, dynamic>);
   }
+  // ── Team Play ──────────────────────────────────────────────────────────
+  // docs/design-review/handoff-team-play/SPEC.md — many four-man teams, one
+  // round, one leaderboard.
+
+  /// The TD's settings, or the defaults when nothing is configured yet.
+  Future<Map<String, dynamic>> getTeamPlaySetup(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/team-play/setup/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Save wizard steps 3–7. Only the keys present are written, so each step
+  /// can post its own answer without carrying the others.
+  ///
+  /// Throws when the format is locked (the first score has landed) or the
+  /// split does not reach 100 — both refused server-side so an API caller
+  /// cannot post a table the screen would have blocked.
+  Future<Map<String, dynamic>> postTeamPlaySetup(
+    int tournamentId, {
+    String? teamFormat,
+    String? ballCountMode,
+    int?    ballCountFixed,
+    Map<String, int>? ballCounts,
+    String? driveRule,
+    int?    drivesRequired,
+    String? drivePenalty,
+    String? handicapMode,
+    int?    allowanceOverridePct,
+    bool    clearAllowanceOverride = false,
+    double? entryFee,
+    int?    placesPaid,
+    List<int>? splitPcts,
+  }) async {
+    final body = <String, dynamic>{
+      if (teamFormat     != null) 'team_format'     : teamFormat,
+      if (ballCountMode  != null) 'ball_count_mode' : ballCountMode,
+      if (ballCountFixed != null) 'ball_count_fixed': ballCountFixed,
+      if (ballCounts     != null) 'ball_counts'     : ballCounts,
+      if (driveRule      != null) 'drive_rule'      : driveRule,
+      if (drivesRequired != null) 'drives_required' : drivesRequired,
+      if (drivePenalty   != null) 'drive_penalty'   : drivePenalty,
+      if (handicapMode   != null) 'handicap_mode'   : handicapMode,
+      if (clearAllowanceOverride) 'allowance_override_pct': null
+      else if (allowanceOverridePct != null)
+        'allowance_override_pct': allowanceOverridePct,
+      if (entryFee   != null) 'entry_fee'  : entryFee.toStringAsFixed(2),
+      if (placesPaid != null) 'places_paid': placesPaid,
+      if (splitPcts  != null) 'split_pcts' : splitPcts,
+    };
+    final data = await _post('/tournaments/$tournamentId/team-play/setup/', body);
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Every team with its worked allowance and drive state — one call, because
+  /// the build-teams screen shows all six figures against each other.
+  Future<TeamPlaySummary> getTeamPlay(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/team-play/');
+    return TeamPlaySummary.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Rename a team. The colour is not settable — it does real work on the
+  /// board and the card, and two teams must never share a block.
+  Future<void> postTeamPlayTeamName(int foursomeId, String name) =>
+      _post('/foursomes/$foursomeId/team-play/team/', {'name': name});
+
+  /// Record whose drive the team took. Never blocks — the team may knowingly
+  /// take the shortfall. Pass a null [playerId] to clear the hole.
+  Future<TeamPlayDrive> postTeamPlayDrive(
+    int foursomeId, {
+    required int hole,
+    required int? playerId,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/team-play/drive/', {
+      'hole_number': hole,
+      'player_id'  : playerId,
+    });
+    return TeamPlayDrive.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// The alternating-pairs rota, set by the team on the 1st tee and then fixed
+  /// for eighteen holes. A second call is refused — a rota that can be re-cut
+  /// mid-round is not a rota.
+  Future<TeamPlayDrive> postTeamPlayPairs(
+    int foursomeId, List<List<int>> pairs) async {
+    final data = await _post('/foursomes/$foursomeId/team-play/pairs/',
+        {'pairs': pairs});
+    return TeamPlayDrive.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// A scramble hole: one number for the ball the team played.
+  Future<TeamPlayRound> postTeamPlayScore(
+    int foursomeId, {
+    required int hole,
+    required int? gross,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/team-play/score/', {
+      'hole_number': hole,
+      'gross_score': gross,
+    });
+    return TeamPlayRound.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// The hole as the card draws it — one number, or four with the counting
+  /// ones flagged.
+  Future<TeamPlayCard> getTeamPlayCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/team-play/card/?hole=$hole');
+    return TeamPlayCard.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<TeamPlayLeaderboard> getTeamPlayLeaderboard(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/team-play/leaderboard/');
+    return TeamPlayLeaderboard.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<TeamPlaySettlement> getTeamPlaySettlement(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/team-play/settlement/');
+    return TeamPlaySettlement.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
 }

@@ -13,6 +13,12 @@ import '../utils/grouping.dart';
 // Aliased so the top-level groupSizes(n) helper is reachable inside
 // _Step3GroupsAndTees, whose `groupSizes` field would otherwise shadow it.
 import '../utils/grouping.dart' as gr;
+import '../utils/course_handicap.dart';
+import '../widgets/team_play/team_drive_step.dart';
+import '../widgets/team_play/team_format_step.dart';
+import '../widgets/team_play/team_handicap_step.dart';
+import '../widgets/team_play/team_payout_step.dart';
+import '../utils/team_allowance.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../widgets/golf_text_field.dart';
@@ -66,12 +72,19 @@ enum _StepKind {
   groups,       // Non-cup: group assignment + tees
   payouts,      // Individual: the championship pot, on its own
   games,        // Individual: side games, each with its entry fee
+  // Team Play — the third shape (docs/design-review/handoff-team-play).
+  // Deliberately the SHORTEST flow of the three: a Saturday scramble is the
+  // most common event a club runs and the least complicated thing it does.
+  teamFormat,   // Scramble or shamble, and the shamble ball count in place
+  teamDrives,   // The four drive rules — three quotas and one schedule
+  teamHandicap, // The allowance the format prescribes, worked on his own teams
+  teamPayout,   // Fee, places and split — after teams, because it needs both
   review,       // Review → create
 }
 
-/// Who is competing — the "scoring unit" the whole flow derives from.  Cup and
-/// solo are wired; pair/quad are drawn but staged (no pair/quad scoring engine
-/// yet), so the picker shows them disabled.
+/// Who is competing — the "scoring unit" the whole flow derives from.  Cup,
+/// solo and quad (Team Play) are wired; pair is drawn but staged (no two-man
+/// scoring engine yet), so the picker shows it disabled.
 enum _EventType { cup, solo, pair, quad }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +112,11 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       _createNewTournament &&
       _tournamentActiveGames.contains(GameIds.teamCup);
 
+  /// Team Play — many four-man teams, ONE round, one leaderboard.
+  bool get _isTeamPlay =>
+      _createNewTournament &&
+      _tournamentActiveGames.contains(GameIds.teamPlay);
+
   /// The ordered steps for the current configuration.  Cup and non-cup share
   /// the front (tournament, details) then diverge; team assignment and round
   /// setup happen later from the tournament card, so the cup flow ends at
@@ -118,6 +136,22 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         _StepKind.review,
       ];
     }
+    if (_isTeamPlay) {
+      // Eight steps, two of them existing screens reused unchanged: Set tees
+      // (groups) and Review. Rounds is not in here at all — one round is
+      // STATED, not chosen, and nothing downstream has a round dimension.
+      return [
+        _StepKind.typeFormat,
+        _StepKind.eventDetails,
+        _StepKind.players,
+        _StepKind.groups,          // the existing Set tees screen, unchanged
+        _StepKind.teamFormat,
+        _StepKind.teamDrives,
+        _StepKind.teamHandicap,
+        _StepKind.teamPayout,
+        _StepKind.review,
+      ];
+    }
     // Individual play — the eight steps the create-flow map settles on. Seven
     // show for a one-round stroke-play event: Stableford adds the points
     // table (the max is not a question, so stroke play does not), and the day
@@ -134,6 +168,82 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       _StepKind.games,
       _StepKind.review,
     ];
+  }
+
+  // ── Foursome Play helpers ──────────────────────────────────────────────
+
+  /// The teams, as rosters of player ids.
+  ///
+  /// **There is no separate build-teams step.** The Groups & Tees step already
+  /// assigns every golfer to a group — drag to reorder, "Edit sizes" to change
+  /// the breakdown — and in this shape the group IS the team. Asking twice
+  /// would be the app making the TD do the same job in two places, and the
+  /// second answer would silently win.
+  ///
+  /// **Field size sets the team count, not the reverse**: 23 golfers become
+  /// six teams, five of four and one of three, and he moves men from there.
+  List<List<int>> get _tpRosters {
+    final ids   = _orderedPlayerIds;
+    final sizes = _effectiveGroupSizes;
+    final out   = <List<int>>[];
+    var cursor  = 0;
+    for (final size in sizes) {
+      if (cursor >= ids.length) break;
+      final end = (cursor + size).clamp(0, ids.length);
+      out.add(ids.sublist(cursor, end));
+      cursor = end;
+    }
+    return out;
+  }
+
+  /// `Group 1` … `Group 6`. The teams name themselves later; the wizard has no
+  /// business inventing names for them, and a colour the TD never chose is one
+  /// more thing on screen that does not help him.
+  String _tpTeamLabel(int index) => 'Group ${index + 1}';
+
+  /// A golfer as the Foursome Play screens need him — name and course handicap
+  /// off the tee he was given on the Groups & Tees step.
+  ({int playerId, String name, int courseHandicap})? _tpGolfer(int id) {
+    final player = _allPlayers.where((p) => p.id == id).firstOrNull;
+    if (player == null) return null;
+    final tee = _playerTees[id];
+    return (
+      playerId: id,
+      name: player.name,
+      courseHandicap: tee == null ? 0 : courseHandicapFor(player, tee),
+    );
+  }
+
+  /// True when any team plays three — the screens say so rather than being
+  /// quietly wrong for one of them.
+  bool get _tpHasShortTeam => _tpRosters.any((r) => r.length == 3);
+
+  /// The ball-count average the shamble allowance tracks.
+  double get _tpAvgBallCount {
+    final pars = _tpParByHole();
+    if (pars.isEmpty) return _tpBallFixed.toDouble();
+    final counts = resolveBallCounts(
+      mode: _tpBallMode, fixed: _tpBallFixed,
+      perHole: _tpPerHoleCounts, parByHole: pars,
+    );
+    if (counts.isEmpty) return _tpBallFixed.toDouble();
+    return counts.values.fold<int>(0, (a, b) => a + b) / counts.length;
+  }
+
+  /// Par by hole off the first assigned tee — every tee on a course shares its
+  /// hole numbering, and par-based counts only need the shape.
+  Map<int, int> _tpParByHole() {
+    final tee = _playerTees.values.whereType<TeeInfo>().firstOrNull;
+    if (tee == null) return {};
+    return {
+      for (final h in tee.holes)
+        (h['number'] as int): (h['par'] as int? ?? 4),
+    };
+  }
+
+  String get _tpTeeName {
+    final tee = _playerTees.values.whereType<TeeInfo>().firstOrNull;
+    return tee?.teeName ?? 'chosen';
   }
 
   /// Number of wizard steps for the current type (excludes post-creation).
@@ -179,6 +289,24 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     GameIds.teamCup,
     GameIds.championshipStrokePlay,
   };
+
+  // ---- Team Play (four-man teams) ----
+  // One config, set across steps 5–9 and posted once the round exists. The
+  // defaults ARE a legitimate event: a one-round scramble with no drive
+  // requirement takes every one of them, which is the point of the flow being
+  // the shortest of the three.
+  String _tpFormat        = 'scramble';   // scramble | shamble
+  String _tpBallMode      = 'fixed';      // fixed | escalating | par_based | per_hole
+  int    _tpBallFixed     = 2;            // best 2 of 4 — the answer most rounds want
+  final Map<int, int> _tpPerHoleCounts = {};
+  String _tpDriveRule     = 'none';
+  int    _tpDrivesReq     = 1;
+  String _tpDrivePenalty  = 'warn';       // falling short costs nothing by default
+  String _tpHandicapMode  = 'net';
+  int?   _tpOverridePct;                  // null = the format's table
+  int    _tpEntryFee      = 25;
+  int    _tpPlacesPaid    = 3;
+  List<int> _tpSplit      = [50, 30, 20];
 
   // ---- Teams (cup tournaments) ----
   // Count, names, badges and colours are all captured here now, so the draft
@@ -561,6 +689,17 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       case _StepKind.sideGame:
         // None is a valid (default) answer, so this step never blocks.
         return true;
+      case _StepKind.teamFormat:
+      case _StepKind.teamDrives:
+      case _StepKind.teamHandicap:
+        // Every answer on these is valid — there is always a live format, a
+        // live rule and a live allowance, and the defaults are a real event.
+        return true;
+      case _StepKind.teamPayout:
+        // The split has to reach 100 or the pool will not balance at
+        // settlement — and the shortfall is named in dollars on the screen
+        // rather than the button simply going grey.
+        return _tpSplit.take(_tpPlacesPaid).fold(0, (a, b) => a + b) == 100;
       case _StepKind.players:
         return _selectedIds.length >= 2;
       case _StepKind.groups:
@@ -604,6 +743,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   void _applyTypeFormat() {
     _tournamentActiveGames.removeAll({
       GameIds.teamCup,
+      GameIds.teamPlay,
       GameIds.championshipStrokePlay,
       GameIds.championshipStableford,
     });
@@ -621,9 +761,19 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               ? GameIds.championshipStableford
               : GameIds.championshipStrokePlay);
         break;
-      case _EventType.pair:
       case _EventType.quad:
-        // Not wired yet — the picker keeps these disabled.
+        // Team Play is a SHAPE marker, like team_cup — the team layer sits on
+        // top of the round rather than being a per-round game. The backend
+        // reads it in Tournament.is_team_play and, importantly, excludes it
+        // from is_individual_play.
+        _tournamentActiveGames.add(GameIds.teamPlay);
+        // One round is STATED, not chosen. Nothing downstream has a round
+        // dimension, so the wizard never offers more.
+        _numRounds = 1;
+        _additionalRounds = [];
+        break;
+      case _EventType.pair:
+        // Not wired yet — the picker keeps this one disabled.
         break;
     }
     if (!_handicapModeTouched) _handicapMode = _defaultHandicapForFormat();
@@ -666,7 +816,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       case _EventType.pair:
         return 'Two-man team';
       case _EventType.quad:
-        return 'Four-man team';
+        return 'Foursome Play · ${_tpFormat == 'shamble' ? 'Shamble' : 'Scramble'}';
     }
   }
 
@@ -736,6 +886,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               (label: 'Groups & tees', sub: 'Assign groups and tees', perRound: true),
             _StepKind.games =>
               (label: 'Side games', sub: 'The four you set, each with its fee', perRound: false),
+            _StepKind.teamFormat =>
+              (label: 'Team format', sub: 'Scramble or shamble', perRound: false),
+            _StepKind.teamDrives =>
+              (label: 'Drives', sub: 'Whose tee shots have to be used', perRound: false),
+            _StepKind.teamHandicap =>
+              (label: 'Handicap', sub: 'The allowance the format prescribes', perRound: false),
+            _StepKind.teamPayout =>
+              (label: 'Entry & payout', sub: 'Fee, places and split', perRound: false),
             _StepKind.review =>
               (label: 'Review', sub: 'Save & create', perRound: false),
             _StepKind.typeFormat =>
@@ -1079,11 +1237,28 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     final playersList = <Map<String, int>>[];
     var groupIdx        = 0;
     var placedInGroup   = 0;
+
+    // Foursome Play needs no assignment of its own — the Groups & Tees step
+    // already put every golfer in a group, and the group IS the team. This
+    // just reads that back so the group numbers reach the backend even when
+    // the TD accepted the auto-balance.
+    final Map<int, int> teamPlayGroupOf = {};
+    if (_isTeamPlay) {
+      final rosters = _tpRosters;
+      for (var i = 0; i < rosters.length; i++) {
+        for (final id in rosters[i]) {
+          teamPlayGroupOf[id] = i + 1;
+        }
+      }
+    }
+
     for (final id in _orderedPlayerIds) {
       final tee = _playerTees[id];
       if (tee == null) throw Exception('Player $id has no tee selected.');
       final entry = <String, int>{'player_id': id, 'tee_id': tee.id};
-      if (overrideSizes != null) {
+      if (teamPlayGroupOf.containsKey(id)) {
+        entry['group_number'] = teamPlayGroupOf[id]!;
+      } else if (overrideSizes != null) {
         // Advance to the next group when the current one is full.
         while (groupIdx < overrideSizes.length &&
                placedInGroup >= overrideSizes[groupIdx]) {
@@ -1102,6 +1277,34 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       randomise     : false,
       autoSetupGames: true,
     );
+    if (!mounted) return;
+
+    // Team Play — the config, then the names. It posts AFTER setup because
+    // sync_teams needs the foursomes to exist: it provisions the phantom for
+    // any team that came out at three and works every team's allowance.
+    if (_isTeamPlay && tournamentId != null) {
+      await client.postTeamPlaySetup(
+        tournamentId,
+        teamFormat    : _tpFormat,
+        ballCountMode : _tpBallMode,
+        ballCountFixed: _tpBallFixed,
+        ballCounts    : {
+          for (final e in _tpPerHoleCounts.entries) '${e.key}': e.value,
+        },
+        driveRule     : _tpDriveRule,
+        drivesRequired: _tpDrivesReq,
+        drivePenalty  : _tpDrivePenalty,
+        handicapMode  : _tpHandicapMode,
+        allowanceOverridePct  : _tpOverridePct,
+        clearAllowanceOverride: _tpOverridePct == null,
+        entryFee      : _tpEntryFee.toDouble(),
+        placesPaid    : _tpPlacesPaid,
+        splitPcts     : _tpSplit.take(_tpPlacesPaid).toList(),
+      );
+      // No names posted here. Teams arrive as Group 1…Group N and name
+      // themselves from the round hub — the TD inventing six names for men
+      // who have not turned up yet is work nobody asked for.
+    }
     if (!mounted) return;
 
     // Auto-apply match play config entered in Step 4.
@@ -1333,6 +1536,78 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               }),
           onPointsChanged     : (roundIdx, points) =>
               setState(() => _roundCupPoints[roundIdx] = points),
+        );
+      case _StepKind.teamFormat:
+        return TeamFormatStep(
+          format        : _tpFormat,
+          ballCountMode : _tpBallMode,
+          ballCountFixed: _tpBallFixed,
+          perHoleCounts : _tpPerHoleCounts,
+          parByHole     : _tpParByHole(),
+          // Nothing is locked before the round exists — the lock is stamped by
+          // the first score, which cannot have happened in the wizard.
+          locked        : false,
+          onFormat : (f) => setState(() => _tpFormat = f),
+          onMode   : (m) => setState(() => _tpBallMode = m),
+          onFixed  : (n) => setState(() => _tpBallFixed = n),
+          onPerHole: (hole, count) =>
+              setState(() => _tpPerHoleCounts[hole] = count),
+        );
+      case _StepKind.teamDrives:
+        return TeamDriveStep(
+          rule          : _tpDriveRule,
+          drivesRequired: _tpDrivesReq,
+          penalty       : _tpDrivePenalty,
+          hasShortTeam  : _tpHasShortTeam,
+          onRule           : (r) => setState(() {
+            _tpDriveRule = r;
+            // Per nine allows one or two; per eighteen two or three. Carrying
+            // a 3 across from one rule to the other would ask for more drives
+            // than the window has room for.
+            if (r == 'per_nine' && _tpDrivesReq > 2) _tpDrivesReq = 2;
+          }),
+          onDrivesRequired: (n) => setState(() => _tpDrivesReq = n),
+          onPenalty       : (p) => setState(() => _tpDrivePenalty = p),
+        );
+      case _StepKind.teamHandicap:
+        return TeamHandicapStep(
+          format       : _tpFormat,
+          handicapMode : _tpHandicapMode,
+          overridePct  : _tpOverridePct,
+          avgBallCount : _tpAvgBallCount,
+          teeName      : _tpTeeName,
+          teams        : [
+            for (var i = 0; i < _tpRosters.length; i++)
+              TeamHandicapPreview(
+                name   : _tpTeamLabel(i),
+                members: [
+                  for (final id in _tpRosters[i])
+                    if (_tpGolfer(id) != null) _tpGolfer(id)!,
+                ],
+              ),
+          ],
+          onHandicapMode: (m) => setState(() => _tpHandicapMode = m),
+          onOverridePct : (p) => setState(() => _tpOverridePct = p),
+        );
+      case _StepKind.teamPayout:
+        return TeamPayoutStep(
+          entryFee    : _tpEntryFee,
+          placesPaid  : _tpPlacesPaid,
+          splitPcts   : _tpSplit,
+          golfers     : _orderedPlayerIds.length,
+          teamCount   : _tpRosters.length,
+          hasShortTeam: _tpHasShortTeam,
+          onFee   : (v) => setState(() => _tpEntryFee = v),
+          onPlaces: (n) => setState(() {
+            _tpPlacesPaid = n;
+            // Resize the split to the new place count, keeping what was set.
+            final next = List<int>.filled(n, 0);
+            for (var i = 0; i < n && i < _tpSplit.length; i++) {
+              next[i] = _tpSplit[i];
+            }
+            _tpSplit = next;
+          }),
+          onSplit : (s) => setState(() => _tpSplit = s),
         );
       case _StepKind.sideGame:
         return _StepSideGame(
@@ -1795,9 +2070,9 @@ class _Step1TypeFormat extends StatelessWidget {
         _typeCard(context, _EventType.pair, 'Two-man team',
             'Pairs against the field. Chapman, alternate shot, best ball.', 'Pair',
             enabled: false),
-        _typeCard(context, _EventType.quad, 'Four-man team',
-            'The whole group against the field. Scramble, shamble, bramble.', 'Group',
-            enabled: false),
+        _typeCard(context, _EventType.quad, 'Foursome Play',
+            'Small teams of four, all against each other on one leaderboard.',
+            'Team'),
         const SizedBox(height: 20),
         _sectionLabel(context, _formatLabel()),
         ..._formatCards(context),
@@ -1814,7 +2089,7 @@ class _Step1TypeFormat extends StatelessWidget {
       case _EventType.cup:  return 'Cup format';
       case _EventType.solo: return 'Scoring';
       case _EventType.pair: return 'Two-man format';
-      case _EventType.quad: return 'Four-man format';
+      case _EventType.quad: return 'How a team scores';
     }
   }
 
@@ -1830,6 +2105,23 @@ class _Step1TypeFormat extends StatelessWidget {
           .map((f) => _formatCard(
               context, f.$1, f.$2, f.$3, f.$4, soloFormat, onPickSoloFormat))
           .toList();
+    }
+    if (eventType == _EventType.quad) {
+      // Foursome Play asks the format two steps on, not here. Scramble and
+      // shamble need different entry screens and different handicap maths, so
+      // the question comes after the tees — a percentage of course handicap
+      // needs a tee to be a percentage OF.
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Scramble or shamble — asked after the course and tees, because '
+            'the allowance is a percentage of course handicap.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        ),
+      ];
     }
     return [
       Padding(
@@ -4057,8 +4349,20 @@ class _Step3GroupsAndTees extends StatelessWidget {
                               // row — the row's job here is group order. Its
                               // tee just READS back so the grouping and the
                               // assignment can be checked against each other.
+                              //
+                              // The COURSE HANDICAP rides along because it is
+                              // what the TD is actually grouping on, and it is
+                              // the number the next steps spend: a Foursome
+                              // Play allowance is a percentage of it, and the
+                              // tee is the reason two golfers off the same
+                              // index get different figures. Reading the tee
+                              // name and doing the slope arithmetic in your
+                              // head is not a thing anybody does.
                               Text(
-                                tee?.teeName ?? 'No tee yet',
+                                tee == null
+                                    ? 'No tee yet'
+                                    : '${tee.teeName} · CH '
+                                      '${courseHandicapFor(player, tee)}',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                     color: tee == null
                                         ? theme.colorScheme.error
