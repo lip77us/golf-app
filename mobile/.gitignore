@@ -50,3 +50,11 @@ macos/build/
 
 # Ghost files left by the cloud file-bridge FUSE mount
 .fuse_hidden*
+
+# Android release signing — the upload keystore and its passwords never enter
+# the repo. Lose the keystore and you lose the ability to update the Play
+# listing (short of a Google-assisted upload-key reset), so keep the .jks
+# backed up somewhere durable OUTSIDE this working copy.
+android/key.properties
+*.jks
+*.keystore

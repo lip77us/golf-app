@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Declared explicitly rather than inherited from a library's merged
+         manifest: the app is useless offline-only, and relying on Firebase to
+         drag INTERNET in means removing Firebase silently breaks release
+         builds (debug/profile get it from their own manifests). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
-        android:label="golf_mobile"
+        android:label="Halved"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -34,7 +40,39 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Android App Links — the counterpart of the iOS Associated
+                 Domains entitlement. autoVerify makes Android fetch
+                 https://link.halved.golf/.well-known/assetlinks.json at install
+                 time; if the SHA-256 there matches the signing cert, taps on a
+                 watch link open Halved instead of the browser. Until that file
+                 carries the Play App Signing fingerprint, verification fails
+                 and links keep falling back to the web watch page — which is a
+                 working outcome, not a broken one. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https"
+                      android:host="link.halved.golf"
+                      android:pathPrefix="/watch/"/>
+            </intent-filter>
         </activity>
+        <!-- FCM presentation defaults. Without the icon override Android draws
+             the launcher icon in the status bar, which renders as a white
+             square (the system expects a flat white-on-transparent silhouette).
+             The channel must also exist before a notification can post on
+             Android 8+; naming it here lets FCM create it on first use. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/halved_mint" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="halved_default" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

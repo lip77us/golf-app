@@ -8,7 +8,8 @@ cutover so it's one submission.
 
 **Your app identifiers (use these exactly):**
 - iOS bundle ID: `us.lipkin.golfapp`
-- Android application ID: `com.lipkin.us.golf_mobile`
+- Android application ID: `golf.halved.app`  (renamed 2026-08-21 from the
+  Flutter template default; see docs/play-store-checklist.md)
 
 Cost: Firebase Cloud Messaging is **free**. Requires your existing Apple
 Developer membership.
@@ -34,7 +35,9 @@ Developer membership.
    - App nickname: "Halved iOS" (optional).
    - **Download `GoogleService-Info.plist`** → hand it to me.
 3. **Add the Android app:** Add app → Android.
-   - Package name: **`com.lipkin.us.golf_mobile`**
+   - Package name: **`golf.halved.app`** — must match `applicationId` in
+     `mobile/android/app/build.gradle.kts` EXACTLY, or every Android build
+     fails with "No matching client found for package name".
    - **Download `google-services.json`** → hand it to me.
 
 (You can skip the "add SDK / run script" steps the wizard shows — I handle the

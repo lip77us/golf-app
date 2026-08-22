@@ -87,10 +87,19 @@ flutter:
     - assets/icon/halved_icon.png
     - assets/icon/halved_mark.svg
 
-# App-icon generation. Swap image_path to the final cut-ball logo later,
-# then re-run:  dart run flutter_launcher_icons
+# App-icon generation. Re-run after changing any source art:
+#   dart run flutter_launcher_icons
+#
+# Android takes the adaptive route: a solid brand-green background layer plus a
+# transparent foreground whose mark sits inside the 66dp safe zone, because the
+# launcher masks the layers to whatever shape the device uses (circle, squircle,
+# teardrop) and a full-bleed square would be cropped. The foreground is
+# generated from halved_icon.png — see docs/play-store-checklist.md.
 flutter_launcher_icons:
   image_path: "assets/icon/halved_icon.png"
   ios: true
-  android: false          # iPhone-only for v1
   remove_alpha_ios: true  # iOS icons must be opaque (no alpha channel)
+  android: "ic_launcher"
+  adaptive_icon_background: "#0B1F1A"
+  adaptive_icon_foreground: "assets/icon/halved_icon_adaptive_fg.png"
+  adaptive_icon_monochrome: "assets/icon/halved_icon_adaptive_mono.png"

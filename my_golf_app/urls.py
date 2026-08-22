@@ -41,6 +41,30 @@ def apple_app_site_association(request):
     })
 
 
+@cache_control(max_age=3600)
+def android_assetlinks(request):
+    """Android App Links association file — the Android counterpart of the
+    apple-app-site-association above.  Android fetches it at install time and
+    only routes https://<this domain>/watch/... into the app if one of the
+    listed SHA-256 fingerprints matches the certificate the installed build was
+    signed with.  Unlike Apple's file this one takes no paths: the URL patterns
+    live in the app's intent-filter, and this file only answers "may that app
+    speak for this domain?".
+
+    With no fingerprints configured it returns an empty list, which is valid
+    JSON and simply verifies as "no".  See ANDROID_CERT_FINGERPRINTS."""
+    return JsonResponse([
+        {
+            'relation': ['delegate_permission/common.handle_all_urls'],
+            'target': {
+                'namespace': 'android_app',
+                'package_name': settings.ANDROID_APP_PACKAGE,
+                'sha256_cert_fingerprints': settings.ANDROID_CERT_FINGERPRINTS,
+            },
+        },
+    ], safe=False)
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/',   include('api.urls')),
@@ -49,6 +73,9 @@ urlpatterns = [
     # content-type application/json, no redirect — mind Cloudflare rewrites).
     path('.well-known/apple-app-site-association', apple_app_site_association),
     path('apple-app-site-association', apple_app_site_association),
+
+    # Android App Links association (HTTPS, application/json, no redirect).
+    path('.well-known/assetlinks.json', android_assetlinks),
 
     # Public spectator pages — token-gated, no auth, plain HTML.
     # Shared by the mobile app's "Share Watch Link" button.

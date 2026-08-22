@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand mint. Tints the status-bar notification silhouette; referenced
+         from the FCM default_notification_color meta-data in the manifest. -->
+    <color name="halved_mint">#3BD89A</color>
+    <!-- Adaptive-icon background layer. Written by flutter_launcher_icons from
+         adaptive_icon_background in pubspec.yaml — edit it there, not here. -->
+    <color name="ic_launcher_background">#0B1F1A</color>
+</resources>

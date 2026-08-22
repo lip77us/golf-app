@@ -1,4 +1,4 @@
-package com.lipkin.us.golf_mobile
+package golf.halved.app
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -314,6 +314,22 @@ PUBLIC_BASE_URL    = os.environ.get(
 # the apple-app-site-association file.  From the Xcode project:
 # DEVELOPMENT_TEAM=V5P3HRQA4G, PRODUCT_BUNDLE_IDENTIFIER=us.lipkin.golfapp.
 IOS_APP_ID         = os.environ.get('IOS_APP_ID', 'V5P3HRQA4G.us.lipkin.golfapp')
+
+# Android App Links.  The package name is fixed at the first Play upload and can
+# never change; the fingerprints are the SHA-256 of the signing certs that may
+# claim this domain — comma-separated because there are normally TWO: the
+# *upload* cert you hold, and the *app-signing* cert Google generates under Play
+# App Signing and actually ships to devices.  Both live in Play Console →
+# Test and release → Setup → App signing, and neither exists until the first
+# bundle is uploaded, so this stays empty until then.  Empty = the assetlinks
+# file lists no statements, Android's verification simply fails, and watch links
+# open the web page instead of the app.  That is the pre-launch state, not a bug.
+ANDROID_APP_PACKAGE = os.environ.get('ANDROID_APP_PACKAGE', 'golf.halved.app')
+ANDROID_CERT_FINGERPRINTS = [
+    f.strip().upper()
+    for f in os.environ.get('ANDROID_CERT_FINGERPRINTS', '').split(',')
+    if f.strip()
+]
 # Logo image shown in the invite link's social/Messages preview (og:image).
 # Host a square PNG (≈512px) and point this at it; empty = no preview image.
 INVITE_OG_IMAGE_URL = os.environ.get(

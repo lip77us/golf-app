@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -7,8 +9,22 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// Release signing. The keystore and its passwords live OUTSIDE the repo:
+// android/key.properties (gitignored) points at a .jks under ~/.
+// Missing file = release builds fall back to debug signing, which builds fine
+// locally but is rejected by Play — so the fallback is loud in the build log.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseSigning = keystorePropertiesFile.exists()
+if (hasReleaseSigning) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+} else {
+    logger.warn("WARNING: android/key.properties not found — release builds " +
+        "will be signed with the DEBUG key and Play will reject them.")
+}
+
 android {
-    namespace = "com.lipkin.us.golf_mobile"
+    namespace = "golf.halved.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -22,21 +38,31 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.lipkin.us.golf_mobile"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // Permanent once the first bundle is published to Play — it can never
+        // be changed afterwards. Chosen 2026-08-21, replacing the Flutter
+        // template's com.lipkin.us.golf_mobile.
+        applicationId = "golf.halved.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(
+                if (hasReleaseSigning) "release" else "debug")
         }
     }
 }
