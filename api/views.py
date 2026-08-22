@@ -9455,12 +9455,37 @@ class TeamPlayCardView(APIView):
             return Response({'detail': 'This round is not a Foursome Play event.'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        hole = int(request.query_params.get('hole') or 1)
+        # The holes this group actually plays, in the order it plays them —
+        # a shotgun group starting on 9 runs 9…18, 1…8. Computed here from
+        # services.hole_plan so the card never has to re-derive the wrap.
+        from services.hole_plan import play_order
+        order = play_order(foursome.round, foursome)
+
+        raw = request.query_params.get('hole')
+        if raw:
+            hole = int(raw)
+        else:
+            # No hole asked for: open on the first one this group has not
+            # finished, so a card resumes where the group is rather than at
+            # the top of the course.
+            hole = _first_unplayed_team_hole(foursome, config, order)
+
+        # Par / SI / yards for BOTH formats. The scramble needs them as much as
+        # the shamble does — the picker anchors on par, and a card that guesses
+        # 4 centres the strip wrong on every par 3 and par 5.
+        from services.team_play_state import hole_data
+        info = next(
+            (h for h in hole_data(foursome) if h.get('number') == hole), {})
+
         body = {
-            'format' : config.team_format,
-            'hole'   : hole,
-            'round'  : team_round(foursome, config),
-            'drive'  : drive_state(foursome, config),
+            'format'    : config.team_format,
+            'hole'      : hole,
+            'play_order': order,
+            'par'       : info.get('par'),
+            'stroke_index': info.get('stroke_index'),
+            'yards'     : info.get('yards'),
+            'round'     : team_round(foursome, config),
+            'drive'     : drive_state(foursome, config),
         }
         if config.is_scramble:
             body['team_score'] = team_hole_scores(foursome).get(hole)
@@ -9468,6 +9493,29 @@ class TeamPlayCardView(APIView):
             body['shamble'] = shamble_hole(
                 foursome, hole, resolved_counts(foursome, config))
         return Response(body)
+
+
+def _first_unplayed_team_hole(foursome, config, order):
+    """The first hole in play order this team has not finished.
+
+    A scramble hole is finished when its one number is in; a shamble hole when
+    every ball on it is. Falls back to the group's starting hole once the round
+    is complete, so a finished card opens where it began rather than nowhere.
+    """
+    from services.team_play_state import resolved_counts
+    from services.team_play_scoring import shamble_hole, team_hole_scores
+
+    if config.is_scramble:
+        scored = team_hole_scores(foursome)
+        for h in order:
+            if scored.get(h) is None:
+                return h
+    else:
+        counts = resolved_counts(foursome, config)
+        for h in order:
+            if not shamble_hole(foursome, h, counts)['complete']:
+                return h
+    return order[0] if order else 1
 
 
 class TeamPlayLeaderboardView(APIView):

@@ -1,23 +1,27 @@
 /// screens/team_play_score_entry_screen.dart
 /// -----------------------------------------
-/// The two cards, one format apart
+/// Foursome Play score entry — the same card every other game in the app uses
 /// (docs/design-review/handoff-team-play/SPEC.md §10.1).
 ///
-/// Everything else in the app enters **a score per golfer**. A scramble does
-/// not have one: four men make one number, and pretending otherwise — four
-/// boxes, three of them ignored — is the single easiest way to get a scramble
-/// card wrong.
+/// Shaped after Survivor / Rabbit / Points 5-3-1: a tinted hole header, the
+/// players stacked as rows, and [InlineScorePicker] expanding INSIDE the
+/// active row's bounding box. A golfer who has entered a score anywhere in
+/// this app already knows how it works, and the two earlier attempts here — a
+/// full-screen stepper, then per-row steppers — were both a fourth idiom for
+/// no gain.
 ///
-///   * **Scramble** — a stepper and one huge number. It is tapped by a man
-///     standing on the next tee holding a beer, so the value is the largest
-///     thing on the phone and it says what it IS (birdie, par, bogey) rather
-///     than just the digit.
-///   * **Shamble** — the four-man grid with the counting scores tinted live
-///     and the rest greyed. A man who shot 5 needs to see instantly that his 5
-///     was not used, or the total looks wrong and someone re-enters it.
+/// Two formats, and only the middle of the card differs:
 ///
-/// The drive row sits on **both**. It warns on the tee, never at the scoring
-/// table, and it never blocks the tap.
+///   * **Scramble** — four men make ONE number, so there is one row: TEAM.
+///     Its picker is always open, because there is nothing to choose between.
+///   * **Shamble** — four balls, so four rows. Tap one to aim the picker; the
+///     counting scores tint and the rest grey as they land.
+///
+/// **The drive is its own question**, so it gets its own control above the
+/// rows rather than being smuggled onto a golfer: a chip per man, the pips on
+/// the chip, and the consequence stated beside it. It never blocks the tap —
+/// the team may knowingly take the shortfall, and by default a shortfall costs
+/// nothing.
 library;
 
 import 'package:flutter/material.dart';
@@ -25,10 +29,8 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
-import '../theme/halved_brand.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_score_picker.dart';
-import '../widgets/team_play/team_play_bits.dart';
 
 class TeamPlayScoreEntryScreen extends StatefulWidget {
   final int    foursomeId;
@@ -48,9 +50,11 @@ class TeamPlayScoreEntryScreen extends StatefulWidget {
 }
 
 class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
-  int  _hole = 1;
-  /// Shamble only: whose ball the picker is entering. Same idiom as every
-  /// other four-man card in the app — tap a golfer, then tap his score.
+  /// Null until the first load: the server picks the opening hole — the first
+  /// this group has not finished, IN ITS PLAY ORDER. A shotgun group starting
+  /// on 9 must not open on 1.
+  int? _hole;
+  /// Shamble only: whose ball the picker is aimed at.
   int? _selected;
   TeamPlayCard? _card;
   Object? _error;
@@ -68,7 +72,7 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
       final card = await context.read<AuthProvider>().client
           .getTeamPlayCard(widget.foursomeId, _hole);
       if (!mounted) return;
-      setState(() { _card = card; _error = null; });
+      setState(() { _card = card; _hole = card.hole; _error = null; });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e);
@@ -77,49 +81,43 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     }
   }
 
-  Future<void> _setScore(int? gross) async {
-    final client = context.read<AuthProvider>().client;
-    await client.postTeamPlayScore(widget.foursomeId,
-        hole: _hole, gross: gross);
+  Future<void> _setTeamScore(int? gross) async {
+    await context.read<AuthProvider>().client
+        .postTeamPlayScore(widget.foursomeId, hole: _hole!, gross: gross);
     await _load();
   }
 
-  /// One golfer's ball on this hole.
-  ///
-  /// A shamble keeps per-golfer scores — four balls, and the best N net count
-  /// — so these are ordinary HoleScores through the ordinary endpoint. Only
-  /// the reading of them is Foursome Play's.
+  /// A shamble keeps per-golfer scores — four balls, best N net count — so
+  /// these are ordinary HoleScores through the ordinary endpoint. Only the
+  /// reading of them is Foursome Play's.
   Future<void> _setGolferScore(int playerId, int? gross) async {
-    final client = context.read<AuthProvider>().client;
-    await client.submitScores(
+    await context.read<AuthProvider>().client.submitScores(
       foursomeId: widget.foursomeId,
-      holeNumber: _hole,
+      holeNumber: _hole!,
       scores    : [{'player_id': playerId, 'gross_score': gross}],
     );
     await _load();
   }
 
   Future<void> _setDrive(int? playerId) async {
-    final client = context.read<AuthProvider>().client;
-    await client.postTeamPlayDrive(widget.foursomeId,
-        hole: _hole, playerId: playerId);
+    await context.read<AuthProvider>().client
+        .postTeamPlayDrive(widget.foursomeId, hole: _hole!, playerId: playerId);
     await _load();
   }
 
-  void _goto(int hole) {
-    if (hole < 1 || hole > 18) return;
+  void _goto(int? hole) {
+    if (hole == null) return;
     setState(() { _hole = hole; _selected = null; });
     _load();
   }
 
-  /// The golfer the picker is aimed at: the TD's pick, else the first man
-  /// still without a score, else the first row. Auto-advancing to whoever is
-  /// missing is what makes four entries four taps.
+  /// The golfer the picker is aimed at: the tap, else the first man still
+  /// without a score, else the first row. Auto-advancing to whoever is missing
+  /// is what makes four entries four taps.
   int? _activeGolfer(TeamPlayCard card) {
     final rows = card.shamble?.rows ?? const <TeamPlayShambleRow>[];
     if (rows.isEmpty) return null;
-    if (_selected != null &&
-        rows.any((r) => r.playerId == _selected)) {
+    if (_selected != null && rows.any((r) => r.playerId == _selected)) {
       return _selected;
     }
     for (final r in rows) {
@@ -132,24 +130,14 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   Widget build(BuildContext context) {
     final card = _card;
     return Scaffold(
-      backgroundColor: Halved.surface,
       appBar: AppBar(
-        backgroundColor: Halved.surface,
-        elevation: 0,
-        title: Row(
-          children: [
-            TeamColourBlock(colour: widget.colour, size: 10),
-            const SizedBox(width: 8),
-            Text(widget.teamName, style: Halved.appBarTitle()),
-          ],
-        ),
+        title: Text(widget.teamName),
         actions: [
           if (card != null)
             Padding(
               padding: const EdgeInsets.only(right: 14),
-              child: Center(
-                child: Text(_formatChip(card), style: Halved.label()),
-              ),
+              child: Center(child: Text(_formatChip(card),
+                  style: Theme.of(context).textTheme.bodySmall)),
             ),
         ],
       ),
@@ -158,200 +146,124 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
           : card == null
               ? const Center(child: CircularProgressIndicator())
               : _body(card),
+      bottomNavigationBar: card == null ? null : _HoleNav(
+        card : card,
+        hole : _hole!,
+        onGo : _goto,
+      ),
     );
   }
 
-  /// `Scramble · 6` / `Shamble · 85%` — the allowance is named in the header
-  /// so it is not hidden, even though it never appears on the card itself.
+  /// `Scramble · 6` / `Shamble · 2 of 4` — the allowance and the count are
+  /// named in the header so neither is hidden, even though neither belongs on
+  /// a row.
   String _formatChip(TeamPlayCard card) {
     if (card.isScramble) {
       final a = card.round.allowance;
-      return a == null ? 'Scramble' : 'Scramble · $a';
+      return a == null ? 'Scramble' : 'Scramble · plays off $a';
     }
-    return 'Shamble';
+    final n = card.shamble?.count;
+    return n == null ? 'Shamble' : 'Shamble · $n of 4 count';
   }
 
   Widget _body(TeamPlayCard card) {
+    final theme = Theme.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       children: [
-        _HoleHeader(hole: _hole, card: card, onGo: _goto),
-        const SizedBox(height: 14),
+        _HoleHeader(card: card, hole: _hole!),
+        const SizedBox(height: 12),
 
-        // A shamble picks a tee shot exactly as a scramble does, so the row is
-        // identical — the only difference is where it sits: above the four
-        // scores rather than below the one.
-        if (!card.isScramble && !card.drive.isOff) ...[
-          _DriveRow(card: card, hole: _hole, onPick: _setDrive),
-          const SizedBox(height: 14),
+        if (!card.drive.isOff) ...[
+          _DriveStrip(card: card, hole: _hole!, onPick: _setDrive),
+          const SizedBox(height: 12),
         ],
 
-        if (card.isScramble)
-          _ScrambleRows(card: card, hole: _hole, onDrive: _setDrive)
-        else
-          _ShambleCard(
-            hole    : card.shamble,
-            selected: _activeGolfer(card),
-            onSelect: (id) => setState(() => _selected = id),
-          ),
-
-        const SizedBox(height: 14),
-        // The same picker every other game renders — score entry, Nassau,
-        // Skins, Wolf, Rabbit, Points 5-3-1, Quota Nassau. A golfer who enters
-        // a score anywhere in the app already knows how this works, and a
-        // bespoke stepper here would have been a fourth thing to learn.
         IgnorePointer(
-          // Nothing is tappable while a save is in flight — two taps on the
-          // same hole would race each other's reload.
+          // Nothing is tappable while a save is in flight — two taps on one
+          // hole would race each other's reload.
           ignoring: _busy,
-          child: _Picker(
-          card    : card,
-          par     : _parFor(card),
-          selected: card.isScramble ? null : _activeGolfer(card),
-          onTeam  : _setScore,
-          onGolfer: _setGolferScore,
-          ),
+          child: card.isScramble
+              ? _TeamScoreRow(card: card, onSet: _setTeamScore)
+              : _ShambleRows(
+                  card    : card,
+                  selected: _activeGolfer(card),
+                  onSelect: (id) => setState(() => _selected = id),
+                  onSet   : _setGolferScore,
+                ),
         ),
 
-        const SizedBox(height: 16),
-        _Strip(card: card, hole: _hole, onGo: _goto),
-
-        const SizedBox(height: 16),
-        _Footer(card: card, hole: _hole, onNext: () => _goto(_hole + 1)),
+        const SizedBox(height: 14),
+        // Gross on the card, net on the leaderboard. A whole-number team
+        // figure applied to the round is not a stroke on a hole, and showing
+        // it per hole would invite subtracting it there.
+        Text(
+          card.isScramble && card.round.allowance != null
+              ? 'Gross on the card. The team\'s ${card.round.allowance} '
+                'strokes come off the total on the leaderboard.'
+              : 'Gross on the card, net on the leaderboard.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
       ],
     );
   }
-
-  int _parFor(TeamPlayCard card) => card.shamble?.par ?? 4;
 }
 
-// ── Header ──────────────────────────────────────────────────────────────────
+// ── Hole header ─────────────────────────────────────────────────────────────
 
 class _HoleHeader extends StatelessWidget {
+  final TeamPlayCard card;
   final int hole;
-  final TeamPlayCard card;
-  final ValueChanged<int> onGo;
-
-  const _HoleHeader({required this.hole, required this.card, required this.onGo});
+  const _HoleHeader({required this.card, required this.hole});
 
   @override
   Widget build(BuildContext context) {
-    final s = card.shamble;
-    return Row(
-      children: [
-        IconButton(
-          onPressed: hole > 1 ? () => onGo(hole - 1) : null,
-          icon: const Icon(Icons.chevron_left),
-          color: Halved.pine,
-        ),
-        Expanded(
-          child: Column(
-            children: [
-              Text('$hole', style: Halved.emptyTitle().copyWith(fontSize: 34)),
-              Text(
-                s?.par == null
-                    ? 'Hole $hole'
-                    : 'Par ${s!.par} · Stroke index ${s.strokeIndex}',
-                style: Halved.body(color: Halved.muted),
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          onPressed: hole < 18 ? () => onGo(hole + 1) : null,
-          icon: const Icon(Icons.chevron_right),
-          color: Halved.pine,
-        ),
-      ],
+    final theme = Theme.of(context);
+    final bits = <String>[
+      if (card.par != null) 'Par ${card.par}',
+      if (card.yards != null) '${card.yards} yds',
+      if (card.strokeIndex != null) 'SI ${card.strokeIndex}',
+      // On a shotgun start the hole number is not the position in the round,
+      // so say both rather than leaving a group on 9 wondering whether it is
+      // on its first hole or its ninth.
+      if (card.playOrder.isNotEmpty && card.playOrder.first != 1)
+        '${card.positionOf(hole)} of ${card.playOrder.length}',
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(children: [
+        Text('Hole $hole',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold)),
+        if (bits.isNotEmpty)
+          Text(bits.join('  ·  '),
+              textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+      ]),
     );
   }
 }
 
-/// The app's standard picker, aimed at whatever this format scores.
-///
-/// A scramble enters ONE number for the team, so it anchors on gross par and
-/// passes no strokes — the allowance is a whole-number team figure taken off
-/// the round total, not a stroke on a hole, and feeding it in here would centre
-/// the strip on a net par the team never plays to.
-///
-/// A shamble enters four, so it anchors on the selected golfer's own strokes,
-/// exactly as the standard card does.
-class _Picker extends StatelessWidget {
+// ── The drive ───────────────────────────────────────────────────────────────
+
+/// A chip per golfer, the pips on the chip, and the consequence stated beside
+/// it. Its own control because it is its own question — the score belongs to
+/// the team, and hanging it off a man's row would say otherwise.
+class _DriveStrip extends StatelessWidget {
   final TeamPlayCard card;
-  final int  par;
-  final int? selected;
-  final Future<void> Function(int?) onTeam;
-  final Future<void> Function(int, int?) onGolfer;
+  final int hole;
+  final Future<void> Function(int?) onPick;
 
-  const _Picker({
-    required this.card, required this.par, required this.selected,
-    required this.onTeam, required this.onGolfer,
+  const _DriveStrip({
+    required this.card, required this.hole, required this.onPick,
   });
-
-  @override
-  Widget build(BuildContext context) {
-    if (card.isScramble) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('TEAM SCORE', style: Halved.label()),
-          const SizedBox(height: 6),
-          InlineScorePicker(
-            par         : par,
-            strokes     : 0,
-            currentScore: card.teamScore,
-            onScoreSelected: (v) => onTeam(v == -1 ? null : v),
-          ),
-        ],
-      );
-    }
-
-    final rows = card.shamble?.rows ?? const <TeamPlayShambleRow>[];
-    final row  = rows.where((r) => r.playerId == selected).firstOrNull;
-    if (row == null) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(row.name.toUpperCase(), style: Halved.label()),
-        const SizedBox(height: 6),
-        InlineScorePicker(
-          par         : par,
-          strokes     : row.strokes,
-          currentScore: row.gross,
-          onScoreSelected: (v) => onGolfer(row.playerId, v == -1 ? null : v),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Scramble: the group card, with the driver's row live ────────────────────
-
-/// Four men, one number.
-///
-/// Shaped after the Cup's alternate-shot card, which draws the ordinary group
-/// card and dims the partner whose turn it isn't. Here the live row is
-/// **whoever's drive the team took**: tap his radio, then put the team's
-/// number on his row. One gesture covers the drive and the score, which is
-/// the pair the hole was never complete without.
-///
-/// The score belongs to the TEAM, not to the man whose row it sits on — the
-/// footer says so, and nothing per-golfer is stored.
-///
-/// When there is no drive to pick — no requirement, or an alternating rota
-/// that already names the pair — the radios would be a question with one
-/// answer, so the card falls back to a single TEAM row.
-class _ScrambleRows extends StatelessWidget {
-  final TeamPlayCard card;
-  final int  hole;
-  final Future<void> Function(int?) onDrive;
-
-  const _ScrambleRows({
-    required this.card, required this.hole, required this.onDrive,
-  });
-
-  bool get _picksDriver => card.drive.isQuota;
 
   TeamPlayDriveWindow? get _window {
     for (final w in card.drive.windows) {
@@ -360,7 +272,7 @@ class _ScrambleRows extends StatelessWidget {
     return card.drive.windows.isEmpty ? null : card.drive.windows.first;
   }
 
-  int? get _driverId {
+  int? get _driver {
     for (final g in _window?.golfers ?? const <TeamPlayDriveGolfer>[]) {
       if (g.holes.contains(hole)) return g.playerId;
     }
@@ -369,399 +281,72 @@ class _ScrambleRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final window = _window;
-    final driver = _driverId;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Halved.card,
-        borderRadius: BorderRadius.circular(Halved.rCard),
-        border: Border.all(
-          color: (window?.tight ?? false) || (window?.impossible ?? false)
-              ? Halved.warning : Halved.cardBorder,
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(_picksDriver ? 'Whose drive' : 'Team score',
-                    style: Halved.body(weight: FontWeight.w700)),
-              ),
-              if (_picksDriver && window != null)
-                Text('${window.perGolfer} each per '
-                     '${window.end <= 9 || window.start >= 10 ? 'nine' : 'round'}',
-                     style: Halved.label()),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          if (_picksDriver && window != null)
-            for (final g in window.golfers)
-              _GolferRow(
-                golfer   : g,
-                live     : g.playerId == driver,
-                anyDriver: driver != null,
-                onPick   : () => onDrive(
-                    g.playerId == driver ? null : g.playerId),
-              )
-          else if (card.drive.isAlternating)
-            // An alternating rota names the pair rather than asking.
-            TeamNote(card.drive.rotaFor(hole)?.upLabel ??
-                'The team sets the pairs on the 1st tee.'),
-
-          if (_picksDriver && driver == null) ...[
-            const SizedBox(height: 8),
-            const TeamNote('Pick whose drive you took, then put the team\'s '
-                           'number on his row.'),
-          ],
-
-          if (window != null && window.owed > 0) ...[
-            const SizedBox(height: 10),
-            // The consequence in a sentence, on the tee — the moment a quota
-            // becomes unsatisfiable is invisible to four men who have had a
-            // few. It never blocks the tap.
-            TeamNote(
-              window.impossible
-                  ? '${window.owed} owed and only ${window.holesLeft} '
-                    '${window.holesLeft == 1 ? 'hole' : 'holes'} left — '
-                    '${window.label.toLowerCase()} cannot be satisfied. '
-                    'Play on; a shortfall is recorded, not blocked.'
-                  : window.tight
-                      ? '${window.owed} owed, ${window.holesLeft} holes left. '
-                        'It still works — but only if every remaining hole '
-                        'goes to a man who owes one.'
-                      : '${window.owed} still owed on the '
-                        '${window.label.toLowerCase()}.',
-              warn: window.tight || window.impossible,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// One man's row: his drive radio, his pips, and — when the team took his
-/// drive — the team's number.
-class _GolferRow extends StatelessWidget {
-  final TeamPlayDriveGolfer golfer;
-  final bool live;
-  final bool anyDriver;
-  final VoidCallback onPick;
-
-  const _GolferRow({
-    required this.golfer, required this.live,
-    required this.anyDriver, required this.onPick,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final body = Container(
-      margin: const EdgeInsets.symmetric(vertical: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: live ? Halved.brightMint.withValues(alpha: 0.16) : Halved.surface,
-        borderRadius: BorderRadius.circular(Halved.rChip),
-        border: Border.all(
-          color: live ? Halved.mint : Halved.cardBorder,
-          width: live ? 2 : 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          InkWell(
-            onTap: onPick,
-            borderRadius: BorderRadius.circular(Halved.rPill),
-            child: Padding(
-              padding: const EdgeInsets.all(2),
-              child: Icon(
-                live ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                size: 22,
-                color: live ? Halved.pine : Halved.cardBorder,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(golfer.name,
-                    style: Halved.body(weight: FontWeight.w600)),
-                Text(golfer.pipLabel,
-                    style: Halved.label(
-                        color: golfer.owes > 0 ? Halved.warning : Halved.pine)),
-              ],
-            ),
-          ),
-          if (live)
-            Text('drive taken', style: Halved.label(color: Halved.pine)),
-        ],
-      ),
-    );
-
-    // Rows that are not the driver's are de-emphasised rather than hidden —
-    // the team still needs to see who has driven and who owes.
-    return anyDriver && !live ? Opacity(opacity: 0.55, child: body) : body;
-  }
-}
-
-// ── Shamble: four scores, and the card says which counted ───────────────────
-
-class _ShambleCard extends StatelessWidget {
-  final TeamPlayShambleHole? hole;
-  /// Whose ball the picker below is entering.
-  final int? selected;
-  final ValueChanged<int> onSelect;
-
-  const _ShambleCard({
-    required this.hole, required this.selected, required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final h = hole;
-    if (h == null) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Halved.card,
-        borderRadius: BorderRadius.circular(Halved.rCard),
-        border: Border.all(color: Halved.cardBorder, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text('Scores',
-                  style: Halved.body(weight: FontWeight.w700))),
-              // Stated on EVERY hole. It usually does not change, and saying so
-              // costs one line and settles the recurring question at the green.
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Halved.pine.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(Halved.rPill),
-                ),
-                child: Text(h.countLabel,
-                    style: Halved.label(color: Halved.pine)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text('The ${h.count == 1 ? 'lowest net counts' : 'lowest nets count'}. '
-               'The rest are recorded and ignored.',
-               style: Halved.body(color: Halved.muted).copyWith(fontSize: 13)),
-          const Divider(height: 18),
-          Row(
-            children: [
-              const Expanded(child: SizedBox()),
-              SizedBox(width: 46,
-                  child: Text('GROSS', textAlign: TextAlign.right,
-                      style: Halved.label())),
-              SizedBox(width: 42,
-                  child: Text('NET', textAlign: TextAlign.right,
-                      style: Halved.label())),
-            ],
-          ),
-          const SizedBox(height: 4),
-          for (final row in h.rows)
-            _ShambleRow(
-              row     : row,
-              selected: row.playerId == selected,
-              onTap   : () => onSelect(row.playerId),
-            ),
-          const Divider(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: Text('Hole total',
-                    style: Halved.body(weight: FontWeight.w700)),
-              ),
-              Text(
-                h.teamNet == null
-                    ? 'Waiting on ${h.rows.where((r) => r.gross == null).length}'
-                    : '${h.teamNet}',
-                style: Halved.body(weight: FontWeight.w700),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ShambleRow extends StatelessWidget {
-  final TeamPlayShambleRow row;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ShambleRow({
-    required this.row, required this.selected, required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Tinted when it counts, greyed when it does not — live, as they are
-    // entered. Two men's cards do nothing on a given hole.
-    final counts = row.counts;
-    final fg = counts ? Halved.deepPine : Halved.disabledText;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(Halved.rChip),
-      child: Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-      decoration: BoxDecoration(
-        color: counts ? Halved.mint.withValues(alpha: 0.10) : null,
-        borderRadius: BorderRadius.circular(Halved.rChip),
-        // The row the picker is aimed at, same as the standard card marks its
-        // active player.
-        border: Border.all(
-          color: selected ? Halved.pine : Colors.transparent,
-          width: selected ? 2 : 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              row.name,
-              style: Halved.body(weight: FontWeight.w600, color: fg).copyWith(
-                fontStyle: row.isPhantom ? FontStyle.italic : FontStyle.normal,
-              ),
-            ),
-          ),
-          // The phantom's ball IS played — by whoever is not driving — so its
-          // row shows a score like any other.
-          SizedBox(width: 46,
-              child: Text('${row.gross ?? '—'}', textAlign: TextAlign.right,
-                  style: Halved.body(color: fg))),
-          SizedBox(width: 42,
-              child: Text('${row.net ?? '—'}', textAlign: TextAlign.right,
-                  style: Halved.body(weight: FontWeight.w700, color: fg))),
-        ],
-      ),
-      ),
-    );
-  }
-}
-
-// ── The drive row ───────────────────────────────────────────────────────────
-
-class _DriveRow extends StatelessWidget {
-  final TeamPlayCard card;
-  final int hole;
-  final Future<void> Function(int?) onPick;
-
-  const _DriveRow({required this.card, required this.hole, required this.onPick});
-
-  @override
-  Widget build(BuildContext context) {
-    final drive = card.drive;
+    final theme = Theme.of(context);
 
     // A schedule needs one line on the tee, not a tracker.
-    if (drive.isAlternating) {
-      final rota = drive.rotaFor(hole);
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Halved.card,
-          borderRadius: BorderRadius.circular(Halved.rCard),
-          border: Border.all(color: Halved.cardBorder, width: 1.5),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('WHOSE TEE SHOT IS IN PLAY', style: Halved.label()),
-                  const SizedBox(height: 3),
-                  Text(
-                    rota == null || rota.upLabel.isEmpty
-                        ? 'The team sets the pairs on the 1st tee.'
-                        : rota.upLabel,
-                    style: Halved.body(
-                        color: Halved.deepPine, weight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-            if (rota != null && rota.phantomCover != null)
-              Text('${rota.phantomCoverName} → phantom',
-                   style: Halved.label()),
-          ],
+    if (card.drive.isAlternating) {
+      final rota = card.drive.rotaFor(hole);
+      return _Panel(
+        label: 'WHOSE TEE SHOT',
+        child: Text(
+          rota == null || rota.upLabel.isEmpty
+              ? 'The team sets the pairs on the 1st tee.'
+              : rota.upLabel +
+                  (rota.phantomCoverName.isEmpty
+                      ? ''
+                      : '  ·  ${rota.phantomCoverName} → phantom'),
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(fontWeight: FontWeight.w600),
         ),
       );
     }
 
-    if (!drive.isQuota) return const SizedBox.shrink();
+    final w = _window;
+    if (w == null) return const SizedBox.shrink();
+    final driver = _driver;
 
-    final window = drive.windows.firstWhere(
-      (w) => hole >= w.start && hole <= w.end,
-      orElse: () => drive.windows.isEmpty
-          ? const TeamPlayDriveWindow(
-              start: 1, end: 18, started: false, required: 0, perGolfer: 0,
-              owed: 0, holesLeft: 0, tight: false, impossible: false,
-              golfers: [])
-          : drive.windows.first,
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Halved.card,
-        borderRadius: BorderRadius.circular(Halved.rCard),
-        border: Border.all(
-          color: window.tight || window.impossible
-              ? Halved.warning : Halved.cardBorder,
-          width: 1.5,
-        ),
-      ),
+    return _Panel(
+      label   : 'WHOSE DRIVE',
+      trailing: w.owed == 0
+          ? Text('all square', style: theme.textTheme.labelSmall)
+          : Text(
+              '${w.owed} owed, ${w.holesLeft} left',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: w.tight || w.impossible
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
             children: [
-              Expanded(child: Text('Whose drive',
-                  style: Halved.body(weight: FontWeight.w700))),
-              Text(
-                '${window.perGolfer} each per '
-                '${window.end <= 9 || window.start >= 10 ? 'nine' : 'round'}',
-                style: Halved.label(),
-              ),
+              for (final g in w.golfers)
+                _DriveChip(
+                  golfer  : g,
+                  selected: g.playerId == driver,
+                  onTap   : () => onPick(
+                      g.playerId == driver ? null : g.playerId),
+                ),
             ],
           ),
-          const SizedBox(height: 10),
-          for (final g in window.golfers)
-            _DrivePip(golfer: g, hole: hole, onPick: onPick),
-
-          if (window.owed > 0) ...[
-            const SizedBox(height: 10),
-            // The consequence in a sentence, on the tee — because the moment a
-            // quota becomes unsatisfiable is invisible to four men who have
-            // had a few. It never blocks the tap.
-            TeamNote(
-              window.impossible
-                  ? '${window.owed} owed and only ${window.holesLeft} '
-                    '${window.holesLeft == 1 ? 'hole' : 'holes'} left — '
-                    '${window.label.toLowerCase()} cannot be satisfied. '
-                    'Play on; a shortfall is recorded, not blocked.'
-                  : window.tight
-                      ? '${window.owed} owed, ${window.holesLeft} holes left. '
-                        'It still works — but only if every remaining hole '
-                        'goes to a man who owes one.'
-                      : '${window.owed} still owed on the '
-                        '${window.label.toLowerCase()}.',
-              warn: window.tight || window.impossible,
+          if (w.owed > 0 && (w.tight || w.impossible)) ...[
+            const SizedBox(height: 8),
+            // The consequence in a sentence, on the tee — the moment a quota
+            // becomes unsatisfiable is invisible to four men who have had a
+            // few. It never blocks the tap.
+            Text(
+              w.impossible
+                  ? '${w.label} cannot be satisfied now. Play on — a shortfall '
+                    'is recorded, not blocked.'
+                  : 'It still works, but only if every remaining hole goes to '
+                    'a man who owes one.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.error),
             ),
           ],
         ],
@@ -770,154 +355,350 @@ class _DriveRow extends StatelessWidget {
   }
 }
 
-class _DrivePip extends StatelessWidget {
+class _DriveChip extends StatelessWidget {
   final TeamPlayDriveGolfer golfer;
-  final int hole;
-  final Future<void> Function(int?) onPick;
+  final bool selected;
+  final VoidCallback onTap;
 
-  const _DrivePip({
-    required this.golfer, required this.hole, required this.onPick,
+  const _DriveChip({
+    required this.golfer, required this.selected, required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final tookThisHole = golfer.holes.contains(hole);
+    final theme = Theme.of(context);
+    final owes  = golfer.owes > 0;
+    // Last name only — four full names do not fit a phone, and the group knows
+    // who Maiolini is.
+    final short = golfer.name.split(' ').last;
     return InkWell(
-      onTap: () => onPick(tookThisHole ? null : golfer.playerId),
-      borderRadius: BorderRadius.circular(Halved.rChip),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 3),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
         decoration: BoxDecoration(
-          color: tookThisHole
-              ? Halved.brightMint.withValues(alpha: 0.20) : Halved.surface,
-          borderRadius: BorderRadius.circular(Halved.rChip),
+          color: selected ? theme.colorScheme.primary : null,
+          borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: tookThisHole ? Halved.mint : Halved.cardBorder,
-            width: tookThisHole ? 2 : 1,
+            color: selected
+                ? theme.colorScheme.primary
+                : (owes ? theme.colorScheme.error.withValues(alpha: 0.5)
+                        : theme.colorScheme.outlineVariant),
+            width: 1.5,
           ),
         ),
-        child: Row(
-          children: [
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(short,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : null,
+              )),
+          const SizedBox(width: 6),
+          Text(
+            golfer.holes.isEmpty ? 'owes ${golfer.owes}'
+                                 : golfer.holes.map((h) => 'h$h').join(' '),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: selected
+                  ? Colors.white70
+                  : (owes ? theme.colorScheme.error
+                          : theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _Panel extends StatelessWidget {
+  final String  label;
+  final Widget  child;
+  final Widget? trailing;
+  const _Panel({required this.label, required this.child, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(child: Text(label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    letterSpacing: 0.6))),
+            if (trailing != null) trailing!,
+          ]),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+// ── Scramble: one row, one number ───────────────────────────────────────────
+
+class _TeamScoreRow extends StatelessWidget {
+  final TeamPlayCard card;
+  final Future<void> Function(int?) onSet;
+  const _TeamScoreRow({required this.card, required this.onSet});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final box   = theme.colorScheme.primary;
+    final par   = card.par ?? 4;
+
+    // Always open: four men make one number, so there is nothing to choose
+    // between and no reason to make the TD tap a row first.
+    return Container(
+      decoration: BoxDecoration(
+        color: box.withValues(alpha: 0.10),
+        border: Border(
+          top:    BorderSide(color: box, width: 1.5),
+          bottom: BorderSide(color: box, width: 1.5),
+          right:  BorderSide(color: box, width: 1.5),
+          left:   BorderSide(color: box, width: 4.0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+            child: Row(children: [
+              Expanded(
+                child: Text('Team score',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+              ),
+              Text('one ball',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ]),
+          ),
+          InlineScorePicker(
+            // Gross par, no strokes: the allowance is a whole-number team
+            // figure off the round total, not a stroke on a hole, so feeding
+            // it in would centre the strip on a net par nobody plays to.
+            par            : par,
+            strokes        : 0,
+            currentScore   : card.teamScore,
+            boxBorderColor : box,
+            boxFillColor   : Colors.white,
+            onScoreSelected: (v) => onSet(v == -1 ? null : v),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shamble: four rows, the active one open ─────────────────────────────────
+
+class _ShambleRows extends StatelessWidget {
+  final TeamPlayCard card;
+  final int? selected;
+  final ValueChanged<int> onSelect;
+  final Future<void> Function(int playerId, int? gross) onSet;
+
+  const _ShambleRows({
+    required this.card, required this.selected,
+    required this.onSelect, required this.onSet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final h = card.shamble;
+    if (h == null) return const SizedBox.shrink();
+    final box = theme.colorScheme.primary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final row in h.rows)
+          if (row.playerId == selected)
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: box.withValues(alpha: 0.10),
+                border: Border(
+                  top:    BorderSide(color: box, width: 1.5),
+                  bottom: BorderSide(color: box, width: 1.5),
+                  right:  BorderSide(color: box, width: 1.5),
+                  left:   BorderSide(color: box, width: 4.0),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _GolferLine(row: row, onTap: null),
+                  InlineScorePicker(
+                    par            : card.par ?? h.par ?? 4,
+                    strokes        : row.strokes,
+                    currentScore   : row.gross,
+                    boxBorderColor : box,
+                    boxFillColor   : Colors.white,
+                    onScoreSelected: (v) =>
+                        onSet(row.playerId, v == -1 ? null : v),
+                  ),
+                ],
+              ),
+            )
+          else
+            _GolferLine(row: row, onTap: () => onSelect(row.playerId)),
+        const Divider(height: 18),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(children: [
             Expanded(
-              child: Text(golfer.name,
-                  style: Halved.body(weight: FontWeight.w600)),
+              child: Text('Hole total',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
             ),
             Text(
-              golfer.pipLabel,
-              style: Halved.label(
-                  color: golfer.owes > 0 ? Halved.warning : Halved.pine),
+              h.teamNet == null
+                  ? 'waiting on ${h.rows.where((r) => r.gross == null).length}'
+                  : '${h.teamNet}',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── The strip and the footer ────────────────────────────────────────────────
-
-/// The eighteen holes across the bottom, filled ones solid — position in the
-/// round without leaving the card.
-class _Strip extends StatelessWidget {
-  final TeamPlayCard card;
-  final int hole;
-  final ValueChanged<int> onGo;
-
-  const _Strip({required this.card, required this.hole, required this.onGo});
-
-  @override
-  Widget build(BuildContext context) {
-    final thru = card.round.thru;
-    return SizedBox(
-      height: 44,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: 18,
-        itemBuilder: (_, i) {
-          final n       = i + 1;
-          final current = n == hole;
-          final filled  = n <= thru;
-          return GestureDetector(
-            onTap: () => onGo(n),
-            child: Container(
-              width: 38,
-              margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-              decoration: BoxDecoration(
-                color: current
-                    ? Halved.pine
-                    : (filled ? Halved.mint.withValues(alpha: 0.18)
-                              : Halved.card),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Halved.cardBorder),
-              ),
-              child: Center(
-                child: Text('$n',
-                    style: Halved.body(weight: FontWeight.w600).copyWith(
-                        color: current ? Halved.cream : Halved.deepPine,
-                        fontSize: 13)),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _Footer extends StatelessWidget {
-  final TeamPlayCard card;
-  final int hole;
-  final VoidCallback onNext;
-
-  const _Footer({required this.card, required this.hole, required this.onNext});
-
-  /// **Auto-advance waits for BOTH** the score and the drive — the hole is not
-  /// complete until the drive is picked, and the button names what is
-  /// outstanding rather than going grey and silent.
-  ({bool ready, String label}) get _state {
-    final needsDrive = card.drive.isQuota &&
-        !card.drive.windows.any((w) =>
-            w.golfers.any((g) => g.holes.contains(hole)));
-    final hasScore = card.isScramble
-        ? card.teamScore != null
-        : (card.shamble?.teamNet != null);
-
-    if (!hasScore && needsDrive) {
-      return (ready: false, label: 'Enter the score and pick whose drive');
-    }
-    if (!hasScore) return (ready: false, label: 'Enter the score to continue');
-    if (needsDrive) {
-      return (ready: false, label: 'Pick whose drive to continue');
-    }
-    return (ready: true, label: 'Save & next hole');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = _state;
-    final round = card.round;
-    return Column(
-      children: [
-        HalvedCtaButton(
-          label: state.label,
-          icon : state.ready ? Icons.arrow_forward : null,
-          trailingIcon: true,
-          onPressed: state.ready && hole < 18 ? onNext : null,
-        ),
-        const SizedBox(height: 10),
-        // Gross on the card, net on the leaderboard. A whole-number team
-        // figure applied to the round is not a stroke on a hole, and showing
-        // it here would invite subtracting it per hole.
-        Text(
-          card.isScramble && round.allowance != null
-              ? 'Gross on the card. Your ${round.allowance} strokes come off '
-                'the total on the leaderboard.'
-              : 'Gross on the card, net on the leaderboard.',
-          textAlign: TextAlign.center,
-          style: Halved.body(color: Halved.muted).copyWith(fontSize: 13),
+          ]),
         ),
       ],
+    );
+  }
+}
+
+/// One golfer's line: name, his strokes, his gross, and whether it counted.
+///
+/// The counting scores tint and the rest grey, live, as they are entered —
+/// two men's cards do nothing on a given hole, and a man who shot 5 needs to
+/// see instantly that his 5 was not used or the total looks wrong and someone
+/// re-enters it.
+class _GolferLine extends StatelessWidget {
+  final TeamPlayShambleRow row;
+  final VoidCallback? onTap;
+  const _GolferLine({required this.row, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final counts  = row.counts;
+    final scored  = row.gross != null;
+    final subdued = scored && !counts;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        child: Row(children: [
+          Expanded(
+            child: Row(children: [
+              Flexible(
+                child: Text(
+                  row.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontStyle: row.isPhantom
+                        ? FontStyle.italic : FontStyle.normal,
+                    color: subdued ? theme.colorScheme.onSurfaceVariant : null,
+                  ),
+                ),
+              ),
+              if (row.strokes > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text('gets ${row.strokes}',
+                      style: theme.textTheme.labelSmall),
+                ),
+              ],
+              if (counts && scored) ...[
+                const SizedBox(width: 8),
+                Icon(Icons.check_circle,
+                     size: 15, color: theme.colorScheme.primary),
+              ],
+            ]),
+          ),
+          // The score box, same as every other card: the value, or an empty
+          // slot inviting the tap.
+          Container(
+            width: 46, height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: subdued
+                    ? theme.colorScheme.outlineVariant
+                    : theme.colorScheme.outline,
+              ),
+            ),
+            child: Text(
+              row.gross?.toString() ?? '',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: subdued ? theme.colorScheme.onSurfaceVariant : null,
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Hole navigation ─────────────────────────────────────────────────────────
+
+/// Prev / next in PLAY order, so a shotgun group walks its own round rather
+/// than the course's numbering.
+class _HoleNav extends StatelessWidget {
+  final TeamPlayCard card;
+  final int hole;
+  final ValueChanged<int?> onGo;
+
+  const _HoleNav({required this.card, required this.hole, required this.onGo});
+
+  @override
+  Widget build(BuildContext context) {
+    final prev = card.prevBefore(hole);
+    final next = card.nextAfter(hole);
+    return SafeArea(
+      minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: prev == null ? null : () => onGo(prev),
+            icon: const Icon(Icons.chevron_left, size: 20),
+            label: Text(prev == null ? 'First hole' : 'Hole $prev'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: next == null ? null : () => onGo(next),
+            iconAlignment: IconAlignment.end,
+            icon: const Icon(Icons.chevron_right, size: 20),
+            label: Text(next == null ? 'Last hole' : 'Hole $next'),
+          ),
+        ),
+      ]),
     );
   }
 }

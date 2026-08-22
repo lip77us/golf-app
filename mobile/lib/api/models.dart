@@ -5591,19 +5591,35 @@ class TeamPlayRound {
 class TeamPlayCard {
   final String format;
   final int    hole;
+  /// The holes this group plays, IN PLAY ORDER — a shotgun group starting on 9
+  /// runs 9…18, 1…8. Computed server-side from services.hole_plan so the card
+  /// never re-derives the wrap.
+  final List<int> playOrder;
+  /// This hole's par / stroke index / yards, sent for BOTH formats — the
+  /// picker anchors on par, and a card that guesses 4 centres the strip wrong
+  /// on every par 3 and par 5.
+  final int? par;
+  final int? strokeIndex;
+  final int? yards;
   final TeamPlayRound round;
   final TeamPlayDrive drive;
   final int?   teamScore;                 // scramble
   final TeamPlayShambleHole? shamble;     // shamble
 
   const TeamPlayCard({
-    required this.format, required this.hole, required this.round,
-    required this.drive, this.teamScore, this.shamble,
+    required this.format, required this.hole, required this.playOrder,
+    required this.round, required this.drive,
+    this.par, this.strokeIndex, this.yards, this.teamScore, this.shamble,
   });
 
   factory TeamPlayCard.fromJson(Map<String, dynamic> j) => TeamPlayCard(
         format   : (j['format'] ?? 'scramble') as String,
         hole     : (j['hole'] ?? 1) as int,
+        playOrder: ((j['play_order'] as List?) ?? const [])
+            .map((e) => e as int).toList(),
+        par        : j['par'] as int?,
+        strokeIndex: j['stroke_index'] as int?,
+        yards      : j['yards'] as int?,
         round    : TeamPlayRound.fromJson(
             Map<String, dynamic>.from((j['round'] ?? {}) as Map)),
         drive    : TeamPlayDrive.fromJson(
@@ -5616,6 +5632,24 @@ class TeamPlayCard {
       );
 
   bool get isScramble => format == 'scramble';
+
+  int _indexOf(int h) => playOrder.indexOf(h);
+
+  /// The hole after [h] in PLAY order, or null at the last one.
+  int? nextAfter(int h) {
+    final i = _indexOf(h);
+    return (i < 0 || i + 1 >= playOrder.length) ? null : playOrder[i + 1];
+  }
+
+  /// The hole before [h] in play order, or null at the first.
+  int? prevBefore(int h) {
+    final i = _indexOf(h);
+    return i <= 0 ? null : playOrder[i - 1];
+  }
+
+  /// `3 of 18` — where this hole sits in the group's round, which is not the
+  /// hole number once a shotgun start is involved.
+  int positionOf(int h) => _indexOf(h) + 1;
 }
 
 /// The board: six rows, one column, sorted on net ascending.

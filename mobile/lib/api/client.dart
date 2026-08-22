@@ -2424,8 +2424,12 @@ class ApiClient {
 
   /// The hole as the card draws it — one number, or four with the counting
   /// ones flagged.
-  Future<TeamPlayCard> getTeamPlayCard(int foursomeId, int hole) async {
-    final data = await _get('/foursomes/$foursomeId/team-play/card/?hole=$hole');
+  /// Omit [hole] to let the server resume — it opens on the first hole this
+  /// group has not finished, in ITS play order, which is not hole 1 for a
+  /// shotgun start.
+  Future<TeamPlayCard> getTeamPlayCard(int foursomeId, [int? hole]) async {
+    final q = hole == null ? '' : '?hole=$hole';
+    final data = await _get('/foursomes/$foursomeId/team-play/card/$q');
     return TeamPlayCard.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
