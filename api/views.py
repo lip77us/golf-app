@@ -9497,6 +9497,10 @@ class TeamPlayCardView(APIView):
             'stroke_index': info.get('stroke_index'),
             'yards'     : info.get('yards'),
             'team_strokes': team_strokes,
+            # Par by hole, so the scorecard under the entry can draw its PAR
+            # row without a second call.
+            'pars'      : {str(h['number']): h.get('par')
+                           for h in hole_data(foursome)},
             'round'     : rnd,
             'drive'     : drive_state(foursome, config),
         }

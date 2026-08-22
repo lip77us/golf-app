@@ -336,3 +336,44 @@ class ShambleCardTests(TestCase):
                              {'hole_number': 1, 'gross_score': 4},
                              format='json')
         self.assertEqual(r.status_code, 400)
+
+
+class LeaderboardShapeTests(TeamPlayScoringTests):
+    """The board's JSON has to survive a strict client.
+
+    `allowance` is a worked BLOCK on a team row and a plain int on a round;
+    merging the two dicts blind replaced one with the other and the Dart model
+    crashed casting an int to a map. Shape, not arithmetic — so it is asserted
+    on the wire.
+    """
+
+    def test_allowance_stays_a_block_on_every_row(self):
+        self._play_everyone()
+        for team in self._board()['teams']:
+            self.assertIsInstance(team['allowance'], dict, team['name'])
+            self.assertIn('kind', team['allowance'])
+            # ...and the plain figure is still there under its own name.
+            self.assertIsInstance(team['team_handicap'], int)
+
+    def test_the_board_round_trips_every_nested_block(self):
+        self._play_everyone()
+        board = self._board()
+        self.assertIsInstance(board['pool'], dict)
+        for team in board['teams']:
+            self.assertIsInstance(team['drive'], dict)
+            self.assertIsInstance(team['members'], list)
+
+
+class ShambleBoardShapeTests(ShambleCardTests):
+    """The board is shared by both formats, so the allowance clobber hit a
+    shamble exactly as it hit a scramble. Asserted on the shamble fixture too,
+    because 'shared code' is the reason a fix gets tested once and regressed on
+    the other path."""
+
+    def test_allowance_stays_a_block(self):
+        r = self.client.get(
+            reverse('api-team-play-leaderboard', args=[self.tourn.id]))
+        self.assertEqual(r.status_code, 200)
+        for team in r.json()['teams']:
+            self.assertIsInstance(team['allowance'], dict)
+            self.assertIn('kind', team['allowance'])

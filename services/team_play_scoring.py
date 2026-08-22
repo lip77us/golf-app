@@ -228,7 +228,14 @@ def leaderboard(tournament) -> dict:
     rows = []
     for foursome in round_obj.foursomes.order_by('group_number'):
         team = team_dict(foursome, config)
-        team.update(team_round(foursome, config))
+        rnd  = team_round(foursome, config)
+        # `allowance` means two different things in the two dicts: the worked
+        # BLOCK in team_dict (kind, pct, label) and the plain whole-number
+        # figure in team_round. Merging blind replaced the block with an int
+        # and the board's client blew up casting it back to a map. The figure
+        # is already on the row as `team_handicap`, so drop the duplicate.
+        rnd.pop('allowance', None)
+        team.update(rnd)
         rows.append(team)
 
     # Rank the teams that have a score. A team with nothing entered sits at the

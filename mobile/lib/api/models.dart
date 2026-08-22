@@ -5570,10 +5570,13 @@ class TeamPlayRound {
   final int  par;
   /// Two strokes per missing drive, added to the gross at the END of the round.
   final int  penalty;
+  /// `{hole: team gross}` — what the scorecard under the entry draws.
+  final Map<int, int> byHole;
 
   const TeamPlayRound({
     this.gross, this.net, this.allowance, required this.thru,
     required this.complete, required this.par, required this.penalty,
+    this.byHole = const {},
   });
 
   factory TeamPlayRound.fromJson(Map<String, dynamic> j) => TeamPlayRound(
@@ -5584,6 +5587,11 @@ class TeamPlayRound {
         complete : j['complete'] == true,
         par      : (j['par'] ?? 72) as int,
         penalty  : (j['penalty'] ?? 0) as int,
+        byHole   : {
+          for (final e in Map<String, dynamic>.from(
+                  (j['by_hole'] ?? const {}) as Map).entries)
+            int.parse(e.key): ((e.value as Map)['gross'] ?? 0) as int,
+        },
       );
 }
 
@@ -5606,6 +5614,8 @@ class TeamPlayCard {
   /// handicap dots, so the team can see on the tee that this is one of the
   /// holes it gets a stroke.
   final int  teamStrokes;
+  /// Par by hole, for the scorecard under the entry.
+  final Map<int, int> pars;
   final TeamPlayRound round;
   final TeamPlayDrive drive;
   final int?   teamScore;                 // scramble
@@ -5615,7 +5625,7 @@ class TeamPlayCard {
     required this.format, required this.hole, required this.playOrder,
     required this.round, required this.drive,
     this.par, this.strokeIndex, this.yards, this.teamStrokes = 0,
-    this.teamScore, this.shamble,
+    this.pars = const {}, this.teamScore, this.shamble,
   });
 
   factory TeamPlayCard.fromJson(Map<String, dynamic> j) => TeamPlayCard(
@@ -5627,6 +5637,11 @@ class TeamPlayCard {
         strokeIndex: j['stroke_index'] as int?,
         yards      : j['yards'] as int?,
         teamStrokes: (j['team_strokes'] ?? 0) as int,
+        pars       : {
+          for (final e in Map<String, dynamic>.from(
+                  (j['pars'] ?? const {}) as Map).entries)
+            if (e.value != null) int.parse(e.key): e.value as int,
+        },
         round    : TeamPlayRound.fromJson(
             Map<String, dynamic>.from((j['round'] ?? {}) as Map)),
         drive    : TeamPlayDrive.fromJson(

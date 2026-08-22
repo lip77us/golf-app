@@ -202,7 +202,6 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   }
 
   Widget _body(TeamPlayCard card) {
-    final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       children: [
@@ -234,19 +233,13 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
                 ),
         ),
 
-        const SizedBox(height: 14),
-        // Gross on the card, net on the leaderboard. A whole-number team
-        // figure applied to the round is not a stroke on a hole, and showing
-        // it per hole would invite subtracting it there.
-        Text(
-          card.isScramble && card.round.allowance != null
-              ? 'Gross on the card. The team\'s ${card.round.allowance} '
-                'strokes come off the total on the leaderboard.'
-              : 'Gross on the card, net on the leaderboard.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
+        const SizedBox(height: 16),
+        // The card so far, under the entry — the same place every other score
+        // screen keeps its by-hole grid. It is the team's row either way: on a
+        // shamble the counted balls are already summed into it, because that
+        // is the number the board ranks.
+        _Scorecard(card: card, hole: _hole!, onGo: _goto),
+
       ],
     );
   }
@@ -559,7 +552,10 @@ class _TeamScoreRow extends StatelessWidget {
                   Text(label,
                       style: theme.textTheme.bodyLarge
                           ?.copyWith(fontWeight: FontWeight.w600)),
-                  if (card.teamStrokes > 0) ...[
+                  // "gets N" is the ROUND's figure, as it is on every other
+                  // card — how many strokes this team has all day. Which HOLES
+                  // carry one is the dot's job.
+                  if ((card.round.allowance ?? 0) > 0) ...[
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -568,24 +564,16 @@ class _TeamScoreRow extends StatelessWidget {
                         color: theme.colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text('gets ${card.teamStrokes}',
+                      child: Text('gets ${card.round.allowance}',
                           style: theme.textTheme.labelSmall),
                     ),
                   ],
                 ]),
               ),
-              // The score box every other card has, not a caption.
-              Container(
-                width: 46, height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: theme.colorScheme.outline),
-                ),
-                child: Text(card.teamScore?.toString() ?? '',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+              _ScoreBox(
+                score     : card.teamScore,
+                active    : true,
+                strokeHere: card.teamStrokes > 0,
               ),
             ]),
           ),
@@ -648,7 +636,7 @@ class _ShambleRows extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _GolferLine(row: row, onTap: null),
+                  _GolferLine(row: row, onTap: null, active: true),
                   InlineScorePicker(
                     par            : card.par ?? h.par ?? 4,
                     strokes        : row.strokes,
@@ -694,8 +682,11 @@ class _ShambleRows extends StatelessWidget {
 /// re-enters it.
 class _GolferLine extends StatelessWidget {
   final TeamPlayShambleRow row;
+  final bool active;
   final VoidCallback? onTap;
-  const _GolferLine({required this.row, required this.onTap});
+  const _GolferLine({
+    required this.row, required this.onTap, this.active = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -743,30 +734,170 @@ class _GolferLine extends StatelessWidget {
               ],
             ]),
           ),
-          // The score box, same as every other card: the value, or an empty
-          // slot inviting the tap.
-          Container(
-            width: 46, height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: subdued
-                    ? theme.colorScheme.outlineVariant
-                    : theme.colorScheme.outline,
-              ),
-            ),
-            child: Text(
-              row.gross?.toString() ?? '',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: subdued ? theme.colorScheme.onSurfaceVariant : null,
-              ),
-            ),
+          _ScoreBox(
+            score     : row.gross,
+            active    : active,
+            strokeHere: row.strokes > 0,
+            subdued   : subdued,
           ),
         ]),
       ),
+    );
+  }
+}
+
+/// The score box every card carries: the value, a PRIMARY border when this is
+/// the row being entered, and a dot above it when the golfer (or the team) gets
+/// a stroke on this hole. The dot is how the app says "stroke here" everywhere
+/// else, so it says it here too.
+class _ScoreBox extends StatelessWidget {
+  final int?  score;
+  final bool  active;
+  final bool  strokeHere;
+  final bool  subdued;
+
+  const _ScoreBox({
+    required this.score,
+    required this.active,
+    required this.strokeHere,
+    this.subdued = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final box = Container(
+      width: 46, height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: active
+              ? theme.colorScheme.primary
+              : (subdued ? theme.colorScheme.outlineVariant
+                         : theme.colorScheme.outline),
+          width: active ? 2 : 1,
+        ),
+      ),
+      child: Text(
+        score?.toString() ?? '',
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: subdued ? theme.colorScheme.onSurfaceVariant : null,
+        ),
+      ),
+    );
+    if (!strokeHere) return box;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: 6, height: 6,
+        margin: const EdgeInsets.only(bottom: 3),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle, color: theme.colorScheme.primary),
+      ),
+      box,
+    ]);
+  }
+}
+
+/// The team's round so far — hole, par, score — front nine then back, with
+/// OUT / IN / TOT. Tap a hole to go to it.
+class _Scorecard extends StatelessWidget {
+  final TeamPlayCard card;
+  final int hole;
+  final ValueChanged<int?> onGo;
+
+  const _Scorecard({
+    required this.card, required this.hole, required this.onGo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme  = Theme.of(context);
+    final scores = card.round.byHole;
+    if (card.pars.isEmpty) return const SizedBox.shrink();
+
+    final holes = card.pars.keys.toList()..sort();
+    final front = holes.where((h) => h <= 9).toList();
+    final back  = holes.where((h) => h > 9).toList();
+
+    int sum(Iterable<int> hs, Map<int, int> from) =>
+        hs.map((h) => from[h] ?? 0).fold(0, (a, b) => a + b);
+
+    Widget nine(List<int> hs, String totalLabel) {
+      if (hs.isEmpty) return const SizedBox.shrink();
+      final anyScored = hs.any((h) => scores[h] != null);
+      Widget cell(String text, {bool head = false, bool strong = false,
+                                int? goTo, bool current = false}) {
+        final child = Container(
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: current
+                ? theme.colorScheme.primary.withValues(alpha: 0.14)
+                : (head ? theme.colorScheme.surfaceContainerHighest : null),
+            border: Border.all(color: theme.colorScheme.outlineVariant,
+                               width: 0.5),
+          ),
+          child: Text(text,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: (head || strong)
+                    ? FontWeight.bold : FontWeight.normal,
+                color: head ? theme.colorScheme.onSurfaceVariant : null,
+              )),
+        );
+        return Expanded(
+          child: goTo == null
+              ? child
+              : InkWell(onTap: () => onGo(goTo), child: child),
+        );
+      }
+
+      return Column(children: [
+        Row(children: [
+          cell('', head: true),
+          for (final h in hs)
+            cell('$h', head: true, goTo: h, current: h == hole),
+          cell(totalLabel, head: true, strong: true),
+        ]),
+        Row(children: [
+          cell('Par', head: true),
+          for (final h in hs) cell('${card.pars[h]}'),
+          cell('${sum(hs, card.pars)}', strong: true),
+        ]),
+        Row(children: [
+          cell('Team', head: true),
+          for (final h in hs)
+            cell(scores[h]?.toString() ?? '–', current: h == hole),
+          cell(anyScored ? '${sum(hs, scores)}' : '–', strong: true),
+        ]),
+      ]);
+    }
+
+    final total = sum(holes, scores);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Expanded(child: Text('Scorecard',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold))),
+          if (card.round.thru > 0)
+            Text(
+              'thru ${card.round.thru} · $total gross'
+              '${card.round.net == null ? '' : ' · ${card.round.net} net'}',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+        ]),
+        const SizedBox(height: 6),
+        nine(front, 'OUT'),
+        if (back.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          nine(back, 'IN'),
+        ],
+      ],
     );
   }
 }
