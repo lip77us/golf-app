@@ -395,3 +395,71 @@ class ShambleBoardShapeTests(ShambleCardTests):
         for team in r.json()['teams']:
             self.assertIsInstance(team['allowance'], dict)
             self.assertIn('kind', team['allowance'])
+
+
+class ShambleHandWorkedRoundTests(ShambleCardTests):
+    """A full shamble round worked by hand, asserted against the board.
+
+    The engine tests check `player_shamble_handicap` in isolation, which is how
+    the 100%-instead-of-85% bug survived: the card called a different path. So
+    this walks the whole way — four golfers, eighteen holes, every score
+    entered — and checks the number the leaderboard ranks on.
+
+    The arithmetic, in full. Course handicaps 6 / 9 / 14 / 21 at the 85% the
+    two-ball count prescribes give 5 / 8 / 12 / 18. Stroke index equals the
+    hole number in this fixture, and everybody shoots 5 on every hole, so the
+    strokes fall:
+
+        Petersen  5  → a stroke on holes 1–5
+        Brown     8  → a stroke on holes 1–8
+        Labass    12 → a stroke on holes 1–12
+        Reilly    18 → a stroke on EVERY hole (18 // 18 = 1)
+
+    Nets are 5 minus that, and the best two count:
+
+        holes 1–5    4 4 4 4  → 8
+        holes 6–8    5 4 4 4  → 8
+        holes 9–12   5 5 4 4  → 8
+        holes 13–18  5 5 5 4  → 9
+
+    Twelve holes at 8 and six at 9 is **150 net**. Counted gross is two 5s a
+    hole — **180**.
+    """
+
+    def _play_all(self, gross=5):
+        from scoring.models import HoleScore
+        for hole in range(1, 19):
+            for p in self.players.values():
+                HoleScore.objects.update_or_create(
+                    foursome=self.fs, player=p, hole_number=hole,
+                    defaults={'gross_score': gross})
+
+    def _row(self):
+        r = self.client.get(
+            reverse('api-team-play-leaderboard', args=[self.tourn.id]))
+        self.assertEqual(r.status_code, 200)
+        return r.json()['teams'][0]
+
+    def test_the_board_matches_the_hand_worked_round(self):
+        self._play_all()
+        row = self._row()
+        self.assertEqual(row['thru'], 18)
+        self.assertTrue(row['complete'])
+        self.assertEqual(row['gross'], 180)
+        self.assertEqual(row['net'], 150)
+
+    def test_a_part_scored_hole_does_not_count_as_played(self):
+        """Two balls in on a best-2 hole already yields a 'best two', so the
+        hole scored as finished and the team read further round than it was —
+        and a round of part-scored holes could reach 'signed for 18', which is
+        what gates settlement."""
+        from scoring.models import HoleScore
+        for name in ('Petersen', 'Brown'):
+            HoleScore.objects.create(
+                foursome=self.fs, player=self.players[name],
+                hole_number=1, gross_score=5)
+
+        row = self._row()
+        self.assertEqual(row['thru'], 0)
+        self.assertFalse(row['complete'])
+        self.assertIsNone(row['net'])

@@ -186,7 +186,17 @@ def team_round(foursome, config) -> dict:
         thru = 0
         for n in sorted(counts):
             hole = shamble_hole(foursome, n, counts, config)
-            if hole['team_net'] is None:
+            # A hole counts once EVERY ball is in, not once enough are in to
+            # make a "best two". Two of four already satisfies a best-2, so the
+            # old check read a part-scored hole as finished: the board showed
+            # the team further round than it was, the net moved when the other
+            # two landed, and a round of half-scored holes could reach "signed
+            # for 18" — which is what gates settlement.
+            #
+            # (A golfer who withdraws mid-round therefore stalls his team's
+            # count. Mid-round withdrawal is not wired into this shape yet;
+            # see docs/mid-round-withdrawal.md for how the other games do it.)
+            if not hole['complete'] or hole['team_net'] is None:
                 continue
             thru += 1
             counted_gross = sum(r['gross'] for r in hole['rows'] if r['counts'])
