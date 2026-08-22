@@ -278,20 +278,21 @@ class _TeeTimesScreenState extends State<TeeTimesScreen> {
                    '${groups.length == 1 ? 'has' : 'have'} no tee time. Lay '
                    '${groups.length == 1 ? 'it' : 'them'} out behind this one?'),
               const SizedBox(height: 14),
-              Row(
+              // Wrap, not Row: four chips plus the words do not fit a narrow
+              // dialog, and an overflowing Row hides the last interval rather
+              // than moving it to the next line.
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 4,
                 children: [
                   const Text('Every'),
-                  const SizedBox(width: 10),
                   for (final m in const [8, 9, 10, 12])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: ChoiceChip(
-                        label: Text('$m'),
-                        selected: interval == m,
-                        onSelected: (_) => setLocal(() => interval = m),
-                      ),
+                    ChoiceChip(
+                      label: Text('$m min'),
+                      selected: interval == m,
+                      onSelected: (_) => setLocal(() => interval = m),
                     ),
-                  const Text('min'),
                 ],
               ),
               const SizedBox(height: 12),

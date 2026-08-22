@@ -80,6 +80,21 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     await _load();
   }
 
+  /// One golfer's ball on this hole.
+  ///
+  /// A shamble keeps per-golfer scores — four balls, and the best N net count
+  /// — so these are ordinary HoleScores through the ordinary endpoint. Only
+  /// the reading of them is Foursome Play's.
+  Future<void> _setGolferScore(int playerId, int? gross) async {
+    final client = context.read<AuthProvider>().client;
+    await client.submitScores(
+      foursomeId: widget.foursomeId,
+      holeNumber: _hole,
+      scores    : [{'player_id': playerId, 'gross_score': gross}],
+    );
+    await _load();
+  }
+
   Future<void> _setDrive(int? playerId) async {
     final client = context.read<AuthProvider>().client;
     await client.postTeamPlayDrive(widget.foursomeId,
@@ -161,7 +176,12 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
             onDrive: _setDrive,
           )
         else
-          _ShambleCard(hole: card.shamble),
+          _ShambleCard(
+            hole : card.shamble,
+            par  : _parFor(card),
+            busy : _busy,
+            onSet: _setGolferScore,
+          ),
 
         const SizedBox(height: 16),
         _Strip(card: card, hole: _hole, onGo: _goto),
@@ -548,7 +568,14 @@ class _ScoreStepper extends StatelessWidget {
 
 class _ShambleCard extends StatelessWidget {
   final TeamPlayShambleHole? hole;
-  const _ShambleCard({required this.hole});
+  final int  par;
+  final bool busy;
+  final Future<void> Function(int playerId, int? gross) onSet;
+
+  const _ShambleCard({
+    required this.hole, required this.par,
+    required this.busy, required this.onSet,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -589,16 +616,17 @@ class _ShambleCard extends StatelessWidget {
           Row(
             children: [
               const Expanded(child: SizedBox()),
-              SizedBox(width: 46,
-                  child: Text('GROSS', textAlign: TextAlign.right,
+              SizedBox(width: 90,
+                  child: Text('GROSS', textAlign: TextAlign.center,
                       style: Halved.label())),
-              SizedBox(width: 46,
+              SizedBox(width: 42,
                   child: Text('NET', textAlign: TextAlign.right,
                       style: Halved.label())),
             ],
           ),
           const SizedBox(height: 4),
-          for (final row in h.rows) _ShambleRow(row: row),
+          for (final row in h.rows)
+            _ShambleRow(row: row, par: par, busy: busy, onSet: onSet),
           const Divider(height: 18),
           Row(
             children: [
@@ -622,7 +650,14 @@ class _ShambleCard extends StatelessWidget {
 
 class _ShambleRow extends StatelessWidget {
   final TeamPlayShambleRow row;
-  const _ShambleRow({required this.row});
+  final int  par;
+  final bool busy;
+  final Future<void> Function(int playerId, int? gross) onSet;
+
+  const _ShambleRow({
+    required this.row, required this.par,
+    required this.busy, required this.onSet,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -647,14 +682,70 @@ class _ShambleRow extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(width: 46,
-              child: Text('${row.gross ?? '—'}', textAlign: TextAlign.right,
-                  style: Halved.body(color: fg))),
-          SizedBox(width: 46,
+          // The phantom's ball IS played — by whoever is not driving — so its
+          // row takes a score like any other.
+          _ShambleStepper(
+            gross: row.gross,
+            par  : par,
+            busy : busy,
+            onSet: (v) => onSet(row.playerId, v),
+          ),
+          SizedBox(width: 42,
               child: Text('${row.net ?? '—'}', textAlign: TextAlign.right,
                   style: Halved.body(weight: FontWeight.w700, color: fg))),
         ],
       ),
+    );
+  }
+}
+
+/// − N + for one golfer's gross. Opens on par like the scramble's, because a
+/// wrong default beats no default when the alternative is a keypad.
+class _ShambleStepper extends StatelessWidget {
+  final int? gross;
+  final int  par;
+  final bool busy;
+  final Future<void> Function(int?) onSet;
+
+  const _ShambleStepper({
+    required this.gross, required this.par,
+    required this.busy, required this.onSet,
+  });
+
+  int get _shown => gross ?? par;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget btn(IconData icon, int next, bool on) => InkWell(
+          onTap: on && !busy ? () => onSet(next) : null,
+          borderRadius: BorderRadius.circular(Halved.rPill),
+          child: Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Halved.card,
+              border: Border.all(color: Halved.cardBorder, width: 1.4),
+            ),
+            child: Icon(icon, size: 15,
+                color: on && !busy ? Halved.pine : Halved.disabledText),
+          ),
+        );
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        btn(Icons.remove, _shown - 1, _shown > 1),
+        SizedBox(
+          width: 34,
+          child: Text('$_shown',
+              textAlign: TextAlign.center,
+              style: Halved.body(weight: FontWeight.w700).copyWith(
+                  fontSize: 19,
+                  color: gross == null
+                      ? Halved.disabledText : Halved.deepPine)),
+        ),
+        btn(Icons.add, _shown + 1, _shown < 15),
+      ],
     );
   }
 }

@@ -1394,62 +1394,6 @@ class _FoursomeCard extends StatelessWidget {
   /// TD-only "shift the schedule" tool — swap this foursome's tee
   /// position (group_number + tee_time) with another's.  Useful when
   /// a group is late or a 3-some wants more donor variety.
-  /// Rename this team.
-  ///
-  /// Foursome Play teams arrive as `Group 1`…`Group N` and name themselves
-  /// here. The wizard does not ask: a TD inventing six names for men who have
-  /// not turned up yet is work nobody wanted, and the men themselves will have
-  /// a better one by the second tee.
-  ///
-  /// Sixteen characters, the same cap as the ball game. Clearing it puts the
-  /// group number back rather than leaving a blank row on the board.
-  Future<void> _showRenameTeamSheet(BuildContext context) async {
-    final controller = TextEditingController(
-      text: foursome.name.isEmpty ? '' : foursome.name,
-    );
-    final fallback = 'Group ${foursome.groupNumber}';
-
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Team name'),
-        content: TextField(
-          controller: controller,
-          autofocus : true,
-          maxLength : 16,
-          textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(
-            hintText  : fallback,
-            helperText: 'Leave it empty to go back to $fallback.',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('Save')),
-        ],
-      ),
-    );
-    if (name == null || !context.mounted) return;
-
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await context.read<AuthProvider>().client
-          .postTeamPlayTeamName(foursome.id, name);
-      onGamesChanged();
-      messenger.showSnackBar(SnackBar(
-        content: Text(name.isEmpty ? 'Back to $fallback' : 'Now $name'),
-        duration: const Duration(seconds: 1),
-      ));
-    } catch (e) {
-      messenger.showSnackBar(
-          SnackBar(content: Text('Could not rename: $e')));
-    }
-  }
-
   Future<void> _showSwapPositionSheet(BuildContext context) async {
     final others = allFoursomes
         .where((f) => f.id != foursome.id)
@@ -1552,19 +1496,30 @@ class _FoursomeCard extends StatelessWidget {
   /// TD-only "rename group" tool — give this foursome a custom name (e.g. a
   /// team name) shown everywhere in place of "Group N".  Clearing the field
   /// resets it back to the default label.
+  /// Rename a group — or, on a Foursome Play round, a TEAM.
+  ///
+  /// Same action either way, because in that shape the group IS the team; only
+  /// the words and the cap change. Foursome Play teams arrive as Group 1…N and
+  /// name themselves here, which is why the wizard never asks: a TD inventing
+  /// six names for men who have not turned up yet is work nobody wanted.
+  ///
+  /// Sixteen characters for a team, the same cap as the ball game, because the
+  /// name has to fit a leaderboard row next to a colour block.
   Future<void> _renameGroup(BuildContext context, Foursome fs) async {
+    final team = isTeamPlayRound;
+    final noun = team ? 'team' : 'group';
     final ctrl = TextEditingController(text: fs.name);
     final newName = await showDialog<String>(
       context: context,
       builder: (dctx) => AlertDialog(
-        title: const Text('Rename group'),
+        title: Text('Rename $noun'),
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          maxLength: 50,
+          maxLength: team ? 16 : 50,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
-            labelText: 'Group name',
+            labelText: team ? 'Team name' : 'Group name',
             hintText: 'Group ${fs.groupNumber}',
             helperText: 'Leave blank to reset to "Group ${fs.groupNumber}".',
           ),
@@ -1585,7 +1540,14 @@ class _FoursomeCard extends StatelessWidget {
     if (newName == null || !context.mounted) return;
     try {
       final client = context.read<AuthProvider>().client;
-      await client.setFoursomeName(fs.id, newName);
+      if (isTeamPlayRound) {
+        // Goes through the Foursome Play endpoint so the team keeps its colour
+        // — the board and the card identify by it, and it is never the TD's to
+        // set.
+        await client.postTeamPlayTeamName(fs.id, newName);
+      } else {
+        await client.setFoursomeName(fs.id, newName);
+      }
       onGamesChanged();
     } catch (e) {
       if (context.mounted) {
@@ -1847,7 +1809,8 @@ class _FoursomeCard extends StatelessWidget {
                       Icon(Icons.edit_outlined, size: 18,
                           color: theme.colorScheme.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      const Flexible(child: Text('Rename group')),
+                      Flexible(child: Text(
+                          isTeamPlayRound ? 'Rename team' : 'Rename group')),
                     ]),
                   ),
                   // Shotgun start — per-group starting hole. Only meaningful
@@ -1891,22 +1854,9 @@ class _FoursomeCard extends StatelessWidget {
                     case 'swap_position':
                       _showSwapPositionSheet(context);
                       break;
-                    case 'rename_team':
-                      _showRenameTeamSheet(context);
-                      break;
                   }
                 },
                 itemBuilder: (_) => [
-                  if (isTeamPlayRound)
-                    PopupMenuItem(
-                      value: 'rename_team',
-                      child: Row(children: [
-                        Icon(Icons.drive_file_rename_outline, size: 18,
-                            color: theme.colorScheme.onSurfaceVariant),
-                        const SizedBox(width: 12),
-                        const Flexible(child: Text('Rename team')),
-                      ]),
-                    ),
                   PopupMenuItem(
                     value: 'remove_noshow',
                     child: Row(children: [
@@ -2163,7 +2113,14 @@ class _FoursomeCard extends StatelessWidget {
               // cross-round Multi-Group Skins pool by pasting its share link
               // (docs/multi-skins-cross-round.md). Round-level, so shown once
               // (group 1) and hidden on a round that already hosts a pool.
+              //
+              // Never on Foursome Play. The team IS the foursome, so there is
+              // no field of individual balls to run a skins pool against — a
+              // scramble has one score a hole and no per-golfer ball at all.
+              // Same reasoning the packet gives for that shape having no side
+              // games (docs/design-review/handoff-team-play/SPEC.md §1).
               if (!isCupRound &&
+                  !isTeamPlayRound &&
                   canManage &&
                   foursome.groupNumber == 1 &&
                   !roundActiveGames.contains('multi_skins'))
