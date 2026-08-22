@@ -9477,6 +9477,18 @@ class TeamPlayCardView(APIView):
         info = next(
             (h for h in hole_data(foursome) if h.get('number') == hole), {})
 
+        rnd = team_round(foursome, config)
+
+        # Strokes the TEAM receives on this hole, allocated off its whole-number
+        # figure by stroke index — the same allocation every other card uses.
+        # It drives the "gets N" chip and the handicap dots, so a scramble can
+        # see on the tee that this is one of the holes it gets a stroke.
+        from scoring.handicap import _strokes_on_hole
+        team_strokes = 0
+        if config.is_scramble and rnd.get('allowance') and info.get('stroke_index'):
+            team_strokes = _strokes_on_hole(
+                rnd['allowance'], info['stroke_index'])
+
         body = {
             'format'    : config.team_format,
             'hole'      : hole,
@@ -9484,7 +9496,8 @@ class TeamPlayCardView(APIView):
             'par'       : info.get('par'),
             'stroke_index': info.get('stroke_index'),
             'yards'     : info.get('yards'),
-            'round'     : team_round(foursome, config),
+            'team_strokes': team_strokes,
+            'round'     : rnd,
             'drive'     : drive_state(foursome, config),
         }
         if config.is_scramble:

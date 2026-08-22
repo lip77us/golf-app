@@ -723,9 +723,12 @@ class _GolfAppState extends State<GolfApp> {
       case '/team-play-score':
         final args = settings.arguments as Map<String, dynamic>;
         return page((_) => TeamPlayScoreEntryScreen(
-              foursomeId: args['foursomeId'] as int,
-              teamName  : args['teamName'] as String? ?? 'Team',
-              colour    : args['colour'] as String? ?? ''));
+              foursomeId    : args['foursomeId'] as int,
+              teamName      : args['teamName'] as String? ?? 'Team',
+              colour        : args['colour'] as String? ?? '',
+              roundId       : args['roundId'] as int?,
+              tournamentId  : args['tournamentId'] as int?,
+              tournamentName: args['tournamentName'] as String? ?? ''));
       case '/tournament-low-net-setup':
         final tournamentId = settings.arguments as int;
         return page((_) =>

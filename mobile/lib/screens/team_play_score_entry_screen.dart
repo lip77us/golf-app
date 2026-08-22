@@ -30,18 +30,28 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_score_picker.dart';
+import '../widgets/round_chat_button.dart';
 
 class TeamPlayScoreEntryScreen extends StatefulWidget {
   final int    foursomeId;
   final String teamName;
   final String colour;
+  /// For the chat button and the board link in the app bar — the same two the
+  /// other entry screens carry.
+  final int?   roundId;
+  final int?   tournamentId;
+  final String tournamentName;
 
   const TeamPlayScoreEntryScreen({
     super.key,
     required this.foursomeId,
     required this.teamName,
     required this.colour,
+    this.roundId,
+    this.tournamentId,
+    this.tournamentName = '',
   });
 
   @override
@@ -130,15 +140,30 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   Widget build(BuildContext context) {
     final card = _card;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.teamName),
+      appBar: GolfAppBar(
+        title: widget.teamName,
+        automaticallyImplyLeading: false,
+        // An X back to the hub, matching every other score-entry screen —
+        // a back chevron reads as "undo a step", and this is a place you leave.
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Back to the round',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         actions: [
-          if (card != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 14),
-              child: Center(child: Text(_formatChip(card),
-                  style: Theme.of(context).textTheme.bodySmall)),
-            ),
+          if (widget.roundId != null) RoundChatButton(roundId: widget.roundId!),
+          IconButton(
+            tooltip: 'Leaderboard',
+            icon: const Icon(Icons.leaderboard_outlined),
+            onPressed: widget.tournamentId == null
+                ? null
+                : () => Navigator.of(context).pushNamed(
+                    '/team-play-leaderboard',
+                    arguments: {
+                      'tournamentId'  : widget.tournamentId,
+                      'tournamentName': widget.tournamentName,
+                    }),
+          ),
         ],
       ),
       body: _error != null
@@ -154,16 +179,26 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     );
   }
 
-  /// `Scramble · 6` / `Shamble · 2 of 4` — the allowance and the count are
-  /// named in the header so neither is hidden, even though neither belongs on
-  /// a row.
-  String _formatChip(TeamPlayCard card) {
+  /// The banner at the top, the way Survivor states what game you are in and
+  /// what it is doing right now. Neither the allowance nor the ball count
+  /// belongs on a row, and neither should be hidden either.
+  (String, String) _context(TeamPlayCard card) {
     if (card.isScramble) {
       final a = card.round.allowance;
-      return a == null ? 'Scramble' : 'Scramble · plays off $a';
+      return (
+        'Scramble',
+        a == null
+            ? 'All four hit, you play the best ball.'
+            : 'All four hit, you play the best ball · the team plays off $a.',
+      );
     }
-    final n = card.shamble?.count;
-    return n == null ? 'Shamble' : 'Shamble · $n of 4 count';
+    final n = card.shamble?.count ?? 2;
+    return (
+      'Shamble · $n of 4 count',
+      'Best drive, then everyone plays his own ball in. '
+      'The ${n == 1 ? 'lowest net counts' : '$n lowest nets count'}; '
+      'the rest are recorded and ignored.',
+    );
   }
 
   Widget _body(TeamPlayCard card) {
@@ -171,6 +206,8 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       children: [
+        _Banner(context_: _context(card)),
+        const SizedBox(height: 12),
         _HoleHeader(card: card, hole: _hole!),
         const SizedBox(height: 12),
 
@@ -184,7 +221,11 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
           // hole would race each other's reload.
           ignoring: _busy,
           child: card.isScramble
-              ? _TeamScoreRow(card: card, onSet: _setTeamScore)
+              ? _TeamScoreRow(
+                  card    : card,
+                  teamName: widget.teamName,
+                  onSet   : _setTeamScore,
+                )
               : _ShambleRows(
                   card    : card,
                   selected: _activeGolfer(card),
@@ -207,6 +248,40 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
       ],
+    );
+  }
+}
+
+/// The green context block Survivor opens with: what game this is, and what it
+/// is doing on this hole.
+class _Banner extends StatelessWidget {
+  final (String, String) context_;
+  const _Banner({required this.context_});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (title, body) = context_;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: theme.colorScheme.primary.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary)),
+          const SizedBox(height: 2),
+          Text(body, style: theme.textTheme.bodySmall),
+        ],
+      ),
     );
   }
 }
@@ -448,14 +523,18 @@ class _Panel extends StatelessWidget {
 
 class _TeamScoreRow extends StatelessWidget {
   final TeamPlayCard card;
+  final String teamName;
   final Future<void> Function(int?) onSet;
-  const _TeamScoreRow({required this.card, required this.onSet});
+  const _TeamScoreRow({
+    required this.card, required this.teamName, required this.onSet,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final box   = theme.colorScheme.primary;
     final par   = card.par ?? 4;
+    final label = teamName.isEmpty ? 'Team' : teamName;
 
     // Always open: four men make one number, so there is nothing to choose
     // between and no reason to make the TD tap a row first.
@@ -473,24 +552,52 @@ class _TeamScoreRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             child: Row(children: [
               Expanded(
-                child: Text('Team score',
-                    style: theme.textTheme.titleSmall
+                child: Row(children: [
+                  Text(label,
+                      style: theme.textTheme.bodyLarge
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  if (card.teamStrokes > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text('gets ${card.teamStrokes}',
+                          style: theme.textTheme.labelSmall),
+                    ),
+                  ],
+                ]),
+              ),
+              // The score box every other card has, not a caption.
+              Container(
+                width: 46, height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: theme.colorScheme.outline),
+                ),
+                child: Text(card.teamScore?.toString() ?? '',
+                    style: theme.textTheme.titleMedium
                         ?.copyWith(fontWeight: FontWeight.bold)),
               ),
-              Text('one ball',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
             ]),
           ),
           InlineScorePicker(
-            // Gross par, no strokes: the allowance is a whole-number team
-            // figure off the round total, not a stroke on a hole, so feeding
-            // it in would centre the strip on a net par nobody plays to.
+            // The team's strokes ARE passed, so the strip anchors on net par
+            // and the handicap dots appear on the holes the team gets one.
+            // The packet argued for gross-only here to stop anyone subtracting
+            // the figure per hole; seeing WHICH holes carry a stroke turned out
+            // to matter more, and the dots are the app's existing way of
+            // saying it.
             par            : par,
-            strokes        : 0,
+            strokes        : card.teamStrokes,
             currentScore   : card.teamScore,
             boxBorderColor : box,
             boxFillColor   : Colors.white,

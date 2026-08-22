@@ -5601,6 +5601,11 @@ class TeamPlayCard {
   final int? par;
   final int? strokeIndex;
   final int? yards;
+  /// Scramble only: strokes the TEAM receives on this hole, off its
+  /// whole-number figure by stroke index. Drives the "gets N" chip and the
+  /// handicap dots, so the team can see on the tee that this is one of the
+  /// holes it gets a stroke.
+  final int  teamStrokes;
   final TeamPlayRound round;
   final TeamPlayDrive drive;
   final int?   teamScore;                 // scramble
@@ -5609,7 +5614,8 @@ class TeamPlayCard {
   const TeamPlayCard({
     required this.format, required this.hole, required this.playOrder,
     required this.round, required this.drive,
-    this.par, this.strokeIndex, this.yards, this.teamScore, this.shamble,
+    this.par, this.strokeIndex, this.yards, this.teamStrokes = 0,
+    this.teamScore, this.shamble,
   });
 
   factory TeamPlayCard.fromJson(Map<String, dynamic> j) => TeamPlayCard(
@@ -5620,6 +5626,7 @@ class TeamPlayCard {
         par        : j['par'] as int?,
         strokeIndex: j['stroke_index'] as int?,
         yards      : j['yards'] as int?,
+        teamStrokes: (j['team_strokes'] ?? 0) as int,
         round    : TeamPlayRound.fromJson(
             Map<String, dynamic>.from((j['round'] ?? {}) as Map)),
         drive    : TeamPlayDrive.fromJson(

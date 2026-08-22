@@ -313,10 +313,12 @@ class _RoundScreenState extends State<RoundScreen> {
                       // sits on both.
                       Navigator.of(context).pushNamed('/team-play-score',
                           arguments: {
-                            'foursomeId': fs.id,
-                            'teamName'  : fs.name.isEmpty
+                            'foursomeId'  : fs.id,
+                            'teamName'    : fs.name.isEmpty
                                 ? 'Group ${fs.groupNumber}' : fs.name,
-                            'colour'    : '',
+                            'colour'      : '',
+                            'roundId'     : round.id,
+                            'tournamentId': round.tournamentId,
                           });
                       return;
                     }
