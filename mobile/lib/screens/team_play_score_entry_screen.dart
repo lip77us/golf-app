@@ -27,6 +27,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
 import '../widgets/error_view.dart';
+import '../widgets/inline_score_picker.dart';
 import '../widgets/team_play/team_play_bits.dart';
 
 class TeamPlayScoreEntryScreen extends StatefulWidget {
@@ -48,6 +49,9 @@ class TeamPlayScoreEntryScreen extends StatefulWidget {
 
 class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   int  _hole = 1;
+  /// Shamble only: whose ball the picker is entering. Same idiom as every
+  /// other four-man card in the app — tap a golfer, then tap his score.
+  int? _selected;
   TeamPlayCard? _card;
   Object? _error;
   bool _busy = false;
@@ -104,8 +108,24 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
 
   void _goto(int hole) {
     if (hole < 1 || hole > 18) return;
-    setState(() => _hole = hole);
+    setState(() { _hole = hole; _selected = null; });
     _load();
+  }
+
+  /// The golfer the picker is aimed at: the TD's pick, else the first man
+  /// still without a score, else the first row. Auto-advancing to whoever is
+  /// missing is what makes four entries four taps.
+  int? _activeGolfer(TeamPlayCard card) {
+    final rows = card.shamble?.rows ?? const <TeamPlayShambleRow>[];
+    if (rows.isEmpty) return null;
+    if (_selected != null &&
+        rows.any((r) => r.playerId == _selected)) {
+      return _selected;
+    }
+    for (final r in rows) {
+      if (r.gross == null) return r.playerId;
+    }
+    return rows.first.playerId;
   }
 
   @override
@@ -167,21 +187,31 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
         ],
 
         if (card.isScramble)
-          _ScrambleRows(
-            card   : card,
-            hole   : _hole,
-            par    : _parFor(card),
-            busy   : _busy,
-            onSet  : _setScore,
-            onDrive: _setDrive,
-          )
+          _ScrambleRows(card: card, hole: _hole, onDrive: _setDrive)
         else
           _ShambleCard(
-            hole : card.shamble,
-            par  : _parFor(card),
-            busy : _busy,
-            onSet: _setGolferScore,
+            hole    : card.shamble,
+            selected: _activeGolfer(card),
+            onSelect: (id) => setState(() => _selected = id),
           ),
+
+        const SizedBox(height: 14),
+        // The same picker every other game renders — score entry, Nassau,
+        // Skins, Wolf, Rabbit, Points 5-3-1, Quota Nassau. A golfer who enters
+        // a score anywhere in the app already knows how this works, and a
+        // bespoke stepper here would have been a fourth thing to learn.
+        IgnorePointer(
+          // Nothing is tappable while a save is in flight — two taps on the
+          // same hole would race each other's reload.
+          ignoring: _busy,
+          child: _Picker(
+          card    : card,
+          par     : _parFor(card),
+          selected: card.isScramble ? null : _activeGolfer(card),
+          onTeam  : _setScore,
+          onGolfer: _setGolferScore,
+          ),
+        ),
 
         const SizedBox(height: 16),
         _Strip(card: card, hole: _hole, onGo: _goto),
@@ -237,6 +267,65 @@ class _HoleHeader extends StatelessWidget {
   }
 }
 
+/// The app's standard picker, aimed at whatever this format scores.
+///
+/// A scramble enters ONE number for the team, so it anchors on gross par and
+/// passes no strokes — the allowance is a whole-number team figure taken off
+/// the round total, not a stroke on a hole, and feeding it in here would centre
+/// the strip on a net par the team never plays to.
+///
+/// A shamble enters four, so it anchors on the selected golfer's own strokes,
+/// exactly as the standard card does.
+class _Picker extends StatelessWidget {
+  final TeamPlayCard card;
+  final int  par;
+  final int? selected;
+  final Future<void> Function(int?) onTeam;
+  final Future<void> Function(int, int?) onGolfer;
+
+  const _Picker({
+    required this.card, required this.par, required this.selected,
+    required this.onTeam, required this.onGolfer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (card.isScramble) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('TEAM SCORE', style: Halved.label()),
+          const SizedBox(height: 6),
+          InlineScorePicker(
+            par         : par,
+            strokes     : 0,
+            currentScore: card.teamScore,
+            onScoreSelected: (v) => onTeam(v == -1 ? null : v),
+          ),
+        ],
+      );
+    }
+
+    final rows = card.shamble?.rows ?? const <TeamPlayShambleRow>[];
+    final row  = rows.where((r) => r.playerId == selected).firstOrNull;
+    if (row == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(row.name.toUpperCase(), style: Halved.label()),
+        const SizedBox(height: 6),
+        InlineScorePicker(
+          par         : par,
+          strokes     : row.strokes,
+          currentScore: row.gross,
+          onScoreSelected: (v) => onGolfer(row.playerId, v == -1 ? null : v),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Scramble: the group card, with the driver's row live ────────────────────
 
 /// Four men, one number.
@@ -256,14 +345,10 @@ class _HoleHeader extends StatelessWidget {
 class _ScrambleRows extends StatelessWidget {
   final TeamPlayCard card;
   final int  hole;
-  final int  par;
-  final bool busy;
-  final Future<void> Function(int?) onSet;
   final Future<void> Function(int?) onDrive;
 
   const _ScrambleRows({
-    required this.card, required this.hole, required this.par,
-    required this.busy, required this.onSet, required this.onDrive,
+    required this.card, required this.hole, required this.onDrive,
   });
 
   bool get _picksDriver => card.drive.isQuota;
@@ -280,22 +365,6 @@ class _ScrambleRows extends StatelessWidget {
       if (g.holes.contains(hole)) return g.playerId;
     }
     return null;
-  }
-
-  /// Opens on par, not blank. A scramble team makes par more than any other
-  /// score, and a wrong default beats no default when the alternative is a
-  /// keypad.
-  int get _shown => card.teamScore ?? par;
-
-  String get _relative {
-    final d = _shown - par;
-    if (d <= -3) return 'albatross';
-    if (d == -2) return 'eagle';
-    if (d == -1) return 'birdie';
-    if (d == 0)  return 'par';
-    if (d == 1)  return 'bogey';
-    if (d == 2)  return 'double';
-    return '+$d';
   }
 
   @override
@@ -334,29 +403,16 @@ class _ScrambleRows extends StatelessWidget {
           if (_picksDriver && window != null)
             for (final g in window.golfers)
               _GolferRow(
-                golfer  : g,
-                live    : g.playerId == driver,
+                golfer   : g,
+                live     : g.playerId == driver,
                 anyDriver: driver != null,
-                score   : card.teamScore,
-                shown   : _shown,
-                relative: _relative,
-                busy    : busy,
-                onPick  : () => onDrive(
+                onPick   : () => onDrive(
                     g.playerId == driver ? null : g.playerId),
-                onSet   : onSet,
               )
-          else
-            _TeamRow(
-              score   : card.teamScore,
-              shown   : _shown,
-              relative: _relative,
-              busy    : busy,
-              onSet   : onSet,
-              // An alternating rota names the pair rather than asking.
-              note    : card.drive.isAlternating
-                  ? (card.drive.rotaFor(hole)?.upLabel ?? '')
-                  : '',
-            ),
+          else if (card.drive.isAlternating)
+            // An alternating rota names the pair rather than asking.
+            TeamNote(card.drive.rotaFor(hole)?.upLabel ??
+                'The team sets the pairs on the 1st tee.'),
 
           if (_picksDriver && driver == null) ...[
             const SizedBox(height: 8),
@@ -396,17 +452,11 @@ class _GolferRow extends StatelessWidget {
   final TeamPlayDriveGolfer golfer;
   final bool live;
   final bool anyDriver;
-  final int? score;
-  final int  shown;
-  final String relative;
-  final bool busy;
   final VoidCallback onPick;
-  final Future<void> Function(int?) onSet;
 
   const _GolferRow({
-    required this.golfer, required this.live, required this.anyDriver,
-    required this.score, required this.shown, required this.relative,
-    required this.busy, required this.onPick, required this.onSet,
+    required this.golfer, required this.live,
+    required this.anyDriver, required this.onPick,
   });
 
   @override
@@ -425,7 +475,7 @@ class _GolferRow extends StatelessWidget {
       child: Row(
         children: [
           InkWell(
-            onTap: busy ? null : onPick,
+            onTap: onPick,
             borderRadius: BorderRadius.circular(Halved.rPill),
             child: Padding(
               padding: const EdgeInsets.all(2),
@@ -450,12 +500,7 @@ class _GolferRow extends StatelessWidget {
             ),
           ),
           if (live)
-            _ScoreStepper(
-              score: score, shown: shown, relative: relative,
-              busy: busy, onSet: onSet,
-            )
-          else
-            Text('—', style: Halved.body(color: Halved.disabledText)),
+            Text('drive taken', style: Halved.label(color: Halved.pine)),
         ],
       ),
     );
@@ -466,115 +511,16 @@ class _GolferRow extends StatelessWidget {
   }
 }
 
-/// The fallback row when there is no driver to choose.
-class _TeamRow extends StatelessWidget {
-  final int? score;
-  final int  shown;
-  final String relative;
-  final bool busy;
-  final String note;
-  final Future<void> Function(int?) onSet;
-
-  const _TeamRow({
-    required this.score, required this.shown, required this.relative,
-    required this.busy, required this.note, required this.onSet,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color: Halved.brightMint.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(Halved.rChip),
-          border: Border.all(color: Halved.mint, width: 2),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('TEAM', style: Halved.body(weight: FontWeight.w700)),
-                  if (note.isNotEmpty)
-                    Text(note, style: Halved.label()),
-                ],
-              ),
-            ),
-            _ScoreStepper(
-              score: score, shown: shown, relative: relative,
-              busy: busy, onSet: onSet,
-            ),
-          ],
-        ),
-      );
-}
-
-/// − N + , with what the number IS under it. On a scramble everyone knows the
-/// score relative to par before they know the digit.
-class _ScoreStepper extends StatelessWidget {
-  final int? score;
-  final int  shown;
-  final String relative;
-  final bool busy;
-  final Future<void> Function(int?) onSet;
-
-  const _ScoreStepper({
-    required this.score, required this.shown, required this.relative,
-    required this.busy, required this.onSet,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Widget btn(IconData icon, int next, bool on) => InkWell(
-          onTap: on && !busy ? () => onSet(next) : null,
-          borderRadius: BorderRadius.circular(Halved.rPill),
-          child: Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Halved.card,
-              border: Border.all(color: Halved.cardBorder, width: 1.5),
-            ),
-            child: Icon(icon, size: 17,
-                color: on && !busy ? Halved.pine : Halved.disabledText),
-          ),
-        );
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        btn(Icons.remove, shown - 1, shown > 1),
-        SizedBox(
-          width: 52,
-          child: Column(
-            children: [
-              Text('$shown',
-                  style: Halved.emptyTitle().copyWith(
-                      fontSize: 30, height: 1.05,
-                      color: score == null
-                          ? Halved.disabledText : Halved.deepPine)),
-              Text(relative.toUpperCase(),
-                  style: Halved.label().copyWith(fontSize: 9)),
-            ],
-          ),
-        ),
-        btn(Icons.add, shown + 1, shown < 15),
-      ],
-    );
-  }
-}
-
 // ── Shamble: four scores, and the card says which counted ───────────────────
 
 class _ShambleCard extends StatelessWidget {
   final TeamPlayShambleHole? hole;
-  final int  par;
-  final bool busy;
-  final Future<void> Function(int playerId, int? gross) onSet;
+  /// Whose ball the picker below is entering.
+  final int? selected;
+  final ValueChanged<int> onSelect;
 
   const _ShambleCard({
-    required this.hole, required this.par,
-    required this.busy, required this.onSet,
+    required this.hole, required this.selected, required this.onSelect,
   });
 
   @override
@@ -616,8 +562,8 @@ class _ShambleCard extends StatelessWidget {
           Row(
             children: [
               const Expanded(child: SizedBox()),
-              SizedBox(width: 90,
-                  child: Text('GROSS', textAlign: TextAlign.center,
+              SizedBox(width: 46,
+                  child: Text('GROSS', textAlign: TextAlign.right,
                       style: Halved.label())),
               SizedBox(width: 42,
                   child: Text('NET', textAlign: TextAlign.right,
@@ -626,7 +572,11 @@ class _ShambleCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           for (final row in h.rows)
-            _ShambleRow(row: row, par: par, busy: busy, onSet: onSet),
+            _ShambleRow(
+              row     : row,
+              selected: row.playerId == selected,
+              onTap   : () => onSelect(row.playerId),
+            ),
           const Divider(height: 18),
           Row(
             children: [
@@ -650,13 +600,11 @@ class _ShambleCard extends StatelessWidget {
 
 class _ShambleRow extends StatelessWidget {
   final TeamPlayShambleRow row;
-  final int  par;
-  final bool busy;
-  final Future<void> Function(int playerId, int? gross) onSet;
+  final bool selected;
+  final VoidCallback onTap;
 
   const _ShambleRow({
-    required this.row, required this.par,
-    required this.busy, required this.onSet,
+    required this.row, required this.selected, required this.onTap,
   });
 
   @override
@@ -665,12 +613,21 @@ class _ShambleRow extends StatelessWidget {
     // entered. Two men's cards do nothing on a given hole.
     final counts = row.counts;
     final fg = counts ? Halved.deepPine : Halved.disabledText;
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(Halved.rChip),
+      child: Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
       decoration: BoxDecoration(
         color: counts ? Halved.mint.withValues(alpha: 0.10) : null,
         borderRadius: BorderRadius.circular(Halved.rChip),
+        // The row the picker is aimed at, same as the standard card marks its
+        // active player.
+        border: Border.all(
+          color: selected ? Halved.pine : Colors.transparent,
+          width: selected ? 2 : 1,
+        ),
       ),
       child: Row(
         children: [
@@ -683,69 +640,16 @@ class _ShambleRow extends StatelessWidget {
             ),
           ),
           // The phantom's ball IS played — by whoever is not driving — so its
-          // row takes a score like any other.
-          _ShambleStepper(
-            gross: row.gross,
-            par  : par,
-            busy : busy,
-            onSet: (v) => onSet(row.playerId, v),
-          ),
+          // row shows a score like any other.
+          SizedBox(width: 46,
+              child: Text('${row.gross ?? '—'}', textAlign: TextAlign.right,
+                  style: Halved.body(color: fg))),
           SizedBox(width: 42,
               child: Text('${row.net ?? '—'}', textAlign: TextAlign.right,
                   style: Halved.body(weight: FontWeight.w700, color: fg))),
         ],
       ),
-    );
-  }
-}
-
-/// − N + for one golfer's gross. Opens on par like the scramble's, because a
-/// wrong default beats no default when the alternative is a keypad.
-class _ShambleStepper extends StatelessWidget {
-  final int? gross;
-  final int  par;
-  final bool busy;
-  final Future<void> Function(int?) onSet;
-
-  const _ShambleStepper({
-    required this.gross, required this.par,
-    required this.busy, required this.onSet,
-  });
-
-  int get _shown => gross ?? par;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget btn(IconData icon, int next, bool on) => InkWell(
-          onTap: on && !busy ? () => onSet(next) : null,
-          borderRadius: BorderRadius.circular(Halved.rPill),
-          child: Container(
-            width: 28, height: 28,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Halved.card,
-              border: Border.all(color: Halved.cardBorder, width: 1.4),
-            ),
-            child: Icon(icon, size: 15,
-                color: on && !busy ? Halved.pine : Halved.disabledText),
-          ),
-        );
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        btn(Icons.remove, _shown - 1, _shown > 1),
-        SizedBox(
-          width: 34,
-          child: Text('$_shown',
-              textAlign: TextAlign.center,
-              style: Halved.body(weight: FontWeight.w700).copyWith(
-                  fontSize: 19,
-                  color: gross == null
-                      ? Halved.disabledText : Halved.deepPine)),
-        ),
-        btn(Icons.add, _shown + 1, _shown < 15),
-      ],
+      ),
     );
   }
 }
