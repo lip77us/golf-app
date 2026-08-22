@@ -38,10 +38,13 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
   String? _error;
   bool    _networkError = false;
   bool    _showCompleted = false;   // false = Active, true = Completed
-  /// Completed-tab watched-round filter. Default OFF ("Rounds I played") so
-  /// watched rounds are hidden until the user opts in. Client-side over the
-  /// already-loaded list. Active is deliberately unfiltered (no row shown).
-  bool    _includeWatched = false;
+  /// Completed-tab watched-round filter. Null = the user hasn't picked a chip,
+  /// so the default is derived per build: watched rounds show when the tab has
+  /// nothing the user played (a pure observer's Completed tab would otherwise
+  /// read as empty), and stay hidden once there are own rounds to see. Tapping
+  /// either chip pins the choice for the session. Client-side over the already-
+  /// loaded list. Active is deliberately unfiltered (no row shown).
+  bool?   _watchedChoice;
   /// True once we know the account has at least one casual round (active OR
   /// completed). Gates the brand-new "Set up your first round" onboarding CTA so
   /// it doesn't reappear on the empty Active tab after a round is completed.
@@ -452,9 +455,12 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
     final watchedItems = [for (final r in watched) _watchedItem(r, fmtDate)];
 
     // Active is deliberately unfiltered — following a live round is the point
-    // there. Completed hides watched rounds until "Include watched" is on.
+    // there. Completed hides watched rounds behind "Include watched", except
+    // when the user played nothing in the tab — then hiding them would leave a
+    // pure observer staring at an empty list.
     final showFilter     = _showCompleted;
-    final includeWatched = !_showCompleted || _includeWatched;
+    final includeWatched =
+        !_showCompleted || (_watchedChoice ?? played.isEmpty);
     final items = <_RoundItem>[
       ...played,
       if (includeWatched) ...watchedItems,
@@ -480,11 +486,11 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
     final shown = includeWatched ? total : played.length;
     return Column(children: [
       _WatchedFilterRow(
-        includeWatched: _includeWatched,
+        includeWatched: includeWatched,
         hasWatched:     watchedItems.isNotEmpty,
         total:          total,
         shown:          shown,
-        onChanged:      (v) => setState(() => _includeWatched = v),
+        onChanged:      (v) => setState(() => _watchedChoice = v),
       ),
       Expanded(child: body),
     ]);
