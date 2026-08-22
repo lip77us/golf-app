@@ -1993,16 +1993,26 @@ class TeamHoleScore(models.Model):
       * Scramble — the whole group is one side → one row per hole.
       * Foursomes / Two-man Chapman — two pairs share the group → two rows per
         hole, one per side.
-    The side is a :class:`TournamentTeam`.  ``chosen_player`` is reserved for a
-    future drive-tracking layer (unused in v1 — the group polices its own
-    drive/turn rules; the app records only the team score).
+      * Team Play scramble — the team IS the foursome → one row per hole, with
+        a NULL team (see below).
+    The side is a :class:`TournamentTeam` in the cup formats.  ``chosen_player``
+    is reserved for a future drive-tracking layer (unused by the cup formats —
+    the group polices its own drive/turn rules; the app records only the team
+    score).  Team Play records its drives in
+    :class:`tournament.models.TeamDrivePick` instead, which serves both of its
+    formats — a shamble has no row here to hang a chosen_player off.
     """
     foursome         = models.ForeignKey(
                          Foursome, on_delete=models.CASCADE,
                          related_name='team_hole_scores')
+    # NULL for Team Play, where the team IS the foursome and there is no
+    # TournamentTeam roster layer — the (foursome, hole) pair is unambiguous
+    # because the group is the side.  The cup formats always set it: Foursomes
+    # and Chapman put two sides in one group and could not tell them apart
+    # otherwise.
     team             = models.ForeignKey(
                          TournamentTeam, on_delete=models.CASCADE,
-                         related_name='+')
+                         related_name='+', null=True, blank=True)
     hole_number      = models.PositiveSmallIntegerField(
                          validators=[MinValueValidator(1), MaxValueValidator(18)])
     gross_score      = models.PositiveSmallIntegerField(null=True, blank=True)

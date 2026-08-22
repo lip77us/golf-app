@@ -27,7 +27,7 @@ from services.irish_rumble import (
 )
 from services.payout import (
     carve_out, check_day_bet_floor, per_person_share, pool_line,
-    split_tied_places, validate_payout_table,
+    split_tied_places, split_to_cents, validate_payout_table,
 )
 from ._helpers import (
     DEFAULT_HOLES, make_course, make_foursome, make_player, make_round,
@@ -234,3 +234,39 @@ class IrishRumbleMoneyTests(TestCase):
         self.assertEqual({r['payout'] for r in rows}, {35.0})
         paid = sum(r['payout'] for r in rows)
         self.assertEqual(paid, 70.0)   # the whole table is handed out
+
+
+# ---------------------------------------------------------------------------
+# Cents (docs/design-review/handoff-team-play/SPEC.md §10.4)
+# ---------------------------------------------------------------------------
+
+class SplitToCentsTests(TestCase):
+    """Split down to the cent, odd cents to the first recipient — Team Play
+    orders them by course handicap descending, so they land on the team's
+    highest. A settlement that does not add up is worse than one that is
+    slightly arbitrary."""
+
+    def test_the_packets_first_place(self):
+        """$287.50 over four men: three at $71.87 and one at $71.89."""
+        self.assertEqual(split_to_cents(287.50, 4), [71.89, 71.87, 71.87, 71.87])
+
+    def test_a_tied_second_over_four(self):
+        self.assertEqual(split_to_cents(143.75, 4), [35.96, 35.93, 35.93, 35.93])
+
+    def test_a_three_man_team_takes_more_each(self):
+        """Dune collects the same $143.75 over three men rather than four —
+        the phantom 4th earned the strokes and cannot be paid."""
+        self.assertEqual(split_to_cents(143.75, 3), [47.93, 47.91, 47.91])
+
+    def test_it_always_balances(self):
+        for total in (287.50, 143.75, 575.00, 92.00, 0.01, 100.00):
+            for n in (1, 2, 3, 4, 5, 7):
+                shares = split_to_cents(total, n)
+                self.assertAlmostEqual(sum(shares), total, places=2,
+                                       msg=f'{total} over {n}')
+
+    def test_an_even_split_leaves_no_odd_cent(self):
+        self.assertEqual(split_to_cents(100.00, 4), [25.0, 25.0, 25.0, 25.0])
+
+    def test_nobody_to_pay(self):
+        self.assertEqual(split_to_cents(50.0, 0), [])

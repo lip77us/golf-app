@@ -1,0 +1,119 @@
+<!-- @dsCard group="Team play" name="Score entry" subtitle="TeamScoreEntry — the two cards: one number for a scramble, four for a shamble or Irish Rumble" viewport="1420x1080" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Team score entry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>.hole{display:flex;align-items:center;gap:10px;padding:2px 4px 10px}
+.hole .n{font-family:"Schibsted Grotesk",sans-serif;font-size:30px;font-weight:700;line-height:1}
+.hole .m{font-size:11px;color:var(--muted);line-height:1.4}
+.hole .m b{color:var(--deepPine)}
+.hole .nav{margin-left:auto;display:flex;gap:7px}
+.hole .nav span{width:36px;height:36px;border-radius:11px;background:#fff;border:1.5px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--pine)}
+.prow{display:flex;align-items:center;gap:9px;padding:7px 2px;font-size:13px}
+.prow .nm{font-weight:600;flex:1}
+.prow .gets{font-size:10.5px;color:var(--muted);font-weight:600;background:var(--surface);border-radius:6px;padding:2px 6px}
+.sbox{width:42px;height:42px;border-radius:10px;border:1.5px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700;font-variant-numeric:tabular-nums}
+.sbox.circle{border:2px solid var(--pine);border-radius:50%;color:var(--pine)}
+.picker{border:2px solid var(--pine);border-radius:12px;margin:4px 0 2px;padding:10px 6px;display:flex;gap:6px;justify-content:center}
+.picker .opt{min-width:42px;height:48px;border-radius:9px;border:1.5px solid var(--cardBorder);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:17px;font-variant-numeric:tabular-nums;cursor:pointer}
+.picker .opt small{font-size:8px;color:var(--muted);text-transform:uppercase;margin-top:2px;font-weight:700;letter-spacing:.3px}
+.picker .opt.sel{border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.15);color:var(--pine)}
+.picker .opt.more{font-size:13px;color:var(--muted)}
+.stepper{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 0 2px}
+.stepper button{width:56px;height:56px;border-radius:18px;border:1.5px solid var(--cardBorder);background:#fff;font-size:26px;color:var(--pine);cursor:pointer;line-height:1}
+.stepper .val{width:104px;text-align:center}
+.stepper .val b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:52px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.stepper .val u{text-decoration:none;display:block;font-size:11px;font-weight:600;color:var(--pine);margin-top:3px;letter-spacing:.3px}
+.who{display:flex;gap:6px;margin-top:2px}
+.who button{flex:1;border:1.5px solid var(--cardBorder);background:#fff;border-radius:11px;padding:9px 2px;font:600 11.5px/1.3 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.who button.on{border-color:var(--pine);background:#F4FAF6;color:var(--pine)}
+.who button u{text-decoration:none;display:block;font-size:9.5px;font-weight:500;color:var(--muted);margin-top:2px}
+.grid{display:grid;grid-template-columns:1fr 46px 46px;gap:0}
+.grid>div{padding:9px 4px;font-size:12.5px;display:flex;align-items:center}
+.grid>div:nth-child(3n+2),.grid>div:nth-child(3n){justify-content:center;font-weight:600;font-variant-numeric:tabular-nums}
+.grid .hd{font-size:9.5px;font-weight:700;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;padding-bottom:4px}
+.grid .rw{border-top:1px solid #F2F6F3}
+.grid .ct{background:#F4FAF6;color:var(--pine);font-weight:700}
+.grid .out{color:#C3CFC6}
+.mini{display:flex;gap:4px;padding:8px 2px 0;overflow:hidden}
+.mini span{flex:none;width:26px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.mini span b{display:block;font-size:11.5px;color:var(--deepPine);background:#fff;border:1px solid var(--cardBorder);border-radius:6px;padding:4px 0;margin-top:2px}
+.mini span.now b{border-color:var(--pine);background:#F4FAF6;color:var(--pine)}
+.mini span.tbd b{color:#C3CFC6}</style></head>
+<body>
+<a class="home" href="12-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Two cards, one format apart</h1>
+<p>Everything else in the app enters <b>a score per golfer</b>. A scramble does not have one. Four men make one number, and pretending otherwise &mdash; four boxes, three of them ignored &mdash; is the single easiest way to get a scramble card wrong.</p>
+<h3>Scramble: one number, the size of the screen</h3>
+<p>The card is a stepper, not a grid. There is one value on the hole and it should be the largest thing on the phone, because it is being tapped by a man standing on the next tee holding a beer.</p>
+<p>Par sits next to it and the value shows what it <b>is</b> &mdash; birdie, par, bogey &mdash; not just the digit. On a scramble everyone knows the number relative to par before they know the number.</p>
+<div class="own"><table>
+<tr><td>Default</td><td>Opens on par, not blank. A scramble team makes par more than any other score, and a wrong default beats no default when the alternative is a keypad.</td></tr>
+<tr><td>Drives</td><td>Only if the TD set a requirement. Then one row: whose drive did you take, with anyone short marked and the arithmetic done live. Off, the row does not exist.</td></tr>
+<tr><td>Strip</td><td>The eighteen holes across the bottom, filled ones solid. Position in the round without leaving the card.</td></tr>
+</table></div>
+<h3>Shamble: four scores, and the card says which counted</h3>
+<p>Same grid as every other four-man card in the app, with one addition that matters more than it looks: <b>the counting scores are tinted and the non-counting ones greyed, live, as they are entered.</b></p>
+<p>Best two of four means two men&rsquo;s cards do nothing on a given hole. A man who shot 5 needs to see instantly that his 5 was not used &mdash; otherwise the team total looks wrong and someone re-enters it.</p>
+<h3>The count is stated on every hole</h3>
+<p><b>2 of 4 count</b> in the header, on all eighteen holes. It does not change, and saying so every hole costs one line and settles the recurring question at the green.</p>
+<h3>The drive row is on both cards</h3>
+<p>A shamble picks a tee shot exactly as a scramble does, so the requirement, the tracker and the warning are identical. The only difference is where the row sits &mdash; above the four scores rather than below the one.</p>
+<h3>The drive row warns on the tee, not at the scoring table</h3>
+<p>Two men owing a drive with two holes left is still fine; with one hole left it is not. The row does that subtraction on <b>every hole</b> and says the consequence in a sentence &mdash; <i>taking Detomasi&rsquo;s drive here leaves the front nine short</i> &mdash; because the moment a quota becomes unsatisfiable is invisible to four men who have had a few.</p>
+<p>It never blocks the tap. The team may knowingly take the shortfall, and by default a shortfall costs nothing.</p>
+<h3>The count is stated on every hole</h3>
+<p><b>1 of 4 counts</b> in the header, changing at 7 and again at 13. Irish Rumble&rsquo;s whole character is the escalation, and a team that forgets it is on three balls plays the last six holes wrong.</p>
+<h3>The count is stated on every hole</h3>
+<p><b>1 of 4 counts</b> in the header, changing at 7 and again at 13. Irish Rumble&rsquo;s whole character is the escalation, and a team that forgets it is on three balls plays the last six holes wrong.</p>
+<h3>Net is not shown on the card</h3>
+<p>A scramble handicap is one whole-number team figure applied to the round, not a stroke on a hole. Showing <b>6</b> on the card would invite subtracting it per hole. Gross on the card, net on the leaderboard, and the header names the allowance so it is not hidden.</p>
+<h3>Anyone on the team can enter</h3>
+<p>No designated scorer. Six teams entering their own hole means the leaderboard is live; making one man responsible means the board is dark until he catches up on 18.</p>
+</div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>9:12</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Pine</span><span class="ic">Scramble &middot; 6</span></div>
+<div class="body tall">
+<div class="hole"><span class="n">7</span><span class="m"><b>Par 4</b> &middot; 412 yds<br>Stroke index 3</span><span class="nav"><span>&#8249;</span><span>&#8250;</span></span></div>
+<div class="blk"><h6>Team score<em>Scramble</em></h6><p>One number for the ball you played.</p>
+<div class="prow"><span class="nm">Pine</span><span class="gets">1 ball</span><span class="sbox circle">3</span></div>
+<div class="picker"><span class="opt sel">3<small>bird</small></span><span class="opt">4<small>par</small></span><span class="opt">5<small>bog</small></span><span class="opt">6<small>dbl</small></span><span class="opt more">&#8942;</span></div>
+</div>
+<div class="blk"><h6>Whose drive<em>1 each per nine</em></h6><p>Maiolini and Yau have not driven on the front. Two holes left in the nine.</p>
+<div class="who"><button style="border-color:#E0B984;background:#FDF8F1">Maiolini<u>owes 1</u></button><button>Gunst<u>&#10003; h2</u></button><button>Detomasi<u>&#10003; h5</u></button><button style="border-color:#E0B984;background:#FDF8F1">Yau<u>owes 1</u></button></div>
+<p style="margin:8px 0 0;font-size:10.5px;line-height:1.5;color:var(--warn)"><b>2 owed, 2 holes left.</b> Taking Gunst&rsquo;s or Detomasi&rsquo;s drive here leaves the front nine short.</p>
+</div>
+<div class="note amber"><span>&#9888;</span><span><b>Score in, drive still needed.</b> Auto-advance is on and waits for both &mdash; the hole is not complete until the drive is picked.</span></div>
+<div class="sec">Through 6 &mdash; 3 under</div>
+<div class="mini"><span>1<b>4</b></span><span>2<b>3</b></span><span>3<b>5</b></span><span>4<b>3</b></span><span>5<b>4</b></span><span>6<b>4</b></span><span class="now">7<b>3</b></span><span class="tbd">8<b>&middot;</b></span><span class="tbd">9<b>&middot;</b></span><span class="tbd">10<b>&middot;</b></span><span class="tbd">11<b>&middot;</b></span></div>
+</div>
+<div class="foot"><button class="off">Pick whose drive to continue</button><p class="fx">Gross on the card. Your 6 strokes come off the total on the leaderboard.</p></div>
+</div><div class="cap">Scramble &mdash; one number</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>9:12</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Clay</span><span class="ic">Shamble &middot; 85%</span></div>
+<div class="body tall">
+<div class="hole"><span class="n">7</span><span class="m"><b>Par 4</b> &middot; 412 yds<br>Stroke index 3</span><span class="nav"><span>&#8249;</span><span>&#8250;</span></span></div>
+<div class="blk"><h6>Whose drive<em>1 each per nine</em></h6><p>All four have driven on the front. No one owes.</p>
+<div class="who"><button>Petersen<u>&#10003; h1</u></button><button class="on">Brown<u>&#10003; h7</u></button><button>Labass<u>&#10003; h3</u></button><button>Reilly<u>&#10003; h6</u></button></div>
+</div>
+<div class="blk"><h6>Scores<em>2 of 4 count</em></h6><p>The two lowest net count. The rest are recorded and ignored.</p>
+<div class="grid">
+<div class="hd">Golfer</div><div class="hd">Gross</div><div class="hd">Net</div>
+<div class="rw">Alan Petersen<span style="color:#C3CFC6;font-size:10px;margin-left:5px">&#9679;</span></div><div class="rw">4</div><div class="rw ct">4</div>
+<div class="rw">Alex Brown<span style="color:#C3CFC6;font-size:10px;margin-left:5px">&#9679;</span></div><div class="rw">5</div><div class="rw out">5</div>
+<div class="rw">Barry Labass<span style="color:#0F6E56;font-size:10px;margin-left:5px">&#9679;</span></div><div class="rw">5</div><div class="rw ct">4</div>
+<div class="rw">Dan Reilly<span style="color:#0F6E56;font-size:10px;margin-left:5px">&#9679;</span></div><div class="rw">7</div><div class="rw out">6</div>
+</div>
+<div class="ln" style="border-top:1.5px solid #DCE5DD;margin-top:5px;padding-top:9px"><span class="d" style="font-weight:700">Hole total<u>Two counted</u></span><span class="v" style="font-size:15px;color:var(--deepPine)">8</span></div>
+</div>
+<div class="sec">Through 6 &mdash; 1 under</div>
+<div class="mini"><span>1<b>3</b></span><span>2<b>4</b></span><span>3<b>4</b></span><span>4<b>3</b></span><span>5<b>5</b></span><span>6<b>4</b></span><span class="now">7<b>8</b></span><span class="tbd">8<b>&middot;</b></span><span class="tbd">9<b>&middot;</b></span><span class="tbd">10<b>&middot;</b></span><span class="tbd">11<b>&middot;</b></span></div>
+</div>
+<div class="foot"><button>Save &amp; next hole</button><p class="fx">Green dot = received a stroke on this hole.</p></div>
+</div><div class="cap">Shamble &mdash; four scores, two counting</div></div>
+</body></html>

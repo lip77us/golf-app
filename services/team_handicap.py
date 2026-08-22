@@ -1,0 +1,224 @@
+"""
+services/team_handicap.py
+-------------------------
+Team Play allowance maths — the step that decides whether anyone believes the
+result (docs/design-review/handoff-team-play/SPEC.md §6).
+
+**The allowance is a table, not a preference.**  Each format has an established
+allowance; the screen states it, shows it applied to the TD's OWN teams, and
+offers one flat override for a group with its own tradition.  Presenting a
+table as an open question invites a guess.
+
+    Scramble   25 / 20 / 15 / 10 of course handicap, LOWEST FIRST, summed
+               → one whole-number team figure.
+    Shamble    a single percentage of each golfer's OWN course handicap,
+               tracking the ball-count average — 75% at one ball, 85% at two,
+               95% at three.
+
+Three rules govern the arithmetic, and the first is the one that costs a stroke
+when it is got wrong:
+
+1. **Round once, on the total.**  Rounding each contribution first turns
+   1.00 + 1.60 + 1.65 + 1.90 into 1 + 2 + 2 + 2 = 7.  Rounding the sum gives 6.
+   Compute at full precision throughout and round at the end.
+2. **Half rounds up.**  7.50 → 8.  (Python's built-in ``round`` is half-to-EVEN
+   and would give 8 here but 6 for 6.50, so every rounding in this module goes
+   through ``Decimal`` with ``ROUND_HALF_UP``.)
+3. **Whole strokes, never fractions.**  Golfers do not play 6.15, and it looks
+   like a spreadsheet error at the scoring table.  Which makes ties normal —
+   see the payout rules, which combine and split rather than break them.
+
+Everything here is pure: course handicaps in, figures out, no DB access.  The
+worked examples in the packet are the test cases.
+
+    Pine   4, 8, 11, 19  → 1.00 1.60 1.65 1.90 → raw 6.15 → 6
+    Clay   6, 9, 14, 21  → 1.50 1.80 2.10 2.10 → raw 7.50 → 8   (half up)
+    Slate  5, 12, 16, 24 → 1.25 2.40 2.40 2.40 → raw 8.45 → 8
+    Dune   9, 15, 23 + phantom 16
+                         → 2.25 3.00 2.40 2.30 → raw 9.95 → 10
+"""
+
+from dataclasses import dataclass, field
+from decimal import Decimal, ROUND_HALF_UP
+
+
+# The scramble table, lowest handicap first.  The order IS the rule: 25%
+# attaches to the lowest handicap, not to the captain or the first name on the
+# list, which is why every screen sorts members low to high.
+SCRAMBLE_TABLE = (Decimal('0.25'), Decimal('0.20'), Decimal('0.15'), Decimal('0.10'))
+
+# Shamble: the allowance follows how many balls count.  The fewer balls, the
+# lower the percentage.
+SHAMBLE_PCT_BY_BALLS = {1: 75, 2: 85, 3: 95, 4: 100}
+
+# Build-time call: the packet gives 75 / 85 / 95 for one, two and three balls
+# and says a per-hole grid averaging 2.3 gets 95% "rather than 85%" — so the
+# mapping is a CEILING, not a round-to-nearest.  A round that ever asks for
+# three balls is a three-ball round for allowance purposes.  Four balls counts
+# everybody, so it takes the full handicap; the packet does not state that case
+# because a whole round at four balls has no drop score at all.
+DEFAULT_SHAMBLE_PCT = 85
+
+
+def _round_half_up(value: Decimal) -> int:
+    """Whole strokes, half up. Clay's 7.50 becomes 8."""
+    return int(Decimal(value).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+
+
+def _contribution(course_handicap: int, pct: int) -> Decimal:
+    """
+    One man's strokes at his percentage, to two places — `Maiolini 4 → 1.00`,
+    the way the worked card draws it.
+
+    Two places is EXACT here, not a rounding: an integer course handicap times
+    an integer percentage over 100 can never need a third.  So the sum of the
+    contributions is still full precision, and rule 1 (round once, on the
+    total) is untouched.
+    """
+    return ((Decimal(course_handicap) * Decimal(pct)) / Decimal(100)).quantize(
+        Decimal('0.01')
+    )
+
+
+@dataclass
+class Contribution:
+    """One member's line on the worked card: `Maiolini 4 → 1.00`."""
+    course_handicap: int
+    pct: int                       # 25 / 20 / 15 / 10, or the flat override
+    strokes: Decimal               # full precision — never rounded here
+    is_phantom: bool = False
+
+
+@dataclass
+class TeamAllowance:
+    """
+    The two numbers a TD needs: the one he plays with, and the one that
+    explains it.  ``raw`` is shown under ``strokes`` on every screen that shows
+    a team figure.
+    """
+    strokes: int                             # the rounded, whole-stroke figure
+    raw: Decimal                             # the full-precision sum
+    contributions: list = field(default_factory=list)
+
+
+def phantom_course_handicap(real_course_handicaps) -> int:
+    """
+    A three-man team fields a phantom 4th at the AVERAGE of its three real men.
+    Bellini 9, Kwan 15, Ortega 23 → 16.
+
+    This keeps everything downstream identical: four handicaps, so the ordinary
+    table applies with no special three-man row, and four balls, so the format
+    is unchanged.
+
+    The alternative — dropping the table's bottom row and giving the three men
+    25/20/15 — produces 9 against the phantom's 10, and a 30/20/10 table gives
+    8.  Both take a stroke AWAY from a team that is already short a ball, which
+    is backwards.  **The allowance follows the roster, not the number of balls
+    hit**, which is also why "play short" carries the same figure: the only
+    thing it changes is whether anybody hits the phantom's ball.
+    """
+    hcaps = list(real_course_handicaps)
+    if not hcaps:
+        return 0
+    return _round_half_up(Decimal(sum(hcaps)) / Decimal(len(hcaps)))
+
+
+def scramble_allowance(course_handicaps, *, override_pct=None,
+                       phantom_index=None) -> TeamAllowance:
+    """
+    One team figure built from four handicaps.
+
+    ``course_handicaps`` need not be sorted — this sorts them low to high,
+    because the percentage is POSITIONAL and a manual order would be a lie.
+    Pass ``phantom_index`` as the position of the phantom's handicap in the
+    ORIGINAL list and it is tracked through the sort, so the caller can draw
+    the phantom's row italic wherever it lands.
+
+    ``override_pct`` applies one flat percentage to all four — a group's
+    tradition beats the table — and the worked result is still returned so the
+    TD sees what he did.
+    """
+    indexed = sorted(
+        ((h, i) for i, h in enumerate(course_handicaps)), key=lambda p: p[0]
+    )
+
+    contributions = []
+    for position, (hcap, original_index) in enumerate(indexed):
+        if override_pct is not None:
+            pct = int(override_pct)
+        elif position < len(SCRAMBLE_TABLE):
+            pct = int(SCRAMBLE_TABLE[position] * 100)
+        else:
+            # More than four men in a group is not a shape this tournament
+            # builds, but a fifth must not silently take 10% again.
+            pct = 0
+        contributions.append(Contribution(
+            course_handicap = hcap,
+            pct             = pct,
+            strokes         = _contribution(hcap, pct),
+            is_phantom      = (original_index == phantom_index),
+        ))
+
+    raw = sum((c.strokes for c in contributions), Decimal('0'))
+    return TeamAllowance(
+        strokes       = _round_half_up(raw),
+        raw           = raw,
+        contributions = contributions,
+    )
+
+
+def shamble_allowance_pct(avg_ball_count) -> int:
+    """
+    The percentage a shamble applies to each golfer's OWN course handicap,
+    tracking the ball-count average.
+
+    A ceiling, not a round-to-nearest: a per-hole grid averaging 2.3 asks for
+    three balls somewhere, so it takes 95% rather than 85%.
+    """
+    avg = Decimal(str(avg_ball_count))
+    if avg <= 0:
+        return DEFAULT_SHAMBLE_PCT
+    balls = int(avg.quantize(Decimal('1'), rounding='ROUND_CEILING'))
+    return SHAMBLE_PCT_BY_BALLS.get(min(max(balls, 1), 4), DEFAULT_SHAMBLE_PCT)
+
+
+def shamble_allowance(course_handicaps, *, avg_ball_count=2,
+                      override_pct=None, phantom_index=None) -> TeamAllowance:
+    """
+    A shamble handicaps each golfer on his own ball, so there is no single team
+    figure in play — the per-golfer strokes are what the card uses.
+
+    The ``strokes`` returned here is therefore a BALANCE figure only: the sum of
+    the four allowances, rounded once, used by the build-teams strip so a TD can
+    see one team stacked against another. It is never subtracted from anything.
+    """
+    pct = int(override_pct) if override_pct is not None \
+        else shamble_allowance_pct(avg_ball_count)
+
+    contributions = [
+        Contribution(
+            course_handicap = hcap,
+            pct             = pct,
+            strokes         = _contribution(hcap, pct),
+            is_phantom      = (i == phantom_index),
+        )
+        for i, hcap in enumerate(sorted(course_handicaps))
+    ]
+    raw = sum((c.strokes for c in contributions), Decimal('0'))
+    return TeamAllowance(
+        strokes       = _round_half_up(raw),
+        raw           = raw,
+        contributions = contributions,
+    )
+
+
+def player_shamble_handicap(course_handicap: int, pct: int) -> int:
+    """
+    One golfer's playing handicap in a shamble — his own course handicap at the
+    format's percentage, rounded to whole strokes.
+
+    Rounded PER GOLFER here, unlike the scramble, and for the same reason: this
+    is the number he plays with on his own ball, so it is his figure that has to
+    be whole rather than a team total's.
+    """
+    return _round_half_up(_contribution(course_handicap, pct))

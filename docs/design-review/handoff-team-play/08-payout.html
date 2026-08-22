@@ -1,0 +1,102 @@
+<!-- @dsCard group="Team play" name="Entry & payout" subtitle="TeamPayout — the TD sets the fee, how many places pay, and the split, with the money worked as he changes it" viewport="1420x1080" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Entry &amp; payout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>.fee{display:flex;align-items:center;gap:12px;padding:4px 0 2px}
+.fee button{width:46px;height:46px;border-radius:14px;border:1.5px solid var(--cardBorder);background:#fff;font-size:22px;color:var(--pine);cursor:pointer;line-height:1}
+.fee .v{flex:1;text-align:center}
+.fee .v b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.fee .v u{text-decoration:none;display:block;font-size:10px;font-weight:700;letter-spacing:.4px;color:var(--muted);margin-top:4px}
+.pot2{display:flex;gap:6px;margin-top:10px}
+.pot2 div{flex:1;text-align:center;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:9px;padding:8px 2px}
+.pot2 b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums;line-height:1}
+.pot2 u{text-decoration:none;display:block;font-size:9px;font-weight:700;color:var(--muted);margin-top:3px;letter-spacing:.3px}
+.sp{display:flex;align-items:center;gap:9px;padding:8px 0;font-size:12.5px}
+.sp+.sp{border-top:1px solid #F2F6F3}
+.sp .pos{flex:none;width:26px;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:13px;color:var(--muted)}
+.sp .st{flex:none;display:flex;align-items:center;gap:7px}
+.sp .st button{width:30px;height:30px;border-radius:9px;border:1.5px solid var(--cardBorder);background:#fff;color:var(--pine);font-size:15px;line-height:1;cursor:pointer}
+.sp .st span{width:42px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.sp .amt{flex:1;text-align:right}
+.sp .amt b{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.sp .amt u{text-decoration:none;display:block;font-size:10px;color:var(--muted);margin-top:1px}
+.tot{display:flex;align-items:center;gap:9px;border-top:1.5px solid #DCE5DD;margin-top:6px;padding-top:9px;font-size:12.5px}
+.tot .l{flex:1;font-weight:700}
+.tot .r{font-weight:700;font-variant-numeric:tabular-nums;color:var(--pine)}</style></head>
+<body>
+<a class="home" href="12-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Entry and payout</h1>
+<p>Three numbers, and they are the only ones anybody argues about after the round: <b>what it costs, how many teams cash, and how the pot divides.</b> They belong on one screen because changing any of them changes the other two&rsquo;s meaning.</p>
+<h3>Worked, not described</h3>
+<p>Every control shows its consequence in dollars as it moves. Raise the fee and the pot moves; add a place and every share shrinks; drag 50 down to 40 and the other rows show what they now pay. <b>A TD setting 50/30/20 is not choosing percentages, he is choosing what third place gets</b> &mdash; so the screen shows that, and the percentage is the mechanism.</p>
+<h3>Per man is the number that matters</h3>
+<p>$287.50 to a team means nothing until it is divided. Each place shows the <b>per-golfer share</b> underneath, because that is what a man decides by: whether it is worth $25 to maybe win $72.</p>
+<div class="own"><table>
+<tr><td>Fee</td><td>Per golfer, flat, taken at signup. Stepped in $5 &mdash; nobody charges $23.</td></tr>
+<tr><td>Places</td><td>1 to 4, capped at the team count. Six teams paying five places is a raffle.</td></tr>
+<tr><td>Split</td><td>Presets first, custom underneath. Most TDs want 50/30/20 and should be able to tap once.</td></tr>
+</table></div>
+<h3>It must total 100, and Save says so</h3>
+<p>A split that adds to 95 leaves $28.75 in the TD&rsquo;s pocket with no line explaining it. The total is shown live, turns amber off 100, and <b>Save is blocked with the reason on the button</b> &mdash; the house rule from the Cup work: nothing is disabled without saying why.</p>
+<p>Rounding is not the TD&rsquo;s problem. He works in whole percentages; the app handles the cents, and the settlement screen states where the odd ones went.</p>
+<h3>Half the field is the advice, not the rule</h3>
+<p>Six teams and three places means half of them cash, which is what keeps a Saturday scramble worth entering. The screen says so under the places control. It does not enforce it &mdash; winner-takes-all is a legitimate choice and the preset is there.</p>
+<h3>Ties are warned about here, where they are cheap</h3>
+<p>Whole-stroke handicaps tie often, and a tie combines places. One line explains that <b>the number of places is the number of prizes, not the number of teams paid</b> &mdash; two teams tied for the last paying place still split it. Better read here than discovered at the scoring table.</p>
+<h3>Where it sits</h3>
+<p>After teams, before review. It needs the field size to compute the pot and the team count to cap the places, and both are only known once the teams are built.</p>
+</div>
+<div class="wrap"><div class="phone">
+<div class="status"><span>7:58</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Payout</span><span class="ic">Cancel</span></div>
+<div class="step">STEP 7 OF 8 &middot; ENTRY &amp; PAYOUT</div>
+<div class="body">
+<div class="blk"><h6>Entry per golfer</h6><p>Flat, collected at signup. One pool &mdash; the team championship.</p>
+<div class="fee"><button>&minus;</button><span class="v"><b>$25</b><u>PER GOLFER</u></span><button>+</button></div>
+<div class="pot2"><div><b>23</b><u>GOLFERS</u></div><div><b>6</b><u>TEAMS</u></div><div><b>$575</b><u>IN THE POOL</u></div></div>
+</div>
+<div class="blk"><h6>Places paid<em>3 of 6 teams</em></h6><p>Half the field cashing is what keeps a one-day scramble worth entering.</p>
+<div class="chips"><button>1</button><button>2</button><button class="on">3</button><button>4</button></div>
+</div>
+<div class="blk"><h6>Split<em>50 / 30 / 20</em></h6><p>Tap a preset, or set your own below.</p>
+<div class="chips" style="margin-bottom:9px"><button>Winner takes all</button><button>60 / 40</button><button class="on">50 / 30 / 20</button></div>
+<div class="sp"><span class="pos">1st</span><span class="st"><button>&minus;</button><span>50%</span><button>+</button></span><span class="amt"><b>$287.50</b><u>$71.88 a man</u></span></div>
+<div class="sp"><span class="pos">2nd</span><span class="st"><button>&minus;</button><span>30%</span><button>+</button></span><span class="amt"><b>$172.50</b><u>$43.13 a man</u></span></div>
+<div class="sp"><span class="pos">3rd</span><span class="st"><button>&minus;</button><span>20%</span><button>+</button></span><span class="amt"><b>$115.00</b><u>$28.75 a man</u></span></div>
+<div class="tot"><span class="l">Total</span><span class="r">100%</span><span class="r" style="width:70px;text-align:right">$575.00</span></div>
+</div>
+<div class="note"><span>&#9679;</span><span><b>Per-man figures assume four.</b> Dune plays three, so a place it wins divides three ways and pays more each &mdash; the phantom 4th cannot be paid.</span></div>
+<div class="note amber"><span>&#9888;</span><span><b>Three places is three prizes, not three teams.</b> Whole-stroke handicaps tie often; two teams tied for the last paying place split it between them.</span></div>
+</div>
+<div class="foot"><button>Next &mdash; Review</button><p class="fx">$25 &times; 23 = $575 &middot; three places &middot; 50 / 30 / 20</p></div>
+</div><div class="cap">Payout &mdash; balanced at 100%</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>7:59</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Payout</span><span class="ic">Cancel</span></div>
+<div class="step">STEP 7 OF 8 &middot; ENTRY &amp; PAYOUT</div>
+<div class="body">
+<div class="blk"><h6>Entry per golfer</h6><p>Flat, collected at signup. One pool &mdash; the team championship.</p>
+<div class="fee"><button>&minus;</button><span class="v"><b>$40</b><u>PER GOLFER</u></span><button>+</button></div>
+<div class="pot2"><div><b>23</b><u>GOLFERS</u></div><div><b>6</b><u>TEAMS</u></div><div><b>$920</b><u>IN THE POOL</u></div></div>
+</div>
+<div class="blk"><h6>Places paid<em>4 of 6 teams</em></h6><p>Two thirds of the field cashing. Generous, and some groups run it.</p>
+<div class="chips"><button>1</button><button>2</button><button>3</button><button class="on">4</button></div>
+</div>
+<div class="blk"><h6>Split<em>Custom</em></h6><p>Tap a preset, or set your own below.</p>
+<div class="chips" style="margin-bottom:9px"><button>Winner takes all</button><button>60 / 40</button><button>50 / 30 / 20</button></div>
+<div class="sp"><span class="pos">1st</span><span class="st"><button>&minus;</button><span>40%</span><button>+</button></span><span class="amt"><b>$368.00</b><u>$92.00 a man</u></span></div>
+<div class="sp"><span class="pos">2nd</span><span class="st"><button>&minus;</button><span>25%</span><button>+</button></span><span class="amt"><b>$230.00</b><u>$57.50 a man</u></span></div>
+<div class="sp"><span class="pos">3rd</span><span class="st"><button>&minus;</button><span>20%</span><button>+</button></span><span class="amt"><b>$184.00</b><u>$46.00 a man</u></span></div>
+<div class="sp"><span class="pos">4th</span><span class="st"><button>&minus;</button><span>10%</span><button>+</button></span><span class="amt"><b>$92.00</b><u>$23.00 a man</u></span></div>
+<div class="tot"><span class="l" style="color:var(--warn)">Total</span><span class="r" style="color:var(--warn)">95%</span><span class="r" style="width:70px;text-align:right;color:var(--warn)">$874.00</span></div>
+</div>
+<div class="note amber"><span>&#9888;</span><span><b>5% unassigned &mdash; $46.00.</b> The split has to reach 100 or the pool will not balance at settlement. Add 5 anywhere.</span></div>
+<div class="blk off2"><h6>4th place pays less than entry<em>$23 vs $40</em></h6><p style="margin:0">Allowed, and worth knowing: a team can finish in the money and still be down $17 a man.</p></div>
+</div>
+<div class="foot"><button class="off">Split totals 95% &mdash; add 5 to continue</button><p class="fx">Nothing is blocked without saying why.</p></div>
+</div><div class="cap">Payout &mdash; custom, and it does not add up</div></div>
+<style>.blk.off2{background:#FDF9F3;border-color:#E8D6BC}.blk.off2>h6{color:#5C4326}.blk.off2>h6 em{color:var(--warn)}.blk.off2>p{color:#6B5334}</style>
+</body></html>

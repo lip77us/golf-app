@@ -9160,3 +9160,333 @@ class RoundMessagesReadView(APIView):
         messaging.mark_read(thread, request.user,
                             request.data.get('last_seen_id', 0))
         return Response({'unread': messaging.unread_count(thread, request.user)})
+
+
+# ---------------------------------------------------------------------------
+# TEAM PLAY  (docs/design-review/handoff-team-play/SPEC.md)
+# ---------------------------------------------------------------------------
+
+class TeamPlaySetupView(APIView):
+    """
+    GET  /api/tournaments/{id}/team-play/setup/ — the config, or the defaults.
+    POST /api/tournaments/{id}/team-play/setup/ — create or update it.
+
+    One row holds every choice the TD makes across wizard steps 3–7, because
+    they are read together everywhere afterwards: the format decides the card,
+    the ball count decides the shamble allowance, and the allowance decides the
+    board.
+
+    **The format locks at the first score.**  A one-number card cannot be
+    re-read as four, so a POST that would change the format or the counts after
+    a score has landed is refused rather than silently ignored.
+    """
+
+    # The fields a locked config still accepts. Money is argued about after the
+    # round as often as before it, and none of it can invalidate a score.
+    UNLOCKED_FIELDS = {
+        'entry_fee', 'places_paid', 'split_pcts', 'drive_penalty',
+    }
+    LOCKED_FIELDS = {
+        'team_format', 'ball_count_mode', 'ball_count_fixed', 'ball_counts',
+    }
+
+    def get(self, request, pk):
+        from tournament.models import TeamPlayConfig
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        cfg = getattr(tournament, 'team_play_config', None)
+        if cfg is None:
+            cfg = TeamPlayConfig(tournament=tournament)
+            configured = False
+        else:
+            configured = True
+        return Response({
+            'configured'            : configured,
+            'team_format'           : cfg.team_format,
+            'ball_count_mode'       : cfg.ball_count_mode,
+            'ball_count_fixed'      : cfg.ball_count_fixed,
+            'ball_counts'           : cfg.ball_counts or {},
+            'drive_rule'            : cfg.drive_rule,
+            'drives_required'       : cfg.drives_required,
+            'drive_penalty'         : cfg.drive_penalty,
+            'handicap_mode'         : cfg.handicap_mode,
+            'allowance_override_pct': cfg.allowance_override_pct,
+            'entry_fee'             : float(cfg.entry_fee or 0),
+            'places_paid'           : cfg.places_paid,
+            'split_pcts'            : cfg.split_pcts or [],
+            'locked'                : cfg.is_locked,
+        })
+
+    def post(self, request, pk):
+        from tournament.models import TeamPlayConfig
+        from services.team_play_state import sync_teams
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        d = request.data
+
+        existing = getattr(tournament, 'team_play_config', None)
+        if existing is not None and existing.is_locked:
+            changing = {
+                f for f in self.LOCKED_FIELDS
+                if f in d and d[f] != getattr(existing, f)
+            }
+            if changing:
+                return Response(
+                    {'detail': 'Format is locked — the first score has been '
+                               'entered. A one-number card cannot be re-read '
+                               'as four.',
+                     'fields': sorted(changing)},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+        # The split has to reach 100 or the pool will not balance at
+        # settlement. Named in dollars on the screen; refused here so an API
+        # caller cannot post a table the UI would have blocked.
+        split = d.get('split_pcts')
+        if split:
+            total = sum(int(p) for p in split)
+            if total != 100:
+                return Response(
+                    {'detail': f'Split totals {total}% — it has to reach 100 '
+                               f'or the pool will not balance at settlement.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        defaults = {}
+        for field in ('team_format', 'ball_count_mode', 'drive_rule',
+                      'drive_penalty', 'handicap_mode'):
+            if field in d:
+                defaults[field] = d[field]
+        for field in ('ball_count_fixed', 'drives_required', 'places_paid'):
+            if field in d:
+                defaults[field] = int(d[field])
+        if 'ball_counts' in d:
+            defaults['ball_counts'] = d['ball_counts'] or {}
+        if 'split_pcts' in d:
+            defaults['split_pcts'] = [int(p) for p in (d['split_pcts'] or [])]
+        if 'entry_fee' in d:
+            defaults['entry_fee'] = d['entry_fee'] or 0
+        if 'allowance_override_pct' in d:
+            v = d['allowance_override_pct']
+            defaults['allowance_override_pct'] = None if v in (None, '') else int(v)
+
+        TeamPlayConfig.objects.update_or_create(
+            tournament=tournament, defaults=defaults,
+        )
+        # Marking the shape on the tournament is what keeps it out of
+        # is_individual_play — a team event must not inherit the always-on cap,
+        # the field-wide allowance or best-N counting.
+        games = list(tournament.active_games or [])
+        if 'team_play' not in games:
+            games.append('team_play')
+            tournament.active_games = games
+            tournament.save(update_fields=['active_games'])
+
+        sync_teams(tournament)
+        return self.get(request, pk)
+
+
+class TeamPlayView(APIView):
+    """
+    GET /api/tournaments/{id}/team-play/
+
+    The read model: the config, the field, and every team with its worked
+    allowance and drive state. One call, because the build-teams screen shows
+    all six teams' figures against each other and the balance strip is the
+    whole argument for the screen.
+    """
+    def get(self, request, pk):
+        from services.team_play_state import team_play_summary
+        tournament = tournament_for_reader(request.user, pk)
+        summary = team_play_summary(tournament)
+        if summary is None:
+            return Response({'configured': False})
+        return Response(summary)
+
+
+class TeamPlayTeamView(APIView):
+    """
+    POST /api/foursomes/{id}/team-play/team/ — rename a team.
+
+    Colour is assigned regardless and is NOT settable here: it does real work
+    on the leaderboard and the scorecard, and a TD renaming his team should not
+    be able to leave two teams sharing a block.
+    """
+    def post(self, request, pk):
+        from services.team_play_state import ensure_team_state
+        foursome = foursome_for_scorer(request.user, pk)
+        name = (request.data.get('name') or '').strip()[:16]   # same cap as the ball game
+        state = ensure_team_state(foursome)
+        foursome.name = name or state.colour
+        foursome.save(update_fields=['name'])
+        return Response({'foursome_id': foursome.id,
+                         'name': foursome.name,
+                         'colour': state.colour})
+
+
+class TeamPlayDriveView(APIView):
+    """
+    POST /api/foursomes/{id}/team-play/drive/ — record whose drive was taken.
+
+    It never blocks: the team may knowingly take the shortfall, and by default
+    a shortfall costs nothing. The warning is the card's job, and it fires two
+    holes before the quota fails rather than on 18.
+    """
+    def post(self, request, pk):
+        from tournament.models import TeamDrivePick
+        from services.team_play_state import drive_state
+        foursome = foursome_for_scorer(request.user, pk)
+        hole      = int(request.data.get('hole_number') or 0)
+        player_id = request.data.get('player_id')
+
+        if not 1 <= hole <= 18:
+            return Response({'detail': 'hole_number must be 1–18.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if player_id in (None, ''):
+            TeamDrivePick.objects.filter(foursome=foursome, hole_number=hole).delete()
+        else:
+            member = foursome.memberships.filter(
+                player_id=int(player_id), player__is_phantom=False).first()
+            if member is None:
+                # The phantom has no tee shot — its ball is played by whoever
+                # is not driving, which is a different question.
+                return Response(
+                    {'detail': 'That golfer is not on this team.'},
+                    status=status.HTTP_400_BAD_REQUEST)
+            TeamDrivePick.objects.update_or_create(
+                foursome=foursome, hole_number=hole,
+                defaults={'player': member.player},
+            )
+
+        config = getattr(foursome.round.tournament, 'team_play_config', None)
+        if config is None:
+            return Response({'detail': 'This round is not a Foursome Play event.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response(drive_state(foursome, config))
+
+
+class TeamPlayPairsView(APIView):
+    """
+    POST /api/foursomes/{id}/team-play/pairs/ — the alternating-pairs rota.
+
+    Set by the team on the 1st tee, before the first score, and then **fixed
+    for eighteen holes**. A rota that can be re-cut mid-round is not a rota, so
+    a second POST is refused rather than quietly overwriting the first.
+    """
+    def post(self, request, pk):
+        from django.utils import timezone
+        from services.team_play_state import ensure_team_state
+        foursome = foursome_for_scorer(request.user, pk)
+        state = ensure_team_state(foursome)
+
+        if state.pairs_are_set:
+            return Response(
+                {'detail': 'The rota is set for the round. Four men decide who '
+                           'is with whom on the 1st tee, and a rota that can be '
+                           're-cut mid-round is not a rota.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        pairs = request.data.get('pairs') or []
+        member_ids = set(
+            foursome.memberships.filter(player__is_phantom=False)
+            .values_list('player_id', flat=True)
+        )
+        flat = [pid for pair in pairs for pid in pair]
+        if not pairs or any(pid not in member_ids for pid in flat):
+            return Response({'detail': 'Every driver must be on this team.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        state.drive_pairs       = [[int(p) for p in pair] for pair in pairs]
+        state.drive_pairs_set_at = timezone.now()
+        state.save(update_fields=['drive_pairs', 'drive_pairs_set_at'])
+
+        config = getattr(foursome.round.tournament, 'team_play_config', None)
+        from services.team_play_state import drive_state
+        return Response(drive_state(foursome, config) if config else {})
+
+
+class TeamPlayScoreView(APIView):
+    """
+    POST /api/foursomes/{id}/team-play/score/ — a scramble hole.
+
+    One number for the ball the team played. Four boxes with three ignored is
+    the easiest way to get a scramble card wrong, so there is only ever one
+    value here; a shamble posts four ordinary per-golfer scores through the
+    normal score endpoint instead.
+    """
+    def post(self, request, pk):
+        from services.team_play_scoring import submit_team_score, team_round
+        foursome = foursome_for_scorer(request.user, pk)
+        config = getattr(foursome.round.tournament, 'team_play_config', None)
+        if config is None:
+            return Response({'detail': 'This round is not a Foursome Play event.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not config.is_scramble:
+            return Response(
+                {'detail': 'A shamble records four scores a hole — post them '
+                           'through the normal score endpoint.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        hole = int(request.data.get('hole_number') or 0)
+        if not 1 <= hole <= 18:
+            return Response({'detail': 'hole_number must be 1–18.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        submit_team_score(foursome, hole, request.data.get('gross_score'))
+        return Response(team_round(foursome, config))
+
+
+class TeamPlayCardView(APIView):
+    """
+    GET /api/foursomes/{id}/team-play/card/?hole=7
+
+    The hole as the card draws it. For a shamble that means the four scores
+    with the counting ones flagged — a man who shot 5 must see instantly that
+    his 5 was not used, or the total looks wrong and someone re-enters it.
+    """
+    def get(self, request, pk):
+        from services.team_play_state import drive_state, resolved_counts
+        from services.team_play_scoring import (
+            shamble_hole, team_hole_scores, team_round,
+        )
+        foursome = foursome_for_reader(request.user, pk)
+        config = getattr(foursome.round.tournament, 'team_play_config', None)
+        if config is None:
+            return Response({'detail': 'This round is not a Foursome Play event.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        hole = int(request.query_params.get('hole') or 1)
+        body = {
+            'format' : config.team_format,
+            'hole'   : hole,
+            'round'  : team_round(foursome, config),
+            'drive'  : drive_state(foursome, config),
+        }
+        if config.is_scramble:
+            body['team_score'] = team_hole_scores(foursome).get(hole)
+        else:
+            body['shamble'] = shamble_hole(
+                foursome, hole, resolved_counts(foursome, config))
+        return Response(body)
+
+
+class TeamPlayLeaderboardView(APIView):
+    """GET /api/tournaments/{id}/team-play/leaderboard/ — six rows, one column."""
+    def get(self, request, pk):
+        from services.team_play_scoring import leaderboard
+        tournament = tournament_for_reader(request.user, pk)
+        board = leaderboard(tournament)
+        if board is None:
+            return Response({'configured': False})
+        return Response(board)
+
+
+class TeamPlaySettlementView(APIView):
+    """GET /api/tournaments/{id}/team-play/settlement/ — one pool, three places."""
+    def get(self, request, pk):
+        from services.team_play_scoring import settlement
+        tournament = tournament_for_reader(request.user, pk)
+        body = settlement(tournament)
+        if body is None:
+            return Response({'configured': False})
+        return Response(body)

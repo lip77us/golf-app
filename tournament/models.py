@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils import timezone
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 from accounts.scoping import AccountScopedManager
 from core.models import GameType, RoundStatus, MatchStatus, Player, Tee, Course
@@ -86,14 +86,32 @@ class Tournament(models.Model):
     objects             = AccountScopedManager()
 
     @property
+    def is_team_play(self) -> bool:
+        """
+        True for a Team Play tournament — many four-man teams, one round, one
+        leaderboard (docs/design-review/handoff-team-play/SPEC.md). Like
+        'team_cup' this is a client-set marker in active_games rather than a
+        per-round GameType: the team layer sits on top of the round.
+        """
+        return 'team_play' in (self.active_games or [])
+
+    @property
     def is_individual_play(self) -> bool:
         """
-        True for an every-golfer-for-himself tournament — the type this spec
-        governs. A cup keeps its own per-round, per-format scoring and must not
-        pick up the individual-play rules (always-on cap, field-wide allowance,
-        best-N), so it is excluded by the presence of the cup game itself.
+        True for an every-golfer-for-himself tournament — the type the
+        individual-play spec governs. The other two shapes are excluded by the
+        presence of their own marker:
+
+        * a **cup** keeps its own per-round, per-format scoring, and
+        * **team play** scores a team rather than a golfer, sets its allowance
+          from a format table rather than field-wide, and has exactly one round.
+
+        Both would otherwise pick up the individual-play rules (always-on net
+        double-bogey cap, field-wide allowance, best-N counting) purely by not
+        being named here.
         """
-        return 'team_cup' not in (self.active_games or [])
+        games = self.active_games or []
+        return 'team_cup' not in games and 'team_play' not in games
 
     @property
     def counts_all_rounds(self) -> bool:
@@ -873,6 +891,303 @@ class RyderCupMatchPoints(models.Model):
             f"{self.team2.name} {self.team2_points}"
         )
 
+
+# ---------------------------------------------------------------------------
+# TEAM PLAY  (the third tournament shape — many 4-man teams, ONE round)
+# ---------------------------------------------------------------------------
+#
+# docs/design-review/handoff-team-play/SPEC.md
+#
+# Cup is two big sides and the unit is a match.  Individual is a field of
+# singles and the unit is a card.  Team Play is many small teams, one
+# leaderboard, one score per team per hole — the Saturday scramble a club runs
+# most often, and deliberately the SIMPLEST of the three.
+#
+# Two structural calls worth knowing before reading the fields:
+#
+#   1. **A team IS a Foursome.**  TeamTournament/TournamentTeam are the CUP
+#      roster layer (cup_name, players_per_team, draft_complete — two big sides
+#      drafted before rounds exist) and are not reused.  A Team Play team is
+#      one Foursome in the tournament's single Round, which brings tee times,
+#      memberships with a stored course_handicap, delegated scoring, mid-round
+#      withdrawal and watchers along for free.
+#
+#   2. **There is no round dimension anywhere.**  One round, stated rather than
+#      chosen.  No round columns, no rounds_to_count, no per-round pot.  A club
+#      wanting two days runs two tournaments.
+
+class TeamPlayConfig(models.Model):
+    """
+    The TD's settings for a Team Play tournament — one row, set across wizard
+    steps 3–7 and read by every surface afterwards.
+
+    Two formats, two scorecards.  They share exactly one thing — the tee shot
+    is chosen — which is why the drive requirement applies to both.
+    """
+
+    FORMAT_SCRAMBLE = 'scramble'
+    FORMAT_SHAMBLE  = 'shamble'
+    FORMAT_CHOICES  = [
+        (FORMAT_SCRAMBLE, 'Scramble'),
+        (FORMAT_SHAMBLE,  'Shamble'),
+    ]
+
+    # Shamble only.  The counts live UNDER the format radio, expanded in place
+    # — house rule from the Irish Rumble work: no game gets a second rules
+    # screen.
+    COUNT_FIXED      = 'fixed'
+    COUNT_ESCALATING = 'escalating'
+    COUNT_PAR_BASED  = 'par_based'
+    COUNT_PER_HOLE   = 'per_hole'
+    COUNT_CHOICES    = [
+        (COUNT_FIXED,      'Fixed'),
+        (COUNT_ESCALATING, 'Escalating — by sixes'),
+        (COUNT_PAR_BASED,  'Par-based'),
+        (COUNT_PER_HOLE,   'Per hole'),
+    ]
+
+    # Three quotas and one schedule.  They are NOT four settings of one thing,
+    # and that split decides the whole UI: a quota needs its slack shown, a
+    # schedule needs one line on the tee.
+    DRIVE_NONE        = 'none'
+    DRIVE_PER_NINE    = 'per_nine'
+    DRIVE_PER_18      = 'per_eighteen'
+    DRIVE_ALTERNATING = 'alternating'
+    DRIVE_CHOICES     = [
+        (DRIVE_NONE,        'No requirement'),
+        (DRIVE_PER_NINE,    'Per nine'),
+        (DRIVE_PER_18,      'Per eighteen'),
+        (DRIVE_ALTERNATING, 'Alternating pairs'),
+    ]
+
+    PENALTY_WARN       = 'warn'
+    PENALTY_TWO_STROKE = 'two_strokes'
+    PENALTY_CHOICES    = [
+        (PENALTY_WARN,       'Warn only'),
+        (PENALTY_TWO_STROKE, 'Two strokes per missing drive'),
+    ]
+
+    tournament = models.OneToOneField(
+        Tournament, on_delete=models.CASCADE, related_name='team_play_config'
+    )
+
+    # ── Step 3 — how a team makes a score ────────────────────────────────
+    team_format = models.CharField(
+        max_length=10, choices=FORMAT_CHOICES, default=FORMAT_SCRAMBLE,
+        help_text=(
+            "Scramble — all four hit, the best ball is played, ONE score per "
+            "hole.  Shamble — best drive, then each man plays his own ball in, "
+            "FOUR scores per hole."
+        ),
+    )
+    ball_count_mode = models.CharField(
+        max_length=12, choices=COUNT_CHOICES, default=COUNT_FIXED,
+        help_text=(
+            "Shamble only: how many of the four scores count on a hole. "
+            "'escalating' is a PRESET rather than a grid recipe — it is the "
+            "shape people describe in words ('sixes'), and making them tap "
+            "eighteen cells for it is the app failing to listen."
+        ),
+    )
+    ball_count_fixed = models.PositiveSmallIntegerField(
+        default=2,
+        validators=[MinValueValidator(1), MaxValueValidator(4)],
+        help_text="Count used by ball_count_mode='fixed'. Best 2 of 4 is the default.",
+    )
+    ball_counts = models.JSONField(
+        default=dict, blank=True,
+        help_text=(
+            "ball_count_mode='per_hole' only: {'1': 2, '2': 2, …} for holes "
+            "1-18.  A hole set to 4 is legal and flagged — no drop score, so "
+            "one blow-up is the team's."
+        ),
+    )
+
+    # ── Step 4 — drives ──────────────────────────────────────────────────
+    drive_rule = models.CharField(
+        max_length=12, choices=DRIVE_CHOICES, default=DRIVE_NONE,
+        help_text="Applies to BOTH formats — a shamble chooses a tee shot exactly as a scramble does.",
+    )
+    drives_required = models.PositiveSmallIntegerField(
+        default=1,
+        help_text=(
+            "Quota rules only: drives owed per golfer per WINDOW (per nine, or "
+            "per eighteen).  A short team owes four men's worth, not three — "
+            "the phantom's share rotates through the three real men."
+        ),
+    )
+    drive_penalty = models.CharField(
+        max_length=12, choices=PENALTY_CHOICES, default=PENALTY_WARN,
+        help_text=(
+            "Falling short costs NOTHING by default.  Two strokes per missing "
+            "drive is opt-in and applied to the team's gross at the end of the "
+            "round.  Silently disqualifying a team over a drive count would be "
+            "the worst outcome the app could produce.  Does not apply to the "
+            "alternating-pairs schedule — there is nothing to fall short of."
+        ),
+    )
+
+    # ── Step 5 — handicap & allowance ────────────────────────────────────
+    handicap_mode = models.CharField(
+        max_length=10,
+        choices=[('net', 'Net'), ('gross', 'Gross')],
+        default='net',
+        help_text="Strokes-off-low needs a single opponent to anchor to and is not offered.",
+    )
+    allowance_override_pct = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text=(
+            "null = the format's table (scramble 25/20/15/10 lowest-first "
+            "summed; shamble one percentage of each golfer's own, tracking the "
+            "ball-count average).  Set to override with ONE flat percentage — "
+            "a group's tradition beats the table.  The allowance is a table, "
+            "not a preference: presenting it as an open question invites a guess."
+        ),
+    )
+
+    # ── Step 7 — entry & payout ──────────────────────────────────────────
+    entry_fee = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        help_text="Per golfer, flat, taken at signup. Stepped in $5 on screen — nobody charges $23.",
+    )
+    places_paid = models.PositiveSmallIntegerField(
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(4)],
+        help_text=(
+            "Capped at the team count on screen.  Half the field cashing is "
+            "ADVICE, not a rule — winner-takes-all is a legitimate preset."
+        ),
+    )
+    split_pcts = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            "[50, 30, 20] — one entry per paid place, and it MUST total 100. "
+            "A split adding to 95 leaves money in the TD's pocket with no line "
+            "explaining it, so Save is blocked with the shortfall named in "
+            "dollars."
+        ),
+    )
+
+    # ── Lock ─────────────────────────────────────────────────────────────
+    format_locked_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text=(
+            "Stamped by the first score.  Format and ball counts lock together: "
+            "a one-number card cannot be re-read as four, and a hole scored "
+            "under 'best 2' cannot be re-read as 'best 1'."
+        ),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def is_scramble(self) -> bool:
+        return self.team_format == self.FORMAT_SCRAMBLE
+
+    @property
+    def is_shamble(self) -> bool:
+        return self.team_format == self.FORMAT_SHAMBLE
+
+    @property
+    def is_locked(self) -> bool:
+        """True once a score has landed. The format may no longer change."""
+        return self.format_locked_at is not None
+
+    @property
+    def drive_rule_is_quota(self) -> bool:
+        """
+        Per nine and per eighteen are quotas — satisfied whenever you like, so
+        the useful number is how much room is LEFT.  Alternating pairs is a
+        schedule: no slack, no counting, nothing to fall short of.
+        """
+        return self.drive_rule in (self.DRIVE_PER_NINE, self.DRIVE_PER_18)
+
+    def __str__(self):
+        return f"Team Play — {self.tournament.name} — {self.get_team_format_display()}"
+
+
+class TeamPlayTeamState(models.Model):
+    """
+    Per-team state for Team Play.  The team itself is the Foursome; this row
+    carries what a Foursome has no field for.
+
+    ``colour`` is assigned whether or not the TD renames the team, because it
+    does real work on the leaderboard and the scorecard: six team names, most
+    of them one syllable and all unfamiliar, and the colour block is how a man
+    finds his team without reading.
+    """
+
+    foursome = models.OneToOneField(
+        Foursome, on_delete=models.CASCADE, related_name='team_play_state'
+    )
+    colour = models.CharField(
+        max_length=20, blank=True,
+        help_text="Pine, Clay, Slate, Dune, Fern, Rust — the default team name and the row's identity.",
+    )
+
+    # The team figure and the number that explains it.  Rounded ONCE, on the
+    # total: rounding each man's contribution first turns 1.00+1.60+1.65+1.90
+    # into 7, where rounding the sum gives 6.  Half rounds up.
+    team_handicap = models.SmallIntegerField(
+        null=True, blank=True,
+        help_text="Whole strokes. Golfers do not play 6.15, and it looks like a spreadsheet error at the scoring table.",
+    )
+    team_handicap_raw = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        help_text="The full-precision sum, shown UNDER the rounded figure so the TD sees where it came from.",
+    )
+
+    # Alternating-pairs rule only.  Set by the team on the 1st tee, before the
+    # first score, then FIXED for eighteen holes — a rota that can be re-cut
+    # mid-round is not a rota.  The app does not derive it from handicap: four
+    # men decide in ten seconds and would override a computed pairing anyway.
+    drive_pairs = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            "[[player_id, player_id], [player_id, player_id]] for four men; "
+            "three men run AB / BC / AC repeating, stored as three pairs.  "
+            "Immutable once written."
+        ),
+    )
+    drive_pairs_set_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def pairs_are_set(self) -> bool:
+        return bool(self.drive_pairs)
+
+    def __str__(self):
+        return f"Team Play state — {self.foursome.display_name} — {self.colour}"
+
+
+class TeamDrivePick(models.Model):
+    """
+    Whose tee shot the team used on one hole.
+
+    **One model serves both formats.**  A shamble has no ScrambleHoleScore row
+    to hang a chosen_player off, and a single source makes the tracker one
+    query either way.
+
+    The pick never blocks the tap — the team may knowingly take the shortfall,
+    and by default a shortfall costs nothing.
+    """
+
+    foursome = models.ForeignKey(
+        Foursome, on_delete=models.CASCADE, related_name='team_drive_picks'
+    )
+    hole_number = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(18)]
+    )
+    player = models.ForeignKey(
+        Player, on_delete=models.CASCADE, related_name='team_drives_used',
+        help_text="The golfer whose drive was played. Never the phantom — the phantom has no tee shot.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('foursome', 'hole_number')
+        ordering = ['hole_number']
+
+    def __str__(self):
+        return f"Drive — {self.foursome.display_name} — Hole {self.hole_number} — {self.player.name}"
 
 # ---------------------------------------------------------------------------
 # WATCHERS  (non-playing spectators invited to follow in-app, read-only)

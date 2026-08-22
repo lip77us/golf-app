@@ -612,6 +612,14 @@ class RoundSerializer(serializers.ModelSerializer):
     course         = CourseSerializer(read_only=True)
     foursomes      = FoursomeSerializer(many=True, read_only=True)
     is_cup_round   = serializers.SerializerMethodField()
+    # True when this round belongs to a Team Play tournament. The card and the
+    # board are different enough — one number a hole, or four with a count —
+    # that the app dispatches on it rather than inferring from active_games.
+    is_team_play_round = serializers.SerializerMethodField()
+    # Which Foursome Play card to draw, and — for a shamble — how many of the
+    # four scores count on each hole, so the standard score-entry screen can
+    # tint the counting ones without a second round-trip.
+    team_play = serializers.SerializerMethodField()
     ir_balls_config = serializers.SerializerMethodField()
     # True for a standalone casual round (no parent tournament).  The mobile
     # app uses this to label the round hub by its game (not "Round N", a
@@ -640,6 +648,32 @@ class RoundSerializer(serializers.ModelSerializer):
     def get_is_cup_round(self, obj):
         """True when this round has a Ryder Cup config (was set up via CupRoundSetupScreen)."""
         return hasattr(obj, 'ryder_cup_config')
+
+    def get_is_team_play_round(self, obj) -> bool:
+        """True when the parent tournament is a Team Play event with its
+        config saved. Both halves matter: the shape marker says which flow, and
+        the config is what the card reads."""
+        tournament = obj.tournament
+        return bool(
+            tournament
+            and tournament.is_team_play
+            and hasattr(tournament, 'team_play_config')
+        )
+
+    def get_team_play(self, obj):
+        """Null for every other shape. A scramble enters one number on the
+        driver's row; a shamble enters four and the card says which counted."""
+        if not self.get_is_team_play_round(obj):
+            return None
+        from services.team_play_state import hole_data, resolved_counts
+        cfg = obj.tournament.team_play_config
+        first = obj.foursomes.order_by('group_number').first()
+        counts = resolved_counts(first, cfg) if first else {}
+        return {
+            'format'     : cfg.team_format,
+            'ball_counts': {str(k): v for k, v in counts.items()},
+            'holes'      : hole_data(first) if first else [],
+        }
 
     def get_is_casual(self, obj) -> bool:
         """True for a standalone casual round (no parent tournament)."""
@@ -689,7 +723,8 @@ class RoundSerializer(serializers.ModelSerializer):
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'num_holes', 'starting_hole',
             'scramble_config', 'notes', 'foursomes',
-            'is_cup_round', 'ir_balls_config', 'can_manage',
+            'is_cup_round', 'is_team_play_round', 'team_play',
+            'ir_balls_config', 'can_manage',
             'is_casual', 'all_holes_scored', 'holes_remaining',
             # Public spectator URL token — used by mobile's "Share Watch
             # Link" button to construct /watch/<token>/.

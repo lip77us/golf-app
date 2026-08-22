@@ -178,3 +178,40 @@ def carve_out(pool: float, pct: int) -> tuple:
         return 0.0, pool
     carved = round(pool * int(pct) / 100.0, 2)
     return carved, round(pool - carved, 2)
+
+
+# ---------------------------------------------------------------------------
+# 5. Cents — a settlement that does not balance is worse than one that is
+#    slightly arbitrary
+# ---------------------------------------------------------------------------
+
+def split_to_cents(total, recipient_count: int) -> list:
+    """
+    Divide a prize into exact cents, the remainder going to the FIRST
+    recipient (docs/design-review/handoff-team-play/SPEC.md §10.4).
+
+    ``round(total / n, 2)`` — what the rest of this module does — silently
+    loses or invents money: $287.50 over four is $71.875, and four roundings
+    of that make $287.56. So every figure a golfer is actually handed goes
+    through here instead, and the pool balances to zero.
+
+    Team Play states the rule on the screen and orders its recipients by
+    **course handicap, descending**, so the odd cents land on the team's
+    highest handicap. Arbitrary, but stated and deterministic, which is the
+    whole requirement — and it is written under the split rather than left as
+    an unexplained $71.89 next to three $71.87s.
+
+        >>> split_to_cents(287.50, 4)
+        [71.89, 71.87, 71.87, 71.87]
+        >>> split_to_cents(143.75, 3)       # a three-man team, more each
+        [47.93, 47.91, 47.91]
+        >>> sum(split_to_cents(143.75, 3))
+        143.75
+    """
+    if recipient_count <= 0:
+        return []
+    cents = int(round(float(total or 0) * 100))
+    base, remainder = divmod(cents, recipient_count)
+    shares = [base] * recipient_count
+    shares[0] += remainder
+    return [c / 100.0 for c in shares]

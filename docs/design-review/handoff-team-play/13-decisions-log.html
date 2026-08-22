@@ -1,0 +1,142 @@
+<!-- @dsCard group="Team play" name="Decisions log" subtitle="Every call made on the four-man team flow, one line each, linked to the screen it lives on" viewport="1420x1240" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Team play decisions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>body{display:block;padding:34px 40px 46px;max-width:1180px;margin:0 auto}
+h1{font-family:"Schibsted Grotesk",sans-serif;font-size:27px;font-weight:600;margin:0 0 6px}
+.lede{color:var(--muted);font-size:14px;line-height:1.6;max-width:740px;margin:0 0 24px}
+.lede b{color:var(--deepPine)}
+h2{font-family:"Schibsted Grotesk",sans-serif;font-size:13.5px;font-weight:700;margin:28px 0 10px;padding-bottom:7px;border-bottom:1.5px solid #CBD8CE;display:flex;align-items:baseline;gap:10px}
+h2 a{margin-left:auto;font-size:11px;font-weight:600;text-decoration:none}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--cardBorder);border-radius:13px;overflow:hidden;font-size:12.5px}
+th{text-align:left;padding:9px 13px;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);background:#F5F8F6;border-bottom:1px solid var(--cardBorder)}
+td{padding:9px 13px;border-bottom:1px solid #F2F6F3;color:var(--muted);vertical-align:top;line-height:1.5}
+tr:last-child td{border-bottom:none}
+td.q{font-weight:700;color:var(--deepPine);width:200px}
+td.a{width:190px;color:var(--deepPine);font-weight:600}
+.op td{background:#FDF9F3}
+.op td.a{color:var(--warn)}</style></head>
+<body>
+<a class="home" href="12-flow-map.html">&#8592; Contents</a>
+<h1>Team Play &mdash; decisions</h1>
+<p class="lede">Sixty-six calls made while drawing the four-man team flow. Amber rows are still open. The rule throughout: <b>this is the simplest of the three tournament shapes and should stay that way</b> &mdash; most entries here are a decision not to build something.</p>
+
+<h2>Shape and scope<a href="01-wizard-step1.html">Wizard step 1 &rarr;</a></h2>
+<table>
+<tr><th>Question</th><th>Call</th><th>Why</th></tr>
+<tr><td class="q">What is the tournament</td><td class="a">Many 4-man teams, one leaderboard</td><td>The third shape. Cup is two sides and a match; Individual is a field of singles; this is small teams against each other.</td></tr>
+<tr><td class="q">How many rounds</td><td class="a">One. Stated, not chosen</td><td>A club wanting two days runs two tournaments. Carrying best-N counting and round columns into a Saturday scramble costs three screens and buys nothing.</td></tr>
+<tr><td class="q">Team count or field first</td><td class="a">Field first, app divides</td><td>Asking for a team count makes the TD do division before he has a headcount.</td></tr>
+<tr><td class="q">Side games</td><td class="a">None</td><td>The team is the foursome, so there is no field to run a ball game against. A foursome wanting a bet among its own men still has the casual games.</td></tr>
+<tr><td class="q">Money</td><td class="a">One pool, team championship</td><td>Flat per-golfer entry at signup. Nothing optional, so the entry side of settlement has nothing to explain. The fee, places and split are set on step 6.</td></tr>
+<tr><td class="q">Course and tees</td><td class="a">The existing Set tees screen, step 2</td><td>Every golfer needs a tee before a course handicap exists, and the allowance is a percentage of course handicap. Nothing new was built &mdash; a team round needs tees for exactly the reason a casual round does.</td></tr>
+<tr><td class="q">How teams get built</td><td class="a">TD assigns manually</td><td>No draft, no auto-balance, no random draw. He already knows who wants to play with whom.</td></tr>
+</table>
+
+<h2>Format<a href="03-team-format.html">Team format &rarr;</a></h2>
+<table>
+<tr><th>Question</th><th>Call</th><th>Why</th></tr>
+<tr><td class="q">Which formats</td><td class="a">Scramble and Shamble</td><td>Two formats, two scorecards. They share one thing &mdash; the tee shot is chosen &mdash; which is why drives apply to both.</td></tr>
+<tr><td class="q">Irish Rumble as a team format</td><td class="a">Removed</td><td>It is a shamble with the count escalating. A club that wants it has it casually and as an Individual side game; a third tournament format would add a screen to say what the count chip already says.</td></tr>
+<tr><td class="q">A &ldquo;modified &mdash; pick the count&rdquo; option</td><td class="a">Not offered</td><td>Same reason. The shamble count chip is the dial.</td></tr>
+<tr><td class="q">Shamble count</td><td class="a">Fixed, escalating, par-based or per hole</td><td>Best 2 of 4 is the default. Escalating &mdash; 1 ball on 1&ndash;6, 2 on 7&ndash;12, 3 on 13&ndash;18 &mdash; is a preset because it is the shape people describe in words. Making them tap eighteen cells for it is the app failing to listen.</td></tr>
+<tr><td class="q">Where the count controls live</td><td class="a">Under the radio, in place</td><td>House rule from the Irish Rumble work: no game gets a second rules screen.</td></tr>
+<tr><td class="q">Preview</td><td class="a">Runs, in sentences, plus a total</td><td><i>Holes 1&ndash;6, best 1 net.</i> And <b>36 counted of 72 played</b> &mdash; the number that describes the round. Fixed-at-2 and escalating both give 36, distributed differently, which makes the choice read as character rather than difficulty.</td></tr>
+<tr><td class="q">A hole counting all four</td><td class="a">Allowed, flagged</td><td>No drop score &mdash; one blow-up is the team&rsquo;s. Deliberate on a closing hole, an accident anywhere else.</td></tr>
+<tr><td class="q">Short team and the count</td><td class="a">No change</td><td>The phantom&rsquo;s ball is one of the four available. That is the point of handicapping a three-man team as four.</td></tr>
+<tr><td class="q">Format changeable mid-round</td><td class="a">Locked at first score</td><td>A one-number card cannot be re-read as four.</td></tr>
+<tr><td class="q">Can teams have 3 men</td><td class="a">Yes, one short team</td><td>23 golfers is the normal case, not the edge case.</td></tr>
+<tr><td class="q">Borrow a 4th</td><td class="a">Never offered</td><td>A borrowed golfer would hit shots for a team he is competing against &mdash; every good one costs his own team the pot. No version of that is defensible.</td></tr>
+<tr><td class="q">Short team instead</td><td class="a">A phantom 4th</td><td>A fourth slot handicapped at the average of the three real men. Four handicaps, so the ordinary 25/20/15/10 applies with no special table; four balls, so the format is unchanged.</td></tr>
+<tr><td class="q">Who plays the phantom&rsquo;s ball</td><td class="a">The man not driving</td><td>He takes the 1st and 4th shots, and who that is rotates hole by hole.</td></tr>
+<tr><td class="q">Phantom handicap</td><td class="a">Average of the three, rounded</td><td>Bellini 9, Kwan 15, Ortega 23 &rarr; 16. Dune plays off 10.</td></tr>
+<tr><td class="q">Phantom vs a three-man allowance</td><td class="a">Two strokes more generous, and correct</td><td>30/20/10 would give 8, and 25/20/15 on three would give 9. Both take strokes away from a team that is already short a ball.</td></tr>
+<tr><td class="q">Alternative for the short team</td><td class="a">Play short &mdash; same 10, three balls</td><td>The allowance follows the roster, not the number of balls hit. Dropping the fourth row of the table would give 9 &mdash; fewer strokes for fewer balls, which is backwards.</td></tr>
+</table>
+
+<h2>Drives<a href="05-drive-requirement.html">Drive requirement &rarr;</a></h2>
+<table>
+<tr><th>Question</th><th>Call</th><th>Why</th></tr>
+<tr><td class="q">Is it worth a step</td><td class="a">Yes, its own screen</td><td>This is where a team round actually gets complicated. Four rules, a quota that can silently become impossible, and a tap added to every hole.</td></tr>
+<tr><td class="q">Which rules</td><td class="a">None, per nine, per eighteen, alternating pairs</td><td>What clubs actually play. Three are quotas; one is a schedule.</td></tr>
+<tr><td class="q">Quota vs schedule</td><td class="a">Different UI for each</td><td>A quota needs slack shown &mdash; twelve required of eighteen, six free. A schedule needs one line on the tee: <i>Gunst and Yau are up</i>.</td></tr>
+<tr><td class="q">Per-nine windows</td><td class="a">Two, independent</td><td>The front does not carry to the back. A tracker that only totals eighteen says a man is fine until the 18th green.</td></tr>
+<tr><td class="q">When to warn</td><td class="a">The moment owed &gt; holes left in the window</td><td>The failure every group has had: three holes left, five drives owed. It became impossible two holes ago and nobody noticed.</td></tr>
+<tr><td class="q">Warn on the card too</td><td class="a">Yes, on the drive row every hole</td><td>&ldquo;Taking Detomasi&rsquo;s drive here leaves the front nine short.&rdquo; The consequence in a sentence, on the tee.</td></tr>
+<tr><td class="q">Block the tap</td><td class="a">Never</td><td>The team may knowingly take the shortfall.</td></tr>
+<tr><td class="q">Penalty for falling short</td><td class="a">None by default</td><td>Most groups treat it as honour. Two strokes per missing drive is available and off unless chosen. Silently disqualifying a team over a drive count would be the worst thing the app could do.</td></tr>
+<tr><td class="q">Who sets the alternating pairs</td><td class="a">The team, on the 1st tee</td><td>Four men decide who is with whom in ten seconds. A computed pairing would be overridden on the spot. Fixed for eighteen holes once set &mdash; a rota that can be re-cut mid-round is not a rota.</td></tr>
+<tr><td class="q">Alternating pairs with three men</td><td class="a">AB, BC, AC, repeat</td><td>Two drivers every hole; each man sits out every third hole, which is as even as three into two goes. The man sitting out plays the phantom&rsquo;s ball.</td></tr>
+<tr><td class="q">Phantom&rsquo;s ball in the quota rules</td><td class="a">Rotates on a shot basis</td><td>Whoever is not driving that hole takes the 1st and 4th shots. The team hits four balls either way, which is the whole point of the phantom.</td></tr>
+<tr><td class="q">Penalty on a schedule rule</td><td class="a">Does not apply</td><td>There is nothing to fall short of.</td></tr>
+<tr><td class="q">Short team quota</td><td class="a">Four men&rsquo;s worth</td><td>The team fields a phantom, so it owes four drives, not three &mdash; the phantom&rsquo;s share rotates through the three real men.</td></tr>
+<tr><td class="q">Which formats</td><td class="a">Both</td><td>A shamble chooses a tee shot exactly as a scramble does, so the requirement, the tracker and the warning are identical.</td></tr>
+</table>
+
+<h2>Handicap<a href="06-handicap.html">Handicap &amp; allowance &rarr;</a></h2>
+<table>
+<tr><th>Question</th><th>Call</th><th>Why</th></tr>
+<tr><td class="q">Allowance model</td><td class="a">Percentage, set by format</td><td>Each format has an established table. The screen states it rather than asking &mdash; presenting a table as an open question invites a guess.</td></tr>
+<tr><td class="q">Scramble allowance</td><td class="a">25 / 20 / 15 / 10, summed</td><td>One team figure built from four handicaps, lowest first.</td></tr>
+<tr><td class="q">Shamble allowance</td><td class="a">Tracks the average ball count</td><td>85% at two balls a hole, 75% at one, 95% at three. A per-hole grid averaging 2.3 gets 95% suggested rather than 85%.</td></tr>
+<tr><td class="q">Override</td><td class="a">One flat percentage</td><td>A group&rsquo;s tradition beats the table. The screen keeps showing the worked result so the TD sees what he did.</td></tr>
+<tr><td class="q">Show the maths</td><td class="a">Worked on his own team</td><td>A generic illustration proves nothing. His own four men and their four percentages are the only numbers he will check.</td></tr>
+<tr><td class="q">Member order</td><td class="a">Sorted low to high, always</td><td>The percentage is positional, so a manual order would be a lie.</td></tr>
+<tr><td class="q">Round the team handicap</td><td class="a">Yes &mdash; whole strokes</td><td>Golfers do not play fractional strokes, and 6.15 on a card looks like a spreadsheet error at the scoring table.</td></tr>
+<tr><td class="q">Where the rounding happens</td><td class="a">Once, on the total</td><td>Rounding each contribution first turns 1.00+1.60+1.65+1.90 into 7. Rounding the sum gives 6. Compute at full precision, round at the end, show the raw total underneath.</td></tr>
+<tr><td class="q">Half strokes</td><td class="a">Round up</td><td>Clay&rsquo;s 7.50 becomes 8.</td></tr>
+<tr><td class="q">Index or course handicap</td><td class="a">Course, tee named on screen</td><td>So nobody applies 25% to the wrong number.</td></tr>
+</table>
+
+<h2>Teams<a href="07-build-teams.html">Build teams &rarr;</a></h2>
+<table>
+<tr><th>Question</th><th>Call</th><th>Why</th></tr>
+<tr><td class="q">Show balance while building</td><td class="a">Yes &mdash; allowance per team, plus a spread strip</td><td>Manual does not mean blind. A hand-built scramble is usually unbalanced by accident and only discovered on the leaderboard.</td></tr>
+<tr><td class="q">Show each man&rsquo;s contribution</td><td class="a">Yes, next to his name</td><td>Maiolini 4 &rarr; 1.00. Showing only the team total hides why moving one man swings a team by two strokes.</td></tr>
+<tr><td class="q">What Next waits on</td><td class="a">An empty tray</td><td>Balance is advice; a golfer with no team is a broken tournament. And the button says which it is waiting on.</td></tr>
+<tr><td class="q">Team names</td><td class="a">Colour default, free text over it, 16 chars</td><td>Same cap as the ball game. Colour is assigned regardless because it does real work on the board and the card.</td></tr>
+<tr><td class="q">Empty seats</td><td class="a">Named, not blank</td><td><i>2 seats open</i>. An invisible gap is how a golfer gets left off.</td></tr>
+</table>
+
+<h2>Play and money<a href="10-leaderboard.html">Leaderboard &rarr;</a></h2>
+<table>
+<tr><th>Question</th><th>Call</th><th>Why</th></tr>
+<tr><td class="q">Scramble card shape</td><td class="a">A stepper, one huge number</td><td>Four boxes with three ignored is the easiest way to get a scramble card wrong. It is tapped by a man on the next tee holding a beer.</td></tr>
+<tr><td class="q">Scramble default value</td><td class="a">Par</td><td>A scramble team makes par more than anything else, and a wrong default beats no default when the alternative is a keypad.</td></tr>
+<tr><td class="q">Shamble card</td><td class="a">Four scores, counting ones tinted live</td><td>Two men&rsquo;s cards do nothing on a given hole. A man who shot 5 must see instantly that it was not used, or the total looks wrong and someone re-enters it.</td></tr>
+<tr><td class="q">Show the count per hole</td><td class="a">Yes, in the header</td><td>It does not change across the eighteen, and saying so costs one line and settles the recurring question at the green.</td></tr>
+<tr><td class="q">Net on the card</td><td class="a">No</td><td>A whole-number team figure applied to the round is not a stroke on a hole. Showing 6 invites subtracting it per hole.</td></tr>
+<tr><td class="q">Who enters</td><td class="a">Anyone on the team</td><td>Six teams entering their own hole keeps the board live. One designated scorer means the board is dark until 18.</td></tr>
+<tr><td class="q">Leaderboard sort</td><td class="a">Net, ascending, one column</td><td>One round, one game, six rows. The design problem is resisting additions.</td></tr>
+<tr><td class="q">Show the phantom</td><td class="a">As a row, everywhere</td><td>Italic and undraggable on the team card, named on the leaderboard row, listed unpaid in settlement. It is a player as far as every screen after setup is concerned; hiding it makes all of them look like special cases.</td></tr>
+<tr><td class="q">Tiebreak</td><td class="a">None &mdash; combine and split</td><td>Whole strokes across six teams tie most weeks. Tied teams combine the places they occupy and split what those places pay. No countback, matching the Individual flow &mdash; an arbitrary tiebreaker decides real money on a rule nobody agreed to at the first tee.</td></tr>
+<tr><td class="q">Teams still out</td><td class="a">Marked, not sorted away</td><td>A team leading through fourteen is not leading. Same rule as the Individual board.</td></tr>
+<tr><td class="q">Places paid</td><td class="a">TD&rsquo;s choice &mdash; drawn at three, 50/30/20</td><td>Six teams, so half the field cashes. That is what a one-day scramble wants, and it is the default rather than the rule.</td></tr>
+<tr><td class="q">Prizes shown per man</td><td class="a">Yes, every place expanded</td><td>The team wins; the TD hands cash to people. <i>Fern &mdash; $287.50</i> is unactionable at the scoring table.</td></tr>
+<tr><td class="q">Odd cents</td><td class="a">To the team&rsquo;s highest course handicap</td><td>Neither $287.50 nor a split $57.50 divides by four. Arbitrary but stated and deterministic &mdash; a settlement that does not balance is worse.</td></tr>
+<tr><td class="q">Three-man team&rsquo;s share</td><td class="a">Split three ways, more each</td><td>Dune takes $47.91 a man against Slate&rsquo;s $35.93 for the same placing. The phantom earned the strokes and cannot be paid &mdash; the same rule as the Irish Rumble levelled group.</td></tr>
+<tr><td class="q">Receipt and texting</td><td class="a">Reused unchanged</td><td>A team receipt is simply a short one &mdash; one entry line, one prize line if he cashed.</td></tr>
+</table>
+
+<h2>Entry and payout<a href="08-payout.html">Entry &amp; payout &rarr;</a></h2>
+<table>
+<tr><th>Question</th><th>Call</th><th>Why</th></tr>
+<tr><td class="q">Are fee, places and split TD-settable</td><td class="a">Yes, all three, one screen</td><td>They are the only numbers anybody argues about after the round, and changing any one changes the other two&rsquo;s meaning.</td></tr>
+<tr><td class="q">Where in the flow</td><td class="a">Step 6, after teams</td><td>It needs the field size to compute the pot and the team count to cap the places. Neither is known until the teams are built.</td></tr>
+<tr><td class="q">Show percentages or dollars</td><td class="a">Both, live</td><td>A TD setting 50/30/20 is choosing what third place gets, not choosing percentages. The percentage is the mechanism.</td></tr>
+<tr><td class="q">Per-man figure</td><td class="a">Under every place</td><td>$287.50 to a team means nothing until it is divided. A man decides by whether $25 is worth maybe winning $72.</td></tr>
+<tr><td class="q">Fee steps</td><td class="a">$5</td><td>Nobody charges $23.</td></tr>
+<tr><td class="q">How many places</td><td class="a">1&ndash;4, capped at the team count</td><td>Six teams paying five places is a raffle. Half the field cashing is advice on the screen, not a rule &mdash; winner-takes-all is a legitimate preset.</td></tr>
+<tr><td class="q">Split must total 100</td><td class="a">Enforced, with the reason on the button</td><td>95% leaves money in the TD&rsquo;s pocket with no line explaining it. The shortfall is named in dollars.</td></tr>
+<tr><td class="q">Rounding</td><td class="a">Not the TD&rsquo;s problem</td><td>He works in whole percentages. The app handles cents and settlement states where the odd ones went.</td></tr>
+<tr><td class="q">A place paying less than entry</td><td class="a">Allowed, flagged</td><td>A team can finish in the money and still be down. Worth knowing, not worth blocking &mdash; unlike the Individual day bet, nothing here is disqualified by cashing.</td></tr>
+<tr><td class="q">Ties on the payout screen</td><td class="a">Warned about here</td><td>Three places is three prizes, not three teams paid. Cheaper to read at setup than to discover at the scoring table.</td></tr>
+</table>
+
+<h2>Open</h2>
+<table>
+<tr><th>Question</th><th>Where it stands</th><th>Notes</th></tr>
+<tr class="op"><td class="q">Flights</td><td class="a">Deferred</td><td>Carried over from the Individual flow. Six teams is under the size where flighting means anything.</td></tr>
+</table>
+</body></html>

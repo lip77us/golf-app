@@ -1,0 +1,112 @@
+<!-- @dsCard group="Team play" name="Drive requirement" subtitle="TeamDriveRule — four ways clubs run it, and the one piece of arithmetic that has to happen before 18 rather than on it" viewport="1420x1080" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Drive requirement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>.math{display:flex;gap:6px;margin-top:8px}
+.math div{flex:1;text-align:center;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:9px;padding:8px 2px}
+.math b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:19px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums;line-height:1}
+.math u{text-decoration:none;display:block;font-size:9px;font-weight:600;color:var(--muted);margin-top:3px;letter-spacing:.3px}
+.pair{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:12px}
+.pair+.pair{border-top:1px solid #F2F6F3}
+.pair .hn{flex:none;width:54px;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.3px}
+.pair .who{flex:1;font-weight:600}
+.tr{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:12.5px}
+.tr+.tr{border-top:1px solid #F2F6F3}
+.tr .nm{flex:1;font-weight:500}
+.tr .pips{flex:none;display:flex;gap:4px}
+.tr .pips i{width:15px;height:15px;border-radius:5px;background:#E4EBE5;display:block}
+.tr .pips i.f{background:var(--pine)}
+.tr .pips i.due{background:#fff;border:1.5px solid #E0B984}
+.tr .st{flex:none;width:56px;text-align:right;font-size:10.5px;font-weight:600;color:var(--muted)}
+.tr .st.w{color:var(--warn)}</style></head>
+<body>
+<a class="home" href="12-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Drive requirements</h1>
+<p>This is where a team round gets complicated. The scoring is straightforward either way; the <b>drives</b> are the part groups argue about, forget on the 15th tee, and work out wrong in the car park.</p>
+<p>It applies to <b>both formats</b> &mdash; a shamble chooses a tee shot exactly as a scramble does. Four rules cover what clubs actually play, and they are not four settings of one thing: three are <b>quotas</b> and one is a <b>schedule</b>. That split decides the whole design.</p>
+<div class="own"><table>
+<tr><td>None</td><td>No requirement. Take the best drive every time, and this screen never appears again.</td></tr>
+<tr><td>Per nine</td><td>Each golfer&rsquo;s drive used at least once (or twice) on each nine. Two windows, and <b>the front does not carry to the back</b>.</td></tr>
+<tr><td>Per eighteen</td><td>Two or three each across the round. One window, most slack.</td></tr>
+<tr><td>Alternating pairs</td><td>Two men drive each hole, the other two the next. <b>The team picks the two pairs on the 1st tee</b> &mdash; not a quota, a rota.</td></tr>
+</table></div>
+<h3>Quotas need slack shown, schedules need the next hole shown</h3>
+<p>A quota is satisfied whenever you like, so the useful number is <b>how much room is left</b>: twelve drives required across eighteen holes means six free. That figure is what tells a captain whether he can let his long hitter drive the par 5.</p>
+<p>A schedule has no slack at all. What it needs is one line on the tee: <b>Gunst and Yau are up.</b> No counting, no tracking, no warning &mdash; and nothing to fall short of, so the penalty setting does not apply to it.</p>
+<h3>The pairs are the team&rsquo;s, set on the 1st tee</h3>
+<p>The app does not derive them from handicap. Four men standing on the first tee decide who is with whom &mdash; it takes ten seconds, it is the only part of the rule anyone enjoys, and a computed pairing would be overridden on the spot anyway.</p>
+<p>So the rule has <b>one setup moment inside the round</b>: a card on hole 1, before the first score, asking for the split. After that it is <b>fixed for eighteen holes</b> and the app just names the pair on each tee. Fixed matters &mdash; a rota that can be re-cut mid-round is not a rota.</p>
+<h3>The warning has to come before it is too late, not on 18</h3>
+<p>The failure every group has had: three holes left, two men each owing two drives. Five drives, three holes. It became impossible two holes ago and nobody noticed.</p>
+<p>So the tracker computes <b>drives owed against holes remaining in the window</b> and turns amber the moment the two cross. On the per-nine rule it does this <b>twice</b>, because a man short on the front is already short &mdash; the back nine cannot fix it, and a tracker that only totals eighteen will say he is fine until the 18th green.</p>
+<h3>Short teams and the phantom 4th</h3>
+<p>Three men at two each is six drives, not eight &mdash; but a three-man team is not really three. It fields a <b>phantom 4th</b>, so the quota is four men&rsquo;s worth and the <b>phantom&rsquo;s share rotates</b>: the man not driving takes the 1st and 4th shots, and who that is moves hole by hole.</p>
+<h3>Alternating pairs works with three</h3>
+<p><b>AB, then BC, then AC, repeat.</b> Every hole has two drivers and every man sits out every third hole, which is as even as three into two goes. The man sitting out is the one covering the phantom &mdash; he takes the 1st and 4th shots.</p>
+<p>In the quota rules the three rotate on a shot basis instead: whoever is not driving that hole plays the phantom&rsquo;s ball. Either way the team hits four balls and the format is unchanged, which is the whole point of the phantom.</p>
+<h3>Falling short is the TD&rsquo;s call, and it defaults to nothing</h3>
+<p>Most groups treat the requirement as honour and a shortfall as an embarrassment. The app <b>warns and records, and by default does not punish</b> &mdash; a two-stroke penalty per missing drive is available for TDs who run it that way, and it is off unless chosen. Silently disqualifying a team over a drive count would be the worst outcome the app could produce.</p>
+<h3>Where it lives</h3>
+<p>Its own step, not a toggle buried in the format screen. It changes the scorecard for both formats, so it is worth a screen; and a TD running no requirement passes it in one tap.</p>
+</div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>7:49</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Drives</span><span class="ic">Cancel</span></div>
+<div class="step">STEP 4 OF 8 &middot; DRIVE REQUIREMENT</div>
+<div class="body">
+<div class="blk"><h6>How many drives must each golfer give</h6><p>Applies to both formats. Adds one tap per hole to the scorecard.</p>
+<div class="opt"><span class="rd"></span><span class="t"><b>No requirement</b><u>Take the best drive every time.</u></span></div>
+<div class="opt"><span class="rd on"></span><span class="t"><b>Per nine</b><u>Each golfer&rsquo;s drive used on the front and again on the back.</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Per eighteen</b><u>A set number each across the whole round, whenever you like.</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Alternating pairs</b><u>Two golfers drive each hole, the other two the next. The team picks the pairs on the 1st tee.</u></span></div>
+</div>
+<div class="blk"><h6>Drives per golfer, per nine<em>1</em></h6>
+<div class="chips"><button class="on">1</button><button>2</button></div>
+<div class="math"><div><b>4</b><u>REQUIRED / NINE</u></div><div><b>9</b><u>HOLES</u></div><div><b>5</b><u>FREE / NINE</u></div></div>
+<p style="margin:9px 0 0;font-size:11px;line-height:1.5;color:var(--muted)">Dune plays three men and a phantom &mdash; 4 required per nine, and the phantom&rsquo;s drive rotates through the three.</p>
+</div>
+<div class="note amber"><span>&#9888;</span><span><b>The front nine does not carry to the back.</b> A golfer who has not driven by the 9th green is short, and the card will say so on the 7th rather than the 18th.</span></div>
+<div class="blk"><h6>If a team falls short<em>Warn only</em></h6>
+<div class="opt"><span class="rd on"></span><span class="t"><b>Warn only</b><u>The card flags it and the leaderboard notes it. No score change.</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Two strokes per missing drive</b><u>Added to the team&rsquo;s gross at the end of the round.</u></span></div>
+</div>
+</div>
+<div class="foot"><button>Next &mdash; Handicap</button><p class="fx">Per nine &middot; 1 each &middot; warn only</p></div>
+</div><div class="cap">Setup &mdash; per-nine quota</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>10:31</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Drives</span><span class="ic">Pine</span></div>
+<div class="step">FRONT NINE &middot; THRU 7 &middot; 2 HOLES LEFT</div>
+<div class="body">
+<div class="note amber"><span>&#9888;</span><span><b>Two men still owe a drive and two holes remain.</b> It still works &mdash; but only if Maiolini and Yau take 8 and 9. One more hole and the front nine cannot be satisfied.</span></div>
+<div class="blk"><h6>Front nine<em>1 each</em></h6>
+<div class="tr"><span class="nm">Anna Maiolini</span><span class="pips"><i class="due"></i></span><span class="st w">owes 1</span></div>
+<div class="tr"><span class="nm">Alex Gunst</span><span class="pips"><i class="f"></i></span><span class="st">hole 2</span></div>
+<div class="tr"><span class="nm">Aldo Detomasi</span><span class="pips"><i class="f"></i></span><span class="st">hole 5</span></div>
+<div class="tr"><span class="nm">Ambrose Yau</span><span class="pips"><i class="due"></i></span><span class="st w">owes 1</span></div>
+</div>
+<div class="blk"><h6>Back nine<em>not started</em></h6>
+<div class="tr"><span class="nm">Anna Maiolini</span><span class="pips"><i></i></span><span class="st">&mdash;</span></div>
+<div class="tr"><span class="nm">Alex Gunst</span><span class="pips"><i></i></span><span class="st">&mdash;</span></div>
+<div class="tr"><span class="nm">Aldo Detomasi</span><span class="pips"><i></i></span><span class="st">&mdash;</span></div>
+<div class="tr"><span class="nm">Ambrose Yau</span><span class="pips"><i></i></span><span class="st">&mdash;</span></div>
+</div>
+<div class="sec">If the rule were alternating pairs</div>
+<div class="blk"><h6>Whose tee shot is in play</h6><p>Pairs set by the team on the 1st tee, then fixed. The app names the pair before each hole.</p>
+<div class="pair" style="border-bottom:1px solid #F2F6F3;padding-bottom:9px"><span class="hn">SET H1</span><span class="who" style="font-weight:500;color:var(--muted)">Maiolini &amp; Yau <span style="color:#C3CFC6">/</span> Gunst &amp; Detomasi</span><span style="font-size:11px;color:var(--pine);font-weight:600">Edit</span></div>
+<div class="pair"><span class="hn">HOLE 8</span><span class="who">Maiolini &amp; Yau</span><span class="v" style="color:var(--pine);font-weight:700">UP</span></div>
+<div class="pair"><span class="hn">HOLE 9</span><span class="who" style="color:var(--muted);font-weight:500">Gunst &amp; Detomasi</span></div>
+<div class="pair"><span class="hn">HOLE 10</span><span class="who" style="color:var(--muted);font-weight:500">Maiolini &amp; Yau</span></div>
+</div>
+<div class="blk"><h6>Dune &mdash; three men<em>AB / BC / AC</em></h6><p>Two drivers every hole. The man sitting out plays the phantom&rsquo;s ball &mdash; 1st and 4th shots.</p>
+<div class="pair"><span class="hn">HOLE 8</span><span class="who">Bellini &amp; Kwan</span><span class="v" style="font-size:10.5px;color:var(--muted);font-weight:600">Ortega &rarr; phantom</span></div>
+<div class="pair"><span class="hn">HOLE 9</span><span class="who" style="color:var(--muted);font-weight:500">Kwan &amp; Ortega</span><span class="v" style="font-size:10.5px;color:#A9B6AC;font-weight:600">Bellini &rarr; phantom</span></div>
+<div class="pair"><span class="hn">HOLE 10</span><span class="who" style="color:var(--muted);font-weight:500">Bellini &amp; Ortega</span><span class="v" style="font-size:10.5px;color:#A9B6AC;font-weight:600">Kwan &rarr; phantom</span></div>
+</div>
+</div>
+<div class="foot"><button style="background:#fff;border:1.5px solid var(--cardBorder);color:var(--deepPine)">Back to the card</button><p class="fx">Warn only &mdash; a shortfall is recorded, not penalised.</p></div>
+</div><div class="cap">Tracker &mdash; the warning, two holes early</div></div>

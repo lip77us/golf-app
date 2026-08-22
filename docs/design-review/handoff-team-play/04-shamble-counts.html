@@ -1,0 +1,197 @@
+<!-- @dsCard group="Team play" name="Shamble — balls that count" subtitle="TeamFormatSetup, shamble state — fixed, escalating by sixes, par-based, or per-hole, expanded in place under the radio" viewport="1420x1120" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Shamble ball counts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>.stp{display:flex;align-items:center;gap:8px}
+.stp button{width:30px;height:30px;border-radius:9px;border:1.5px solid var(--cardBorder);background:#fff;color:var(--pine);font-size:15px;line-height:1;cursor:pointer}
+.stp span{width:26px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.gl{font-size:9.5px;font-weight:700;letter-spacing:.4px;color:var(--muted);margin:8px 0 4px}
+.hs{display:flex;gap:3px}
+.h{flex:1;border:1.5px solid var(--cardBorder);border-radius:7px;background:#fff;padding:4px 0 3px;text-align:center;cursor:pointer}
+.h .hn{font-size:8.5px;font-weight:700;color:var(--muted);letter-spacing:.2px}
+.h .hp{font-size:7.5px;color:#A9B6AC;font-weight:600}
+.h .hb{font-size:14px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums;line-height:1.15}
+.h.b1{background:#F4FAF6;border-color:#C9E3D4}
+.h.b2{background:#E4F2EA;border-color:#9FD9BC}
+.h.b3{background:#CFE9DC;border-color:#7CC7A4}
+.h.b4{background:#B6DEC8;border-color:#5AB68D}
+.sg{display:flex;align-items:baseline;gap:9px;padding:6px 0;font-size:12px}
+.sg+.sg{border-top:1px solid #F2F6F3}
+.sg b{flex:none;width:78px;font-weight:700}
+.sg span{flex:1;color:var(--muted)}
+.load{display:flex;gap:6px;margin-top:9px}
+.load div{flex:1;text-align:center;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:9px;padding:7px 2px}
+.load b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:16px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums;line-height:1}
+.load u{text-decoration:none;display:block;font-size:8.5px;font-weight:700;color:var(--muted);margin-top:3px;letter-spacing:.3px}</style></head>
+<body>
+<a class="home" href="12-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>How many balls count, and where</h1>
+<p>A shamble is only a format once you say <b>how many of the four scores count on a hole</b>. One number for all eighteen is the simple case; most groups that run a shamble seriously do something more interesting than that.</p>
+<h3>It expands in place, under the radio</h3>
+<p>House rule from the Irish Rumble work: <b>no game gets a second rules screen.</b> Picking Shamble reveals the count controls beneath it, and picking Scramble collapses them. There is no extra wizard step and no back-and-forth to check what you set.</p>
+<h3>Four modes, and only one of them is fiddly</h3>
+<div class="own"><table>
+<tr><td>Fixed</td><td>The same count all eighteen. Best 2 of 4 is the default and the answer for most rounds.</td></tr>
+<tr><td>Escalating</td><td><b>One ball on 1&ndash;6, two on 7&ndash;12, three on 13&ndash;18.</b> The round gets harder as it goes and the back nine needs everyone.</td></tr>
+<tr><td>Par-based</td><td>Par 3 counts three balls, par 4 counts two, par 5 counts one. The short holes are where a team can afford to need everybody.</td></tr>
+<tr><td>Per-hole</td><td>The 18-cell grid. Tap to cycle 1&rarr;2&rarr;3&rarr;4.</td></tr>
+</table></div>
+<p>Escalating is drawn as a preset rather than left to the grid because it is the shape people describe in words &mdash; <i>sixes</i> &mdash; and making them tap eighteen cells to express it is the app failing to listen.</p>
+<h3>The preview reads it back in sentences</h3>
+<p>Whatever the mode, the same block underneath says <b>which holes count how many</b>, collapsed into runs. It is the check that catches a per-hole grid that is accidentally all 2s, or a par-based setting on a course with five par 3s that turns out much harder than intended.</p>
+<h3>Total balls is the number that describes the round</h3>
+<p><b>36 counted balls of 72 played</b> tells a TD more than any of the settings do. Fixed at 2 gives 36. Escalating gives 36 as well &mdash; the same total, distributed differently &mdash; and seeing that is what makes the choice feel like a choice about <i>character</i> rather than difficulty.</p>
+<h3>Four balls on a hole means everybody counts</h3>
+<p>Legal, and worth a word: a 4-ball hole has no drop score, so one blow-up is the team&rsquo;s. It is a real design choice for a closing hole and a bad accident anywhere else, so the grid says so when a 4 is set.</p>
+<h3>A three-man team counts the phantom</h3>
+<p>Dune plays three men and a phantom 4th. On a hole counting three balls, the phantom&rsquo;s ball is one of the four available &mdash; the same as any other team. Nothing about the count changes for a short team; that is the point of handicapping it as four.</p>
+<h3>Locked with the format</h3>
+<p>The counts lock when the first score lands, alongside the format itself. A hole already scored under &ldquo;best 2&rdquo; cannot be re-read as &ldquo;best 1&rdquo;.</p>
+</div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>7:44</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Team format</span><span class="ic">Cancel</span></div>
+<div class="step">STEP 3 OF 8 &middot; FORMAT</div>
+<div class="body">
+<div class="blk"><h6>How the team scores</h6><p>Sets the scorecard and the handicap allowance. Locked once the first score is entered.</p>
+<div class="opt"><span class="rd"></span><span class="t"><b>Scramble</b><u>All four hit, you play the best ball, repeat. One score per hole.</u></span></div>
+<div class="opt"><span class="rd on"></span><span class="t"><b>Shamble</b><u>Best drive, then everyone plays his own ball in.</u></span></div>
+</div>
+
+<div class="blk"><h6>Balls that count</h6><p>How many of the four scores count on a hole.</p>
+<div class="opt" data-m="fixed"><span class="rd"></span><span class="t"><b>Fixed</b><u>The same count on all 18 holes.</u></span></div>
+<div class="opt" data-m="esc"><span class="rd on"></span><span class="t"><b>Escalating &mdash; by sixes</b><u>1 ball on 1&ndash;6, 2 on 7&ndash;12, 3 on 13&ndash;18.</u></span></div>
+<div class="opt" data-m="par"><span class="rd"></span><span class="t"><b>Par-based</b><u>Par 3 = 3 balls, par 4 = 2, par 5 = 1.</u></span></div>
+<div class="opt" data-m="custom"><span class="rd"></span><span class="t"><b>Per hole</b><u>Set all eighteen yourself.</u></span></div>
+<div id="fixedRow" style="display:none;border-top:1px solid #F2F6F3;padding-top:9px;margin-top:4px"><div class="ln"><span class="d">Best nets counted<u>Out of four on the team</u></span><span class="stp"><button id="bm">&minus;</button><span id="bn">2</span><button id="bp">+</button></span></div></div>
+<div id="grid" style="display:none">
+<div class="gl">FRONT 9 &mdash; TAP TO CYCLE 1&rarr;2&rarr;3&rarr;4</div><div class="hs" id="f9"></div>
+<div class="gl">BACK 9</div><div class="hs" id="b9"></div>
+</div>
+</div>
+
+<div class="blk"><h6>What that means<em id="mlab">Escalating</em></h6>
+<div id="prev"></div>
+<div class="load"><div><b id="tot">36</b><u>BALLS COUNTED</u></div><div><b>72</b><u>BALLS PLAYED</u></div><div><b id="avg">2.0</b><u>AVG PER HOLE</u></div></div>
+<p id="warn" style="margin:9px 0 0;font-size:10.5px;line-height:1.5;color:var(--warn);display:none"></p>
+</div>
+
+<div class="note"><span>&#9679;</span><span><b>Allowance follows the average.</b> Two balls a hole takes 85% of each golfer&rsquo;s course handicap &mdash; set on step 5, from the tees you picked on step 2.</span></div>
+</div>
+<div class="foot"><button>Next &mdash; Drives</button><p class="fx" id="fx">Shamble &middot; escalating by sixes &middot; 36 counted</p></div>
+</div><div class="cap">Shamble &mdash; escalating by sixes</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>7:45</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Team format</span><span class="ic">Cancel</span></div>
+<div class="step">STEP 3 OF 8 &middot; FORMAT</div>
+<div class="body">
+<div class="blk"><h6>Balls that count<em>Per hole</em></h6><p>Tap a cell to cycle 1&rarr;2&rarr;3&rarr;4. Shade shows how many count.</p>
+<div class="gl">FRONT 9</div>
+<div class="hs">
+<div class="h b1"><span class="hn">1</span><span class="hb">1</span><span class="hp">p4</span></div>
+<div class="h b1"><span class="hn">2</span><span class="hb">1</span><span class="hp">p4</span></div>
+<div class="h b2"><span class="hn">3</span><span class="hb">2</span><span class="hp">p4</span></div>
+<div class="h b2"><span class="hn">4</span><span class="hb">2</span><span class="hp">p3</span></div>
+<div class="h b2"><span class="hn">5</span><span class="hb">2</span><span class="hp">p4</span></div>
+<div class="h b2"><span class="hn">6</span><span class="hb">2</span><span class="hp">p4</span></div>
+<div class="h b2"><span class="hn">7</span><span class="hb">2</span><span class="hp">p3</span></div>
+<div class="h b2"><span class="hn">8</span><span class="hb">2</span><span class="hp">p5</span></div>
+<div class="h b3"><span class="hn">9</span><span class="hb">3</span><span class="hp">p4</span></div>
+</div>
+<div class="gl">BACK 9</div>
+<div class="hs">
+<div class="h b2"><span class="hn">10</span><span class="hb">2</span><span class="hp">p4</span></div>
+<div class="h b2"><span class="hn">11</span><span class="hb">2</span><span class="hp">p3</span></div>
+<div class="h b2"><span class="hn">12</span><span class="hb">2</span><span class="hp">p4</span></div>
+<div class="h b2"><span class="hn">13</span><span class="hb">2</span><span class="hp">p5</span></div>
+<div class="h b3"><span class="hn">14</span><span class="hb">3</span><span class="hp">p4</span></div>
+<div class="h b3"><span class="hn">15</span><span class="hb">3</span><span class="hp">p4</span></div>
+<div class="h b3"><span class="hn">16</span><span class="hb">3</span><span class="hp">p3</span></div>
+<div class="h b3"><span class="hn">17</span><span class="hb">3</span><span class="hp">p4</span></div>
+<div class="h b4"><span class="hn">18</span><span class="hb">4</span><span class="hp">p4</span></div>
+</div>
+</div>
+<div class="blk"><h6>What that means<em>Per hole</em></h6>
+<div class="sg"><b>Holes 1&ndash;2</b><span>Best 1 net &mdash; one ball carries the hole</span></div>
+<div class="sg"><b>Holes 3&ndash;8</b><span>Best 2 nets</span></div>
+<div class="sg"><b>Hole 9</b><span>Best 3 nets</span></div>
+<div class="sg"><b>Holes 10&ndash;13</b><span>Best 2 nets</span></div>
+<div class="sg"><b>Holes 14&ndash;17</b><span>Best 3 nets</span></div>
+<div class="sg"><b>Hole 18</b><span>All 4 &mdash; no drop score</span></div>
+<div class="load"><div><b>41</b><u>BALLS COUNTED</u></div><div><b>72</b><u>BALLS PLAYED</u></div><div><b>2.3</b><u>AVG PER HOLE</u></div></div>
+<p style="margin:9px 0 0;font-size:10.5px;line-height:1.5;color:var(--warn)"><b>Hole 18 counts all four.</b> No drop score &mdash; one blow-up there is the team&rsquo;s. Deliberate on a closing hole, an accident anywhere else.</p>
+</div>
+<div class="note"><span>&#9679;</span><span><b>2.3 balls a hole averages nearer best-3 than best-2.</b> The allowance step will suggest 95% rather than 85%.</span></div>
+</div>
+<div class="foot"><button>Next &mdash; Drives</button><p class="fx">Shamble &middot; per hole &middot; 41 counted</p></div>
+</div><div class="cap">Per-hole grid, with a 4-ball finish</div></div>
+
+<script>
+var PAR=[4,4,4,3,4,4,3,5,4,4,3,4,5,4,4,3,4,4],mode='esc',fixed=2,per=[];
+function calc(){
+  if(mode==='fixed')per=PAR.map(function(){return fixed});
+  else if(mode==='esc')per=PAR.map(function(_,i){return i<6?1:i<12?2:3});
+  else if(mode==='par')per=PAR.map(function(p){return p===3?3:p===4?2:1});
+}
+function cells(id,off){
+  document.getElementById(id).innerHTML=per.slice(off,off+9).map(function(b,i){
+    return '<div class="h b'+b+'" data-i="'+(off+i)+'"><span class="hn">'+(off+i+1)+'</span><span class="hb">'+b+'</span><span class="hp">p'+PAR[off+i]+'</span></div>'}).join('');
+}
+function runs(){
+  var out=[],s=0;
+  for(var i=1;i<=18;i++){
+    if(i===18||per[i]!==per[s]){
+      var lbl=s===i-1?'Hole '+(s+1):'Holes '+(s+1)+'\u2013'+i;
+      out.push([lbl,per[s]]);s=i;
+    }
+  }
+  return out;
+}
+function draw(){
+  calc();
+  document.getElementById('fixedRow').style.display=mode==='fixed'?'':'none';
+  document.getElementById('grid').style.display=mode==='custom'?'':'none';
+  if(mode==='custom'){cells('f9',0);cells('b9',9)}
+  var names={fixed:'Fixed',esc:'Escalating',par:'Par-based',custom:'Per hole'};
+  document.getElementById('mlab').textContent=names[mode];
+  document.getElementById('prev').innerHTML=runs().map(function(r){
+    var d=r[1]===1?'Best 1 net \u2014 one ball carries the hole':r[1]===4?'All 4 \u2014 no drop score':'Best '+r[1]+' nets';
+    return '<div class="sg"><b>'+r[0]+'</b><span>'+d+'</span></div>'}).join('');
+  var t=per.reduce(function(a,b){return a+b},0);
+  document.getElementById('tot').textContent=t;
+  document.getElementById('avg').textContent=(t/18).toFixed(1);
+  var w=document.getElementById('warn'),f=per.filter(function(b){return b===4}).length;
+  if(f){w.style.display='';w.innerHTML='<b>'+f+' hole'+(f>1?'s count':' counts')+' all four.</b> No drop score there \u2014 one blow-up is the team\u2019s.'}
+  else w.style.display='none';
+  document.getElementById('fx').textContent='Shamble \u00b7 '+names[mode].toLowerCase()+' \u00b7 '+t+' counted';
+}
+document.querySelectorAll('.opt[data-m]').forEach(function(o){
+  o.onclick=function(){
+    document.querySelectorAll('.opt[data-m] .rd').forEach(function(x){x.classList.remove('on')});
+    o.querySelector('.rd').classList.add('on');mode=o.dataset.m;
+    if(mode==='custom')calc();
+    draw();
+  };
+});
+document.getElementById('bp').onclick=function(){if(fixed<4){fixed++;document.getElementById('bn').textContent=fixed;draw()}};
+document.getElementById('bm').onclick=function(){if(fixed>1){fixed--;document.getElementById('bn').textContent=fixed;draw()}};
+document.addEventListener('click',function(e){
+  var c=e.target.closest('#grid .h');if(!c)return;
+  var i=+c.dataset.i;per[i]=per[i]%4+1;cells('f9',0);cells('b9',9);
+  var t=per.reduce(function(a,b){return a+b},0);
+  document.getElementById('tot').textContent=t;
+  document.getElementById('avg').textContent=(t/18).toFixed(1);
+  document.getElementById('prev').innerHTML=runs().map(function(r){
+    var d=r[1]===1?'Best 1 net \u2014 one ball carries the hole':r[1]===4?'All 4 \u2014 no drop score':'Best '+r[1]+' nets';
+    return '<div class="sg"><b>'+r[0]+'</b><span>'+d+'</span></div>'}).join('');
+  var w=document.getElementById('warn'),f=per.filter(function(b){return b===4}).length;
+  if(f){w.style.display='';w.innerHTML='<b>'+f+' hole'+(f>1?'s count':' counts')+' all four.</b> No drop score there \u2014 one blow-up is the team\u2019s.'}
+  else w.style.display='none';
+});
+draw();
+</script>
+</body></html>

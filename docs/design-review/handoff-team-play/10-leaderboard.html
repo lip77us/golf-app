@@ -1,0 +1,98 @@
+<!-- @dsCard group="Team play" name="Team leaderboard" subtitle="TeamLeaderboard — the standard leaderboard card, ranked on whole-stroke net, with two ties" viewport="1420x1080" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Team leaderboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>:root{--under:#0F6E56;--win:#0F6E56}
+.tabs2{display:flex;padding:0 16px;border-bottom:1px solid var(--cardBorder);margin-bottom:12px}
+.tabs2 div{padding:8px 12px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.tabs2 div.on{color:var(--pine);border-bottom:2px solid var(--pine)}
+.card{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:16px;overflow:hidden;margin-bottom:14px}
+.tr{display:flex;align-items:center;padding:11px 14px;border-top:1px solid var(--cardBorder);font-size:14px}
+.tr:first-child{border-top:none}
+.rk{width:26px;color:var(--muted);font-weight:700;font-size:13px}
+.pl{flex:1;min-width:0;display:flex;align-items:center;gap:7px}
+.pl .tx{min-width:0}
+.pl b{font-weight:600;display:block}
+.pl small{color:var(--muted);font-size:11px;display:block;margin-top:1px}
+.n{width:40px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--muted);font-size:13px}
+.par{width:40px;text-align:right;font-variant-numeric:tabular-nums;color:var(--under);font-weight:700}
+.hdr{display:flex;padding:7px 14px;background:#F1F5F2;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.hdr .rk,.hdr .pl{color:var(--muted)}
+.hdr .n,.hdr .par{color:var(--muted);font-weight:700}
+.live{display:inline-block;width:6px;height:6px;border-radius:50%;background:#B45309;margin-right:4px;vertical-align:1px}
+.strip{background:var(--surface);padding:7px 10px;border-top:1px solid var(--cardBorder);overflow-x:auto}
+.block{display:inline-block;border-top:1px solid var(--cardBorder);border-left:1px solid var(--cardBorder)}
+.brow{display:flex}
+.cell{width:23px;height:17px;border-right:1px solid var(--cardBorder);border-bottom:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-variant-numeric:tabular-nums;background:#fff}
+.cell.sum{width:29px;background:#F1F5F2;font-weight:700}
+.cell.hd{background:#E7EEE9;font-weight:700;color:var(--muted);height:15px;font-size:9.5px}
+.cell.pr{background:#F3F6F4;color:var(--muted);height:14px}
+.u{color:var(--under);font-weight:700}
+.circle{border:1.5px solid var(--under);border-radius:50%;width:15px;height:15px;display:flex;align-items:center;justify-content:center;line-height:1}
+.square{border:1.5px solid #B45309;border-radius:4px;width:15px;height:15px;display:flex;align-items:center;justify-content:center;line-height:1;color:#B45309}
+.expnote{font-size:10px;color:var(--muted);padding:6px 12px 8px;background:var(--surface)}
+.cap2{color:var(--muted);font-size:10.5px;margin:-8px 2px 12px;line-height:1.45}
+.cap2 b{color:var(--deepPine)}</style></head>
+<body>
+<a class="home" href="12-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Six teams, one column</h1>
+<p>The Individual board has to carry four rounds, five games and a counting rule. This one carries <b>one round, one game, six rows.</b> The design problem is entirely different: not how to fit everything, but how to resist adding anything.</p>
+<h3>It is the same board as everywhere else</h3>
+<p>The card, the rank / name / gross / net columns, the hole-grid strip under an expanded row, the circled birdie and boxed bogey &mdash; all of it is the leaderboard the casual rounds and the Cup already use. <b>A team is just what sits in the name column.</b></p>
+<p>Nothing here earned a bespoke board. Inventing one would mean a golfer who reads three leaderboards a month has to learn a fourth layout to find out he finished fourth.</p>
+<h3>Net is a whole number, and ties happen</h3>
+<p>The allowance is rounded once at the end, so the board reads <b>55</b>, not 54.90. Nobody plays a fractional stroke and nobody wants to read one on a leaderboard.</p>
+<p>The cost is real: whole strokes across six teams produce ties most weeks, and here there are two. <b>Slate and Dune share 57; Pine and Clay share 58.</b> They are shown as <b>T2</b> and <b>T4</b>, in board order, with no attempt to separate them &mdash; <b>tied teams combine the places they occupy and split the money.</b> No countback, no card-off, the same rule as the Individual flow.</p>
+<p>The two ties behave differently and that is worth reading twice. T2 combines 2nd <i>and</i> 3rd, so those two teams split $287.50. T4 combines 4th and 5th, neither of which pays, so it costs nothing to leave unresolved.</p>
+<div class="own"><table>
+<tr><td>Ranked on</td><td>Net, ascending. One sort, no segmented control to change it.</td></tr>
+<tr><td>Ties</td><td>Marked <b>T</b>, drawn adjacent, split in settlement. Never silently ordered.</td></tr>
+<tr><td>Gross</td><td>The middle column. It is what the team remembers shooting and it is not what pays.</td></tr>
+</table></div>
+<h3>The phantom is named on the row</h3>
+<p>Dune reads <b>Bellini &middot; Kwan &middot; Ortega &middot; phantom 4th</b>. Three names and ten strokes against four names and eight would look like a mistake; naming the phantom explains the figure in the space already there.</p>
+<h3>Teams still out are marked, not sorted away</h3>
+<p>An amber dot and <b>thru 14</b>. A team leading through fourteen is not leading, and the board must not let that read as a result &mdash; the same rule as the Individual championship board.</p>
+<h3>Colour does the identifying</h3>
+<p>Six team names, most of them one syllable, all unfamiliar. The colour block carries the row and matches the scorecard the team is holding, so a man finds his team without reading. That is also why colour is assigned even when the TD renames the team.</p>
+<h3>The pool sits under the board, not on it</h3>
+<p>One card: <b>$575, three places, projected until every team is in.</b> Money on the rows would put a dollar figure next to a team that has four holes left.</p>
+<h3>No tabs, or one</h3>
+<p>With no side games there is nothing to tab between. If a TD later turns one on, the tab bar fills with the game named &mdash; it does not sit there empty waiting to be useful.</p>
+</div>
+<div class="wrap"><div class="phone">
+<div class="status"><span>2:47</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Leaderboard</span><span class="ic">&#9679;&#9679;&#9679;</span></div>
+<div class="tabs2"><div class="on">Championship</div></div>
+<div class="body" style="height:648px;padding:0 16px 90px">
+<div class="card">
+<div class="hdr"><span class="rk">&nbsp;</span><span class="pl">Team</span><span class="n">Gross</span><span class="par">Net</span></div>
+<div class="tr"><span class="rk">1</span><span class="pl"><span class="dot" style="background:#3BD89A"></span><span class="tx"><b>Fern</b><small>Ferraro &middot; Okafor &middot; Tran &middot; Nunes</small></span></span><span class="n">63</span><span class="par">55</span></div>
+<div class="strip"><div class="block">
+<div class="brow"><span class="cell hd">HOLE</span><span class="cell hd">1</span><span class="cell hd">2</span><span class="cell hd">3</span><span class="cell hd">4</span><span class="cell hd">5</span><span class="cell hd">6</span><span class="cell hd">7</span><span class="cell hd">8</span><span class="cell hd">9</span><span class="cell hd sum">OUT</span></div>
+<div class="brow"><span class="cell pr">PAR</span><span class="cell pr">4</span><span class="cell pr">4</span><span class="cell pr">4</span><span class="cell pr">3</span><span class="cell pr">5</span><span class="cell pr">4</span><span class="cell pr">4</span><span class="cell pr">4</span><span class="cell pr">4</span><span class="cell pr sum">36</span></div>
+<div class="brow"><span class="cell">&nbsp;</span><span class="cell">4</span><span class="cell"><span class="circle u">3</span></span><span class="cell">4</span><span class="cell"><span class="circle u">2</span></span><span class="cell"><span class="circle u">4</span></span><span class="cell"><span class="circle u">3</span></span><span class="cell">4</span><span class="cell"><span class="circle u">3</span></span><span class="cell">4</span><span class="cell sum">31</span></div>
+<div class="brow"><span class="cell hd">HOLE</span><span class="cell hd">10</span><span class="cell hd">11</span><span class="cell hd">12</span><span class="cell hd">13</span><span class="cell hd">14</span><span class="cell hd">15</span><span class="cell hd">16</span><span class="cell hd">17</span><span class="cell hd">18</span><span class="cell hd sum">IN</span></div>
+<div class="brow"><span class="cell pr">PAR</span><span class="cell pr">4</span><span class="cell pr">4</span><span class="cell pr">4</span><span class="cell pr">4</span><span class="cell pr">4</span><span class="cell pr">5</span><span class="cell pr">3</span><span class="cell pr">3</span><span class="cell pr">5</span><span class="cell pr sum">36</span></div>
+<div class="brow"><span class="cell">&nbsp;</span><span class="cell"><span class="circle u">3</span></span><span class="cell">4</span><span class="cell"><span class="square">5</span></span><span class="cell"><span class="circle u">3</span></span><span class="cell">4</span><span class="cell"><span class="circle u">4</span></span><span class="cell">3</span><span class="cell"><span class="circle u">2</span></span><span class="cell"><span class="circle u">4</span></span><span class="cell sum">32</span></div>
+</div></div>
+<div class="expnote">Gross 63 &middot; allowance 8 &middot; net 55. Eight birdies, one bogey.</div>
+<div class="tr"><span class="rk">T2</span><span class="pl"><span class="dot" style="background:#475569"></span><span class="tx"><b>Slate</b><small>Mercer &middot; Ellis &middot; Barrueta &middot; Vaughn</small></span></span><span class="n">65</span><span class="par">57</span></div>
+<div class="tr"><span class="rk">T2</span><span class="pl"><span class="dot" style="background:#A16207"></span><span class="tx"><b>Dune</b><small>Bellini &middot; Kwan &middot; Ortega &middot; phantom 4th</small></span></span><span class="n">67</span><span class="par">57</span></div>
+<div class="tr"><span class="rk">T4</span><span class="pl"><span class="dot" style="background:#0F6E56"></span><span class="tx"><b>Pine</b><small>Maiolini &middot; Gunst &middot; Detomasi &middot; Yau</small></span></span><span class="n">64</span><span class="par">58</span></div>
+<div class="tr"><span class="rk">T4</span><span class="pl"><span class="dot" style="background:#B45309"></span><span class="tx"><b>Clay</b><small><span class="live"></span>thru 16 &middot; Petersen &middot; Brown &middot; Labass &middot; Reilly</small></span></span><span class="n">58</span><span class="par">58</span></div>
+<div class="tr"><span class="rk">6</span><span class="pl"><span class="dot" style="background:#9A3412"></span><span class="tx"><b>Rust</b><small><span class="live"></span>thru 14 &middot; Morgan &middot; Mayers &middot; Salas &middot; Lipkin</small></span></span><span class="n">53</span><span class="par">60</span></div>
+</div>
+<p class="cap2"><b>Two ties, and only one of them pays.</b> Slate and Dune share 2nd &mdash; they combine 2nd and 3rd. Pine and Clay share 4th, which pays nothing. Two teams are still out.</p>
+<div class="card">
+<div class="hdr"><span class="pl">Pool &mdash; team championship</span><span class="par">$575</span></div>
+<div class="tr"><span class="pl"><span class="tx"><b>1st</b><small>Fern &mdash; 4 ways</small></span></span><span class="par" style="width:70px;font-style:italic;font-weight:600">$287.50</span></div>
+<div class="tr"><span class="pl"><span class="tx"><b>T2</b><small>Slate and Dune &mdash; 2nd and 3rd combined, split</small></span></span><span class="par" style="width:70px;font-style:italic;font-weight:600">$287.50</span></div>
+<div class="tr"><span class="pl"><span class="tx"><b>T4</b><small>Pine and Clay &mdash; out of the money</small></span></span><span class="par" style="width:70px;font-style:italic;font-weight:600;color:var(--muted)">&mdash;</span></div>
+<div class="expnote">$25 flat &times; 23 golfers. 50 / 30 / 20, split evenly inside the team. Money is projected until every team has signed for 18.</div>
+</div>
+</div>
+</div><div class="cap">Leaderboard &mdash; the standard card, two ties</div></div>
+</body></html>

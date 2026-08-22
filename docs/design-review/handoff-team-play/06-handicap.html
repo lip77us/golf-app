@@ -1,0 +1,74 @@
+<!-- @dsCard group="Team play" name="Handicap & allowance" subtitle="TeamHandicap — the allowance table, worked on the TD's own teams so he can see the numbers before he agrees to them" viewport="1420x1080" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Team handicap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>.calc{display:flex;gap:0;margin:2px 0 0}
+.calc div{flex:1;text-align:center;padding:7px 2px;border-right:1px solid #F2F6F3}
+.calc div:last-child{border:none;background:#F4FAF6;border-radius:0 8px 8px 0}
+.calc b{display:block;font-size:13.5px;font-variant-numeric:tabular-nums}
+.calc u{text-decoration:none;display:block;font-size:9.5px;color:var(--muted);margin-top:2px;letter-spacing:.2px}
+.calc div:last-child b{color:var(--pine)}
+.pct{display:flex;gap:6px;margin-top:4px}
+.pct span{flex:1;text-align:center;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:8px;padding:6px 2px;font-size:12px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums}
+.pct span u{text-decoration:none;display:block;font-size:9px;font-weight:500;color:var(--muted);margin-top:1px}</style></head>
+<body>
+<a class="home" href="12-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Handicap on a team score</h1>
+<p>This is the step that decides whether anyone believes the result. A scramble handicap is not four handicaps &mdash; it is <b>one number, built from four</b>, and the maths is unfamiliar enough that a TD who cannot see it worked will not trust it.</p>
+<h3>The allowance is not a preference, it is a table</h3>
+<p>Each format has an established allowance. Scramble takes <b>25 / 20 / 15 / 10</b> of each man&rsquo;s course handicap, lowest first, summed. Shamble applies a single percentage to <b>each golfer&rsquo;s own</b> strokes &mdash; the fewer balls that count, the lower the percentage.</p>
+<p>So the screen does not ask &ldquo;what allowance&rdquo;. It <b>states the allowance the chosen format uses</b>, shows it applied, and lets the TD override the whole thing with one number if his group has its own tradition. Presenting a table as an open question invites a guess.</p>
+<div class="own"><table>
+<tr><td>Scramble</td><td>25/20/15/10 &rarr; one team figure. Three men: a phantom 4th at the average of the three, then the same table.</td></tr>
+<tr><td>Shamble</td><td>85% of each golfer&rsquo;s own course handicap at best 2 of 4. 75% at best 1, 95% at best 3.</td></tr>
+<tr><td>Override</td><td>One percentage, applied flat. The screen keeps showing the worked result so the TD sees what he did.</td></tr>
+</table></div>
+<h3>Worked on his own teams, not on an example</h3>
+<p>The card shows Team 1&rsquo;s four real men, their four percentages and the sum. A generic illustration proves nothing; <b>his own numbers</b> are the only ones he will check. Every team is listed with its figure so an outlier is visible here rather than at the scoring table.</p>
+<h3>The team handicap is a whole number</h3>
+<p>6.15 becomes <b>6</b>. Golfers do not play fractional strokes and a card that says 6.15 looks like a spreadsheet error at the scoring table &mdash; whatever the arithmetic says, the number a team is given has to be one it can subtract in its head.</p>
+<p><b>Round once, at the end.</b> Rounding each man&rsquo;s contribution first turns 1.00 + 1.60 + 1.65 + 1.90 into 1 + 2 + 2 + 2 = 7. Rounding the sum gives 6. A full stroke of difference from where you put the rounding, so the screen shows the raw total next to the rounded one and the code computes at full precision throughout.</p>
+<p>Half rounds up: Clay&rsquo;s 7.50 becomes 8.</p>
+<h3>Which means ties are real again, and they split</h3>
+<p>Whole strokes across six teams will produce a tie most weeks. There is no countback and no card-off &mdash; <b>tied teams combine the places they occupy and split the money</b>, the same rule the Individual flow uses. A tie is no action, and an arbitrary tiebreaker decides real money on a rule nobody agreed to at the first tee.</p>
+<h3>A three-man team is handicapped as four</h3>
+<p>Dune fields a <b>phantom 4th</b> at the average of its three men &mdash; 9, 15 and 23 give 16 &mdash; and then takes the ordinary table. No special three-man percentages, no separate code path, and the phantom sorts into the order like anyone else.</p>
+<p>The team lands on <b>10</b>, two more than a three-man allowance would have given it. That is the right answer: it is playing four balls, so it is handicapped for four.</p>
+<h3>Lowest first, and it is shown that way</h3>
+<p>The order is the rule &mdash; 25% attaches to the lowest handicap, not to the captain or the first name on the list. Sorting the four men low to high on screen makes the order self-evident and stops a TD reading the percentages as arbitrary.</p>
+<h3>Course handicap, not index</h3>
+<p>Allowance applies to <b>course handicap</b>, after the tee adjustment. The tees are already set; the screen names the tee it computed from so nobody applies 25% to the wrong number.</p>
+</div>
+<div class="wrap"><div class="phone">
+<div class="status"><span>7:46</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Handicap</span><span class="ic">Cancel</span></div>
+<div class="step">STEP 5 OF 8 &middot; HANDICAP</div>
+<div class="body">
+<div class="blk"><h6>Scoring<em>Net</em></h6>
+<div class="opt"><span class="rd on"></span><span class="t"><b>Net</b><u>Team handicap comes off the team&rsquo;s gross.</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Gross</b><u>No strokes. Straight scramble.</u></span></div>
+</div>
+<div class="blk"><h6>Allowance<em>Scramble</em></h6><p>The standard allowance for a four-man scramble, applied to course handicap from the white tees.</p>
+<div class="pct"><span>25%<u>lowest</u></span><span>20%<u>2nd</u></span><span>15%<u>3rd</u></span><span>10%<u>highest</u></span></div>
+<div class="opt" style="border-top:1px solid #F2F6F3;margin-top:8px"><span class="rd sq"></span><span class="t"><b>Use my own percentage instead</b><u>One flat number applied to all four. Your group&rsquo;s tradition beats the table.</u></span></div>
+</div>
+<div class="blk"><h6>Team 1 &mdash; Pine<em>worked</em></h6><p>Lowest course handicap takes 25%, and so on down.</p>
+<div class="calc"><div><b>4</b><u>MAIOLINI</u></div><div><b>8</b><u>GUNST</u></div><div><b>11</b><u>DETOMASI</u></div><div><b>19</b><u>YAU</u></div><div><b>&nbsp;</b><u>&nbsp;</u></div></div>
+<div class="calc" style="border-top:1px solid #F2F6F3"><div><b>1.00</b><u>25%</u></div><div><b>1.60</b><u>20%</u></div><div><b>1.65</b><u>15%</u></div><div><b>1.90</b><u>10%</u></div><div><b>6</b><u>TEAM</u></div></div>
+<p style="margin:9px 0 0;font-size:11px;line-height:1.5;color:var(--muted)">Raw total <b style="color:var(--deepPine)">6.15</b>, rounded once at the end. Rounding each man first would give 7.</p>
+</div>
+<div class="sec">All teams</div>
+<div class="blk">
+<div class="ln"><span class="dot" style="background:#0F6E56"></span><span class="d">Pine<u>4 &middot; 8 &middot; 11 &middot; 19 &mdash; raw 6.15</u></span><span class="v">6</span></div>
+<div class="ln"><span class="dot" style="background:#B45309"></span><span class="d">Clay<u>6 &middot; 9 &middot; 14 &middot; 21 &mdash; raw 7.50</u></span><span class="v">8</span></div>
+<div class="ln"><span class="dot" style="background:#475569"></span><span class="d">Slate<u>5 &middot; 12 &middot; 16 &middot; 24 &mdash; raw 8.45</u></span><span class="v">8</span></div>
+<div class="ln"><span class="dot" style="background:#9A3412"></span><span class="d">Rust<u>7 &middot; 10 &middot; 18 &middot; 20 &mdash; raw 8.45</u></span><span class="v">8</span></div>
+<div class="ln"><span class="dot" style="background:#3BD89A"></span><span class="d">Fern<u>3 &middot; 13 &middot; 17 &middot; 22 &mdash; raw 8.10</u></span><span class="v">8</span></div>
+<div class="ln"><span class="dot" style="background:#A16207"></span><span class="d">Dune<u>9 &middot; 15 &middot; 23 &middot; phantom 16 &mdash; raw 9.95</u></span><span class="v">10</span></div>
+</div>
+<div class="note amber"><span>&#9888;</span><span><b>Four teams on 8.</b> Whole strokes cluster, so ties are likely &mdash; tied teams combine their places and split the money. No countback.</span></div>
+</div>
+<div class="foot"><button>Next &mdash; Teams</button><p class="fx">Net &middot; scramble allowance &middot; white tees</p></div>
+</div><div class="cap">Handicap &mdash; the allowance, worked</div></div>

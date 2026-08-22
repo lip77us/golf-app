@@ -1,0 +1,91 @@
+<!-- @dsCard group="Team play" name="Build teams" subtitle="TeamBuilder — the TD assigns 23 golfers to 6 teams by hand, watching the balance move as he does it" viewport="1420x1080" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Build teams</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>.team{background:#fff;border:1px solid var(--cardBorder);border-radius:14px;padding:10px 12px 8px;margin-bottom:9px}
+.thd{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.thd .nm{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:13px}
+.thd .hc{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums}
+.thd .hc u{text-decoration:none;font-weight:500;color:var(--muted);font-size:9.5px;display:block;text-align:right}
+.mem{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px}
+.mem+.mem{border-top:1px solid #F8FBF9}
+.mem .g{flex:none;width:20px;text-align:center;font-size:11px;font-weight:700;color:#C3CFC6}
+.mem .n{flex:1}
+.mem .h{flex:none;font-size:11.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;width:26px;text-align:right}
+.mem .p{flex:none;width:38px;text-align:right;font-size:11px;font-weight:600;color:var(--pine);font-variant-numeric:tabular-nums}
+.mem .dg{flex:none;color:#C3CFC6;font-size:14px;cursor:grab}
+.slot{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:12px;color:var(--warn);border-top:1px dashed #E3D5BE}
+.bar{height:5px;border-radius:3px;background:#E4EBE5;overflow:hidden;margin:7px 0 1px;display:flex}
+.bar i{display:block;height:100%}</style></head>
+<body>
+<a class="home" href="12-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Building the teams</h1>
+<p>The TD assigns every golfer himself. No draft, no auto-balance, no random draw &mdash; he already knows who wants to play with whom, and the app fighting that is worse than the app doing nothing.</p>
+<h3>Manual, but not blind</h3>
+<p>Doing it by hand does not mean doing it without information. Each team shows its <b>allowance figure the moment a fourth man lands in it</b>, and the strip under the header shows the six figures against each other. The TD is not being told what to do; he is being told what he just did.</p>
+<p>That is the whole argument for this screen. A hand-built scramble is usually unbalanced by accident &mdash; four low men end up together because they arrived together &mdash; and it is only discovered on the leaderboard.</p>
+<h3>The percentage sits next to the man</h3>
+<p>Each member row carries the strokes he contributes: <b>Maiolini 4 &rarr; 1.00</b>. Move him to another team and the number changes, because the percentage is positional. Showing only the team total hides why moving one man swings a team by two strokes.</p>
+<p>The contributions stay fractional and the <b>team figure is the rounded one</b>, with the raw sum under it. Those are the two numbers a TD needs: the one he plays with, and the one that explains it.</p>
+<div class="own"><table>
+<tr><td>Order</td><td>Members sort low to high automatically. The percentage follows the position, so a manual order would be a lie.</td></tr>
+<tr><td>Unassigned</td><td>A tray at the bottom, always visible, with a count. Nobody gets left off because he scrolled out of view.</td></tr>
+<tr><td>Empty seat</td><td>Named &mdash; <i>1 seat open</i> &mdash; not an invisible gap.</td></tr>
+</table></div>
+<h3>The short team is a decision, not a leftover</h3>
+<p>23 golfers means one team of three. The screen does not choose which &mdash; the TD does &mdash; but the three-man team carries a <b>phantom 4th row</b>, italic and undraggable, handicapped at the average of the three. It sorts into the order like anyone else and takes its percentage like anyone else, so the team&rsquo;s figure comes from the ordinary table.</p>
+<p>Drawing it as a row rather than a footnote is the point: <b>the phantom is a player as far as every screen after this one is concerned.</b> It appears on the card, in the drive rota and in the allowance, and hiding it here would make all three look like special cases.</p>
+<h3>Names are the TD&rsquo;s, colours are for the card</h3>
+<p>Teams default to a colour name &mdash; Pine, Clay, Slate &mdash; and are free text over it. The colour is doing real work on the leaderboard and the scorecard, so it is assigned whether or not the TD renames anything. Sixteen characters, same cap as the ball game.</p>
+<h3>What Next is waiting on</h3>
+<p>Every golfer assigned. Not a balanced field, not a full six teams &mdash; just <b>nobody in the tray</b>. Balance is advice; a man with no team is a broken tournament. And the button says which it is waiting on.</p>
+</div>
+<div class="wrap"><div class="phone">
+<div class="status"><span>7:52</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Teams</span><span class="ic">Auto-fill</span></div>
+<div class="step">STEP 6 OF 8 &middot; TEAMS &middot; 21 OF 23 ASSIGNED</div>
+<div class="body">
+<div class="blk" style="padding:10px 12px"><h6>Balance<em>6 &ndash; 10</em></h6><p style="margin:0">Allowance strokes per team, rounded. A wide spread means the pot is decided at this screen.</p>
+<div class="bar"><i style="width:13%;background:#0F6E56"></i><i style="width:1px;background:#fff"></i><i style="width:16%;background:#B45309"></i><i style="width:1px;background:#fff"></i><i style="width:17%;background:#475569"></i><i style="width:1px;background:#fff"></i><i style="width:17%;background:#9A3412"></i><i style="width:1px;background:#fff"></i><i style="width:16%;background:#3BD89A"></i><i style="width:1px;background:#fff"></i><i style="width:21%;background:#A16207"></i></div></div>
+
+<div class="team"><div class="thd"><span class="dot" style="background:#0F6E56"></span><span class="nm">Pine</span><span class="hc">6<u>RAW 6.15</u></span></div>
+<div class="mem"><span class="g">25</span><span class="n">Anna Maiolini</span><span class="h">4</span><span class="p">1.00</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">20</span><span class="n">Alex Gunst</span><span class="h">8</span><span class="p">1.60</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">15</span><span class="n">Aldo Detomasi</span><span class="h">11</span><span class="p">1.65</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">10</span><span class="n">Ambrose Yau</span><span class="h">19</span><span class="p">1.90</span><span class="dg">&#8942;&#8942;</span></div></div>
+
+<div class="team"><div class="thd"><span class="dot" style="background:#B45309"></span><span class="nm">Clay</span><span class="hc">8<u>RAW 7.50</u></span></div>
+<div class="mem"><span class="g">25</span><span class="n">Alan Petersen</span><span class="h">6</span><span class="p">1.50</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">20</span><span class="n">Alex Brown</span><span class="h">9</span><span class="p">1.80</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">15</span><span class="n">Barry Labass</span><span class="h">14</span><span class="p">2.10</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">10</span><span class="n">Dan Reilly</span><span class="h">21</span><span class="p">2.10</span><span class="dg">&#8942;&#8942;</span></div></div>
+
+<div class="team"><div class="thd"><span class="dot" style="background:#475569"></span><span class="nm">Slate</span><span class="hc">8<u>RAW 8.45</u></span></div>
+<div class="mem"><span class="g">25</span><span class="n">Tom Mercer</span><span class="h">5</span><span class="p">1.25</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">20</span><span class="n">Ryan Ellis</span><span class="h">12</span><span class="p">2.40</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">15</span><span class="n">Anthony Barrueta</span><span class="h">16</span><span class="p">2.40</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">10</span><span class="n">Chris Vaughn</span><span class="h">24</span><span class="p">2.40</span><span class="dg">&#8942;&#8942;</span></div></div>
+
+<div class="team"><div class="thd"><span class="dot" style="background:#A16207"></span><span class="nm">Dune</span><span class="hc">10<u>RAW 9.95</u></span></div>
+<div class="mem"><span class="g">25</span><span class="n">Marco Bellini</span><span class="h">9</span><span class="p">2.25</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">20</span><span class="n">Dave Kwan</span><span class="h">15</span><span class="p">3.00</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem" style="color:var(--muted)"><span class="g">15</span><span class="n" style="font-style:italic">Phantom 4th<span style="font-size:10px;font-style:normal"> &middot; average of the three</span></span><span class="h">16</span><span class="p">2.40</span><span class="dg" style="opacity:.3">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">10</span><span class="n">Luis Ortega</span><span class="h">23</span><span class="p">2.30</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="slot" style="border-top-color:#DCE5DD;color:var(--muted)"><span>&#9633;</span><span>Playing three. Drop a golfer here to replace the phantom.</span></div></div>
+
+<div class="team" style="border-style:dashed;border-color:#E3D5BE"><div class="thd"><span class="dot" style="background:#3BD89A"></span><span class="nm">Fern</span><span class="hc" style="color:var(--warn)">2 seats<u>OPEN</u></span></div>
+<div class="mem"><span class="g">&#8212;</span><span class="n">Nick Ferraro</span><span class="h">3</span><span class="p">&#8212;</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="mem"><span class="g">&#8212;</span><span class="n">Sam Okafor</span><span class="h">13</span><span class="p">&#8212;</span><span class="dg">&#8942;&#8942;</span></div>
+<div class="slot"><span>&#9633;</span><span>2 seats open &mdash; allowance shows once the team is full.</span></div></div>
+
+<div class="sec">Unassigned &mdash; 2</div>
+<div class="blk">
+<div class="ln"><span class="d">Will Tran<u>Course handicap 17</u></span><span class="v">&#8942;&#8942;</span></div>
+<div class="ln"><span class="d">Greg Nunes<u>Course handicap 22</u></span><span class="v">&#8942;&#8942;</span></div>
+</div>
+</div>
+<div class="foot"><button class="off">2 golfers still unassigned</button><p class="fx">Next unlocks when the tray is empty. Uneven teams are allowed &mdash; unplaced golfers are not.</p></div>
+</div><div class="cap">Teams &mdash; mid-build, two men in the tray</div></div>
+</body></html>

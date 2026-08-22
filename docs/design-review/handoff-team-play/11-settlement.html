@@ -1,0 +1,90 @@
+<!-- @dsCard group="Team play" name="Settlement" subtitle="TeamSettlement — one pool, three places, and the penny that has to go somewhere" viewport="1420x1080" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Team settlement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>.pot{background:#fff;border:1px solid var(--cardBorder);border-radius:14px;padding:13px;margin-bottom:10px}
+.pot .top{display:flex;align-items:baseline;gap:9px;margin-bottom:3px}
+.pot .top b{font-family:"Schibsted Grotesk",sans-serif;font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--pine);line-height:1}
+.pot .top span{font-size:11.5px;color:var(--muted);font-weight:600}
+.pl{display:flex;align-items:center;gap:9px;padding:9px 0;font-size:12.5px}
+.pl+.pl{border-top:1px solid #F2F6F3}
+.pl .ps{flex:none;width:18px;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:13px;color:var(--muted)}
+.pl .id{flex:1;min-width:0}
+.pl .id b{display:block;font-weight:700}
+.pl .id u{text-decoration:none;display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
+.pl .amt{flex:none;text-align:right}
+.pl .amt b{font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.pl .amt u{text-decoration:none;display:block;font-size:10px;color:var(--pine);font-weight:600;margin-top:1px}
+.mem2{display:flex;align-items:center;gap:8px;padding:6px 0 6px 27px;font-size:12px;color:var(--muted)}
+.mem2+.mem2{border-top:1px solid #F8FBF9}
+.mem2 .n{flex:1}
+.mem2 .a{flex:none;font-weight:600;font-variant-numeric:tabular-nums;color:var(--pine)}</style></head>
+<body>
+<a class="home" href="12-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Settlement &mdash; one pool</h1>
+<p>Individual settlement reconciles seven pots against sixteen golfers. This reconciles <b>one pot against twenty-three</b>, and the screen should look as different as the problem is. No tabs, no per-game sections, no balance check across games &mdash; one number in, three payments out.</p>
+<h3>Everyone paid the same, so the screen leads with what changed</h3>
+<p>Flat $25 at signup, no optional games, so <b>the entry side has nothing to explain.</b> One line for it. The whole screen is the three prizes and who is in them.</p>
+<h3>The team wins; the golfers get paid</h3>
+<p>Prizes are earned by teams and settled to <b>people</b> &mdash; the TD hands cash to men, not to a colour. So every paid place expands to its members with each man&rsquo;s figure spelled out. A row saying <i>Fern &mdash; $287.50</i> is unactionable at the scoring table.</p>
+<h3>A tie is the normal case now, not an exception</h3>
+<p>Whole-stroke handicaps across six teams tie most weeks. This week there are two, and they behave differently &mdash; which is the case worth drawing.</p>
+<p>The rule: <b>combine the places the tied teams occupy, and split what those places pay.</b> Slate and Dune tied on 57, so 2nd and 3rd combine to $287.50 and each team takes $143.75. Pine and Clay tied on 58 for 4th; 4th and 5th pay nothing, so the tie costs nothing and is left unresolved. No countback, no card-off, matching the Individual flow.</p>
+<p>Each tie is drawn as <b>one block with both teams inside it</b>. Two separate rows each reading $143.75 would hide that it was one prize.</p>
+<h3>The penny rule, stated on the screen</h3>
+<p>$287.50 over four men is $71.875. Splitting to the cent leaves two cents unassigned, and a settlement that does not add up is worse than one that is slightly arbitrary.</p>
+<p>The rule: <b>split down to the cent, odd cents to the team&rsquo;s highest course handicap.</b> Deterministic, always balances, and it is written under the split rather than left as an unexplained $71.89 next to three $71.87s.</p>
+<h3>A three-man team splits three ways and takes more each</h3>
+<p>Dune collects $143.75 over three men rather than four &mdash; $47.91 each against Slate&rsquo;s $35.93 for the identical placing. The phantom 4th earned the strokes and cannot be paid.</p>
+<p>That is the same rule the Irish Rumble uses for a levelled group: <b>the place belongs to the team, and it is divided among the men who are actually on it.</b> It is consistent, so it stays &mdash; and the screen says <i>3 ways</i> on the row so nobody has to work out why the figure is larger.</p>
+<div class="own"><table>
+<tr><td>Pays</td><td>Three places, 50 / 30 / 20. Six teams &mdash; half the field cashes, which is what a one-day scramble wants. A tie can collapse three places into two payments.</td></tr>
+<tr><td>Ties</td><td>Combined and split. Expected, now that the handicap is a whole number.</td></tr>
+<tr><td>Drive shortfall</td><td>Recorded on the team row if it happened. It changes the money only if the TD chose the stroke penalty, and then it has already changed the gross upstream.</td></tr>
+</table></div>
+<h3>Settle is gated on all six teams signed</h3>
+<p>Same rule as everywhere else: money does not move while a score can. Until then every figure is muted italic and the button says what it is waiting on.</p>
+<h3>The receipt is the same one</h3>
+<p>Texting works exactly as it does for Individual play &mdash; personal receipts or a field summary &mdash; and needs nothing new here. A team receipt is a short one: one entry line, one prize line if he cashed.</p>
+</div>
+<div class="wrap"><div class="phone">
+<div class="status"><span>4:18</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Settlement</span><span class="ic">&#9679;&#9679;&#9679;</span></div>
+<div class="body" style="height:660px">
+<div class="pot"><div class="top"><b>$575.00</b><span>in the pool</span></div>
+<p style="margin:0;font-size:11.5px;color:var(--muted);line-height:1.5">$25 flat &times; 23 golfers, taken at signup. No side games.</p></div>
+<div class="sec">Payouts &mdash; three places, second tied</div>
+<div class="blk">
+<div class="pl"><span class="ps">1</span><span class="dot" style="background:#3BD89A"></span><span class="id"><b>Fern</b><u>Net 55 &middot; gross 63 &middot; 4 ways</u></span><span class="amt"><b>$287.50</b><u>50%</u></span></div>
+<div class="mem2"><span class="n">Nick Ferraro</span><span class="a">$71.87</span></div>
+<div class="mem2"><span class="n">Sam Okafor</span><span class="a">$71.87</span></div>
+<div class="mem2"><span class="n">Will Tran</span><span class="a">$71.87</span></div>
+<div class="mem2"><span class="n">Greg Nunes<span style="font-size:10px;color:var(--pine)"> &middot; +2&cent;</span></span><span class="a">$71.89</span></div>
+</div>
+<div class="blk">
+<div class="pl"><span class="ps">T2</span><span class="dot" style="background:#475569"></span><span class="id"><b>Slate</b><u>Net 57 &middot; gross 65 &middot; 4 ways</u></span><span class="amt"><b>$143.75</b><u>&frac12; of 2nd+3rd</u></span></div>
+<div class="mem2"><span class="n">Tom Mercer</span><span class="a">$35.93</span></div>
+<div class="mem2"><span class="n">Ryan Ellis</span><span class="a">$35.93</span></div>
+<div class="mem2"><span class="n">Anthony Barrueta</span><span class="a">$35.93</span></div>
+<div class="mem2"><span class="n">Chris Vaughn<span style="font-size:10px;color:var(--pine)"> &middot; +3&cent;</span></span><span class="a">$35.96</span></div>
+<div class="pl" style="border-top:1px solid #F2F6F3"><span class="ps">T2</span><span class="dot" style="background:#A16207"></span><span class="id"><b>Dune</b><u>Net 57 &middot; gross 67 &middot; 3 ways</u></span><span class="amt"><b>$143.75</b><u>&frac12; of 2nd+3rd</u></span></div>
+<div class="mem2"><span class="n">Marco Bellini</span><span class="a">$47.91</span></div>
+<div class="mem2"><span class="n">Dave Kwan</span><span class="a">$47.91</span></div>
+<div class="mem2"><span class="n">Luis Ortega<span style="font-size:10px;color:var(--pine)"> &middot; +2&cent;</span></span><span class="a">$47.93</span></div>
+<div class="mem2" style="opacity:.55"><span class="n" style="font-style:italic">Phantom 4th</span><span class="a" style="color:var(--muted)">&mdash;</span></div>
+<p style="margin:9px 0 0;font-size:11px;line-height:1.5;color:var(--muted)">Tied on 57. Second and third combined &mdash; $287.50 splits two ways. Dune splits three ways: the phantom cannot be paid.</p>
+</div>
+<div class="note"><span>&#9679;</span><span><b>Odd cents go to the team&rsquo;s highest course handicap.</b> Neither $287.50 nor $143.75 divides evenly &mdash; the cents are assigned rather than lost, so the pool balances to zero.</span></div>
+<div class="sec">Out of the money &mdash; 3 teams</div>
+<div class="blk">
+<div class="ln"><span class="dot" style="background:#0F6E56"></span><span class="d">Pine<u>Net 58 &middot; T4 &mdash; 4th and 5th pay nothing</u></span><span class="v">&minus;$25 each</span></div>
+<div class="ln"><span class="dot" style="background:#B45309"></span><span class="d">Clay<u>Net 58 &middot; T4</u></span><span class="v">&minus;$25 each</span></div>
+<div class="ln"><span class="dot" style="background:#9A3412"></span><span class="d">Rust<u>Net 60 &middot; 6th &middot; 1 drive short</u></span><span class="v">&minus;$25 each</span></div>
+</div>
+<div class="ln" style="border-top:1.5px solid #CBD8CE;padding:11px 2px 0;font-size:13px"><span class="d" style="font-weight:700">Pool balance</span><span class="v" style="font-size:15px;color:var(--deepPine)">$0.00</span></div>
+</div>
+<div class="foot"><button>Settle &amp; text receipts</button><p class="fx">All six teams signed for 18. Rust finished one drive short &mdash; recorded, no penalty.</p></div>
+</div><div class="cap">Settlement &mdash; one pool, three places</div></div>
+</body></html>

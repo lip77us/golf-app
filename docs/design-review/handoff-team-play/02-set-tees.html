@@ -1,0 +1,156 @@
+<!-- @dsCard group="Rounds" name="Set tees" subtitle="SetTeesScreen — per-golfer tee picker grouped by sex, Set all per group, tee menu with yards/rating/slope/par" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Set tees</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#1D9E75;--brightMint:#3BD89A;--surface:#EAF0EA;--card:#FFFFFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--field:#DEE9E0;--warn:#B24225}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:370px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:14px;padding:6px 18px 4px}
+.appbar .bk{font-size:24px;line-height:1;color:var(--deepPine);cursor:pointer}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:21px}
+.head{padding:10px 18px 0}
+.head h2{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:26px;margin:0 0 6px}
+.head p{color:var(--muted);font-size:13.5px;line-height:1.5;margin:0}
+.body{padding:14px 16px 96px;overflow-y:auto;height:592px}
+.grp{background:var(--card);border:1px solid var(--cardBorder);border-radius:16px;padding:12px 14px 6px;margin-bottom:12px;box-shadow:0 1px 2px rgba(11,31,26,.05)}
+.ghd{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--cardBorder)}
+.ghd .g{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:16px}
+.setall{background:none;border:none;color:var(--pine);font:600 13.5px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer;padding:2px 0}
+.ghd .tee{margin-left:auto}
+.pr{display:flex;align-items:center;gap:10px;padding:11px 0}
+.pr+.pr{border-top:1px solid #EDF2ED}
+.who{min-width:0;flex:1}
+.who b{display:block;font-weight:600;font-size:15px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who small{display:block;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums;margin-top:1px}
+.tee{display:inline-flex;align-items:center;gap:8px;background:var(--field);border:none;border-radius:10px;padding:9px 11px;font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--deepPine);cursor:pointer;flex:none;max-width:172px}
+.tee .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.2px}
+.tee .cv{font-size:9px;color:var(--muted)}
+.tee.unset{background:#FBEAE4;color:var(--warn);font-weight:700}
+.tee.unset .cv{color:var(--warn)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 18px 22px;display:flex;gap:12px;background:linear-gradient(transparent,var(--surface) 24%)}
+.b2{height:56px;border-radius:16px;font:700 16px/1 "Spline Sans",system-ui,sans-serif;display:flex;align-items:center;justify-content:center;gap:9px;cursor:pointer}
+.back{width:112px;background:transparent;border:1.5px solid var(--pine);color:var(--pine);flex:none}
+.next{flex:1;background:var(--brightMint);border:none;color:#08301F}
+.next svg{width:19px;height:19px}
+.scrim{position:absolute;inset:0;background:rgba(11,31,26,.18);opacity:0;pointer-events:none;transition:opacity .16s}
+.scrim.on{opacity:1;pointer-events:auto}
+.menu{position:absolute;background:var(--card);border-radius:14px;box-shadow:0 18px 44px rgba(6,18,14,.3);overflow:hidden;display:none;z-index:6;width:296px;max-height:330px;overflow-y:auto}
+.menu.on{display:block}
+.mi{padding:13px 16px;font-size:14.5px;line-height:1.35;cursor:pointer;display:flex;gap:8px;align-items:baseline}
+.mi+.mi{border-top:1px solid #EEF3EE}
+.mi:hover{background:#F4F8F4}
+.mi.sel{background:#DDE4DE;font-weight:600}
+.mi .c{font-weight:600;flex:none}
+.mi .d{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.mi.sel .d{color:var(--deepPine)}
+.mhd{padding:11px 16px 8px;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);background:#F7FAF7}
+</style>
+</head>
+<body>
+<a href="12-flow-map.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Set tees</h1>
+<p>Every golfer needs a tee before handicaps can be computed, so this step is a <b>confirmation</b>, not a blank form: tees are pre-suggested by sex and the screen is already valid on arrival. The work is overriding the ones that don&rsquo;t fit.</p>
+<h3>Two levels of set</h3>
+<ul>
+<li><b>Set all</b> on the group header assigns every golfer in that group at once &mdash; the common case, since most groups play one tee.</li>
+<li><b>Per-golfer picker</b> for the exceptions. The group header keeps its own control so &ldquo;set all, then fix one&rdquo; is two taps.</li>
+</ul>
+<h3>The menu earns its height</h3>
+<ul>
+<li>Each option carries <b>yards &middot; rating/slope &middot; par</b> &mdash; the numbers that actually change the handicap. Colour alone can&rsquo;t answer &ldquo;which tee should I play?&rdquo;</li>
+<li><b>The same tee rates differently by sex</b>, and sometimes measures differently too. The menu shows the rating set for the golfer it was opened from &mdash; the header names which one (&ldquo;women&rsquo;s rating&rdquo;) so a shared number is never mistaken for a shared card. A tee with no rating for that sex should be hidden, not listed unplayable.</li>
+<li>The current selection is held, not just ticked, so re-opening reads as a state rather than a fresh choice.</li>
+<li>Tees are listed <b>as the course publishes them</b>, including duplicates like <i>White</i> and <i>White &ndash; sixes</i>. Do not sort or de-duplicate: a named variant usually means a different card.</li>
+</ul>
+<h3>Rules</h3>
+<ul>
+<li>An unset golfer shows a loud <b>Pick tee</b> chip and blocks <b>Configure Round</b>. Nothing else on the screen is destructive, so there is no confirm.</li>
+<li>Groups are by sex only because that is what the suggestion keys off. A group with no golfers is not rendered.</li>
+<li>The pill shows <b>colour &middot; yardage</b> &mdash; enough to spot a wrong tee at a glance, with the full detail one tap away.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>12:22</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Tees</span></div>
+<div class="head">
+<h2>Set tees</h2>
+<p>Confirm each golfer&rsquo;s tee. We suggested one by sex &mdash; change any that don&rsquo;t fit, or set a whole group at once.</p>
+</div>
+<div class="body" id="body">
+
+<div class="grp">
+<div class="ghd"><span class="g">Men</span><button class="setall">Set all</button><button class="tee" data-tee="White"><span class="lab">WHITE &middot; 5778y</span><span class="cv">&#9660;</span></button></div>
+<div class="pr"><span class="who"><b>Bill Jones</b><small>Index 10.0</small></span><button class="tee" data-tee="White"><span class="lab">WHITE &middot; 5778y</span><span class="cv">&#9660;</span></button></div>
+<div class="pr"><span class="who"><b>Paul Lipkin</b><small>Index 15.6</small></span><button class="tee" data-tee="White"><span class="lab">WHITE &middot; 5778y</span><span class="cv">&#9660;</span></button></div>
+</div>
+
+<div class="grp">
+<div class="ghd"><span class="g">Women</span><button class="setall">Set all</button><button class="tee" data-tee="Red"><span class="lab">RED &middot; 5438y</span><span class="cv">&#9660;</span></button></div>
+<div class="pr"><span class="who"><b>Ann White</b><small>Index 21.6</small></span><button class="tee" data-tee="Red"><span class="lab">RED &middot; 5438y</span><span class="cv">&#9660;</span></button></div>
+<div class="pr"><span class="who"><b>Carol Martin</b><small>Index 31.8</small></span><button class="tee unset" data-tee=""><span class="lab">&#9888; PICK TEE</span><span class="cv">&#9660;</span></button></div>
+</div>
+
+</div>
+<div class="bottom">
+<button class="b2 back">Back</button>
+<button class="b2 next" id="next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>Configure Round</button>
+</div>
+<div class="scrim" id="scrim"></div>
+<div class="menu" id="menu"></div>
+</div>
+<script>
+var TEES=[
+ {c:'White',m:{y:5778,r:'69.0/122',p:70},w:{y:5769,r:'73.4/128',p:72}},
+ {c:'Blue',m:{y:6260,r:'71.2/125',p:70},w:{y:6260,r:'76.1/135',p:72}},
+ {c:'Red',m:{y:5438,r:'67.3/116',p:70},w:{y:5438,r:'71.0/121',p:72}},
+ {c:'White - sixes',m:{y:5778,r:'69.0/122',p:70},w:{y:5769,r:'73.4/128',p:72}},
+ {c:'Yellow',m:{y:3113,r:'57.1/91',p:6},w:{y:3113,r:'59.8/95',p:6}}
+];
+function sexOf(el){return el.closest('.grp').querySelector('.ghd .g').textContent.trim()==='Women'?'w':'m'}
+function set(t,sex){return t[sex]}
+var menu=document.getElementById('menu'),scrim=document.getElementById('scrim'),body=document.getElementById('body'),open=null;
+function label(t,sex){return t.c.toUpperCase()+' \u00b7 '+t[sex].y+'y'}
+function close(){menu.classList.remove('on');scrim.classList.remove('on');open=null}
+function paint(btn,t){btn.dataset.tee=t.c;btn.classList.remove('unset');btn.querySelector('.lab').textContent=label(t,sexOf(btn));check()}
+function check(){var bad=body.querySelectorAll('.pr .tee.unset').length;document.getElementById('next').style.opacity=bad?'.45':'1'}
+function openMenu(btn){
+  var sex=sexOf(btn),hd=(btn.closest('.ghd')?'Set every golfer in this group':'Tee for this golfer')+' \u00b7 '+(sex==='w'?'women\u2019s':'men\u2019s')+' rating';
+  menu.innerHTML='<div class="mhd">'+hd+'</div>'+TEES.map(function(t){var s=t[sex];
+    return '<div class="mi'+(t.c===btn.dataset.tee?' sel':'')+'" data-c="'+t.c+'"><span class="c">'+t.c+'</span><span class="d">'+s.y+' yds \u00b7 '+s.r+' \u00b7 par '+s.p+'</span></div>'}).join('');
+  var pr=btn.getBoundingClientRect(),ph=document.querySelector('.phone').getBoundingClientRect();
+  menu.classList.add('on');scrim.classList.add('on');
+  var top=pr.bottom-ph.top+6,mh=menu.offsetHeight;
+  if(top+mh>ph.height-16)top=Math.max(56,pr.top-ph.top-mh-6);
+  menu.style.top=top+'px';
+  menu.style.left=Math.max(12,Math.min(pr.right-ph.left-menu.offsetWidth,ph.width-menu.offsetWidth-12))+'px';
+  open=btn;
+  menu.querySelectorAll('.mi').forEach(function(mi){mi.addEventListener('click',function(){
+    var t=TEES.filter(function(x){return x.c===mi.dataset.c})[0];
+    if(open.closest('.ghd')){var g=open.closest('.grp');g.querySelectorAll('.tee').forEach(function(b){paint(b,t)})}
+    else paint(open,t);
+    close();})});
+}
+document.querySelectorAll('.tee').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();open===b?close():openMenu(b)})});
+document.querySelectorAll('.setall').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();openMenu(b.parentNode.querySelector('.tee'))})});
+scrim.addEventListener('click',close);
+check();
+</script>
+</body>
+</html>
