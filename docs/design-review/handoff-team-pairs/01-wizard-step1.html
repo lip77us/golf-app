@@ -1,0 +1,55 @@
+<!-- @dsCard group="Team play" name="Wizard step 1 — Team Play" subtitle="TeamWizardStep1 — choosing the third tournament shape, and what it commits the TD to" viewport="1420x1080" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Team play step 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css"></head>
+<body>
+<a class="home" href="04-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Team Play &mdash; the third shape</h1>
+<p>The app already knows two tournament shapes. <b>Cup</b> is two big sides and the unit is a match. <b>Individual</b> is a field of singles and the unit is a card. Team Play is the third: <b>many small teams, one leaderboard, one score per team per hole.</b></p>
+<p>It is the shape a club actually runs most often &mdash; a Saturday scramble with six teams and a pot &mdash; and it is the simplest of the three, so the wizard should feel shorter, not longer.</p>
+<h3>Format is chosen here, not later</h3>
+<p>Picking Team Play does not tell the app how a team makes a score. Scramble and shamble need <b>different entry screens</b> and <b>different handicap maths</b>, so the format question comes immediately after &mdash; it is the first thing every other step reads.</p>
+<h3>One day, and the wizard does not ask</h3>
+<p>The Cup and Individual flows are both multi-day. This one is <b>one round</b>, stated rather than chosen. A club that wants two days runs two tournaments; carrying best-N counting, dropped rounds and a cross-round board into a Saturday scramble buys nothing and costs three screens.</p>
+<div class="own"><table>
+<tr><td>Rounds</td><td>Fixed at one. Nothing downstream has a round dimension &mdash; no round columns, no counting rule, no per-round pot.</td></tr>
+<tr><td>Side games</td><td>Off by default. In a scramble the team <i>is</i> the foursome, so there is no field to run a ball game against. A foursome that wants a bet among its own men still has the casual games.</td></tr>
+<tr><td>Money</td><td>One pool &mdash; team championship. Flat entry per golfer, taken at signup, same as Individual.</td></tr>
+</table></div>
+<h3>Field size sets the team count, not the reverse</h3>
+<p>The TD enters golfers and the app says <b>six teams, one of three</b>. Asking him for a team count first makes him do division at the first-tee before he has a headcount.</p>
+<h3>Fours or pairs is a control, not a format</h3>
+<p>Two-man tournaments are this same flow with the size set to two. It changes the format list on step 3 and the allowance table on step 5 &mdash; <b>nothing else</b>. A separate &ldquo;Two-Man Tournament&rdquo; entry in the list above would duplicate seven screens to change two.</p>
+<h3>Nothing here is disabled without saying why</h3>
+<p>House rule, inherited from the Cup. Next is live from the moment the three defaults are on screen &mdash; the TD can accept a one-round scramble by tapping once.</p>
+</div>
+<div class="wrap"><div class="phone">
+<div class="status"><span>7:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">New tournament</span><span class="ic">Cancel</span></div>
+<div class="step">STEP 1 OF 8 &middot; FORMAT</div>
+<div class="body">
+<div class="blk"><h6>Tournament format</h6><p>How the field is organised. This cannot change once scores are entered.</p>
+<div class="opt"><span class="rd"></span><span class="t"><b>Cup</b><u>Two sides, match play, points to win. 12&ndash;24 golfers.</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Individual</b><u>A field of singles on one card. Championship plus side games.</u></span></div>
+<div class="opt"><span class="rd on"></span><span class="t"><b>Team Play</b><u>Small teams of four, all against each other on one leaderboard.</u></span></div>
+</div>
+<div class="note"><span>&#9679;</span><span><b>Next: the course and tees</b>, then how a team makes a score. It sets the scorecard and the handicap, so it is asked before anything else.</span></div>
+<div class="blk"><h6>Rounds<em>1</em></h6><p style="margin:0">One day, one round. Multi-round team events are a different tournament &mdash; run two.</p></div>
+<div class="blk"><h6>Team size<em>Fours</em></h6><p>Changes the format list and the allowance table. Nothing else in the flow.</p>
+<div class="chips"><button class="on">Fours</button><button>Pairs</button></div>
+<p style="margin:9px 0 0;font-size:10.5px;line-height:1.5;color:var(--muted)">Fours: scramble or shamble. <a href="02-pairs-format.html" style="font-weight:600">Pairs</a>: scramble, best ball, alternate shot, Scotch or Chapman.</p>
+</div>
+<div class="blk"><h6>Golfers<em>23 added</em></h6>
+<div class="ln"><span class="d">From My Golfers<u>23 selected &middot; all have a course handicap</u></span><span class="v">&#8250;</span></div>
+<div class="ln"><span class="d">Teams<u>6 teams &mdash; five of four, one of three</u></span><span class="v">Auto</span></div>
+</div>
+<div class="note"><span>&#9679;</span><span><b>23 does not divide by four.</b> One team plays three and fields a phantom 4th, handicapped at the average of the three. Nobody is borrowed from another team.</span></div>
+<div class="blk"><h6>Money<em>One pool</em></h6><p>The team championship, and nothing else &mdash; the team is the foursome, so there is no field to run a side game against.</p>
+<div class="ln"><span class="d">Entry and payout<u>Set on step 7, once the teams are built</u></span><span class="v">&#8250;</span></div>
+</div>
+</div>
+<div class="foot"><button>Next &mdash; Course &amp; tees</button><p class="fx">Seven steps left. A one-round scramble takes every default.</p></div>
+</div><div class="cap">Step 1 &mdash; format, rounds, field</div></div>
+</body></html>

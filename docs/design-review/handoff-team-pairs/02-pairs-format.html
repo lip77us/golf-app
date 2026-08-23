@@ -1,0 +1,173 @@
+<!-- @dsCard group="Team play" name="Pairs — format" subtitle="TeamPairsFormat — scramble, best ball, alternate shot or Chapman, each with the allowance and the rota it implies" viewport="1420x1120" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Pairs format</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>.calc{display:flex;gap:0;margin:2px 0 0}
+.calc div{flex:1;text-align:center;padding:7px 2px;border-right:1px solid #F2F6F3}
+.calc div:last-child{border:none;background:#F4FAF6;border-radius:0 8px 8px 0}
+.calc b{display:block;font-size:13.5px;font-variant-numeric:tabular-nums}
+.calc u{text-decoration:none;display:block;font-size:9.5px;color:var(--muted);margin-top:2px;letter-spacing:.2px}
+.calc div:last-child b{color:var(--pine)}
+.pair{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:12px}
+.pair+.pair{border-top:1px solid #F2F6F3}
+.pair .hn{flex:none;width:62px;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.3px}
+.pair .who{flex:1;font-weight:600}
+.cmp{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:4px}
+.cmp th{text-align:left;padding:6px 6px;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--cardBorder)}
+.cmp td{padding:7px 6px;border-bottom:1px solid #F2F6F3;color:var(--muted);line-height:1.4}
+.cmp td:first-child{font-weight:700;color:var(--deepPine)}
+.cmp td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--pine)}
+.cmp tr:last-child td{border-bottom:none}
+.cmp tr.on td{background:#F4FAF6}</style></head>
+<body>
+<a class="home" href="04-flow-map.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Pairs</h1>
+<p>Two-man teams are <b>not a fourth tournament shape</b>. They are Team Play with the team size set to two: the same wizard, the same leaderboard, the same one pool, the same settlement. Only two steps behave differently, and both do so because the <i>formats</i> are different, not because the shape is.</p>
+<p>Everything the four-man flow decided still holds &mdash; one round, no side games, whole-stroke handicaps, ties combine and split, the TD sets fee and places himself. None of it is re-litigated here.</p>
+<h3>Team size is one control on step 1</h3>
+<p><b>Fours or pairs.</b> It changes the format list on step 3 and the allowance table on step 5, and nothing else. A separate &ldquo;Two-Man Tournament&rdquo; entry in the format list would duplicate seven screens to change two.</p>
+<h3>The allowance is doing enormous work here</h3>
+<p>This is the finding worth acting on. The <b>same pair</b> &mdash; Maiolini 4 and Yau 19 &mdash; plays off 4 in a scramble and 12 in alternate shot. Three times the strokes, for the same two men, purely from the format.</p>
+<div class="own"><table>
+<tr><td>Scramble</td><td><b>35% low + 15% high.</b> Two balls every shot, so the pair is strong and takes almost nothing.</td></tr>
+<tr><td>Best ball</td><td><b>85% each, own ball.</b> Not a team figure &mdash; each man plays his own strokes and the better net counts.</td></tr>
+<tr><td>Alternate shot</td><td><b>50% of the combined.</b> One ball, both mistakes. The most generous by a distance, and correctly so.</td></tr>
+<tr><td>Scotch</td><td><b>60% low + 40% high.</b> Both drive, take the better, then alternate.</td></tr>
+<tr><td>Chapman</td><td><b>60% low + 40% high.</b> Both drive, swap for the second, then one ball &mdash; the same table as Scotch.</td></tr>
+</table></div>
+<p><b>Scotch and Chapman share an allowance</b>, and that is the honest answer rather than a manufactured difference. Both are two drives and then one ball; Chapman buys one extra shot of position, which is not worth a stroke.</p>
+<p>So the format screen shows the pair&rsquo;s figure <b>on every option, before it is chosen</b>. A TD picking Chapman because it sounds fun should see that it doubles his field&rsquo;s strokes against a scramble.</p>
+<h3>Two scorecards, and only one of them has two numbers</h3>
+<p>Scramble, alternate shot, Scotch and Chapman all end in <b>one ball</b>, so they take the one-number card. <b>Best ball is the only pairs format that enters two scores</b>, with the counting one tinted &mdash; the same card the shamble uses, with two rows instead of four.</p>
+<h3>In Scotch the drive tap is an instruction, not a record</h3>
+<p>Every format that chooses a tee shot has the same control on the card. What it <i>does</i> differs, and Scotch is the case worth building for.</p>
+<p>In a scramble, tapping whose drive you took <b>records compliance</b> against a quota. In Scotch it <b>tells the pair who hits next</b> &mdash; the partner whose drive was not chosen plays the second shot. So the card answers with a sentence rather than a tick: <i>Maiolini plays the second shot, then alternate.</i></p>
+<p>The quota is still available on top, because the tap is already there and some groups require a drive count. It is optional and off by default.</p>
+<h3>Alternate shot needs a rota, not a quota</h3>
+<p>Who tees off on the odd holes is <b>the rule</b>, not a preference: the pair sets it on the 1st tee and it is fixed for eighteen. Same mechanic as alternating pairs in the four-man flow, and the same reason &mdash; a rota that can be re-cut mid-round is not a rota.</p>
+<p>It also means the app must state it on every tee. A pair that loses track plays a hole out of order and the round is gone.</p>
+<div class="own"><table>
+<tr><td>Scramble</td><td>Optional drive minimum, as in the four-man flow. Usually <b>one drive each per nine</b> &mdash; two men and eighteen holes is a lot of slack.</td></tr>
+<tr><td>Best ball</td><td>None. Both play their own ball off every tee.</td></tr>
+<tr><td>Alternate shot</td><td>A fixed odd/even tee rota. Not a quota &mdash; there is nothing to fall short of.</td></tr>
+<tr><td>Scotch</td><td>A drive tap on every hole, because it decides who plays next. An optional quota on top of it.</td></tr>
+<tr><td>Chapman</td><td>None. Both drive on every hole by definition.</td></tr>
+</table></div>
+<h3>The field must be even, and the screen names who is not paired</h3>
+<p>A phantom partner is not the answer here. In fours the phantom is a handicap device for a team that still hits four balls; in pairs it would be an imaginary man taking half the shots in an alternate shot. <b>Pairs require an even field</b>, the block names the unpaired golfer, and the TD adds or removes one &mdash; a ten-second fix that does not deserve a special case.</p>
+<h3>What is unchanged</h3>
+<p>Score picker, leaderboard card, payout screen, settlement, receipt. A pair is what sits in the name column.</p>
+</div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>8:12</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Team format</span><span class="ic">Cancel</span></div>
+<div class="step">STEP 3 OF 8 &middot; FORMAT &middot; PAIRS</div>
+<div class="body">
+<div class="blk"><h6>How the pair scores<em>12 golfers &middot; 6 pairs</em></h6><p>Sets the scorecard and the allowance. Locked once the first score is entered.</p>
+<div class="opt"><span class="rd on"></span><span class="t"><b>Scramble</b><u>Both hit, you play the better ball, repeat. One score per hole.</u></span><span class="rt">4<u>STROKES</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Best ball</b><u>Both play their own ball. The better net counts.</u></span><span class="rt">85%<u>EACH</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Alternate shot</b><u>One ball, hit in turn. Both mistakes are the pair&rsquo;s.</u></span><span class="rt">12<u>STROKES</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Scotch</b><u>Both drive, take the better one, then alternate from there.</u></span><span class="rt">10<u>STROKES</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Chapman</b><u>Both drive, swap for the second, then one ball in turn.</u></span><span class="rt">10<u>STROKES</u></span></div>
+<p style="margin:9px 0 0;font-size:10.5px;line-height:1.5;color:var(--muted)">Figures are for <b style="color:var(--deepPine)">Maiolini &amp; Yau</b> &mdash; 4 and 19. Every pair is worked on step 5.</p>
+</div>
+
+<div class="blk"><h6>The allowance changes the round<em>Same pair</em></h6>
+<table class="cmp">
+<tr><th>Format</th><th>Rule</th><th style="text-align:right">Pair</th></tr>
+<tr class="on"><td>Scramble</td><td>35% low + 15% high</td><td class="num">4</td></tr>
+<tr><td>Best ball</td><td>85% of each, own ball</td><td class="num">3 / 16</td></tr>
+<tr><td>Alternate shot</td><td>50% of combined</td><td class="num">12</td></tr>
+<tr><td>Scotch</td><td>60% low + 40% high</td><td class="num">10</td></tr>
+<tr><td>Chapman</td><td>60% low + 40% high</td><td class="num">10</td></tr>
+</table>
+<p style="margin:9px 0 0;font-size:10.5px;line-height:1.5;color:var(--muted)"><b style="color:var(--deepPine)">Scotch and Chapman share a table.</b> Both are two drives then one ball &mdash; Chapman buys one extra shot of position, which is not worth a stroke.</p>
+</div>
+
+<div class="blk"><h6>Scramble &mdash; worked<em>Maiolini &amp; Yau</em></h6>
+<div class="calc"><div><b>4</b><u>MAIOLINI</u></div><div><b>19</b><u>YAU</u></div><div><b>&nbsp;</b><u>&nbsp;</u></div></div>
+<div class="calc" style="border-top:1px solid #F2F6F3"><div><b>1.40</b><u>35%</u></div><div><b>2.85</b><u>15%</u></div><div><b>4</b><u>PAIR</u></div></div>
+<p style="margin:9px 0 0;font-size:11px;line-height:1.5;color:var(--muted)">Raw total <b style="color:var(--deepPine)">4.25</b>, rounded once at the end.</p>
+</div>
+
+<div class="blk"><h6>Drive minimum<em>1 each per nine</em></h6><p>Scramble only. Two men and eighteen holes is a lot of slack &mdash; one each per nine is the usual rule.</p>
+<div class="chips"><button>Off</button><button class="on">1 per nine</button><button>2 per nine</button><button>4 per 18</button></div>
+</div>
+
+<div class="blk off"><h6>Tee rota<em>n/a</em></h6><p style="margin:0">Alternate shot only. The pair sets who tees on the odd holes, on the 1st tee, and it is fixed for eighteen.</p></div>
+</div>
+<div class="foot"><button>Next &mdash; Drives</button><p class="fx">Pairs &middot; scramble &middot; 35 / 15 &middot; 1 drive each per nine</p></div>
+</div><div class="cap">Pairs format &mdash; scramble selected</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>8:14</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Team format</span><span class="ic">Cancel</span></div>
+<div class="step">STEP 3 OF 8 &middot; FORMAT &middot; PAIRS</div>
+<div class="body">
+<div class="blk"><h6>How the pair scores<em>12 golfers &middot; 6 pairs</em></h6><p>Sets the scorecard and the allowance. Locked once the first score is entered.</p>
+<div class="opt"><span class="rd"></span><span class="t"><b>Scramble</b><u>Both hit, you play the better ball, repeat.</u></span><span class="rt">4<u>STROKES</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Best ball</b><u>Both play their own ball. The better net counts.</u></span><span class="rt">85%<u>EACH</u></span></div>
+<div class="opt"><span class="rd on"></span><span class="t"><b>Alternate shot</b><u>One ball, hit in turn. Both mistakes are the pair&rsquo;s.</u></span><span class="rt">12<u>STROKES</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Scotch</b><u>Both drive, take the better one, then alternate from there.</u></span><span class="rt">10<u>STROKES</u></span></div>
+<div class="opt"><span class="rd"></span><span class="t"><b>Chapman</b><u>Both drive, swap for the second, then one ball in turn.</u></span><span class="rt">10<u>STROKES</u></span></div>
+</div>
+
+<div class="note amber"><span>&#9888;</span><span><b>Alternate shot is the most generous format by a distance.</b> 12 strokes against a scramble&rsquo;s 4, for the same two men. One ball means both mistakes count, and the allowance is right &mdash; but the round will score very differently.</span></div>
+
+<div class="blk"><h6>Alternate shot &mdash; worked<em>Maiolini &amp; Yau</em></h6>
+<div class="calc"><div><b>4</b><u>MAIOLINI</u></div><div><b>19</b><u>YAU</u></div><div><b>&nbsp;</b><u>&nbsp;</u></div></div>
+<div class="calc" style="border-top:1px solid #F2F6F3"><div><b>23</b><u>COMBINED</u></div><div><b>50%</b><u>ALLOWANCE</u></div><div><b>12</b><u>PAIR</u></div></div>
+<p style="margin:9px 0 0;font-size:11px;line-height:1.5;color:var(--muted)">Raw total <b style="color:var(--deepPine)">11.50</b>. Half rounds up.</p>
+</div>
+
+<div class="blk"><h6>Tee rota<em>Set on the 1st tee</em></h6><p>Who tees on the odd holes. Fixed for eighteen once set &mdash; a rota that can be re-cut mid-round is not a rota.</p>
+<div class="pair" style="border-bottom:1px solid #F2F6F3;padding-bottom:9px"><span class="hn">SET H1</span><span class="who" style="font-weight:500;color:var(--muted)">Maiolini odds <span style="color:#C3CFC6">/</span> Yau evens</span><span style="font-size:11px;color:var(--pine);font-weight:600">Edit</span></div>
+<div class="pair"><span class="hn">HOLE 1</span><span class="who">Maiolini tees</span><span style="color:var(--pine);font-weight:700;font-size:11px">UP</span></div>
+<div class="pair"><span class="hn">HOLE 2</span><span class="who" style="color:var(--muted);font-weight:500">Yau tees</span></div>
+<div class="pair"><span class="hn">HOLE 3</span><span class="who" style="color:var(--muted);font-weight:500">Maiolini tees</span></div>
+<p style="margin:9px 0 0;font-size:10.5px;line-height:1.5;color:var(--warn)"><b>The card names the tee on every hole.</b> A pair that loses track plays a hole out of order and the round is gone.</p>
+</div>
+
+<div class="blk off"><h6>Drive minimum<em>n/a</em></h6><p style="margin:0">Alternate shot has a fixed rota, so there is nothing to fall short of. No quota, no warning, no penalty setting.</p></div>
+</div>
+<div class="foot"><button>Next &mdash; Handicap</button><p class="fx">Pairs &middot; alternate shot &middot; 50% combined &middot; rota on the 1st tee</p></div>
+</div><div class="cap">Alternate shot &mdash; the rota, and the stroke jump</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>10:03</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Maiolini &amp; Yau</span><span class="ic">Scotch &middot; 10</span></div>
+<div class="body tall">
+<div class="pair" style="padding:2px 4px 10px;gap:10px"><span style="font-family:'Schibsted Grotesk',sans-serif;font-size:30px;font-weight:700;line-height:1">7</span><span style="font-size:11px;color:var(--muted);line-height:1.4;flex:1"><b style="color:var(--deepPine)">Par 4</b> &middot; 412 yds<br>Stroke index 3</span><span style="display:flex;gap:7px"><span style="width:36px;height:36px;border-radius:11px;background:#fff;border:1.5px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--pine)">&#8249;</span><span style="width:36px;height:36px;border-radius:11px;background:#fff;border:1.5px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--pine)">&#8250;</span></span></div>
+
+<div class="blk"><h6>Whose drive<em>Both hit &mdash; take the better</em></h6><p>Picking the drive also says who hits next.</p>
+<div class="chips" style="gap:8px"><button style="flex:1;padding:11px 6px">Maiolini</button><button class="on" style="flex:1;padding:11px 6px">Yau</button></div>
+<p style="margin:9px 0 0;font-size:11.5px;line-height:1.5;color:var(--pine);font-weight:600">&rarr; Maiolini plays the second shot, then alternate.</p>
+</div>
+
+<div class="blk"><h6>Team score<em>Scotch</em></h6><p>One number for the ball you played in.</p>
+<div class="prow"><span class="nm">Maiolini &amp; Yau</span><span class="gets">1 ball</span><span class="sbox circle">4</span></div>
+<div class="picker"><span class="opt2">3<small>bird</small></span><span class="opt2 sel">4<small>par</small></span><span class="opt2">5<small>bog</small></span><span class="opt2">6<small>dbl</small></span><span class="opt2 more">&#8942;</span></div>
+</div>
+
+<div class="blk"><h6>Drives used<em>1 each per nine</em></h6><p style="margin:0">Optional in Scotch, because the tap is already there. Maiolini has not driven on the front.</p>
+<div class="chips" style="margin-top:8px"><button style="flex:1;border-color:#E0B984;background:#FDF8F1">Maiolini &mdash; owes 1</button><button style="flex:1">Yau &mdash; h2, h7</button></div>
+</div>
+
+<div class="note"><span>&#9679;</span><span><b>The drive tap means something different here.</b> In a scramble it records compliance. In Scotch it is an instruction &mdash; the partner whose drive was not taken plays the next shot.</span></div>
+</div>
+<div class="foot"><button>Save &amp; next hole</button><p class="fx">Score and drive both picked &mdash; the hole is complete.</p></div>
+</div><div class="cap">Scotch &mdash; the drive pick is an instruction</div></div>
+<style>.prow{display:flex;align-items:center;gap:9px;padding:7px 2px;font-size:13px}
+.prow .nm{font-weight:600;flex:1}
+.prow .gets{font-size:10.5px;color:var(--muted);font-weight:600;background:var(--surface);border-radius:6px;padding:2px 6px}
+.sbox{width:42px;height:42px;border-radius:10px;border:1.5px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700;font-variant-numeric:tabular-nums}
+.sbox.circle{border:2px solid var(--pine);border-radius:50%;color:var(--pine)}
+.picker{border:2px solid var(--pine);border-radius:12px;margin:4px 0 2px;padding:10px 6px;display:flex;gap:6px;justify-content:center}
+.picker .opt2{min-width:42px;height:48px;border-radius:9px;border:1.5px solid var(--cardBorder);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:17px;font-variant-numeric:tabular-nums;cursor:pointer}
+.picker .opt2 small{font-size:8px;color:var(--muted);text-transform:uppercase;margin-top:2px;font-weight:700;letter-spacing:.3px}
+.picker .opt2.sel{border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.15);color:var(--pine)}
+.picker .opt2.more{font-size:13px;color:var(--muted)}</style>
+</body></html>

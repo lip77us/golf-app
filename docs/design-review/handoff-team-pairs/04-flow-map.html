@@ -1,0 +1,136 @@
+<!-- @dsCard group="Team play" name="Flow map" subtitle="TeamFlowMap — six setup steps and three play surfaces, with what each one decides" viewport="1420x1180" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Team play flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="team-kit.css">
+<style>body{display:block;padding:34px 40px 46px;max-width:1340px;margin:0 auto}
+h1{font-family:"Schibsted Grotesk",sans-serif;font-size:27px;font-weight:600;margin:0 0 6px}
+.lede{color:var(--muted);font-size:14px;line-height:1.6;max-width:760px;margin:0 0 26px}
+.lede b{color:var(--deepPine)}
+h2{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:700;margin:30px 0 12px;padding-bottom:7px;border-bottom:1.5px solid #CBD8CE;letter-spacing:.2px}
+.rail{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.st{background:#fff;border:1px solid var(--cardBorder);border-radius:14px;padding:14px 15px 13px;position:relative}
+.st .num{font-size:10px;font-weight:700;letter-spacing:.6px;color:var(--pine);margin-bottom:4px}
+.st h4{font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:700;margin:0 0 6px}
+.st h4 a{text-decoration:none}
+.st p{margin:0 0 9px;font-size:12.5px;line-height:1.55;color:var(--muted)}
+.st p b{color:var(--deepPine)}
+.st dl{margin:0;font-size:11.5px;line-height:1.5}
+.st dt{font-weight:700;color:var(--deepPine);margin-top:7px}
+.st dd{margin:1px 0 0;color:var(--muted)}
+.st .tag{position:absolute;top:13px;right:14px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:#A9B6AC}
+.st.skip{background:#F5F8F6;border-style:dashed}
+.wide{grid-column:span 3;background:#F4FAF6;border-color:#C9E3D4}
+.wide h4{color:#1C5544}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cmp{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--cardBorder);border-radius:14px;overflow:hidden;font-size:12.5px}
+.cmp th{text-align:left;padding:10px 13px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);background:#F5F8F6;border-bottom:1px solid var(--cardBorder)}
+.cmp td{padding:10px 13px;border-bottom:1px solid #F2F6F3;color:var(--muted);vertical-align:top;line-height:1.5}
+.cmp td:first-child{font-weight:700;color:var(--deepPine);width:150px}
+.cmp tr:last-child td{border-bottom:none}</style></head>
+<body>
+<a class="home" href="04-flow-map.html">&#8592; Contents</a>
+<h1>Team Play &mdash; the flow</h1>
+<p class="lede">The third tournament shape: <b>many small teams, one round, one leaderboard.</b> Eight setup steps — two of them existing screens reused unchanged — three play surfaces, one pool. It is deliberately the shortest of the three flows &mdash; a Saturday scramble is the most common event a club runs and the least complicated thing it does.</p>
+
+<h2>Where it sits against the other two</h2>
+<table class="cmp">
+<tr><th>&nbsp;</th><th>Cup</th><th>Individual</th><th>Team Play</th></tr>
+<tr><td>The unit</td><td>Two sides, a match</td><td>One golfer, a card</td><td>A team of four, a card</td></tr>
+<tr><td>Rounds</td><td>Multi-day</td><td>Multi-day, best-N counting</td><td>One. Not a setting.</td></tr>
+<tr><td>Games</td><td>Cup plus a secondary</td><td>Championship plus four side games</td><td>One. The championship.</td></tr>
+<tr><td>Handicap</td><td>Net / gross / strokes off low</td><td>Full net, allowance %</td><td>Allowance set by format &mdash; a team figure, not a golfer&rsquo;s</td></tr>
+<tr><td>Hard part</td><td>Pairings and no-shows</td><td>Money across seven pots</td><td>Drive requirements</td></tr></table>
+
+<h2>Setup &mdash; eight steps</h2>
+<div class="rail">
+<div class="st"><span class="tag">STEP 1</span><div class="num">FORMAT</div><h4><a href="01-wizard-step1.html">Tournament format</a></h4>
+<p>Cup, Individual or <b>Team Play</b>. Rounds is stated as one, not offered. Golfers in, entry set.</p>
+<dl><dt>Decides</dt><dd>Which wizard runs, and that nothing downstream has a round dimension.</dd>
+<dt>Watch for</dt><dd>Field size sets the team count, not the reverse. 23 golfers &rarr; six teams, one of three.</dd></dl></div>
+
+<div class="st skip"><span class="tag">STEP 2</span><div class="num">COURSE</div><h4><a href="set-tees.html">Course &amp; tees</a></h4>
+<p>The <b>existing</b> Set tees screen, unchanged. Pre-suggested by sex, confirmed per golfer, <i>Set all</i> per group.</p>
+<dl><dt>Decides</dt><dd>Every golfer&rsquo;s <b>course handicap</b> &mdash; which is what the allowance on step 5 is a percentage of.</dd>
+<dt>Watch for</dt><dd>Nothing new was built here. A team round needs tees for exactly the reason a casual round does.</dd></dl></div>
+
+<div class="st"><span class="tag">STEP 3</span><div class="num">FORMAT</div><h4><a href="team-format-setup.html">How a team scores</a></h4>
+<p>Fours: <b>scramble or shamble</b>, with the shamble expanding in place to <a href="team-shamble-counts.html">the ball-count controls</a>. Pairs: <a href="02-pairs-format.html">scramble, best ball, alternate shot, Scotch or Chapman</a>.</p>
+<dl><dt>Decides</dt><dd>The scorecard, the allowance table, and how many of the scores count.</dd>
+<dt>Watch for</dt><dd>Locked once a score lands. No second rules screen &mdash; the extras live under the radio.</dd></dl></div>
+
+<div class="st"><span class="tag">STEP 4</span><div class="num">DRIVES</div><h4><a href="team-drive-rules.html">Drive requirement</a></h4>
+<p>Scramble and shamble alike. None, per nine, per eighteen, or <b>alternating pairs</b> &mdash; three quotas and one schedule. A three-man team runs AB / BC / AC.</p>
+<dl><dt>Decides</dt><dd>Whether the card gains a drive row, and what the tracker is counting toward.</dd>
+<dt>Watch for</dt><dd>Per nine has two windows. The front does not carry to the back.</dd></dl></div>
+
+<div class="st"><span class="tag">STEP 5</span><div class="num">HANDICAP</div><h4><a href="team-handicap.html">Handicap &amp; allowance</a></h4>
+<p>Net or gross, then the allowance the format prescribes &mdash; 25/20/15/10 for a scramble, a percentage tracking the ball count for a shamble.</p>
+<dl><dt>Decides</dt><dd>Every team&rsquo;s figure, worked on his own men rather than on an example.</dd>
+<dt>Watch for</dt><dd>Whole strokes, rounded once on the total &mdash; never per contribution, which costs a stroke.</dd></dl></div>
+
+<div class="st"><span class="tag">STEP 6</span><div class="num">TEAMS</div><h4><a href="team-build-teams.html">Build teams</a> &middot; <a href="03-pairs-teams.html">pairs</a></h4>
+<p>The TD assigns all 23 by hand. Allowance appears per team as it fills; a balance strip shows the spread. The three-man team carries a phantom 4th row.</p>
+<dl><dt>Decides</dt><dd>Who plays with whom, and &mdash; visibly &mdash; whether the pot was decided here.</dd>
+<dt>Watch for</dt><dd>Next waits on an empty tray, not on balance. Uneven teams are allowed; unplaced golfers are not.</dd></dl></div>
+
+<div class="st"><span class="tag">STEP 7</span><div class="num">MONEY</div><h4><a href="team-payout.html">Entry &amp; payout</a></h4>
+<p>Fee per golfer, how many places pay, and the split. Every control shows its consequence in dollars &mdash; and in <b>per-man</b> dollars.</p>
+<dl><dt>Decides</dt><dd>The pot and what each place is worth. Needs the field size and the team count, so it cannot come earlier.</dd>
+<dt>Watch for</dt><dd>Save is blocked off 100%, with the shortfall named. Places are capped at the team count.</dd></dl></div>
+
+<div class="st skip"><span class="tag">STEP 8</span><div class="num">REVIEW</div><h4>Review &amp; create</h4>
+<p>The existing review step, unchanged. Format, drive rule, allowance, six teams, one pool.</p>
+<dl><dt>Decides</dt><dd>Nothing new. It is the last chance to change the format before it locks.</dd></dl></div>
+</div>
+
+<h2>Play &mdash; three surfaces</h2>
+<div class="rail">
+<div class="st"><div class="num">ON THE COURSE</div><h4><a href="team-score-entry.html">Score entry</a></h4>
+<p>A stepper and one big number for a scramble; the four-man grid with counting scores tinted for a shamble. The drive row sits on both.</p>
+<dl><dt>Decides</dt><dd>Nothing. It records &mdash; but it is where the drive warning fires, two holes before the quota fails.</dd>
+<dt>Watch for</dt><dd>Anyone on the team can enter. No designated scorer, or the board is dark until 18.</dd></dl></div>
+
+<div class="st"><div class="num">ON THE COURSE</div><h4><a href="team-drive-rules.html">Drive tracker</a></h4>
+<p>Off the card. Per-window pips for each golfer, and the pair rota &mdash; set by the team on the 1st tee &mdash; if the rule is alternating.</p>
+<dl><dt>Decides</dt><dd>Whether the team can still satisfy the rule. Warns; never blocks.</dd>
+<dt>Watch for</dt><dd>Falling short costs nothing by default. The penalty is opt-in.</dd></dl></div>
+
+<div class="st"><div class="num">AFTER</div><h4><a href="team-leaderboard.html">Leaderboard</a></h4>
+<p>Six rows, ranked on whole-stroke net, ties marked <b>T</b> and drawn adjacent. Teams still out are marked. The pool sits under the board, italic until everyone signs.</p>
+<dl><dt>Decides</dt><dd>The order. There is nothing else on it &mdash; no tabs, because there is nothing to tab to.</dd>
+<dt>Watch for</dt><dd>Ties are the normal case now. Combine the places and split; no countback.</dd></dl></div>
+</div>
+
+<div class="rail" style="margin-top:14px">
+<div class="st wide"><div class="num">AFTER</div><h4><a href="team-settlement.html">Settlement &rarr; receipt</a></h4>
+<p>One pool, three places, 50/30/20, each expanded to the men who get paid. Tied teams combine their places and split what those places pay &mdash; and a three-man team divides its share three ways, because the phantom 4th earned the strokes and cannot be paid. Odd cents go to the team&rsquo;s highest course handicap so the pool balances to zero. Gated on all six teams signed. <b>The receipt and the texting flow are the Individual ones, reused unchanged</b> &mdash; a team receipt is simply a short one.</p></div>
+</div>
+
+<table class="cmp">
+<tr><th colspan="3">Pairs &mdash; the same flow, size set to two</th></tr>
+<tr><td>What changes</td><td colspan="2">Step 3 (four formats instead of two) and step 5 (a different allowance per format). Nothing else &mdash; same leaderboard, same payout, same settlement, same receipt.</td></tr>
+<tr><td>Scramble</td><td>35% low + 15% high</td><td>One ball. Optional drive minimum, usually one each per nine.</td></tr>
+<tr><td>Best ball</td><td>85% of each, own ball</td><td>The only pairs format entering two scores.</td></tr>
+<tr><td>Alternate shot</td><td>50% of combined</td><td>One ball. A fixed odd/even tee rota set on the 1st tee.</td></tr>
+<tr><td>Scotch</td><td>60% low + 40% high</td><td>Both drive, take the better, alternate from there. The drive tap says who hits next.</td></tr>
+<tr><td>Chapman</td><td>60% low + 40% high</td><td>One ball. Both drive by definition, so no drive rule. Same table as Scotch.</td></tr>
+<tr><td>Odd field</td><td colspan="2">Blocked, naming the unpaired golfer. No phantom partner &mdash; it would be an imaginary man taking half the shots in an alternate shot.</td></tr>
+</table>
+
+<h2>What this flow deliberately does not have</h2>
+<div class="two">
+<table class="cmp">
+<tr><th colspan="2">Left out</th></tr>
+<tr><td>Multiple rounds</td><td>A club wanting two days runs two tournaments. Best-N counting, round columns and a cross-round board would cost three screens and buy nothing.</td></tr>
+<tr><td>Side games</td><td>The team is the foursome, so there is no field to run a ball game against. A foursome that wants a bet among its own men still has the casual games.</td></tr>
+<tr><td>Borrowed golfers</td><td>A borrowed man would hit shots for a team he is competing against. A three-man team fields a phantom 4th instead &mdash; handicapped at the average of the three, its ball played by whoever is not driving.</td></tr>
+</table>
+<table class="cmp">
+<tr><th colspan="2">Still open</th></tr>
+<tr><td>Flights</td><td>Deferred with the Individual flow. Six teams is under the size where flighting means anything.</td></tr>
+<tr><td>Extra formats</td><td>Irish Rumble, modified counts, best-ball variants &mdash; all of them are a shamble with the count moved. A club that wants Irish Rumble has it casually and as an Individual side game.</td></tr>
+<tr><td>Ties</td><td>Combined and split &mdash; expected, not exceptional, now the handicap is a whole number. No countback and no card-off, matching the Individual flow.</td></tr>
+</table>
+</div>
+</body></html>
