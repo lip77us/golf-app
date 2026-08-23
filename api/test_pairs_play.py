@@ -1033,6 +1033,45 @@ class PlayingGroupTests(PairsBase):
             format='json')
         self.assertEqual(r.status_code, 409)
 
+    def test_the_scorecard_labels_a_pair_by_its_initials(self):
+        """`Bronson & Petersen` ellipsises to nothing in a 58-pixel label
+        column, and `Team` twice says nothing when two pairs share one card."""
+        self._configure('scramble')
+        card = self._card(self.groups[0], 1)
+        self.assertEqual([t['short_name'] for t in card['teams']],
+                         ['M & Y', 'P & R'])
+
+    def test_two_pairs_in_one_group_never_share_a_colour(self):
+        """Twelve colours recycle across a big field, and that is fine — every
+        board row carries its name. The one place it must hold is inside a
+        playing group, where two pairs share a card and the colour is what
+        binds each row to its entry block."""
+        self._configure('scramble')
+        summary = self._summary()
+        by_group = {}
+        for t in summary['teams']:
+            by_group.setdefault(t['foursome_id'], []).append(t['colour'])
+        for fid, colours in by_group.items():
+            self.assertEqual(len(set(colours)), len(colours), fid)
+
+    def test_the_colour_ordinal_does_not_drift(self):
+        """A running counter re-colours teams when a group is added. The
+        ordinal is derived from the group and the slot instead, so a re-sync
+        lands every team on the same colour it had."""
+        self._configure('scramble')
+        before = {(t['foursome_id'], t['slot']): t['colour']
+                  for t in self._summary()['teams']}
+        self._configure('scotch')          # re-syncs the whole field
+        after = {(t['foursome_id'], t['slot']): t['colour']
+                 for t in self._summary()['teams']}
+        self.assertEqual(before, after)
+
+    def test_a_foursome_row_is_still_called_team(self):
+        self.client.post(self._setup_url(),
+                         {'team_size': 4, 'team_format': 'scramble'},
+                         format='json')
+        self.assertEqual(self._team(self._summary(), 1)['short_name'], 'Team')
+
     def test_a_foursome_event_has_nothing_to_split(self):
         self.client.post(self._setup_url(),
                          {'team_size': 4, 'team_format': 'scramble'},

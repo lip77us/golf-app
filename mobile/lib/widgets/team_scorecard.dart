@@ -46,6 +46,14 @@ class TeamScorecardRow {
   /// score. Two 5s on a par 4 is +2, and "10" says nothing without doing the
   /// multiplication in your head.
   final bool toPar;
+  /// Draw the rule BELOW this row rather than above it.
+  ///
+  /// `total` puts a rule ABOVE, which is right when the row sums the rows over
+  /// it — golfers, then the team's line. It is wrong when one card carries two
+  /// TEAMS: there the rule fell between a pair's score row and its own net
+  /// row, splitting the pair it was supposed to bind. Setting this instead
+  /// puts the line under the pair, where it separates one pair from the next.
+  final bool ruleBelow;
   /// A colour bar down the left of the label, binding this row to a team.
   ///
   /// **One card can carry two teams.** A pairs playing group is four golfers
@@ -64,8 +72,13 @@ class TeamScorecardRow {
     this.italic = false,
     this.total = false,
     this.toPar = false,
+    this.ruleBelow = false,
     this.accent,
   });
+
+  /// A rule above is the default for a summing row, and is suppressed when the
+  /// row asks for one below instead — two lines around one row is a box.
+  bool get ruleAbove => total && !ruleBelow;
 }
 
 class TeamScorecard extends StatefulWidget {
@@ -172,6 +185,17 @@ class _TeamScorecardState extends State<TeamScorecard> {
       final v = r.scores[h];
       if (v == null) return '';
       return r.toPar ? toParLabel(v) : '$v';
+    }
+
+    BoxDecoration? _rule(TeamScorecardRow r, ThemeData th) {
+      if (!r.ruleAbove && !r.ruleBelow) return null;
+      final side = BorderSide(color: th.colorScheme.outlineVariant);
+      return BoxDecoration(
+        border: Border(
+          top:    r.ruleAbove ? side : BorderSide.none,
+          bottom: r.ruleBelow ? side : BorderSide.none,
+        ),
+      );
     }
 
     Widget labelCell(String text,
@@ -296,21 +320,13 @@ class _TeamScorecardState extends State<TeamScorecard> {
       for (final r in widget.rows)
         rowPair(
           Container(
-            decoration: r.total
-                ? BoxDecoration(
-                    border: Border(top: BorderSide(
-                        color: theme.colorScheme.outlineVariant)))
-                : null,
+            decoration: _rule(r, theme),
             child: labelCell(r.label,
                 bold: r.total, italic: r.italic, accent: r.accent),
           ),
           [
             Container(
-              decoration: r.total
-                  ? BoxDecoration(
-                      border: Border(top: BorderSide(
-                          color: theme.colorScheme.outlineVariant)))
-                  : null,
+              decoration: _rule(r, theme),
               child: Row(children: line(
                 (h) => cell(fmt(r, h),
                     current: h == widget.currentHole,

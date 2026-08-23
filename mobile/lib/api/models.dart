@@ -5383,6 +5383,8 @@ class TeamPlayTeam {
   /// pairs share one.
   final String groupName;
   final String name;
+  /// `B & P` — the pair's surname initials, for columns too narrow for a name.
+  final String shortName;
   /// Assigned whether or not the TD renames the team: six unfamiliar
   /// one-syllable names, and the colour block is how a golfer finds their row
   /// without reading.
@@ -5429,7 +5431,7 @@ class TeamPlayTeam {
 
   const TeamPlayTeam({
     required this.foursomeId, required this.groupNumber, required this.name,
-    this.slot = 1, this.groupName = '',
+    this.slot = 1, this.groupName = '', this.shortName = 'Team',
     required this.colour, required this.realPlayerCount,
     this.teamSize = 4,
     required this.hasPhantom, required this.seatsOpen, required this.members,
@@ -5448,6 +5450,7 @@ class TeamPlayTeam {
         slot           : (j['slot'] ?? 1) as int,
         groupNumber    : (j['group_number'] ?? 0) as int,
         groupName      : (j['group_name'] ?? '') as String,
+        shortName      : (j['short_name'] ?? 'Team') as String,
         name           : (j['name'] ?? '') as String,
         colour         : (j['colour'] ?? '') as String,
         realPlayerCount: (j['real_player_count'] ?? 0) as int,
@@ -5868,6 +5871,10 @@ class TeamPlayRound {
 class TeamPlayCardTeam {
   final int    slot;
   final String name;
+  /// `B & P` — the pair's surname initials, for the scorecard's 58-pixel
+  /// label column where the full name ellipsises to nothing and `Team` cannot
+  /// tell two pairs on one card apart. `Team` for a foursome event.
+  final String shortName;
   final String colour;
   /// Strokes this team receives on THIS hole, off its whole-number figure.
   final int    teamStrokes;
@@ -5886,6 +5893,7 @@ class TeamPlayCardTeam {
 
   const TeamPlayCardTeam({
     required this.slot, required this.name, required this.colour,
+    this.shortName = 'Team',
     required this.round, required this.drive,
     this.teamStrokes = 0, this.strokesByHole = const {},
     this.golferStrokes = const {}, this.netToParByHole = const {},
@@ -5897,6 +5905,7 @@ class TeamPlayCardTeam {
   factory TeamPlayCardTeam.fromJson(Map<String, dynamic> j) => TeamPlayCardTeam(
         slot        : (j['slot'] ?? 1) as int,
         name        : (j['name'] ?? '') as String,
+        shortName   : (j['short_name'] ?? 'Team') as String,
         colour      : (j['colour'] ?? '') as String,
         teamStrokes : (j['team_strokes'] ?? 0) as int,
         strokesByHole: {

@@ -9682,7 +9682,9 @@ class TeamPlayCardView(APIView):
         info = next(
             (h for h in hole_data(foursome) if h.get('number') == hole), {})
 
-        from services.team_play_state import team_name, team_slots
+        from services.team_play_state import (
+            team_initials, team_name, team_slots,
+        )
         from scoring.handicap import _strokes_on_hole
 
         slots = team_slots(foursome, config)
@@ -9708,6 +9710,8 @@ class TeamPlayCardView(APIView):
             block = {
                 'slot'         : slot,
                 'name'         : team_name(foursome, config, slot=slot),
+                # `B & P` — the label the group scorecard can actually fit.
+                'short_name'   : team_initials(foursome, config, slot=slot),
                 'colour'       : state.colour if state else '',
                 'team_strokes' : team_strokes,
                 # Where the strokes fall, across the WHOLE round. Seeing which

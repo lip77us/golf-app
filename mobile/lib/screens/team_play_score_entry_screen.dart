@@ -1246,6 +1246,7 @@ class _GroupScorecard extends StatelessWidget {
 
     final rows = <TeamScorecardRow>[];
     for (final team in teams) {
+      final last = team == teams.last;
       final accent = many ? TeamColourBlock.colourFor(team.colour) : null;
 
       if (card.isOneBall) {
@@ -1254,7 +1255,9 @@ class _GroupScorecard extends StatelessWidget {
         // Chapman each play a single ball off a single team figure exactly as
         // a scramble does.
         rows.add(TeamScorecardRow(
-          label  : 'Team',
+          // `B & P`, not `Team` — with two pairs on one card, `Team` twice
+          // says nothing, and the initials fit where the name does not.
+          label  : team.shortName,
           scores : team.round.byHole,
           strokes: team.strokesFor(null),
           accent : accent,
@@ -1276,11 +1279,19 @@ class _GroupScorecard extends StatelessWidget {
       }
       if (team.netToParByHole.isNotEmpty) {
         rows.add(TeamScorecardRow(
+          // Plain `Net`: the colour bar already ties it to the pair named on
+          // the row above it, and `Net B & P` only ellipsises.
           label  : 'Net',
           scores : team.netToParByHole,
           total  : true,
           toPar  : true,
           accent : accent,
+          // With two pairs on one card the rule goes UNDER the net, where it
+          // separates one pair from the next. Above it — the default for a
+          // summing row — it fell between a pair's scores and that pair's own
+          // net, splitting the thing it was meant to bind. The last pair needs
+          // no rule; the card ends there.
+          ruleBelow: many && !last,
         ));
       }
     }

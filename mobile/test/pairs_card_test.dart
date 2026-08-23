@@ -14,6 +14,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
+import 'package:golf_mobile/widgets/team_scorecard.dart';
 
 TeamPlayCard _card(String format, {int teamSize = 2}) =>
     TeamPlayCard.fromJson({
@@ -128,6 +129,31 @@ void main() {
     test('a foursome event sits at slot 1 and keys off it unchanged', () {
       expect(boardRow(7, 1).slot, 1);
       expect(boardRow(7, 1).rowKey, '7:1');
+    });
+  });
+
+  group('the rule binds a pair rather than splitting it', () {
+    // `total` puts a rule ABOVE, which is right when the row sums the rows
+    // over it. On a card carrying two teams it fell between a pair's score row
+    // and that pair's own net row — splitting the thing it was meant to bind.
+    test('a summing row rules above by default', () {
+      const r = TeamScorecardRow(label: 'Net', scores: {}, total: true);
+      expect(r.ruleAbove, isTrue);
+      expect(r.ruleBelow, isFalse);
+    });
+
+    test('asking for a rule below suppresses the one above', () {
+      // Two lines around one row is a box, not a separator.
+      const r = TeamScorecardRow(
+          label: 'Net', scores: {}, total: true, ruleBelow: true);
+      expect(r.ruleAbove, isFalse);
+      expect(r.ruleBelow, isTrue);
+    });
+
+    test('an ordinary row rules neither way', () {
+      const r = TeamScorecardRow(label: 'B & P', scores: {});
+      expect(r.ruleAbove, isFalse);
+      expect(r.ruleBelow, isFalse);
     });
   });
 }

@@ -55,9 +55,37 @@ PAIR_NAME_MAX = 24
 
 
 def team_colour_for(index: int) -> str:
-    """1-based group number → its colour, wrapping if a field ever outgrows
-    the list."""
+    """
+    1-based team ordinal → its colour.
+
+    **Twelve colours, and they recycle.**  A twenty-team field gives team 13
+    Pine again.  The palette is not widened to cover it because it already
+    carries three greens and four ambers, and a fourth green nobody can
+    separate on a phone in sunlight is worse than an honest repeat — so colour
+    is a FINDING aid, never an identifier.  Every board row carries its name
+    beside the block, and the scorecard labels its rows with the pair's
+    initials rather than relying on the swatch.
+
+    Where it does have to hold is INSIDE a playing group, because two pairs
+    share one card there.  `team_ordinal` keeps those two consecutive, so they
+    can never land on the same colour.
+    """
     return TEAM_COLOURS[(index - 1) % len(TEAM_COLOURS)]
+
+
+def team_ordinal(foursome, config, slot: int) -> int:
+    """
+    A team's position in the field, counted deterministically.
+
+    Not a running counter: a counter drifts when a group is added or a roster
+    changes, and re-colours teams mid-setup.  Derived from the group number and
+    the slot instead, which also guarantees the two teams sharing a playing
+    group are CONSECUTIVE — and therefore never the same colour, which is the
+    one place the palette's recycling would actually be ambiguous.
+    """
+    if not config.is_pairs:
+        return foursome.group_number
+    return (foursome.group_number - 1) * 2 + slot
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +299,6 @@ def sync_teams(tournament):
     teams  = []
     from tournament.models import TeamPlayTeamState
 
-    colour_index = 0
     for foursome in round_obj.foursomes.order_by('group_number'):
         ensure_phantom_fourth(foursome, config)
         if config is None:
@@ -283,9 +310,9 @@ def sync_teams(tournament):
         # playing group must not share one — the colour walks the teams, not
         # the groups.
         for slot in slots:
-            colour_index += 1
             state = ensure_team_state(
-                foursome, index=colour_index, slot=slot)
+                foursome, index=team_ordinal(foursome, config, slot),
+                slot=slot)
             apply_default_name(foursome, config, state, slot=slot)
             allowance = compute_allowance(foursome, config, slot=slot)
             if (state.team_handicap != allowance.strokes
@@ -738,6 +765,26 @@ def _pair_surnames(foursome, real=None, slot=1):
     return joined if len(joined) <= PAIR_NAME_MAX else ''
 
 
+def team_initials(foursome, config, real=None, slot=1) -> str:
+    """
+    `B & P` — the pair, in the width a scorecard label column actually has.
+
+    The group scorecard's label column is 58 pixels: `Bronson & Petersen`
+    ellipsises to nothing there, and `Team` cannot tell two pairs apart when
+    both are on the same card.  Surname initials do both jobs and fit.
+
+    A foursome event has one team on its card, so `Team` is still the right
+    word and there is nothing to disambiguate from.
+    """
+    if not config.is_pairs:
+        return 'Team'
+    if real is None:
+        real = _real_memberships(foursome, slot)
+    initials = [m.player.name.strip().split()[-1][:1].upper()
+                for m in real if (m.player.name or '').strip()]
+    return ' & '.join(initials) if initials else 'Team'
+
+
 def team_dict(foursome, config, slot=1) -> dict:
     """One TEAM, as every Team Play surface reads it.
 
@@ -798,6 +845,8 @@ def team_dict(foursome, config, slot=1) -> dict:
         'group_number'      : foursome.group_number,
         'group_name'        : foursome.name or f'Group {foursome.group_number}',
         'name'              : team_name(foursome, config, real, slot),
+        # `B & P` — what the scorecard's 58-pixel label column can hold.
+        'short_name'        : team_initials(foursome, config, real, slot),
         'colour'            : state.colour if state else '',
         'real_player_count' : len(real),
         'team_size'         : size,
