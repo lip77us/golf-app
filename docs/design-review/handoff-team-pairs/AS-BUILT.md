@@ -58,6 +58,30 @@ notes.
   The quota follows the roster when the roster is bigger than the size; the
   phantom's floating share falls out at zero, because pairs have no phantom.
 
+## Rulings taken during testing
+
+- **Twelve colours, and they recycle.** A twenty-team field gives team 13 Pine
+  again. Confirmed as the wanted behaviour rather than widened: the palette
+  already carries three greens and four ambers, and a fourth green nobody can
+  separate on a phone in sunlight is worse than an honest repeat. So **colour
+  is a finding aid, never an identifier** — every board row carries its name
+  beside the swatch, and the scorecard labels its rows `B & P` rather than
+  leaning on colour. The one place it must hold is INSIDE a playing group,
+  where two pairs share a card; the colour ordinal is derived from
+  `(group, slot)`, which keeps those two consecutive and so never equal.
+- **No drive requirement, no asking who drove.** The packet argues the Scotch
+  tap should be mandatory because picking the drive says who plays next. A pair
+  on the tee already knows that, and recording it buys the app a sentence and
+  the golfers nothing. Set a quota and the tap returns, sentence included,
+  because then it is counting something.
+- **No `gets N` chip on either card.** It restates the round's total where
+  nobody plays off it; the dots already answer the question somebody standing
+  on a tee is asking, which is which holes carry a stroke.
+- **Golfers, not men.** Coed play is the expectation, so the copy does not
+  assume otherwise anywhere in the flow. `men's` and `women's` survive in
+  exactly one place — the names of the tee sets and their stroke indexes —
+  because there the distinction is the meaning.
+
 ## Implementation notes design may care about
 
 - **Best ball is a shamble whose count is 1.** It reuses the whole own-ball
