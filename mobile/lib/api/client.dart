@@ -2322,7 +2322,7 @@ class ApiClient {
     return QuotaNassauSummary.fromJson(data as Map<String, dynamic>);
   }
   // ── Team Play ──────────────────────────────────────────────────────────
-  // docs/design-review/handoff-team-play/SPEC.md — many four-man teams, one
+  // docs/design-review/handoff-team-play/SPEC.md — many four-golfer teams, one
   // round, one leaderboard.
 
   /// The TD's settings, or the defaults when nothing is configured yet.
@@ -2340,7 +2340,7 @@ class ApiClient {
   Future<Map<String, dynamic>> postTeamPlaySetup(
     int tournamentId, {
     /// Four or two. The size decides which formats are legal, and the server
-    /// refuses a mismatch — there is no two-man shamble and no four-man
+    /// refuses a mismatch — there is no two-golfer shamble and no four-golfer
     /// Chapman.
     int?    teamSize,
     String? teamFormat,
@@ -2420,7 +2420,7 @@ class ApiClient {
 
   /// Who is paired with whom inside a playing group. Four golfers go off one
   /// tee time; in a pairs event that group holds TWO teams, and this says
-  /// which two men are which.
+  /// which two golfers are which.
   Future<Map<String, dynamic>> postTeamPlaySplit(
     int foursomeId, Map<int, int> slotByPlayer) async {
     final data = await _post('/foursomes/$foursomeId/team-play/split/', {

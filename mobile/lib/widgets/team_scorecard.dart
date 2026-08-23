@@ -5,7 +5,7 @@
 ///
 /// **One strip of eighteen, scrolled to the hole being played** — the shape
 /// Nassau uses. Front-nine-over-back-nine stacked two grids on a phone and
-/// made the reader find which half he was in before he could read anything;
+/// made the reader find which half they were in before they could read anything;
 /// eighteen across with the current hole parked seven slots in is one glance.
 ///
 /// Par and stroke index stay called out as their own rows: they are the fixed
@@ -46,6 +46,15 @@ class TeamScorecardRow {
   /// score. Two 5s on a par 4 is +2, and "10" says nothing without doing the
   /// multiplication in your head.
   final bool toPar;
+  /// A colour bar down the left of the label, binding this row to a team.
+  ///
+  /// **One card can carry two teams.** A pairs playing group is four golfers
+  /// on one scorecard, and the label column is 58 pixels — nowhere near enough
+  /// for `Bronson & Petersen`. So the rows stay labelled `Team` and `Net` and
+  /// the colour says whose, matching the swatch beside the name on the entry
+  /// block directly above. Null when there is only one team and nothing to
+  /// tell apart.
+  final Color? accent;
 
   const TeamScorecardRow({
     required this.label,
@@ -55,6 +64,7 @@ class TeamScorecardRow {
     this.italic = false,
     this.total = false,
     this.toPar = false,
+    this.accent,
   });
 }
 
@@ -164,11 +174,17 @@ class _TeamScorecardState extends State<TeamScorecard> {
       return r.toPar ? toParLabel(v) : '$v';
     }
 
-    Widget labelCell(String text, {bool bold = false, bool italic = false}) =>
+    Widget labelCell(String text,
+            {bool bold = false, bool italic = false, Color? accent}) =>
         Container(
           width: _labelW, height: _rowH,
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.only(left: 8),
+          padding: EdgeInsets.only(left: accent == null ? 8 : 6),
+          decoration: accent == null
+              ? null
+              : BoxDecoration(
+                  border: Border(
+                      left: BorderSide(color: accent, width: 3))),
           child: Text(text,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
@@ -285,7 +301,8 @@ class _TeamScorecardState extends State<TeamScorecard> {
                     border: Border(top: BorderSide(
                         color: theme.colorScheme.outlineVariant)))
                 : null,
-            child: labelCell(r.label, bold: r.total, italic: r.italic),
+            child: labelCell(r.label,
+                bold: r.total, italic: r.italic, accent: r.accent),
           ),
           [
             Container(

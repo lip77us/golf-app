@@ -46,7 +46,12 @@ class TeamPlayLeaderboardScreen extends StatefulWidget {
 class _TeamPlayLeaderboardScreenState extends State<TeamPlayLeaderboardScreen> {
   TeamPlayLeaderboard? _board;
   Object? _error;
-  int? _expanded;
+  /// Which ROW is open — `foursomeId:slot`, not the foursome id.
+  ///
+  /// **Two pairs share a playing group.** Keyed on the foursome alone, opening
+  /// one pair's row opened the other pair's with it, so a twosome expanded
+  /// into the whole foursome.
+  String? _expanded;
 
   @override
   void initState() {
@@ -103,10 +108,10 @@ class _TeamPlayLeaderboardScreenState extends State<TeamPlayLeaderboardScreen> {
                       for (final team in board.teams)
                         _Row(
                           team    : team,
-                          expanded: _expanded == team.foursomeId,
+                          expanded: _expanded == team.rowKey,
                           onTap   : () => setState(() => _expanded =
-                              _expanded == team.foursomeId
-                                  ? null : team.foursomeId),
+                              _expanded == team.rowKey
+                                  ? null : team.rowKey),
                         ),
                       const SizedBox(height: 16),
                       _Pool(board: board),

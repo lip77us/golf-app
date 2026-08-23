@@ -348,8 +348,22 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
             onSetGolfer: _setGolferScore,
             onGo       : _goto,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
         ],
+
+        // ONE scorecard for the FOURSOME, under the last pair's entry.
+        //
+        // Hole, Par and Index belong to the course, not to a team, so drawing
+        // them twice was drawing the same three rows twice. Each pair keeps
+        // its own Team and Net lines, bound to its entry block by the colour
+        // bar down the label — the label column is 58 pixels and would
+        // ellipsise `Bronson & Petersen` to nothing.
+        _GroupScorecard(
+          card    : card,
+          teams   : _teams(card),
+          hole    : _hole!,
+          onGo    : _goto,
+        ),
 
         const SizedBox(height: 16),
         // The rules sit at the BOTTOM. They are read once on the 1st tee and
@@ -492,18 +506,6 @@ class _TeamBlock extends StatelessWidget {
                     onSelect: onSelect,
                     onSet   : onSetGolfer,
                   ),
-          ),
-
-          // The card so far, in the SAME container as the entry rather than a
-          // section of its own. It is the same team, the same hole strip and
-          // the same colour — splitting it off bought a second border and a
-          // second title and said nothing new.
-          _CardScorecard(
-            card    : card,
-            team    : team,
-            hole    : hole,
-            onGo    : onGo,
-            golferId: card.isOneBall ? null : selected,
           ),
         ],
       ),
@@ -1212,85 +1214,91 @@ class _ScoreBox extends StatelessWidget {
 
 /// The card so far, under the entry — the shared scorecard, so it reads as
 /// the same object as the one inside a leaderboard row.
-class _CardScorecard extends StatelessWidget {
+/// ONE scorecard for the whole playing group.
+///
+/// **Hole, Par and Index belong to the course, not to a team.** Drawing a card
+/// per pair drew those three rows twice and cost a second border and a second
+/// title bar, on a screen where the entry blocks above already say whose is
+/// whose. So there is one grid under the last block, and each team keeps only
+/// the lines that are actually its own: its scores and its net.
+///
+/// The rows stay labelled `Team` and `Net`, bound to their pair by a colour
+/// bar down the label — the label column is 58 pixels, which would ellipsise
+/// `Bronson & Petersen` into nothing.
+class _GroupScorecard extends StatelessWidget {
   final TeamPlayCard card;
-  final TeamPlayCardTeam team;
+  final List<TeamPlayCardTeam> teams;
   final int hole;
   final ValueChanged<int?> onGo;
-  /// Own-ball formats: whose strokes the dots mark. Null on a one-ball
-  /// format, where the figure is the team's.
-  final int? golferId;
 
-  const _CardScorecard({
-    required this.card, required this.team, required this.hole,
-    required this.onGo, required this.golferId,
+  const _GroupScorecard({
+    required this.card, required this.teams, required this.hole,
+    required this.onGo,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (card.pars.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    if (card.pars.isEmpty || teams.isEmpty) return const SizedBox.shrink();
 
-    final scores = team.round.byHole;
-    // The label on the score line. On a one-ball format the line IS the team,
-    // and the header two rows up has already named it, so `Team` is the right
-    // word for the grid's own column.
-    final name = golferId == null
-        ? 'Team'
-        : (team.shamble?.rows
-                .where((r) => r.playerId == golferId)
-                .firstOrNull
-                ?.name
-                .split(' ')
-                .last ??
-            'Team');
+    // Only worth colour-coding when there is another team to tell apart.
+    final many = teams.length > 1;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 6),
-        TeamScorecard(
-          pars         : card.pars,
-          strokeIndexes: card.strokeIndexes,
-          currentHole  : hole,
-          onTapHole    : (h) => onGo(h),
-          rows         : [
-            // One ball, so one line: what the team made, with its dots. TRUE
-            // FOR ALL FOUR one-ball formats — an alternate shot, a Scotch and
-            // a Chapman each play a single ball off a single team figure
-            // exactly as a scramble does. Testing the format NAME here instead
-            // sent the other three down the own-ball branch, where they
-            // iterated a list the server correctly sends empty: no score line
-            // and no dots, leaving the card with nothing on it but the net.
-            if (card.isOneBall)
-              TeamScorecardRow(
-                label  : name,
-                scores : scores,
-                strokes: team.strokesFor(golferId),
-              )
-            // An own-ball format shows every ball — the same rows the board's
-            // expanded team shows, counting balls tinted and the rest pale.
-            // What it does NOT get is a team TOTAL line: that figure is the
-            // sum of the counting balls, a "10" that is two 5s, and it is
-            // arithmetic nobody performs.
-            else
-              for (final g in team.golfersByHole)
-                TeamScorecardRow(
-                  label  : g.shortName,
-                  scores : g.scores,
-                  strokes: g.strokes,
-                  counted: g.counted,
-                  italic : g.isPhantom,
-                ),
-            if (team.netToParByHole.isNotEmpty)
-              TeamScorecardRow(
-                label  : 'Net',
-                scores : team.netToParByHole,
-                total  : true,
-                toPar  : true,
-              ),
-          ],
-        ),
-      ],
+    final rows = <TeamScorecardRow>[];
+    for (final team in teams) {
+      final accent = many ? TeamColourBlock.colourFor(team.colour) : null;
+
+      if (card.isOneBall) {
+        // One ball, so one line: what the team made, with its dots. True for
+        // all four one-ball formats — an alternate shot, a Scotch and a
+        // Chapman each play a single ball off a single team figure exactly as
+        // a scramble does.
+        rows.add(TeamScorecardRow(
+          label  : 'Team',
+          scores : team.round.byHole,
+          strokes: team.strokesFor(null),
+          accent : accent,
+        ));
+      } else {
+        // Every ball, with the counting ones marked — the team's total is a
+        // subset of them, and a row showing only the total cannot answer
+        // whose scores made it.
+        for (final g in team.golfersByHole) {
+          rows.add(TeamScorecardRow(
+            label  : g.shortName,
+            scores : g.scores,
+            strokes: g.strokes,
+            counted: g.counted,
+            italic : g.isPhantom,
+            accent : accent,
+          ));
+        }
+      }
+      if (team.netToParByHole.isNotEmpty) {
+        rows.add(TeamScorecardRow(
+          label  : 'Net',
+          scores : team.netToParByHole,
+          total  : true,
+          toPar  : true,
+          accent : accent,
+        ));
+      }
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: TeamScorecard(
+        pars         : card.pars,
+        strokeIndexes: card.strokeIndexes,
+        currentHole  : hole,
+        onTapHole    : (h) => onGo(h),
+        rows         : rows,
+      ),
     );
   }
 }

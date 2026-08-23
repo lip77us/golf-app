@@ -3172,7 +3172,7 @@ class SurvivorHoleEntry {
   /// Option on. Drives the plum row and the live (editable) score box, in place
   /// of the dimmed OUT row.
   final bool    isZombie;
-  /// This hole is where he came back in — the plum mark on the grid.
+  /// This hole is where they came back in — the plum mark on the grid.
   final bool    isResurrected;
   /// Did this hole knock them out?
   final bool    isEliminated;
@@ -3266,7 +3266,7 @@ class SurvivorSummary {
   final String status;
   final String handicapMode;
   final int    netPercent;
-  /// When on, the eliminated player keeps playing and can win his way back in.
+  /// When on, the eliminated player keeps playing and can win their way back in.
   final bool   zombieOption;
   final List<SurvivorLeg>         survivors;
   final List<SurvivorPlayerTotal> players;
@@ -5071,7 +5071,7 @@ class PhantomInitResult {
 // TEAM PLAY  (docs/design-review/handoff-team-play/SPEC.md)
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// The third tournament shape: many four-man teams, ONE round, one leaderboard.
+// The third tournament shape: many four-golfer teams, ONE round, one leaderboard.
 // Cup is two big sides and the unit is a match; Individual is a field of
 // singles and the unit is a card; this is small teams against each other, one
 // score per team per hole.
@@ -5181,7 +5181,7 @@ class TeamPlayAllowance {
 /// One golfer's drive pips inside one window.
 class TeamPlayDriveGolfer {
   final int       playerId;
-  /// The card names the man — *Maiolini owes 1* — never a player id.
+  /// The card names the golfer — *Maiolini owes 1* — never a player id.
   final String    name;
   final int       used;
   final List<int> holes;
@@ -5201,15 +5201,15 @@ class TeamPlayDriveGolfer {
         owes    : (j['owes'] ?? 0) as int,
       );
 
-  /// `✓ h2` once he has driven, `owes 1` until he has.
+  /// `✓ h2` once they have driven, `owes 1` until they have.
   String get pipLabel => holes.isEmpty
       ? 'owes $owes'
       : holes.map((h) => 'h$h').join(' · ');
 }
 
 /// One quota window. **Per nine is two of these, and the front does not carry
-/// to the back** — a man short on the front is already short, and a tracker
-/// that only totals eighteen says he is fine until the 18th green.
+/// to the back** — a golfer short on the front is already short, and a tracker
+/// that only totals eighteen says they are fine until the 18th green.
 class TeamPlayDriveWindow {
   final int  start;
   final int  end;
@@ -5222,7 +5222,7 @@ class TeamPlayDriveWindow {
   /// decide whether the long hitter can have the par 5.
   final int  freeLeft;
   /// Owed equals the holes remaining: it still works, but only if every one of
-  /// them goes to a man who owes.
+  /// them goes to a golfer who owes.
   final bool tight;
   /// Owed exceeds them: the window cannot be satisfied. It never blocks the
   /// tap — the team may knowingly take the shortfall.
@@ -5280,7 +5280,7 @@ class TeamPlayRotaHole {
   /// The line as the server writes it, in surnames — the form it is read in on
   /// the tee. Falls back to [upLabel] for a payload that predates it.
   final String    line;
-  /// Three-man team only: the man not driving, who plays the phantom's ball —
+  /// Three-golfer team only: the golfer not driving, who plays the phantom's ball —
   /// its 1st and 4th shots.
   final int?      phantomCover;
   final String    phantomCoverName;
@@ -5318,7 +5318,7 @@ class TeamPlayDrive {
   final int    perGolfer;
   final int    holes;
   /// Twelve required of eighteen means six free — the figure that tells a
-  /// captain whether he can let his long hitter drive the par 5.
+  /// captain whether they can let their long hitter drive the par 5.
   final int    free;
   final int    shortfall;
   /// Two strokes per missing drive, and ONLY when the TD opted in. Falling
@@ -5359,7 +5359,7 @@ class TeamPlayDrive {
   bool get isAlternating => rule == 'alternating';
 
   /// The card's amber state, on every hole rather than on 18. The moment a
-  /// quota becomes unsatisfiable is invisible to four men who have had a few.
+  /// quota becomes unsatisfiable is invisible to four golfers who have had a few.
   bool get warns => windows.any((w) => w.tight || w.impossible);
 
   TeamPlayRotaHole? rotaFor(int hole) {
@@ -5374,10 +5374,17 @@ class TeamPlayDrive {
 /// group.
 class TeamPlayTeam {
   final int    foursomeId;
+  /// Which team inside the playing group. A foursome event is always 1; a
+  /// pairs group of four carries a team at 1 and another at 2, so the foursome
+  /// id alone does not identify a row.
+  final int    slot;
   final int    groupNumber;
+  /// The PLAYING group's name — what the tee sheet and the hub call it. Two
+  /// pairs share one.
+  final String groupName;
   final String name;
   /// Assigned whether or not the TD renames the team: six unfamiliar
-  /// one-syllable names, and the colour block is how a man finds his row
+  /// one-syllable names, and the colour block is how a golfer finds their row
   /// without reading.
   final String colour;
   final int    realPlayerCount;
@@ -5388,7 +5395,7 @@ class TeamPlayTeam {
   final int    seatsOpen;
   final List<TeamPlayMember> members;
   /// Null until the team is full at ITS size — two for a pair. A team still
-  /// being built has no figure, because moving one man changes it.
+  /// being built has no figure, because moving one golfer changes it.
   final int?    teamHandicap;
   final String  teamHandicapRaw;
   final TeamPlayAllowance allowance;
@@ -5422,6 +5429,7 @@ class TeamPlayTeam {
 
   const TeamPlayTeam({
     required this.foursomeId, required this.groupNumber, required this.name,
+    this.slot = 1, this.groupName = '',
     required this.colour, required this.realPlayerCount,
     this.teamSize = 4,
     required this.hasPhantom, required this.seatsOpen, required this.members,
@@ -5437,7 +5445,9 @@ class TeamPlayTeam {
 
   factory TeamPlayTeam.fromJson(Map<String, dynamic> j) => TeamPlayTeam(
         foursomeId     : (j['foursome_id'] ?? 0) as int,
+        slot           : (j['slot'] ?? 1) as int,
         groupNumber    : (j['group_number'] ?? 0) as int,
+        groupName      : (j['group_name'] ?? '') as String,
         name           : (j['name'] ?? '') as String,
         colour         : (j['colour'] ?? '') as String,
         realPlayerCount: (j['real_player_count'] ?? 0) as int,
@@ -5486,9 +5496,14 @@ class TeamPlayTeam {
       .map((m) => m.isPhantom ? 'phantom 4th' : m.name)
       .join(' · ');
 
-  /// A pair is short until it has two men, a foursome until it has four
+  /// A pair is short until it has two golfers, a foursome until it has four
   /// (phantom included).
   bool get isFull => seatsOpen == 0;
+
+  /// What identifies this ROW. Two pairs share a playing group, so the
+  /// foursome id alone collides — keying anything on it expands, selects or
+  /// scrolls to both of them at once.
+  String get rowKey => '$foursomeId:$slot';
 }
 
 /// The whole Team Play read model — one call, because the build-teams screen
@@ -5643,11 +5658,11 @@ class TeamPlayDriveOption {
 ///
 /// **Pairs need an even field**, and there is no phantom partner to paper over
 /// an odd one — in fours the phantom is a handicap device for a team that
-/// still hits four balls, and in pairs it would be an imaginary man taking
+/// still hits four balls, and in pairs it would be an imaginary partner taking
 /// half the shots in an alternate shot.
 ///
 /// So the block is plain, and it NAMES the golfer rather than reporting a
-/// count: the fix is about one man and the TD needs to know which one is
+/// count: the fix is about one golfer and the TD needs to know which one is
 /// standing there.
 class TeamPlayBlock {
   /// `unpaired` — a team of one. `three_ball` — a team of three outside best
@@ -5733,7 +5748,7 @@ class TeamPlayBallCount {
 }
 
 /// One golfer's row on a shamble hole. The counting scores are tinted and the
-/// rest greyed, live — a man who shot 5 must see instantly that his 5 was not
+/// rest greyed, live — a golfer who shot 5 must see instantly that their 5 was not
 /// used, or the total looks wrong and someone re-enters it.
 class TeamPlayShambleRow {
   final int    playerId;
@@ -5932,7 +5947,7 @@ class TeamPlayCardTeam {
   ///
   /// A format that ends in ONE ball has a single team figure, so the dots are
   /// the team's. An own-ball format keeps handicaps per golfer, so they are
-  /// keyed by player and the card shows whichever man is selected.
+  /// keyed by player and the card shows whichever golfer is selected.
   Map<int, int> strokesFor(int? playerId) => playerId == null
       ? strokesByHole
       : (golferStrokes[playerId] ?? const {});
@@ -5947,7 +5962,7 @@ class TeamPlayCard {
   /// What the tee-shot control here actually DOES — `record` (a scramble's
   /// compliance against a quota), `instruction` (Scotch: the pick says who
   /// hits next), `rota` (alternate shot: odd/even, set on the 1st tee) or
-  /// `none` (best ball and Chapman, where both men drive every hole with no
+  /// `none` (best ball and Chapman, where both golfers drive every hole with no
   /// choice to record).
   final String driveControl;
   /// The sentence the card says on this hole. *Maiolini plays the second shot,
@@ -6086,7 +6101,7 @@ class TeamPlayCard {
   bool get showsDriveChips => (driveControl == 'record' ||
                                driveControl == 'instruction') &&
                               driveOptions.isNotEmpty;
-  /// The man whose drive was taken on this hole, or null.
+  /// The golfer whose drive was taken on this hole, or null.
   int? get pickedDriver => driveOptions
       .where((o) => o.picked).map((o) => o.playerId).firstOrNull;
 
@@ -6115,7 +6130,7 @@ class TeamPlayCard {
   /// A format that ends in ONE ball has a single team figure, so the dots are
   /// the team's — every one of them, not just a scramble's. An own-ball format
   /// keeps handicaps per golfer, so they are keyed by player and the card
-  /// shows whichever man is selected.
+  /// shows whichever golfer is selected.
   Map<int, int> strokesFor(int? playerId) => isOneBall
       ? strokesByHole
       : (golferStrokes[playerId] ?? const {});
@@ -6194,7 +6209,7 @@ class TeamPlayPaidTeam {
   final String colour;
   final int?   net;
   final int?   gross;
-  /// A three-man team divides its share three ways and takes more each — the
+  /// A team of three divides its share three ways and takes more each — the
   /// phantom 4th earned the strokes and cannot be paid. Said on the row so
   /// nobody has to work out why the figure is larger.
   final int    ways;

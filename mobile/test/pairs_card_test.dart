@@ -102,4 +102,32 @@ void main() {
       expect(shape('chapman', 'none').chips, isFalse);
     });
   });
+
+  group('two pairs share a playing group, so the foursome id is not a key', () {
+    TeamPlayTeam boardRow(int foursomeId, int slot) =>
+        TeamPlayTeam.fromJson({
+          'foursome_id': foursomeId, 'slot': slot,
+          'group_number': 1, 'name': 'Pair $slot', 'colour': 'Pine',
+          'real_player_count': 2, 'has_phantom': false, 'seats_open': 0,
+          'members': const [], 'team_handicap': 4,
+          'team_handicap_raw': '4.25',
+          'allowance': const {}, 'drive': const {}, 'thru': 0,
+        });
+
+    test('two rows in one group have different keys', () {
+      // Keyed on the foursome alone, opening one pair's row on the board
+      // opened the other pair's with it — a twosome expanded into the whole
+      // foursome.
+      expect(boardRow(7, 1).rowKey, isNot(boardRow(7, 2).rowKey));
+    });
+
+    test('the same row is the same key', () {
+      expect(boardRow(7, 1).rowKey, boardRow(7, 1).rowKey);
+    });
+
+    test('a foursome event sits at slot 1 and keys off it unchanged', () {
+      expect(boardRow(7, 1).slot, 1);
+      expect(boardRow(7, 1).rowKey, '7:1');
+    });
+  });
 }
