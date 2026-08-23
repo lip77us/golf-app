@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.6.0)
+# App Store listing copy — Halved (v2.7.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -53,6 +53,8 @@ GAMES YOU CAN PLAY
 • Stroke Play
 • Multi-Group Skins across foursomes
 • One-round team cup
+• Scramble and Shamble team events
+• Two-golfer teams — best ball, alternate shot, Scotch, Chapman
 
 CASUAL ROUNDS
 Playing with friends? Start a round, choose one or more games, and assign
@@ -72,7 +74,9 @@ in other groups.
 TOURNAMENTS
 Running something bigger? Halved supports multiple foursomes, several games at
 once, and multi-round events — with live leaderboards, team cup play, and
-formats like Irish Rumble, Pink Ball, and Singles.
+formats like Irish Rumble, Pink Ball, and Singles. Team events run small teams
+or two-golfer pairs against the whole field on one board, each format with the
+allowance it is actually played off.
 
 FIND YOUR COURSE FAST
 Just start typing a course name and pick it from one list — your own courses, a
@@ -92,7 +96,41 @@ seconds, with no spreadsheets and no napkin math.
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
 
-## What's New (v2.6.0)
+## What's New (v2.7.0)
+Team tournaments, and a rebuilt tournament for individual play:
+
+• Team tournaments — run a Saturday scramble or shamble with as many teams as
+  you like, all on one leaderboard. Pick the format, decide whether every
+  golfer has to give a drive, and Halved works each team's allowance from the
+  tees you set and shows it applied to your own teams before you commit.
+• Two-golfer teams — the same event for pairs, with five formats: scramble,
+  best ball, alternate shot, Scotch and Chapman. Two pairs go off together on
+  one tee time with one card, scored apart. Each format sets its own
+  allowance, and every one is shown before you choose so you can see that the
+  same two golfers get four strokes in a scramble and twelve in an alternate
+  shot.
+• Alternate shot keeps the order for you — the pair sets who tees on the odd
+  holes before the first shot, and the card names the tee on every hole after
+  that.
+• Individual tournaments, rebuilt — a clearer eight-step setup, best-N-of-M
+  scoring across rounds, a Mini Singles bracket in every group, an optional
+  final-round day bet, and a settlement screen that shows exactly who owes whom
+  and why, game by game.
+• Survivor's Zombie Option — switch it on and a knocked-out golfer plays on as
+  the Zombie. Beat the field on the next hole and you are back in.
+• Better sharing — a shared round link now opens a real page with the scorecard
+  on it, and previews with a proper card instead of a bare link.
+
+Fixes
+
+• A scramble round can be completed. One score per hole meant the round never
+  read as finished, so it could not be closed out.
+• Every stroke a team receives now shows on the card. A hole carrying three
+  strokes was drawing the same single mark as a hole carrying one.
+• Tee sheets name the event and list who is in each group.
+• A new tournament starts as an individual event rather than a cup.
+
+## What's New (v2.6.0) — previous
 A brand-new game, and a cup that's easier to build:
 
 • Survivor — a new game for three players. Everyone plays the hole and the
