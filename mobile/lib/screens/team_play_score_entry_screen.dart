@@ -54,6 +54,31 @@ import '../widgets/round_chat_button.dart';
 import '../widgets/team_play/team_play_bits.dart';
 import '../widgets/team_scorecard.dart';
 
+/// The golfer the picker is aimed at, across a WHOLE playing group.
+///
+/// **One picker on the screen, wherever the group's rows are drawn.** Four
+/// golfers on one card is one person entering four scores, so exactly one row
+/// is open and tapping another moves it — the idiom every other entry screen
+/// in the app uses, and the reason the universal screen tracks a single hot
+/// row rather than one per side.
+///
+/// [ids] are every golfer on the card in the order they are drawn, [scored]
+/// the ones who already have a number, and [picked] whoever was last tapped.
+/// The tap wins while that golfer is still on the card; otherwise it advances
+/// to the first golfer anywhere on it who has not been entered, which is what
+/// makes four entries four taps.
+///
+/// Top-level and pure so the rule can be tested. It regressed once by being
+/// keyed per pair, which opened a picker in every pair's block at once.
+int? activeGolferAcross(List<int> ids, Set<int> scored, int? picked) {
+  if (ids.isEmpty) return null;
+  if (picked != null && ids.contains(picked)) return picked;
+  for (final id in ids) {
+    if (!scored.contains(id)) return id;
+  }
+  return ids.first;
+}
+
 class TeamPlayScoreEntryScreen extends StatefulWidget {
   final int    foursomeId;
   final String teamName;
@@ -84,9 +109,14 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   /// this group has not finished, IN ITS PLAY ORDER. A shotgun group starting
   /// on 9 must not open on 1.
   int? _hole;
-  /// Own-ball formats only: whose ball the picker is aimed at, keyed by the
-  /// team it belongs to — two pairs on one card each aim their own.
-  final Map<int, int> _selected = {};
+  /// Own-ball formats only: whose ball the picker is aimed at.
+  ///
+  /// **ONE golfer for the whole playing group, not one per pair.** Four
+  /// golfers on one card is one person entering four scores, so exactly one
+  /// row is open at a time and tapping another moves it — the idiom every
+  /// other entry screen in the app uses. Keyed per pair, best ball opened a
+  /// picker in each block and put two on screen at once.
+  int? _selected;
   TeamPlayCard? _card;
   Object? _error;
   bool _busy = false;
@@ -160,22 +190,27 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
 
   void _goto(int? hole) {
     if (hole == null) return;
-    setState(() { _hole = hole; _selected.clear(); });
+    setState(() { _hole = hole; _selected = null; });
     _load();
   }
 
   /// The golfer the picker is aimed at: the tap, else the first golfer still
   /// without a score, else the first row. Auto-advancing to whoever is missing
   /// is what makes four entries four taps.
-  int? _activeGolfer(TeamPlayCardTeam team) {
-    final rows = team.shamble?.rows ?? const <TeamPlayShambleRow>[];
-    if (rows.isEmpty) return null;
-    final picked = _selected[team.slot];
-    if (picked != null && rows.any((r) => r.playerId == picked)) return picked;
-    for (final r in rows) {
-      if (r.gross == null) return r.playerId;
-    }
-    return rows.first.playerId;
+  /// The golfer the picker is aimed at, across the WHOLE playing group: the
+  /// tap, else the first golfer anywhere on the card still without a score,
+  /// else the first row. Auto-advancing to whoever is missing is what makes
+  /// four entries four taps.
+  int? _activeGolfer(TeamPlayCard card) {
+    final rows = [
+      for (final t in _teams(card))
+        ...(t.shamble?.rows ?? const <TeamPlayShambleRow>[]),
+    ];
+    return activeGolferAcross(
+      [for (final r in rows) r.playerId],
+      {for (final r in rows) if (r.gross != null) r.playerId},
+      _selected,
+    );
   }
 
   /// What this hole is still waiting on, or null when it is complete.
@@ -340,11 +375,11 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
             hole    : _hole!,
             busy    : _busy,
             needsRota  : _needsRota(team),
-            selected   : card.isOneBall ? null : _activeGolfer(team),
+            selected   : card.isOneBall ? null : _activeGolfer(card),
             onSetRota  : (pairs) => _setRota(team.slot, pairs),
             onPickDrive: (pid) => _setDrive(team.slot, pid),
             onSetTeam  : (gross) => _setTeamScore(team.slot, gross),
-            onSelect   : (id) => setState(() => _selected[team.slot] = id),
+            onSelect   : (id) => setState(() => _selected = id),
             onSetGolfer: _setGolferScore,
             onGo       : _goto,
           ),

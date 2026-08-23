@@ -14,6 +14,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
+import 'package:golf_mobile/screens/team_play_score_entry_screen.dart';
 import 'package:golf_mobile/widgets/team_scorecard.dart';
 
 TeamPlayCard _card(String format, {int teamSize = 2}) =>
@@ -165,6 +166,38 @@ void main() {
       const r = TeamScorecardRow(label: 'B & P', scores: {});
       expect(r.drawsRuleAbove, isFalse);
       expect(r.ruleBelow, isFalse);
+    });
+  });
+
+  group('one picker for the playing group, not one per pair', () {
+    // Four golfers on one card is one person entering four scores. Keyed per
+    // pair, best ball opened a picker in each pair's block and put two on
+    // screen at once — which no other entry screen in the app does.
+    test('with nothing entered it opens on the first golfer', () {
+      expect(activeGolferAcross([1, 2, 3, 4], {}, null), 1);
+    });
+
+    test('it advances past golfers who already have a score', () {
+      // Including past the whole first pair — the group is one list, so the
+      // picker crosses from one pair into the next on its own.
+      expect(activeGolferAcross([1, 2, 3, 4], {1, 2}, null), 3);
+    });
+
+    test('a tap wins over the advance', () {
+      expect(activeGolferAcross([1, 2, 3, 4], {}, 4), 4);
+    });
+
+    test('a tap on a golfer no longer on the card is ignored', () {
+      // The group can shrink between the tap and the reload.
+      expect(activeGolferAcross([1, 2], {}, 9), 1);
+    });
+
+    test('a full card keeps the picker on the first row', () {
+      expect(activeGolferAcross([1, 2, 3, 4], {1, 2, 3, 4}, null), 1);
+    });
+
+    test('an empty card opens nothing', () {
+      expect(activeGolferAcross([], {}, 3), isNull);
     });
   });
 }
