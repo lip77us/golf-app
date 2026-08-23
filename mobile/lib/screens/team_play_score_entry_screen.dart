@@ -410,10 +410,13 @@ class _DriveStrip extends StatelessWidget {
 
     return _Panel(
       label   : 'WHOSE DRIVE',
+      // "all square" was match-play language borrowed by accident and meant
+      // nothing here. Say what the captain needs: who still owes, and how many
+      // holes are not already spoken for.
       trailing: w.owed == 0
-          ? Text('all square', style: theme.textTheme.labelSmall)
+          ? Text('nobody owes', style: theme.textTheme.labelSmall)
           : Text(
-              '${w.owed} owed, ${w.holesLeft} left',
+              '${w.owed} owed · ${w.freeLeft} free',
               style: theme.textTheme.labelSmall?.copyWith(
                 color: w.tight || w.impossible
                     ? theme.colorScheme.error

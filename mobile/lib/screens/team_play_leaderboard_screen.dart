@@ -283,15 +283,20 @@ class _Detail extends StatelessWidget {
                     counted: g.counted,
                     italic : g.isPhantom,
                   ),
-                // Two lines, because the score the team made and what it was
-                // worth are different facts once strokes are involved — a 4 on
-                // a stroke hole is level, and one row cannot say both.
-                TeamScorecardRow(
-                  label  : 'Team',
-                  scores : team.scoresByHole,
-                  strokes: team.strokesByHole,
-                  total  : true,
-                ),
+                // A scramble's team score is one ball, so the raw line means
+                // something and both are worth showing: what the team made,
+                // and what it was worth once the stroke landed.
+                //
+                // A shamble's is the sum of the counting balls — a "10" that
+                // is two 5s — so only the net to par goes on it. The four
+                // golfer lines above already show what was actually shot.
+                if (team.golfersByHole.isEmpty)
+                  TeamScorecardRow(
+                    label  : 'Team',
+                    scores : team.scoresByHole,
+                    strokes: team.strokesByHole,
+                    total  : true,
+                  ),
                 TeamScorecardRow(
                   label  : 'Net',
                   scores : team.netToParByHole,
