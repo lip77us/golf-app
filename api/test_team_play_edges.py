@@ -478,3 +478,71 @@ class ShambleCardSummaryTests(_Base):
         self.assertIsNotNone(rnd['net_to_par'])
         self.assertLess(abs(rnd['net_to_par']), 20)
         self.assertEqual(rnd['net_to_par'], rnd['net'] - rnd['par_played'])
+
+
+class FeedRecapTests(_Base):
+    """The feed reports the TEAM, because the team is the competitor.
+
+    A shamble's individual front-nine gross is not a score anybody played for —
+    four balls go out and two count — and a scramble has no per-golfer ball at
+    all.
+    """
+
+    def _bodies(self):
+        from tournament.models import Message
+        return [m.body for m in Message.objects.filter(
+            thread__round=self.round).order_by('id')]
+
+    def _keys(self):
+        from tournament.models import Message
+        return [m.event_key.split(':')[0] for m in Message.objects.filter(
+            thread__round=self.round)]
+
+    def test_no_individual_front_nine_on_a_shamble(self):
+        self.configure(team_format='shamble')
+        # Both teams through the front.
+        self.shamble_round('Slate', gross=5, holes=9)
+        self.shamble_round('Dune',  gross=6, holes=9)
+        from services.messaging_events import emit_score_events
+        for fs in self.teams.values():
+            emit_score_events(fs, 9, [])
+
+        self.assertNotIn('front9_recap', self._keys())
+
+    def test_the_team_front_nine_waits_for_the_whole_field(self):
+        """One group at the turn is not the turn — the teams are playing each
+        other, so the card waits for all of them."""
+        self.configure(team_format='shamble')
+        self.shamble_round('Slate', gross=5, holes=9)
+        from services.messaging_events import emit_score_events
+        emit_score_events(self.teams['Slate'], 9, [])
+        self.assertNotIn('team_front9_recap', self._keys())
+
+        self.shamble_round('Dune', gross=6, holes=9)
+        emit_score_events(self.teams['Dune'], 9, [])
+        self.assertIn('team_front9_recap', self._keys())
+
+    def test_the_card_reports_teams_against_par(self):
+        self.configure(team_format='shamble')
+        self.shamble_round('Slate', gross=5, holes=9)
+        self.shamble_round('Dune',  gross=6, holes=9)
+        from services.messaging_events import emit_score_events
+        emit_score_events(self.teams['Dune'], 9, [])
+
+        body = next(b for b in self._bodies() if b.startswith('Front 9'))
+        self.assertIn('Slate', body)
+        self.assertIn('Dune', body)
+        # Named teams and to-par figures, never a golfer's name.
+        for golfer in ('Mercer', 'Bellini'):
+            self.assertNotIn(golfer, body)
+
+    def test_the_final_recap_is_the_teams_too(self):
+        self.configure(team_format='scramble')
+        self.scramble_round('Slate', gross_per_hole=4)
+        self.scramble_round('Dune',  gross_per_hole=5)
+        from services.messaging_events import emit_round_complete
+        emit_round_complete(self.round)
+
+        keys = self._keys()
+        self.assertIn('team_final_recap', keys)
+        self.assertNotIn('gross_recap', keys)

@@ -68,11 +68,66 @@ def emit_round_complete(round_obj):
         logger.exception('emit_round_complete failed (round %s)', round_obj.id)
 
 
+def _is_team_play(round_obj) -> bool:
+    """True for a configured Foursome Play round."""
+    t = round_obj.tournament
+    return bool(t and t.is_team_play and hasattr(t, 'team_play_config'))
+
+
+def _team_to_par(round_obj, upto_hole):
+    """`[(name, to_par), …]` best first, or None until EVERY team is through
+    ``upto_hole``.
+
+    Reported against par rather than as a total: a shamble's team score is the
+    sum of the counting balls, so "34" is two balls' worth of a nine and means
+    nothing on its own.
+    """
+    from services.team_play_scoring import net_to_par_by_hole, team_round
+    config = round_obj.tournament.team_play_config
+
+    out = []
+    for fs in round_obj.foursomes.order_by('group_number'):
+        rnd    = team_round(fs, config)
+        by_par = net_to_par_by_hole(fs, config, rnd)
+        holes  = [h for h in range(1, upto_hole + 1)]
+        if any(str(h) not in by_par for h in holes):
+            return None                       # a team is still out — wait
+        out.append((fs.name or f'Group {fs.group_number}',
+                    sum(by_par[str(h)] for h in holes)))
+    if not out:
+        return None
+    out.sort(key=lambda x: x[1])
+    return out
+
+
+def _fmt_to_par(v):
+    return 'E' if v == 0 else (f'+{v}' if v > 0 else str(v))
+
+
+def _emit_team_recap(round_obj, *, upto_hole, key, lead):
+    """The Foursome Play equivalent of the individual recaps: team nets, best
+    first, once every team is through."""
+    rows = _team_to_par(round_obj, upto_hole)
+    if not rows:
+        return
+    _emit(round_obj,
+          event_key=f'{key}:{round_obj.id}',
+          body=f'{lead} — ' + ', '.join(
+              f'{name} {_fmt_to_par(v)}' for name, v in rows),
+          data={'type': key,
+                'teams': [{'name': n, 'to_par': v} for n, v in rows]})
+
+
 def _emit_gross_recap(round_obj):
     """Feed-only card: every competitor's GROSS front-back-18 (e.g. 41-40-81),
     lowest total first. Withdrawn players show ``WD`` (no numbers). Skipped for
-    Triple Cup (team match play — a per-player stroke total isn't the point)."""
+    Triple Cup (team match play — a per-player stroke total isn't the point)
+    and for Foursome Play, for the same reason: the competitor is the team."""
     if 'triple_cup' in (round_obj.active_games or []):
+        return
+    if _is_team_play(round_obj):
+        _emit_team_recap(round_obj, upto_hole=18,
+                         key='team_final_recap', lead='Final')
         return
     from scoring.models import HoleScore
 
@@ -229,8 +284,17 @@ def _emit_front9_recap(foursome, hole_number):
     (e.g. "Front 9 done — Paul 41, Jenn 44"). Posts once per foursome, only once
     every non-withdrawn real player has all nine front scores in. Fires for ANY
     game (it's just a scorecard recap), feed-only like the round-complete recap.
-    Only bothers to check while scoring the front nine."""
+    Only bothers to check while scoring the front nine.
+
+    Foursome Play gets the TEAM nets instead. A shamble's individual front-nine
+    gross is not a score anybody played for — four balls go out and two count —
+    and a scramble has no per-golfer ball at all. It also waits for the whole
+    FIELD rather than one group, because the teams are playing each other."""
     if hole_number > 9:
+        return
+    if _is_team_play(foursome.round):
+        _emit_team_recap(foursome.round, upto_hole=9,
+                         key='team_front9_recap', lead='Front 9')
         return
     from scoring.models import HoleScore
     round_obj = foursome.round
