@@ -74,6 +74,13 @@ notes.
   on the tee already knows that, and recording it buys the app a sentence and
   the golfers nothing. Set a quota and the tap returns, sentence included,
   because then it is counting something.
+- **A named pair still shows its golfers' initials on the scorecard.** Name a
+  pair "The Ringers" and the board says The Ringers, the entry block above the
+  grid says The Ringers, and the grid row says `B & P`. Kept deliberately: the
+  card is where somebody enters scores for PEOPLE, so the golfers' initials are
+  the more useful thing in a 58-pixel column — a nickname's initials would tell
+  the scorer less. The colour bar ties the row to the named block above it.
+
 - **No `gets N` chip on either card.** It restates the round's total where
   nobody plays off it; the dots already answer the question somebody standing
   on a tee is asking, which is which holes carry a stroke.
