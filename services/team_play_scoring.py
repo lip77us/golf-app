@@ -36,8 +36,8 @@ from scoring.handicap import _strokes_on_hole
 from services.payout import payouts_by_place, split_tied_places, split_to_cents
 from services.team_play import drive_penalty_strokes
 from services.team_play_state import (
-    _phantom_membership, _real_memberships, drive_picks, hole_data,
-    resolved_counts, team_dict,
+    _phantom_membership, _real_memberships, _state_for, drive_picks, hole_data,
+    resolved_counts, team_dict, team_slots,
 )
 
 
@@ -46,7 +46,7 @@ from services.team_play_state import (
 # ---------------------------------------------------------------------------
 
 @transaction.atomic
-def submit_team_score(foursome, hole_number: int, gross_score):
+def submit_team_score(foursome, hole_number: int, gross_score, slot=1):
     """
     A one-ball hole — scramble, alternate shot, Scotch or Chapman: one number
     for the ball the team played in.
@@ -60,10 +60,12 @@ def submit_team_score(foursome, hole_number: int, gross_score):
 
     if gross_score in (None, ''):
         TeamHoleScore.objects.filter(
-            foursome=foursome, team=None, hole_number=hole_number).delete()
+            foursome=foursome, team=None, team_play_slot=slot,
+            hole_number=hole_number).delete()
     else:
         TeamHoleScore.objects.update_or_create(
-            foursome=foursome, team=None, hole_number=hole_number,
+            foursome=foursome, team=None, team_play_slot=slot,
+            hole_number=hole_number,
             defaults={'gross_score': int(gross_score)},
         )
         config = getattr(foursome.round.tournament, 'team_play_config', None)
@@ -72,18 +74,22 @@ def submit_team_score(foursome, hole_number: int, gross_score):
             config.save(update_fields=['format_locked_at'])
 
 
-def team_hole_scores(foursome) -> dict:
-    """``{hole_number: gross}`` for a team playing one ball."""
+def team_hole_scores(foursome, slot=1) -> dict:
+    """``{hole_number: gross}`` for one team playing one ball.
+
+    Keyed on the SLOT as well as the group: two pairs sharing a playing group
+    both carry a null `team`, so the group alone does not identify a side."""
     from games.models import TeamHoleScore
     return {
         r.hole_number: r.gross_score
-        for r in TeamHoleScore.objects.filter(foursome=foursome, team=None)
+        for r in TeamHoleScore.objects.filter(
+            foursome=foursome, team=None, team_play_slot=slot)
         if r.gross_score is not None
     }
 
 
 def shamble_hole(foursome, hole_number: int, counts: dict,
-                 config) -> dict:
+                 config, slot=1) -> dict:
     """
     One own-ball hole: every man's score, and which of them counted.
 
@@ -106,8 +112,8 @@ def shamble_hole(foursome, hole_number: int, counts: dict,
     si     = hole.get('stroke_index', hole_number)
     n      = counts.get(hole_number, 2)
 
-    members = _real_memberships(foursome)
-    phantom = _phantom_membership(foursome)
+    members = _real_memberships(foursome, slot)
+    phantom = _phantom_membership(foursome) if slot == 1 else None
     if phantom is not None:
         members = members + [phantom]
 
@@ -170,7 +176,7 @@ def shamble_hole(foursome, hole_number: int, counts: dict,
 # 2. The team's round
 # ---------------------------------------------------------------------------
 
-def team_round(foursome, config) -> dict:
+def team_round(foursome, config, slot=1) -> dict:
     """
     A team's gross, net and progress — the row the leaderboard draws.
 
@@ -178,12 +184,12 @@ def team_round(foursome, config) -> dict:
     round total.  An own-ball format's net is the sum of the counting nets,
     hole by hole, because its handicap never stopped being per golfer.
     """
-    state   = getattr(foursome, 'team_play_state', None)
+    state   = _state_for(foursome, slot)
     holes   = hole_data(foursome)
     par     = sum(h.get('par', 0) for h in holes)
 
     if config.plays_one_ball:
-        scores    = team_hole_scores(foursome)
+        scores    = team_hole_scores(foursome, slot)
         allowance = (state.team_handicap if state and state.team_handicap
                      is not None else 0)
         si_map    = {h['number']: h.get('stroke_index', h['number'])
@@ -211,7 +217,7 @@ def team_round(foursome, config) -> dict:
         gross_total = net_total = 0
         thru = 0
         for n in sorted(counts):
-            hole = shamble_hole(foursome, n, counts, config)
+            hole = shamble_hole(foursome, n, counts, config, slot)
             # A hole counts once EVERY ball is in, not once enough are in to
             # make a "best two". Two of four already satisfies a best-2, so the
             # old check read a part-scored hole as finished: the board showed
@@ -236,8 +242,9 @@ def team_round(foursome, config) -> dict:
 
     # Two strokes per missing drive, added to the team's gross at the END of
     # the round — and only when the TD opted in.
-    real_ids = [m.player_id for m in _real_memberships(foursome)]
-    penalty  = drive_penalty_strokes(config, drive_picks(foursome), real_ids)
+    real_ids = [m.player_id for m in _real_memberships(foursome, slot)]
+    penalty  = drive_penalty_strokes(
+        config, drive_picks(foursome, slot), real_ids)
     if penalty and gross is not None:
         gross += penalty
         net   += penalty
@@ -341,7 +348,7 @@ def net_to_par_by_hole(foursome, config, rnd) -> dict:
     return out
 
 
-def golfers_by_hole(foursome, config) -> list:
+def golfers_by_hole(foursome, config, slot=1) -> list:
     """Per-golfer gross, net, strokes and counted-flag, hole by hole.
 
     Own-ball formats only — a one-ball format has no per-golfer ball to show.
@@ -360,7 +367,7 @@ def golfers_by_hole(foursome, config) -> list:
     }
     out = {}
     for n in sorted(counts):
-        for r in shamble_hole(foursome, n, counts, config)['rows']:
+        for r in shamble_hole(foursome, n, counts, config, slot)['rows']:
             entry = out.setdefault(r['player_id'], {
                 'player_id' : r['player_id'],
                 'name'      : r['name'],
@@ -401,9 +408,12 @@ def leaderboard(tournament) -> dict:
         return None
 
     rows = []
-    for foursome in round_obj.foursomes.order_by('group_number'):
-        team = team_dict(foursome, config)
-        rnd  = team_round(foursome, config)
+    pairings = [(f, slot)
+                for f in round_obj.foursomes.order_by('group_number')
+                for slot in team_slots(f, config)]
+    for foursome, slot in pairings:
+        team = team_dict(foursome, config, slot)
+        rnd  = team_round(foursome, config, slot)
         # `allowance` means two different things in the two dicts: the worked
         # BLOCK in team_dict (kind, pct, label) and the plain whole-number
         # figure in team_round. Merging blind replaced the block with an int
@@ -432,7 +442,7 @@ def leaderboard(tournament) -> dict:
         # A shamble's expanded row shows all FOUR balls with the counting ones
         # marked — the team's total is two of them, and a board that shows only
         # the total cannot answer "whose scores made it".
-        team['golfers_by_hole'] = golfers_by_hole(foursome, config)
+        team['golfers_by_hole'] = golfers_by_hole(foursome, config, slot)
         # The team's line reads against par, not as a raw total: two 5s on a
         # par 4 is +2, and "10" says nothing without doing the multiplication
         # in your head.
@@ -469,7 +479,7 @@ def leaderboard(tournament) -> dict:
         row.setdefault('tied', False)
 
     rows.sort(key=lambda r: (r['rank'] is None, r['rank'] or 0,
-                             r['group_number']))
+                             r['group_number'], r['slot']))
 
     all_in = bool(rows) and all(r['complete'] for r in rows)
     return {

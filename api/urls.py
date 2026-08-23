@@ -50,6 +50,7 @@ urlpatterns = [
     path('tournaments/<int:pk>/team-play/setup/', views.TeamPlaySetupView.as_view(), name='api-team-play-setup'),
     path('foursomes/<int:pk>/team-play/team/',    views.TeamPlayTeamView.as_view(),  name='api-team-play-team'),
     path('foursomes/<int:pk>/team-play/drive/',   views.TeamPlayDriveView.as_view(), name='api-team-play-drive'),
+    path('foursomes/<int:pk>/team-play/split/',   views.TeamPlaySplitView.as_view(), name='api-team-play-split'),
     path('foursomes/<int:pk>/team-play/pairs/',   views.TeamPlayPairsView.as_view(), name='api-team-play-pairs'),
     path('foursomes/<int:pk>/team-play/score/',   views.TeamPlayScoreView.as_view(), name='api-team-play-score'),
     path('foursomes/<int:pk>/team-play/card/',    views.TeamPlayCardView.as_view(),  name='api-team-play-card'),

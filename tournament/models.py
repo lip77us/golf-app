@@ -424,6 +424,20 @@ class FoursomeMembership(models.Model):
                             help_text='True if the hole after withdrawal was '
                                       'abandoned by the whole group (voided).',
                         )
+    # Team Play: which team inside the playing group this golfer belongs to.
+    #
+    # **The foursome is the PLAYING group, not the team.**  That distinction
+    # does not exist in a four-man event — the group is the team, everybody
+    # sits at slot 1, and nothing here changes.  A pairs event puts TWO teams
+    # in one group: four golfers, one tee time, one scorer, one card, and two
+    # separate pairs on it.  Slot 2 is the second pair
+    # (docs/design-review/handoff-team-pairs/SPEC.md §3).
+    team_play_slot      = models.PositiveSmallIntegerField(
+                            default=1,
+                            help_text='1 or 2 — which pair inside the playing '
+                                      'group. Always 1 for a foursome event, '
+                                      'where the group IS the team.',
+                        )
 
     class Meta:
         unique_together = ('foursome', 'player')
@@ -1252,13 +1266,12 @@ class TeamPlayConfig(models.Model):
         """
         Whether a hole is incomplete until the drive is picked.
 
-        True for every quota — the card's gate — and **true for Scotch even
-        with no quota**, because there the tap is not a record at all: it says
-        who plays the second shot.  A Scotch hole with no drive picked has not
-        been played.
+        **Only when a quota is counting them.**  With no drive requirement
+        there is nothing to record, in any format — a pair playing Scotch knows
+        which of them is hitting the second shot without telling the app, and
+        charging them a tap a hole to be told back is the app asking for its
+        own benefit.
         """
-        if self.team_format == self.FORMAT_SCOTCH:
-            return True
         return self.drive_rule_is_quota
 
     def __str__(self):
@@ -1267,8 +1280,14 @@ class TeamPlayConfig(models.Model):
 
 class TeamPlayTeamState(models.Model):
     """
-    Per-team state for Team Play.  The team itself is the Foursome; this row
-    carries what a Foursome has no field for.
+    Per-team state for Team Play — one row per TEAM, which is not always one
+    row per group.
+
+    **The foursome is the playing group.**  In a four-man event the group IS
+    the team, there is one row at slot 1, and everything reads as it always
+    did.  A pairs event puts two teams in one playing group — four golfers, one
+    tee time, one scorer, one card — so it gets a row at slot 1 and another at
+    slot 2, and each carries its own name, colour, figure and rota.
 
     ``colour`` is assigned whether or not the TD renames the team, because it
     does real work on the leaderboard and the scorecard: six team names, most
@@ -1276,8 +1295,26 @@ class TeamPlayTeamState(models.Model):
     finds his team without reading.
     """
 
-    foursome = models.OneToOneField(
-        Foursome, on_delete=models.CASCADE, related_name='team_play_state'
+    foursome = models.ForeignKey(
+        Foursome, on_delete=models.CASCADE, related_name='team_play_states'
+    )
+    slot = models.PositiveSmallIntegerField(
+        default=1,
+        help_text='1 or 2 — which team inside the playing group. Always 1 for '
+                  'a foursome event, where the group IS the team.',
+    )
+    # A pair's own name. A FOURSOME keeps using `Foursome.name`, because there
+    # the group and the team are the same thing and that is the field the hub,
+    # the tee sheet and the chat header already read. Two pairs in one group
+    # cannot share one field, so theirs lives here.
+    name = models.CharField(
+        max_length=32, blank=True,
+        help_text=(
+            'Pairs only — a foursome names itself through Foursome.name. '
+            'Longer than the ball game\'s 16 because this one is not invented: '
+            'it is two real surnames, and "Petersen & Reilly" is seventeen '
+            'characters before anybody has typed anything.'
+        ),
     )
     colour = models.CharField(
         max_length=20, blank=True,
@@ -1326,12 +1363,17 @@ class TeamPlayTeamState(models.Model):
     )
     drive_pairs_set_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        unique_together = ('foursome', 'slot')
+        ordering = ['foursome_id', 'slot']
+
     @property
     def pairs_are_set(self) -> bool:
         return bool(self.drive_pairs)
 
     def __str__(self):
-        return f"Team Play state — {self.foursome.display_name} — {self.colour}"
+        return (f"Team Play state — {self.foursome.display_name} "
+                f"slot {self.slot} — {self.colour}")
 
 
 class TeamDrivePick(models.Model):
@@ -1349,6 +1391,10 @@ class TeamDrivePick(models.Model):
     foursome = models.ForeignKey(
         Foursome, on_delete=models.CASCADE, related_name='team_drive_picks'
     )
+    # Which team in the playing group took this drive. Two pairs sharing a
+    # group each choose their own tee shot on every hole, so the pick is the
+    # TEAM's and not the group's.
+    slot = models.PositiveSmallIntegerField(default=1)
     hole_number = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(18)]
     )
@@ -1359,11 +1405,12 @@ class TeamDrivePick(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('foursome', 'hole_number')
+        unique_together = ('foursome', 'slot', 'hole_number')
         ordering = ['hole_number']
 
     def __str__(self):
-        return f"Drive — {self.foursome.display_name} — Hole {self.hole_number} — {self.player.name}"
+        return (f"Drive — {self.foursome.display_name} slot {self.slot} — "
+                f"Hole {self.hole_number} — {self.player.name}")
 
 # ---------------------------------------------------------------------------
 # WATCHERS  (non-playing spectators invited to follow in-app, read-only)

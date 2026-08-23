@@ -9404,33 +9404,114 @@ class TeamPlayTeamView(APIView):
     unnamed team is `Group N` and the colour identifies the row rather than
     naming it, and clearing a name should give back the thing the wizard
     showed.
+
+    **A pair is named on its own row, not on the Foursome.** Two pairs share a
+    playing group, so `Foursome.name` is the GROUP's name and cannot also be
+    one of theirs.
     """
     def post(self, request, pk):
         from services.team_play_state import (
             apply_default_name, ensure_team_state, team_name,
         )
         foursome = foursome_for_scorer(request.user, pk)
-        name = (request.data.get('name') or '').strip()[:16]   # same cap as the ball game
-        state = ensure_team_state(foursome)
+        from services.team_play_state import PAIR_NAME_MAX
         config = getattr(foursome.round.tournament, 'team_play_config', None)
+        slot = _team_slot(request, foursome, config)
+        # A foursome keeps the ball game's 16; a pair gets the wider cap its
+        # own surnames need.
+        cap = PAIR_NAME_MAX if (config and config.is_pairs) else 16
+        name = (request.data.get('name') or '').strip()[:cap]
+        state = ensure_team_state(foursome, slot=slot)
+        pairs = config is not None and config.is_pairs
 
-        foursome.name = name
-        foursome.save(update_fields=['name'])
+        if pairs:
+            state.name = name
+        else:
+            foursome.name = name
+            foursome.save(update_fields=['name'])
         # A pair's surname default follows the roster until somebody types over
         # it; after that a swapped golfer must not drag the name with him.
-        if state.name_is_default != (not name):
-            state.name_is_default = not name
-            state.save(update_fields=['name_is_default'])
+        state.name_is_default = not name
+        state.save(update_fields=['name', 'name_is_default'])
         if config is not None:
-            apply_default_name(foursome, config, state)
-            foursome.refresh_from_db(fields=['name'])
+            apply_default_name(foursome, config, state, slot=slot)
 
         return Response({
             'foursome_id': foursome.id,
-            'name'   : (foursome.name or
-                        (team_name(foursome, config) if config is not None
-                         else f'Group {foursome.group_number}')),
+            'slot'   : slot,
+            'name'   : (team_name(foursome, config, slot=slot)
+                        if config is not None
+                        else (foursome.name or f'Group {foursome.group_number}')),
             'colour' : state.colour,
+        })
+
+
+class TeamPlaySplitView(APIView):
+    """
+    POST /api/foursomes/{id}/team-play/split/ — who is paired with whom inside
+    a playing group.
+
+    Four golfers go off one tee time as one group; in a pairs event that group
+    holds TWO teams, and this says which two men are which. The default is the
+    order the TD dragged them into on Groups & Tees — first two, then the next
+    two — and this is how he changes it without rebuilding the round.
+
+    Body: ``{"slots": {"<player_id>": 1 | 2}}``. Every real golfer in the
+    group must be named, because a split that leaves somebody out is a golfer
+    on no team.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        config = getattr(foursome.round.tournament, 'team_play_config', None)
+        if config is None or not config.is_pairs:
+            return Response(
+                {'detail': 'Only a pairs event splits a playing group — a '
+                           'foursome event has one team per group.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        if config.is_locked:
+            return Response(
+                {'detail': 'The first score has been entered. Re-pairing now '
+                           'would move scores between teams.'},
+                status=status.HTTP_409_CONFLICT)
+
+        raw = request.data.get('slots') or {}
+        members = list(foursome.memberships.filter(player__is_phantom=False))
+        wanted = {}
+        for m in members:
+            v = raw.get(str(m.player_id), raw.get(m.player_id))
+            if v is None:
+                return Response(
+                    {'detail': f'{m.player.name} is not in the split. Every '
+                               f'golfer in the group has to be on a team.'},
+                    status=status.HTTP_400_BAD_REQUEST)
+            if int(v) not in (1, 2):
+                return Response({'detail': 'A slot is 1 or 2.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            wanted[m.player_id] = int(v)
+
+        # A team of one is a golfer with no partner. It is allowed to EXIST —
+        # the odd-field block names him and the wizard waits on it — but it
+        # cannot be created deliberately here while a legal split is available.
+        counts = {}
+        for v in wanted.values():
+            counts[v] = counts.get(v, 0) + 1
+        if len(members) == 4 and sorted(counts.values()) != [2, 2]:
+            return Response(
+                {'detail': 'Four golfers split two and two.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        for m in members:
+            if m.team_play_slot != wanted[m.player_id]:
+                m.team_play_slot = wanted[m.player_id]
+                m.save(update_fields=['team_play_slot'])
+
+        from services.team_play_state import sync_teams
+        sync_teams(foursome.round.tournament)
+        from services.team_play_state import team_dict, team_slots
+        return Response({
+            'foursome_id': foursome.id,
+            'teams': [team_dict(foursome, config, s)
+                      for s in team_slots(foursome, config)],
         })
 
 
@@ -9453,11 +9534,16 @@ class TeamPlayDriveView(APIView):
             return Response({'detail': 'hole_number must be 1–18.'},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        config0 = getattr(foursome.round.tournament, 'team_play_config', None)
+        slot = _team_slot(request, foursome, config0)
+
         if player_id in (None, ''):
-            TeamDrivePick.objects.filter(foursome=foursome, hole_number=hole).delete()
+            TeamDrivePick.objects.filter(
+                foursome=foursome, slot=slot, hole_number=hole).delete()
         else:
             member = foursome.memberships.filter(
-                player_id=int(player_id), player__is_phantom=False).first()
+                player_id=int(player_id), player__is_phantom=False,
+                team_play_slot=slot).first()
             if member is None:
                 # The phantom has no tee shot — its ball is played by whoever
                 # is not driving, which is a different question.
@@ -9465,15 +9551,14 @@ class TeamPlayDriveView(APIView):
                     {'detail': 'That golfer is not on this team.'},
                     status=status.HTTP_400_BAD_REQUEST)
             TeamDrivePick.objects.update_or_create(
-                foursome=foursome, hole_number=hole,
+                foursome=foursome, slot=slot, hole_number=hole,
                 defaults={'player': member.player},
             )
 
-        config = getattr(foursome.round.tournament, 'team_play_config', None)
-        if config is None:
+        if config0 is None:
             return Response({'detail': 'This round is not a Foursome Play event.'},
                             status=status.HTTP_400_BAD_REQUEST)
-        return Response(drive_state(foursome, config))
+        return Response(drive_state(foursome, config0, slot))
 
 
 class TeamPlayPairsView(APIView):
@@ -9488,7 +9573,9 @@ class TeamPlayPairsView(APIView):
         from django.utils import timezone
         from services.team_play_state import ensure_team_state
         foursome = foursome_for_scorer(request.user, pk)
-        state = ensure_team_state(foursome)
+        cfg = getattr(foursome.round.tournament, 'team_play_config', None)
+        slot = _team_slot(request, foursome, cfg)
+        state = ensure_team_state(foursome, slot=slot)
 
         if state.pairs_are_set:
             return Response(
@@ -9500,7 +9587,8 @@ class TeamPlayPairsView(APIView):
 
         pairs = request.data.get('pairs') or []
         member_ids = set(
-            foursome.memberships.filter(player__is_phantom=False)
+            foursome.memberships.filter(player__is_phantom=False,
+                                        team_play_slot=slot)
             .values_list('player_id', flat=True)
         )
         flat = [pid for pair in pairs for pid in pair]
@@ -9512,9 +9600,8 @@ class TeamPlayPairsView(APIView):
         state.drive_pairs_set_at = timezone.now()
         state.save(update_fields=['drive_pairs', 'drive_pairs_set_at'])
 
-        config = getattr(foursome.round.tournament, 'team_play_config', None)
         from services.team_play_state import drive_state
-        return Response(drive_state(foursome, config) if config else {})
+        return Response(drive_state(foursome, cfg, slot) if cfg else {})
 
 
 class TeamPlayScoreView(APIView):
@@ -9545,8 +9632,10 @@ class TeamPlayScoreView(APIView):
             return Response({'detail': 'hole_number must be 1–18.'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        submit_team_score(foursome, hole, request.data.get('gross_score'))
-        return Response(team_round(foursome, config))
+        slot = _team_slot(request, foursome, config)
+        submit_team_score(foursome, hole, request.data.get('gross_score'),
+                          slot=slot)
+        return Response(team_round(foursome, config, slot))
 
 
 class TeamPlayCardView(APIView):
@@ -9593,79 +9682,124 @@ class TeamPlayCardView(APIView):
         info = next(
             (h for h in hole_data(foursome) if h.get('number') == hole), {})
 
-        rnd = team_round(foursome, config)
-
-        # Strokes the TEAM receives on this hole, allocated off its whole-number
-        # figure by stroke index — the same allocation every other card uses.
-        # It drives the "gets N" chip and the handicap dots, so a scramble can
-        # see on the tee that this is one of the holes it gets a stroke.
+        from services.team_play_state import team_name, team_slots
         from scoring.handicap import _strokes_on_hole
-        team_strokes = 0
-        if config.plays_one_ball and rnd.get('allowance') and info.get('stroke_index'):
-            team_strokes = _strokes_on_hole(
-                rnd['allowance'], info['stroke_index'])
+
+        slots = team_slots(foursome, config)
+
+        def _team_block(slot):
+            """One team's half of the card.
+
+            **The card belongs to the playing GROUP, not the team.** Four
+            golfers go off one tee with one scorer, so one person enters
+            everything on it — and in pairs that is two teams' worth. Each
+            block is self-contained so the client draws them one under the
+            other without knowing which is which.
+            """
+            rnd = team_round(foursome, config, slot)
+            team_strokes = 0
+            if (config.plays_one_ball and rnd.get('allowance')
+                    and info.get('stroke_index')):
+                team_strokes = _strokes_on_hole(
+                    rnd['allowance'], info['stroke_index'])
+
+            state = next((st for st in foursome.team_play_states.all()
+                          if st.slot == slot), None)
+            block = {
+                'slot'         : slot,
+                'name'         : team_name(foursome, config, slot=slot),
+                'colour'       : state.colour if state else '',
+                'team_strokes' : team_strokes,
+                # Where the strokes fall, across the WHOLE round. Seeing which
+                # holes carry one is half the reason the card sits under the
+                # entry — a dot on the hole you happen to be standing on tells
+                # you nothing about the two coming up.
+                #
+                # A one-ball format has a single team figure, so this is the
+                # team's. An own-ball format keeps handicaps per golfer, so it
+                # is keyed by player and the card shows whichever man is
+                # selected.
+                'strokes_by_hole': _team_strokes_by_hole(
+                    foursome, config, rnd, slot),
+                'golfer_strokes' : _golfer_strokes_by_hole(
+                    foursome, config, slot),
+                'net_to_par_by_hole': net_to_par_by_hole(
+                    foursome, config, rnd),
+                'golfers_by_hole': golfers_by_hole(foursome, config, slot),
+                'round'        : rnd,
+                'drive'        : drive_state(foursome, config, slot),
+                # What the tee-shot control DOES — a record, an instruction, a
+                # rota, or nothing at all.
+                'drive_control': drive_control_kind(config),
+                # …and the sentence it answers with. Alternate shot, on EVERY
+                # tee: "Maiolini tees." A pair that loses track plays a hole
+                # out of order and the round is gone.
+                'tee_note'     : tee_note(foursome, config, hole, slot),
+                'requires_drive_pick': config.requires_drive_pick,
+                'drive_options': _team_drive_options(
+                    foursome, config, hole, slot),
+            }
+            if config.plays_one_ball:
+                block['team_score'] = team_hole_scores(foursome, slot).get(hole)
+            else:
+                block['shamble'] = shamble_hole(
+                    foursome, hole, resolved_counts(foursome, config),
+                    config, slot)
+            return block
+
+        teams = [_team_block(slot) for slot in slots]
 
         body = {
             'format'    : config.team_format,
+            'team_size' : config.team_size,
             'hole'      : hole,
             'play_order': order,
             'par'       : info.get('par'),
             'stroke_index': info.get('stroke_index'),
             'yards'     : info.get('yards'),
-            'team_strokes': team_strokes,
+            'group_name': foursome.name or f'Group {foursome.group_number}',
             # Par by hole, so the scorecard under the entry can draw its PAR
             # row without a second call.
             'pars'      : {str(h['number']): h.get('par')
                            for h in hole_data(foursome)},
             'stroke_indexes': {str(h['number']): h.get('stroke_index')
                                for h in hole_data(foursome)},
-            # Where the strokes fall, across the WHOLE round. Seeing which
-            # holes carry one is half the reason the card sits under the
-            # entry — a dot on the hole you happen to be standing on tells you
-            # nothing about the two coming up.
-            #
-            # A scramble has one team figure, so this is the team's. A shamble
-            # keeps handicaps per golfer, so it is keyed by player and the card
-            # shows whichever man is selected.
-            'strokes_by_hole': _team_strokes_by_hole(foursome, config, rnd),
-            'golfer_strokes' : _golfer_strokes_by_hole(foursome, config),
-            # What each hole's score was WORTH — the net line under the card.
-            'net_to_par_by_hole': net_to_par_by_hole(foursome, config, rnd),
-            # Every ball, hole by hole, with the counting ones flagged — the
-            # scorecard under the entry shows the same four rows the board's
-            # expanded row does.
-            'golfers_by_hole': golfers_by_hole(foursome, config),
-            'round'     : rnd,
-            'drive'     : drive_state(foursome, config),
-            # What the tee-shot control on this card actually DOES — a record,
-            # an instruction, a rota, or nothing at all. The same control does
-            # three different jobs across the six formats, and the client must
-            # not have to work out which from the format name.
-            'drive_control': drive_control_kind(config),
-            # …and the sentence it answers with. Scotch: "Maiolini plays the
-            # second shot, then alternate." Alternate shot, on EVERY tee:
-            # "Maiolini tees." A pair that loses track plays a hole out of
-            # order and the round is gone, so the note is never conditional.
-            'tee_note'     : tee_note(foursome, config, hole),
-            # A Scotch hole is not complete until the drive is picked even
-            # with no quota, because there the tap is the instruction.
-            'requires_drive_pick': config.requires_drive_pick,
-            'team_size'    : config.team_size,
-            # Who the card may tap, and who is tapped. The quota windows carry
-            # this for a quota rule, but Scotch has the tap with NO quota — the
-            # pick is an instruction, not a record — so the roster has to come
-            # down either way or the chips have nobody to draw.
-            'drive_options': _team_drive_options(foursome, config, hole),
+            # One entry per team on this card. A foursome event always sends
+            # exactly one; a pairs group sends one or two.
+            'teams'     : teams,
         }
-        if config.plays_one_ball:
-            body['team_score'] = team_hole_scores(foursome).get(hole)
-        else:
-            body['shamble'] = shamble_hole(
-                foursome, hole, resolved_counts(foursome, config), config)
+        # The first team's fields stay at the top level as well, so a client
+        # that predates the two-pair card still reads a whole, correct card for
+        # the team it knows about.
+        body.update({k: v for k, v in teams[0].items() if k != 'slot'})
         return Response(body)
 
 
-def _team_drive_options(foursome, config, hole):
+def _team_slot(request, foursome, config) -> int:
+    """Which team inside the playing group this write is for.
+
+    A four-man event has exactly one, so the parameter is absent and the answer
+    is 1 — which is what every existing caller sends by not sending it. A pairs
+    group of four holds two, and the card names the one it is writing.
+
+    An out-of-range slot falls back to the first team actually in the group
+    rather than 400ing: the group may have shrunk to one pair since the card
+    loaded, and refusing a score because of that would be the app losing a
+    number a golfer already made.
+    """
+    from services.team_play_state import team_slots
+    raw = request.data.get('slot', request.query_params.get('slot'))
+    try:
+        slot = int(raw)
+    except (TypeError, ValueError):
+        slot = 1
+    if config is None:
+        return 1
+    available = team_slots(foursome, config)
+    return slot if slot in available else (available[0] if available else 1)
+
+
+def _team_drive_options(foursome, config, hole, slot=1):
     """`[{player_id, name, picked}]` — the chips the card draws, and which one
     is on.
 
@@ -9683,15 +9817,15 @@ def _team_drive_options(foursome, config, hole):
 
     if drive_control_kind(config) not in ('record', 'instruction', 'rota'):
         return []
-    picked = drive_picks(foursome).get(hole)
+    picked = drive_picks(foursome, slot).get(hole)
     return [
         {'player_id': m.player_id, 'name': m.player.name,
          'picked': m.player_id == picked}
-        for m in _real_memberships(foursome)
+        for m in _real_memberships(foursome, slot)
     ]
 
 
-def _team_strokes_by_hole(foursome, config, rnd):
+def _team_strokes_by_hole(foursome, config, rnd, slot=1):
     """`{hole: strokes}` for the TEAM — one-ball formats only, where a single
     figure covers the side. Empty on an own-ball format, whose strokes belong
     to golfers."""
@@ -9707,7 +9841,7 @@ def _team_strokes_by_hole(foursome, config, rnd):
     }
 
 
-def _golfer_strokes_by_hole(foursome, config):
+def _golfer_strokes_by_hole(foursome, config, slot=1):
     """`{player_id: {hole: strokes}}` for an own-ball format, off each golfer's
     own playing handicap. Empty on a one-ball format, which has no per-golfer
     ball."""
@@ -9724,7 +9858,8 @@ def _golfer_strokes_by_hole(foursome, config):
     pct = allowance_label(foursome, config).get('pct') or 100
 
     out = {}
-    for m in foursome.memberships.select_related('player'):
+    for m in foursome.memberships.select_related('player').filter(
+            team_play_slot=slot):
         hcp = 0 if gross_only else player_own_ball_handicap(
             m.course_handicap, pct)
         out[str(m.player_id)] = {
@@ -9751,15 +9886,22 @@ def _first_unplayed_team_hole(foursome, config, order):
     from services.team_play_state import resolved_counts
     from services.team_play_scoring import shamble_hole, team_hole_scores
 
+    from services.team_play_state import team_slots
+    slots = team_slots(foursome, config)
+
     if config.plays_one_ball:
-        scored = team_hole_scores(foursome)
+        scored = [team_hole_scores(foursome, s) for s in slots]
         for h in order:
-            if scored.get(h) is None:
+            # The card is the GROUP's, so it opens on the first hole any team
+            # on it has not finished — one card, two pairs, and the group
+            # walks the course together.
+            if any(sc.get(h) is None for sc in scored):
                 return h
     else:
         counts = resolved_counts(foursome, config)
         for h in order:
-            if not shamble_hole(foursome, h, counts, config)['complete']:
+            if any(not shamble_hole(foursome, h, counts, config, s)['complete']
+                   for s in slots):
                 return h
     return order[0] if order else 1
 

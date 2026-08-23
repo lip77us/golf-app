@@ -49,6 +49,11 @@ TEAM_COLOURS = [
 ]
 
 
+# How long a pair's name may be. Two real surnames need more room than an
+# invented team name: `Petersen & Reilly` is already seventeen characters.
+PAIR_NAME_MAX = 24
+
+
 def team_colour_for(index: int) -> str:
     """1-based group number → its colour, wrapping if a field ever outgrows
     the list."""
@@ -59,16 +64,100 @@ def team_colour_for(index: int) -> str:
 # 1. Provisioning
 # ---------------------------------------------------------------------------
 
-def _real_memberships(foursome):
+def _real_memberships(foursome, slot=None):
+    """
+    The real golfers on a team, low handicap first.
+
+    ``slot`` narrows to ONE team inside the playing group.  Omit it for a
+    four-man event, where the group is the team and there is nothing to narrow
+    — and pass it for pairs, where a group of four holds two teams.
+    """
+    qs = foursome.memberships.filter(player__is_phantom=False)
+    if slot is not None:
+        qs = qs.filter(team_play_slot=slot)
     return list(
-        foursome.memberships.filter(player__is_phantom=False)
-        .select_related('player', 'tee')
-        .order_by('course_handicap', 'player__name')
+        qs.select_related('player', 'tee')
+          .order_by('course_handicap', 'player__name')
     )
 
 
-def _phantom_membership(foursome):
-    return foursome.memberships.filter(player__is_phantom=True).first()
+def _phantom_membership(foursome, slot=None):
+    """The phantom 4th, which only a FOURSOME can have — a pair never fields
+    one, so a slot argument here is always answered with None for pairs."""
+    qs = foursome.memberships.filter(player__is_phantom=True)
+    if slot is not None:
+        qs = qs.filter(team_play_slot=slot)
+    return qs.first()
+
+
+def _state_for(foursome, slot=1):
+    """This team's state row, or None. `foursome.team_play_state` is gone —
+    a playing group can hold two teams, so the row is keyed by slot."""
+    return next((st for st in foursome.team_play_states.all()
+                 if st.slot == slot), None)
+
+
+def team_slots(foursome, config) -> list:
+    """
+    The teams inside this playing group, as slot numbers.
+
+    ``[1]`` for a four-man event — the group IS the team.  ``[1]`` or ``[1, 2]``
+    for pairs, depending on whether the TD put one pair or two out together.
+    """
+    if not config.is_pairs:
+        return [1]
+    slots = sorted({m.team_play_slot
+                    for m in foursome.memberships.filter(player__is_phantom=False)})
+    return slots or [1]
+
+
+@transaction.atomic
+def assign_slots(foursome, config) -> list:
+    """
+    Split a playing group into its teams.
+
+    **The foursome is the playing group, and in pairs it holds two teams.**
+    Four golfers go off one tee time with one scorer and one card, and the two
+    pairs on it are scored separately — so each golfer has to say which pair he
+    is in.
+
+    The default split is by the order the TD dragged them into on Groups &
+    Tees: the first two men are pair 1 and the next two are pair 2.  Once
+    anybody has been moved off that default the split is the TD's and is left
+    alone.
+
+    A three-man group in **best ball** defaults to ONE team of three rather
+    than a pair plus a spare — that is the packet's odd-field way out, and it
+    is the only shape three men can legally take in a pairs event, so choosing
+    it is not a guess.
+    """
+    real = list(foursome.memberships.filter(player__is_phantom=False)
+                .order_by('id'))
+
+    def _set(m, want):
+        if m.team_play_slot != want:
+            m.team_play_slot = want
+            m.save(update_fields=['team_play_slot'])
+
+    if not config.is_pairs:
+        # A four-man event has one team per group. Anything else is a stale
+        # split left behind by a size change, and it would silently halve the
+        # team.
+        for m in real:
+            _set(m, 1)
+        return [1]
+
+    if len(real) == 3 and config.counts_every_ball:
+        for m in real:
+            _set(m, 1)
+        return [1]
+
+    if len({m.team_play_slot for m in real}) > 1:
+        return sorted({m.team_play_slot for m in real})   # the TD's own split
+
+    for i, m in enumerate(real):
+        _set(m, 1 if i < 2 else 2)
+    return sorted({m.team_play_slot for m in real}) or [1]
 
 
 @transaction.atomic
@@ -146,11 +235,15 @@ def ensure_phantom_fourth(foursome, config=None):
 
 
 @transaction.atomic
-def ensure_team_state(foursome, *, index=None):
-    """Create the team's state row and give it a colour if it has none."""
+def ensure_team_state(foursome, *, index=None, slot=1):
+    """Create the team's state row and give it a colour if it has none.
+
+    One row per TEAM, which in pairs means one per slot — two pairs sharing a
+    playing group must not share a colour, a figure or a rota."""
     from tournament.models import TeamPlayTeamState
 
-    state, created = TeamPlayTeamState.objects.get_or_create(foursome=foursome)
+    state, created = TeamPlayTeamState.objects.get_or_create(
+        foursome=foursome, slot=slot)
     if not state.colour:
         state.colour = team_colour_for(index or foursome.group_number)
         state.save(update_fields=['colour'])
@@ -176,19 +269,37 @@ def sync_teams(tournament):
 
     config = getattr(tournament, 'team_play_config', None)
     teams  = []
+    from tournament.models import TeamPlayTeamState
+
+    colour_index = 0
     for foursome in round_obj.foursomes.order_by('group_number'):
         ensure_phantom_fourth(foursome, config)
-        state = ensure_team_state(foursome, index=foursome.group_number)
-        if config is not None:
-            apply_default_name(foursome, config, state)
-        if config is not None:
-            allowance = compute_allowance(foursome, config)
+        if config is None:
+            teams.append((foursome, 1))
+            continue
+
+        slots = assign_slots(foursome, config)
+        # A colour identifies a TEAM on the board, so two pairs sharing a
+        # playing group must not share one — the colour walks the teams, not
+        # the groups.
+        for slot in slots:
+            colour_index += 1
+            state = ensure_team_state(
+                foursome, index=colour_index, slot=slot)
+            apply_default_name(foursome, config, state, slot=slot)
+            allowance = compute_allowance(foursome, config, slot=slot)
             if (state.team_handicap != allowance.strokes
                     or state.team_handicap_raw != allowance.raw):
                 state.team_handicap     = allowance.strokes
                 state.team_handicap_raw = allowance.raw
                 state.save(update_fields=['team_handicap', 'team_handicap_raw'])
-        teams.append(foursome)
+            teams.append((foursome, slot))
+
+        # Drop a state row for a slot that no longer has anybody in it — a
+        # group that shrank from two pairs to one must not keep the second on
+        # the board.
+        TeamPlayTeamState.objects.filter(
+            foursome=foursome).exclude(slot__in=slots).delete()
     return teams
 
 
@@ -227,7 +338,7 @@ def average_ball_count(foursome, config) -> Decimal:
     return Decimal(sum(counts.values())) / Decimal(len(counts))
 
 
-def compute_allowance(foursome, config):
+def compute_allowance(foursome, config, slot=None):
     """
     The team's figure, worked on its own men.
 
@@ -235,8 +346,8 @@ def compute_allowance(foursome, config):
     percentages are the only numbers a TD will check — which is why this
     returns the contributions, not just the total.
     """
-    memberships = _real_memberships(foursome)
-    phantom     = _phantom_membership(foursome)
+    memberships = _real_memberships(foursome, slot)
+    phantom     = _phantom_membership(foursome) if slot in (None, 1) else None
 
     handicaps = [m.course_handicap for m in memberships]
     phantom_index = None
@@ -328,22 +439,25 @@ def allowance_label(foursome, config) -> dict:
 # 3. Drives
 # ---------------------------------------------------------------------------
 
-def drive_picks(foursome) -> dict:
-    """``{hole_number: player_id}`` for the holes played so far."""
+def drive_picks(foursome, slot=1) -> dict:
+    """``{hole_number: player_id}`` for the holes played so far.
+
+    Per TEAM: two pairs sharing a playing group each choose their own tee shot
+    on every hole."""
     return {
         p.hole_number: p.player_id
-        for p in foursome.team_drive_picks.all()
+        for p in foursome.team_drive_picks.filter(slot=slot)
     }
 
 
-def thru_hole(foursome) -> int:
+def thru_hole(foursome, slot=1) -> int:
     """The last hole this team has completed. Drives are the tracker's clock:
     a hole is not complete until the drive is picked."""
-    picks = drive_picks(foursome)
+    picks = drive_picks(foursome, slot)
     return max(picks) if picks else 0
 
 
-def drive_state(foursome, config) -> dict:
+def drive_state(foursome, config, slot=1) -> dict:
     """
     The tracker (SPEC §5) — per-window pips, the sentence, and the rota.
 
@@ -352,10 +466,10 @@ def drive_state(foursome, config) -> dict:
     """
     from tournament.models import TeamPlayConfig
 
-    real   = _real_memberships(foursome)
+    real   = _real_memberships(foursome, slot)
     ids    = [m.player_id for m in real]
-    picks  = drive_picks(foursome)
-    thru   = thru_hole(foursome)
+    picks  = drive_picks(foursome, slot)
+    thru   = thru_hole(foursome, slot)
 
     names = {m.player_id: m.player.name for m in real}
 
@@ -364,7 +478,7 @@ def drive_state(foursome, config) -> dict:
                 'shortfall': 0, 'penalty_strokes': 0}
 
     if config.drive_rule == TeamPlayConfig.DRIVE_ALTERNATING:
-        state = getattr(foursome, 'team_play_state', None)
+        state = _state_for(foursome, slot)
         pairs = (state.drive_pairs if state else []) or []
         rota  = [tuple(p) for p in pairs] if pairs else build_rota(ids)
         short = {m.player_id: short_label(m.player) for m in real}
@@ -456,30 +570,38 @@ def drive_control_kind(config) -> str:
     Every format that chooses a tee shot draws the same control, and this is
     the part to get right in code:
 
-    ``record``       Scramble.  Compliance against a quota — a tick.
-    ``instruction``  Scotch.  Picking the drive says who hits NEXT, so the card
-                     answers with a sentence rather than a tick.  A quota is
-                     available on top, off by default, because the tap is
-                     already there.
+    ``record``       Scramble with a quota.  Compliance against it — a tick.
+    ``instruction``  Scotch with a quota.  The tap is already there, so the
+                     card also answers with the sentence it implies: the
+                     partner whose drive was not taken plays the second shot.
     ``rota``         Alternate shot.  Odd/even, set on the 1st tee, fixed for
                      eighteen.  Nothing is chosen on the hole; the card states
                      who is up.
-    ``none``         Best ball and Chapman.  Both men drive every hole with no
-                     choice to record.
+    ``none``         Everything else, and that includes **scramble and Scotch
+                     with no drive requirement**.
+
+    That last one is the rule the packet got wrong.  It argued the Scotch tap
+    should be mandatory because picking the drive says who plays next — but a
+    pair standing on the tee already knows that, and asking them to record it
+    is a tap a hole that buys the app a sentence and the golfers nothing.  **No
+    requirement, no asking.**  Set a quota and the tap comes back, sentence
+    included, because then it is counting something.
     """
     from tournament.models import TeamPlayConfig
 
-    if config.team_format == TeamPlayConfig.FORMAT_SCOTCH:
-        return 'instruction'
     if config.team_format == TeamPlayConfig.FORMAT_ALTERNATE_SHOT:
         return 'rota'
     if config.team_format in (TeamPlayConfig.FORMAT_BEST_BALL,
                               TeamPlayConfig.FORMAT_CHAPMAN):
         return 'none'
+    if not config.drive_rule_is_quota:
+        return 'none'
+    if config.team_format == TeamPlayConfig.FORMAT_SCOTCH:
+        return 'instruction'
     return 'record'
 
 
-def tee_note(foursome, config, hole_number: int) -> str:
+def tee_note(foursome, config, hole_number: int, slot=1) -> str:
     """
     The sentence the card says on this hole, or ``''`` when the format has
     nothing to say.
@@ -497,14 +619,14 @@ def tee_note(foursome, config, hole_number: int) -> str:
     from tournament.models import TeamPlayConfig
 
     kind = drive_control_kind(config)
-    real = _real_memberships(foursome)
+    real = _real_memberships(foursome, slot)
     # Surnames on the card, the way the packet draws it and the way a pair says
     # it out loud — "Maiolini tees", not "Anna Maiolini tees". The tracker off
     # the card keeps full names, where there is room for them.
     names = {m.player_id: short_label(m.player) for m in real}
 
     if kind == 'rota':
-        state = getattr(foursome, 'team_play_state', None)
+        state = _state_for(foursome, slot)
         pairs = (state.drive_pairs if state else []) or []
         if not pairs:
             return 'Set the tee rota before the first score.'
@@ -513,7 +635,7 @@ def tee_note(foursome, config, hole_number: int) -> str:
         return f'{names.get(up[0], "")} tees.' if up else ''
 
     if kind == 'instruction':
-        picked = drive_picks(foursome).get(hole_number)
+        picked = drive_picks(foursome, slot).get(hole_number)
         if picked is None:
             return 'Both drive — take the better one. The pick says who plays next.'
         other = next((pid for pid in names if pid != picked), None)
@@ -525,6 +647,8 @@ def tee_note(foursome, config, hole_number: int) -> str:
         return 'Both drive, swap for the second, then one ball in turn.'
     if config.team_format == TeamPlayConfig.FORMAT_BEST_BALL:
         return 'Both play their own ball. The better net counts.'
+    if config.team_format == TeamPlayConfig.FORMAT_SCOTCH:
+        return 'Both drive, take the better one, then alternate from there.'
     return ''
 
 
@@ -532,7 +656,7 @@ def tee_note(foursome, config, hole_number: int) -> str:
 # 4. The read model
 # ---------------------------------------------------------------------------
 
-def team_name(foursome, config, real=None) -> str:
+def team_name(foursome, config, real=None, slot=1) -> str:
     """
     What the team is called before the TD names it.
 
@@ -546,20 +670,34 @@ def team_name(foursome, config, real=None) -> str:
     falls back to `Group N` rather than being truncated mid-word.  Free text
     over it either way, and the colour is still assigned for the card.
     """
-    if foursome.name:
-        return foursome.name
-    fallback = f'Group {foursome.group_number}'
     if not config.is_pairs:
-        return fallback
-    return _pair_surnames(foursome, real) or fallback
+        # The group IS the team, so the group's own name is the team's.
+        return foursome.name or f'Group {foursome.group_number}'
+
+    # A pair cannot use Foursome.name — two of them share the playing group.
+    state = _state_for(foursome, slot)
+    if state and state.name:
+        return state.name
+    derived = _pair_surnames(foursome, real, slot)
+    if derived:
+        return derived
+    # Only disambiguate when there is something to disambiguate FROM. A group
+    # carrying one pair is just `Group N`; a group carrying two needs to say
+    # which.
+    if len(team_slots(foursome, config)) > 1:
+        return f'Group {foursome.group_number} · pair {slot}'
+    return f'Group {foursome.group_number}'
 
 
 @transaction.atomic
-def apply_default_name(foursome, config, state=None):
+def apply_default_name(foursome, config, state=None, slot=1):
     """
-    Write a pair's surname name onto the Foursome, so every surface reads it —
-    the round hub, the tee sheet, the chat header and the board, none of which
-    know Team Play exists.
+    Write a pair's surname name onto its state row, so every Team Play surface
+    reads it.
+
+    It does NOT go on the Foursome: that is the PLAYING group's name, and two
+    pairs share one. The tee sheet and the round hub name the group; the board
+    and the card name the pair.
 
     Only while ``name_is_default``: the moment the TD types his own name over
     it, a roster change stops dragging the name along with it.
@@ -569,20 +707,23 @@ def apply_default_name(foursome, config, state=None):
     """
     if not config.is_pairs:
         return None
-    state = state or ensure_team_state(foursome)
+    state = state or ensure_team_state(foursome, slot=slot)
     if not state.name_is_default:
         return None
-    derived = _pair_surnames(foursome)
-    if derived and foursome.name != derived:
-        foursome.name = derived
-        foursome.save(update_fields=['name'])
+    derived = _pair_surnames(foursome, slot=slot)
+    if state.name != derived:
+        # Clearing it matters as much as setting it: a re-paired team whose new
+        # surnames do not fit must fall back to `Group N`, not keep the name of
+        # a pairing that no longer exists.
+        state.name = derived
+        state.save(update_fields=['name'])
     return derived
 
 
-def _pair_surnames(foursome, real=None):
+def _pair_surnames(foursome, real=None, slot=1):
     """`Maiolini & Yau`, or `''` when the roster cannot produce one."""
     if real is None:
-        real = _real_memberships(foursome)
+        real = _real_memberships(foursome, slot)
     if len(real) != 2:
         return ''
     surnames = [m.player.name.split()[-1]
@@ -590,18 +731,22 @@ def _pair_surnames(foursome, real=None):
     if len(surnames) != 2:
         return ''
     joined = ' & '.join(surnames)
-    # Sixteen characters, the same cap the ball game uses, because the name has
-    # to fit a leaderboard row next to a colour block. Overflow falls back to
-    # `Group N` rather than being truncated mid-word.
-    return joined if len(joined) <= 16 else ''
+    # Wide enough for two real surnames — `Petersen & Reilly` is seventeen
+    # characters, so the ball game's 16 rejected most actual pairs — and still
+    # short enough to sit on a leaderboard row next to a colour block.
+    # Overflow falls back to `Group N` rather than truncating mid-word.
+    return joined if len(joined) <= PAIR_NAME_MAX else ''
 
 
-def team_dict(foursome, config) -> dict:
-    """One team, as every Team Play surface reads it."""
-    real      = _real_memberships(foursome)
-    phantom   = _phantom_membership(foursome)
-    state     = getattr(foursome, 'team_play_state', None)
-    allowance = compute_allowance(foursome, config)
+def team_dict(foursome, config, slot=1) -> dict:
+    """One TEAM, as every Team Play surface reads it.
+
+    A four-man event has one of these per playing group. Pairs have one per
+    slot — two teams sharing a tee time, a scorer and a card, scored apart."""
+    real      = _real_memberships(foursome, slot)
+    phantom   = _phantom_membership(foursome) if slot == 1 else None
+    state     = _state_for(foursome, slot)
+    allowance = compute_allowance(foursome, config, slot=slot)
 
     # Match each contribution back to its member. The contributions are sorted
     # low to high — the order IS the rule, because the percentage is
@@ -648,8 +793,11 @@ def team_dict(foursome, config) -> dict:
 
     return {
         'foursome_id'       : foursome.id,
+        'slot'              : slot,
+        # The playing group this team goes out with. Two pairs share one.
         'group_number'      : foursome.group_number,
-        'name'              : team_name(foursome, config, real),
+        'group_name'        : foursome.name or f'Group {foursome.group_number}',
+        'name'              : team_name(foursome, config, real, slot),
         'colour'            : state.colour if state else '',
         'real_player_count' : len(real),
         'team_size'         : size,
@@ -661,9 +809,9 @@ def team_dict(foursome, config) -> dict:
         'team_handicap'     : allowance.strokes if filled >= size else None,
         'team_handicap_raw' : str(allowance.raw),
         'allowance'         : allowance_label(foursome, config),
-        'drive'             : drive_state(foursome, config),
+        'drive'             : drive_state(foursome, config, slot),
         'drive_control'     : drive_control_kind(config),
-        'thru'              : thru_hole(foursome),
+        'thru'              : thru_hole(foursome, slot),
     }
 
 
@@ -708,6 +856,7 @@ def field_blocking(teams, config) -> list:
             out.append({
                 'kind'        : 'unpaired',
                 'foursome_id' : team['foursome_id'],
+                'slot'        : team['slot'],
                 'golfer'      : golfer,
                 'three_ball_available': three_ok,
                 'detail'      : (
@@ -719,6 +868,7 @@ def field_blocking(teams, config) -> list:
             out.append({
                 'kind'        : 'three_ball',
                 'foursome_id' : team['foursome_id'],
+                'slot'        : team['slot'],
                 'team'        : team['name'],
                 'three_ball_available': False,
                 'detail'      : (
@@ -743,7 +893,10 @@ def team_play_summary(tournament) -> dict:
 
     round_obj = tournament.rounds.order_by('round_number').first()
     foursomes = list(round_obj.foursomes.order_by('group_number')) if round_obj else []
-    teams     = [team_dict(f, config) for f in foursomes]
+    # One row per TEAM. A four-man group is one; a pairs group of four is two,
+    # sharing the tee time and the card and scored apart.
+    teams     = [team_dict(f, config, slot)
+                 for f in foursomes for slot in team_slots(f, config)]
 
     golfers = sum(t['real_player_count'] for t in teams)
     pool    = float(config.entry_fee or 0) * golfers
@@ -776,6 +929,7 @@ def team_play_summary(tournament) -> dict:
         'field'        : {
             'golfers' : golfers,
             'teams'   : len(teams),
+            'groups'  : len(foursomes),
             'pool'    : round(pool, 2),
         },
         'teams'        : teams,

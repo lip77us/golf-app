@@ -161,8 +161,10 @@ class TeamPlayEndpointTests(TestCase):
         self._configure()
         body = self.client.get(self._board_url()).json()
 
+        # Six teams in six playing groups — a foursome event puts one team per
+        # group, so the two counts agree. They part company only in pairs.
         self.assertEqual(body['field'], {'golfers': 23, 'teams': 6,
-                                         'pool': 575.0})
+                                         'groups': 6, 'pool': 575.0})
 
         self.assertEqual(self._team(body, 'Pine')['team_handicap'], 6)
         self.assertEqual(self._team(body, 'Pine')['team_handicap_raw'], '6.15')

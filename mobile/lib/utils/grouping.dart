@@ -60,6 +60,44 @@ List<int> pairSizes(int n) {
   return [...List.filled(n ~/ 2, 2), if (n.isOdd) 1];
 }
 
+/// **Playing**-group sizes for a pairs field: two pairs to a group.
+///
+/// A pair is the scoring unit; it is not the group that walks the course. Two
+/// pairs go off each tee time as a foursome, share one scorer and one card,
+/// and are scored apart — so the sheet is fours, with a twosome on the end
+/// when the number of pairs is odd.
+///
+///  n= 4 → [4]
+///  n= 6 → [4, 2]        one group of two pairs, one of a single pair
+///  n=10 → [4, 4, 2]
+///  n=12 → [4, 4, 4]
+///  n=13 → [4, 4, 4, 1]  the odd man, left visible so the block can name him
+List<int> pairPlayGroupSizes(int n) {
+  if (n <= 0) return [];
+  final pairs = n ~/ 2;
+  return [
+    ...List.filled(pairs ~/ 2, 4),
+    if (pairs.isOdd) 2,
+    if (n.isOdd) 1,
+  ];
+}
+
+/// Split one playing group into its teams, by position.
+///
+/// The first two men are pair 1 and the next two are pair 2 — the order the TD
+/// dragged them into on Groups & Tees, which is the same default the server
+/// applies. A three-man group in **best ball** is ONE team of three, the
+/// packet's odd-field way out and the only shape three men can legally take.
+List<List<T>> splitIntoPairs<T>(List<T> group, {bool bestBall = false}) {
+  if (group.isEmpty) return [];
+  if (group.length == 3 && bestBall) return [List<T>.from(group)];
+  final out = <List<T>>[];
+  for (var i = 0; i < group.length; i += 2) {
+    out.add(group.sublist(i, (i + 2).clamp(0, group.length)));
+  }
+  return out;
+}
+
 /// Whether a group of [groupSize] gets a phantom to fill it out.
 ///
 /// [teamPlaySize] is the size a Team Play team fills to — 4 for a foursome

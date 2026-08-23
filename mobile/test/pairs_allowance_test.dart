@@ -171,6 +171,37 @@ void main() {
     });
   });
 
+  group('two pairs share a playing group', () {
+    // A pair is the SCORING unit; it is not the group that walks the course.
+    // Two pairs go off each tee time as a foursome, share one scorer and one
+    // card, and are scored apart.
+    test('six golfers are two groups, not three', () {
+      expect(pairPlayGroupSizes(6), [4, 2]);
+    });
+
+    test('twelve golfers are three groups of four', () {
+      expect(pairPlayGroupSizes(12), [4, 4, 4]);
+    });
+
+    test('an odd number of PAIRS leaves a twosome on the end', () {
+      expect(pairPlayGroupSizes(10), [4, 4, 2]);
+    });
+
+    test('an odd FIELD still leaves the unpaired man visible', () {
+      expect(pairPlayGroupSizes(13), [4, 4, 4, 1]);
+    });
+
+    test('a group splits into its pairs by position', () {
+      expect(splitIntoPairs([1, 2, 3, 4]), [[1, 2], [3, 4]]);
+      expect(splitIntoPairs([1, 2]), [[1, 2]]);
+    });
+
+    test('three men in best ball are ONE team, not a pair and a spare', () {
+      expect(splitIntoPairs([1, 2, 3], bestBall: true), [[1, 2, 3]]);
+      expect(splitIntoPairs([1, 2, 3]), [[1, 2], [3]]);
+    });
+  });
+
   group('a pair is complete at two — nothing pads it', () {
     // The review step labelled a finished pair "+ 1 phantom" for being two
     // men, because "anything under four gets a phantom" was written out

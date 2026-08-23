@@ -232,12 +232,16 @@ class PairsTeamTests(PairsBase):
         self.assertEqual(self._team(self._summary(), 4)['name'],
                          'Morgan & Lipkin')
 
-    def test_the_default_is_written_so_every_surface_reads_it(self):
-        """The hub, the tee sheet and the chat header know nothing about Team
-        Play, so the pair's name has to land on the Foursome itself."""
+    def test_the_default_is_written_to_the_pair_not_the_group(self):
+        """Two pairs share a playing group, so `Foursome.name` is the GROUP's
+        name and cannot also be one of theirs. The pair is named on its own
+        row."""
         self._configure('scramble')
+        from tournament.models import TeamPlayTeamState
+        state = TeamPlayTeamState.objects.get(foursome=self.groups[0], slot=1)
+        self.assertEqual(state.name, 'Maiolini & Yau')
         self.groups[0].refresh_from_db()
-        self.assertEqual(self.groups[0].name, 'Maiolini & Yau')
+        self.assertEqual(self.groups[0].name, '')
 
     def test_a_td_name_still_wins(self):
         self._configure('scramble')
@@ -264,11 +268,21 @@ class PairsTeamTests(PairsBase):
         self.assertNotEqual(r.json()['name'], r.json()['colour'])
 
     def test_a_long_pair_of_surnames_falls_back_rather_than_truncating(self):
+        """The cap is wide enough for two real surnames — `Petersen & Reilly`
+        is seventeen characters — but a name that still will not fit falls back
+        to `Group N` rather than being cut mid-word."""
         from core.models import Player
         Player.objects.filter(name='Anna Maiolini').update(
             name='Anna Featherstonehaugh')
+        Player.objects.filter(name='Ambrose Yau').update(
+            name='Ambrose Wolstenholme')
         self._configure('scramble')
         self.assertEqual(self._team(self._summary(), 1)['name'], 'Group 1')
+
+    def test_two_ordinary_surnames_fit(self):
+        self._configure('scramble')
+        self.assertEqual(self._team(self._summary(), 2)['name'],
+                         'Petersen & Reilly')
 
     def test_the_colour_is_still_assigned(self):
         """It does real work on the board and the card; it just is not the
@@ -332,12 +346,13 @@ class ThreeManPairTests(PairsBase):
     ROSTER = PAIRS[:5] + [[('Marco Bellini', 9), ('Luis Ortega', 23),
                            ('Dave Kwan', 15)]]
 
-    def test_a_three_ball_is_blocked_outside_best_ball(self):
+    def test_three_men_outside_best_ball_leave_one_unpaired(self):
+        """Three golfers in a playing group are a pair and a man on his own —
+        only best ball can make them one team of three."""
         self._configure('chapman')
         blocking = self._summary()['blocking']
-        self.assertEqual(blocking[0]['kind'], 'three_ball')
-        self.assertIn('Only best ball can play a three',
-                      blocking[0]['detail'])
+        self.assertEqual(blocking[0]['kind'], 'unpaired')
+        self.assertIn('has no partner', blocking[0]['detail'])
 
     def test_best_ball_lets_one_team_play_three(self):
         self._configure('best_ball')
@@ -411,19 +426,30 @@ class DriveControlTests(PairsBase):
         self.assertEqual(cfg.max_drives_per_golfer, 2)
         self.assertEqual(cfg.drives_required, 2)
 
-    def test_scotch_is_an_instruction(self):
+    def test_scotch_with_no_requirement_does_not_ask_who_drove(self):
+        """A pair playing Scotch knows which of them is hitting the second
+        shot. Charging them a tap a hole to be told it back is the app asking
+        for its own benefit — **no requirement, no asking.**"""
         self._configure('scotch')
         summary = self._summary()
-        self.assertEqual(summary['drive_control'], 'instruction')
-        # The tap is required on every hole even with no quota, because there
-        # it is not a record at all.
         self.assertEqual(summary['drive_rule'], 'none')
+        self.assertEqual(summary['drive_control'], 'none')
+        self.assertFalse(summary['requires_drive_pick'])
+        self.assertEqual(self._card(self.groups[0], 7)['drive_options'], [])
+
+    def test_scotch_with_a_quota_taps_and_instructs(self):
+        """Set a quota and the tap comes back — now it is counting something,
+        and the sentence it implies comes free."""
+        self._configure('scotch', drive_rule='per_nine', drives_required=1)
+        summary = self._summary()
+        self.assertEqual(summary['drive_control'], 'instruction')
         self.assertTrue(summary['requires_drive_pick'])
 
     def test_scotch_answers_with_a_sentence(self):
-        """Picking the drive says who hits NEXT — the partner whose ball was
-        not taken plays the second shot."""
-        self._configure('scotch')
+        """Once a quota puts the tap on the card, picking the drive also says
+        who hits NEXT — the partner whose ball was not taken plays the second
+        shot."""
+        self._configure('scotch', drive_rule='per_nine', drives_required=1)
         fs = self.groups[0]
         self.assertIn('The pick says who plays next',
                       self._card(fs, 7)['tee_note'])
@@ -860,3 +886,159 @@ class WizardOrderTests(TestCase):
             format='json')
         self.assertIn(r.status_code, (200, 201), r.content)
         self.assertEqual(self.round.foursomes.count(), 3)
+
+
+# ---------------------------------------------------------------------------
+# 9. The foursome is the PLAYING group, and it holds two pairs
+# ---------------------------------------------------------------------------
+
+class PlayingGroupTests(PairsBase):
+    """
+    Two pairs go off together, share a tee time and a scorer, and one person
+    enters everything on the card — but they are two separate teams on the
+    board (docs/design-review/handoff-team-pairs/SPEC.md §3).
+
+    The field here is six golfers in two groups: one carrying two pairs, one
+    carrying a single pair, which is exactly the shape a six-man event takes.
+    """
+
+    ROSTER = [
+        [('Anna Maiolini', 4), ('Ambrose Yau', 19),
+         ('Alan Petersen', 6), ('Dan Reilly', 21)],
+        [('Tom Mercer', 5),    ('Chris Vaughn', 24)],
+    ]
+
+    def test_a_group_of_four_holds_two_teams(self):
+        self._configure('scotch')
+        summary = self._summary()
+        self.assertEqual(summary['field']['golfers'], 6)
+        self.assertEqual(summary['field']['groups'], 2)
+        self.assertEqual(summary['field']['teams'], 3)
+        self.assertEqual(summary['blocking'], [])
+
+    def test_the_split_follows_the_order_the_td_dragged_them_into(self):
+        self._configure('scotch')
+        teams = self._summary()['teams']
+        self.assertEqual([t['slot'] for t in teams], [1, 2, 1])
+        self.assertEqual(teams[0]['name'], 'Maiolini & Yau')
+        self.assertEqual(teams[1]['name'], 'Petersen & Reilly')
+        self.assertEqual(teams[2]['name'], 'Mercer & Vaughn')
+
+    def test_each_pair_is_worked_on_its_own_two_men(self):
+        self._configure('scramble')
+        teams = self._summary()['teams']
+        self.assertEqual([t['team_handicap'] for t in teams], [4, 5, 5])
+        for t in teams:
+            self.assertEqual(t['real_player_count'], 2)
+
+    def test_two_pairs_in_a_group_never_share_a_colour(self):
+        self._configure('scramble')
+        colours = [t['colour'] for t in self._summary()['teams']]
+        self.assertEqual(len(set(colours)), 3, colours)
+
+    def test_one_card_carries_both_pairs(self):
+        """One tee time, one scorer, one card — and two teams on it."""
+        self._configure('scotch')
+        card = self._card(self.groups[0], 7)
+        self.assertEqual(len(card['teams']), 2)
+        self.assertEqual([t['slot'] for t in card['teams']], [1, 2])
+        self.assertEqual(card['teams'][0]['name'], 'Maiolini & Yau')
+        self.assertEqual(card['teams'][1]['name'], 'Petersen & Reilly')
+
+    def test_a_group_carrying_one_pair_sends_one_team(self):
+        self._configure('scotch')
+        card = self._card(self.groups[1], 7)
+        self.assertEqual(len(card['teams']), 1)
+        self.assertEqual(card['teams'][0]['name'], 'Mercer & Vaughn')
+
+    def test_each_pair_scores_its_own_ball(self):
+        """Both pairs are on one card and both carry a null team FK, so the
+        slot is the only thing telling their scores apart."""
+        self._configure('scotch')
+        fs = self.groups[0]
+        url = reverse('api-team-play-score', args=[fs.id])
+        self.client.post(url, {'slot': 1, 'hole_number': 1, 'gross_score': 4},
+                         format='json')
+        r = self.client.post(
+            url, {'slot': 2, 'hole_number': 1, 'gross_score': 6},
+            format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+        card = self._card(fs, 1)
+        self.assertEqual(card['teams'][0]['team_score'], 4)
+        self.assertEqual(card['teams'][1]['team_score'], 6)
+
+    def test_the_board_ranks_pairs_not_groups(self):
+        self._configure('scramble')
+        for fs, slot, gross in ((self.groups[0], 1, 4),
+                                (self.groups[0], 2, 5),
+                                (self.groups[1], 1, 6)):
+            url = reverse('api-team-play-score', args=[fs.id])
+            for hole in range(1, 19):
+                self.client.post(
+                    url, {'slot': slot, 'hole_number': hole,
+                          'gross_score': gross}, format='json')
+
+        board = self.client.get(
+            reverse('api-team-play-leaderboard', args=[self.tourn.id])).json()
+        self.assertEqual(len(board['teams']), 3)
+        self.assertTrue(board['all_in'])
+        self.assertEqual(board['teams'][0]['name'], 'Maiolini & Yau')
+        # Both pairs from group 1 are on the board, separately.
+        self.assertEqual(
+            sorted(t['slot'] for t in board['teams']
+                   if t['foursome_id'] == self.groups[0].id), [1, 2])
+
+    def test_the_td_can_re_pair_inside_a_group(self):
+        self._configure('scramble')
+        fs = self.groups[0]
+        ids = {name: self.players[name].id for name in
+               ('Anna Maiolini', 'Ambrose Yau', 'Alan Petersen', 'Dan Reilly')}
+        r = self.client.post(
+            reverse('api-team-play-split', args=[fs.id]),
+            {'slots': {str(ids['Anna Maiolini']): 1,
+                       str(ids['Alan Petersen']): 1,
+                       str(ids['Ambrose Yau']): 2,
+                       str(ids['Dan Reilly']): 2}},
+            format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        names = [t['name'] for t in self._summary()['teams']]
+        self.assertIn('Maiolini & Petersen', names)
+        self.assertIn('Yau & Reilly', names)
+
+    def test_four_golfers_split_two_and_two(self):
+        self._configure('scramble')
+        ids = [self.players[n].id for n in
+               ('Anna Maiolini', 'Ambrose Yau', 'Alan Petersen', 'Dan Reilly')]
+        r = self.client.post(
+            reverse('api-team-play-split', args=[self.groups[0].id]),
+            {'slots': {str(ids[0]): 1, str(ids[1]): 1,
+                       str(ids[2]): 1, str(ids[3]): 2}},
+            format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('two and two', r.json()['detail'])
+
+    def test_re_pairing_is_refused_once_a_score_lands(self):
+        self._configure('scramble')
+        fs = self.groups[0]
+        self.client.post(reverse('api-team-play-score', args=[fs.id]),
+                         {'slot': 1, 'hole_number': 1, 'gross_score': 4},
+                         format='json')
+        ids = [self.players[n].id for n in
+               ('Anna Maiolini', 'Ambrose Yau', 'Alan Petersen', 'Dan Reilly')]
+        r = self.client.post(
+            reverse('api-team-play-split', args=[fs.id]),
+            {'slots': {str(ids[0]): 1, str(ids[2]): 1,
+                       str(ids[1]): 2, str(ids[3]): 2}},
+            format='json')
+        self.assertEqual(r.status_code, 409)
+
+    def test_a_foursome_event_has_nothing_to_split(self):
+        self.client.post(self._setup_url(),
+                         {'team_size': 4, 'team_format': 'scramble'},
+                         format='json')
+        r = self.client.post(
+            reverse('api-team-play-split', args=[self.groups[0].id]),
+            {'slots': {}}, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('one team per group', r.json()['detail'])

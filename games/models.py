@@ -1993,8 +1993,9 @@ class TeamHoleScore(models.Model):
       * Scramble — the whole group is one side → one row per hole.
       * Foursomes / Two-man Chapman — two pairs share the group → two rows per
         hole, one per side.
-      * Team Play scramble — the team IS the foursome → one row per hole, with
-        a NULL team (see below).
+      * Team Play — the team is a SLOT inside the playing group → one row per
+        team per hole, with a NULL team FK and `team_play_slot` telling the
+        pairs apart (see below).
     The side is a :class:`TournamentTeam` in the cup formats.  ``chosen_player``
     is reserved for a future drive-tracking layer (unused by the cup formats —
     the group polices its own drive/turn rules; the app records only the team
@@ -2005,14 +2006,20 @@ class TeamHoleScore(models.Model):
     foursome         = models.ForeignKey(
                          Foursome, on_delete=models.CASCADE,
                          related_name='team_hole_scores')
-    # NULL for Team Play, where the team IS the foursome and there is no
-    # TournamentTeam roster layer — the (foursome, hole) pair is unambiguous
-    # because the group is the side.  The cup formats always set it: Foursomes
-    # and Chapman put two sides in one group and could not tell them apart
-    # otherwise.
+    # NULL for Team Play, which has no TournamentTeam roster layer — the side
+    # is identified by `team_play_slot` instead.  The cup formats always set
+    # it: Foursomes and Chapman put two sides in one group and could not tell
+    # them apart otherwise.
     team             = models.ForeignKey(
                          TournamentTeam, on_delete=models.CASCADE,
                          related_name='+', null=True, blank=True)
+    # Team Play only: which team inside the playing group this row belongs to.
+    #
+    # A four-man event has one team per group and every row sits at slot 1, so
+    # nothing that existed before this field moves.  A pairs event puts TWO
+    # teams in one group and both carry a NULL `team`, so without the slot the
+    # (foursome, team, hole) key matches both rows at once.
+    team_play_slot   = models.PositiveSmallIntegerField(default=1)
     hole_number      = models.PositiveSmallIntegerField(
                          validators=[MinValueValidator(1), MaxValueValidator(18)])
     gross_score      = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -2023,12 +2030,13 @@ class TeamHoleScore(models.Model):
                          related_name='+')
 
     class Meta:
-        unique_together = ('foursome', 'team', 'hole_number')
+        unique_together = ('foursome', 'team', 'team_play_slot', 'hole_number')
         ordering = ['hole_number']
 
     def __str__(self):
         return (f"TeamHoleScore — Group {self.foursome.group_number} — "
-                f"team {self.team_id} — Hole {self.hole_number} — {self.gross_score}")
+                f"team {self.team_id}/{self.team_play_slot} — "
+                f"Hole {self.hole_number} — {self.gross_score}")
 
 
 class ScrambleResult(models.Model):

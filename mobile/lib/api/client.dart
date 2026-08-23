@@ -2387,8 +2387,10 @@ class ApiClient {
 
   /// Rename a team. The colour is not settable — it does real work on the
   /// board and the card, and two teams must never share a block.
-  Future<void> postTeamPlayTeamName(int foursomeId, String name) =>
-      _post('/foursomes/$foursomeId/team-play/team/', {'name': name});
+  Future<void> postTeamPlayTeamName(int foursomeId, String name,
+          {int slot = 1}) =>
+      _post('/foursomes/$foursomeId/team-play/team/',
+            {'name': name, 'slot': slot});
 
   /// Record whose drive the team took. Never blocks — the team may knowingly
   /// take the shortfall. Pass a null [playerId] to clear the hole.
@@ -2396,10 +2398,12 @@ class ApiClient {
     int foursomeId, {
     required int hole,
     required int? playerId,
+    int slot = 1,
   }) async {
     final data = await _post('/foursomes/$foursomeId/team-play/drive/', {
       'hole_number': hole,
       'player_id'  : playerId,
+      'slot'       : slot,
     });
     return TeamPlayDrive.fromJson(Map<String, dynamic>.from(data as Map));
   }
@@ -2408,10 +2412,21 @@ class ApiClient {
   /// for eighteen holes. A second call is refused — a rota that can be re-cut
   /// mid-round is not a rota.
   Future<TeamPlayDrive> postTeamPlayPairs(
-    int foursomeId, List<List<int>> pairs) async {
+    int foursomeId, List<List<int>> pairs, {int slot = 1}) async {
     final data = await _post('/foursomes/$foursomeId/team-play/pairs/',
-        {'pairs': pairs});
+        {'pairs': pairs, 'slot': slot});
     return TeamPlayDrive.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Who is paired with whom inside a playing group. Four golfers go off one
+  /// tee time; in a pairs event that group holds TWO teams, and this says
+  /// which two men are which.
+  Future<Map<String, dynamic>> postTeamPlaySplit(
+    int foursomeId, Map<int, int> slotByPlayer) async {
+    final data = await _post('/foursomes/$foursomeId/team-play/split/', {
+      'slots': slotByPlayer.map((k, v) => MapEntry(k.toString(), v)),
+    });
+    return Map<String, dynamic>.from(data as Map);
   }
 
   /// A scramble hole: one number for the ball the team played.
@@ -2419,8 +2434,10 @@ class ApiClient {
     int foursomeId, {
     required int hole,
     required int? gross,
+    int slot = 1,
   }) async {
     final data = await _post('/foursomes/$foursomeId/team-play/score/', {
+      'slot'       : slot,
       'hole_number': hole,
       'gross_score': gross,
     });

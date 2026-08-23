@@ -5844,6 +5844,100 @@ class TeamPlayRound {
       );
 }
 
+/// One TEAM's half of the card.
+///
+/// **The card belongs to the playing group, not the team.** Four golfers go off
+/// one tee time with one scorer, so one person enters everything on it — and in
+/// a pairs event that is two teams' worth. Each block is self-contained so the
+/// screen stacks them without knowing which is which.
+class TeamPlayCardTeam {
+  final int    slot;
+  final String name;
+  final String colour;
+  /// Strokes this team receives on THIS hole, off its whole-number figure.
+  final int    teamStrokes;
+  final Map<int, int> strokesByHole;
+  final Map<int, Map<int, int>> golferStrokes;
+  final Map<int, int> netToParByHole;
+  final List<TeamPlayGolferCard> golfersByHole;
+  final TeamPlayRound round;
+  final TeamPlayDrive drive;
+  final String driveControl;
+  final String teeNote;
+  final bool   requiresDrivePick;
+  final List<TeamPlayDriveOption> driveOptions;
+  final int?   teamScore;                 // one-ball formats
+  final TeamPlayShambleHole? shamble;     // own-ball formats
+
+  const TeamPlayCardTeam({
+    required this.slot, required this.name, required this.colour,
+    required this.round, required this.drive,
+    this.teamStrokes = 0, this.strokesByHole = const {},
+    this.golferStrokes = const {}, this.netToParByHole = const {},
+    this.golfersByHole = const [], this.driveControl = 'record',
+    this.teeNote = '', this.requiresDrivePick = false,
+    this.driveOptions = const [], this.teamScore, this.shamble,
+  });
+
+  factory TeamPlayCardTeam.fromJson(Map<String, dynamic> j) => TeamPlayCardTeam(
+        slot        : (j['slot'] ?? 1) as int,
+        name        : (j['name'] ?? '') as String,
+        colour      : (j['colour'] ?? '') as String,
+        teamStrokes : (j['team_strokes'] ?? 0) as int,
+        strokesByHole: {
+          for (final e in Map<String, dynamic>.from(
+                  (j['strokes_by_hole'] ?? const {}) as Map).entries)
+            int.parse(e.key): e.value as int,
+        },
+        golferStrokes: {
+          for (final e in Map<String, dynamic>.from(
+                  (j['golfer_strokes'] ?? const {}) as Map).entries)
+            int.parse(e.key): {
+              for (final h in Map<String, dynamic>.from(e.value as Map).entries)
+                int.parse(h.key): h.value as int,
+            },
+        },
+        netToParByHole: _intMap(j['net_to_par_by_hole']),
+        golfersByHole : ((j['golfers_by_hole'] as List?) ?? const [])
+            .map((e) => TeamPlayGolferCard.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        round       : TeamPlayRound.fromJson(
+            Map<String, dynamic>.from((j['round'] ?? {}) as Map)),
+        drive       : TeamPlayDrive.fromJson(
+            Map<String, dynamic>.from((j['drive'] ?? {}) as Map)),
+        driveControl: (j['drive_control'] ?? 'record') as String,
+        teeNote     : (j['tee_note'] ?? '') as String,
+        requiresDrivePick: j['requires_drive_pick'] == true,
+        driveOptions: ((j['drive_options'] as List?) ?? const [])
+            .map((e) => TeamPlayDriveOption.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        teamScore   : j['team_score'] as int?,
+        shamble     : j['shamble'] == null
+            ? null
+            : TeamPlayShambleHole.fromJson(
+                Map<String, dynamic>.from(j['shamble'] as Map)),
+      );
+
+  /// The control is drawn at all only when there is something to tap. A rota
+  /// states who is up; best ball and Chapman have nothing to say.
+  bool get showsDriveChips => (driveControl == 'record' ||
+                               driveControl == 'instruction') &&
+                              driveOptions.isNotEmpty;
+  int? get pickedDriver => driveOptions
+      .where((o) => o.picked).map((o) => o.playerId).firstOrNull;
+
+  /// Where this team's strokes fall across the round.
+  ///
+  /// A format that ends in ONE ball has a single team figure, so the dots are
+  /// the team's. An own-ball format keeps handicaps per golfer, so they are
+  /// keyed by player and the card shows whichever man is selected.
+  Map<int, int> strokesFor(int? playerId) => playerId == null
+      ? strokesByHole
+      : (golferStrokes[playerId] ?? const {});
+}
+
 /// One hole of the card — one number for the ball a team played in, or one
 /// number per golfer with the best N counting.
 class TeamPlayCard {
@@ -5866,6 +5960,11 @@ class TeamPlayCard {
   /// The chips the drive control draws, and which one is on. Empty when the
   /// control is a rota or absent.
   final List<TeamPlayDriveOption> driveOptions;
+  /// Every team on this card. A foursome event always sends exactly one; a
+  /// pairs playing group sends one or two.
+  final List<TeamPlayCardTeam> teams;
+  /// The PLAYING group's own name — what the tee sheet and the hub call it.
+  final String groupName;
   /// The holes this group plays, IN PLAY ORDER — a shotgun group starting on 9
   /// runs 9…18, 1…8. Computed server-side from services.hole_plan so the card
   /// never re-derives the wrap.
@@ -5907,6 +6006,7 @@ class TeamPlayCard {
     required this.round, required this.drive,
     this.teamSize = 4, this.driveControl = 'record', this.teeNote = '',
     this.requiresDrivePick = false, this.driveOptions = const [],
+    this.teams = const [], this.groupName = '',
     this.par, this.strokeIndex, this.yards, this.teamStrokes = 0,
     this.pars = const {}, this.strokeIndexes = const {},
     this.strokesByHole = const {},
@@ -5924,6 +6024,11 @@ class TeamPlayCard {
             .map((e) => TeamPlayDriveOption.fromJson(
                 Map<String, dynamic>.from(e as Map)))
             .toList(),
+        teams    : ((j['teams'] as List?) ?? const [])
+            .map((e) => TeamPlayCardTeam.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        groupName: (j['group_name'] ?? '') as String,
         hole     : (j['hole'] ?? 1) as int,
         playOrder: ((j['play_order'] as List?) ?? const [])
             .map((e) => e as int).toList(),

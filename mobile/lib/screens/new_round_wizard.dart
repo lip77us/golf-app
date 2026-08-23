@@ -203,6 +203,20 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     return out;
   }
 
+  /// The TEAMS, as rosters of player ids.
+  ///
+  /// **A playing group is not a team in a pairs event.** `_tpRosters` gives
+  /// the groups that walk the course together — four men, one tee time, one
+  /// card — and this splits each of them into the one or two pairs that are
+  /// actually scored. A foursome event returns exactly the groups.
+  List<List<int>> get _tpTeams {
+    if (_tpTeamSize != 2) return _tpRosters;
+    return [
+      for (final group in _tpRosters)
+        ...splitIntoPairs(group, bestBall: _tpFormat == 'best_ball'),
+    ];
+  }
+
   /// `Group 1` … `Group 6` for a foursome; **`Maiolini & Yau` for a pair.**
   ///
   /// The wizard has no business inventing names for four men — a colour the TD
@@ -213,16 +227,18 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   String _tpTeamLabel(int index) {
     final fallback = 'Group ${index + 1}';
     if (_tpTeamSize != 2) return fallback;
-    final roster = _tpRosters;
-    if (index >= roster.length || roster[index].length != 2) return fallback;
-    final surnames = roster[index]
+    final teams = _tpTeams;
+    if (index >= teams.length || teams[index].length != 2) return fallback;
+    final surnames = teams[index]
         .map((id) => _tpGolfer(id)?.name.trim() ?? '')
         .where((n) => n.isNotEmpty)
         .map((n) => n.split(' ').last)
         .toList();
     if (surnames.length != 2) return fallback;
     final joined = surnames.join(' & ');
-    return joined.length <= 16 ? joined : fallback;
+    // Wide enough for two real surnames — `Petersen & Reilly` is seventeen
+    // characters. Mirrors PAIR_NAME_MAX on the server.
+    return joined.length <= 24 ? joined : fallback;
   }
 
   /// The tee-shot control does three different jobs, and the FORMAT picks
@@ -277,7 +293,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<String> get _tpPairsProblems {
     if (_tpTeamSize != 2) return const [];
     final out = <String>[];
-    final rosters = _tpRosters;
+    final rosters = _tpTeams;
     for (var i = 0; i < rosters.length; i++) {
       final r = rosters[i];
       if (r.isEmpty) continue;
@@ -307,7 +323,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   /// True when any team plays three — the screens say so rather than being
   /// quietly wrong for one of them.
-  bool get _tpHasShortTeam => _tpRosters.any((r) => r.length == 3);
+  bool get _tpHasShortTeam =>
+      _tpTeamSize != 2 && _tpRosters.any((r) => r.length == 3);
 
   /// The TD's own first pair, for the figures printed on the format options.
   ///
@@ -317,7 +334,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   /// strokes.
   ({String name, List<int> handicaps})? get _tpSamplePair {
     if (_tpTeamSize != 2) return null;
-    final rosters = _tpRosters;
+    final rosters = _tpTeams;
     final full = rosters.where((r) => r.length == 2).firstOrNull;
     if (full == null) return null;
     final golfers = full.map(_tpGolfer).whereType<
@@ -615,16 +632,16 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<int> get _effectiveGroupSizes {
     final n  = _selectedIds.length;
     final ov = _groupSizesOverride;
-    // A pairs field is twos all the way down, with a trailing ONE when it is
-    // odd — left visible on purpose, because that is the golfer the block has
-    // to name. An override may hold a three (the best-ball way out) but never
-    // a four.
+    // A pairs field groups in FOURS — two pairs to a tee time, one scorer,
+    // one card — with a twosome on the end when the number of pairs is odd
+    // and a trailing ONE when the field is, which is the golfer the block has
+    // to name.
     if (_isTeamPlay && _tpTeamSize == 2) {
       if (ov != null && ov.fold<int>(0, (s, x) => s + x) == n
-          && ov.every((s) => s >= 1 && s <= 3)) {
+          && ov.every((s) => s >= 1 && s <= 4)) {
         return List<int>.from(ov);
       }
-      return pairSizes(n);
+      return pairPlayGroupSizes(n);
     }
     if (ov != null && ov.fold<int>(0, (s, x) => s + x) == n
         && ov.every((s) => s >= 2 && s <= 4)) {
@@ -1744,11 +1761,11 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           problems     : _tpPairsProblems,
           threeBallAvailable: _tpFormat == 'best_ball',
           teams        : [
-            for (var i = 0; i < _tpRosters.length; i++)
+            for (var i = 0; i < _tpTeams.length; i++)
               TeamHandicapPreview(
                 name   : _tpTeamLabel(i),
                 members: [
-                  for (final id in _tpRosters[i])
+                  for (final id in _tpTeams[i])
                     if (_tpGolfer(id) != null) _tpGolfer(id)!,
                 ],
               ),
@@ -1762,7 +1779,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           placesPaid  : _tpPlacesPaid,
           splitPcts   : _tpSplit,
           golfers     : _orderedPlayerIds.length,
-          teamCount   : _tpRosters.length,
+          teamCount   : _tpTeams.length,
           hasShortTeam: _tpHasShortTeam,
           onFee   : (v) => setState(() => _tpEntryFee = v),
           onPlaces: (n) => setState(() {
@@ -1856,11 +1873,11 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           // 13-golfer field is otherwise unsaveable), and a three is only
           // legal in best ball, which is the one format that can count a third
           // ball.
+          // A pairs field groups in fours — two pairs to a tee time — with a
+          // twosome when the pair count is odd and a ONE when the field is.
           minGroupSize: _isTeamPlay && _tpTeamSize == 2 ? 1 : 2,
-          maxGroupSize: _isTeamPlay && _tpTeamSize == 2
-              ? (_tpFormat == 'best_ball' ? 3 : 2)
-              : 4,
-          groupNoun   : _isTeamPlay && _tpTeamSize == 2 ? 'Pair' : 'Group',
+          maxGroupSize: 4,
+          groupNoun   : 'Group',
           orderedPlayers: _orderedPlayers,
           playerTees    : _playerTees,
           courseTees    : _courseTees,
@@ -4386,7 +4403,7 @@ class _Step3GroupsAndTees extends StatelessWidget {
     // the fours auto-balance otherwise. Comparing a pairs override against the
     // fours default marked every pairs field as "overridden".
     final autoBalance = minGroupSize == 1
-        ? gr.pairSizes(orderedPlayers.length)
+        ? gr.pairPlayGroupSizes(orderedPlayers.length)
         : gr.groupSizes(orderedPlayers.length);
     bool _sameAsAuto() {
       if (sizes.length != autoBalance.length) return false;
@@ -4601,8 +4618,10 @@ class _Step3GroupsAndTees extends StatelessWidget {
                 // would be an imaginary man taking half the shots in an
                 // alternate shot — so an odd field is a problem to fix, and
                 // the Handicap step names the golfer standing there.
-                ? 'Pairs need an even field. A golfer left without a partner '
-                  'is named on the Handicap step, and Next waits on it.'
+                ? 'Two pairs go off together — one tee time, one scorer, one '
+                  'card. The first two men in a group are one pair and the '
+                  'next two are the other. A golfer left without a partner is '
+                  'named on the Handicap step, and Next waits on it.'
                 : 'Groups with fewer than 4 players will have a phantom added '
                   'automatically so all scoring works correctly.',
             style: theme.textTheme.bodySmall?.copyWith(
