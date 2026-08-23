@@ -15,6 +15,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:golf_mobile/utils/team_allowance.dart';
 import 'package:golf_mobile/widgets/team_play/team_drive_step.dart';
 
 void main() {
@@ -139,6 +140,43 @@ void main() {
       await pumpTall(tester, harness(format: 'scotch', rule: 'none'));
       expect(find.textContaining('happens on every hole in Scotch'),
              findsOneWidget);
+    });
+  });
+
+  group('a step with nothing to set is not a step', () {
+    // In best ball and Chapman both men drive every hole: no drive to choose,
+    // no quota to count, no penalty to apply. The wizard drops the step rather
+    // than showing a page whose only content says there is nothing on it.
+    test('best ball and chapman have no drive step', () {
+      expect(hasDriveStep(2, 'best_ball'), isFalse);
+      expect(hasDriveStep(2, 'chapman'), isFalse);
+    });
+
+    test('alternate shot keeps its step despite having no control', () {
+      // The rota is a real thing that happens on the course, and the step is
+      // the only place the TD is told it is coming.
+      expect(hasDriveStep(2, 'alternate_shot'), isTrue);
+      expect(driveRulesFor(2, 'alternate_shot'), ['alternating']);
+    });
+
+    test('the formats with a choice keep theirs', () {
+      expect(hasDriveStep(2, 'scramble'), isTrue);
+      expect(hasDriveStep(2, 'scotch'), isTrue);
+      expect(hasDriveStep(4, 'scramble'), isTrue);
+      expect(hasDriveStep(4, 'shamble'), isTrue);
+    });
+
+    test('alternating pairs stays a fours rule', () {
+      // Two men have no pairs to alternate; their rota IS alternate shot.
+      expect(driveRulesFor(2, 'scramble'), isNot(contains('alternating')));
+      expect(driveRulesFor(4, 'scramble'), contains('alternating'));
+    });
+
+    test('the ceiling helper agrees with the widget', () {
+      expect(maxDrivesPerGolfer(2, 'per_nine'), 4);
+      expect(maxDrivesPerGolfer(2, 'per_eighteen'), 9);
+      expect(maxDrivesPerGolfer(4, 'per_nine'), 2);
+      expect(maxDrivesPerGolfer(4, 'per_eighteen'), 4);
     });
   });
 }

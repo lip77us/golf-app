@@ -141,13 +141,19 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       // Eight steps, two of them existing screens reused unchanged: Set tees
       // (groups) and Review. Rounds is not in here at all — one round is
       // STATED, not chosen, and nothing downstream has a round dimension.
+      //
+      // **Drives drops out when the format has no tee shot to choose.** In
+      // best ball and Chapman both men drive every hole, so the step had no
+      // control on it at all — a page whose only content was a note saying
+      // there was nothing to set. Seven steps, and the header count reads this
+      // list, so it stays honest.
       return [
         _StepKind.typeFormat,
         _StepKind.eventDetails,
         _StepKind.players,
         _StepKind.groups,          // the existing Set tees screen, unchanged
         _StepKind.teamFormat,
-        _StepKind.teamDrives,
+        if (_tpHasDriveStep) _StepKind.teamDrives,
         _StepKind.teamHandicap,
         _StepKind.teamPayout,
         _StepKind.review,
@@ -230,18 +236,21 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     // figure set at the pairs ceiling has to come down with it.
     final cap = _tpMaxDrivesPerGolfer;
     if (_tpDrivesReq > cap) _tpDrivesReq = cap;
+    // Picking best ball or Chapman drops the Drives step out of the flow, and
+    // `_step` indexes that list. The format is chosen from a step ABOVE the one
+    // that disappears, so this cannot bite today — but the flow is derived and
+    // the next conditional step might not sit so conveniently.
+    final last = _stepFlow.length - 1;
+    if (_step > last) _step = last;
   }
 
-  /// Best ball and Chapman have both men driving every hole with no choice to
-  /// record. Alternate shot has a rota, which is a schedule and not a quota —
-  /// nothing to fall short of, so no warning and no penalty setting.
-  /// Alternating pairs stays a FOURS rule: two men have no pairs to alternate.
-  List<String> get _tpDriveRulesAllowed {
-    if (_tpFormat == 'best_ball' || _tpFormat == 'chapman') return const ['none'];
-    if (_tpFormat == 'alternate_shot') return const ['alternating'];
-    if (_tpTeamSize == 2) return const ['none', 'per_nine', 'per_eighteen'];
-    return const ['none', 'per_nine', 'per_eighteen', 'alternating'];
-  }
+  /// Whether the wizard shows a Drives step at all, and which rules it offers.
+  /// Both live in `utils/team_allowance.dart` beside the other mirrors of the
+  /// server's rules, so they can be unit-tested rather than sealed in wizard
+  /// state.
+  bool get _tpHasDriveStep => hasDriveStep(_tpTeamSize, _tpFormat);
+  List<String> get _tpDriveRulesAllowed =>
+      driveRulesFor(_tpTeamSize, _tpFormat);
 
   /// The most drives one golfer can be asked for in a window: the holes in it,
   /// divided between the men.
@@ -251,10 +260,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   /// nine each across eighteen — every hole spoken for, nothing left over.
   /// Mirrors `TeamPlayConfig.max_drives_per_golfer`; the wizard sets this
   /// before the config row exists, so it cannot ask the server.
-  int get _tpMaxDrivesPerGolfer {
-    final holes = _tpDriveRule == 'per_nine' ? 9 : 18;
-    return (holes ~/ _tpTeamSize).clamp(1, 18);
-  }
+  int get _tpMaxDrivesPerGolfer =>
+      maxDrivesPerGolfer(_tpTeamSize, _tpDriveRule);
 
   /// The odd-field block, computed on the roster the Groups & Tees step
   /// produced (docs/design-review/handoff-team-pairs/SPEC.md §3.1).
@@ -1975,6 +1982,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           );
         }
         return _Step5Review(
+          // Null unless this is a Team Play event — the review's fill-to-four
+          // rule is right for every other shape.
+          teamPlaySize         : _isTeamPlay ? _tpTeamSize : null,
           createNew            : _createNewTournament,
           tournamentName       : _createNewTournament
               ? _nameCtrl.text.trim()
@@ -4586,8 +4596,15 @@ class _Step3GroupsAndTees extends StatelessWidget {
 
           const SizedBox(height: 12),
           Text(
-            'Groups with fewer than 4 players will have a phantom added '
-            'automatically so all scoring works correctly.',
+            minGroupSize == 1
+                // A pairs field. There is no phantom partner to pad with — it
+                // would be an imaginary man taking half the shots in an
+                // alternate shot — so an odd field is a problem to fix, and
+                // the Handicap step names the golfer standing there.
+                ? 'Pairs need an even field. A golfer left without a partner '
+                  'is named on the Handicap step, and Next waits on it.'
+                : 'Groups with fewer than 4 players will have a phantom added '
+                  'automatically so all scoring works correctly.',
             style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant),
           ),
@@ -6505,6 +6522,12 @@ class _Step5Review extends StatelessWidget {
   /// Championship entry per golfer, and the carve-out taken off the top.
   final int                championshipFee;
   final int                carvePct;
+  /// Team Play only: how many men make a complete team. **A pair of two is
+  /// complete** — it fields no phantom, because in fours the phantom is a
+  /// handicap device for a team that still hits four balls and here it would
+  /// be an imaginary man taking half the shots. Null for every other shape,
+  /// where the old fill-to-four rule stands.
+  final int?               teamPlaySize;
 
   const _Step5Review({
     required this.createNew,
@@ -6522,6 +6545,7 @@ class _Step5Review extends StatelessWidget {
     this.sideGameFees   = const {},
     this.championshipFee = 0,
     this.carvePct        = 0,
+    this.teamPlaySize,
     this.createError,
   });
 
@@ -6637,7 +6661,11 @@ class _Step5Review extends StatelessWidget {
               .map((e) => e.value)
               .toList();
           final color = _groupColors[g % _groupColors.length];
-          final needsPhantom = groupPlayers.length < 4;
+          // A group is short only against the size its shape actually fills.
+          // A pairs event fills to TWO, so a complete pair was being labelled
+          // "+ 1 phantom" for being two men — which is the whole team.
+          final needsPhantom = gr.groupNeedsPhantom(
+              groupPlayers.length, teamPlaySize: teamPlaySize);
 
           return Card(
             margin: const EdgeInsets.only(bottom: 8),

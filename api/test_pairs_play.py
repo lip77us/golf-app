@@ -667,3 +667,146 @@ class UnchangedDownstreamTests(PairsBase):
         s = self.client.get(
             reverse('api-team-play-settlement', args=[self.tourn.id])).json()
         self.assertEqual(s['balance'], 0)
+
+
+# ---------------------------------------------------------------------------
+# 8. The wizard's own order — round setup FIRST, config second
+# ---------------------------------------------------------------------------
+
+class WizardOrderTests(TestCase):
+    """
+    Every other test in this file builds its Foursomes by hand, which skips the
+    two calls the wizard actually makes and in the order it makes them:
+
+        POST /rounds/<id>/setup/     explicit 2-man groups, auto_setup_games
+        POST /tournaments/<id>/team-play/setup/   team_size=2, best_ball
+
+    The config does not exist yet during the first call, so anything that pads
+    or provisions a group has to get pairs right without being told they are
+    pairs — which is a different question from the one the hand-built tests ask.
+    """
+
+    def setUp(self):
+        self.acct = Account.objects.create(name='Saturday Club')
+        self.user = User.objects.create_user(username='td', account=self.acct)
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+        course = Course.objects.create(account=self.acct, name='Tilden Park')
+        self.tee = Tee.objects.create(
+            course=course, tee_name='White', slope=113,
+            course_rating=Decimal('72.0'), par=72, holes=HOLES)
+        self.tourn = Tournament.objects.create(
+            account=self.acct, name='Saturday Pairs',
+            start_date=date(2026, 6, 6), total_rounds=1,
+            active_games=['team_play'])
+        self.round = Round.objects.create(
+            account=self.acct, course=course, tournament=self.tourn,
+            round_number=1, status='pending')
+
+        self.players = []
+        for pair in PAIRS:
+            for name, hcp in pair:
+                self.players.append(Player.objects.create(
+                    account=self.acct, name=name,
+                    handicap_index=Decimal(hcp)))
+
+    def _run_wizard(self, team_format='best_ball'):
+        """Exactly what the wizard posts, in the order it posts it."""
+        body = {
+            'players': [
+                {'player_id': p.id, 'tee_id': self.tee.id,
+                 'group_number': (i // 2) + 1}
+                for i, p in enumerate(self.players)
+            ],
+            'randomise': False,
+            'auto_setup_games': True,
+        }
+        r = self.client.post(
+            reverse('api-round-setup', args=[self.round.id]), body,
+            format='json')
+        assert r.status_code in (200, 201), r.content
+        return self.client.post(
+            reverse('api-team-play-setup', args=[self.tourn.id]),
+            {'team_size': 2, 'team_format': team_format, 'entry_fee': '25.00',
+             'places_paid': 3, 'split_pcts': [50, 30, 20]},
+            format='json')
+
+    def test_no_phantom_lands_on_a_pair(self):
+        """In fours the phantom is a handicap device for a team that still hits
+        four balls. In pairs it would be an imaginary man taking half the
+        shots, so there must not be one anywhere."""
+        r = self._run_wizard()
+        self.assertEqual(r.status_code, 200, r.content)
+
+        from tournament.models import FoursomeMembership
+        phantoms = FoursomeMembership.objects.filter(
+            foursome__round=self.round, player__is_phantom=True)
+        self.assertEqual(
+            list(phantoms), [],
+            f'{phantoms.count()} phantom(s) on a pairs round')
+        self.assertFalse(
+            self.round.foursomes.filter(has_phantom=True).exists())
+
+    def test_the_config_reaches_sync_teams(self):
+        """The read model has to come out configured — the figures, the names
+        and the colours are all `sync_teams`' work, and it is called with a
+        config the same request just created."""
+        self._run_wizard()
+        summary = self.client.get(
+            reverse('api-team-play', args=[self.tourn.id])).json()
+        self.assertTrue(summary['configured'])
+        self.assertEqual(summary['team_size'], 2)
+        self.assertEqual(len(summary['teams']), 6)
+        for team in summary['teams']:
+            self.assertFalse(team['has_phantom'], team['name'])
+            self.assertEqual(team['real_player_count'], 2)
+            self.assertEqual(team['seats_open'], 0)
+            self.assertIsNotNone(team['team_handicap'], team['name'])
+            self.assertTrue(team['colour'], team['name'])
+
+    def test_pairs_are_named_by_their_surnames(self):
+        self._run_wizard()
+        summary = self.client.get(
+            reverse('api-team-play', args=[self.tourn.id])).json()
+        self.assertEqual(summary['teams'][0]['name'], 'Maiolini & Yau')
+
+    def test_a_one_ball_pairs_format_is_equally_phantom_free(self):
+        self._run_wizard('alternate_shot')
+        from tournament.models import FoursomeMembership
+        self.assertFalse(FoursomeMembership.objects.filter(
+            foursome__round=self.round, player__is_phantom=True).exists())
+
+    def test_a_three_man_best_ball_pair_gets_no_phantom_either(self):
+        """The odd-field way out is a real group of three, not two men and an
+        imaginary one — best ball simply counts the best of three balls."""
+        # 3 + 3 + 2 + 2 + 2 = 12.
+        sizes, groups = [3, 3, 2, 2, 2], []
+        for n, size in enumerate(sizes, start=1):
+            groups.extend([n] * size)
+        body = {
+            'players': [
+                {'player_id': p.id, 'tee_id': self.tee.id,
+                 'group_number': groups[i]}
+                for i, p in enumerate(self.players)
+            ],
+            'randomise': False,
+            'auto_setup_games': True,
+        }
+        r = self.client.post(
+            reverse('api-round-setup', args=[self.round.id]), body,
+            format='json')
+        self.assertIn(r.status_code, (200, 201), r.content)
+        self.client.post(
+            reverse('api-team-play-setup', args=[self.tourn.id]),
+            {'team_size': 2, 'team_format': 'best_ball'}, format='json')
+
+        from tournament.models import FoursomeMembership
+        self.assertFalse(FoursomeMembership.objects.filter(
+            foursome__round=self.round, player__is_phantom=True).exists())
+        summary = self.client.get(
+            reverse('api-team-play', args=[self.tourn.id])).json()
+        self.assertEqual(summary['teams'][0]['real_player_count'], 3)
+        self.assertEqual(summary['blocking'], [])

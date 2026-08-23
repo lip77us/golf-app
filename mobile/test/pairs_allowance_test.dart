@@ -170,4 +170,27 @@ void main() {
       expect(pairSizes(0), isEmpty);
     });
   });
+
+  group('a pair is complete at two — nothing pads it', () {
+    // The review step labelled a finished pair "+ 1 phantom" for being two
+    // men, because "anything under four gets a phantom" was written out
+    // longhand wherever groups are drawn.
+    test('a pair never gets a phantom, at any roster size', () {
+      expect(groupNeedsPhantom(2, teamPlaySize: 2), isFalse);
+      expect(groupNeedsPhantom(3, teamPlaySize: 2), isFalse);
+      // Even a golfer with no partner: that is a problem to fix, named on the
+      // Handicap step, not a gap to pad with an imaginary man.
+      expect(groupNeedsPhantom(1, teamPlaySize: 2), isFalse);
+    });
+
+    test('a foursome still fields a phantom 4th', () {
+      expect(groupNeedsPhantom(3, teamPlaySize: 4), isTrue);
+      expect(groupNeedsPhantom(4, teamPlaySize: 4), isFalse);
+    });
+
+    test('every other shape fills to four, unchanged', () {
+      expect(groupNeedsPhantom(3), isTrue);
+      expect(groupNeedsPhantom(4), isFalse);
+    });
+  });
 }

@@ -60,6 +60,25 @@ List<int> pairSizes(int n) {
   return [...List.filled(n ~/ 2, 2), if (n.isOdd) 1];
 }
 
+/// Whether a group of [groupSize] gets a phantom to fill it out.
+///
+/// [teamPlaySize] is the size a Team Play team fills to — 4 for a foursome
+/// event, 2 for pairs — or null for every other shape, which fills to four.
+///
+/// **A pair is complete at two.** In fours the phantom is a handicap device
+/// for a team that still hits four balls; in pairs it would be an imaginary
+/// man taking half the shots in an alternate shot, so there is never one at
+/// any roster size. An odd field is a problem to fix, not a gap to pad — the
+/// Handicap step names the golfer standing there.
+///
+/// Kept here, next to the sizing rules, because "anything under four gets a
+/// phantom" is an assumption that reappears wherever groups are drawn and had
+/// already been written out twice.
+bool groupNeedsPhantom(int groupSize, {int? teamPlaySize}) {
+  if (teamPlaySize == 2) return false;
+  return groupSize < (teamPlaySize ?? 4);
+}
+
 /// Returns the 1-based group number for the player at position [idx]
 /// given a precomputed [sizes] list (from [groupSizes]).
 int groupOf(int idx, List<int> sizes) {

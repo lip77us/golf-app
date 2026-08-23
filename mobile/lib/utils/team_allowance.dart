@@ -78,6 +78,56 @@ bool playsOneBall(String format) =>
     format == 'scramble' || format == 'alternate_shot' ||
     format == 'scotch'   || format == 'chapman';
 
+/// The drive rules a format may use — mirrors
+/// `TeamPlayConfig.drive_rules_allowed`.
+///
+/// The tee-shot control does three different jobs, and the FORMAT picks which:
+///
+///   * **A record** — scramble, either size. Compliance against a quota.
+///   * **An instruction** — Scotch. The pick says who hits next, so the tap
+///     happens every hole and a quota is available on top, off by default.
+///   * **A rota** — alternate shot. Odd/even, set on the 1st tee, fixed for
+///     eighteen. Not a quota: nothing to fall short of.
+///   * **Absent** — best ball and Chapman. Both men drive every hole with no
+///     choice to record.
+///
+/// Alternating pairs stays a FOURS rule: two men have no pairs to alternate,
+/// and their alternate-shot rota is the `alternate_shot` format's own schedule.
+List<String> driveRulesFor(int teamSize, String format) {
+  if (format == 'best_ball' || format == 'chapman') return const ['none'];
+  if (format == 'alternate_shot') return const ['alternating'];
+  if (teamSize == 2) return const ['none', 'per_nine', 'per_eighteen'];
+  return const ['none', 'per_nine', 'per_eighteen', 'alternating'];
+}
+
+/// Whether the wizard shows a Drives step at all.
+///
+/// **A step with nothing to set is not a step.** In best ball and Chapman both
+/// men drive every hole, so there is no drive to choose, no quota to count and
+/// no penalty to apply — the page's whole content was a note saying so, which
+/// is a worse way to say it than not asking.
+///
+/// Alternate shot keeps its step despite having no control either: the rota is
+/// a real thing that happens on the course — the pair sets it on the 1st tee
+/// and the card names the tee for eighteen holes — and the step is the only
+/// place the TD is told it is coming. The line is whether something happens,
+/// not whether there is a widget.
+bool hasDriveStep(int teamSize, String format) {
+  final rules = driveRulesFor(teamSize, format);
+  return !(rules.length == 1 && rules.first == 'none');
+}
+
+/// The most drives one golfer can be asked for in a window: the window's holes
+/// divided between the men. Mirrors `TeamPlayConfig.max_drives_per_golfer`.
+///
+/// Four men sharing nine holes top out at two each, and four each across
+/// eighteen. **Two men sharing the same nine top out at four each**, and nine
+/// each across eighteen — every hole spoken for, nothing left over.
+int maxDrivesPerGolfer(int teamSize, String driveRule) {
+  final holes = driveRule == 'per_nine' ? 9 : 18;
+  return (holes ~/ (teamSize < 1 ? 1 : teamSize)).clamp(1, 18);
+}
+
 /// One man's line on the worked card.
 class AllowanceLine {
   final int  courseHandicap;

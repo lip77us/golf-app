@@ -28,6 +28,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../theme/halved_brand.dart';
+import '../../utils/team_allowance.dart';
 import '../section_card.dart';
 import 'team_play_bits.dart';
 
@@ -81,20 +82,7 @@ class TeamDriveStep extends StatelessWidget {
   int get _required => teamSize * drivesRequired;
   int get _windowHoles => _isPerNine ? 9 : 18;
   int get _free => (_windowHoles - _required).clamp(0, 18);
-
-  /// The most a window can actually be asked for: the holes in it, divided
-  /// between the men.
-  ///
-  /// **It scales with the team size, and it always did — the old 2-and-4 was
-  /// four men's answer hardcoded.** Four men have nine holes to share, so two
-  /// each is the ceiling and four each across eighteen; TWO men have the same
-  /// nine holes between them, so four each per nine and nine each across
-  /// eighteen, which is every hole spoken for and nothing left over.
-  ///
-  /// Mirrors `TeamPlayConfig.max_drives_per_golfer`, which clamps the same
-  /// figure server-side. The wizard sets this before the config row exists, so
-  /// it cannot ask the server for it.
-  int get _maxPerGolfer => (_windowHoles ~/ teamSize).clamp(1, 18);
+  int get _maxPerGolfer => maxDrivesPerGolfer(teamSize, rule);
 
   String get _headerBody {
     if (_hasNoControl) {
