@@ -292,8 +292,12 @@ def _board_golfers_by_hole(foursome, config) -> list:
 
     Shamble only — a scramble has no per-golfer ball to show.
     """
+    # A LIST either way. Returning {} for the scramble made the field change
+    # type between formats, and the client — which casts it once — died on the
+    # scramble board. Same fault as the allowance clobber: a payload key that
+    # is a map on one path and a list on another.
     if config.is_scramble:
-        return {}
+        return []
 
     counts = resolved_counts(foursome, config)
     out = {}

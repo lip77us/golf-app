@@ -1,0 +1,290 @@
+"""
+api/test_team_play_edges.py
+---------------------------
+Foursome Play on the paths the main suites do not walk.
+
+Everything in `api/test_team_play_scoring.py` plays a FINISHED SCRAMBLE, which
+is how three separate arithmetic faults survived it — the whole allowance taken
+off a part round, a shamble's par not multiplied by the ball count, and a
+shamble allocating strokes off 100%. So this file deliberately plays the other
+combinations: shambles, part rounds, three-man teams, and the money that hangs
+off them.
+"""
+from datetime import date
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
+
+from accounts.models import Account
+from core.models import Course, Player, Tee
+from scoring.models import HoleScore
+from tournament.models import (
+    Foursome, FoursomeMembership, Round, TeamPlayConfig, Tournament,
+)
+
+User = get_user_model()
+
+HOLES = [{'number': n, 'par': 4, 'stroke_index': n, 'yards': 400}
+         for n in range(1, 19)]
+
+
+class _Base(TestCase):
+    """Two teams: one of four, one of three so the phantom is always in play."""
+
+    FOUR  = [('Mercer', 5), ('Ellis', 12), ('Barrueta', 16), ('Vaughn', 24)]
+    THREE = [('Bellini', 9), ('Kwan', 15), ('Ortega', 23)]
+
+    def setUp(self):
+        self.acct = Account.objects.create(name='Club')
+        self.user = User.objects.create_user(username='td', account=self.acct)
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+        course = Course.objects.create(account=self.acct, name='Tilden')
+        self.tee = Tee.objects.create(
+            course=course, tee_name='White', slope=113,
+            course_rating=Decimal('72.0'), par=72, holes=HOLES)
+        self.tourn = Tournament.objects.create(
+            account=self.acct, name='Saturday', start_date=date(2026, 6, 6),
+            total_rounds=1, active_games=['team_play'])
+        self.round = Round.objects.create(
+            account=self.acct, course=course, tournament=self.tourn,
+            round_number=1, status='in_progress')
+
+        self.players = {}
+        self.teams = {}
+        for i, (name, roster) in enumerate(
+                [('Slate', self.FOUR), ('Dune', self.THREE)], start=1):
+            fs = Foursome.objects.create(round=self.round, group_number=i,
+                                         name=name)
+            self.teams[name] = fs
+            for golfer, hcp in roster:
+                p = Player.objects.create(account=self.acct, name=golfer,
+                                          handicap_index=Decimal(hcp))
+                self.players[golfer] = p
+                FoursomeMembership.objects.create(
+                    foursome=fs, player=p, tee=self.tee,
+                    course_handicap=hcp, playing_handicap=hcp)
+
+    def configure(self, **kw):
+        body = {'team_format': 'scramble', 'drive_rule': 'none',
+                'entry_fee': '25.00', 'places_paid': 1, 'split_pcts': [100]}
+        body.update(kw)
+        r = self.client.post(reverse('api-team-play-setup',
+                                     args=[self.tourn.id]), body, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+    def board(self):
+        return self.client.get(
+            reverse('api-team-play-leaderboard', args=[self.tourn.id])).json()
+
+    def settlement(self):
+        return self.client.get(
+            reverse('api-team-play-settlement', args=[self.tourn.id])).json()
+
+    def row(self, name):
+        return next(t for t in self.board()['teams'] if t['name'] == name)
+
+    def scramble_round(self, team, gross_per_hole=4, holes=18):
+        url = reverse('api-team-play-score', args=[self.teams[team].id])
+        for h in range(1, holes + 1):
+            self.client.post(url, {'hole_number': h,
+                                   'gross_score': gross_per_hole},
+                             format='json')
+
+    def shamble_round(self, team, gross=5, holes=18):
+        fs = self.teams[team]
+        for h in range(1, holes + 1):
+            for m in fs.memberships.all():
+                HoleScore.objects.update_or_create(
+                    foursome=fs, player=m.player, hole_number=h,
+                    defaults={'gross_score': gross})
+
+
+# ---------------------------------------------------------------------------
+# The phantom, on a shamble
+# ---------------------------------------------------------------------------
+
+class ShamblePhantomTests(_Base):
+
+    def test_the_phantom_gets_a_ball_and_an_allowance(self):
+        """A three-man team hits four balls — that is the whole point of the
+        phantom — so its ball takes a score and a handicap like any other."""
+        self.configure(team_format='shamble')
+        card = self.client.get(
+            reverse('api-team-play-card', args=[self.teams['Dune'].id]),
+            {'hole': 1}).json()
+
+        rows = card['shamble']['rows']
+        self.assertEqual(len(rows), 4)
+        phantom = next(r for r in rows if r['is_phantom'])
+        # Average of 9, 15, 23 is 16; at the two-ball 85% that is 14.
+        self.assertEqual(phantom['handicap'], 14)
+
+    def test_the_phantoms_ball_can_count(self):
+        self.configure(team_format='shamble')
+        fs = self.teams['Dune']
+        phantom = fs.memberships.get(player__is_phantom=True).player
+        # Everyone makes 6; the phantom makes 3, so it must be one of the two.
+        for m in fs.memberships.all():
+            HoleScore.objects.create(
+                foursome=fs, player=m.player, hole_number=1,
+                gross_score=3 if m.player_id == phantom.id else 6)
+
+        hole = self.client.get(
+            reverse('api-team-play-card', args=[fs.id]), {'hole': 1},
+        ).json()['shamble']
+        counted = [r for r in hole['rows'] if r['counts']]
+        self.assertIn(True, [r['is_phantom'] for r in counted])
+
+
+# ---------------------------------------------------------------------------
+# Money, on the paths the scramble suite never reaches
+# ---------------------------------------------------------------------------
+
+class SettlementEdgeTests(_Base):
+
+    def test_settle_is_blocked_while_a_team_is_still_out(self):
+        """Money does not move while a score can."""
+        self.configure()
+        self.scramble_round('Slate')
+        self.scramble_round('Dune', holes=9)
+
+        s = self.settlement()
+        self.assertFalse(s['can_settle'])
+        self.assertIn('Dune', s['waiting_on'])
+
+    def test_a_shamble_settles_and_balances(self):
+        self.configure(team_format='shamble', entry_fee='25.00',
+                       places_paid=1, split_pcts=[100])
+        self.shamble_round('Slate', gross=5)
+        self.shamble_round('Dune', gross=6)
+
+        s = self.settlement()
+        self.assertTrue(s['can_settle'])
+        # 7 golfers × $25. The phantom is not one of them.
+        self.assertEqual(s['golfers'], 7)
+        self.assertEqual(s['pool'], 175.0)
+        self.assertEqual(s['balance'], 0.0)
+
+    def test_a_three_man_winner_splits_three_ways(self):
+        """Dune plays three, so its share divides three ways and pays more
+        each — the phantom earned the strokes and cannot be paid."""
+        self.configure()
+        self.scramble_round('Dune', gross_per_hole=3)     # 54, wins
+        self.scramble_round('Slate', gross_per_hole=5)    # 90
+
+        block = self.settlement()['blocks'][0]
+        team  = block['teams'][0]
+        self.assertEqual(team['name'], 'Dune')
+        self.assertEqual(team['ways'], 3)
+        self.assertTrue(team['phantom'])
+        self.assertEqual(len(team['golfers']), 3)
+        self.assertNotIn('Phantom 4th', [g['name'] for g in team['golfers']])
+        self.assertAlmostEqual(
+            sum(g['amount'] for g in team['golfers']), 175.0, places=2)
+
+
+# ---------------------------------------------------------------------------
+# The drive penalty, on a shamble
+# ---------------------------------------------------------------------------
+
+class ShambleDrivePenaltyTests(_Base):
+
+    def test_two_strokes_a_missing_drive_reaches_the_board(self):
+        """The requirement applies to BOTH formats — a shamble chooses a tee
+        shot exactly as a scramble does — so the penalty has to land on a
+        shamble's gross too."""
+        self.configure(team_format='shamble', drive_rule='per_eighteen',
+                       drives_required=1, drive_penalty='two_strokes')
+        self.shamble_round('Slate', gross=5)
+
+        row = self.row('Slate')
+        # Four drives owed, none taken → eight strokes on the gross.
+        self.assertEqual(row['drive']['shortfall'], 4)
+        self.assertEqual(row['drive']['penalty_strokes'], 8)
+        # 18 holes, best 2 of four 5s = 180 counted, plus the 8.
+        self.assertEqual(row['gross'], 188)
+
+    def test_warn_only_leaves_the_gross_alone(self):
+        self.configure(team_format='shamble', drive_rule='per_eighteen',
+                       drives_required=1, drive_penalty='warn')
+        self.shamble_round('Slate', gross=5)
+
+        row = self.row('Slate')
+        self.assertEqual(row['drive']['shortfall'], 4)
+        self.assertEqual(row['drive']['penalty_strokes'], 0)
+        self.assertEqual(row['gross'], 180)
+
+
+# ---------------------------------------------------------------------------
+# Payload shape — the class of bug that keeps reaching the client
+# ---------------------------------------------------------------------------
+
+class BoardShapeTests(_Base):
+    """Every key on a board row must hold the SAME TYPE for both formats.
+
+    Two crashes have now come from a field changing shape between the scramble
+    and shamble paths — `allowance` (block vs int) and `golfers_by_hole` (list
+    vs map). The client casts each key once; a key that is a list on one path
+    and a map on the other takes the board down.
+    """
+
+    TYPES = {
+        'allowance'      : dict,
+        'drive'          : dict,
+        'members'        : list,
+        'pars'           : dict,
+        'stroke_indexes' : dict,
+        'scores_by_hole' : dict,
+        'strokes_by_hole': dict,
+        'golfers_by_hole': list,
+        'by_hole'        : dict,
+    }
+
+    def _assert_shapes(self, fmt):
+        for key, want in self.TYPES.items():
+            for team in self.board()['teams']:
+                self.assertIsInstance(
+                    team[key], want,
+                    f'{fmt}: {key} on {team["name"]} is {type(team[key])}')
+
+    def test_scramble_row_shapes(self):
+        self.configure(team_format='scramble')
+        self.scramble_round('Slate', holes=3)
+        self._assert_shapes('scramble')
+
+    def test_shamble_row_shapes(self):
+        self.configure(team_format='shamble')
+        self.shamble_round('Slate', holes=3)
+        self._assert_shapes('shamble')
+
+
+# ---------------------------------------------------------------------------
+# The ball count → allowance chain, end to end
+# ---------------------------------------------------------------------------
+
+class BallCountAllowanceTests(_Base):
+
+    def test_a_grid_averaging_over_two_takes_95_percent(self):
+        """The packet's own case: a per-hole grid averaging 2.3 gets 95%
+        suggested rather than 85%, because the mapping is a CEILING — a round
+        that ever asks for three balls is a three-ball round for allowance."""
+        counts = {str(h): (3 if h <= 6 else 2) for h in range(1, 19)}
+        self.configure(team_format='shamble', ball_count_mode='per_hole',
+                       ball_counts=counts)
+
+        board = self.board()
+        self.assertEqual(board['teams'][0]['allowance']['pct'], 95)
+
+    def test_escalating_averages_two_and_takes_85(self):
+        self.configure(team_format='shamble', ball_count_mode='escalating')
+        summary = self.client.get(
+            reverse('api-team-play', args=[self.tourn.id])).json()
+        self.assertEqual(summary['ball_count']['counted'], 36)
+        self.assertEqual(summary['teams'][0]['allowance']['pct'], 85)
