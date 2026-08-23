@@ -310,20 +310,14 @@ class _Detail extends StatelessWidget {
                 child: TeamNote(w.freeLabel,
                     warn: w.freeLeft == 0 && w.owed > 0),
               ),
-          // Recorded on the row if it happened. It changes the money only if
-          // the TD chose the stroke penalty, and then it already changed the
-          // gross upstream.
-          if (drive.shortfall > 0) ...[
+          // No shortfall line here. The free-drives note above already says
+          // where the team stands, and a second sentence about the same thing
+          // is the row talking twice. The penalty, when the TD chose one, has
+          // already moved the gross.
+          if (drive.penaltyStrokes > 0) ...[
             const SizedBox(height: 8),
-            // "N drives short" read as short YARDAGE. Say what actually
-            // happened: required drives that never got used.
-            TeamNote(
-              drive.penaltyStrokes > 0
-                  ? 'Never used ${drive.shortfall} of the required drives — '
-                    '${drive.penaltyStrokes} strokes added.'
-                  : 'Never used ${drive.shortfall} of the required drives — '
-                    'recorded, no penalty.',
-            ),
+            TeamNote('${drive.penaltyStrokes} penalty strokes added for '
+                     'missed drives.'),
           ],
         ],
       ),

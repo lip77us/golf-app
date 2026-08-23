@@ -397,3 +397,57 @@ class NetLineTests(_Base):
         # takes two. Nets are 4/4/4/3, the best two are 3 and 4, and 7 against
         # a par of 8 is one under.
         self.assertEqual(row['net_to_par_by_hole']['1'], -1)
+
+
+class BoardSortTests(_Base):
+    """The board prints to par, so it has to rank on to par.
+
+    Ranking on the raw net total contradicts the column the moment teams are
+    at different points in the round: nine holes of net 30 is not better than
+    eighteen of net 70.
+    """
+
+    def test_the_bigger_allowance_wins_off_the_same_gross(self):
+        """Slate plays off 8 (5/12/16/24 → 1.25+2.40+2.40+2.40 = 8.45) and Dune
+        off 10 (9/15/23 plus a phantom 16 → 2.25+3.00+2.40+2.30 = 9.95). Level
+        gross for both, so Dune is two further under and leads."""
+        self.configure()
+        self.scramble_round('Slate', gross_per_hole=4)   # 72, level
+        self.scramble_round('Dune',  gross_per_hole=4)   # 72, level
+
+        board = self.board()['teams']
+        self.assertEqual(board[0]['name'], 'Dune')
+        self.assertEqual(board[0]['net_to_par'], -10)
+        self.assertEqual(board[1]['net_to_par'], -8)
+
+    def test_a_part_round_does_not_jump_the_field_on_raw_total(self):
+        """Slate finishes; Dune has played five holes and has a much smaller
+        net TOTAL. Ranked on totals Dune leads, which is nonsense."""
+        self.configure()
+        self.scramble_round('Slate', gross_per_hole=4)
+        self.scramble_round('Dune', gross_per_hole=4, holes=5)
+
+        board = self.board()['teams']
+        dune  = next(t for t in board if t['name'] == 'Dune')
+        slate = next(t for t in board if t['name'] == 'Slate')
+
+        self.assertLess(dune['net'], slate['net'])            # smaller total…
+        self.assertLess(slate['net_to_par'], dune['net_to_par'])  # …worse round
+        self.assertEqual(board[0]['name'], 'Slate')
+
+    def test_equal_to_par_is_a_tie(self):
+        """Dune's two extra strokes of allowance make 74 gross worth exactly
+        what Slate's 72 is."""
+        self.configure()
+        self.scramble_round('Slate', gross_per_hole=4)        # 72 → net 64
+        self.scramble_round('Dune',  gross_per_hole=4)
+        url = reverse('api-team-play-score', args=[self.teams['Dune'].id])
+        for hole in (1, 2):                                   # 74 → net 64
+            self.client.post(url, {'hole_number': hole, 'gross_score': 5},
+                             format='json')
+
+        board = self.board()['teams']
+        self.assertEqual(board[0]['net_to_par'], board[1]['net_to_par'])
+        self.assertTrue(board[0]['tied'])
+        self.assertTrue(board[1]['tied'])
+        self.assertEqual(board[0]['rank'], board[1]['rank'])

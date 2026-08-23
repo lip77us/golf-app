@@ -428,15 +428,22 @@ def leaderboard(tournament) -> dict:
 
     # Rank the teams that have a score. A team with nothing entered sits at the
     # bottom unranked rather than tying for first at zero.
-    scored = [r for r in rows if r['net'] is not None]
-    scored.sort(key=lambda r: (r['net'], r['gross']))
+    #
+    # Ranked on net TO PAR, not on the raw net total. The board prints to par,
+    # so sorting on anything else makes it contradict its own column — and
+    # while teams are still out the totals are not comparable at all: nine
+    # holes of net 30 is not better than eighteen of net 70. Once everybody is
+    # in, par is the same for all of them and the two orders agree, which is
+    # what settlement needs.
+    scored = [r for r in rows if r['net_to_par'] is not None]
+    scored.sort(key=lambda r: (r['net_to_par'], r['gross_to_par'] or 0))
 
     rank = 0
     previous = None
     for i, row in enumerate(scored, start=1):
-        if row['net'] != previous:
+        if row['net_to_par'] != previous:
             rank = i
-            previous = row['net']
+            previous = row['net_to_par']
         row['rank'] = rank
     counts = {}
     for row in scored:
