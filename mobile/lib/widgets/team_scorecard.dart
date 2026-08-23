@@ -3,12 +3,17 @@
 /// The by-hole scorecard for Foursome Play — one widget, drawn the same under
 /// score entry and inside an expanded leaderboard row.
 ///
-/// It follows the banded format every other scorecard in the app uses: hole
-/// numbers on `surfaceContainerHighest`, par and index a step lighter on
-/// `surfaceContainerLow`, scores plain underneath. The bands do real work
-/// outdoors — they separate the fixed course information from the scores
-/// without adding a single word — and every scorecard reading as the same
-/// object is the point.
+/// **One strip of eighteen, scrolled to the hole being played** — the shape
+/// Nassau uses. Front-nine-over-back-nine stacked two grids on a phone and
+/// made the reader find which half he was in before he could read anything;
+/// eighteen across with the current hole parked seven slots in is one glance.
+///
+/// Par and stroke index stay called out as their own rows: they are the fixed
+/// facts about the hole, and having them under the number is what lets a
+/// golfer check a score without leaving the card.
+///
+/// White card, quiet bands. Only the header rows are tinted, so the scores
+/// read as ink on paper rather than as cells in a spreadsheet.
 ///
 /// Stroke dots sit in the **top-right corner** of a cell, 4pt, at most two,
 /// matching the leaderboard's own cells. Centred over the digit they collide
@@ -48,15 +53,15 @@ class TeamScorecardRow {
   });
 }
 
-class TeamScorecard extends StatelessWidget {
+class TeamScorecard extends StatefulWidget {
   /// `{hole: par}` — also defines which holes exist.
   final Map<int, int> pars;
   /// `{hole: stroke index}`, optional; drawn as the Index row when present.
   final Map<int, int> strokeIndexes;
   /// One or more score lines. A scramble has one; a shamble has four balls
-  /// and a team total.
+  /// and a net line.
   final List<TeamScorecardRow> rows;
-  /// Highlighted, and tappable when [onTapHole] is given.
+  /// Highlighted, scrolled to, and tappable when [onTapHole] is given.
   final int? currentHole;
   final ValueChanged<int>? onTapHole;
 
@@ -90,18 +95,56 @@ class TeamScorecard extends StatelessWidget {
             label: label, scores: scores, strokes: strokes)],
       );
 
-  static const double _labelW = 54;
-  static const double _cellW  = 30;
-  static const double _totalW = 38;
+  @override
+  State<TeamScorecard> createState() => _TeamScorecardState();
+}
+
+class _TeamScorecardState extends State<TeamScorecard> {
+  final ScrollController _ctrl = ScrollController();
+
+  static const double _labelW = 58;
+  static const double _cellW  = 34;
+  static const double _totalW = 40;
   static const double _rowH   = 26;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTo());
+  }
+
+  @override
+  void didUpdateWidget(TeamScorecard old) {
+    super.didUpdateWidget(old);
+    if (old.currentHole != widget.currentHole) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTo());
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  /// Park the current hole about seven slots in, so the holes just played stay
+  /// on screen beside it — the same placement Nassau's grid uses.
+  void _scrollTo() {
+    final hole = widget.currentHole;
+    if (hole == null || !_ctrl.hasClients) return;
+    final target = (_labelW + (hole - 7) * _cellW)
+        .clamp(0.0, _ctrl.position.maxScrollExtent);
+    _ctrl.animateTo(target,
+        duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (pars.isEmpty) return const SizedBox.shrink();
+    if (widget.pars.isEmpty) return const SizedBox.shrink();
 
-    final holes = pars.keys.toList()..sort();
-    final front = holes.where((h) => h <= 9).toList();
+    final holes = widget.pars.keys.toList()..sort();
+    final out   = holes.where((h) => h <= 9).toList();
     final back  = holes.where((h) => h > 9).toList();
 
     int total(Iterable<int> hs, Map<int, int> from) =>
@@ -114,24 +157,18 @@ class TeamScorecard extends StatelessWidget {
       return r.toPar ? toParLabel(v) : '$v';
     }
 
-    Widget band(Widget child, Color? colour) =>
-        Container(color: colour, child: child);
-
     Widget labelCell(String text, {bool bold = false, bool italic = false}) =>
-        SizedBox(
+        Container(
           width: _labelW, height: _rowH,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 6),
-              child: Text(text,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: bold ? FontWeight.bold : null,
-                    fontStyle: italic ? FontStyle.italic : null,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  )),
-            ),
-          ),
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(left: 8),
+          child: Text(text,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: bold ? FontWeight.bold : null,
+                fontStyle: italic ? FontStyle.italic : null,
+                color: theme.colorScheme.onSurfaceVariant,
+              )),
         );
 
     Widget cell(String text, {
@@ -147,13 +184,16 @@ class TeamScorecard extends StatelessWidget {
       final body = Container(
         width: width, height: _rowH,
         decoration: BoxDecoration(
-          // A counting ball is tinted; the ones that did not count go pale,
-          // so the two that made the total are readable at a glance.
           color: counted
-              ? theme.colorScheme.primary.withValues(alpha: 0.16)
+              ? theme.colorScheme.primary.withValues(alpha: 0.14)
               : (current
-                  ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                  ? theme.colorScheme.primary.withValues(alpha: 0.10)
                   : null),
+          border: Border(
+            left: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                width: 0.5),
+          ),
         ),
         child: Stack(children: [
           Center(
@@ -167,8 +207,6 @@ class TeamScorecard extends StatelessWidget {
           ),
           if (dots > 0)
             Positioned(
-              // Top-right, clear of the digit — the leaderboard's own
-              // placement, so the two cards read identically.
               top: 2, right: 2,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -187,87 +225,93 @@ class TeamScorecard extends StatelessWidget {
             ),
         ]),
       );
-      return goTo == null || onTapHole == null
+      return goTo == null || widget.onTapHole == null
           ? body
-          : InkWell(onTap: () => onTapHole!(goTo), child: body);
+          : InkWell(onTap: () => widget.onTapHole!(goTo), child: body);
     }
 
-    Widget nine(List<int> hs, String totalLabel) {
-      if (hs.isEmpty) return const SizedBox.shrink();
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          band(
-            Row(children: [
-              labelCell('Hole', bold: true),
-              for (final h in hs)
-                cell('$h',
-                     bold: true, goTo: h, current: h == currentHole),
-              cell(totalLabel, bold: true, width: _totalW),
-            ]),
-            theme.colorScheme.surfaceContainerHighest,
-          ),
-          band(
-            Row(children: [
-              labelCell('Par', italic: true),
-              for (final h in hs) cell('${pars[h]}'),
-              cell('${total(hs, pars)}', bold: true, width: _totalW),
-            ]),
-            theme.colorScheme.surfaceContainerLow,
-          ),
-          if (strokeIndexes.isNotEmpty)
+    /// Every hole in order, then OUT / IN / TOT — one strip, not two grids.
+    List<Widget> line(Widget Function(int hole) forHole,
+                      Widget Function(List<int> hs, String label) forTotal) =>
+        [
+          for (final h in out) forHole(h),
+          forTotal(out, 'OUT'),
+          for (final h in back) forHole(h),
+          if (back.isNotEmpty) forTotal(back, 'IN'),
+          if (back.isNotEmpty) forTotal(holes, 'TOT'),
+        ];
+
+    Widget band(List<Widget> cells, Color? colour, Widget label) => Container(
+          color: colour,
+          child: Row(children: [label, ...cells]),
+        );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        controller: _ctrl,
+        scrollDirection: Axis.horizontal,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             band(
-              Row(children: [
-                labelCell('Index'),
-                for (final h in hs) cell('${strokeIndexes[h] ?? ''}'),
-                cell('', width: _totalW),
-              ]),
+              line((h) => cell('$h', bold: true, goTo: h,
+                               current: h == widget.currentHole),
+                   (hs, l) => cell(l, bold: true, width: _totalW)),
+              theme.colorScheme.surfaceContainerHighest,
+              labelCell('Hole', bold: true),
+            ),
+            band(
+              line((h) => cell('${widget.pars[h]}'),
+                   (hs, l) => cell('${total(hs, widget.pars)}',
+                                   bold: true, width: _totalW)),
               theme.colorScheme.surfaceContainerLow,
+              labelCell('Par', italic: true),
             ),
-          for (final r in rows)
-            Container(
-              decoration: r.total
-                  ? BoxDecoration(
-                      border: Border(top: BorderSide(
-                          color: theme.colorScheme.outlineVariant)))
-                  : null,
-              child: Row(children: [
-                labelCell(r.label, bold: r.total, italic: r.italic),
-                for (final h in hs)
-                  cell(fmt(r, h),
-                       current: h == currentHole,
-                       counted: r.counted.contains(h),
-                       faded  : r.scores[h] != null &&
-                                r.counted.isNotEmpty &&
-                                !r.counted.contains(h),
-                       italic : r.italic,
-                       bold   : r.total,
-                       dots   : r.strokes[h] ?? 0,
-                       goTo   : h),
-                cell(
-                    hs.any((h) => r.scores[h] != null)
-                        ? (r.toPar
-                            ? toParLabel(total(hs, r.scores))
-                            : '${total(hs, r.scores)}')
-                        : '',
-                    bold: true, width: _totalW),
-              ]),
-            ),
-        ],
-      );
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          nine(front, 'OUT'),
-          if (back.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            nine(back, 'IN'),
+            if (widget.strokeIndexes.isNotEmpty)
+              band(
+                line((h) => cell('${widget.strokeIndexes[h] ?? ''}'),
+                     (hs, l) => cell('', width: _totalW)),
+                theme.colorScheme.surfaceContainerLow,
+                labelCell('Index'),
+              ),
+            for (final r in widget.rows)
+              Container(
+                decoration: r.total
+                    ? BoxDecoration(
+                        border: Border(top: BorderSide(
+                            color: theme.colorScheme.outlineVariant)))
+                    : null,
+                child: Row(children: [
+                  labelCell(r.label, bold: r.total, italic: r.italic),
+                  ...line(
+                    (h) => cell(fmt(r, h),
+                        current: h == widget.currentHole,
+                        counted: r.counted.contains(h),
+                        faded  : r.scores[h] != null &&
+                                 r.counted.isNotEmpty &&
+                                 !r.counted.contains(h),
+                        italic : r.italic,
+                        bold   : r.total,
+                        dots   : r.strokes[h] ?? 0,
+                        goTo   : h),
+                    (hs, l) => cell(
+                        hs.any((h) => r.scores[h] != null)
+                            ? (r.toPar
+                                ? toParLabel(total(hs, r.scores))
+                                : '${total(hs, r.scores)}')
+                            : '',
+                        bold: true, width: _totalW),
+                  ),
+                ]),
+              ),
           ],
-        ],
+        ),
       ),
     );
   }
