@@ -810,3 +810,53 @@ class WizardOrderTests(TestCase):
             reverse('api-team-play', args=[self.tourn.id])).json()
         self.assertEqual(summary['teams'][0]['real_player_count'], 3)
         self.assertEqual(summary['blocking'], [])
+
+    def test_six_golfers_in_chapman_make_exactly_three_pairs(self):
+        """Six golfers are three twosomes — not four groups, and not the
+        [3, 3] the fours auto-balance would produce. The wizard sends explicit
+        group numbers, and `setup_round` wipes any previous setup for the round
+        before creating them, so a re-run cannot leave a stale group behind."""
+        six = self.players[:6]
+        body = {
+            'players': [
+                {'player_id': p.id, 'tee_id': self.tee.id,
+                 'group_number': (i // 2) + 1}
+                for i, p in enumerate(six)
+            ],
+            'randomise': False,
+            'auto_setup_games': True,
+        }
+        r = self.client.post(
+            reverse('api-round-setup', args=[self.round.id]), body,
+            format='json')
+        self.assertIn(r.status_code, (200, 201), r.content)
+        self.client.post(
+            reverse('api-team-play-setup', args=[self.tourn.id]),
+            {'team_size': 2, 'team_format': 'chapman'}, format='json')
+
+        self.assertEqual(self.round.foursomes.count(), 3)
+        summary = self.client.get(
+            reverse('api-team-play', args=[self.tourn.id])).json()
+        self.assertEqual(len(summary['teams']), 3)
+        self.assertEqual([t['real_player_count'] for t in summary['teams']],
+                         [2, 2, 2])
+        self.assertEqual(summary['blocking'], [])
+
+    def test_re_running_setup_leaves_no_stale_groups(self):
+        """The report that prompted this: a tee sheet showing four groups for a
+        field of three pairs. Re-running setup with a smaller field must shrink
+        the sheet, not add to it."""
+        self._run_wizard('chapman')                    # 12 golfers → 6 pairs
+        self.assertEqual(self.round.foursomes.count(), 6)
+
+        six = self.players[:6]
+        r = self.client.post(
+            reverse('api-round-setup', args=[self.round.id]),
+            {'players': [
+                {'player_id': p.id, 'tee_id': self.tee.id,
+                 'group_number': (i // 2) + 1}
+                for i, p in enumerate(six)],
+             'randomise': False, 'auto_setup_games': True},
+            format='json')
+        self.assertIn(r.status_code, (200, 201), r.content)
+        self.assertEqual(self.round.foursomes.count(), 3)

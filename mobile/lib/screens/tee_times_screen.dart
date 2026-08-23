@@ -72,6 +72,14 @@ class _TeeTimesScreenState extends State<TeeTimesScreen> {
     }
   }
 
+  /// What this row is called: the team's own name, else `Group N`.
+  ///
+  /// A Team Play pair arrives already named after its two golfers, and a TD
+  /// who renamed his foursome did it so he would see it. Everything else in
+  /// the app reads `Foursome.name` this way.
+  static String _label(Foursome fs) =>
+      fs.name.trim().isEmpty ? 'Group ${fs.groupNumber}' : fs.name.trim();
+
   /// The order they actually go out: by tee time, then group number.
   ///
   /// Groups with no time yet sit at the BOTTOM rather than at midnight — an
@@ -171,7 +179,7 @@ class _TeeTimesScreenState extends State<TeeTimesScreen> {
       if (!mounted) return;
       setState(() => _savingGroup = null);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Group ${fs.groupNumber} · ${_friendly(hhmm)} saved'),
+        content: Text('${_label(fs)} · ${_friendly(hhmm)} saved'),
         duration: const Duration(seconds: 1),
       ));
     } catch (e) {
@@ -435,7 +443,14 @@ class _TeeTimesScreenState extends State<TeeTimesScreen> {
                                     : Icons.schedule,
                               color: clash ? theme.colorScheme.error : null,
                             ),
-                            title: Text('Group ${fs.groupNumber}',
+                            // The team's OWN name when it has one — a pair
+                            // arrives called `Maiolini & Yau`, and a TD who
+                            // named his foursome named it to see it. Hard-
+                            // coding "Group N" here made the tee sheet the one
+                            // surface that ignored the name, which is exactly
+                            // the sheet you read at the first tee looking for
+                            // your own group.
+                            title: Text(_label(fs),
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w600)),
                             subtitle: clash
