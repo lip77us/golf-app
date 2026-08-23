@@ -20,12 +20,25 @@
 /// White card, quiet bands. Only the header rows are tinted, so the scores
 /// read as ink on paper rather than as cells in a spreadsheet.
 ///
-/// Stroke dots sit in the **top-right corner** of a cell, 4pt, at most two,
-/// matching the leaderboard's own cells. Centred over the digit they collide
-/// with it, which is exactly what they do nowhere else in the app.
+/// Stroke dots sit in the **top-right corner** of a cell, 4pt. Centred over
+/// the digit they collide with it, which is exactly what they do nowhere else
+/// in the app.
 library;
 
 import 'package:flutter/material.dart';
+
+/// The most stroke dots a cell will draw.
+///
+/// **Three, not the two the rest of the app caps at.** A team figure is big:
+/// alternate shot takes 50% of the COMBINED handicap, so two golfers off 35
+/// and 40 play to 38, which is two strokes on every hole and THREE on the two
+/// hardest. Capped at two, the card said two while the net line and the score
+/// picker both worked off three — the dots were the only thing lying, and they
+/// are what a pair reads on the tee.
+///
+/// Three is also the true ceiling rather than a guess: the largest playing
+/// handicap the app allows is 54, and 54 over 18 holes is exactly three a hole.
+const int kMaxStrokeDots = 3;
 
 /// One line of a [TeamScorecard]: a golfer's ball, or the team's total.
 class TeamScorecardRow {
@@ -266,7 +279,7 @@ class _TeamScorecardState extends State<TeamScorecard> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: List.generate(
-                  dots.clamp(0, 2),
+                  dots.clamp(0, kMaxStrokeDots),
                   (i) => Container(
                     width: 4, height: 4,
                     margin: const EdgeInsets.only(left: 1),

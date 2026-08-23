@@ -492,7 +492,7 @@ class _TeamBlock extends StatelessWidget {
                 _ScoreBox(
                   score     : team.teamScore,
                   active    : true,
-                  strokeHere: team.teamStrokes > 0,
+                  strokes   : team.teamStrokes,
                 )
               else if ((team.shamble?.count ?? 0) > 0)
                 Text('${team.shamble!.count} of '
@@ -1183,7 +1183,7 @@ class _GolferLine extends StatelessWidget {
           _ScoreBox(
             score     : row.gross,
             active    : active,
-            strokeHere: row.strokes > 0,
+            strokes   : row.strokes,
             subdued   : subdued,
           ),
         ]),
@@ -1199,13 +1199,21 @@ class _GolferLine extends StatelessWidget {
 class _ScoreBox extends StatelessWidget {
   final int?  score;
   final bool  active;
-  final bool  strokeHere;
+  /// How many strokes fall on THIS hole — drawn as that many dots.
+  ///
+  /// It used to be a bool, so a team getting three strokes on the stroke-index-1
+  /// hole showed the same single dot as a team getting one. On a pairs card
+  /// that is the common case rather than the edge: alternate shot takes 50% of
+  /// the COMBINED handicap, so two golfers off 35 and 40 play to 38 and take
+  /// three strokes on the hardest hole. The picker and the net both knew; the
+  /// dot was the only thing rounding it to "some".
+  final int   strokes;
   final bool  subdued;
 
   const _ScoreBox({
     required this.score,
     required this.active,
-    required this.strokeHere,
+    required this.strokes,
     this.subdued = false,
   });
 
@@ -1234,13 +1242,19 @@ class _ScoreBox extends StatelessWidget {
         ),
       ),
     );
-    if (!strokeHere) return box;
+    if (strokes <= 0) return box;
     return Column(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        width: 6, height: 6,
-        margin: const EdgeInsets.only(bottom: 3),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle, color: theme.colorScheme.primary),
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < strokes.clamp(0, kMaxStrokeDots); i++)
+            Container(
+              width: 6, height: 6,
+              margin: EdgeInsets.only(bottom: 3, left: i == 0 ? 0 : 3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle, color: theme.colorScheme.primary),
+            ),
+        ],
       ),
       box,
     ]);

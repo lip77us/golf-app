@@ -18,6 +18,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/utils/grouping.dart';
 import 'package:golf_mobile/utils/team_allowance.dart';
+import 'package:golf_mobile/widgets/team_scorecard.dart';
 
 int _pairFigure(String format, List<int> hcaps) =>
     teamAllowanceFor(teamSize: 2, format: format, courseHandicaps: hcaps)
@@ -222,6 +223,42 @@ void main() {
     test('every other shape fills to four, unchanged', () {
       expect(groupNeedsPhantom(3), isTrue);
       expect(groupNeedsPhantom(4), isFalse);
+    });
+  });
+
+  group('the stroke dots have to survive a team figure', () {
+    // A pair off 35 and 40 takes THREE strokes on the hardest hole. The card
+    // drew two, because the dot renderer capped there — while the score picker
+    // and the net line both worked off three. The dots are what a pair reads
+    // on the tee, so they were the one thing lying.
+    test('alternate shot off 35 and 40 plays to 38', () {
+      final a = teamAllowanceFor(
+          teamSize: 2, format: 'alternate_shot', courseHandicaps: [35, 40]);
+      expect(a.raw, '37.50');
+      expect(a.rounded, 38);
+    });
+
+    test('38 is two a hole and three on the two hardest', () {
+      const figure = 38;
+      expect(figure ~/ 18, 2);   // two everywhere
+      expect(figure % 18, 2);    // and one more on stroke index 1 and 2
+      expect(kMaxStrokeDots, greaterThanOrEqualTo(3));
+    });
+
+    test('the cap covers the largest figure the app can produce', () {
+      // A playing handicap tops out at 54, which is exactly three a hole — so
+      // three dots is the true ceiling rather than a guess, and nothing can
+      // quietly exceed it.
+      expect(54 ~/ 18, kMaxStrokeDots);
+    });
+
+    test('a pair off 19 and 24 takes only two there', () {
+      // The other pair on the same card, and the contrast is the point: same
+      // hole, same par, different number of dots.
+      expect(teamAllowanceFor(
+          teamSize: 2, format: 'alternate_shot',
+          courseHandicaps: [19, 24]).rounded, 22);
+      expect(22 % 18, 4);        // one more on stroke index 1 through 4
     });
   });
 }
