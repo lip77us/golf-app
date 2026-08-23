@@ -1126,7 +1126,8 @@ class _CardScorecard extends StatelessWidget {
   final TeamPlayCard card;
   final int hole;
   final ValueChanged<int?> onGo;
-  /// Shamble: whose strokes the dots mark. Null on a scramble.
+  /// Own-ball formats: whose strokes the dots mark. Null on a one-ball
+  /// format, where the figure is the team's.
   final int? golferId;
 
   const _CardScorecard({
@@ -1188,14 +1189,20 @@ class _CardScorecard extends StatelessWidget {
           currentHole  : hole,
           onTapHole    : (h) => onGo(h),
           rows         : [
-            // A scramble is one ball, so one line: what the team made.
-            if (card.isScramble)
+            // One ball, so one line: what the team made, with its dots. TRUE
+            // FOR ALL FOUR one-ball formats — an alternate shot, a Scotch and
+            // a Chapman each play a single ball off a single team figure
+            // exactly as a scramble does. Testing the format NAME here instead
+            // sent the other three down the own-ball branch, where they
+            // iterated a list the server correctly sends empty: no score line
+            // and no dots, leaving the card with nothing on it but the net.
+            if (card.isOneBall)
               TeamScorecardRow(
                 label  : name,
                 scores : scores,
                 strokes: card.strokesFor(golferId),
               )
-            // A shamble is four, so all four — the same rows the board's
+            // An own-ball format shows every ball — the same rows the board's
             // expanded team shows, counting balls tinted and the rest pale.
             // What it does NOT get is a team TOTAL line: that figure is the
             // sum of the counting balls, a "10" that is two 5s, and it is

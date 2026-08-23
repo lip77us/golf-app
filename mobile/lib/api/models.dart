@@ -6005,7 +6005,13 @@ class TeamPlayCard {
 
   /// Strokes on each hole for whoever the card is scoring: the team on a
   /// scramble, the selected golfer on a shamble.
-  Map<int, int> strokesFor(int? playerId) => isScramble
+  /// Where this card's strokes fall across the round.
+  ///
+  /// A format that ends in ONE ball has a single team figure, so the dots are
+  /// the team's — every one of them, not just a scramble's. An own-ball format
+  /// keeps handicaps per golfer, so they are keyed by player and the card
+  /// shows whichever man is selected.
+  Map<int, int> strokesFor(int? playerId) => isOneBall
       ? strokesByHole
       : (golferStrokes[playerId] ?? const {});
 }
