@@ -388,13 +388,18 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   bool get _isPostCreate => _step >= _stepFlow.length;
 
   // ---- Type & format (asked first) ----
-  // Who is competing + the format that sets the scoring unit.  Defaults to a
-  // cup on Triple Cup, matching the type-first design.  Selecting a type/format
-  // rewrites the championship entry in _tournamentActiveGames (see
+  // Who is competing + the format that sets the scoring unit.  Selecting a
+  // type/format rewrites the championship entry in _tournamentActiveGames (see
   // _applyTypeFormat).  The cup format is informational for now — per-round
   // "Games by round" remains the source of truth; solo format is functional
   // (it chooses the championship game).
-  _EventType _eventType  = _EventType.cup;
+  //
+  // **Defaults to Individual stroke play**, which is the ordinary tournament:
+  // a field of singles on one card.  A cup is a specific thing a club sets up
+  // on purpose, and defaulting to it made every other event start by undoing
+  // a choice — including the handicap, since a cup silently brings strokes off
+  // the low index with it.
+  _EventType _eventType  = _EventType.solo;
   String     _cupFormat  = 'mixed';    // mixed | triple  (triple = exclusive)
   String     _soloFormat = 'stroke';   // stroke | stableford
 
@@ -414,8 +419,11 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   /// championshipStrokePlay / championshipStableford) is owned by the type &
   /// format step; low_net may be added later on the Cup Design step.  Seeded to
   /// the cup default so the flow opens on a cup.
+  // Seeded to match the default type above — Individual stroke play, whose
+  // championship is Stroke Play and which carries no cup marker. Out of step
+  // with `_eventType` this is the set that actually gets POSTED, so the first
+  // screen would agree with itself and the created tournament would not.
   final Set<String> _tournamentActiveGames = {
-    GameIds.teamCup,
     GameIds.championshipStrokePlay,
   };
 
@@ -521,7 +529,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // match play and play off the low index (SO Low), so that's the default while
   // the wizard opens on a cup; individual play defaults to Net.  Once the user
   // picks a mode themselves (_handicapModeTouched), the default stops overriding.
-  String            _handicapMode   = 'strokes_off';
+  // Net, matching the default type: strokes off the low index needs a single
+  // opponent to anchor to, and a field has none.
+  String            _handicapMode   = 'net';
   bool              _handicapModeTouched = false;
   int               _netPercent     = 100;
   bool              _netMaxDoubleBogey = true;
