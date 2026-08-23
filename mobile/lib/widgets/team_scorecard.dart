@@ -17,17 +17,40 @@ library;
 
 import 'package:flutter/material.dart';
 
+/// One line of a [TeamScorecard]: a golfer's ball, or the team's total.
+class TeamScorecardRow {
+  /// `Team`, or a golfer's surname.
+  final String label;
+  final Map<int, int> scores;
+  /// `{hole: strokes received}` — the dots.
+  final Map<int, int> strokes;
+  /// Holes whose score COUNTED toward the team. On a shamble two of four do,
+  /// and a board that does not mark them cannot answer whose scores made the
+  /// total.
+  final Set<int> counted;
+  /// Draws italic — the phantom is a row everywhere, never a footnote.
+  final bool italic;
+  /// Bold, with a rule above: the team's line under the golfers'.
+  final bool total;
+
+  const TeamScorecardRow({
+    required this.label,
+    required this.scores,
+    this.strokes = const {},
+    this.counted = const {},
+    this.italic = false,
+    this.total = false,
+  });
+}
+
 class TeamScorecard extends StatelessWidget {
   /// `{hole: par}` — also defines which holes exist.
   final Map<int, int> pars;
   /// `{hole: stroke index}`, optional; drawn as the Index row when present.
   final Map<int, int> strokeIndexes;
-  /// `{hole: gross}` for the row being drawn.
-  final Map<int, int> scores;
-  /// `{hole: strokes received}` — the dots.
-  final Map<int, int> strokes;
-  /// The row's label: `Team`, or a golfer's surname on a shamble.
-  final String label;
+  /// One or more score lines. A scramble has one; a shamble has four balls
+  /// and a team total.
+  final List<TeamScorecardRow> rows;
   /// Highlighted, and tappable when [onTapHole] is given.
   final int? currentHole;
   final ValueChanged<int>? onTapHole;
@@ -35,13 +58,32 @@ class TeamScorecard extends StatelessWidget {
   const TeamScorecard({
     super.key,
     required this.pars,
-    required this.scores,
-    required this.label,
+    required this.rows,
     this.strokeIndexes = const {},
-    this.strokes = const {},
     this.currentHole,
     this.onTapHole,
   });
+
+  /// The common case: a single line.
+  factory TeamScorecard.single({
+    Key? key,
+    required Map<int, int> pars,
+    required Map<int, int> scores,
+    required String label,
+    Map<int, int> strokeIndexes = const {},
+    Map<int, int> strokes = const {},
+    int? currentHole,
+    ValueChanged<int>? onTapHole,
+  }) =>
+      TeamScorecard(
+        key: key,
+        pars: pars,
+        strokeIndexes: strokeIndexes,
+        currentHole: currentHole,
+        onTapHole: onTapHole,
+        rows: [TeamScorecardRow(
+            label: label, scores: scores, strokes: strokes)],
+      );
 
   static const double _labelW = 54;
   static const double _cellW  = 30;
@@ -59,7 +101,6 @@ class TeamScorecard extends StatelessWidget {
 
     int total(Iterable<int> hs, Map<int, int> from) =>
         hs.map((h) => from[h] ?? 0).fold(0, (a, b) => a + b);
-    bool anyScored(Iterable<int> hs) => hs.any((h) => scores[h] != null);
 
     Widget band(Widget child, Color? colour) =>
         Container(color: colour, child: child);
@@ -84,6 +125,9 @@ class TeamScorecard extends StatelessWidget {
     Widget cell(String text, {
       bool bold = false,
       bool current = false,
+      bool counted = false,
+      bool faded = false,
+      bool italic = false,
       int dots = 0,
       int? goTo,
       double width = _cellW,
@@ -91,15 +135,23 @@ class TeamScorecard extends StatelessWidget {
       final body = Container(
         width: width, height: _rowH,
         decoration: BoxDecoration(
-          color: current
-              ? theme.colorScheme.primary.withValues(alpha: 0.12)
-              : null,
+          // A counting ball is tinted; the ones that did not count go pale,
+          // so the two that made the total are readable at a glance.
+          color: counted
+              ? theme.colorScheme.primary.withValues(alpha: 0.16)
+              : (current
+                  ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                  : null),
         ),
         child: Stack(children: [
           Center(
             child: Text(text,
                 style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: bold ? FontWeight.bold : FontWeight.w500)),
+                    fontWeight: (bold || counted)
+                        ? FontWeight.bold : FontWeight.w500,
+                    fontStyle: italic ? FontStyle.italic : null,
+                    color: faded
+                        ? theme.colorScheme.onSurfaceVariant : null)),
           ),
           if (dots > 0)
             Positioned(
@@ -160,16 +212,31 @@ class TeamScorecard extends StatelessWidget {
               ]),
               theme.colorScheme.surfaceContainerLow,
             ),
-          Row(children: [
-            labelCell(label, bold: true),
-            for (final h in hs)
-              cell(scores[h]?.toString() ?? '',
-                   current: h == currentHole,
-                   dots: strokes[h] ?? 0,
-                   goTo: h),
-            cell(anyScored(hs) ? '${total(hs, scores)}' : '',
-                 bold: true, width: _totalW),
-          ]),
+          for (final r in rows)
+            Container(
+              decoration: r.total
+                  ? BoxDecoration(
+                      border: Border(top: BorderSide(
+                          color: theme.colorScheme.outlineVariant)))
+                  : null,
+              child: Row(children: [
+                labelCell(r.label, bold: r.total, italic: r.italic),
+                for (final h in hs)
+                  cell(r.scores[h]?.toString() ?? '',
+                       current: h == currentHole,
+                       counted: r.counted.contains(h),
+                       faded  : r.scores[h] != null &&
+                                r.counted.isNotEmpty &&
+                                !r.counted.contains(h),
+                       italic : r.italic,
+                       bold   : r.total,
+                       dots   : r.strokes[h] ?? 0,
+                       goTo   : h),
+                cell(hs.any((h) => r.scores[h] != null)
+                        ? '${total(hs, r.scores)}' : '',
+                     bold: true, width: _totalW),
+              ]),
+            ),
         ],
       );
     }

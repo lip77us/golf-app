@@ -5077,6 +5077,39 @@ Map<int, int> _intMap(dynamic raw) => {
         if (e.value != null) int.parse(e.key): e.value as int,
     };
 
+/// One golfer's ball across the round, for a shamble's expanded board row.
+class TeamPlayGolferCard {
+  final int    playerId;
+  final String name;
+  final bool   isPhantom;
+  final int    handicap;
+  final Map<int, int> scores;
+  final Map<int, int> strokes;
+  /// The holes where this ball COUNTED toward the team's total.
+  final Set<int> counted;
+
+  const TeamPlayGolferCard({
+    required this.playerId, required this.name, required this.isPhantom,
+    required this.handicap, required this.scores, required this.strokes,
+    required this.counted,
+  });
+
+  factory TeamPlayGolferCard.fromJson(Map<String, dynamic> j) =>
+      TeamPlayGolferCard(
+        playerId  : (j['player_id'] ?? 0) as int,
+        name      : (j['name'] ?? '') as String,
+        isPhantom : j['is_phantom'] == true,
+        handicap  : (j['handicap'] ?? 0) as int,
+        scores    : _intMap(j['scores']),
+        strokes   : _intMap(j['strokes']),
+        counted   : {
+          for (final e in Map<String, dynamic>.from(
+                  (j['counted'] ?? const {}) as Map).entries)
+            if (e.value == true) int.parse(e.key),
+        },
+      );
+}
+
 /// One member's line on the worked allowance card — `Maiolini 4 → 1.00`.
 ///
 /// The percentage is POSITIONAL (25% attaches to the lowest handicap, not to
@@ -5331,6 +5364,8 @@ class TeamPlayTeam {
   final Map<int, int> strokeIndexes;
   final Map<int, int> scoresByHole;
   final Map<int, int> strokesByHole;
+  /// Shamble only: every ball, hole by hole, with the counting ones flagged.
+  final List<TeamPlayGolferCard> golfersByHole;
 
   // Present on the leaderboard; null on the setup board.
   final int?    gross;
@@ -5352,6 +5387,7 @@ class TeamPlayTeam {
     required this.allowance, required this.drive, required this.thru,
     this.pars = const {}, this.strokeIndexes = const {},
     this.scoresByHole = const {}, this.strokesByHole = const {},
+    this.golfersByHole = const [],
     this.gross, this.net, this.grossToPar, this.netToPar,
     this.rank, this.tied = false, this.complete = false,
   });
@@ -5379,6 +5415,10 @@ class TeamPlayTeam {
         strokeIndexes : _intMap(j['stroke_indexes']),
         scoresByHole  : _intMap(j['scores_by_hole']),
         strokesByHole : _intMap(j['strokes_by_hole']),
+        golfersByHole : ((j['golfers_by_hole'] as List?) ?? const [])
+            .map((e) => TeamPlayGolferCard.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
         gross          : j['gross'] as int?,
         net            : j['net'] as int?,
         grossToPar     : j['gross_to_par'] as int?,

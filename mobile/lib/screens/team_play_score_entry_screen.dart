@@ -855,10 +855,11 @@ class _CardScorecard extends StatelessWidget {
     required this.onGo, required this.golferId,
   });
 
-  /// `3 under` / `2 over` / `even` — what a golfer says on the next tee. The
-  /// raw totals are on the OUT / IN cells, where a scorecard puts them.
+  /// `E` / `+3` / `-2` — the app's to-par label, the same one the board
+  /// prints. The raw totals are on the OUT / IN cells, where a scorecard puts
+  /// them.
   static String _toPar(int diff) =>
-      diff == 0 ? 'even' : (diff > 0 ? '$diff over' : '${-diff} under');
+      diff == 0 ? 'E' : (diff > 0 ? '+$diff' : '$diff');
 
   @override
   Widget build(BuildContext context) {
@@ -894,14 +895,14 @@ class _CardScorecard extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.bold))),
           if (card.round.thru > 0)
             Text(
-              'thru ${card.round.thru} · gross ${_toPar(gross - parSoFar)}'
-              '${net == null ? '' : ' · net ${_toPar(net - parSoFar)}'}',
+              'thru ${card.round.thru} · Gross ${_toPar(gross - parSoFar)}'
+              '${net == null ? '' : ' · Net ${_toPar(net - parSoFar)}'}',
               style: theme.textTheme.labelSmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
         ]),
         const SizedBox(height: 6),
-        TeamScorecard(
+        TeamScorecard.single(
           pars         : card.pars,
           strokeIndexes: card.strokeIndexes,
           scores       : scores,

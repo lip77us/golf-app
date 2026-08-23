@@ -173,12 +173,27 @@ def team_round(foursome, config) -> dict:
 
     if config.is_scramble:
         scores    = team_hole_scores(foursome)
-        by_hole   = {h: {'gross': g} for h, g in scores.items()}
-        gross     = sum(scores.values()) if scores else None
         allowance = (state.team_handicap if state and state.team_handicap
                      is not None else 0)
-        thru      = len(scores)
-        net       = None if gross is None else gross - allowance
+        si_map    = {h['number']: h.get('stroke_index', h['number'])
+                     for h in holes}
+
+        # Net is summed PER HOLE, not `gross − allowance`.
+        #
+        # Taking the whole allowance off a part round credits strokes on holes
+        # the team has not reached: thru 7 of an 18-hole 10-stroke allowance it
+        # has actually received about 5, and deducting 10 flattered every
+        # unfinished team on the board and in the card's own summary. At 18
+        # holes the two agree exactly, which is why it went unnoticed.
+        by_hole = {}
+        for h, g in scores.items():
+            st = _strokes_on_hole(allowance, si_map.get(h, h))
+            by_hole[h] = {'gross': g, 'net': g - st, 'strokes': st}
+
+        gross = sum(scores.values()) if scores else None
+        thru  = len(scores)
+        net   = (sum(v['net'] for v in by_hole.values())
+                 if by_hole else None)
     else:
         counts  = resolved_counts(foursome, config)
         by_hole = {}
@@ -219,8 +234,18 @@ def team_round(foursome, config) -> dict:
     # Par over the holes actually PLAYED. A team thru 14 measured against the
     # full 72 would read eighteen under, which is how a leading team looks like
     # a runaway on a board where half the field is still out.
+    #
+    # And on a SHAMBLE par is multiplied by the ball count, because the team's
+    # figure is the sum of the counting balls: best-2 on a par 4 is a par of 8,
+    # not 4. Comparing a two-ball total against one hole's par put every
+    # shamble team about +70 and made the column meaningless.
     par_map    = {h['number']: h.get('par', 0) for h in holes}
-    par_played = sum(par_map.get(n, 0) for n in by_hole)
+    if config.is_scramble:
+        par_played = sum(par_map.get(n, 0) for n in by_hole)
+    else:
+        counts_map = resolved_counts(foursome, config)
+        par_played = sum(
+            par_map.get(n, 0) * counts_map.get(n, 1) for n in by_hole)
 
     return {
         'gross'      : gross,
@@ -260,6 +285,34 @@ def _board_strokes_by_hole(foursome, config, rnd) -> dict:
             rnd['allowance'], h.get('stroke_index', h['number']))
         for h in hole_data(foursome)
     }
+
+
+def _board_golfers_by_hole(foursome, config) -> list:
+    """Per-golfer gross, net, strokes and counted-flag, hole by hole.
+
+    Shamble only — a scramble has no per-golfer ball to show.
+    """
+    if config.is_scramble:
+        return {}
+
+    counts = resolved_counts(foursome, config)
+    out = {}
+    for n in sorted(counts):
+        for r in shamble_hole(foursome, n, counts, config)['rows']:
+            entry = out.setdefault(r['player_id'], {
+                'player_id' : r['player_id'],
+                'name'      : r['name'],
+                'is_phantom': r['is_phantom'],
+                'handicap'  : r['handicap'],
+                'scores'    : {},
+                'counted'   : {},
+                'strokes'   : {},
+            })
+            if r['gross'] is not None:
+                entry['scores'][str(n)]  = r['gross']
+                entry['counted'][str(n)] = r['counts']
+            entry['strokes'][str(n)] = r['strokes']
+    return list(out.values())
 
 
 def leaderboard(tournament) -> dict:
@@ -302,6 +355,10 @@ def leaderboard(tournament) -> dict:
         team['scores_by_hole'] = {
             str(n): v.get('gross') for n, v in (rnd.get('by_hole') or {}).items()}
         team['strokes_by_hole'] = _board_strokes_by_hole(foursome, config, rnd)
+        # A shamble's expanded row shows all FOUR balls with the counting ones
+        # marked — the team's total is two of them, and a board that shows only
+        # the total cannot answer "whose scores made it".
+        team['golfers_by_hole'] = _board_golfers_by_hole(foursome, config)
         rows.append(team)
 
     # Rank the teams that have a score. A team with nothing entered sits at the

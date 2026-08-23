@@ -288,13 +288,29 @@ class _Detail extends StatelessWidget {
           if (team.pars.isNotEmpty) ...[
             const SizedBox(height: 12),
             // The same widget the entry card draws, so a golfer who has just
-            // come off his own scorecard recognises this one.
+            // come off his own scorecard recognises this one. A shamble shows
+            // all FOUR balls with the counting ones tinted and the rest pale —
+            // the team's total is two of them, and a row showing only the
+            // total cannot answer whose scores made it.
             TeamScorecard(
               pars         : team.pars,
               strokeIndexes: team.strokeIndexes,
-              scores       : team.scoresByHole,
-              strokes      : team.strokesByHole,
-              label        : 'Team',
+              rows         : [
+                for (final g in team.golfersByHole)
+                  TeamScorecardRow(
+                    label  : g.name.split(' ').last,
+                    scores : g.scores,
+                    strokes: g.strokes,
+                    counted: g.counted,
+                    italic : g.isPhantom,
+                  ),
+                TeamScorecardRow(
+                  label  : 'Team',
+                  scores : team.scoresByHole,
+                  strokes: team.strokesByHole,
+                  total  : true,
+                ),
+              ],
             ),
           ],
           // Recorded on the row if it happened. It changes the money only if

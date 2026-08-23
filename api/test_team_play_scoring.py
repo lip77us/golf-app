@@ -485,6 +485,49 @@ class BoardToParTests(TeamPlayScoringTests):
         self.assertEqual(pine['thru'], 9)
         self.assertEqual(pine['par_played'], 36)
         self.assertEqual(pine['gross_to_par'], 0)
-        # Its allowance still comes off in full, which is what "projected"
-        # on the pool line is warning about.
-        self.assertEqual(pine['net_to_par'], -pine['team_handicap'])
+        # Only the strokes RECEIVED so far come off. Pine plays off 6, and
+        # stroke index equals hole number here, so six of its strokes fall on
+        # holes 1–6 — six through the front nine, not the full figure.
+        self.assertEqual(pine['net_to_par'], -6)
+
+
+class ShambleToParTests(ShambleHandWorkedRoundTests):
+    """A shamble's team figure is the sum of the COUNTING balls, so par has to
+    be multiplied by the count. Best-2 on a par 4 is a par of 8."""
+
+    def test_par_is_multiplied_by_the_ball_count(self):
+        self._play_all()
+        row = self._row()
+        # Eighteen par-4s at best-2 → a par of 144, not 72.
+        self.assertEqual(row['par_played'], 144)
+        # The hand-worked round: 180 counted gross, 150 net.
+        self.assertEqual(row['gross_to_par'], 180 - 144)
+        self.assertEqual(row['net_to_par'],   150 - 144)
+
+
+class PartRoundNetTests(TeamPlayScoringTests):
+    """Net through N holes counts only the strokes RECEIVED through N holes.
+
+    Taking the whole allowance off a part round credits strokes on holes the
+    team has not reached. At 18 the two agree exactly, which is how it survived
+    — every test played full rounds.
+    """
+
+    def test_scramble_net_thru_seven(self):
+        # Pine plays off 6; stroke index equals hole number in this fixture, so
+        # six of its strokes fall on holes 1-6 and it has had 6 through seven.
+        # Seven level-par holes: gross 28 against a par of 28.
+        self._post_round('Pine', 28, holes=7)
+        pine = next(t for t in self._board()['teams'] if t['name'] == 'Pine')
+
+        self.assertEqual(pine['thru'], 7)
+        self.assertEqual(pine['team_handicap'], 6)
+        self.assertEqual(pine['par_played'], 28)
+        self.assertEqual(pine['gross_to_par'], 0)
+        self.assertEqual(pine['net_to_par'], -6)      # not -6 by luck: 6 of 6
+        self.assertEqual(pine['net'], 22)
+
+    def test_the_two_agree_once_the_round_is_finished(self):
+        self._play_everyone()
+        for row in self._board()['teams']:
+            self.assertEqual(row['net'], row['gross'] - row['team_handicap'])
