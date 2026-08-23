@@ -205,6 +205,7 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
         hole     : _hole!,
         onGo     : _goto,
         outstanding: _outstanding(card),
+        onDone     : () => Navigator.of(context).maybePop(),
       ),
     );
   }
@@ -1006,10 +1007,11 @@ class _HoleNav extends StatelessWidget {
   final ValueChanged<int?> onGo;
   /// What the hole is still waiting on; null when it is done.
   final String? outstanding;
+  final VoidCallback onDone;
 
   const _HoleNav({
     required this.card, required this.hole, required this.onGo,
-    required this.outstanding,
+    required this.outstanding, required this.onDone,
   });
 
   @override
@@ -1027,24 +1029,33 @@ class _HoleNav extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: prev == null ? null : () => onGo(prev),
             icon: const Icon(Icons.chevron_left, size: 20),
-            label: Text(prev == null ? 'First hole' : 'Hole $prev'),
+            // Just "Hole" when there is nowhere back, matching every other
+            // card — "First hole" reads like a destination you can tap.
+            label: Text(prev == null ? 'Hole' : 'Hole $prev'),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
           flex: ready ? 1 : 2,
-          child: FilledButton.icon(
-            onPressed: (ready && next != null) ? () => onGo(next) : null,
-            iconAlignment: IconAlignment.end,
-            icon: Icon(ready ? Icons.chevron_right : Icons.edit_outlined,
-                       size: 20),
-            label: Text(
-              !ready
-                  ? outstanding!
-                  : (next == null ? 'Last hole' : 'Hole $next'),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+          child: next == null
+              // The last hole ends in Done, as the other cards do. It returns
+              // to the hub rather than closing the round: this round belongs
+              // to every team, and it is the TD who completes it once they are
+              // all in — one team finishing its 18th is not the event ending.
+              ? FilledButton.icon(
+                  onPressed: ready ? onDone : null,
+                  icon: const Icon(Icons.emoji_events, size: 20),
+                  label: Text(ready ? 'Done' : outstanding!,
+                      overflow: TextOverflow.ellipsis),
+                )
+              : FilledButton.icon(
+                  onPressed: ready ? () => onGo(next) : null,
+                  iconAlignment: IconAlignment.end,
+                  icon: Icon(ready ? Icons.chevron_right : Icons.edit_outlined,
+                             size: 20),
+                  label: Text(ready ? 'Hole $next' : outstanding!,
+                      overflow: TextOverflow.ellipsis),
+                ),
         ),
       ]),
     );
