@@ -546,3 +546,36 @@ class FeedRecapTests(_Base):
         keys = self._keys()
         self.assertIn('team_final_recap', keys)
         self.assertNotIn('gross_recap', keys)
+
+
+class CardGolferRowsTests(_Base):
+    """The scorecard under the entry shows the same four balls the board's
+    expanded row does — a shamble's card without them cannot say who shot
+    what, only what the team was worth."""
+
+    def test_the_card_carries_every_ball(self):
+        self.configure(team_format='shamble')
+        self.shamble_round('Slate', gross=5, holes=3)
+
+        card = self.client.get(
+            reverse('api-team-play-card', args=[self.teams['Slate'].id]),
+            {'hole': 1}).json()
+        golfers = card['golfers_by_hole']
+
+        self.assertEqual(len(golfers), 4)
+        self.assertEqual({g['name'] for g in golfers},
+                         {'Mercer', 'Ellis', 'Barrueta', 'Vaughn'})
+        for g in golfers:
+            self.assertEqual(g['scores']['1'], 5)
+            self.assertIn('1', g['counted'])
+        # Exactly two of the four counted on the hole.
+        self.assertEqual(
+            sum(1 for g in golfers if g['counted'].get('1')), 2)
+
+    def test_a_scramble_card_has_no_per_golfer_balls(self):
+        self.configure(team_format='scramble')
+        self.assertEqual(
+            self.client.get(
+                reverse('api-team-play-card', args=[self.teams['Slate'].id]),
+                {'hole': 1}).json()['golfers_by_hole'],
+            [])

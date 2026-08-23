@@ -9454,7 +9454,8 @@ class TeamPlayCardView(APIView):
     def get(self, request, pk):
         from services.team_play_state import drive_state, resolved_counts
         from services.team_play_scoring import (
-            net_to_par_by_hole, shamble_hole, team_hole_scores, team_round,
+            golfers_by_hole, net_to_par_by_hole, shamble_hole,
+            team_hole_scores, team_round,
         )
         foursome = foursome_for_reader(request.user, pk)
         config = getattr(foursome.round.tournament, 'team_play_config', None)
@@ -9522,6 +9523,10 @@ class TeamPlayCardView(APIView):
             'golfer_strokes' : _golfer_strokes_by_hole(foursome, config),
             # What each hole's score was WORTH — the net line under the card.
             'net_to_par_by_hole': net_to_par_by_hole(foursome, config, rnd),
+            # Every ball, hole by hole, with the counting ones flagged — the
+            # scorecard under the entry shows the same four rows the board's
+            # expanded row does.
+            'golfers_by_hole': golfers_by_hole(foursome, config),
             'round'     : rnd,
             'drive'     : drive_state(foursome, config),
         }

@@ -5733,6 +5733,8 @@ class TeamPlayCard {
   final Map<int, Map<int, int>> golferStrokes;
   /// `{hole: net against par}` — what each hole's score was worth.
   final Map<int, int> netToParByHole;
+  /// Shamble: every ball, hole by hole, for the scorecard under the entry.
+  final List<TeamPlayGolferCard> golfersByHole;
   final TeamPlayRound round;
   final TeamPlayDrive drive;
   final int?   teamScore;                 // scramble
@@ -5745,7 +5747,7 @@ class TeamPlayCard {
     this.pars = const {}, this.strokeIndexes = const {},
     this.strokesByHole = const {},
     this.golferStrokes = const {}, this.netToParByHole = const {},
-    this.teamScore, this.shamble,
+    this.golfersByHole = const [], this.teamScore, this.shamble,
   });
 
   factory TeamPlayCard.fromJson(Map<String, dynamic> j) => TeamPlayCard(
@@ -5781,6 +5783,10 @@ class TeamPlayCard {
             },
         },
         netToParByHole: _intMap(j['net_to_par_by_hole']),
+        golfersByHole : ((j['golfers_by_hole'] as List?) ?? const [])
+            .map((e) => TeamPlayGolferCard.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
         round    : TeamPlayRound.fromJson(
             Map<String, dynamic>.from((j['round'] ?? {}) as Map)),
         drive    : TeamPlayDrive.fromJson(

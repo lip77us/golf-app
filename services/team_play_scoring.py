@@ -328,7 +328,7 @@ def net_to_par_by_hole(foursome, config, rnd) -> dict:
     return out
 
 
-def _board_golfers_by_hole(foursome, config) -> list:
+def golfers_by_hole(foursome, config) -> list:
     """Per-golfer gross, net, strokes and counted-flag, hole by hole.
 
     Shamble only — a scramble has no per-golfer ball to show.
@@ -419,7 +419,7 @@ def leaderboard(tournament) -> dict:
         # A shamble's expanded row shows all FOUR balls with the counting ones
         # marked — the team's total is two of them, and a board that shows only
         # the total cannot answer "whose scores made it".
-        team['golfers_by_hole'] = _board_golfers_by_hole(foursome, config)
+        team['golfers_by_hole'] = golfers_by_hole(foursome, config)
         # The team's line reads against par, not as a raw total: two 5s on a
         # par 4 is +2, and "10" says nothing without doing the multiplication
         # in your head.
