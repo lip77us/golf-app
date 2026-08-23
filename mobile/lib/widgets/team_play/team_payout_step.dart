@@ -234,13 +234,13 @@ class TeamPayoutStep extends StatelessWidget {
           TeamNote(
             '${_ordinals[placesPaid - 1]} place pays less than entry — '
             '${_money(_perMan(splitPcts[placesPaid - 1]))} against '
-            '${_money(entryFee.toDouble())} a man.',
+            '${_money(entryFee.toDouble())} a golfer.',
           ),
           const SizedBox(height: 10),
         ],
         if (hasShortTeam) ...[
           const TeamNote(
-            'Per-man figures assume four. A team playing three divides its '
+            'Per-golfer figures assume four. A team playing three divides its '
             'share three ways and pays more each — the phantom 4th cannot be '
             'paid.',
           ),
@@ -317,7 +317,7 @@ class _PlaceRow extends StatelessWidget {
                  style: Halved.body(weight: FontWeight.w700)),
             // $287.50 to a team means nothing until it is divided. A man
             // decides by whether $25 is worth maybe winning $72.
-            Text('\$${(amount / 4).toStringAsFixed(2)} a man',
+            Text('\$${(amount / 4).toStringAsFixed(2)} a golfer',
                  style: Halved.label()),
           ],
         ),

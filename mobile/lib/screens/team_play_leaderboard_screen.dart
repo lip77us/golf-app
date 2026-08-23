@@ -22,8 +22,10 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
+import '../utils/golf_colors.dart';
 import '../widgets/error_view.dart';
 import '../widgets/team_play/team_play_bits.dart';
+import '../widgets/team_scorecard.dart';
 import 'team_play_settlement_screen.dart';
 
 class TeamPlayLeaderboardScreen extends StatefulWidget {
@@ -126,15 +128,24 @@ class _Header extends StatelessWidget {
           children: [
             SizedBox(width: 38, child: Text('', style: Halved.label())),
             Expanded(child: Text('TEAM', style: Halved.label())),
+            // Named as to-par, because the figures are +2 / E / −3 rather than
+            // 74 and 68 — an unlabelled "-3" under "NET" reads as a total.
             SizedBox(width: 52,
-                child: Text('GROSS', textAlign: TextAlign.right,
+                child: Text('GROSS\n TO PAR', textAlign: TextAlign.right,
                     style: Halved.label())),
             SizedBox(width: 52,
-                child: Text('NET', textAlign: TextAlign.right,
+                child: Text('NET\nTO PAR', textAlign: TextAlign.right,
                     style: Halved.label())),
           ],
         ),
       );
+}
+
+/// `E` / `-3` / `+5` — the app's to-par label, matching the stroke-play board.
+String _toPar(int? v) {
+  if (v == null) return '—';
+  if (v == 0) return 'E';
+  return v < 0 ? '$v' : '+$v';
 }
 
 class _Row extends StatelessWidget {
@@ -210,15 +221,18 @@ class _Row extends StatelessWidget {
                   ),
                   SizedBox(
                     width: 52,
-                    child: Text('${team.gross ?? '—'}',
+                    child: Text(_toPar(team.grossToPar),
                         textAlign: TextAlign.right,
-                        style: Halved.body(color: Halved.muted)),
+                        style: Halved.body(
+                            color: toParColor(team.grossToPar) ?? Halved.muted)),
                   ),
                   SizedBox(
                     width: 52,
-                    child: Text('${team.net ?? '—'}',
+                    child: Text(_toPar(team.netToPar),
                         textAlign: TextAlign.right,
-                        style: Halved.sectionHead().copyWith(fontSize: 20)),
+                        style: Halved.sectionHead().copyWith(
+                            fontSize: 20,
+                            color: toParColor(team.netToPar) ?? Halved.deepPine)),
                   ),
                 ],
               ),
@@ -245,6 +259,8 @@ class _Detail extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Divider(height: 14),
+          // The raw totals live here, where a scorecard puts them — the row
+          // above is for the number a golfer quotes.
           Text(
             'Gross ${team.gross ?? '—'} · allowance '
             '${team.teamHandicap ?? '—'} · net ${team.net ?? '—'}',
@@ -269,6 +285,18 @@ class _Detail extends StatelessWidget {
                 ],
               ),
             ),
+          if (team.pars.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            // The same widget the entry card draws, so a golfer who has just
+            // come off his own scorecard recognises this one.
+            TeamScorecard(
+              pars         : team.pars,
+              strokeIndexes: team.strokeIndexes,
+              scores       : team.scoresByHole,
+              strokes      : team.strokesByHole,
+              label        : 'Team',
+            ),
+          ],
           // Recorded on the row if it happened. It changes the money only if
           // the TD chose the stroke penalty, and then it already changed the
           // gross upstream.

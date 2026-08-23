@@ -131,7 +131,7 @@ class TeamDriveStep extends StatelessWidget {
                 if (_free <= 0) ...[
                   const SizedBox(height: 12),
                   const TeamNote(
-                    'No slack at all — every hole has to go to a man who owes '
+                    'No slack at all — every hole has to go to a golfer who owes '
                     'one.',
                     warn: true,
                   ),

@@ -463,3 +463,28 @@ class ShambleHandWorkedRoundTests(ShambleCardTests):
         self.assertEqual(row['thru'], 0)
         self.assertFalse(row['complete'])
         self.assertIsNone(row['net'])
+
+
+class BoardToParTests(TeamPlayScoringTests):
+    """The board prints scores against par, like every other leaderboard in
+    the app — and measures against the holes PLAYED, so a team still out is not
+    flattered by the holes it has not reached."""
+
+    def test_a_finished_team_reads_against_the_full_par(self):
+        self._play_everyone()
+        fern = next(t for t in self._board()['teams'] if t['name'] == 'Fern')
+        # 18 par-4s = 72. Fern shot 63 gross for 55 net.
+        self.assertEqual(fern['gross_to_par'], 63 - 72)
+        self.assertEqual(fern['net_to_par'],   55 - 72)
+
+    def test_a_team_still_out_reads_against_the_holes_it_played(self):
+        """Measured against the full 72 a team thru 9 looks nine under before
+        it has hit a shot on the back."""
+        self._post_round('Pine', 36, holes=9)      # nine level-par holes
+        pine = next(t for t in self._board()['teams'] if t['name'] == 'Pine')
+        self.assertEqual(pine['thru'], 9)
+        self.assertEqual(pine['par_played'], 36)
+        self.assertEqual(pine['gross_to_par'], 0)
+        # Its allowance still comes off in full, which is what "projected"
+        # on the pool line is warning about.
+        self.assertEqual(pine['net_to_par'], -pine['team_handicap'])

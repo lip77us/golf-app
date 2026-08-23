@@ -216,21 +216,51 @@ def team_round(foursome, config) -> dict:
         gross += penalty
         net   += penalty
 
+    # Par over the holes actually PLAYED. A team thru 14 measured against the
+    # full 72 would read eighteen under, which is how a leading team looks like
+    # a runaway on a board where half the field is still out.
+    par_map    = {h['number']: h.get('par', 0) for h in holes}
+    par_played = sum(par_map.get(n, 0) for n in by_hole)
+
     return {
-        'gross'     : gross,
-        'net'       : net,
-        'allowance' : allowance,
-        'thru'      : thru,
-        'complete'  : thru == len(holes) and thru > 0,
-        'par'       : par,
-        'penalty'   : penalty,
-        'by_hole'   : by_hole,
+        'gross'      : gross,
+        'net'        : net,
+        'allowance'  : allowance,
+        'thru'       : thru,
+        'complete'   : thru == len(holes) and thru > 0,
+        'par'        : par,
+        'par_played' : par_played,
+        # What the board ranks and prints: the app shows scores against par,
+        # not as totals, on every other leaderboard it draws.
+        'gross_to_par': None if gross is None else gross - par_played,
+        'net_to_par'  : None if net   is None else net   - par_played,
+        'penalty'    : penalty,
+        'by_hole'    : by_hole,
     }
 
 
 # ---------------------------------------------------------------------------
 # 3. The board
 # ---------------------------------------------------------------------------
+
+def _board_strokes_by_hole(foursome, config, rnd) -> dict:
+    """`{hole: strokes}` for the row the board draws.
+
+    A scramble has one team figure, so the dots are the team's. A shamble keeps
+    handicaps per golfer and the board row is the TEAM's counted total, so
+    there is no single golfer whose dots belong on it — the entry card shows
+    those, per golfer, where the question is "where do I get shots".
+    """
+    from scoring.handicap import _strokes_on_hole
+
+    if not config.is_scramble or not rnd.get('allowance'):
+        return {}
+    return {
+        str(h['number']): _strokes_on_hole(
+            rnd['allowance'], h.get('stroke_index', h['number']))
+        for h in hole_data(foursome)
+    }
+
 
 def leaderboard(tournament) -> dict:
     """
@@ -263,6 +293,15 @@ def leaderboard(tournament) -> dict:
         # is already on the row as `team_handicap`, so drop the duplicate.
         rnd.pop('allowance', None)
         team.update(rnd)
+        # Enough for the expanded row to draw the same scorecard the entry
+        # screen draws, rather than a second, thinner grid of its own.
+        holes = hole_data(foursome)
+        team['pars'] = {str(h['number']): h.get('par') for h in holes}
+        team['stroke_indexes'] = {
+            str(h['number']): h.get('stroke_index') for h in holes}
+        team['scores_by_hole'] = {
+            str(n): v.get('gross') for n, v in (rnd.get('by_hole') or {}).items()}
+        team['strokes_by_hole'] = _board_strokes_by_hole(foursome, config, rnd)
         rows.append(team)
 
     # Rank the teams that have a score. A team with nothing entered sits at the

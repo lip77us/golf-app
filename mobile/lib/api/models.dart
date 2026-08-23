@@ -5070,6 +5070,13 @@ class PhantomInitResult {
 // singles and the unit is a card; this is small teams against each other, one
 // score per team per hole.
 
+/// `{"3": 4}` → `{3: 4}`, skipping nulls — the shape every per-hole map on a
+/// Foursome Play payload arrives in.
+Map<int, int> _intMap(dynamic raw) => {
+      for (final e in Map<String, dynamic>.from((raw ?? const {}) as Map).entries)
+        if (e.value != null) int.parse(e.key): e.value as int,
+    };
+
 /// One member's line on the worked allowance card — `Maiolini 4 → 1.00`.
 ///
 /// The percentage is POSITIONAL (25% attaches to the lowest handicap, not to
@@ -5319,9 +5326,20 @@ class TeamPlayTeam {
   final TeamPlayDrive     drive;
   final int     thru;
 
+  /// Board rows carry enough to draw the shared scorecard.
+  final Map<int, int> pars;
+  final Map<int, int> strokeIndexes;
+  final Map<int, int> scoresByHole;
+  final Map<int, int> strokesByHole;
+
   // Present on the leaderboard; null on the setup board.
   final int?    gross;
   final int?    net;
+  /// What the board prints: scores against par, the way every other
+  /// leaderboard in the app reads. Measured over the holes PLAYED, so a team
+  /// still out is not flattered by the holes it has not reached.
+  final int?    grossToPar;
+  final int?    netToPar;
   final int?    rank;
   final bool    tied;
   final bool    complete;
@@ -5332,7 +5350,10 @@ class TeamPlayTeam {
     required this.hasPhantom, required this.seatsOpen, required this.members,
     required this.teamHandicap, required this.teamHandicapRaw,
     required this.allowance, required this.drive, required this.thru,
-    this.gross, this.net, this.rank, this.tied = false, this.complete = false,
+    this.pars = const {}, this.strokeIndexes = const {},
+    this.scoresByHole = const {}, this.strokesByHole = const {},
+    this.gross, this.net, this.grossToPar, this.netToPar,
+    this.rank, this.tied = false, this.complete = false,
   });
 
   factory TeamPlayTeam.fromJson(Map<String, dynamic> j) => TeamPlayTeam(
@@ -5354,8 +5375,14 @@ class TeamPlayTeam {
         drive          : TeamPlayDrive.fromJson(
             Map<String, dynamic>.from((j['drive'] ?? {}) as Map)),
         thru           : (j['thru'] ?? 0) as int,
+        pars          : _intMap(j['pars']),
+        strokeIndexes : _intMap(j['stroke_indexes']),
+        scoresByHole  : _intMap(j['scores_by_hole']),
+        strokesByHole : _intMap(j['strokes_by_hole']),
         gross          : j['gross'] as int?,
         net            : j['net'] as int?,
+        grossToPar     : j['gross_to_par'] as int?,
+        netToPar       : j['net_to_par'] as int?,
         rank           : j['rank'] as int?,
         tied           : j['tied'] == true,
         complete       : j['complete'] == true,
@@ -5621,8 +5648,9 @@ class TeamPlayCard {
   /// handicap dots, so the team can see on the tee that this is one of the
   /// holes it gets a stroke.
   final int  teamStrokes;
-  /// Par by hole, for the scorecard under the entry.
+  /// Par and stroke index by hole, for the scorecard under the entry.
   final Map<int, int> pars;
+  final Map<int, int> strokeIndexes;
   /// Where the strokes fall across the WHOLE round — half the reason the card
   /// sits under the entry, since a dot on the hole you are standing on says
   /// nothing about the two coming up.
@@ -5641,7 +5669,8 @@ class TeamPlayCard {
     required this.format, required this.hole, required this.playOrder,
     required this.round, required this.drive,
     this.par, this.strokeIndex, this.yards, this.teamStrokes = 0,
-    this.pars = const {}, this.strokesByHole = const {},
+    this.pars = const {}, this.strokeIndexes = const {},
+    this.strokesByHole = const {},
     this.golferStrokes = const {}, this.teamScore, this.shamble,
   });
 
@@ -5657,6 +5686,11 @@ class TeamPlayCard {
         pars       : {
           for (final e in Map<String, dynamic>.from(
                   (j['pars'] ?? const {}) as Map).entries)
+            if (e.value != null) int.parse(e.key): e.value as int,
+        },
+        strokeIndexes: {
+          for (final e in Map<String, dynamic>.from(
+                  (j['stroke_indexes'] ?? const {}) as Map).entries)
             if (e.value != null) int.parse(e.key): e.value as int,
         },
         strokesByHole: {

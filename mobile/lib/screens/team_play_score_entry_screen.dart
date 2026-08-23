@@ -33,6 +33,7 @@ import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/team_scorecard.dart';
 
 class TeamPlayScoreEntryScreen extends StatefulWidget {
   final int    foursomeId;
@@ -269,7 +270,7 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
         // screen keeps its by-hole grid. It is the team's row either way: on a
         // shamble the counted balls are already summed into it, because that
         // is the number the board ranks.
-        _Scorecard(
+        _CardScorecard(
           card    : card,
           hole    : _hole!,
           onGo    : _goto,
@@ -448,7 +449,7 @@ class _DriveStrip extends StatelessWidget {
                   ? '${w.label} cannot be satisfied now. Play on — a shortfall '
                     'is recorded, not blocked.'
                   : 'It still works, but only if every remaining hole goes to '
-                    'a man who owes one.',
+                    'a golfer who owes one.',
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.error),
             ),
@@ -840,140 +841,49 @@ class _ScoreBox extends StatelessWidget {
   }
 }
 
-/// The team's round so far — hole, par, score — front nine then back, with
-/// OUT / IN / TOT. Tap a hole to go to it.
-class _Scorecard extends StatelessWidget {
+/// The card so far, under the entry — the shared scorecard, so it reads as
+/// the same object as the one inside a leaderboard row.
+class _CardScorecard extends StatelessWidget {
   final TeamPlayCard card;
   final int hole;
   final ValueChanged<int?> onGo;
-  /// Shamble: whose strokes the dots mark. Null on a scramble, where the
-  /// figure belongs to the side.
+  /// Shamble: whose strokes the dots mark. Null on a scramble.
   final int? golferId;
 
-  const _Scorecard({
-    required this.card, required this.hole, required this.onGo,
-    required this.golferId,
+  const _CardScorecard({
+    required this.card, required this.hole,
+    required this.onGo, required this.golferId,
   });
 
-  /// `3 under` / `2 over` / `even` — what a golfer actually says. Raw totals
-  /// are on the OUT / IN / TOT cells where a scorecard puts them; the line
-  /// above the card is for the number you quote on the next tee.
-  static String _toPar(int diff) {
-    if (diff == 0) return 'even';
-    return diff > 0 ? '$diff over' : '${-diff} under';
-  }
+  /// `3 under` / `2 over` / `even` — what a golfer says on the next tee. The
+  /// raw totals are on the OUT / IN cells, where a scorecard puts them.
+  static String _toPar(int diff) =>
+      diff == 0 ? 'even' : (diff > 0 ? '$diff over' : '${-diff} under');
 
   @override
   Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final scores  = card.round.byHole;
-    final strokes = card.strokesFor(golferId);
+    final theme = Theme.of(context);
     if (card.pars.isEmpty) return const SizedBox.shrink();
 
-    final holes = card.pars.keys.toList()..sort();
-    final front = holes.where((h) => h <= 9).toList();
-    final back  = holes.where((h) => h > 9).toList();
+    final scores = card.round.byHole;
+    final name = golferId == null
+        ? 'Team'
+        : (card.shamble?.rows
+                .where((r) => r.playerId == golferId)
+                .firstOrNull
+                ?.name
+                .split(' ')
+                .last ??
+            'Team');
 
-    int sum(Iterable<int> hs, Map<int, int> from) =>
-        hs.map((h) => from[h] ?? 0).fold(0, (a, b) => a + b);
-
-    Widget nine(List<int> hs, String totalLabel) {
-      if (hs.isEmpty) return const SizedBox.shrink();
-      final anyScored = hs.any((h) => scores[h] != null);
-      Widget cell(String text, {bool head = false, bool strong = false,
-                                int? goTo, bool current = false,
-                                int dots = 0}) {
-        final label = Text(text,
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: (head || strong)
-                  ? FontWeight.bold : FontWeight.normal,
-              color: head ? theme.colorScheme.onSurfaceVariant : null,
-            ));
-        final child = Container(
-          height: 26,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: current
-                ? theme.colorScheme.primary.withValues(alpha: 0.14)
-                : (head ? theme.colorScheme.surfaceContainerHighest : null),
-            border: Border.all(color: theme.colorScheme.outlineVariant,
-                               width: 0.5),
-          ),
-          // One dot per stroke received, in the corner — the app's notation
-          // for it, and the reason the whole card is worth showing: you can
-          // see the two coming up, not just the one you are on.
-          child: dots == 0
-              ? label
-              : Stack(alignment: Alignment.center, children: [
-                  label,
-                  Positioned(
-                    top: 2,
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      for (var i = 0; i < dots; i++)
-                        Container(
-                          width: 3, height: 3,
-                          margin: const EdgeInsets.symmetric(horizontal: 0.5),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                    ]),
-                  ),
-                ]),
-        );
-        return Expanded(
-          child: goTo == null
-              ? child
-              : InkWell(onTap: () => onGo(goTo), child: child),
-        );
-      }
-
-      return Column(children: [
-        Row(children: [
-          cell('', head: true),
-          for (final h in hs)
-            cell('$h', head: true, goTo: h, current: h == hole),
-          cell(totalLabel, head: true, strong: true),
-        ]),
-        Row(children: [
-          cell('Par', head: true),
-          for (final h in hs) cell('${card.pars[h]}'),
-          cell('${sum(hs, card.pars)}', strong: true),
-        ]),
-        Row(children: [
-          cell(golferId == null
-                  ? 'Team'
-                  : (card.shamble?.rows
-                          .where((r) => r.playerId == golferId)
-                          .firstOrNull
-                          ?.name
-                          .split(' ')
-                          .last ??
-                      'Team'),
-               head: true),
-          for (final h in hs)
-            cell(scores[h]?.toString() ?? '–',
-                 current: h == hole, dots: strokes[h] ?? 0),
-          cell(anyScored ? '${sum(hs, scores)}' : '–', strong: true),
-        ]),
-      ]);
-    }
-
-    final total = sum(holes, scores);
-    // Par over the holes actually PLAYED — comparing a part-round gross to the
-    // full 72 would read as twenty under through six.
-    final parSoFar = holes
+    // Par over the holes actually PLAYED — a part round against the full 72
+    // would read as twenty under through six.
+    final parSoFar = card.pars.keys
         .where((h) => scores[h] != null)
         .map((h) => card.pars[h] ?? 0)
         .fold<int>(0, (a, b) => a + b);
-
-    String summary(int gross) {
-      final net = card.round.net;
-      final g = 'gross ${_toPar(gross - parSoFar)}';
-      final n = net == null ? '' : ' · net ${_toPar(net - parSoFar)}';
-      return 'thru ${card.round.thru} · $g$n';
-    }
+    final gross = scores.values.fold<int>(0, (a, b) => a + b);
+    final net   = card.round.net;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -983,15 +893,23 @@ class _Scorecard extends StatelessWidget {
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold))),
           if (card.round.thru > 0)
-            Text(summary(total), style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            Text(
+              'thru ${card.round.thru} · gross ${_toPar(gross - parSoFar)}'
+              '${net == null ? '' : ' · net ${_toPar(net - parSoFar)}'}',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
         ]),
         const SizedBox(height: 6),
-        nine(front, 'OUT'),
-        if (back.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          nine(back, 'IN'),
-        ],
+        TeamScorecard(
+          pars         : card.pars,
+          strokeIndexes: card.strokeIndexes,
+          scores       : scores,
+          strokes      : card.strokesFor(golferId),
+          label        : name,
+          currentHole  : hole,
+          onTapHole    : (h) => onGo(h),
+        ),
       ],
     );
   }

@@ -9501,6 +9501,8 @@ class TeamPlayCardView(APIView):
             # row without a second call.
             'pars'      : {str(h['number']): h.get('par')
                            for h in hole_data(foursome)},
+            'stroke_indexes': {str(h['number']): h.get('stroke_index')
+                               for h in hole_data(foursome)},
             # Where the strokes fall, across the WHOLE round. Seeing which
             # holes carry one is half the reason the card sits under the
             # entry — a dot on the hole you happen to be standing on tells you
