@@ -12,6 +12,11 @@
 /// facts about the hole, and having them under the number is what lets a
 /// golfer check a score without leaving the card.
 ///
+/// **Column one is frozen.** The labels — Hole, Par, Index and the golfers'
+/// names — stay put while the eighteen scroll under them, because a scorecard
+/// you have scrolled three holes into is unreadable the moment you cannot see
+/// whose row you are on.
+///
 /// White card, quiet bands. Only the header rows are tinted, so the scores
 /// read as ink on paper rather than as cells in a spreadsheet.
 ///
@@ -132,7 +137,9 @@ class _TeamScorecardState extends State<TeamScorecard> {
   void _scrollTo() {
     final hole = widget.currentHole;
     if (hole == null || !_ctrl.hasClients) return;
-    final target = (_labelW + (hole - 7) * _cellW)
+    // No label width in the offset: the frozen column is outside the scroll
+    // view, so hole 1 sits at zero.
+    final target = ((hole - 7) * _cellW)
         .clamp(0.0, _ctrl.position.maxScrollExtent);
     _ctrl.animateTo(target,
         duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
@@ -241,10 +248,76 @@ class _TeamScorecardState extends State<TeamScorecard> {
           if (back.isNotEmpty) forTotal(holes, 'TOT'),
         ];
 
-    Widget band(List<Widget> cells, Color? colour, Widget label) => Container(
-          color: colour,
-          child: Row(children: [label, ...cells]),
+    /// One row, split in two: the label that stays and the cells that scroll.
+    ({Widget label, Widget cells}) rowPair(
+        Widget label, List<Widget> cells, Color? colour) => (
+          label: Container(color: colour, child: label),
+          cells: Container(color: colour, child: Row(children: cells)),
         );
+
+    final built = <({Widget label, Widget cells})>[
+      rowPair(
+        labelCell('Hole', bold: true),
+        line((h) => cell('$h', bold: true, goTo: h,
+                         current: h == widget.currentHole),
+             (hs, l) => cell(l, bold: true, width: _totalW)),
+        theme.colorScheme.surfaceContainerHighest,
+      ),
+      rowPair(
+        labelCell('Par', italic: true),
+        line((h) => cell('${widget.pars[h]}'),
+             (hs, l) => cell('${total(hs, widget.pars)}',
+                             bold: true, width: _totalW)),
+        theme.colorScheme.surfaceContainerLow,
+      ),
+      if (widget.strokeIndexes.isNotEmpty)
+        rowPair(
+          labelCell('Index'),
+          line((h) => cell('${widget.strokeIndexes[h] ?? ''}'),
+               (hs, l) => cell('', width: _totalW)),
+          theme.colorScheme.surfaceContainerLow,
+        ),
+      for (final r in widget.rows)
+        rowPair(
+          Container(
+            decoration: r.total
+                ? BoxDecoration(
+                    border: Border(top: BorderSide(
+                        color: theme.colorScheme.outlineVariant)))
+                : null,
+            child: labelCell(r.label, bold: r.total, italic: r.italic),
+          ),
+          [
+            Container(
+              decoration: r.total
+                  ? BoxDecoration(
+                      border: Border(top: BorderSide(
+                          color: theme.colorScheme.outlineVariant)))
+                  : null,
+              child: Row(children: line(
+                (h) => cell(fmt(r, h),
+                    current: h == widget.currentHole,
+                    counted: r.counted.contains(h),
+                    faded  : r.scores[h] != null &&
+                             r.counted.isNotEmpty &&
+                             !r.counted.contains(h),
+                    italic : r.italic,
+                    bold   : r.total,
+                    dots   : r.strokes[h] ?? 0,
+                    goTo   : h),
+                (hs, l) => cell(
+                    hs.any((h) => r.scores[h] != null)
+                        ? (r.toPar
+                            ? toParLabel(total(hs, r.scores))
+                            : '${total(hs, r.scores)}')
+                        : '',
+                    bold: true, width: _totalW),
+              )),
+            ),
+          ],
+          null,
+        ),
+    ];
 
     return Container(
       decoration: BoxDecoration(
@@ -253,65 +326,33 @@ class _TeamScorecardState extends State<TeamScorecard> {
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
-        controller: _ctrl,
-        scrollDirection: Axis.horizontal,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            band(
-              line((h) => cell('$h', bold: true, goTo: h,
-                               current: h == widget.currentHole),
-                   (hs, l) => cell(l, bold: true, width: _totalW)),
-              theme.colorScheme.surfaceContainerHighest,
-              labelCell('Hole', bold: true),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Frozen column one, with the hairline on its own right edge so it
+          // tracks the real height — the total rows each add a border pixel,
+          // and a divider sized from the row count would fall short.
+          Container(
+            decoration: BoxDecoration(
+              border: Border(right: BorderSide(
+                  color: theme.colorScheme.outlineVariant)),
             ),
-            band(
-              line((h) => cell('${widget.pars[h]}'),
-                   (hs, l) => cell('${total(hs, widget.pars)}',
-                                   bold: true, width: _totalW)),
-              theme.colorScheme.surfaceContainerLow,
-              labelCell('Par', italic: true),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [for (final r in built) r.label],
             ),
-            if (widget.strokeIndexes.isNotEmpty)
-              band(
-                line((h) => cell('${widget.strokeIndexes[h] ?? ''}'),
-                     (hs, l) => cell('', width: _totalW)),
-                theme.colorScheme.surfaceContainerLow,
-                labelCell('Index'),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _ctrl,
+              scrollDirection: Axis.horizontal,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [for (final r in built) r.cells],
               ),
-            for (final r in widget.rows)
-              Container(
-                decoration: r.total
-                    ? BoxDecoration(
-                        border: Border(top: BorderSide(
-                            color: theme.colorScheme.outlineVariant)))
-                    : null,
-                child: Row(children: [
-                  labelCell(r.label, bold: r.total, italic: r.italic),
-                  ...line(
-                    (h) => cell(fmt(r, h),
-                        current: h == widget.currentHole,
-                        counted: r.counted.contains(h),
-                        faded  : r.scores[h] != null &&
-                                 r.counted.isNotEmpty &&
-                                 !r.counted.contains(h),
-                        italic : r.italic,
-                        bold   : r.total,
-                        dots   : r.strokes[h] ?? 0,
-                        goTo   : h),
-                    (hs, l) => cell(
-                        hs.any((h) => r.scores[h] != null)
-                            ? (r.toPar
-                                ? toParLabel(total(hs, r.scores))
-                                : '${total(hs, r.scores)}')
-                            : '',
-                        bold: true, width: _totalW),
-                  ),
-                ]),
-              ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
