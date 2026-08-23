@@ -231,7 +231,9 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
 
   Widget _body(TeamPlayCard card) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      // Same outer padding as Skins — 12 all round, 8 at the foot, with the
+      // hole nav below taking its own safe-area inset.
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       children: [
         _HoleHeader(card: card, hole: _hole!),
         const SizedBox(height: 12),
@@ -241,7 +243,18 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
           const SizedBox(height: 12),
         ],
 
-        IgnorePointer(
+        // The rows sit on WHITE, matching Skins: an unscored golfer is plain
+        // paper, and only the row being entered is tinted. On the app's sage
+        // surface every row looked half-greyed.
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Theme.of(context).colorScheme
+                .outlineVariant),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: IgnorePointer(
           // Nothing is tappable while a save is in flight — two taps on one
           // hole would race each other's reload.
           ignoring: _busy,
@@ -257,6 +270,7 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
                   onSelect: (id) => setState(() => _selected = id),
                   onSet   : _setGolferScore,
                 ),
+        ),
         ),
 
         const SizedBox(height: 16),
@@ -588,7 +602,7 @@ class _TeamScoreRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(children: [
               Expanded(
                 child: Row(children: [
@@ -666,7 +680,6 @@ class _ShambleRows extends StatelessWidget {
         for (final row in h.rows)
           if (row.playerId == selected)
             Container(
-              margin: const EdgeInsets.symmetric(vertical: 6),
               decoration: BoxDecoration(
                 color: box.withValues(alpha: 0.10),
                 border: Border(
@@ -722,8 +735,12 @@ class _GolferLine extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(
+              color: theme.colorScheme.outlineVariant)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(children: [
           Expanded(
             child: Row(children: [
